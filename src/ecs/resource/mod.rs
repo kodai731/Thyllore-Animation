@@ -11,6 +11,7 @@ pub mod timing;
 
 mod batch;
 mod flame;
+mod lightning;
 mod water;
 mod wind;
 
@@ -27,5 +28,6 @@ pub use timing::*;
 
 pub use batch::*;
 pub use flame::*;
+pub use lightning::*;
 pub use water::*;
 pub use wind::*;

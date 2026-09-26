@@ -1,14 +1,16 @@
-use crate::ecs::component::{FlameEffect, FlameTrail, WaterTorusEffect, WindTornadoEffect};
+use crate::ecs::component::{
+    FlameEffect, FlameTrail, LightningEffect, WaterTorusEffect, WindTornadoEffect,
+};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState, MessageLog,
-    OnionSkinningConfig, PhysicalCameraParameters, TransformGizmoState, WaterRenderSettings,
-    WeightHeatmapState, WindRenderSettings,
+    AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState,
+    LightningRenderSettings, MessageLog, OnionSkinningConfig, PhysicalCameraParameters,
+    TransformGizmoState, WaterRenderSettings, WeightHeatmapState, WindRenderSettings,
 };
 use crate::ecs::systems::{
-    resolve_selected_flame, resolve_selected_water, resolve_selected_wind, write_flame_transform,
-    write_water_transform, write_wind_transform,
+    resolve_selected_flame, resolve_selected_lightning, write_flame_transform,
+    write_lightning_transform, write_water_transform, write_wind_transform,
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
@@ -67,12 +69,12 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                     *config = new_config.clone();
                 }
             }
-            UIEvent::UpdateFlameEffect(effect) => {
-                let Some(target) = resolve_selected_flame(world) else {
+            UIEvent::UpdateFlameEffect { entity, effect } => {
+                if !world.has_component::<FlameEffect>(*entity) {
                     continue;
-                };
-                write_flame_transform(world, target, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<FlameEffect>(target) {
+                }
+                write_flame_transform(world, *entity, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<FlameEffect>(*entity) {
                     *current = effect.as_ref().clone();
                 }
             }
@@ -167,12 +169,12 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             UIEvent::SelectEffectInstance { key, index } => {
                 select_effect_instance(world, key, *index);
             }
-            UIEvent::UpdateWaterEffect(effect) => {
-                let Some(target) = resolve_selected_water(world) else {
+            UIEvent::UpdateWaterEffect { entity, effect } => {
+                if !world.has_component::<WaterTorusEffect>(*entity) {
                     continue;
-                };
-                write_water_transform(world, target, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<WaterTorusEffect>(target) {
+                }
+                write_water_transform(world, *entity, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<WaterTorusEffect>(*entity) {
                     *current = effect.as_ref().clone();
                 }
             }
@@ -184,12 +186,12 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                     *settings = new_settings.clone();
                 }
             }
-            UIEvent::UpdateWindEffect(effect) => {
-                let Some(target) = resolve_selected_wind(world) else {
+            UIEvent::UpdateWindEffect { entity, effect } => {
+                if !world.has_component::<WindTornadoEffect>(*entity) {
                     continue;
-                };
-                write_wind_transform(world, target, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<WindTornadoEffect>(target) {
+                }
+                write_wind_transform(world, *entity, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<WindTornadoEffect>(*entity) {
                     *current = effect.as_ref().clone();
                 }
             }
@@ -198,6 +200,43 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             }
             UIEvent::UpdateWindRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<WindRenderSettings>() {
+                    *settings = *new_settings;
+                }
+            }
+            UIEvent::UpdateLightningEffect { entity, effect } => {
+                if !world.has_component::<LightningEffect>(*entity) {
+                    continue;
+                }
+                write_lightning_transform(world, *entity, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<LightningEffect>(*entity) {
+                    *current = effect.as_ref().clone();
+                }
+            }
+            UIEvent::ApplyLightningPreset(name) => {
+                crate::ecs::systems::apply_lightning_preset_to_selected(world, name);
+            }
+            UIEvent::AddLightningTarget => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::spawn_lightning_target(world, lightning);
+                }
+            }
+            UIEvent::ClearLightningTarget => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::clear_lightning_target(world, lightning);
+                }
+            }
+            UIEvent::AddLightningWaypoint => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::spawn_lightning_waypoint(world, lightning);
+                }
+            }
+            UIEvent::RemoveLightningWaypoint(index) => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::remove_lightning_waypoint(world, lightning, *index);
+                }
+            }
+            UIEvent::UpdateLightningRenderSettings(new_settings) => {
+                if let Some(mut settings) = world.get_resource_mut::<LightningRenderSettings>() {
                     *settings = *new_settings;
                 }
             }

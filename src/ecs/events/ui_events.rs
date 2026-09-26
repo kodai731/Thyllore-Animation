@@ -9,16 +9,17 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::ecs::component::{
-    ColliderShape, FlameEffect, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
-    SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect, WindTornadoEffect,
+    ColliderShape, FlameEffect, LightningEffect, SpringChain, SpringChainId, SpringColliderDef,
+    SpringColliderGroup, SpringColliderGroupId, SpringColliderId, SpringJointParam,
+    WaterTorusEffect, WindTornadoEffect,
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, FlameRenderSettings,
-    HierarchyDisplayMode, OnionSkinningConfig, PhysicalCameraParameters, SelectedKeyframe,
-    SelectionModifier, TransformGizmoMode, TransformGizmoState, WaterRenderSettings,
-    WindRenderSettings,
+    HierarchyDisplayMode, LightningRenderSettings, OnionSkinningConfig, PhysicalCameraParameters,
+    SelectedKeyframe, SelectionModifier, TransformGizmoMode, TransformGizmoState,
+    WaterRenderSettings, WindRenderSettings,
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
@@ -443,7 +444,10 @@ pub enum UIEvent {
     UpdatePhysicalCamera(PhysicalCameraParameters),
     UpdateAutoExposure(AutoExposure),
     UpdateOnionSkinning(OnionSkinningConfig),
-    UpdateFlameEffect(Box<FlameEffect>),
+    UpdateFlameEffect {
+        entity: Entity,
+        effect: Box<FlameEffect>,
+    },
     UpdateFlameBaked(Box<thyllore_effect_core::FlameBaked>),
     ApplyFlamePreset(String),
     ApplyFlameTextureFit {
@@ -484,12 +488,28 @@ pub enum UIEvent {
         source_id: SourceClipId,
         seconds: f32,
     },
-    UpdateWaterEffect(Box<WaterTorusEffect>),
+    UpdateWaterEffect {
+        entity: Entity,
+        effect: Box<WaterTorusEffect>,
+    },
     ApplyWaterPreset(String),
     UpdateWaterRenderSettings(WaterRenderSettings),
-    UpdateWindEffect(Box<WindTornadoEffect>),
+    UpdateWindEffect {
+        entity: Entity,
+        effect: Box<WindTornadoEffect>,
+    },
     ApplyWindPreset(String),
     UpdateWindRenderSettings(WindRenderSettings),
+    UpdateLightningEffect {
+        entity: Entity,
+        effect: Box<LightningEffect>,
+    },
+    ApplyLightningPreset(String),
+    AddLightningTarget,
+    ClearLightningTarget,
+    AddLightningWaypoint,
+    RemoveLightningWaypoint(usize),
+    UpdateLightningRenderSettings(LightningRenderSettings),
     OpenScalarCurveEditor,
 }
 

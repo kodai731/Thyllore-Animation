@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use cgmath::Matrix4;
+use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{BoneId, SkeletonId};
 use crate::ecs::component::LineMesh;
@@ -19,7 +19,7 @@ use crate::ecs::systems::{
     compute_local_override_from_global_scale, compute_local_override_from_global_translation,
     select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
 };
-use crate::ecs::world::{Entity, GlobalTransform, Transform};
+use crate::ecs::world::{Entity, GlobalTransform, Parent, Transform};
 use crate::ecs::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
 };
@@ -929,9 +929,19 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
     }
 }
 
+/// The gizmo hands over a world position; a child entity stores it relative to its parent.
 fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vector3<f32>) {
+    let parent_global = ctx
+        .world
+        .get_component::<Parent>(entity)
+        .and_then(|parent| ctx.world.get_component::<GlobalTransform>(parent.0))
+        .map(|global| global.0);
+    let local_pos = match parent_global.and_then(|global| global.invert()) {
+        Some(inverse) => (inverse * new_pos.extend(1.0)).truncate(),
+        None => new_pos,
+    };
     if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
-        transform.translation = new_pos;
+        transform.translation = local_pos;
     }
 }
 

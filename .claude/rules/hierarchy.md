@@ -128,6 +128,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `batch/` | Batch run schedule and pick capture |
 | `gizmo/` | Bone, constraint, grid, light, spring bone and transform gizmo state |
 | `flame/` | Flame effect data, render targets, history snapshot, SDF source, batch capture |
+| `lightning/` | Lightning GPU state, render targets, batch debug capture |
 | `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
 | `wind/` | Wind effect data, render targets, batch capture |
 | `app/` | App command and exit, message log, scene state |
@@ -142,12 +143,13 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | Path | Contents |
 |---|---|
 | `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and its domain table, spring bone |
-| `editor/` | entity icon and editor display, gizmo re-exports, markers |
+| `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
 | `render/` | camera state, render handles, field-driven look |
 | `model/` | GLB source |
 | `ml/` | inference actor |
 | `mesh/` | GPU mesh types and vertex attribute presets |
 | `flame/` | Flame effect components |
+| `lightning/` | Lightning effect components |
 | `water/` | Water effect components |
 | `wind/` | Wind effect components |
 

@@ -1,6 +1,7 @@
 mod animation;
 mod editor;
 mod flame;
+mod lightning;
 pub mod mesh;
 mod ml;
 mod model;
@@ -11,6 +12,7 @@ mod wind;
 pub use animation::*;
 pub use editor::*;
 pub use flame::*;
+pub use lightning::*;
 pub use mesh::*;
 pub use ml::*;
 pub use model::*;

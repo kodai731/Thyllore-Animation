@@ -5,6 +5,7 @@ mod gpu_block_codegen;
 mod manifest;
 mod naming;
 mod slang;
+mod spirv_block;
 mod spirv_files;
 mod stage;
 
@@ -25,6 +26,9 @@ pub use naming::{is_shader_source, parse_entry_points, spirv_output_name, EntryP
 pub use slang::{
     cpp_command, slang_root, slang_version, slangc_path, spirv_command, spirv_rerun_if_env_changed,
     verify_slangc_version,
+};
+pub use spirv_block::{
+    generate_spirv_block_rust, reflect_stage_block, SpirvBlock, SpirvBlockError,
 };
 pub use spirv_files::collect_spirv_files;
 pub use stage::StageKind;

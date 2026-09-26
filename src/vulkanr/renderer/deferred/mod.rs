@@ -17,5 +17,7 @@ pub use onion_skin_pass::*;
 pub use overlay_renderer::OverlayRenderer;
 pub use post_process_pass::*;
 pub use ray_query_pass::*;
-pub(crate) use scissor::{compute_bounds_scissor, full_extent_scissor};
+pub(crate) use scissor::{
+    compute_bounds_scissor, compute_projected_bounds_scissor, full_extent_scissor,
+};
 pub use tonemap_pass::*;

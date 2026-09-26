@@ -26,6 +26,7 @@ declare_scene_format! {
         },
         height: f32 = Frame { get: |e| e.height, set: |e, v| e.height = v,
             ui {
+                primary,
                 min: 0.05,
                 max: 10.0,
                 format: "%.2f",
@@ -34,6 +35,7 @@ declare_scene_format! {
         },
         radius: f32 = Frame { get: |e| e.radius, set: |e, v| e.radius = v,
             ui {
+                primary,
                 min: 0.05,
                 max: 10.0,
                 format: "%.2f",
@@ -43,6 +45,7 @@ declare_scene_format! {
         sigma_t: f32 = Style { get: |e| e.sigma_t, set: |e, v| e.sigma_t = v },
         intensity: f32 = Style { get: |e| e.intensity, set: |e, v| e.intensity = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 10.0,
                 group: "body",
@@ -53,6 +56,7 @@ declare_scene_format! {
             set: |e, v| e.color.base = v,
             scalars: rgb,
             ui {
+                primary,
                 kind: Color,
                 label: "Base Color",
                 min: 0.0,
@@ -67,6 +71,7 @@ declare_scene_format! {
             set: |e, v| e.color.tip = v,
             scalars: rgb,
             ui {
+                primary,
                 kind: Color,
                 label: "Tip Color",
                 min: 0.0,
@@ -110,6 +115,7 @@ declare_scene_format! {
             get: |e| e.noise.amplitude,
             set: |e, v| e.noise.amplitude = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 3.0,
                 group: "noise",
@@ -119,6 +125,7 @@ declare_scene_format! {
             get: |e| e.noise.contrast,
             set: |e, v| e.noise.contrast = v,
             ui {
+                primary,
                 min: 0.25,
                 max: 4.0,
                 format: "%.2f",
@@ -135,6 +142,7 @@ declare_scene_format! {
         },
         time_scale: f32 = Frame { get: |e| e.time_scale, set: |e, v| e.time_scale = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 4.0,
                 group: "footer",
@@ -722,5 +730,23 @@ mod tests {
             assert!(!object.contains_key(name), "{name} must stay runtime-only");
         }
         assert_eq!(object.len(), PARAMETER_OWNERSHIP.len());
+    }
+
+    #[test]
+    fn test_exactly_eight_primary_params() {
+        let primary: Vec<&str> = FLAME_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 8);
+        assert!(primary.contains(&"radius"));
+        assert!(primary.contains(&"height"));
+        assert!(primary.contains(&"noise_amplitude"));
+        assert!(primary.contains(&"noise_contrast"));
+        assert!(primary.contains(&"color_base"));
+        assert!(primary.contains(&"color_tip"));
+        assert!(primary.contains(&"intensity"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

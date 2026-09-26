@@ -212,7 +212,7 @@ pub(crate) mod test_support {
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
     pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
-        code: 768,
+        code: 1024,
         display_name: "Level",
         cli_name: "probe_level",
         scene_name: "ProbeLevel",
@@ -220,7 +220,7 @@ pub(crate) mod test_support {
     };
 
     pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
-        code: 769,
+        code: 1025,
         display_name: "Height",
         cli_name: "probe_height",
         scene_name: "ProbeHeight",

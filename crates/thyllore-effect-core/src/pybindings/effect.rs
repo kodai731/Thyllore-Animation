@@ -27,6 +27,7 @@ fn ui_kind_name(kind: UiKind) -> &'static str {
         UiKind::Scalar => "scalar",
         UiKind::Color => "color",
         UiKind::Absorption => "absorption",
+        UiKind::Offset => "offset",
     }
 }
 
@@ -40,8 +41,9 @@ fn fill_ui_param_dict(dict: &Bound<'_, PyDict>, param: &UiParam) -> PyResult<()>
     dict.set_item("format", param.format)?;
     dict.set_item("tooltip", param.tooltip)?;
     dict.set_item("persisted", param.persisted)?;
+    dict.set_item("primary", param.primary)?;
     match param.kind {
-        UiKind::Scalar | UiKind::Color => {}
+        UiKind::Scalar | UiKind::Color | UiKind::Offset => {}
         UiKind::Absorption => {
             dict.set_item("reference_distance", ABSORPTION_REFERENCE_DISTANCE)?;
         }

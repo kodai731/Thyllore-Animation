@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Callable
 
+from .coordinates import blender_to_engine_point, engine_to_blender_point
+
 ABSORPTION_COLOR_FLOOR = 1e-3
 
 
@@ -51,6 +53,31 @@ def display_property_names(exposed_params: list[dict]) -> dict[str, str]:
     }
 
 
+def offset_param_names(exposed_params: list[dict]) -> list[str]:
+    """Names of parameters whose UI kind is 'offset'."""
+    return [p["name"] for p in exposed_params if p.get("kind") == "offset"]
+
+
+def convert_offsets_to_blender(values: dict, names: list[str]) -> dict:
+    """Convert offset values from engine coordinates to Blender coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in engine_to_blender_point(v)]
+    return result
+
+
+def convert_offsets_to_engine(values: dict, names: list[str]) -> dict:
+    """Convert offset values from Blender coordinates to engine coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in blender_to_engine_point(v)]
+    return result
+
+
 def select_exposed_params(ui_params: list[dict]) -> list[dict]:
     """Mirrors the engine's persisted UI parameters; runtime-only ones are driven by scene playback."""
     return [p for p in ui_params if p["persisted"]]
@@ -65,6 +92,18 @@ def group_params_by_owner(exposed_params: list[dict]) -> list[tuple[str, list[st
     return list(groups.items())
 
 
+def split_primary_params(exposed_params: list[dict]) -> tuple[list[str], list[dict]]:
+    """Primary names in declaration order, and the remaining param dicts."""
+    primary_names: list[str] = []
+    remaining: list[dict] = []
+    for param in exposed_params:
+        if param.get("primary", False):
+            primary_names.append(param["name"])
+        else:
+            remaining.append(param)
+    return primary_names, remaining
+
+
 def draw_param_groups(layout, props) -> None:
     groups = type(props).PARAM_GROUPS
     display_names = type(props).PARAM_DISPLAY_NAMES
@@ -74,6 +113,16 @@ def draw_param_groups(layout, props) -> None:
             box.label(text=owner.title())
         for name in names:
             box.prop(props, display_names.get(name, name))
+
+
+def draw_primary_params(layout, props) -> None:
+    primary_names = type(props).PARAM_PRIMARY
+    if not primary_names:
+        return
+    display_names = type(props).PARAM_DISPLAY_NAMES
+    box = layout.box()
+    for name in primary_names:
+        box.prop(props, display_names.get(name, name))
 
 
 def collect_params(props, names: list[str]) -> dict:
@@ -96,6 +145,7 @@ def merge_preset_params(preset_values: dict, exposed_values: dict) -> dict:
 def render_params(props, preset_params: Callable[[str], dict]) -> dict:
     preset_values = preset_params(props.preset)
     exposed_values = collect_params(props, type(props).PARAM_NAMES)
+    exposed_values = convert_offsets_to_engine(exposed_values, type(props).OFFSET_PARAM_NAMES)
     return merge_preset_params(preset_values, exposed_values)
 
 
@@ -171,6 +221,17 @@ def build_param_properties(param: dict) -> dict[str, object]:
         return {name: _build_color_property(param)}
     if ui_kind == "absorption":
         return _build_absorption_properties(param)
+    if ui_kind == "offset":
+        return {
+            name: bpy.props.FloatVectorProperty(
+                name=label,
+                description=tooltip,
+                default=engine_to_blender_point(default),
+                size=3,
+                subtype="TRANSLATION",
+                **_range_kwargs(param),
+            )
+        }
 
     kind = property_kind(default)
     if kind == "bool":
@@ -222,11 +283,13 @@ def build_effect_property_group(
 
     exposed_params = select_exposed_params(ui_params())
     param_names = [p["name"] for p in exposed_params]
+    offset_names = offset_param_names(exposed_params)
 
     def apply_preset(self, context):
         preset_values = preset_params(self.preset)
         if preset_values_post_process is not None:
             preset_values = preset_values_post_process(preset_values)
+        preset_values = convert_offsets_to_blender(preset_values, offset_names)
         for name in param_names:
             if name in preset_values:
                 setattr(self, name, preset_values[name])
@@ -242,12 +305,57 @@ def build_effect_property_group(
         update=apply_preset,
     )
 
+    primary_names, remaining_params = split_primary_params(exposed_params)
+
     attrs = {
         "__annotations__": annotations,
         "PARAM_NAMES": param_names,
-        "PARAM_GROUPS": group_params_by_owner(exposed_params),
+        "OFFSET_PARAM_NAMES": offset_names,
+        "PARAM_PRIMARY": primary_names,
+        "PARAM_GROUPS": group_params_by_owner(remaining_params),
         "PARAM_DISPLAY_NAMES": display_property_names(exposed_params),
         "__module__": module_name,
     }
 
     return type(class_name, (bpy.types.PropertyGroup,), attrs)
+
+
+def build_effect_child_panel(effect_type: str, main_panel_id: str, suffix: str, label: str, draw_body):
+    """Closed sub-panel under an effect panel whose body is drawn by draw_body(layout, props)."""
+    import bpy
+
+    def _poll(cls, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return False
+        attr = getattr(obj, f"thyllore_{effect_type}", None)
+        if attr is None:
+            return False
+        flag = getattr(attr, f"is_{effect_type}", False)
+        return bool(flag)
+
+    def _draw(self, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return
+        props = getattr(obj, f"thyllore_{effect_type}")
+        draw_body(self.layout, props)
+
+    child_id = main_panel_id + "_" + suffix
+    return type(child_id, (bpy.types.Panel,), {
+        "bl_space_type": "VIEW_3D",
+        "bl_region_type": "UI",
+        "bl_category": "Thyllore",
+        "bl_parent_id": main_panel_id,
+        "bl_label": label,
+        "bl_options": {"DEFAULT_CLOSED"},
+        "poll": classmethod(_poll),
+        "draw": _draw,
+    })
+
+
+def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
+    """Closed "Advanced" sub-panel under an effect panel, drawing the non-primary groups."""
+    return build_effect_child_panel(
+        effect_type, main_panel_id, "advanced", "Advanced", draw_param_groups
+    )

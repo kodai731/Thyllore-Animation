@@ -3,18 +3,19 @@ use std::rc::Rc;
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{FlameParam, WaterParam, WindParam};
+use crate::ecs::component::{FlameParam, LightningParam, WaterParam, WindParam};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
-    WeightHeatmapState, WindDebugCapture,
+    CoordinateSpace, LightningDebugCapture, ModelState, TransformGizmoMode, TransformGizmoState,
+    WaterDebugCapture, WeightHeatmapState, WindDebugCapture,
 };
-use crate::ecs::systems::{FLAME_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK};
+use crate::ecs::systems::{
+    FLAME_SPAWN_HOOK, LIGHTNING_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK,
+};
 use crate::ecs::World;
 
-use super::flame_param_groups::flame_group_param_names;
-use super::param_widgets::{draw_params, EditedScalars};
+use super::param_widgets::{draw_params, draw_tiered_params, EditedScalars};
 use super::viewport_window::ViewportInfo;
 
 const OVERLAY_MARGIN: f32 = 8.0;
@@ -22,8 +23,6 @@ const OVERLAY_WIDTH: f32 = 420.0;
 
 pub struct SceneOverlayState {
     pub model: ModelState,
-    pub water_preset_index: usize,
-    pub wind_preset_index: usize,
     #[cfg(feature = "auto-rig")]
     pub open_text_to_mesh_dialog: bool,
     #[cfg(feature = "auto-rig")]
@@ -72,9 +71,11 @@ pub fn build_scene_overlay(
 
             build_onion_skinning_section(ui, ui_events, ecs_world);
 
-            build_water_section(ui, ui_events, overlay_state, ecs_world);
+            build_water_section(ui, ui_events, ecs_world);
 
-            build_wind_section(ui, ui_events, overlay_state, ecs_world);
+            build_wind_section(ui, ui_events, ecs_world);
+
+            build_lightning_section(ui, ui_events, ecs_world);
 
             build_flame_section(ui, ui_events, overlay_state, ecs_world, viewport_info);
         });
@@ -259,6 +260,16 @@ fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedS
         .iter()
         .filter_map(|(name, value)| {
             WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+        })
+        .collect();
+    send_key_button(ui, ui_events, edited, keys);
+}
+
+fn lightning_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+    let keys: Vec<(PropertyType, f32)> = edited
+        .iter()
+        .filter_map(|(name, value)| {
+            LightningParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);
@@ -500,58 +511,37 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     }
 }
 
-fn build_wind_section(
+/// Preset combo whose preview is the preset recorded on the selected entity; returns the
+/// preset the user just picked, if any.
+fn draw_preset_combo(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+    label: &str,
+    names: &[&str],
+    applied: Option<&str>,
+) -> Option<String> {
+    let preview = applied.unwrap_or("(none)");
+    let combo = ui.begin_combo(label, preview)?;
+    let mut chosen = None;
+    for &name in names {
+        if ui
+            .selectable_config(name)
+            .selected(Some(name) == applied)
+            .build()
+        {
+            chosen = Some(name.to_string());
+        }
+    }
+    combo.end();
+    chosen
+}
+
+fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     use crate::ecs::component::WindTornadoEffect;
-    use crate::ecs::resource::{WindDebugView, WindRenderSettings, WindShadingMode};
 
     if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
         return;
     }
-
-    if let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() {
-        let mut settings_copy = *settings;
-        drop(settings);
-
-        if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-            for mode in WindShadingMode::ALL {
-                if ui
-                    .selectable_config(mode.label())
-                    .selected(mode == settings_copy.shading_mode)
-                    .build()
-                {
-                    settings_copy.shading_mode = mode;
-                }
-            }
-        }
-        if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-            for view in WindDebugView::ALL {
-                if ui
-                    .selectable_config(view.label())
-                    .selected(view == settings_copy.debug_view)
-                    .build()
-                {
-                    settings_copy.debug_view = view;
-                }
-            }
-        }
-        let mut step_count = settings_copy.reference_step_count as i32;
-        if ui
-            .slider_config("Reference Steps", 16, 2048)
-            .build(&mut step_count)
-        {
-            settings_copy.reference_step_count = step_count.max(1) as u32;
-        }
-        ui.checkbox(
-            "Animate when paused",
-            &mut settings_copy.free_run_when_paused,
-        );
-        ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
-    }
+    let _section_id = ui.push_id("wind");
 
     if ui.button("Add Wind") {
         ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
@@ -581,18 +571,23 @@ fn build_wind_section(
         }
     }
 
-    let presets: Vec<String> = thyllore_effect_core::WIND_PRESET_NAMES
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let mut preset_index = overlay_state.wind_preset_index;
-    let preset_changed = ui.combo_simple_string("Wind Preset", &mut preset_index, &presets);
-    overlay_state.wind_preset_index = preset_index;
+    let applied_preset = selected_wind_entity.and_then(|entity| {
+        ecs_world
+            .get_component::<crate::ecs::component::AppliedWindPreset>(entity)
+            .map(|preset| preset.name.clone())
+    });
     let mut effect_applied_this_frame = false;
-    if preset_changed && selected_wind_entity.is_some() {
-        ui_events.send(UIEvent::ClearScalarKeys);
-        ui_events.send(UIEvent::ApplyWindPreset(presets[preset_index].clone()));
-        effect_applied_this_frame = true;
+    if let Some(chosen) = draw_preset_combo(
+        ui,
+        "Wind Preset",
+        thyllore_effect_core::WIND_PRESET_NAMES,
+        applied_preset.as_deref(),
+    ) {
+        if selected_wind_entity.is_some() {
+            ui_events.send(UIEvent::ClearScalarKeys);
+            ui_events.send(UIEvent::ApplyWindPreset(chosen));
+            effect_applied_this_frame = true;
+        }
     }
 
     let Some(selected_wind) = selected_wind_entity else {
@@ -602,106 +597,302 @@ fn build_wind_section(
         return;
     };
     let mut effect_copy = effect.clone();
-    let mut drawn_groups: Vec<&str> = Vec::new();
-    for group in thyllore_effect_core::WIND_UI_PARAMS
-        .iter()
-        .map(|param| param.group)
-        .filter(|group| !group.is_empty())
-    {
-        if drawn_groups.contains(&group) {
-            continue;
-        }
-        drawn_groups.push(group);
-
-        let names: Vec<&str> = thyllore_effect_core::WIND_UI_PARAMS
-            .iter()
-            .filter(|param| param.group == group)
-            .map(|param| param.name)
-            .collect();
-        draw_params(
-            ui,
-            &names,
-            thyllore_effect_core::WIND_UI_PARAMS,
-            thyllore_effect_core::WIND_SCALAR_PARAMS,
-            &mut effect_copy,
-            |ui, edited| wind_key_button(ui, ui_events, edited),
-        );
-    }
+    draw_tiered_params(
+        ui,
+        thyllore_effect_core::WIND_UI_PARAMS,
+        &thyllore_effect_core::WIND_SCALAR_PARAMS,
+        &mut effect_copy,
+        &[],
+        |ui, edited| wind_key_button(ui, ui_events, edited),
+    );
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
+        ui_events.send(UIEvent::UpdateWindEffect {
+            entity: selected_wind,
+            effect: Box::new(effect_copy),
+        });
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
     }
-    ui.same_line();
+    if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
+        draw_wind_render_settings(ui, ui_events, ecs_world);
+        if ui.button("Dump Debug") {
+            ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+        }
+        if ui.is_item_hovered() {
+            ui.tooltip_text(
+                "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
+            );
+        }
+    }
+}
+
+fn draw_wind_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{WindDebugView, WindRenderSettings, WindShadingMode};
+
+    let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in WindShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
+    }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in WindDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+    let mut step_count = settings_copy.reference_step_count as i32;
+    if ui
+        .slider_config("Reference Steps", 16, 2048)
+        .build(&mut step_count)
+    {
+        settings_copy.reference_step_count = step_count.max(1) as u32;
+    }
+    ui.checkbox(
+        "Animate when paused",
+        &mut settings_copy.free_run_when_paused,
+    );
+    ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
+}
+
+fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::component::LightningEffect;
+
+    if !ui.collapsing_header("Lightning", imgui::TreeNodeFlags::empty()) {
+        return;
+    }
+    let _section_id = ui.push_id("lightning");
+
+    if ui.button("Add Lightning") {
+        ui_events.send(UIEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
+    }
+
+    let lightnings = ecs_world.entities_with::<LightningEffect>();
+    let selected_entity = crate::ecs::systems::resolve_selected_lightning(ecs_world);
+    if lightnings.len() > 1 {
+        let mut current = selected_entity
+            .and_then(|entity| lightnings.iter().position(|&e| e == entity))
+            .unwrap_or(0);
+        let items: Vec<String> = lightnings
+            .iter()
+            .enumerate()
+            .map(|(i, &entity)| {
+                ecs_world
+                    .get_component::<crate::ecs::world::Name>(entity)
+                    .map(|n| n.0.clone())
+                    .unwrap_or_else(|| format!("Lightning {}", i + 1))
+            })
+            .collect();
+        if ui.combo_simple_string("Instance", &mut current, &items) {
+            ui_events.send(UIEvent::SelectEffectInstance {
+                key: LIGHTNING_SPAWN_HOOK.key,
+                index: current,
+            });
+        }
+    }
+
+    let applied_preset = selected_entity.and_then(|entity| {
+        ecs_world
+            .get_component::<crate::ecs::component::AppliedLightningPreset>(entity)
+            .map(|preset| preset.name.clone())
+    });
+    let mut effect_applied_this_frame = false;
+    if let Some(chosen) = draw_preset_combo(
+        ui,
+        "Lightning Preset",
+        thyllore_effect_core::LIGHTNING_PRESET_NAMES,
+        applied_preset.as_deref(),
+    ) {
+        if selected_entity.is_some() {
+            ui_events.send(UIEvent::ClearScalarKeys);
+            ui_events.send(UIEvent::ApplyLightningPreset(chosen));
+            effect_applied_this_frame = true;
+        }
+    }
+
+    let Some(selected) = selected_entity else {
+        return;
+    };
+    let Some(effect) = ecs_world.get_component::<LightningEffect>(selected) else {
+        return;
+    };
+    let mut effect_copy = effect.clone();
+    let target_name = draw_lightning_target_row(ui, ui_events, ecs_world, selected);
+    draw_lightning_path_rows(ui, ui_events, ecs_world, selected);
+
+    if target_name.is_none() {
+        draw_params(
+            ui,
+            &["end_offset"],
+            thyllore_effect_core::LIGHTNING_UI_PARAMS,
+            thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+            &mut effect_copy,
+            |ui, edited| lightning_key_button(ui, ui_events, edited),
+        );
+    }
+
+    draw_tiered_params(
+        ui,
+        thyllore_effect_core::LIGHTNING_UI_PARAMS,
+        thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+        &mut effect_copy,
+        &["end_offset"],
+        |ui, edited| lightning_key_button(ui, ui_events, edited),
+    );
+
+    if !effect_applied_this_frame {
+        ui_events.send(UIEvent::UpdateLightningEffect {
+            entity: selected,
+            effect: Box::new(effect_copy),
+        });
+    }
+    if ui.button("Curves") {
+        ui_events.send(UIEvent::OpenScalarCurveEditor);
+    }
+    if !ui.collapsing_header("Lightning Debug", imgui::TreeNodeFlags::empty()) {
+        return;
+    }
+    draw_lightning_render_settings(ui, ui_events, ecs_world);
     if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+        ui_events.send(UIEvent::CaptureNow(Rc::new(LightningDebugCapture)));
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
-            "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
+            "Write lightning parameters, UBO, render settings, camera and a screenshot to log/lightning/",
         );
     }
 }
 
-fn build_water_section(
+/// The bolt's end point row: the linked locator's name, or a button that creates one. While a
+/// target is linked the end offset follows it, so its slider is hidden.
+fn draw_lightning_target_row(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
     ecs_world: &World,
+    lightning: crate::ecs::world::Entity,
+) -> Option<String> {
+    use crate::ecs::component::LightningTarget;
+
+    let target_name = ecs_world
+        .get_component::<LightningTarget>(lightning)
+        .map(|target| target.entity_name.clone());
+    match &target_name {
+        Some(name) => {
+            ui.text(format!("Target: {name}"));
+            ui.same_line();
+            if ui.small_button("Clear##lightning_target") {
+                ui_events.send(UIEvent::ClearLightningTarget);
+            }
+        }
+        None => {
+            if ui.button("Add Target") {
+                ui_events.send(UIEvent::AddLightningTarget);
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text("Spawn a locator at the end point; move it to aim the bolt");
+            }
+        }
+    }
+    target_name
+}
+
+fn draw_lightning_path_rows(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
+    lightning: crate::ecs::world::Entity,
 ) {
+    use crate::ecs::component::LightningPath;
+
+    let waypoints = ecs_world
+        .get_component::<LightningPath>(lightning)
+        .map(|path| path.waypoints.clone())
+        .unwrap_or_default();
+
+    for (i, name) in waypoints.iter().enumerate() {
+        ui.text(name);
+        ui.same_line();
+        if ui.small_button(format!("x##waypoint{i}")) {
+            ui_events.send(UIEvent::RemoveLightningWaypoint(i));
+        }
+    }
+
+    if ui.button("Add Waypoint") {
+        ui_events.send(UIEvent::AddLightningWaypoint);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Spawn a locator halfway to the end point; the bolt passes through waypoints in order",
+        );
+    }
+}
+
+fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{LightningDebugView, LightningRenderSettings, LightningShadingMode};
+
+    let Some(settings) = ecs_world.get_resource::<LightningRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in LightningShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
+    }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in LightningDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+    let mut step_count = settings_copy.reference_step_count as i32;
+    if ui
+        .slider_config("Reference Steps", 16, 2048)
+        .build(&mut step_count)
+    {
+        settings_copy.reference_step_count = step_count.max(1) as u32;
+    }
+    ui_events.send(UIEvent::UpdateLightningRenderSettings(settings_copy));
+}
+
+fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     use crate::ecs::component::WaterTorusEffect;
-    use crate::ecs::resource::WaterRenderSettings;
 
     if ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
-        // WaterRenderSettings: secondary_rays combo and debug_view slider
-        if let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) =
-                ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label())
-            {
-                for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
-                    let selected = mode == settings_copy.secondary_rays;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.secondary_rays = mode;
-                    }
-                }
-            }
-
-            let mut debug_view = settings_copy.debug_view as f32;
-            if ui
-                .slider_config("Debug View", 0.0f32, 1.0f32)
-                .build(&mut debug_view)
-            {
-                settings_copy.debug_view = debug_view as i32;
-            }
-
-            ui.checkbox(
-                "Animate when paused",
-                &mut settings_copy.free_run_when_paused,
-            );
-
-            ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
-        }
-
+        let _section_id = ui.push_id("water");
         // Add Water button (before instance selector, accessible even when no water exists)
         if ui.button("Add Water") {
             ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
-        }
-        ui.same_line();
-        if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
-        }
-        if ui.is_item_hovered() {
-            ui.tooltip_text(
-                "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
-            );
         }
 
         // Instance selector
@@ -731,21 +922,22 @@ fn build_water_section(
             }
         }
 
-        // Preset combo
-        let presets: Vec<String> = thyllore_effect_core::WATER_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let applied_preset = selected_water_entity.and_then(|entity| {
+            ecs_world
+                .get_component::<crate::ecs::component::AppliedWaterPreset>(entity)
+                .map(|preset| preset.name.clone())
+        });
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.water_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Water Preset", &mut preset_index, &presets);
-            overlay_state.water_preset_index = preset_index;
-            if preset_changed {
+            if let Some(chosen) = draw_preset_combo(
+                ui,
+                "Water Preset",
+                thyllore_effect_core::WATER_PRESET_NAMES,
+                applied_preset.as_deref(),
+            ) {
                 if selected_water_entity.is_some() {
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyWaterPreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::ApplyWaterPreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }
@@ -755,34 +947,20 @@ fn build_water_section(
                 if let Some(effect) = ecs_world.get_component::<WaterTorusEffect>(selected_water) {
                     let mut effect_copy = effect.clone();
 
-                    let mut drawn_groups: Vec<&str> = Vec::new();
-                    for group in thyllore_effect_core::WATER_UI_PARAMS
-                        .iter()
-                        .map(|param| param.group)
-                        .filter(|group| !group.is_empty())
-                    {
-                        if drawn_groups.contains(&group) {
-                            continue;
-                        }
-                        drawn_groups.push(group);
-
-                        let names: Vec<&str> = thyllore_effect_core::WATER_UI_PARAMS
-                            .iter()
-                            .filter(|param| param.group == group)
-                            .map(|param| param.name)
-                            .collect();
-                        draw_params(
-                            ui,
-                            &names,
-                            thyllore_effect_core::WATER_UI_PARAMS,
-                            thyllore_effect_core::WATER_SCALAR_PARAMS,
-                            &mut effect_copy,
-                            |ui, edited| water_key_button(ui, ui_events, edited),
-                        );
-                    }
+                    draw_tiered_params(
+                        ui,
+                        thyllore_effect_core::WATER_UI_PARAMS,
+                        &thyllore_effect_core::WATER_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        &[],
+                        |ui, edited| water_key_button(ui, ui_events, edited),
+                    );
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::UpdateWaterEffect {
+                            entity: selected_water,
+                            effect: Box::new(effect_copy),
+                        });
                     }
 
                     if ui.button("Curves") {
@@ -791,6 +969,119 @@ fn build_water_section(
                 }
             }
         }
+        if ui.collapsing_header("Water Debug", imgui::TreeNodeFlags::empty()) {
+            draw_water_render_settings(ui, ui_events, ecs_world);
+            if ui.button("Dump Debug") {
+                ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text(
+                    "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
+                );
+            }
+        }
+    }
+}
+
+fn draw_water_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::WaterRenderSettings;
+
+    let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label()) {
+        for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.secondary_rays)
+                .build()
+            {
+                settings_copy.secondary_rays = mode;
+            }
+        }
+    }
+
+    let mut debug_view = settings_copy.debug_view as f32;
+    if ui
+        .slider_config("Debug View", 0.0f32, 1.0f32)
+        .build(&mut debug_view)
+    {
+        settings_copy.debug_view = debug_view as i32;
+    }
+
+    ui.checkbox(
+        "Animate when paused",
+        &mut settings_copy.free_run_when_paused,
+    );
+
+    ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
+}
+
+fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
+    let mut noise_sharpness =
+        thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale);
+    if ui
+        .slider_config("Noise Sharpness", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut noise_sharpness)
+    {
+        effect.noise.shaping_scale =
+            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Crispness of the noise pattern: log remap of the tanh shaping \
+             scale, harder edges to the right (small scale saturates the \
+             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
+             perceptual sweet spot). Stateless — noise_shaping_scale stays \
+             the source of truth (0 = built-in 0.6)",
+        );
+    }
+
+    let mut wave_segments = effect.wave_segments as i32;
+    if ui
+        .slider_config(
+            "Noise Segments",
+            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
+            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
+        )
+        .build(&mut wave_segments)
+    {
+        effect.wave_segments = wave_segments as u32;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Closed-form segments per ray: the noise grid aliases into a \
+             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
+             frequency ~4 at twice the cost",
+        );
+    }
+
+    let mut vortex =
+        (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
+    if ui
+        .slider_config("Vortex", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut vortex)
+    {
+        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
+        effect.twist.gain = gain;
+        effect.twist.speed = speed;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Vortex macro: one knob writing both twist parameters along a \
+             faster-and-deeper curve (stateless; the fine sliders \
+             stay the source of truth)",
+        );
+    }
+
+    let mut branch_seed = effect.branch.seed as i32;
+    if ui.input_int("Branch Seed", &mut branch_seed).build() {
+        effect.branch.seed = branch_seed.max(0) as u32;
     }
 }
 
@@ -802,85 +1093,9 @@ fn build_flame_section(
     viewport_info: &ViewportInfo,
 ) {
     use crate::ecs::component::FlameEffect;
-    use crate::ecs::resource::{FlameRenderSettings, FlameShadingMode};
 
     if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
-        if let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label())
-            {
-                for mode in FlameShadingMode::ALL {
-                    let selected = mode == settings_copy.shading_mode;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.shading_mode = mode;
-                    }
-                }
-            }
-
-            {
-                use crate::ecs::resource::FlameDebugView;
-                if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label())
-                {
-                    for view in FlameDebugView::ALL {
-                        let selected = view == settings_copy.debug_view;
-                        if ui
-                            .selectable_config(view.label())
-                            .selected(selected)
-                            .build()
-                        {
-                            settings_copy.debug_view = view;
-                        }
-                    }
-                }
-            }
-
-            {
-                use thyllore_effect_core::flame_wave::{
-                    read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter,
-                    set_wave_jitter_freq,
-                };
-                let mut jitter = read_env_wave_jitter();
-                if ui
-                    .slider_config("Jitter Depth", 0.0f32, 2.0f32)
-                    .build(&mut jitter)
-                {
-                    set_wave_jitter(jitter);
-                }
-                let mut jitter_freq = read_env_wave_jitter_freq();
-                if ui
-                    .slider_config("Jitter Freq", 0.25f32, 6.0f32)
-                    .build(&mut jitter_freq)
-                {
-                    set_wave_jitter_freq(jitter_freq);
-                }
-            }
-
-            match settings_copy.shading_mode {
-                FlameShadingMode::ReferenceRaymarch => {
-                    let mut steps = settings_copy.reference_step_count as i32;
-                    ui.slider_config("Reference Steps", 8, 512)
-                        .build(&mut steps);
-                    settings_copy.reference_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::NoiseRaymarch => {
-                    let mut steps = settings_copy.noise_step_count as i32;
-                    ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
-                    settings_copy.noise_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::Analytic
-                | FlameShadingMode::DebugThickness
-                | FlameShadingMode::DebugDepthClamp => {}
-            }
-
-            ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
-        }
-
+        let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
         let clamped_index = selected_flame_entity
@@ -908,27 +1123,28 @@ fn build_flame_section(
             }
         }
 
-        // Flame Preset selector
-        let presets: Vec<String> = thyllore_effect_core::FLAME_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let applied_preset = selected_flame_entity.and_then(|entity| {
+            ecs_world
+                .get_component::<crate::ecs::component::AppliedFlamePreset>(entity)
+                .map(|preset| preset.name.clone())
+        });
         // The slider block below re-sends the (pre-apply) effect every frame;
         // that send must be skipped on the frame an Apply button fires or it
         // overwrites the applied preset/fit in the same dispatch.
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.model.flame_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Flame Preset", &mut preset_index, &presets);
-            overlay_state.model.flame_preset_index = preset_index;
-            if preset_changed {
+            if let Some(chosen) = draw_preset_combo(
+                ui,
+                "Flame Preset",
+                thyllore_effect_core::FLAME_PRESET_NAMES,
+                applied_preset.as_deref(),
+            ) {
                 if selected_flame_entity.is_some() {
                     // Keyed scalar curves re-stamp their channels every
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyFlamePreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::ApplyFlamePreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }
@@ -1208,141 +1424,21 @@ fn build_flame_section(
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
 
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("body"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    draw_params(
+                    let advanced_open = draw_tiered_params(
                         ui,
-                        &*flame_group_param_names("color"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
+                        &[],
                         |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
+                    if advanced_open {
+                        draw_flame_manual_params(ui, &mut effect_copy);
+                    }
                     if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
                         effect_copy.color.use_blackbody = false;
                     }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("noise"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut noise_sharpness =
-                        thyllore_effect_core::shaping_scale_to_noise_sharpness(
-                            effect_copy.noise.shaping_scale,
-                        );
-                    if ui
-                        .slider_config("Noise Sharpness", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut noise_sharpness)
-                    {
-                        effect_copy.noise.shaping_scale =
-                            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Crispness of the noise pattern: log remap of the tanh shaping \
-                             scale, harder edges to the right (small scale saturates the \
-                             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
-                             perceptual sweet spot). Stateless — noise_shaping_scale stays \
-                             the source of truth (0 = built-in 0.6)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("mix"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut wave_segments = effect_copy.wave_segments as i32;
-                    if ui
-                        .slider_config(
-                            "Noise Segments",
-                            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
-                            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
-                        )
-                        .build(&mut wave_segments)
-                    {
-                        effect_copy.wave_segments = wave_segments as u32;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Closed-form segments per ray: the noise grid aliases into a \
-                             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-                             frequency ~4 at twice the cost",
-                        );
-                    }
-
-                    let mut vortex = (effect_copy.twist.gain
-                        / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN)
-                        .clamp(0.0, 1.0);
-                    if ui
-                        .slider_config("Vortex", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut vortex)
-                    {
-                        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
-                        effect_copy.twist.gain = gain;
-                        effect_copy.twist.speed = speed;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Vortex macro: one knob writing both twist parameters along a \
-                             faster-and-deeper curve (stateless; the fine sliders below \
-                             stay the source of truth)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("motion"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Branches");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("branch"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut branch_seed = effect_copy.branch.seed as i32;
-                    if ui.input_int("Branch Seed", &mut branch_seed).build() {
-                        effect_copy.branch.seed = branch_seed.max(0) as u32;
-                    }
-
-                    ui.separator();
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("footer"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
 
                     if ui.button("Clear Flame Keys") {
                         ui_events.send(UIEvent::ClearScalarKeys);
@@ -1360,17 +1456,6 @@ fn build_flame_section(
                     }
                     if ui.button("Add Flame") {
                         ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
-                    }
-                    ui.same_line();
-                    if ui.button("Dump Probe") {
-                        ui_events.send(UIEvent::DumpFlameWallProbe {
-                            viewport_size: viewport_info.size,
-                        });
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-                        );
                     }
 
                     // Trail checkbox and slider
@@ -1402,12 +1487,99 @@ fn build_flame_section(
                     }
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateFlameEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::UpdateFlameEffect {
+                            entity: selected_flame,
+                            effect: Box::new(effect_copy),
+                        });
+                    }
+
+                    if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
+                        draw_flame_render_settings(ui, ui_events, ecs_world);
+                        if ui.button("Dump Probe") {
+                            ui_events.send(UIEvent::DumpFlameWallProbe {
+                                viewport_size: viewport_info.size,
+                            });
+                        }
+                        if ui.is_item_hovered() {
+                            ui.tooltip_text(
+                                "Dump camera pose + wall-regime ray diagnostics to log/flame/",
+                            );
+                        }
                     }
                 }
             }
         }
     }
+}
+
+fn draw_flame_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
+    use thyllore_effect_core::flame_wave::{
+        read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter, set_wave_jitter_freq,
+    };
+
+    let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in FlameShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
+    }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in FlameDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+
+    let mut jitter = read_env_wave_jitter();
+    if ui
+        .slider_config("Jitter Depth", 0.0f32, 2.0f32)
+        .build(&mut jitter)
+    {
+        set_wave_jitter(jitter);
+    }
+    let mut jitter_freq = read_env_wave_jitter_freq();
+    if ui
+        .slider_config("Jitter Freq", 0.25f32, 6.0f32)
+        .build(&mut jitter_freq)
+    {
+        set_wave_jitter_freq(jitter_freq);
+    }
+
+    match settings_copy.shading_mode {
+        FlameShadingMode::ReferenceRaymarch => {
+            let mut steps = settings_copy.reference_step_count as i32;
+            ui.slider_config("Reference Steps", 8, 512)
+                .build(&mut steps);
+            settings_copy.reference_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::NoiseRaymarch => {
+            let mut steps = settings_copy.noise_step_count as i32;
+            ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
+            settings_copy.noise_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::Analytic
+        | FlameShadingMode::DebugThickness
+        | FlameShadingMode::DebugDepthClamp => {}
+    }
+
+    ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
 }
 
 /// Canonicalized directory, falling back to the typed text when the path

@@ -42,6 +42,11 @@ Commands:
       the NVIDIA GPU and open blender/wind.blend with a wind tornado already
       added (scripts/blender/wind/launch.sh):
         ./run.sh blender --wind
+  blender --lightning [--skip-build] [--release] [--software-gl] [scene.blend]
+      Build the lightning addon ZIP, install it into a pristine Docker Blender on
+      the NVIDIA GPU and open blender/lightning.blend with a lightning bolt already
+      added (scripts/blender/lightning/launch.sh):
+        ./run.sh blender --lightning
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
@@ -81,6 +86,10 @@ case "$command" in
         if [[ "${1:-}" == "--wind" ]]; then
             shift
             exec bash "$REPO_ROOT/scripts/blender/wind/launch.sh" "$@"
+        fi
+        if [[ "${1:-}" == "--lightning" ]]; then
+            shift
+            exec bash "$REPO_ROOT/scripts/blender/lightning/launch.sh" "$@"
         fi
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;

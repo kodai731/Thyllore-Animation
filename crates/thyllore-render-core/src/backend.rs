@@ -17,8 +17,6 @@ pub trait RenderBackend {
         memory_type: BufferMemoryType,
     ) -> Result<()>;
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()>;
-
     unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh);
 
     unsafe fn update_or_create_line_buffers(

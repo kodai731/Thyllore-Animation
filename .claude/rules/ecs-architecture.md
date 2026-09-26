@@ -165,8 +165,7 @@ Timeline      → run_timeline_phase()         # Timeline / clip schedule advanc
 Animation     → run_animation_phase_ecs()    # Animation evaluation, blending, transform propagation
               → run_animation_phase_gpu()    # Skinning / vertex upload
 OnionSkin     → run_onion_skin_phase()       # Ghost frame generation
-RenderPrep    → run_transform_phase_gpu()    # Light gizmo vertex upload (#194)
-              → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
+RenderPrep    → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
                 (App::render: record, submit, present)
 Last          → run_last_phase()             # Requested BatchCapture readbacks + scheduled screenshot
 ```

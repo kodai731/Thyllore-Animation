@@ -4,7 +4,6 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::ecs::component::LineMesh;
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
@@ -21,7 +20,7 @@ use crate::ecs::FrameContext;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
-    build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
+    build_spring_bone_gizmo_mesh,
 };
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
@@ -97,10 +96,6 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     );
 
     let t = Instant::now();
-    update_grid_gizmo_buffers(ctx)?;
-    sub.insert("grid".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-
-    let t = Instant::now();
     update_transform_gizmo_mesh(ctx)?;
     sub.insert(
         "transform_gizmo".to_string(),
@@ -126,6 +121,13 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     );
 
     let t = Instant::now();
+    upload_light_gizmo_if_changed(ctx)?;
+    sub.insert(
+        "light_gizmo".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    let t = Instant::now();
     crate::ecs::systems::gizmo_systems::run_vertical_lines_update(ctx)?;
     sub.insert(
         "vertical_lines".to_string(),
@@ -136,6 +138,25 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         .insert_resource(crate::ecs::resource::RenderPrepSubTimings { timings: sub });
 
     crate::ecs::systems::raytracing_systems::refresh_tlas_mesh_transforms(ctx)?;
+
+    Ok(())
+}
+
+unsafe fn upload_light_gizmo_if_changed(ctx: &mut FrameContext) -> Result<()> {
+    if ctx.light_gizmo().pending_uploads == 0 {
+        return Ok(());
+    }
+
+    let mut mesh = ctx.light_gizmo().mesh.clone();
+    {
+        let frame_slot = ctx.frame_slot;
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut mesh, frame_slot)?;
+    }
+
+    let mut light_gizmo = ctx.light_gizmo_mut();
+    light_gizmo.mesh = mesh;
+    light_gizmo.pending_uploads -= 1;
 
     Ok(())
 }
@@ -388,14 +409,6 @@ unsafe fn update_billboard_ubo(
 
     let image_index = ctx.image_index;
     ctx.update_billboard_ubo_internal(model_matrix, view, proj, image_index)?;
-
-    Ok(())
-}
-
-unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext) -> Result<()> {
-    let mesh = ctx.gizmo().mesh.clone();
-    let backend = ctx.create_backend();
-    gizmo_update_vertex_buffer(&mesh, &backend)?;
 
     Ok(())
 }
@@ -740,16 +753,13 @@ unsafe fn update_sphere_bone_mesh(
         .map(|s| (*s).clone())
         .unwrap_or_default();
 
-    let mut solid_mesh = LineMesh::default();
-    let mut wire_mesh = LineMesh::default();
-
-    {
-        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        solid_mesh.vertex_buffer_handles[0] = bone_gizmo.solid_mesh.vertex_buffer_handles[0];
-        solid_mesh.index_buffer_handles[0] = bone_gizmo.solid_mesh.index_buffer_handles[0];
-        wire_mesh.vertex_buffer_handles[0] = bone_gizmo.wire_mesh.vertex_buffer_handles[0];
-        wire_mesh.index_buffer_handles[0] = bone_gizmo.wire_mesh.index_buffer_handles[0];
-    }
+    let (mut solid_mesh, mut wire_mesh) = {
+        let bg = ctx.world.resource::<BoneGizmoData>();
+        let solid_mesh = bg.solid_mesh.clone();
+        let wire_mesh = bg.wire_mesh.clone();
+        drop(bg);
+        (solid_mesh, wire_mesh)
+    };
 
     build_sphere_bone_meshes_with_selection(
         skeleton,
@@ -823,13 +833,11 @@ unsafe fn update_constraint_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     };
 
-    let mut wire_mesh = LineMesh::default();
-
-    {
-        let cg = ctx.world.resource::<ConstraintGizmoData>();
-        wire_mesh.vertex_buffer_handles[0] = cg.wire_mesh.vertex_buffer_handles[0];
-        wire_mesh.index_buffer_handles[0] = cg.wire_mesh.index_buffer_handles[0];
-    }
+    let mut wire_mesh = ctx
+        .world
+        .resource::<ConstraintGizmoData>()
+        .wire_mesh
+        .clone();
 
     build_constraint_gizmo_mesh(
         &constraint_set,
@@ -890,13 +898,11 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     };
 
-    let mut wire_mesh = LineMesh::default();
-
-    {
-        let sg = ctx.world.resource::<SpringBoneGizmoData>();
-        wire_mesh.vertex_buffer_handles[0] = sg.wire_mesh.vertex_buffer_handles[0];
-        wire_mesh.index_buffer_handles[0] = sg.wire_mesh.index_buffer_handles[0];
-    }
+    let mut wire_mesh = ctx
+        .world
+        .resource::<SpringBoneGizmoData>()
+        .wire_mesh
+        .clone();
 
     build_spring_bone_gizmo_mesh(&setup, &transforms, &offsets, mesh_scale, &mut wire_mesh);
 

@@ -1,12 +1,10 @@
-use anyhow::Result;
 use cgmath::Vector2;
 
 use crate::ecs::context::EcsContext;
 use crate::ecs::systems::camera_systems::{compute_camera_position, compute_camera_up};
-use crate::ecs::FrameContext;
 use crate::ecs::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
-    gizmo_update_vertex_buffer, update_billboard_transform,
+    update_billboard_transform,
 };
 use crate::math::calculate_billboard_click_rect;
 
@@ -21,7 +19,9 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     {
         let mut light_gizmo = ctx.light_gizmo_mut();
         let selectable = light_gizmo.selectable.clone();
-        gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
+        if gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable) {
+            light_gizmo.pending_uploads = crate::ecs::MAX_FRAMES_IN_FLIGHT;
+        }
     }
 
     let camera_pos = compute_camera_position(&ctx.camera());
@@ -50,13 +50,6 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     }
 
     ctx.world.insert_resource(proj_data);
-}
-
-pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
-    let mesh = ctx.light_gizmo().mesh.clone();
-    let backend = ctx.create_backend();
-    gizmo_update_vertex_buffer(&mesh, &backend)?;
-    Ok(())
 }
 
 fn update_camera_near_plane(ctx: &mut EcsContext) {

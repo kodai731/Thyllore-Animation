@@ -1,5 +1,12 @@
+use super::construct::*;
+use super::path::{displace_path, emit_path, scatter_end_offset};
+use super::segment::{Segment, LIGHTNING_MAX_SEGMENTS};
 use super::test_support::{difference, length, segments_match, waypoint_effect};
-use super::*;
+use crate::lightning::analytic::timing;
+use crate::lightning::effect::LightningSource;
+use crate::LightningEffect;
+use cgmath::Vector3;
+use thyllore_math_core::hash_u32;
 
 #[test]
 fn test_bit_parity() {

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use thyllore_effect_core::{FlameUBO, WaterUBO, WindUBO};
+use thyllore_effect_core::{FlameUBO, LightningSegmentsUBO, LightningUBO, WaterUBO, WindUBO};
 use thyllore_render_core::{FrameUBO, MaterialUBO, ObjectUBO};
 use thyllore_spirv_reflect::{
     compare_block_layout, BlockCoverage, DescriptorKind, GpuBlock, LayoutDifference, ReflectedBlock,
@@ -65,6 +65,8 @@ fn rust_blocks() -> Vec<RustBlock> {
         rust_block::<MaterialUBO>("MaterialUBO"),
         rust_block::<ObjectUBO>("ObjectUBO"),
         rust_block::<FlameUBO>("FlameUBO"),
+        rust_block::<LightningUBO>("LightningUBO"),
+        rust_block::<LightningSegmentsUBO>("LightningSegmentsUBO"),
         rust_block::<WaterUBO>("WaterUBO"),
         rust_block::<WindUBO>("WindUBO"),
         rust_block::<SceneUniformData>("SceneData"),

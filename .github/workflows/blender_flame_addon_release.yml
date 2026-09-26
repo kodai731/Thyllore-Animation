@@ -97,6 +97,9 @@ jobs:
           tar -xJf blender.tar.xz -C /opt/blender --strip-components=1
           /opt/blender/blender --version
 
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
       - name: Build ZIP per platform
         run: |
           set -euo pipefail

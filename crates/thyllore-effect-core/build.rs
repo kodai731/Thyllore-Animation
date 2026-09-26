@@ -4,12 +4,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use thyllore_shader_manifest::{
-    cpp_command, find_declared_block, generate_gpu_blocks_rust, layout_asserts_cpp,
-    layout_differences, natural_layout_block, parse_entry_points, parse_module, rust_bindings,
-    slang_root, slang_type_name, spirv_command, spirv_rerun_if_env_changed, verify_slangc_version,
-    CppModule, GpuBlockCodegenConfig, UniformPassing,
+    cpp_command, generate_gpu_blocks_rust, generate_spirv_block_rust, layout_asserts_cpp,
+    layout_differences, natural_layout_block, parse_module, reflect_stage_block, rust_bindings,
+    slang_root, slang_type_name, spirv_rerun_if_env_changed, verify_slangc_version, CppModule,
+    GpuBlockCodegenConfig, SpirvBlock, UniformPassing,
 };
-use thyllore_spirv_reflect::{reflect_shader_bytes, ReflectedBlock};
 
 /// A uniform block the module reads through its kernel context: its Rust struct is generated
 /// from the C++ natural layout and proven equal to the std140 layout of `stage_source`.
@@ -68,6 +67,32 @@ const MODULES: [CpuModule; 4] = [
     },
 ];
 
+/// Lightning fills its blocks from Rust alone (the segments are built on the CPU in Rust, not in
+/// a Slang CPU module), so like `TracePush` in thyllore-vulkan-core the mirror comes from SPIR-V.
+struct GpuOnlyBlock {
+    block: SpirvBlock,
+    gpu_blocks_file: &'static str,
+}
+
+const GPU_ONLY_BLOCKS: [GpuOnlyBlock; 2] = [
+    GpuOnlyBlock {
+        block: SpirvBlock {
+            name: "LightningUBO",
+            stage_source: "lightning/resolveFragment.slang",
+            imports: &["cgmath::Matrix4"],
+        },
+        gpu_blocks_file: "lightning_gpu_blocks.rs",
+    },
+    GpuOnlyBlock {
+        block: SpirvBlock {
+            name: "LightningSegmentsUBO",
+            stage_source: "lightning/resolveFragment.slang",
+            imports: &[],
+        },
+        gpu_blocks_file: "lightning_segments_gpu_blocks.rs",
+    },
+];
+
 fn flame_extra_derives() -> BTreeMap<String, Vec<String>> {
     let mut derives = BTreeMap::new();
     for name in ["FlameBranchElement", "FlameBranchField"] {
@@ -97,6 +122,10 @@ fn main() {
     let mut cpp_files = Vec::new();
     for module in &MODULES {
         cpp_files.push(build_module(module, &slang_root, &shader_root, &out_dir));
+    }
+
+    for entry in &GPU_ONLY_BLOCKS {
+        build_gpu_only_block(entry, &slang_root, &shader_root, &out_dir);
     }
 
     cc::Build::new()
@@ -139,7 +168,14 @@ fn build_module(
 
     if let Some(uniform) = &module.uniform {
         let block_cpp_name = uniform_block_cpp_name(&parsed, uniform.name, module.exports);
-        let std140 = reflect_uniform_block(uniform, slang_root, shader_root, out_dir);
+        let std140 = reflect_stage_block(
+            uniform.name,
+            uniform.stage_source,
+            slang_root,
+            shader_root,
+            out_dir,
+        )
+        .unwrap_or_else(|error| fail(error));
         let natural =
             natural_layout_block(&parsed, &block_cpp_name).unwrap_or_else(|error| fail(error));
 
@@ -186,39 +222,24 @@ fn uniform_block_cpp_name(parsed: &CppModule, expected: &str, exports: &str) -> 
     block.clone()
 }
 
-/// Compiles the stage that reads the block to SPIR-V with the renderer's flags and reflects it.
-fn reflect_uniform_block(
-    uniform: &UniformBlock,
+fn build_gpu_only_block(
+    entry: &GpuOnlyBlock,
     slang_root: &Path,
     shader_root: &Path,
     out_dir: &Path,
-) -> ReflectedBlock {
-    let source_path = shader_root.join(uniform.stage_source);
-    let source = fs::read_to_string(&source_path).unwrap_or_else(|error| fail(error));
-    let entry = parse_entry_points(&source)
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| fail(format!("{}: no [shader] entry point", uniform.stage_source)));
-
-    let spirv_path = out_dir.join(format!("{}.spv", uniform.name));
-    run(
-        spirv_command(slang_root, shader_root, &source_path)
-            .args(["-entry", &entry.name])
-            .args(["-stage", entry.stage.attribute()])
-            .arg("-o")
-            .arg(&spirv_path),
-        uniform.stage_source,
-    );
-
-    let bytes = fs::read(&spirv_path).unwrap_or_else(|error| fail(error));
-    let reflection = reflect_shader_bytes(&bytes)
-        .unwrap_or_else(|error| fail(format!("{}: {error}", uniform.stage_source)));
-    find_declared_block(&reflection, uniform.name).unwrap_or_else(|| {
-        fail(format!(
-            "{}: SPIR-V declares no uniform block `{}`",
-            uniform.stage_source, uniform.name
-        ))
-    })
+) {
+    let block = &entry.block;
+    let std140 = reflect_stage_block(
+        block.name,
+        block.stage_source,
+        slang_root,
+        shader_root,
+        out_dir,
+    )
+    .unwrap_or_else(|error| fail(error));
+    let gpu_blocks = generate_spirv_block_rust(&std140, block.stage_source, block.imports)
+        .unwrap_or_else(|error| fail(error));
+    write(&out_dir.join(entry.gpu_blocks_file), &gpu_blocks);
 }
 
 fn run(command: &mut std::process::Command, what: &str) {

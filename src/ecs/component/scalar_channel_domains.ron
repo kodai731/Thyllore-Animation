@@ -4,6 +4,7 @@
     (name: "Flame", first_code: 0, code_count: 256),
     (name: "Water", first_code: 256, code_count: 256),
     (name: "Wind", first_code: 512, code_count: 256),
+    (name: "Lightning", first_code: 768, code_count: 256),
     // Lib test fixture domain (scalar_clip_systems::test_support); shipped clips never use it.
-    (name: "Probe", first_code: 768, code_count: 256),
+    (name: "Probe", first_code: 1024, code_count: 256),
 ]

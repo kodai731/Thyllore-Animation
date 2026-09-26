@@ -1,5 +1,5 @@
 use super::{resolve_selected_flame, write_flame_transform};
-use crate::ecs::component::FlameEffect;
+use crate::ecs::component::{AppliedFlamePreset, FlameEffect};
 use crate::ecs::world::World;
 
 /// Apply a named preset to the selected flame's parameter component. The
@@ -18,5 +18,11 @@ pub fn apply_flame_preset_to_selected(world: &mut World, name: &str) {
     if thyllore_effect_core::apply_flame_preset(&mut effect, name) {
         write_flame_transform(world, target, effect.position, effect.rotation);
         world.insert_component(target, effect);
+        world.insert_component(
+            target,
+            AppliedFlamePreset {
+                name: name.to_string(),
+            },
+        );
     }
 }

@@ -71,7 +71,7 @@ fn build_channels<C>(scalars: &[ScalarParam<C>], ui: &[UiParam]) -> Vec<ScalarCh
                 display_name: leak_str(display_name(ui, param.name)),
                 cli_name: param.name,
                 scene_name: leak_str(title_case_snake(param.name).replace(' ', "")),
-                debug_value_range: debug_value_range(ui, param.name),
+                debug_value_range: debug_value_range(param, ui),
             })
         })
         .collect()
@@ -84,14 +84,19 @@ fn display_name(ui: &[UiParam], name: &str) -> String {
     }
 }
 
-fn debug_value_range(ui: &[UiParam], name: &str) -> (f32, f32) {
+fn debug_value_range<C>(param: &ScalarParam<C>, ui: &[UiParam]) -> (f32, f32) {
+    if let Some(debug_range) = param.debug_range {
+        return debug_range;
+    }
+
+    let name = param.name;
     let ui_param = find_ui_param(ui, name)
         .or_else(|| {
             let (parent_name, _) = name.rsplit_once('_')?;
             find_ui_param(ui, parent_name)
         })
-        .unwrap_or_else(|| panic!("scalar {name} has no ui entry to take a debug range from"));
-    ui_param.debug_range.unwrap_or((ui_param.min, ui_param.max))
+        .unwrap_or_else(|| panic!("scalar {name} has no debug range and no ui entry"));
+    (ui_param.min, ui_param.max)
 }
 
 fn leak_str(text: String) -> &'static str {

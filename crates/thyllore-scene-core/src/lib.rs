@@ -10,6 +10,7 @@ pub struct ScalarParam<C: 'static> {
     pub code: Option<u16>,
     pub get: fn(&C) -> f32,
     pub set: fn(&mut C, f32),
+    pub debug_range: Option<(f32, f32)>,
 }
 
 pub fn find_scalar_param<'a, C>(
@@ -48,7 +49,6 @@ pub struct UiParam {
     /// Persisted parameters are saved with the scene; runtime ones are driven by playback.
     pub persisted: bool,
     pub primary: bool,
-    pub debug_range: Option<(f32, f32)>,
 }
 
 impl UiParam {
@@ -159,11 +159,13 @@ macro_rules! declare_scene_format {
                 get: $get:expr,
                 set: $set:expr
                 $(, code: $code:literal)?
+                $(, debug_range: ($dr_min:expr, $dr_max:expr))?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
                     set: $alias_set:expr
-                    $(, code: $alias_code:literal)? $(,)?
+                    $(, code: $alias_code:literal)?
+                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))? $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -174,8 +176,7 @@ macro_rules! declare_scene_format {
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
                     $(, tooltip: $ui_tooltip:expr)?
-                    $(, group: $ui_group:expr)?
-                    $(, debug_range: ($dr_min:expr, $dr_max:expr))? $(,)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -217,11 +218,13 @@ macro_rules! declare_scene_format {
                     get: $get,
                     set: $set
                     $(, code: $code)?
+                    $(, debug_range: ($dr_min, $dr_max))?
                     $(, default: $default)?
                     $(, scalars { $( $alias : {
                         get: $alias_get,
                         set: $alias_set,
                         $( code: $alias_code, )?
+                        $( debug_range: ($alias_dr_min, $alias_dr_max), )?
                     } ),+ })?
                     $(, scalars: $channels)?
                     $(, ui {
@@ -233,7 +236,6 @@ macro_rules! declare_scene_format {
                         $(, format: $ui_format)?
                         $(, tooltip: $ui_tooltip)?
                         $(, group: $ui_group)?
-                        $(, debug_range: ($dr_min, $dr_max))?
                     })?
                 } ),+
             },
@@ -269,11 +271,13 @@ macro_rules! declare_scene_format {
                 get: $get:expr,
                 set: $set:expr
                 $(, code: $code:literal)?
+                $(, debug_range: ($dr_min:expr, $dr_max:expr))?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
                     set: $alias_set:expr
-                    $(, code: $alias_code:literal)? $(,)?
+                    $(, code: $alias_code:literal)?
+                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))? $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -284,8 +288,7 @@ macro_rules! declare_scene_format {
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
                     $(, tooltip: $ui_tooltip:expr)?
-                    $(, group: $ui_group:expr)?
-                    $(, debug_range: ($dr_min:expr, $dr_max:expr))? $(,)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -383,10 +386,10 @@ macro_rules! declare_scene_format {
         pub const $scalars_name: &[$crate::ScalarParam<$component>] =
             $crate::declare_scene_format!(@scalars $component, [
                 $(
-                    ($name, $ty, $get, $set, $crate::declare_scene_format!(@scalar_code $(, $code)?) $(, $channels)?)
-                    $( $( ($alias, f32, $alias_get, $alias_set, $crate::declare_scene_format!(@scalar_code $(, $alias_code)?)) )+ )?
+                    ($name, $ty, $get, $set, $crate::declare_scene_format!(@scalar_code $(, $code)?) $(, $channels)?, $crate::declare_scene_format!(@debug_range $(, ($dr_min, $dr_max))?))
+                    $( $( ($alias, f32, $alias_get, $alias_set, $crate::declare_scene_format!(@scalar_code $(, $alias_code)?), $crate::declare_scene_format!(@debug_range $(, ($alias_dr_min, $alias_dr_max))?)) )+ )?
                 )+
-                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set, None) )*
+                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set, None, None) )*
             ], []);
 
         /// Display metadata of the parameters that declared a `ui` node, in declaration order.
@@ -403,7 +406,6 @@ macro_rules! declare_scene_format {
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_tooltip)?),
                     persisted: true,
                     primary: $crate::declare_scene_format!(@ui_primary $(, primary $ui_primary_comma)?),
-                    debug_range: $crate::declare_scene_format!(@debug_range $(, ($dr_min, $dr_max))?),
                 },
             )? )+
             $( $(
@@ -418,7 +420,6 @@ macro_rules! declare_scene_format {
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_tooltip)?),
                     persisted: false,
                     primary: $crate::declare_scene_format!(@ui_primary $(, primary $rt_ui_primary_comma)?),
-                    debug_range: None,
                 },
             )? )*
         ];
@@ -475,7 +476,7 @@ macro_rules! declare_scene_format {
         &[ $($acc)* ]
     };
     (@scalars $component:ty,
-        [ ($name:ident, f32, $get:expr, $set:expr, $code:expr) $($rest:tt)* ],
+        [ ($name:ident, f32, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -496,11 +497,12 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: $debug_range,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, u32, $get:expr, $set:expr, $code:expr) $($rest:tt)* ],
+        [ ($name:ident, u32, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -521,11 +523,12 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: $debug_range,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, bool, $get:expr, $set:expr, $code:expr) $($rest:tt)* ],
+        [ ($name:ident, bool, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -546,27 +549,28 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: $debug_range,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $ty:tt, $get:expr, $set:expr, $code:expr, rgb) $($rest:tt)* ],
+        [ ($name:ident, $ty:tt, $get:expr, $set:expr, $code:expr, rgb, $debug_range:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 0, "_r", $code),
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 1, "_g", $code),
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 2, "_b", $code),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 0, "_r", $code, $debug_range),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 1, "_g", $code, $debug_range),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 2, "_b", $code, $debug_range),
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $other:tt, $get:expr, $set:expr, $code:expr) $($rest:tt)* ],
+        [ ($name:ident, $other:tt, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)* ])
     };
     (@rgb_channel $component:ty, $name:ident, $get:expr, $set:expr,
-        $channel:literal, $suffix:literal, $code:expr
+        $channel:literal, $suffix:literal, $code:expr, $debug_range:expr
     ) => {{
         struct Field;
         impl $crate::RgbField<$component> for Field {
@@ -582,6 +586,7 @@ macro_rules! declare_scene_format {
             },
             get: $crate::get_rgb_channel::<$component, Field, $channel>,
             set: $crate::set_rgb_channel::<$component, Field, $channel>,
+            debug_range: $debug_range,
         }
     }};
 }
@@ -610,7 +615,6 @@ mod tests {
             tooltip: "",
             persisted: true,
             primary: false,
-            debug_range: None,
         };
         let derived = UiParam {
             label: None,
@@ -633,7 +637,6 @@ mod tests {
             tooltip: "",
             persisted: true,
             primary: false,
-            debug_range: None,
         };
         assert_eq!(tint.color_component_names(), ["tint_r", "tint_g", "tint_b"]);
     }
@@ -662,11 +665,11 @@ mod tests {
                 get: |c: &TestEffect| c.intensity,
                 set: |c: &mut TestEffect, v: f32| { c.intensity = v; }
                 , code: 10
+                , debug_range: (0.0, 5.0)
                 , ui {
                     min: 0.0,
                     max: 10.0
                     , group: "test"
-                    , debug_range: (0.0, 5.0)
                 }
             },
             count: u32 {
@@ -761,11 +764,20 @@ mod tests {
     }
 
     #[test]
-    fn test_ui_param_debug_range() {
-        let intensity = TEST_UI_PARAMS
+    fn test_scalar_param_debug_range() {
+        let intensity = TEST_SCALAR_PARAMS
             .iter()
             .find(|p| p.name == "intensity")
             .unwrap();
         assert_eq!(intensity.debug_range, Some((0.0, 5.0)));
+    }
+
+    #[test]
+    fn test_scalar_param_debug_range_none_when_missing() {
+        let count = TEST_SCALAR_PARAMS
+            .iter()
+            .find(|p| p.name == "count")
+            .unwrap();
+        assert_eq!(count.debug_range, None);
     }
 }

@@ -58,12 +58,12 @@ declare_scene_format! {
             get: |e| e.shape.strikes_per_burst,
             set: |e, v| e.shape.strikes_per_burst = v,
             code: 771,
+            debug_range: (1.0, 8.0),
             ui {
                 min: 1.0,
                 max: 32.0,
                 format: "%.0f",
                 group: "shape",
-                debug_range: (1.0, 8.0),
             },
         },
         detail_levels: u32 {

@@ -285,7 +285,6 @@ mod tests {
             max: 1.0,
             format: "%.3f",
             tooltip: "",
-            debug_range: None,
             persisted: true,
             primary,
         }

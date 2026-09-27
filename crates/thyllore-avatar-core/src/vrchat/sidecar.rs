@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::expression::components::preset::ExpressionLibrary;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
+use crate::stats::components::stats::AvatarStats;
 use crate::vrchat::blink::find_blink_candidates;
 use crate::vrchat::viseme::VISEME_CHANNELS;
 
@@ -46,15 +47,6 @@ pub struct SidecarSpringChain {
     pub gravity: f32,
     pub drag: f32,
     pub colliders: Vec<String>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct AvatarStats {
-    pub has_expression_mesh: bool,
-    pub has_blink: bool,
-    pub viseme_count: usize,
-    pub expression_count: usize,
 }
 
 pub struct SidecarInput<'a> {
@@ -191,10 +183,16 @@ mod tests {
         };
 
         let stats = AvatarStats {
-            has_expression_mesh: true,
-            has_blink: true,
-            viseme_count: 1,
-            expression_count: 1,
+            triangles: 1000,
+            bones: 5,
+            materials: 2,
+            skinned_meshes: 1,
+            meshes: 3,
+            morph_meshes: 1,
+            spring_chains: 0,
+            spring_transforms: 0,
+            spring_colliders: 0,
+            texture_bytes: 0,
         };
 
         let input = SidecarInput {
@@ -225,6 +223,8 @@ mod tests {
         assert_eq!(value["expression_mesh"], "face_expression");
 
         assert_eq!(value["blink"]["both"], "eye_blink");
+
+        assert_eq!(value["stats"]["triangles"], 1000);
     }
 
     #[test]

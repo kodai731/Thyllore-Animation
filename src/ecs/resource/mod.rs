@@ -10,6 +10,7 @@ mod app_exit;
 mod auto_exposure;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_state;
+mod avatar_setup;
 mod batch;
 mod blend_shape_inspector;
 mod bloom;
@@ -93,6 +94,7 @@ pub use app_exit::*;
 pub use auto_exposure::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_state::*;
+pub use avatar_setup::*;
 pub use batch::*;
 pub use blend_shape_inspector::*;
 pub use bloom::*;

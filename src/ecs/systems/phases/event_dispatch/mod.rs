@@ -1,3 +1,4 @@
+pub mod avatar_setup;
 pub mod camera;
 pub mod clip_browser;
 pub mod clip_instance;

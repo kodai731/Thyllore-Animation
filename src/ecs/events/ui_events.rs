@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
 use cgmath::{Quaternion, Vector3};
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::vrchat::rank::Platform;
 
 use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
@@ -531,6 +533,14 @@ pub enum UIEvent {
     KeyMorphWeights {
         entity: Entity,
     },
+    OpenAvatarSetup,
+    SetHumanoidRole {
+        role: HumanoidRole,
+        bone: Option<usize>,
+    },
+    SaveHumanoidMapping,
+    SetAvatarRankPlatform(Platform),
+    ExportAvatarSidecar,
 }
 
 #[derive(Default)]

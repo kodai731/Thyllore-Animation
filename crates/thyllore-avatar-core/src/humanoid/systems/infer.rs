@@ -60,7 +60,7 @@ pub fn infer_mapping_by_name(
     (mapping, unresolved)
 }
 
-fn collect_unresolved_roles(mapping: &HumanoidMapping) -> Vec<UnresolvedRole> {
+pub fn collect_unresolved_roles(mapping: &HumanoidMapping) -> Vec<UnresolvedRole> {
     HumanoidRole::ALL
         .iter()
         .filter(|role| !mapping.by_role.contains_key(role))

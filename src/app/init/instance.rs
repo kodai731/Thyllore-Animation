@@ -780,6 +780,8 @@ impl App {
             .insert_resource(crate::ecs::resource::MorphTrackPlayback::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::AvatarSetupState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {

@@ -10,8 +10,9 @@ pub enum PerformanceRank {
     VeryPoor,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Platform {
+    #[default]
     Pc,
     Quest,
 }

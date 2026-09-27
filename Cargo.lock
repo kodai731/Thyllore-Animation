@@ -3786,6 +3786,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "thyllore-avatar-core"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "thyllore-color-core"
 version = "0.0.1"
 

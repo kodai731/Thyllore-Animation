@@ -1,0 +1,25 @@
+[[group]]
+name = "Eye"
+prefixes = ["eye"]
+
+[[group]]
+name = "Eyebrow"
+prefixes = ["eyebrow"]
+
+[[group]]
+name = "Mouth"
+prefixes = ["mouth"]
+
+[[group]]
+name = "Cheek"
+prefixes = ["cheek"]
+
+[[group]]
+name = "Viseme"
+prefixes = ["vrc.v"]
+
+[[group]]
+name = "BodyShape"
+prefixes = ["Shrink"]
+collapsed = true
+exclude_from_reset = true

@@ -33,16 +33,19 @@ declare_scene_format! {
                     get: |e| e.shape.end_offset[0],
                     set: |e, v| e.shape.end_offset[0] = v,
                     code: 768,
+                    debug_range: (-20.0, 20.0),
                 },
                 end_offset_y: {
                     get: |e| e.shape.end_offset[1],
                     set: |e, v| e.shape.end_offset[1] = v,
                     code: 769,
+                    debug_range: (-20.0, 20.0),
                 },
                 end_offset_z: {
                     get: |e| e.shape.end_offset[2],
                     set: |e, v| e.shape.end_offset[2] = v,
                     code: 770,
+                    debug_range: (-20.0, 20.0),
                 },
             },
             ui {

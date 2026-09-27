@@ -59,11 +59,16 @@ pub struct ScalarChannel {
     pub scene_name: &'static str,
     /// Conservative value range for generated debug keys.
     pub debug_value_range: (f32, f32),
+    pub renamed_from: &'static [&'static str],
 }
 
 impl ScalarChannel {
     pub const fn property_type(&self) -> PropertyType {
         PropertyType::Custom(self.code)
+    }
+
+    fn is_renamed_from(&self, name: &str) -> bool {
+        self.renamed_from.contains(&name)
     }
 }
 
@@ -139,7 +144,7 @@ pub fn scalar_channel_for_cli_name(
     scalar_channel_domains().iter().find_map(|domain| {
         (domain.channels)()
             .iter()
-            .find(|c| c.cli_name == name)
+            .find(|c| c.cli_name == name || c.is_renamed_from(name))
             .map(|c| (*domain, c))
     })
 }
@@ -150,7 +155,7 @@ pub fn scalar_channel_for_scene_name(
     scalar_channel_domains().iter().find_map(|domain| {
         (domain.channels)()
             .iter()
-            .find(|c| c.scene_name == name)
+            .find(|c| c.scene_name == name || c.is_renamed_from(name))
             .map(|c| (*domain, c))
     })
 }

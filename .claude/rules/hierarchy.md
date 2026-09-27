@@ -267,17 +267,19 @@ Concretely:
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
 - Animatable scalar fields reach the curve editor, timeline, batch CLI and scene files through
-  `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
-  `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
-  `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
-  never lists them. Tests of the shared clip, timeline, dispatch and batch code use the test-only
+  `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect's `declare_scene_format!`
+  declares `code:` (the channel code), `debug_range:` (value range for non-ui params) and
+  `renamed_from:` (former scene names) in its persisted block — these are the SSoT of every channel
+  property; the engine side holds only `scalar_domain.rs` (~20 lines) implementing `ScalarDomainSource`
+  with `effect_scalar_domain::<S>()`; `scalar_channel_domains()` gathers the registrations at link time
+  and never lists them. Tests of the shared clip, timeline, dispatch and batch code use the test-only
   `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
   `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
   never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
   (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
 - Components and resources of an effect live in `src/ecs/component/<effect>/` and
-  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `param.rs`, `render_targets.rs`,
+  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `scalar_domain.rs`, `render_targets.rs`,
   `batch.rs`, ...), never as `<effect>_*.rs` files in the shared directory.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
   `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.

@@ -226,7 +226,8 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 5. Persist it: give the parameter component a `key:` in `declare_scene_format!` and write
    `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
    components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
-   Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited
+   Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited. If the
+   parameter should be animatable, add `code:` to its persisted entry in `declare_scene_format!`.
 
 ## Adding New Domain Features
 

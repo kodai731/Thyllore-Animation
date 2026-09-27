@@ -11,6 +11,7 @@ pub struct ScalarParam<C: 'static> {
     pub get: fn(&C) -> f32,
     pub set: fn(&mut C, f32),
     pub debug_range: Option<(f32, f32)>,
+    pub renamed_from: &'static [&'static str],
 }
 
 pub fn find_scalar_param<'a, C>(
@@ -160,12 +161,14 @@ macro_rules! declare_scene_format {
                 set: $set:expr
                 $(, code: $code:literal)?
                 $(, debug_range: ($dr_min:expr, $dr_max:expr))?
+                $(, renamed_from: [$($renamed:literal),+])?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
                     set: $alias_set:expr
                     $(, code: $alias_code:literal)?
-                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))? $(,)?
+                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))?
+                    $(, renamed_from: [$($alias_renamed:literal),+])? $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -219,12 +222,14 @@ macro_rules! declare_scene_format {
                     set: $set
                     $(, code: $code)?
                     $(, debug_range: ($dr_min, $dr_max))?
+                    $(, renamed_from: [$($renamed),+])?
                     $(, default: $default)?
                     $(, scalars { $( $alias : {
                         get: $alias_get,
                         set: $alias_set,
                         $( code: $alias_code, )?
                         $( debug_range: ($alias_dr_min, $alias_dr_max), )?
+                        $( renamed_from: [$($alias_renamed),+], )?
                     } ),+ })?
                     $(, scalars: $channels)?
                     $(, ui {
@@ -272,12 +277,14 @@ macro_rules! declare_scene_format {
                 set: $set:expr
                 $(, code: $code:literal)?
                 $(, debug_range: ($dr_min:expr, $dr_max:expr))?
+                $(, renamed_from: [$($renamed:literal),+])?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
                     set: $alias_set:expr
                     $(, code: $alias_code:literal)?
-                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))? $(,)?
+                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))?
+                    $(, renamed_from: [$($alias_renamed:literal),+])? $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -386,10 +393,10 @@ macro_rules! declare_scene_format {
         pub const $scalars_name: &[$crate::ScalarParam<$component>] =
             $crate::declare_scene_format!(@scalars $component, [
                 $(
-                    ($name, $ty, $get, $set, $crate::declare_scene_format!(@scalar_code $(, $code)?) $(, $channels)?, $crate::declare_scene_format!(@debug_range $(, ($dr_min, $dr_max))?))
-                    $( $( ($alias, f32, $alias_get, $alias_set, $crate::declare_scene_format!(@scalar_code $(, $alias_code)?), $crate::declare_scene_format!(@debug_range $(, ($alias_dr_min, $alias_dr_max))?)) )+ )?
+                    ($name, $ty, $get, $set, $crate::declare_scene_format!(@scalar_code $(, $code)?) $(, $channels)?, $crate::declare_scene_format!(@debug_range $(, ($dr_min, $dr_max))?), $crate::declare_scene_format!(@renamed_from $(, [$($renamed),+])?))
+                    $( $( ($alias, f32, $alias_get, $alias_set, $crate::declare_scene_format!(@scalar_code $(, $alias_code)?), $crate::declare_scene_format!(@debug_range $(, ($alias_dr_min, $alias_dr_max))?), $crate::declare_scene_format!(@renamed_from $(, [$($alias_renamed),+])?)) )+ )?
                 )+
-                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set, None, None) )*
+                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set, None, None, &[]) )*
             ], []);
 
         /// Display metadata of the parameters that declared a `ui` node, in declaration order.
@@ -472,11 +479,17 @@ macro_rules! declare_scene_format {
     (@debug_range, ($dr_min:expr, $dr_max:expr)) => {
         Some(($dr_min, $dr_max))
     };
+    (@renamed_from) => {
+        &[]
+    };
+    (@renamed_from, [$($renamed:literal),+]) => {
+        &[$($renamed),+]
+    };
     (@scalars $component:ty, [], [ $($acc:tt)* ]) => {
         &[ $($acc)* ]
     };
     (@scalars $component:ty,
-        [ ($name:ident, f32, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
+        [ ($name:ident, f32, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -498,11 +511,12 @@ macro_rules! declare_scene_format {
                     set_scalar
                 },
                 debug_range: $debug_range,
+                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, u32, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
+        [ ($name:ident, u32, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -524,11 +538,12 @@ macro_rules! declare_scene_format {
                     set_scalar
                 },
                 debug_range: $debug_range,
+                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, bool, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
+        [ ($name:ident, bool, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -550,11 +565,12 @@ macro_rules! declare_scene_format {
                     set_scalar
                 },
                 debug_range: $debug_range,
+                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $ty:tt, $get:expr, $set:expr, $code:expr, rgb, $debug_range:expr) $($rest:tt)* ],
+        [ ($name:ident, $ty:tt, $get:expr, $set:expr, $code:expr, rgb, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
@@ -564,7 +580,7 @@ macro_rules! declare_scene_format {
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $other:tt, $get:expr, $set:expr, $code:expr, $debug_range:expr) $($rest:tt)* ],
+        [ ($name:ident, $other:tt, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)* ])
@@ -587,6 +603,7 @@ macro_rules! declare_scene_format {
             get: $crate::get_rgb_channel::<$component, Field, $channel>,
             set: $crate::set_rgb_channel::<$component, Field, $channel>,
             debug_range: $debug_range,
+            renamed_from: &[],
         }
     }};
 }
@@ -676,6 +693,7 @@ mod tests {
                 get: |c: &TestEffect| c.count,
                 set: |c: &mut TestEffect, v: u32| { c.count = v; }
                 , code: 20
+                , renamed_from: ["legacy_count", "old_count"]
             },
             enabled: bool {
                 get: |c: &TestEffect| c.enabled,
@@ -699,6 +717,7 @@ mod tests {
                     offset_y: {
                         get: |c: &TestEffect| c.offset[1],
                         set: |c: &mut TestEffect, v: f32| { c.offset[1] = v; },
+                        renamed_from: ["offset_v"],
                     },
                 }
             },
@@ -779,5 +798,28 @@ mod tests {
             .find(|p| p.name == "count")
             .unwrap();
         assert_eq!(count.debug_range, None);
+    }
+
+    #[test]
+    fn test_scalar_param_renamed_from() {
+        let count = TEST_SCALAR_PARAMS
+            .iter()
+            .find(|p| p.name == "count")
+            .unwrap();
+        let offset_y = TEST_SCALAR_PARAMS
+            .iter()
+            .find(|p| p.name == "offset_y")
+            .unwrap();
+        assert_eq!(count.renamed_from, ["legacy_count", "old_count"]);
+        assert_eq!(offset_y.renamed_from, ["offset_v"]);
+    }
+
+    #[test]
+    fn test_scalar_param_renamed_from_empty_when_missing() {
+        let intensity = TEST_SCALAR_PARAMS
+            .iter()
+            .find(|p| p.name == "intensity")
+            .unwrap();
+        assert!(intensity.renamed_from.is_empty());
     }
 }

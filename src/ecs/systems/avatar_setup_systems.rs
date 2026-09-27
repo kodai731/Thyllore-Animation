@@ -11,6 +11,7 @@ use thyllore_avatar_core::humanoid::systems::mapping_io::{
     humanoid_mapping_path, load_mapping, save_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
+use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
@@ -21,11 +22,12 @@ use thyllore_avatar_core::vrchat::sidecar::{
 };
 use thyllore_model_core::MeshMorph;
 
-use crate::animation::Skeleton;
+use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
-use crate::ecs::component::SpringBoneSetup;
+use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{AvatarSetupState, ExpressionLibraryState, ModelState};
-use crate::ecs::world::World;
+use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
+use crate::ecs::world::{Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -228,6 +230,41 @@ pub fn save_humanoid_mapping(world: &World) {
             error
         ),
     }
+}
+
+pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, prefix: &str) {
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        log_warn!("Cannot add spring chains: no skeleton loaded");
+        return;
+    };
+    let Some(spring_entity) = find_spring_bone_setup_entity(world) else {
+        log_warn!("Cannot add spring chains: no SpringBoneSetup entity found");
+        return;
+    };
+
+    let bones = skeleton_to_bone_inputs(skeleton);
+    let roots = find_prefix_chain_roots(&bones, prefix);
+    if roots.is_empty() {
+        log_warn!("No spring chain roots found for prefix \"{}\"", prefix);
+        return;
+    }
+
+    for chain in roots {
+        handle_spring_chain_add(
+            world,
+            spring_entity,
+            chain.root as BoneId,
+            chain.length,
+            skeleton,
+        );
+    }
+}
+
+fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
+    world
+        .iter_components::<WithSpringBone>()
+        .map(|(entity, _)| entity)
+        .find(|&entity| world.has_component::<SpringBoneSetup>(entity))
 }
 
 pub fn export_avatar_sidecar(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {

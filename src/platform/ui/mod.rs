@@ -1,3 +1,4 @@
+mod avatar_setup_window;
 mod blend_shape_inspector;
 mod bottom_panel;
 mod clip_browser_window;
@@ -20,6 +21,7 @@ mod text_to_animation_dialog;
 mod text_to_mesh_dialog;
 pub(crate) mod timeline_window;
 mod viewport_window;
+pub use avatar_setup_window::*;
 pub use blend_shape_inspector::*;
 pub use bottom_panel::*;
 pub use clip_browser_window::*;

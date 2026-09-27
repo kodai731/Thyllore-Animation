@@ -1,8 +1,8 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::systems::{
-    export_avatar_sidecar, open_avatar_setup, save_humanoid_mapping, set_avatar_rank_platform,
-    set_humanoid_role,
+    add_spring_chains_by_prefix, export_avatar_sidecar, open_avatar_setup, save_humanoid_mapping,
+    set_avatar_rank_platform, set_humanoid_role,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -20,6 +20,9 @@ pub fn dispatch_avatar_setup_events(
             UIEvent::SaveHumanoidMapping => save_humanoid_mapping(world),
             UIEvent::SetAvatarRankPlatform(platform) => set_avatar_rank_platform(world, *platform),
             UIEvent::ExportAvatarSidecar => export_avatar_sidecar(world, assets, graphics),
+            UIEvent::AddSpringChainsByPrefix { prefix } => {
+                add_spring_chains_by_prefix(world, assets, prefix)
+            }
             _ => {}
         }
     }

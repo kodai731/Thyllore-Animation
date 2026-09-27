@@ -541,6 +541,9 @@ pub enum UIEvent {
     SaveHumanoidMapping,
     SetAvatarRankPlatform(Platform),
     ExportAvatarSidecar,
+    AddSpringChainsByPrefix {
+        prefix: String,
+    },
 }
 
 #[derive(Default)]

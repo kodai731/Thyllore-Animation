@@ -18,4 +18,5 @@ pub struct AvatarSetupState {
     pub stats: AvatarStats,
     pub platform: Platform,
     pub rank: Option<RankReport>,
+    pub spring_prefix: String,
 }

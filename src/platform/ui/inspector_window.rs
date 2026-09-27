@@ -71,6 +71,11 @@ pub fn build_inspector_window(
                 build_spring_bone_section(ui, ui_events, world, entity, assets, state);
 
                 build_blend_shape_section(ui, ui_events, world, entity, assets, graphics);
+
+                ui.separator();
+                if ui.button("Avatar Setup...") {
+                    ui_events.send(UIEvent::OpenAvatarSetup);
+                }
             } else {
                 ui.text("No entity selected");
             }

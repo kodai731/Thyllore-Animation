@@ -9,8 +9,8 @@ use crate::ecs::resource::{
 };
 use crate::ecs::FrameContext;
 use crate::ecs::{
-    playback_upload_animations, run_animation_pipeline, transform_propagation_system,
-    update_weight_heatmap,
+    apply_morph_weights, playback_upload_animations, run_animation_pipeline,
+    transform_propagation_system, update_weight_heatmap,
 };
 
 pub struct AnimationUpdates {
@@ -27,6 +27,15 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     // Initialize PoseApplyCache before taking other mutable borrows
     if !ctx.world.contains_resource::<PoseApplyCache>() {
         ctx.world.insert_resource(PoseApplyCache::default());
+    }
+
+    let morph_updated_meshes = apply_morph_weights(ctx.world, ctx.assets, ctx.graphics);
+    {
+        let mut pose_apply_cache = ctx.world.resource_mut::<PoseApplyCache>();
+        for mesh_index in &morph_updated_meshes {
+            pose_apply_cache.skinned_cache.remove(mesh_index);
+            pose_apply_cache.node_cache.remove(mesh_index);
+        }
     }
 
     let eval_result = {
@@ -73,6 +82,11 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     let heatmap_updated_meshes = apply_weight_heatmap_update(ctx);
 
     let mut updated_meshes = eval_result.updated_meshes;
+    for mesh_index in morph_updated_meshes {
+        if !updated_meshes.contains(&mesh_index) {
+            updated_meshes.push(mesh_index);
+        }
+    }
     for mesh_index in heatmap_updated_meshes {
         if !updated_meshes.contains(&mesh_index) {
             updated_meshes.push(mesh_index);

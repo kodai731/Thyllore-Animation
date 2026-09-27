@@ -132,6 +132,11 @@ mod tests {
             WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "full"])).unwrap();
         assert_eq!(full.resolve_scale, Some(WindResolveScale::Full));
 
+        let quarter =
+            WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "quarter"]))
+                .unwrap();
+        assert_eq!(quarter.resolve_scale, Some(WindResolveScale::Quarter));
+
         assert!(
             WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "x"])).is_err()
         );

@@ -7,6 +7,7 @@ pub mod line_mesh_draw;
 pub mod onion_skin;
 pub mod onion_skin_buffers;
 pub mod overlay;
+pub mod overlay_scale;
 pub mod pass_target;
 pub mod push_constants;
 pub mod rayquery;
@@ -33,6 +34,9 @@ pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
 pub use overlay::{
     OverlayAttachmentLoad, OverlayBlend, OverlayInstanceDraw, OverlayNodeSpec, OverlayPass,
     OverlayPushConstants,
+};
+pub use overlay_scale::{
+    union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,

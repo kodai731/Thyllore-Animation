@@ -2,11 +2,11 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake, wind_upsample};
+use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use crate::vulkanr::descriptor::{
-    ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE,
+    ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE,
 };
-use crate::vulkanr::image::{create_nearest_sampler, create_scene_depth_sampler};
+use crate::vulkanr::image::create_scene_depth_sampler;
 use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::resource::{UniformBuffer, VolumeImage};
 use thyllore_effect_core::WindUBO;
@@ -152,71 +152,6 @@ impl WindShadowBakeDescriptorSet {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct WindUpsampleDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub wind_color_sampler: vk::Sampler,
-    pub scene_depth_sampler: vk::Sampler,
-}
-
-impl WindUpsampleDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WIND_UPSAMPLE)
-    }
-
-    pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = (0..frames_in_flight)
-            .map(|_| layout.allocate_set(rrdevice))
-            .collect::<Result<Vec<_>>>()?;
-        let wind_color_sampler = create_nearest_sampler(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
-
-        Ok(Self {
-            layout,
-            descriptor_sets,
-            wind_color_sampler,
-            scene_depth_sampler,
-        })
-    }
-
-    pub fn descriptor_set(&self, frame_slot: usize) -> vk::DescriptorSet {
-        self.descriptor_sets[frame_slot]
-    }
-
-    pub unsafe fn update_image_views_at(
-        &self,
-        rrdevice: &RRDevice,
-        frame_slot: usize,
-        wind_color_view: vk::ImageView,
-        scene_depth_view: vk::ImageView,
-    ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_sets[frame_slot])
-            .image(
-                wind_upsample::WIND_COLOR_SAMPLER,
-                wind_color_view,
-                self.wind_color_sampler,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            )?
-            .image(
-                wind_upsample::SCENE_DEPTH_SAMPLER,
-                scene_depth_view,
-                self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-            )?
-            .apply(rrdevice);
-        Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
-        device.destroy_sampler(self.wind_color_sampler, None);
-        device.destroy_sampler(self.scene_depth_sampler, None);
-    }
-}
-
 impl GpuResource for WindResolveDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
@@ -224,12 +159,6 @@ impl GpuResource for WindResolveDescriptorSet {
 }
 
 impl GpuResource for WindShadowBakeDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-}
-
-impl GpuResource for WindUpsampleDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }

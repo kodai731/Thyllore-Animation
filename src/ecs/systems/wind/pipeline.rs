@@ -3,16 +3,16 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::{BoundGenerations, WindGpuState, WindRenderTargets};
 use crate::ecs::systems::wind::descriptors::{
-    WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
+    WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
 };
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE};
+use crate::vulkanr::descriptor::{OverlayUpsampleDescriptorSet, WIND_RESOLVE, WIND_SHADOW_BAKE};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{
-    OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
+    OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
 
 pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
@@ -20,13 +20,6 @@ pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     blends: &[OverlayBlend::Premultiplied],
     depth_test: None,
     push_constants: OverlayPushConstants::of::<ShadingPushConstants>(),
-};
-
-pub const WIND_UPSAMPLE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
-    shaders: &WIND_UPSAMPLE,
-    blends: &[OverlayBlend::Premultiplied],
-    depth_test: None,
-    push_constants: OverlayPushConstants::None,
 };
 
 pub unsafe fn create_wind_gpu_state(
@@ -69,8 +62,8 @@ pub unsafe fn create_wind_gpu_state(
         ],
         targets.extent(),
     )?;
-    let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let upsample_pipeline = WIND_UPSAMPLE_OVERLAY.build_pipeline(
+    let upsample_descriptor = OverlayUpsampleDescriptorSet::new(rrdevice, frames_in_flight)?;
+    let upsample_pipeline = UPSAMPLE_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
         targets.render_pass,

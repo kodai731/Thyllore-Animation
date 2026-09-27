@@ -49,10 +49,15 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
   prep hook; the previous snapshot is the generic `HistorySnapshotState<S>` resource.
 - Render passes are created once during effect setup (`create_color_overlay_render_pass`), only the
   resolution-dependent framebuffers are recreated on viewport resize.
-- Intermediate images used only within a frame (wind's half-resolution color) are not owned; they are
-  requested via `RenderPassNode::transients` as `TransientRequest`, and their framebuffers are obtained in
-  `prepare` via `ctx.transient.framebuffer`. Descriptors are updated per frame slot only when generations
-  change (`src/ecs/systems/wind/passes.rs`).
+- Resolving at a reduced resolution is generic: `OverlayResolveScale { Half, Quarter }` reduces the extent
+  and the instance scissors, `ReducedResolveTarget` (vulkan-core `renderer/overlay_scale.rs`) owns the
+  cleared transient render pass and gives its `TransientDesc` and `OverlayPass` for the scale chosen this
+  frame, and the depth-aware upsample onto the full target is the shared `pass.overlay_upsample`
+  (`shaders/overlay/upsampleFragment.slang`, `UPSAMPLE_OVERLAY` spec, `OverlayUpsampleDescriptorSet` with
+  one set per frame slot). The effect maps its own scale setting to `OverlayResolveScale`, requests the
+  reduced image via `RenderPassNode::transients`, binds it in `prepare` (framebuffer from
+  `ctx.transient.framebuffer`, descriptor rewritten only when the generation changes) and records
+  resolve then upsample (`src/ecs/systems/wind/passes.rs`).
 - Everything around the overlay pass stays in the effect: the order of its nodes, compute passes (wind
   shadow bake, water caustic), ray tracing (water trace) and the history ping-pong index.
 

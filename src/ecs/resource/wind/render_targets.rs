@@ -1,25 +1,22 @@
 use thyllore_effect_core::WindUBO;
+use thyllore_vulkan_core::descriptor::OverlayUpsampleDescriptorSet;
 use thyllore_vulkan_core::pipeline::RRPipeline;
-use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayPass};
-use thyllore_vulkan_core::resource::hdr_buffer::HDR_FORMAT;
-use thyllore_vulkan_core::resource::render_target_transient::TransientDesc;
+use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayPass, ReducedResolveTarget};
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
 use thyllore_vulkan_core::vulkan::vk;
 
 use crate::ecs::resource::BoundGenerations;
-use crate::ecs::systems::wind::{
-    WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
-};
+use crate::ecs::systems::wind::{WindResolveDescriptorSet, WindShadowBakeDescriptorSet};
 use crate::gpu_resource;
 
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
-/// the half resolution render pass used by the upsampled resolve path, and the
+/// the reduced resolution render pass used by the upsampled resolve path, and the
 /// shadow volume baked once per frame for every instance slot.
 #[derive(Debug, Default)]
 pub struct WindRenderTargets {
     pub render_pass: vk::RenderPass,
     pub framebuffer: vk::Framebuffer,
-    pub half_render_pass: vk::RenderPass,
+    pub reduced: ReducedResolveTarget,
     pub shadow_volume: VolumeImage,
     pub width: u32,
     pub height: u32,
@@ -33,10 +30,6 @@ impl WindRenderTargets {
         }
     }
 
-    pub fn half_extent(&self) -> vk::Extent2D {
-        half_extent(self.width, self.height)
-    }
-
     pub fn overlay_pass(&self) -> OverlayPass {
         OverlayPass {
             render_pass: self.render_pass,
@@ -44,33 +37,6 @@ impl WindRenderTargets {
             extent: self.extent(),
             load: OverlayAttachmentLoad::Keep,
         }
-    }
-
-    /// The half resolution pass into the frame's transient color image, cleared to transparent.
-    pub fn half_overlay_pass(&self, half_framebuffer: vk::Framebuffer) -> OverlayPass {
-        OverlayPass {
-            render_pass: self.half_render_pass,
-            framebuffer: half_framebuffer,
-            extent: self.half_extent(),
-            load: OverlayAttachmentLoad::Clear([0.0; 4]),
-        }
-    }
-
-    pub fn half_color_desc(&self) -> TransientDesc {
-        let extent = self.half_extent();
-        TransientDesc {
-            width: extent.width,
-            height: extent.height,
-            format: HDR_FORMAT,
-            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
-        }
-    }
-}
-
-pub fn half_extent(width: u32, height: u32) -> vk::Extent2D {
-    vk::Extent2D {
-        width: (width / 2).max(1),
-        height: (height / 2).max(1),
     }
 }
 
@@ -83,7 +49,7 @@ pub struct WindGpuState {
     pub shadow_bake_pipeline: Option<RRPipeline>,
     pub shadow_bake_descriptor: Option<WindShadowBakeDescriptorSet>,
     pub upsample_pipeline: Option<RRPipeline>,
-    pub upsample_descriptor: Option<WindUpsampleDescriptorSet>,
+    pub upsample_descriptor: Option<OverlayUpsampleDescriptorSet>,
     #[gpu_resource(skip)]
     pub upsample_bound: BoundGenerations,
 }

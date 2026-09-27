@@ -13,6 +13,7 @@ use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
 };
+use thyllore_vulkan_core::renderer::ReducedResolveTarget;
 
 pub const WIND_SHADOW_VOLUME_FORMAT: vk::Format = vk::Format::R16G16_SFLOAT;
 
@@ -71,15 +72,7 @@ pub unsafe fn create_wind_render_targets(
         vk::Extent2D { width, height },
     )?;
 
-    let half_render_pass = create_color_overlay_render_pass(
-        rrdevice,
-        ColorOverlayPassDesc {
-            format: HDR_FORMAT,
-            load_op: vk::AttachmentLoadOp::CLEAR,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        },
-    )?;
+    let reduced = ReducedResolveTarget::new(rrdevice, HDR_FORMAT)?;
 
     let shadow_volume = VolumeImage::new(
         instance,
@@ -93,7 +86,7 @@ pub unsafe fn create_wind_render_targets(
     Ok(WindRenderTargets {
         render_pass,
         framebuffer,
-        half_render_pass,
+        reduced,
         shadow_volume,
         width,
         height,
@@ -108,10 +101,7 @@ impl GpuResource for WindRenderTargets {
 
 pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &vulkanalia::Device) {
     targets.shadow_volume.destroy(device);
-    if targets.half_render_pass != vk::RenderPass::null() {
-        device.destroy_render_pass(targets.half_render_pass, None);
-        targets.half_render_pass = vk::RenderPass::null();
-    }
+    targets.reduced.destroy(device);
     if targets.framebuffer != vk::Framebuffer::null() {
         device.destroy_framebuffer(targets.framebuffer, None);
         targets.framebuffer = vk::Framebuffer::null();

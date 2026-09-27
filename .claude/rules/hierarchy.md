@@ -49,6 +49,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
   fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
   offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,
+  `OverlayNodeSpec` / `ReducedResolveTarget` / `OverlayUpsampleDescriptorSet` for fullscreen overlays,
   `HistoryTargets` (an HDR + history ping-pong render pass with its framebuffers, clear and destroy,
   parameterised by `HistoryTargetsDesc`: storage keys, format, sampler, history load op, optional scene
   depth), `AccumulationTarget` (a storage image kept in GENERAL), `ReflectedSetLayout`, `UniformBuffer<T>`,

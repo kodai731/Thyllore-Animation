@@ -3,6 +3,7 @@ pub enum WindResolveScale {
     #[default]
     Full,
     Half,
+    Quarter,
 }
 
 impl WindResolveScale {
@@ -10,6 +11,7 @@ impl WindResolveScale {
         match value {
             "full" => Some(WindResolveScale::Full),
             "half" => Some(WindResolveScale::Half),
+            "quarter" => Some(WindResolveScale::Quarter),
             _ => None,
         }
     }
@@ -18,6 +20,7 @@ impl WindResolveScale {
         match self {
             WindResolveScale::Full => 1,
             WindResolveScale::Half => 2,
+            WindResolveScale::Quarter => 4,
         }
     }
 }
@@ -26,8 +29,9 @@ impl std::str::FromStr for WindResolveScale {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::parse(value)
-            .ok_or_else(|| format!("invalid wind resolve scale '{value}': expected full|half"))
+        Self::parse(value).ok_or_else(|| {
+            format!("invalid wind resolve scale '{value}': expected full|half|quarter")
+        })
     }
 }
 

@@ -50,8 +50,8 @@ sets = { 0 = "frame", 1 = "local" }
 stages = ["wind/shadowBakeCompute.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
-[pass.wind_upsample]
-stages = ["postprocess/tonemapVertex.slang", "wind/upsampleFragment.slang"]
+[pass.overlay_upsample]
+stages = ["postprocess/tonemapVertex.slang", "overlay/upsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.tonemap]

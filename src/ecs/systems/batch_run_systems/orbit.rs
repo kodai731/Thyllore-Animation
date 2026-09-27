@@ -1,5 +1,5 @@
 use crate::ecs::component::MotionPath;
-use crate::ecs::resource::BatchFlameOrbit;
+use crate::ecs::resource::BatchEffectOrbit;
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
 
@@ -27,7 +27,7 @@ fn collect_effect_entities(world: &World) -> Vec<Entity> {
 pub fn batch_run_update_orbit(world: &mut World) {
     let effect_entities = collect_effect_entities(world);
     let (radius, period_seconds, center) = {
-        let Some(mut orbit) = world.get_resource_mut::<BatchFlameOrbit>() else {
+        let Some(mut orbit) = world.get_resource_mut::<BatchEffectOrbit>() else {
             return;
         };
         if orbit.initial.is_some() {

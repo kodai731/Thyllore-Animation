@@ -5,7 +5,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::MotionPath;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
+    BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
     DebugViewMode, DebugViewState, FrameClock, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
@@ -210,7 +210,7 @@ fn batch_run_update_orbit_inserts_missing_transform() {
         frame: 1,
         ..FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS)
     });
-    world.insert_resource(BatchFlameOrbit {
+    world.insert_resource(BatchEffectOrbit {
         radius: 2.0,
         period_seconds: 4.0,
         initial: None,

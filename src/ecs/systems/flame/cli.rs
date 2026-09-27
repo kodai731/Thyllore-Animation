@@ -12,7 +12,7 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
 use crate::ecs::resource::{
-    BatchFlameOrbit, FlameDumpSink, FlameFieldTraceCapture, FlameRenderSettings, FlameSdfSource,
+    BatchEffectOrbit, FlameDumpSink, FlameFieldTraceCapture, FlameRenderSettings, FlameSdfSource,
     FlameShadingMode,
 };
 use crate::ecs::systems::cli_args::{
@@ -210,7 +210,7 @@ impl FlameOverrides {
         }
 
         if let Some((radius, period)) = self.orbit {
-            world.insert_resource(BatchFlameOrbit {
+            world.insert_resource(BatchEffectOrbit {
                 radius,
                 period_seconds: period,
                 initial: None,
@@ -680,7 +680,7 @@ mod tests {
         let mut assets = AssetStorage::new();
         overrides.apply(&mut world, &mut assets).unwrap();
         assert!(world.get_resource::<FlameSdfSource>().is_none());
-        assert!(world.get_resource::<BatchFlameOrbit>().is_none());
+        assert!(world.get_resource::<BatchEffectOrbit>().is_none());
         assert!(world.get_resource::<FlameFieldTraceCapture>().is_none());
     }
 }

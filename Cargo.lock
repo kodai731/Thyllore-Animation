@@ -3767,6 +3767,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
  "thyllore-grpc-client",

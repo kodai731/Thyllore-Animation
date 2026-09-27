@@ -1,5 +1,10 @@
+use thyllore_avatar_core::expression::components::grouping::ExpressionGrouping;
+use thyllore_avatar_core::expression::systems::grouping::group_channels;
+use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
+
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedMorphWeights, MorphWeights};
+use crate::ecs::resource::BlendShapeInspectorState;
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::mesh_buffer::MeshBuffer;
@@ -19,6 +24,77 @@ pub fn apply_morph_weights(
     }
 
     updated_meshes
+}
+
+pub fn find_morph_channel_names(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Option<Vec<String>> {
+    let mesh_ref = world.get_component::<MeshRef>(entity)?;
+    let mesh_idx = assets.get_mesh(mesh_ref.mesh_asset_id)?.graphics_mesh_index;
+    let mesh = graphics.meshes.get(mesh_idx)?;
+    Some(
+        mesh.morph
+            .channels
+            .iter()
+            .map(|channel| channel.name.clone())
+            .collect(),
+    )
+}
+
+pub fn set_morph_weight(
+    world: &mut World,
+    entity: Entity,
+    channel: usize,
+    weight: f32,
+    channel_names: &[String],
+) {
+    let clamped = weight.clamp(0.0, 1.0);
+
+    let mirror_edit = world
+        .get_resource::<BlendShapeInspectorState>()
+        .is_some_and(|state| state.mirror_edit);
+    let mirror_channel = if mirror_edit {
+        find_mirror_channel_index(channel_names, channel)
+    } else {
+        None
+    };
+
+    let Some(morph_weights) = world.get_component_mut::<MorphWeights>(entity) else {
+        return;
+    };
+
+    for target in std::iter::once(channel).chain(mirror_channel) {
+        if let Some(slot) = morph_weights.weights.get_mut(target) {
+            *slot = clamped;
+        }
+    }
+}
+
+fn find_mirror_channel_index(channel_names: &[String], channel: usize) -> Option<usize> {
+    let mirror_name = find_mirror_channel(channel_names.get(channel)?)?;
+    channel_names.iter().position(|name| *name == mirror_name)
+}
+
+pub fn reset_morph_weights(world: &mut World, entity: Entity, channel_names: &[String]) {
+    let preserved_channels: Vec<usize> =
+        group_channels(channel_names, &ExpressionGrouping::default())
+            .into_iter()
+            .filter(|group| group.exclude_from_reset)
+            .flat_map(|group| group.channel_indices)
+            .collect();
+
+    let Some(morph_weights) = world.get_component_mut::<MorphWeights>(entity) else {
+        return;
+    };
+
+    for (channel, weight) in morph_weights.weights.iter_mut().enumerate() {
+        if !preserved_channels.contains(&channel) {
+            *weight = 0.0;
+        }
+    }
 }
 
 fn collect_pending_morph_updates(
@@ -124,6 +200,25 @@ mod tests {
         mesh
     }
 
+    fn make_morph_world(channel_count: usize) -> (World, Entity) {
+        let mut world = World::new();
+        let entity = world.spawn();
+        world.insert_component(entity, MorphWeights::zeroed(channel_count));
+        (world, entity)
+    }
+
+    fn channel_names(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| name.to_string()).collect()
+    }
+
+    fn morph_weights_of(world: &World, entity: Entity) -> Vec<f32> {
+        world
+            .get_component::<MorphWeights>(entity)
+            .unwrap()
+            .weights
+            .clone()
+    }
+
     #[test]
     fn test_apply_morph_to_mesh_full_weight() {
         let mut mesh = make_test_mesh();
@@ -183,5 +278,57 @@ mod tests {
                     < 1e-6
             );
         }
+    }
+
+    #[test]
+    fn test_set_morph_weight_clamps() {
+        let names = channel_names(&["eye_angry", "mouth_smile"]);
+        let (mut world, entity) = make_morph_world(names.len());
+
+        set_morph_weight(&mut world, entity, 0, 1.5, &names);
+        set_morph_weight(&mut world, entity, 1, -0.5, &names);
+
+        assert_eq!(morph_weights_of(&world, entity), vec![1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_set_morph_weight_mirrors_when_enabled() {
+        let names = channel_names(&["eye_angry_L", "eye_angry_R", "mouth_smile"]);
+        let (mut world, entity) = make_morph_world(names.len());
+        world.insert_resource(BlendShapeInspectorState {
+            mirror_edit: true,
+            ..Default::default()
+        });
+
+        set_morph_weight(&mut world, entity, 1, 0.4, &names);
+
+        assert_eq!(morph_weights_of(&world, entity), vec![0.4, 0.4, 0.0]);
+    }
+
+    #[test]
+    fn test_set_morph_weight_does_not_mirror_when_disabled() {
+        let names = channel_names(&["eye_angry_L", "eye_angry_R"]);
+        let (mut world, entity) = make_morph_world(names.len());
+        world.insert_resource(BlendShapeInspectorState::default());
+
+        set_morph_weight(&mut world, entity, 0, 0.7, &names);
+
+        assert_eq!(morph_weights_of(&world, entity), vec![0.7, 0.0]);
+    }
+
+    #[test]
+    fn test_reset_morph_weights_keeps_excluded_groups() {
+        let names = channel_names(&["eye_angry", "Shrink", "mouth_smile"]);
+        let (mut world, entity) = make_morph_world(names.len());
+        world.insert_component(
+            entity,
+            MorphWeights {
+                weights: vec![0.5, 1.0, 0.3],
+            },
+        );
+
+        reset_morph_weights(&mut world, entity, &names);
+
+        assert_eq!(morph_weights_of(&world, entity), vec![0.0, 1.0, 0.0]);
     }
 }

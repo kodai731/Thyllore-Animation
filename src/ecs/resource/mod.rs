@@ -11,6 +11,7 @@ mod auto_exposure;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_state;
 mod batch;
+mod blend_shape_inspector;
 mod bloom;
 mod bone_pose_override;
 mod camera;
@@ -91,6 +92,7 @@ pub use auto_exposure::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_state::*;
 pub use batch::*;
+pub use blend_shape_inspector::*;
 pub use bloom::*;
 pub use bone_pose_override::*;
 pub use camera::*;

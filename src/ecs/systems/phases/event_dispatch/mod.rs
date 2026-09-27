@@ -5,6 +5,7 @@ pub mod constraint;
 pub mod edit_history;
 pub mod hierarchy;
 pub mod ml;
+pub mod morph;
 pub mod overlay;
 pub mod pose_library;
 pub mod scalar_curve;

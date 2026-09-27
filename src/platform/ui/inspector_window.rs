@@ -8,6 +8,7 @@ use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
+use super::blend_shape_inspector::build_blend_shape_section;
 use super::constraint_inspector::build_constraint_section;
 use super::layout_snapshot::LayoutSnapshot;
 use super::spring_bone_inspector::build_spring_bone_section;
@@ -68,6 +69,8 @@ pub fn build_inspector_window(
                 }
 
                 build_spring_bone_section(ui, ui_events, world, entity, assets, state);
+
+                build_blend_shape_section(ui, ui_events, world, entity, assets, graphics);
             } else {
                 ui.text("No entity selected");
             }

@@ -30,7 +30,7 @@ pub fn capture_preset(name: &str, channel_names: &[String], weights: &[f32]) -> 
     };
 
     for (i, weight) in weights.iter().enumerate() {
-        if *weight > CAPTURE_EPSILON {
+        if weight.abs() > CAPTURE_EPSILON {
             preset.weights.insert(channel_names[i].clone(), *weight);
         }
     }
@@ -127,6 +127,17 @@ mod tests {
         assert_eq!(preset.weights.len(), 2);
         assert!(!preset.weights.contains_key("eye_angry"));
         assert!(preset.weights.contains_key("mouth_smile"));
+    }
+
+    #[test]
+    fn test_capture_preset_keeps_negative_weights() {
+        let names = channel_names();
+        let weights = [-0.5, -1e-7, 0.0];
+
+        let preset = capture_preset("test", &names, &weights);
+
+        assert_eq!(preset.weights.len(), 1);
+        assert_eq!(*preset.weights.get("eye_angry").unwrap(), -0.5);
     }
 
     #[test]

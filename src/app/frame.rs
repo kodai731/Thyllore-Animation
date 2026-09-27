@@ -61,6 +61,7 @@ impl App {
         let (file_events, mut commands) = run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
+            &self.data.graphics_resources,
             model_bounds,
         );
         commands.extend(open_file_dialogs(&file_events, self));

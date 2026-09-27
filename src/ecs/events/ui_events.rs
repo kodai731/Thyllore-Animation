@@ -511,6 +511,14 @@ pub enum UIEvent {
     RemoveLightningWaypoint(usize),
     UpdateLightningRenderSettings(LightningRenderSettings),
     OpenScalarCurveEditor,
+    SetMorphWeight {
+        entity: Entity,
+        channel: usize,
+        weight: f32,
+    },
+    ResetMorphWeights {
+        entity: Entity,
+    },
 }
 
 #[derive(Default)]

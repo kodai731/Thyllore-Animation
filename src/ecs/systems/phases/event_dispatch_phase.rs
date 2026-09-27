@@ -4,6 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::world::World;
 use crate::ecs::UIEventQueue;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::event_dispatch::camera::dispatch_camera_light_debug_events;
 use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
@@ -14,6 +15,7 @@ use super::event_dispatch::constraint::{
 };
 use super::event_dispatch::edit_history::dispatch_edit_history_events;
 use super::event_dispatch::hierarchy::dispatch_hierarchy_events;
+use super::event_dispatch::morph::dispatch_morph_weight_events;
 use super::event_dispatch::overlay::dispatch_overlay_events;
 use super::event_dispatch::pose_library::dispatch_pose_library_events;
 use super::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
@@ -29,6 +31,7 @@ use crate::ecs::resource::AppCommand;
 pub fn run_event_dispatch_phase(
     world: &mut World,
     assets: &mut AssetStorage,
+    graphics: &GraphicsResources,
     model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
 ) -> (Vec<UIEvent>, Vec<AppCommand>) {
     let mut commands: Vec<AppCommand> = Vec::new();
@@ -69,6 +72,7 @@ pub fn run_event_dispatch_phase(
     dispatch_pose_library_events(&events, world, assets);
     dispatch_spring_bone_bake_ecs_events(&events, world, assets);
     dispatch_spring_bone_edit_events(&events, world, assets);
+    dispatch_morph_weight_events(&events, world, assets, graphics);
     #[cfg(feature = "ml")]
     super::event_dispatch::ml::dispatch_curve_suggestion_events(&events, world, assets);
     #[cfg(feature = "auto-rig")]

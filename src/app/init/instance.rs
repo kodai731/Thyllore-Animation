@@ -774,6 +774,8 @@ impl App {
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
             .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {

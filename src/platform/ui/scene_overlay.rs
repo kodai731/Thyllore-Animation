@@ -3,7 +3,7 @@ use std::rc::Rc;
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{scalar_channel_for_cli_name, FlameParam, WaterParam, WindParam};
+use crate::ecs::component::{scalar_channel_for_cli_name, FlameParam, WaterParam};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
@@ -259,7 +259,7 @@ fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedS
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            scalar_channel_for_cli_name(name).map(|(_, channel)| (channel.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);

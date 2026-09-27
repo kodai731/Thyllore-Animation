@@ -27,60 +27,71 @@ declare_scene_format! {
         column_height: f32 = Frame {
             get: |e| e.column_height,
             set: |e, v| e.column_height = v,
+            code: 512,
             ui {
                 primary,
                 min: 0.1,
                 max: 20.0,
                 format: "%.2f",
                 group: "shape",
+                debug_range: (0.5, 10.0),
             },
         },
         wall_radius_base: f32 = Frame {
             get: |e| e.wall_radius_base,
             set: |e, v| e.wall_radius_base = v,
+            code: 515,
             ui {
                 primary,
                 min: 0.01,
                 max: 10.0,
                 format: "%.3f",
                 group: "shape",
+                debug_range: (0.05, 5.0),
             },
         },
         wall_radius_top: f32 = Frame {
             get: |e| e.wall_radius_top,
             set: |e, v| e.wall_radius_top = v,
+            code: 516,
             ui {
                 min: 0.01,
                 max: 10.0,
                 format: "%.3f",
                 group: "shape",
+                debug_range: (0.05, 5.0),
             },
         },
         wall_width_q: f32 = Frame {
             get: |e| e.wall_width_q,
             set: |e, v| e.wall_width_q = v,
+            code: 517,
             ui {
                 min: 0.001,
                 max: 5.0,
                 format: "%.3f",
                 tooltip: "Half width of the wall shell in squared-radius units; the radial thickness is about wall_width_q / (2 R)",
                 group: "shape",
+                debug_range: (0.01, 2.0),
             },
         },
         top_fade: f32 = Frame {
             get: |e| e.top_fade,
             set: |e, v| e.top_fade = v,
+            code: 519,
             ui {
                 min: 0.01,
                 max: 1.0,
                 format: "%.2f",
                 tooltip: "Fraction of the height over which the density fades to zero at the top",
                 group: "shape",
+                debug_range: (0.05, 1.0),
             },
         },
         density: f32 = Frame {
             get: |e| e.density,
             set: |e, v| e.density = v,
+            code: 520,
             ui {
                 primary,
                 min: 0.0,
@@ -88,11 +99,13 @@ declare_scene_format! {
                 format: "%.2f",
                 tooltip: "Extinction coefficient per meter at unit shell density",
                 group: "density",
+                debug_range: (0.0, 20.0),
             },
         },
         wall_strength: f32 = Frame {
             get: |e| e.wall_strength,
             set: |e, v| e.wall_strength = v,
+            code: 518,
             ui {
                 min: 0.0,
                 max: 4.0,
@@ -103,6 +116,7 @@ declare_scene_format! {
         rise_initial_height: f32 = Frame {
             get: |e| e.rise_initial_height,
             set: |e, v| e.rise_initial_height = v,
+            code: 525,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -114,6 +128,7 @@ declare_scene_format! {
         rise_duration: f32 = Frame {
             get: |e| e.rise_duration,
             set: |e, v| e.rise_duration = v,
+            code: 526,
             ui {
                 primary,
                 min: 0.1,
@@ -126,6 +141,7 @@ declare_scene_format! {
         spread_start: f32 = Frame {
             get: |e| e.spread_start,
             set: |e, v| e.spread_start = v,
+            code: 527,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -137,6 +153,7 @@ declare_scene_format! {
         spread_rate: f32 = Frame {
             get: |e| e.spread_rate,
             set: |e, v| e.spread_rate = v,
+            code: 528,
             ui {
                 min: 0.0,
                 max: 5.0,
@@ -148,6 +165,7 @@ declare_scene_format! {
         dissipate_start: f32 = Frame {
             get: |e| e.dissipate_start,
             set: |e, v| e.dissipate_start = v,
+            code: 529,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -159,6 +177,7 @@ declare_scene_format! {
         dissipate_time: f32 = Frame {
             get: |e| e.dissipate_time,
             set: |e, v| e.dissipate_time = v,
+            code: 530,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -170,6 +189,7 @@ declare_scene_format! {
         circulation: f32 = Frame {
             get: |e| e.circulation,
             set: |e, v| e.circulation = v,
+            code: 533,
             ui {
                 primary,
                 min: 0.0,
@@ -182,6 +202,7 @@ declare_scene_format! {
         streak_order: f32 = Frame {
             get: |e| e.streak_order,
             set: |e, v| e.streak_order = v,
+            code: 534,
             ui {
                 min: 1.0,
                 max: 16.0,
@@ -193,6 +214,7 @@ declare_scene_format! {
         streak_twist: f32 = Frame {
             get: |e| e.streak_twist,
             set: |e, v| e.streak_twist = v,
+            code: 535,
             ui {
                 min: 0.0,
                 max: 20.0,
@@ -204,6 +226,7 @@ declare_scene_format! {
         streak_rise_speed: f32 = Frame {
             get: |e| e.streak_rise_speed,
             set: |e, v| e.streak_rise_speed = v,
+            code: 536,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -215,6 +238,7 @@ declare_scene_format! {
         streak_amplitude: f32 = Frame {
             get: |e| e.streak_amplitude,
             set: |e, v| e.streak_amplitude = v,
+            code: 537,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -226,6 +250,7 @@ declare_scene_format! {
         eddy_amplitude: f32 = Frame {
             get: |e| e.eddy_amplitude,
             set: |e, v| e.eddy_amplitude = v,
+            code: 538,
             ui {
                 primary,
                 min: 0.0,
@@ -238,6 +263,7 @@ declare_scene_format! {
         eddy_cell_theta: f32 = Frame {
             get: |e| e.eddy_cell_theta,
             set: |e, v| e.eddy_cell_theta = v,
+            code: 539,
             ui {
                 min: 0.01,
                 max: 2.0,
@@ -249,6 +275,7 @@ declare_scene_format! {
         eddy_cell_height: f32 = Frame {
             get: |e| e.eddy_cell_height,
             set: |e, v| e.eddy_cell_height = v,
+            code: 540,
             ui {
                 min: 0.01,
                 max: 2.0,
@@ -260,6 +287,7 @@ declare_scene_format! {
         eddy_cell_radial: f32 = Frame {
             get: |e| e.eddy_cell_radial,
             set: |e, v| e.eddy_cell_radial = v,
+            code: 541,
             ui {
                 min: 0.01,
                 max: 1.0,
@@ -271,6 +299,7 @@ declare_scene_format! {
         eddy_shear: f32 = Frame {
             get: |e| e.eddy_shear,
             set: |e, v| e.eddy_shear = v,
+            code: 542,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -282,6 +311,7 @@ declare_scene_format! {
         eddy_speed_spread: f32 = Frame {
             get: |e| e.eddy_speed_spread,
             set: |e, v| e.eddy_speed_spread = v,
+            code: 556,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -293,6 +323,7 @@ declare_scene_format! {
         eddy_rise_speed: f32 = Frame {
             get: |e| e.eddy_rise_speed,
             set: |e, v| e.eddy_rise_speed = v,
+            code: 543,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -304,6 +335,7 @@ declare_scene_format! {
         eddy_reseed_period: f32 = Frame {
             get: |e| e.eddy_reseed_period,
             set: |e, v| e.eddy_reseed_period = v,
+            code: 544,
             ui {
                 min: 0.1,
                 max: 10.0,
@@ -315,6 +347,7 @@ declare_scene_format! {
         eddy_erosion: f32 = Frame {
             get: |e| e.eddy_erosion,
             set: |e, v| e.eddy_erosion = v,
+            code: 555,
             ui {
                 min: 0.0,
                 max: 0.95,
@@ -326,6 +359,7 @@ declare_scene_format! {
         puff_count_theta: u32 = Frame {
             get: |e| e.puff_count_theta,
             set: |e, v| e.puff_count_theta = v,
+            code: 548,
             ui {
                 min: 0.0,
                 max: 16.0,
@@ -337,6 +371,7 @@ declare_scene_format! {
         puff_count_height: u32 = Frame {
             get: |e| e.puff_count_height,
             set: |e, v| e.puff_count_height = v,
+            code: 549,
             ui {
                 min: 0.0,
                 max: 16.0,
@@ -348,6 +383,7 @@ declare_scene_format! {
         puff_radius: f32 = Frame {
             get: |e| e.puff_radius,
             set: |e, v| e.puff_radius = v,
+            code: 550,
             ui {
                 min: 0.01,
                 max: 1.0,
@@ -359,6 +395,7 @@ declare_scene_format! {
         puff_radius_jitter: f32 = Frame {
             get: |e| e.puff_radius_jitter,
             set: |e, v| e.puff_radius_jitter = v,
+            code: 551,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -370,6 +407,7 @@ declare_scene_format! {
         puff_offset_q: f32 = Frame {
             get: |e| e.puff_offset_q,
             set: |e, v| e.puff_offset_q = v,
+            code: 552,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -381,6 +419,7 @@ declare_scene_format! {
         puff_strength: f32 = Frame {
             get: |e| e.puff_strength,
             set: |e, v| e.puff_strength = v,
+            code: 553,
             ui {
                 min: 0.0,
                 max: 4.0,
@@ -392,6 +431,7 @@ declare_scene_format! {
         puff_rise_speed: f32 = Frame {
             get: |e| e.puff_rise_speed,
             set: |e, v| e.puff_rise_speed = v,
+            code: 554,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -403,6 +443,7 @@ declare_scene_format! {
         albedo: [f32; 3] = Frame {
             get: |e| e.albedo,
             set: |e, v| e.albedo = v,
+            code: 521,
             scalars: rgb,
             ui {
                 primary,
@@ -417,6 +458,7 @@ declare_scene_format! {
         ambient_brightness: f32 = Frame {
             get: |e| e.ambient_brightness,
             set: |e, v| e.ambient_brightness = v,
+            code: 524,
             ui {
                 min: 0.0,
                 max: 5.0,
@@ -427,6 +469,7 @@ declare_scene_format! {
         phase_g: f32 = Frame {
             get: |e| e.phase_g,
             set: |e, v| e.phase_g = v,
+            code: 531,
             ui {
                 min: -0.95,
                 max: 0.95,
@@ -438,6 +481,7 @@ declare_scene_format! {
         sun_intensity: f32 = Frame {
             get: |e| e.sun_intensity,
             set: |e, v| e.sun_intensity = v,
+            code: 532,
             ui {
                 min: 0.0,
                 max: 10.0,

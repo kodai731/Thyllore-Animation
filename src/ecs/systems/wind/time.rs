@@ -1,4 +1,4 @@
-use crate::ecs::component::{apply_wind_param_value, WindParam, WindTornadoEffect};
+use crate::ecs::component::{apply_scalar, WindScalars, WindTornadoEffect};
 use crate::ecs::resource::WindRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
@@ -46,8 +46,8 @@ impl TimedEffect for WindTornadoEffect {
     }
 
     fn apply_scalar(&mut self, property_type: PropertyType, value: f32) {
-        if let Some(param) = WindParam::from_property_type(property_type) {
-            apply_wind_param_value(self, param, value);
+        if let PropertyType::Custom(code) = property_type {
+            apply_scalar::<WindScalars>(self, code, value);
         }
     }
 }

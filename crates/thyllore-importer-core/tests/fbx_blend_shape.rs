@@ -11,7 +11,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn fixture_path() -> PathBuf {
-    workspace_root().join("crates/thyllore-importer-core/tests/fixtures/morph_cube.fbx.txt")
+    workspace_root().join("crates/thyllore-importer-core/tests/data/morph_cube.fbx.txt")
 }
 
 fn copy_fixture_to_temp() -> PathBuf {

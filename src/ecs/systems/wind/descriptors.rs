@@ -26,6 +26,10 @@ impl WindResolveDescriptorSet {
         )
     }
 
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        &self.layout
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
         let descriptor_set = layout.allocate_set(rrdevice)?;
@@ -105,6 +109,10 @@ impl WindShadowBakeDescriptorSet {
             wind_shadow_bake::WIND,
             vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
         )
+    }
+
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        &self.layout
     }
 
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {

@@ -33,6 +33,10 @@ impl RRFlameDescriptorSet {
         )
     }
 
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        &self.layout
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
         let sets = layout.allocate_sets(rrdevice, FLAME_HISTORY_SET_COUNT)?;

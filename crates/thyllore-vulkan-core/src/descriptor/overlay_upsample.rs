@@ -1,6 +1,7 @@
 use crate::core::device::*;
 use crate::descriptor::pass_manifest::OVERLAY_UPSAMPLE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::descriptor::reflected_sets::ReflectedDescriptorSets;
 use crate::descriptor::shader_bindings::overlay_upsample;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_nearest_sampler, create_scene_depth_sampler};
@@ -9,8 +10,7 @@ use crate::vulkan::*;
 /// One set per frame slot binding the reduced overlay color and the scene depth of that frame.
 #[derive(Clone, Debug, Default)]
 pub struct OverlayUpsampleDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    sets: ReflectedDescriptorSets,
     pub reduced_color_sampler: vk::Sampler,
     pub scene_depth_sampler: vk::Sampler,
 }
@@ -21,23 +21,24 @@ impl OverlayUpsampleDescriptorSet {
     }
 
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = (0..frames_in_flight)
-            .map(|_| layout.allocate_set(rrdevice))
-            .collect::<Result<Vec<_>>>()?;
+        let sets =
+            ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), frames_in_flight)?;
         let reduced_color_sampler = create_nearest_sampler(rrdevice)?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
-            layout,
-            descriptor_sets,
+            sets,
             reduced_color_sampler,
             scene_depth_sampler,
         })
     }
 
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        self.sets.layout()
+    }
+
     pub fn descriptor_set(&self, frame_slot: usize) -> vk::DescriptorSet {
-        self.descriptor_sets[frame_slot]
+        self.sets.set(frame_slot)
     }
 
     pub unsafe fn update_image_views_at(
@@ -47,8 +48,8 @@ impl OverlayUpsampleDescriptorSet {
         reduced_color_view: vk::ImageView,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_sets[frame_slot])
+        self.sets
+            .writer(frame_slot)
             .image(
                 overlay_upsample::REDUCED_COLOR_SAMPLER,
                 reduced_color_view,
@@ -66,7 +67,7 @@ impl OverlayUpsampleDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
         device.destroy_sampler(self.reduced_color_sampler, None);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }

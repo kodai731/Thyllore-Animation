@@ -3,7 +3,9 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::lightning_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE};
+use crate::vulkanr::descriptor::{
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE,
+};
 use crate::vulkanr::image::create_scene_depth_sampler;
 use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::resource::UniformBuffer;
@@ -11,8 +13,7 @@ use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
 
 #[derive(Clone, Debug, Default)]
 pub struct LightningResolveDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    sets: ReflectedDescriptorSets,
     pub scene_depth_sampler: vk::Sampler,
 }
 
@@ -30,15 +31,21 @@ impl LightningResolveDescriptorSet {
     }
 
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+        let sets = ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), 1)?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
-            layout,
-            descriptor_set,
+            sets,
             scene_depth_sampler,
         })
+    }
+
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        self.sets.layout()
+    }
+
+    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+        self.sets.set(0)
     }
 
     pub unsafe fn write_all(
@@ -48,8 +55,8 @@ impl LightningResolveDescriptorSet {
         segments_ubo: &UniformBuffer<LightningSegmentsUBO>,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .uniform_dynamic(lightning_resolve::LIGHTNING, lightning_ubo)?
             .uniform_dynamic(lightning_resolve::SEGMENTS, segments_ubo)?
             .apply(rrdevice);
@@ -61,8 +68,8 @@ impl LightningResolveDescriptorSet {
         rrdevice: &RRDevice,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .image(
                 lightning_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
@@ -74,7 +81,7 @@ impl LightningResolveDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }
 }

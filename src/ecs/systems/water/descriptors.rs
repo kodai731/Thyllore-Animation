@@ -23,6 +23,10 @@ impl RRWaterDescriptorSet {
         )
     }
 
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        &self.layout
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
 

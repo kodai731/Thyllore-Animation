@@ -1,11 +1,14 @@
 use crate::flame::*;
 
 /// Azimuthal swirl-shear of the RTE medium (differential rotation).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameSwirl {
-    /// Share of the fixed strain budget spent on the swirl modes; 0 = off.
+    /// Medium swirl share: strain budget spent on azimuthal shear (0 = off; raising it thins the carve warp)
+    #[persist(ui(label = "Swirl", min = 0.0, max = 1.5, group = "noise"))]
     pub gain: f32,
-    /// Phase-drift rate multiplier of the counter-rotating shear layers.
+    /// How fast the swirl layers counter-rotate against the rise (time-only: costs no strain budget)
+    #[persist(ui(min = 0.0, max = 4.0, group = "motion"))]
     pub speed: f32,
 }
 
@@ -19,22 +22,26 @@ impl Default for FlameSwirl {
 }
 
 /// Node-frozen azimuthal rotation of the noise coordinate (V design).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "motion")]
 pub struct FlameTwist {
-    /// Rotation amplitude in radians at the axis tip; rotation never folds, so no strain cap.
+    /// Azimuthal twist of the noise pattern around the axis (radians at the tip; a rotation never folds, so any amplitude is structurally safe; 0 = off)
+    #[persist(ui(label = "Twist", min = 0.0, max = 8.0))]
     pub gain: f32,
-    /// Own phase rate scale; 0 delegates the rate to swirl speed.
+    /// Twist rotation rate scale (0 = follow Swirl Speed; > 0 gives the twist its own rate so depth and speed tune independently)
+    #[persist(ui(min = 0.0, max = 4.0))]
     pub speed: f32,
 }
 
 /// Animated horizontal displacement of the centerline.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "motion")]
 pub struct FlameMeander {
-    /// Displacement amplitude; 0 = off.
+    /// Horizontal meandering motion of the flame (0 = off)
+    #[persist(ui(label = "Meander", min = 0.0, max = 2.0))]
     pub amp: f32,
-    /// Multiplier on the meander mode wavenumbers: 1 keeps the two long modes
-    /// (kappa 1.2 / 2.1 per height), larger values fold the centerline into a
-    /// shorter snake (the pillar reference sits near 12: ~4 bends over the height).
+    /// Wavenumber multiplier of the meander modes: 1 = two long bends over the height, ~12 folds the column into a snake with ~4 bends (pillar reference)
+    #[persist(ui(min = 0.2, max = 30.0, format = "%.1f"))]
     pub frequency: f32,
 }
 
@@ -48,11 +55,16 @@ impl Default for FlameMeander {
 }
 
 /// Sinusoidal displacement of the density boundary; amp 0 = off.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner)]
 pub struct FlameBoundary {
+    #[runtime]
     pub amp: f32,
+    #[runtime]
     pub freq: f32,
+    #[runtime]
     pub speed: f32,
+    #[runtime]
     pub radius_ratio: f32,
 }
 
@@ -69,30 +81,37 @@ impl Default for FlameBoundary {
 
 /// Discrete branch element layer: a deterministic spawner of vortex transport
 /// elements that wrap the RTE medium around a rising core; period 0 or gain 0 = off.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "branch")]
 pub struct FlameBranch {
-    /// Spawn period in seconds; 0 spawns nothing.
+    /// Spawn period [s] of the branch elements (vortex lines that roll the medium into side tongues); raised to life/31 when the table is full, so shorter periods never shrink the tongues; 0 = off
+    #[persist(ui(min = 0.0, max = 2.0))]
     pub period: f32,
-    /// Element lifetime in seconds.
+    /// Lifetime [s] of one element (wind out fast, hold, burn out); the spawn period is raised to life/31 when the element table is full
+    #[persist(ui(min = 0.1, max = 6.0))]
     pub life: f32,
-    /// Peak rotation angle of the vortex core in radians at full envelope; 0 = off.
+    /// Rotation angle [rad] the core reaches at the end of winding; the medium flows along the arcs toward the tongue tip at a constant rate. Positive rolls trunk material down-out-up (cap curling inward), negative rolls it up-out-down (KH crest leaning upward). A compact rotation never folds; 0 = off
+    #[persist(ui(min = -8.0, max = 8.0))]
     pub gain: f32,
-    /// Lamb-Oseen core radius as a ratio of the local trunk radius; near 1 the
-    /// whole disc turns coherently (fat tongues), small values shear thin spirals.
+    /// Vortex core radius as a ratio of the local trunk radius: small values shear the medium into thin spirals, near 1 the whole disc turns together and tongues keep the trunk's thickness
+    #[persist(ui(label = "Branch Core", min = 0.05, max = 3.0))]
     pub core_radius: f32,
-    /// Lateral position of the vortex core at spawn as a ratio of the local trunk
-    /// radius: 0 sits on the axis (the whole slab tilts), 1 sits on the shear
-    /// layer so trunk material rolls outward as a billow.
+    /// Lateral position of the core at spawn as a ratio of the local trunk radius: 0 on the axis tilts the whole slab, 1 on the shear layer rolls trunk material outward as a billow
+    #[persist(ui(min = 0.0, max = 3.0))]
     pub core_offset: f32,
-    /// Compact reach of one element at the end of its life as a ratio of the local
-    /// trunk radius; nothing beyond it moves, so it bounds the lateral extent.
+    /// Compact reach of one element at the end of its life as a ratio of the local trunk radius; nothing beyond it moves, so it bounds how far tongues can extend sideways
+    #[persist(ui(min = 0.5, max = 8.0))]
     pub reach: f32,
-    /// Scatter of azimuth, timing jitter and side alternation in [0, 1].
+    /// Scatter of azimuth, timing jitter, left/right alternation, element size, line tilt and window shift (0 = identical elements strictly alternating in one plane)
+    #[persist(ui(min = 0.0, max = 1.0))]
     pub spread: f32,
-    /// Center of the spawn height band in local height units.
+    /// Center of the spawn height band (0 = base, 1 = top)
+    #[persist(ui(label = "Branch Height", min = 0.0, max = 1.0))]
     pub spawn_height: f32,
-    /// Full width of the spawn height band; 1 with center 0.5 covers the trunk.
+    /// Full width of the spawn height band; 1.0 with center 0.5 spawns elements over the whole trunk
+    #[persist(ui(label = "Branch Height Range", min = 0.0, max = 1.0))]
     pub spawn_range: f32,
+    #[persist(owner = Frame)]
     pub seed: u32,
 }
 

@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["kodai731"]
-description = "Proc-macro companion of thyllore-effect-core"
+description = "Proc-macro half of thyllore-effect-core (a separate package only because Rust requires proc-macro = true): #[derive(UboPack)] writes struct fields into the vec4 slots of a SPIR-V generated UBO. Re-exported by thyllore-effect-core; nothing depends on it directly."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [lib]

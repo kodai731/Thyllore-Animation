@@ -267,7 +267,7 @@ fn water_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: WaterParam) -> &'static ScalarParam<WaterTorusEffect> {
-    find_scalar_param(WATER_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&WATER_SCALAR_PARAMS, param.cli_name())
         .expect("every WaterParam cli_name is registered in WATER_SCALAR_PARAMS")
 }
 
@@ -311,7 +311,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in WaterParam::ALL {
             assert!(
-                find_scalar_param(WATER_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&WATER_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );

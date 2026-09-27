@@ -21,6 +21,7 @@ declare_effect_pyfunctions! {
     effect: WindTornadoEffect,
     preset_names: wind_preset_names,
     ui_params: wind_ui_params,
+    parameter_paths: wind_parameter_paths,
     preset_params: wind_preset_params,
     extra: [
         wind_default_preset,

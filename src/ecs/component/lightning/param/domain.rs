@@ -165,7 +165,7 @@ fn lightning_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: LightningParam) -> &'static ScalarParam<LightningEffect> {
-    find_scalar_param(LIGHTNING_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&LIGHTNING_SCALAR_PARAMS, param.cli_name())
         .expect("every LightningParam cli_name is registered in LIGHTNING_SCALAR_PARAMS")
 }
 
@@ -203,7 +203,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in LightningParam::ALL {
             assert!(
-                find_scalar_param(LIGHTNING_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&LIGHTNING_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );

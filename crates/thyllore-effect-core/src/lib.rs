@@ -1,9 +1,11 @@
 extern crate self as thyllore_effect_core;
 
 pub mod debug;
+pub mod effect_facade;
 pub mod flame;
 pub mod gpu_pack;
 pub mod lightning;
+pub mod scene_convert;
 pub mod volume;
 pub mod water;
 pub mod wind;
@@ -18,8 +20,11 @@ pub use debug::flame_wall_probe::{
     probe_flame_wall, WallProbeRay, WallProbeReport, WallProbeView, WALL_PROBE_GRID_COLS,
     WALL_PROBE_GRID_ROWS,
 };
+pub use effect_facade::{EffectPresets, Placement};
 pub use flame::*;
+pub use gpu_pack::UboPack;
 pub use lightning::*;
+pub use thyllore_effect_derive::UboPack;
 pub use volume::{
     clamp_ray_to_cone_frustum, RayKnots, RayPuffs, VolumeShell, PUFFS_PER_RAY, RAY_MAX_KNOTS,
 };

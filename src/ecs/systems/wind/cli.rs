@@ -82,7 +82,7 @@ fn wind_set_entry_parse(text: &str) -> Result<(String, f32), String> {
 
 pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
     for (key, value) in overrides {
-        let param = find_scalar_param(WIND_SCALAR_PARAMS, key)
+        let param = find_scalar_param(&WIND_SCALAR_PARAMS, key)
             .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -177,7 +177,7 @@ mod tests {
             apply_wind_overrides(&mut effect, &[(key.to_string(), 1.0)]);
 
             let param =
-                find_scalar_param(WIND_SCALAR_PARAMS, key).expect("valid key is registered");
+                find_scalar_param(&WIND_SCALAR_PARAMS, key).expect("valid key is registered");
             assert_eq!((param.get)(&effect), 1.0, "{key}");
         }
     }

@@ -19,6 +19,7 @@ declare_effect_pyfunctions! {
     effect: LightningEffect,
     preset_names: lightning_preset_names,
     ui_params: lightning_ui_params,
+    parameter_paths: lightning_parameter_paths,
     preset_params: lightning_preset_params,
     extra: [
         pack_lightning_ubo,

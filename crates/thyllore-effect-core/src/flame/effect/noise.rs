@@ -1,18 +1,28 @@
 use crate::flame::*;
 
 /// Erosion noise of the medium.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "noise")]
 pub struct FlameNoise {
+    #[persist(ui(primary, min = 0.0, max = 3.0))]
     pub amplitude: f32,
     /// Scales the edge smoothstep window half-width as hw0 / contrast; 1.0 keeps the authored window.
+    #[persist(ui(primary, min = 0.25, max = 4.0))]
     pub contrast: f32,
+    #[persist]
     pub frequency: f32,
+    #[persist]
     pub scroll_speed: f32,
+    /// Vertical scale of the noise cells: small = tall streaks, 1 = isotropic puffs (in the height-scaled mode)
+    #[persist(ui(label = "Noise Aspect", min = 0.05, max = 1.5))]
     pub aniso_y: f32,
     /// < 0.5 uses `aniso_y` as-is, >= 0.5 multiplies it by height / radius.
+    #[persist]
     pub scale_mode: f32,
     /// tanh shaping scale override for the wave noise; 0 = built-in default.
+    #[persist]
     pub shaping_scale: f32,
+    #[persist]
     pub erosion_gain: f32,
 }
 

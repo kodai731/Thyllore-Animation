@@ -101,7 +101,7 @@ fn lightning_preset_parse(text: &str) -> Result<String, String> {
 
 pub fn apply_lightning_overrides(effect: &mut LightningEffect, overrides: &[(String, f32)]) {
     for (key, value) in overrides {
-        let param = find_scalar_param(LIGHTNING_SCALAR_PARAMS, key)
+        let param = find_scalar_param(&LIGHTNING_SCALAR_PARAMS, key)
             .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -188,17 +188,19 @@ mod tests {
     #[test]
     fn set_parses_both_forms_and_rejects_unknown_key() {
         let pairs =
-            LightningOverrides::resolve(&args(&["--batch-lightning-set=core_intensity=12.0"]))
+            LightningOverrides::resolve(&args(&["--batch-lightning-set=look_core_intensity=12.0"]))
                 .unwrap()
                 .set;
         assert_eq!(pairs.len(), 1);
-        assert_eq!(pairs[0].0, "core_intensity");
+        assert_eq!(pairs[0].0, "look_core_intensity");
         assert!((pairs[0].1 - 12.0).abs() < 1e-6);
 
-        let separate =
-            LightningOverrides::resolve(&args(&["--batch-lightning-set", "core_intensity=12.0"]))
-                .unwrap()
-                .set;
+        let separate = LightningOverrides::resolve(&args(&[
+            "--batch-lightning-set",
+            "look_core_intensity=12.0",
+        ]))
+        .unwrap()
+        .set;
         assert_eq!(separate, pairs);
 
         let err = LightningOverrides::resolve(&args(&["--batch-lightning-set", "invalid_key=1.0"]))
@@ -231,7 +233,7 @@ mod tests {
             apply_lightning_overrides(&mut effect, &[(key.to_string(), 1.0)]);
 
             let param =
-                find_scalar_param(LIGHTNING_SCALAR_PARAMS, key).expect("valid key is registered");
+                find_scalar_param(&LIGHTNING_SCALAR_PARAMS, key).expect("valid key is registered");
             assert_eq!((param.get)(&effect), 1.0, "{key}");
         }
     }

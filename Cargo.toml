@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "crates/thyllore-scene-core/derive", "crates/thyllore-effect-core/derive"]
 
 [package]
 name = "thyllore-animation"

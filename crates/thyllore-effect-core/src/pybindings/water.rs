@@ -19,6 +19,7 @@ declare_effect_pyfunctions! {
     effect: WaterTorusEffect,
     preset_names: water_preset_names,
     ui_params: water_ui_params,
+    parameter_paths: water_parameter_paths,
     preset_params: water_preset_params,
     extra: [pack_water_ubo, water_bounds_corners, water_ubo_size]
 }

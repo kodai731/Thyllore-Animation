@@ -25,6 +25,7 @@ declare_effect_pyfunctions! {
     effect: FlameEffect,
     preset_names: flame_preset_names,
     ui_params: flame_ui_params,
+    parameter_paths: flame_parameter_paths,
     preset_params: flame_preset_params,
     extra: [
         flame_effective_optical_depth,

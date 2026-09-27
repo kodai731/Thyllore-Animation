@@ -1,8 +1,11 @@
+mod fields;
 mod scene_component;
 
 use std::borrow::Cow;
 
+pub use fields::{intern_name, nested_prefix, FieldPath, RootPath, SceneFields, SceneTables, Then};
 pub use scene_component::SceneComponent;
+pub use thyllore_scene_derive::SceneFields;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
@@ -35,8 +38,11 @@ pub enum UiKind {
 pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
 
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
+#[derive(Clone, Copy, Debug)]
 pub struct UiParam {
     pub name: &'static str,
+    /// Dotted location of the persisted value inside the component's serde form.
+    pub path: &'static str,
     pub group: &'static str,
     pub label: Option<&'static str>,
     pub kind: UiKind,
@@ -384,6 +390,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($name),
+                    path: stringify!($name),
                     group: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $ui_label)?),
                     kind: $crate::declare_scene_format!(@ui_kind $(, $ui_kind)?),
@@ -398,6 +405,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($runtime_name),
+                    path: stringify!($runtime_name),
                     group: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $rt_ui_label)?),
                     kind: $crate::UiKind::Scalar,
@@ -569,6 +577,7 @@ mod tests {
     fn test_display_label_prefers_explicit_label() {
         let explicit = UiParam {
             name: "swirl_gain",
+            path: "swirl_gain",
             group: "",
             label: Some("Swirl"),
             kind: UiKind::Scalar,
@@ -591,6 +600,7 @@ mod tests {
     fn test_color_component_names_follow_rgb_suffixes() {
         let tint = UiParam {
             name: "tint",
+            path: "tint",
             group: "",
             label: None,
             kind: UiKind::Color,

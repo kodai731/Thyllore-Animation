@@ -3962,6 +3962,16 @@ version = "0.0.1"
 dependencies = [
  "serde",
  "thyllore-color-core",
+ "thyllore-scene-derive",
+]
+
+[[package]]
+name = "thyllore-scene-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

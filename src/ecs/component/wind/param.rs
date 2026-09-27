@@ -394,7 +394,7 @@ fn wind_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: WindParam) -> &'static ScalarParam<WindTornadoEffect> {
-    find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&WIND_SCALAR_PARAMS, param.cli_name())
         .expect("every WindParam cli_name is registered in WIND_SCALAR_PARAMS")
 }
 
@@ -428,7 +428,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in WindParam::ALL {
             assert!(
-                find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&WIND_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );

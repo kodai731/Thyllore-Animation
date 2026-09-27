@@ -22,7 +22,7 @@ pub const WIND_MAX_PUFFS: usize = 96;
 const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
-#[derive(Clone, Copy, Debug, PartialEq, thyllore_effect_derive::UboPack)]
+#[derive(Clone, Copy, Debug, PartialEq, crate::UboPack)]
 #[ubo(target = crate::WindUBO)]
 pub struct WindShellParams {
     #[ubo("shape.x")]

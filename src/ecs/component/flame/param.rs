@@ -114,16 +114,16 @@ impl FlameParam {
             FlameParam::Radius => "radius",
             FlameParam::Intensity => "intensity",
             FlameParam::SigmaT => "sigma_t",
-            FlameParam::TemperatureBaseK => "temperature_base_k",
-            FlameParam::TemperatureTipK => "temperature_tip_k",
+            FlameParam::TemperatureBaseK => "color_temperature_base_k",
+            FlameParam::TemperatureTipK => "color_temperature_tip_k",
             FlameParam::WarpAmp => "warp_amp",
             FlameParam::WarpFreq => "warp_freq",
-            FlameParam::RiseSpeed => "rise_speed",
+            FlameParam::RiseSpeed => "warp_rise_speed",
             FlameParam::NoiseAmplitude => "noise_amplitude",
-            FlameParam::WhiteBoost => "white_boost",
-            FlameParam::BendAmount => "bend_amount",
-            FlameParam::WindX => "wind_x",
-            FlameParam::WindZ => "wind_z",
+            FlameParam::WhiteBoost => "edge_white_boost",
+            FlameParam::BendAmount => "wind_bend_amount",
+            FlameParam::WindX => "wind_direction_x",
+            FlameParam::WindZ => "wind_direction_y",
             FlameParam::EdgeLow => "edge_low",
             FlameParam::EdgeHigh => "edge_high",
         }
@@ -235,7 +235,7 @@ fn flame_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: FlameParam) -> &'static ScalarParam<FlameEffect> {
-    find_scalar_param(FLAME_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&FLAME_SCALAR_PARAMS, param.cli_name())
         .expect("every FlameParam cli_name is registered in FLAME_SCALAR_PARAMS")
 }
 
@@ -279,7 +279,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in FlameParam::ALL {
             assert!(
-                find_scalar_param(FLAME_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&FLAME_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );

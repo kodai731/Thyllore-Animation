@@ -54,11 +54,17 @@ src/ecs/
 └── mod.rs
 ```
 
-Component and resource types that an effect exposes as parameters (flame, water, wind) are declared once in
-`crates/thyllore-effect-core` via struct field attributes (`#[derive(SceneFormat)]`); `src/ecs/component/`
-only wraps them. The `#[scene(key = ...)]` attribute makes the component a `thyllore_scene_core::SceneComponent`
-(type key + persisted field list), which is all the scene format needs: it never names the effect (see
-`hierarchy.md`, "Feature isolation").
+Component and resource types that an effect exposes as parameters (flame, water, wind, lightning) are declared
+once in `crates/thyllore-effect-core` via struct field attributes (`#[derive(thyllore_scene_core::SceneFields)]`, the
+proc-macro nested at `crates/thyllore-scene-core/derive/` and re-exported by scene-core, usable by any scene component); `src/ecs/component/`
+only wraps them. The effect struct carries `#[scene(key, tag, tags, snapshot, scalars, ui, overwrite, owner?, group?)]`,
+a sub-struct carries `#[params(tag, owner?, group?)]`, and a field carries one of `#[persist(owner?, as?, with?,
+ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
+fields). The tooltip is the field's `///` doc comment. The scene form is nested by struct; the public parameter
+name is the underscore-joined path (`noise.amplitude` → `noise_amplitude`) and is the one string used by
+`ScalarChannel.cli_name`, the batch CLI, MCP and the Blender property identifier. `#[scene(key = ...)]` makes the
+component a `thyllore_scene_core::SceneComponent` (type key + persisted field list), which is all the scene format
+needs: it never names the effect (see `hierarchy.md`, "Feature isolation").
 
 ### Domain ECS Modules
 

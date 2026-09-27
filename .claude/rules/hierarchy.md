@@ -35,7 +35,9 @@ A crate holds code that is meaningful without the engine: pure math, domain type
 operations, GPU primitives, importers and exporters, codegen used by build scripts.
 
 - Every crate is named `thyllore-<topic>-core` (or `-api`, `-debug`, `-client`, and `-derive` for the
-  proc-macro companion of a `-core` crate) and states its layer and what it must not depend on in
+  proc-macro companion of a `-core` crate; Rust forbids proc-macros inside a library crate, so a derive that
+  belongs to one core crate nests in its directory and is re-exported by it like serde does:
+  `thyllore-scene-core/derive/` is `#[derive(SceneFields)]`, `thyllore-effect-core/derive/` is `#[derive(UboPack)]`) and states its layer and what it must not depend on in
   `Cargo.toml` `description`. The two build-script helpers (`thyllore-shader-manifest`,
   `thyllore-spirv-reflect`) are named for the artefact they produce instead; no further exception.
 - A crate never depends on `World`, `Entity`, `AssetStorage` or `App`.
@@ -195,7 +197,7 @@ inside the effect stage.
 Every feature (today the effects flame, water, wind) is a set of directories that only it may name. Code
 outside those directories reaches a feature through a contract (`src/hooks/`), a registry it subscribes to
 (`src/effect/subscription.rs`), or reflection metadata the feature's own declaration generates
-(`declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
+(`#[derive(SceneFields)]` / `declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
 `UiParam` tables). The rule is about generic files, not only about effects: a file whose job would not change if
 one feature were deleted (a phase, a shared system, a resource module, a pass, an app init step) must
 compile and behave the same without that feature, so it never names the feature's components, resources,
@@ -222,13 +224,15 @@ Concretely:
   `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
   engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
   `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
- `<Effect>::TYPE_KEY`, which comes from the effect struct's `#[scene(key = ...)]` attribute (resource: `declare_scene_format!`). Hooks are
+  `<Effect>::TYPE_KEY`, which comes from the effect struct's `#[scene(key = ...)]` attribute (resource:
+  `declare_scene_format!`). Hooks are
   registered at link time (`inventory`): `scene_owner!(Effect { icon, placement, prepare_loaded? })`
   and `scene_attachment!(C)` in the component's own file both submit the hook, and
   `SceneComponentHooks::collect()` gathers every submission at app start (duplicate keys fail there).
   There is no list of scene components anywhere.
-- Adding a persisted parameter = adding one `#[persist(...)]` field to the effect struct (nested via `name`/`path`/`as`). Nothing in
-  `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
+- Adding a persisted parameter = one `#[persist(...)]` attribute on the field, in the struct that owns it (a
+  sub-struct derives `SceneFields` with `#[params(tag = ...)]`, the effect marks it `#[nested]`); its public name
+  is `<parent>_<field>` and its scene path `parent.field`. Nothing in `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
   = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
   own per-frame system when missing, never by the loader.
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,

@@ -28,11 +28,33 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 
 ### Fullscreen Overlay Passes
 
-- Pipelines are built using `thyllore_vulkan_core::renderer::overlay_pipeline(pass, render_pass, &[OverlayBlend], Option<DepthTestConfig>)` (no vertex input, fullscreen triangle, dynamic viewport/scissor; blend definitions are centralized in vulkan-core).
-- Recording is done via `record_overlay_draws(device, cmd, &OverlayPass, render_area, OverlayAttachmentLoad, pipeline, push_constants, &[OverlayDraw])`.
-- Render passes are created once during effect setup using `create_color_overlay_render_pass(ColorOverlayPassDesc)`, with only resolution-dependent framebuffers recreated on viewport resize.
-- Intermediate images used only within a frame (e.g., wind's half-resolution color) are not owned; they are requested via `RenderPassNode::transients` as `TransientRequest`, and their framebuffers are obtained in `prepare` via `ctx.transient.framebuffer`. Descriptors are updated per frame slot only when generations change (e.g., `src/ecs/systems/wind/passes.rs`).
-- Complex behaviors like history ping-pong (flame) or compute/ray tracing (water's caustic, trace) do not fit this pattern and must be implemented within the effect domain.
+- An effect declares its overlay pass once as a `const OverlayNodeSpec` in
+  `src/ecs/systems/<effect>/pipeline.rs` (`thyllore_vulkan_core::renderer::OverlayNodeSpec`: shaders, one
+  `OverlayBlend` per color attachment, optional `DepthTestConfig`, `OverlayPushConstants`). Blend
+  definitions live only in vulkan-core.
+- `spec.build_pipeline(rrdevice, rrrender, render_pass, &[layouts], extent)` builds the pipeline at effect
+  setup (no vertex input, fullscreen triangle, dynamic viewport / scissor, so a resize never rebuilds it).
+- `spec.record(device, cmd, &OverlayPass, render_area, pipeline, push_constants, &[sets],
+  &[OverlayInstanceDraw])` records one render pass: every instance draw binds the same sets with its own
+  dynamic offsets inside its scissor. `OverlayPass` (render pass, framebuffer, extent,
+  `OverlayAttachmentLoad`) comes from the target: `HistoryTargets::overlay_pass(history_index, load)`, or
+  the effect resource's `overlay_pass()` for an HDR pass built with `create_color_overlay_render_pass`.
+- The shading settings block `ShadingPushConstants { mode, step_count, debug_view }` is shared; an effect
+  with a different block declares its own `#[repr(C)]` struct.
+- Instance scissors come from `src/vulkanr/renderer/deferred/scissor.rs::compute_bounds_scissor` (local
+  bound corners projected with the model matrix; full extent when a corner is behind the camera, `None`
+  when all are or the bounds are empty). Effects never project corners themselves.
+- Temporal history reuse is `src/ecs/systems/temporal_history.rs`: an effect implements `TemporalHistory`
+  (snapshot, accumulator) and calls `accumulate_temporal_history::<E>(world)` from its `Accumulate` frame
+  prep hook; the previous snapshot is the generic `HistorySnapshotState<S>` resource.
+- Render passes are created once during effect setup (`create_color_overlay_render_pass`), only the
+  resolution-dependent framebuffers are recreated on viewport resize.
+- Intermediate images used only within a frame (wind's half-resolution color) are not owned; they are
+  requested via `RenderPassNode::transients` as `TransientRequest`, and their framebuffers are obtained in
+  `prepare` via `ctx.transient.framebuffer`. Descriptors are updated per frame slot only when generations
+  change (`src/ecs/systems/wind/passes.rs`).
+- Everything around the overlay pass stays in the effect: the order of its nodes, compute passes (wind
+  shadow bake, water caustic), ray tracing (water trace) and the history ping-pong index.
 
 ## Frame flow
 

@@ -5,14 +5,29 @@ use crate::ecs::resource::{BoundGenerations, WindGpuState, WindRenderTargets};
 use crate::ecs::systems::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
 };
-use crate::ecs::systems::wind::record::WindPushConstants;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE};
-use crate::vulkanr::pipeline::{PushConstantConfig, RRPipeline};
+use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
-use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
+use thyllore_vulkan_core::renderer::{
+    OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
+};
+
+pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+    shaders: &WIND_RESOLVE,
+    blends: &[OverlayBlend::Premultiplied],
+    depth_test: None,
+    push_constants: OverlayPushConstants::of::<ShadingPushConstants>(),
+};
+
+pub const WIND_UPSAMPLE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+    shaders: &WIND_UPSAMPLE,
+    blends: &[OverlayBlend::Premultiplied],
+    depth_test: None,
+    push_constants: OverlayPushConstants::None,
+};
 
 pub unsafe fn create_wind_gpu_state(
     instance: &Instance,
@@ -33,7 +48,6 @@ pub unsafe fn create_wind_gpu_state(
 
     let resolve_descriptor = WindResolveDescriptorSet::new(rrdevice)?;
     resolve_descriptor.write_all(rrdevice, &ubo, &targets.shadow_volume, scene_depth_view)?;
-
     let shadow_bake_descriptor = WindShadowBakeDescriptorSet::new(rrdevice)?;
     shadow_bake_descriptor.write_all(rrdevice, &ubo, &targets.shadow_volume)?;
     let shadow_bake_pipeline = RRPipeline::new_compute(
@@ -45,34 +59,26 @@ pub unsafe fn create_wind_gpu_state(
         ],
     )?;
 
-    let resolve_pipeline = overlay_pipeline(
-        &WIND_RESOLVE,
+    let resolve_pipeline = WIND_RESOLVE_OVERLAY.build_pipeline(
+        rrdevice,
+        rrrender,
         targets.render_pass,
-        &[OverlayBlend::Premultiplied],
-        None,
-    )
-    .push_constants(PushConstantConfig {
-        stage_flags: vk::ShaderStageFlags::FRAGMENT,
-        offset: 0,
-        size: std::mem::size_of::<WindPushConstants>() as u32,
-    })
-    .descriptor_layouts(&[
-        &graphics_resources.frame_set.layout,
-        &resolve_descriptor.layout,
-    ])
-    .build(rrdevice, rrrender, Some(targets.extent()))?;
-
+        &[
+            &graphics_resources.frame_set.layout,
+            &resolve_descriptor.layout,
+        ],
+        targets.extent(),
+    )?;
     let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let upsample_pipeline = overlay_pipeline(
-        &WIND_UPSAMPLE,
+    let upsample_pipeline = WIND_UPSAMPLE_OVERLAY.build_pipeline(
+        rrdevice,
+        rrrender,
         targets.render_pass,
-        &[OverlayBlend::Premultiplied],
-        None,
-    )
-    .descriptor_layouts(&[&upsample_descriptor.layout])
-    .build(rrdevice, rrrender, Some(targets.extent()))?;
-
+        &[&upsample_descriptor.layout],
+        targets.extent(),
+    )?;
     log!("Created wind pipeline");
+
     Ok(WindGpuState {
         ubo: Some(ubo),
         resolve_pipeline: Some(resolve_pipeline),

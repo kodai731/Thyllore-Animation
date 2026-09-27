@@ -3,11 +3,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings, WindRenderTargets};
-use crate::ecs::systems::wind::descriptors::WindResolveDescriptorSet;
-use crate::ecs::systems::wind::record::{
-    record_wind_half_resolve_pass, record_wind_shading_pass, record_wind_shadow_bake_pass,
-    record_wind_upsample_pass, WindInstanceDraw, WindPushConstants,
-};
+use crate::ecs::systems::wind::pipeline::{WIND_RESOLVE_OVERLAY, WIND_UPSAMPLE_OVERLAY};
+use crate::ecs::systems::wind::record::record_wind_shadow_bake_pass;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse, TransientRequest,
@@ -20,6 +17,7 @@ use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 use thyllore_vulkan_core::FrameRenderContext;
 
 const HALF_COLOR_SLOT: TransientSlot = TransientSlot("wind.half_color");
@@ -226,7 +224,7 @@ unsafe fn record_wind_passes(
     let render = ctx.frame_render_context(image_index);
 
     let settings = wind_render_settings(ctx);
-    let push_constants = WindPushConstants::new(
+    let push_constants = ShadingPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
         settings.debug_view.as_shader_value(),
@@ -244,8 +242,8 @@ unsafe fn record_wind_passes(
             ubo,
             vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
-        draws.push(WindInstanceDraw {
-            ubo_dynamic_offset: wind_ubo.slot_offset(slot)? as u32,
+        draws.push(OverlayInstanceDraw {
+            dynamic_offsets: vec![wind_ubo.slot_offset(slot)? as u32],
             scissor,
         });
     }
@@ -268,18 +266,23 @@ unsafe fn record_wind_passes(
         )?;
     }
 
+    let resolve_sets = [
+        render.graphics.frame_set.sets[image_index],
+        descriptor.descriptor_set,
+    ];
     match settings.resolve_scale {
         WindResolveScale::Full => {
+            let pass = wind_buffer.overlay_pass();
             for draw in &draws {
-                record_wind_shading_pass(
-                    &render,
-                    wind_buffer,
-                    shading_pipeline,
-                    descriptor,
-                    draw,
-                    push_constants,
-                    image_index,
+                WIND_RESOLVE_OVERLAY.record(
+                    &render.device.device,
                     command_buffer,
+                    &pass,
+                    draw.scissor,
+                    shading_pipeline,
+                    Some(push_constants.as_bytes()),
+                    &resolve_sets,
+                    std::slice::from_ref(draw),
                 )?;
             }
         }
@@ -289,10 +292,9 @@ unsafe fn record_wind_passes(
             &render,
             wind_buffer,
             shading_pipeline,
-            descriptor,
+            &resolve_sets,
             &draws,
             push_constants,
-            image_index,
             frame_slot,
             command_buffer,
         )?,
@@ -308,10 +310,9 @@ unsafe fn record_half_scale_wind_passes(
     ctx: &FrameRenderContext,
     wind_buffer: &WindRenderTargets,
     shading_pipeline: &RRPipeline,
-    descriptor: &WindResolveDescriptorSet,
-    draws: &[WindInstanceDraw],
-    push_constants: WindPushConstants,
-    image_index: usize,
+    resolve_sets: &[vk::DescriptorSet],
+    draws: &[OverlayInstanceDraw],
+    push_constants: ShadingPushConstants,
     frame_slot: usize,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
@@ -328,35 +329,41 @@ unsafe fn record_half_scale_wind_passes(
     else {
         return Ok(());
     };
+    let device = &ctx.device.device;
 
-    let half_extent = wind_buffer.half_extent();
-    let half_draws: Vec<WindInstanceDraw> = draws
+    let half_pass = wind_buffer.half_overlay_pass(half_framebuffer);
+    let half_draws: Vec<OverlayInstanceDraw> = draws
         .iter()
-        .map(|draw| WindInstanceDraw {
-            ubo_dynamic_offset: draw.ubo_dynamic_offset,
-            scissor: halved_scissor(draw.scissor, half_extent),
+        .map(|draw| OverlayInstanceDraw {
+            dynamic_offsets: draw.dynamic_offsets.clone(),
+            scissor: halved_scissor(draw.scissor, half_pass.extent),
         })
         .collect();
-
-    record_wind_half_resolve_pass(
-        ctx,
-        wind_buffer,
-        half_framebuffer,
+    WIND_RESOLVE_OVERLAY.record(
+        device,
+        command_buffer,
+        &half_pass,
+        half_pass.full_area(),
         shading_pipeline,
-        descriptor,
+        Some(push_constants.as_bytes()),
+        resolve_sets,
         &half_draws,
-        push_constants,
-        image_index,
-        command_buffer,
     )?;
-    record_wind_upsample_pass(
-        ctx,
-        wind_buffer,
-        upsample_pipeline,
-        upsample_descriptor,
-        union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent()),
-        frame_slot,
+
+    let upsample_scissor =
+        union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent());
+    WIND_UPSAMPLE_OVERLAY.record(
+        device,
         command_buffer,
+        &wind_buffer.overlay_pass(),
+        upsample_scissor,
+        upsample_pipeline,
+        None,
+        &[upsample_descriptor.descriptor_set(frame_slot)],
+        &[OverlayInstanceDraw {
+            dynamic_offsets: Vec::new(),
+            scissor: upsample_scissor,
+        }],
     )
 }
 

@@ -2,6 +2,7 @@ use cgmath::Matrix4;
 
 use super::WaterRenderSettings;
 use crate::ecs::component::WaterTorusEffect;
+use crate::ecs::resource::HistorySnapshotState;
 
 /// The frame state that history reuse depends on. Any difference between two
 /// consecutive frames invalidates the accumulated history.
@@ -12,7 +13,4 @@ pub struct WaterHistorySnapshot {
     pub settings: WaterRenderSettings,
 }
 
-#[derive(Default)]
-pub struct WaterHistorySnapshotState {
-    pub previous: Option<WaterHistorySnapshot>,
-}
+pub type WaterHistorySnapshotState = HistorySnapshotState<WaterHistorySnapshot>;

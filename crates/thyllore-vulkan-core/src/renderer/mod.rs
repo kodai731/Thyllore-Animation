@@ -31,14 +31,14 @@ pub use line_mesh_draw::{
 pub use onion_skin::{record_onion_skin_composite_pass, record_onion_skin_ghost_pass};
 pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
 pub use overlay::{
-    begin_overlay_render_pass, draw_fullscreen_triangle, overlay_pipeline, record_overlay_draws,
-    set_full_viewport, OverlayAttachmentLoad, OverlayBlend, OverlayDraw, OverlayPass,
+    OverlayAttachmentLoad, OverlayBlend, OverlayInstanceDraw, OverlayNodeSpec, OverlayPass,
+    OverlayPushConstants,
 };
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
     TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
 };
-pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants};
+pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};

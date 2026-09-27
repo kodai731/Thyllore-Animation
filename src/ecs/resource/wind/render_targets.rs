@@ -1,5 +1,6 @@
 use thyllore_effect_core::WindUBO;
 use thyllore_vulkan_core::pipeline::RRPipeline;
+use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayPass};
 use thyllore_vulkan_core::resource::hdr_buffer::HDR_FORMAT;
 use thyllore_vulkan_core::resource::render_target_transient::TransientDesc;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
@@ -34,6 +35,25 @@ impl WindRenderTargets {
 
     pub fn half_extent(&self) -> vk::Extent2D {
         half_extent(self.width, self.height)
+    }
+
+    pub fn overlay_pass(&self) -> OverlayPass {
+        OverlayPass {
+            render_pass: self.render_pass,
+            framebuffer: self.framebuffer,
+            extent: self.extent(),
+            load: OverlayAttachmentLoad::Keep,
+        }
+    }
+
+    /// The half resolution pass into the frame's transient color image, cleared to transparent.
+    pub fn half_overlay_pass(&self, half_framebuffer: vk::Framebuffer) -> OverlayPass {
+        OverlayPass {
+            render_pass: self.half_render_pass,
+            framebuffer: half_framebuffer,
+            extent: self.half_extent(),
+            load: OverlayAttachmentLoad::Clear([0.0; 4]),
+        }
     }
 
     pub fn half_color_desc(&self) -> TransientDesc {

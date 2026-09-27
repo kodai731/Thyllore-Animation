@@ -1,11 +1,6 @@
-use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use super::descriptors::RRWaterDescriptorSet;
-use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_vulkan_core::frame_context::FrameRenderContext;
-use thyllore_vulkan_core::resource::HistoryTargets;
-use thyllore_vulkan_core::{record_overlay_draws, OverlayAttachmentLoad, OverlayDraw, OverlayPass};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -68,47 +63,4 @@ pub unsafe fn record_water_scene_color_copy(
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         &[region],
     );
-}
-
-pub unsafe fn record_water_shading_pass(
-    ctx: &FrameRenderContext,
-    water_history: &HistoryTargets,
-    pipeline: &RRPipeline,
-    descriptor: &RRWaterDescriptorSet,
-    ubo_dynamic_offset: u32,
-    scissor: vk::Rect2D,
-    push_constants: WaterPushConstants,
-    image_index: usize,
-    frame_slot: usize,
-    history_index: usize,
-    cmd: vk::CommandBuffer,
-) -> Result<()> {
-    let device = &ctx.device.device;
-
-    let pass = OverlayPass {
-        render_pass: water_history.render_pass,
-        framebuffer: water_history.framebuffers[history_index],
-        extent: water_history.extent(),
-    };
-
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
-    let overlay_draws = [OverlayDraw {
-        descriptor_sets: &[
-            frame_set,
-            descriptor.descriptor_set(frame_slot, history_index)?,
-        ],
-        dynamic_offsets: &[ubo_dynamic_offset],
-        scissor,
-    }];
-
-    record_overlay_draws(
-        device,
-        cmd,
-        &pass,
-        scissor,
-        OverlayAttachmentLoad::Keep,
-        pipeline,
-        Some(push_constants.as_bytes()),
-        &overlay_draws,
-    )
 }

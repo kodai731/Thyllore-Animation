@@ -5,11 +5,24 @@ use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstant
 use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
-use crate::vulkanr::pipeline::{DepthTestConfig, PushConstantConfig, RRPipeline};
+use crate::vulkanr::pipeline::{DepthTestConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
-use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
+use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
+
+/// Writes the shading into the HDR color and the history image where the torus is nearer than
+/// the scene depth.
+pub const WATER_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+    shaders: &WATER_RESOLVE,
+    blends: &[OverlayBlend::Opaque, OverlayBlend::Opaque],
+    depth_test: Some(DepthTestConfig {
+        test_enable: true,
+        write_enable: true,
+        compare_op: vk::CompareOp::GREATER_OR_EQUAL,
+    }),
+    push_constants: OverlayPushConstants::of::<WaterPushConstants>(),
+};
 
 pub unsafe fn create_water_pipeline(
     instance: &Instance,
@@ -30,26 +43,16 @@ pub unsafe fn create_water_pipeline(
     water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
 
     let water_descriptor = RRWaterDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let water_shading_pipeline = overlay_pipeline(
-        &WATER_RESOLVE,
+    let water_shading_pipeline = WATER_OVERLAY.build_pipeline(
+        rrdevice,
+        rrrender,
         water_targets.history.render_pass,
-        &[OverlayBlend::Opaque, OverlayBlend::Opaque],
-        Some(DepthTestConfig {
-            test_enable: true,
-            write_enable: true,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        }),
-    )
-    .push_constants(PushConstantConfig {
-        stage_flags: vk::ShaderStageFlags::FRAGMENT,
-        offset: 0,
-        size: std::mem::size_of::<WaterPushConstants>() as u32,
-    })
-    .descriptor_layouts(&[
-        &graphics_resources.frame_set.layout,
-        &water_descriptor.layout,
-    ])
-    .build(rrdevice, rrrender, Some(water_targets.extent()))?;
+        &[
+            &graphics_resources.frame_set.layout,
+            &water_descriptor.layout,
+        ],
+        water_targets.extent(),
+    )?;
 
     let mut gpu_state = WaterGpuState {
         shading_pipeline: Some(water_shading_pipeline),

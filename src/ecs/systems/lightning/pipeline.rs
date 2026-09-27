@@ -3,14 +3,21 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::{LightningGpuState, LightningRenderTargets};
 use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
-use crate::ecs::systems::lightning::record::LightningPushConstants;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::LIGHTNING_RESOLVE;
-use crate::vulkanr::pipeline::PushConstantConfig;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::LIGHTNING_MAX_INSTANCES;
-use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
+use thyllore_vulkan_core::renderer::{
+    OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
+};
+
+pub const LIGHTNING_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+    shaders: &LIGHTNING_RESOLVE,
+    blends: &[OverlayBlend::Additive],
+    depth_test: None,
+    push_constants: OverlayPushConstants::of::<ShadingPushConstants>(),
+};
 
 pub unsafe fn create_lightning_gpu_state(
     instance: &Instance,
@@ -32,28 +39,21 @@ pub unsafe fn create_lightning_gpu_state(
         LIGHTNING_MAX_INSTANCES,
         Placement::DeviceUpdated,
     )?;
-
     let resolve_descriptor = LightningResolveDescriptorSet::new(rrdevice)?;
     resolve_descriptor.write_all(rrdevice, &ubo, &segments_ubo, scene_depth_view)?;
 
-    let resolve_pipeline = overlay_pipeline(
-        &LIGHTNING_RESOLVE,
+    let resolve_pipeline = LIGHTNING_OVERLAY.build_pipeline(
+        rrdevice,
+        rrrender,
         targets.render_pass,
-        &[OverlayBlend::Additive],
-        None,
-    )
-    .push_constants(PushConstantConfig {
-        stage_flags: vk::ShaderStageFlags::FRAGMENT,
-        offset: 0,
-        size: std::mem::size_of::<LightningPushConstants>() as u32,
-    })
-    .descriptor_layouts(&[
-        &graphics_resources.frame_set.layout,
-        &resolve_descriptor.layout,
-    ])
-    .build(rrdevice, rrrender, Some(targets.extent()))?;
-
+        &[
+            &graphics_resources.frame_set.layout,
+            &resolve_descriptor.layout,
+        ],
+        targets.extent(),
+    )?;
     log!("Created lightning pipeline");
+
     Ok(LightningGpuState {
         ubo: Some(ubo),
         segments_ubo: Some(segments_ubo),

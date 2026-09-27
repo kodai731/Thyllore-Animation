@@ -5,9 +5,7 @@ use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{
     LightningGpuState, LightningRenderSettings, LightningRenderTargets, ProjectionData,
 };
-use crate::ecs::systems::lightning::record::{
-    record_lightning_resolve_pass, LightningInstanceDraw, LightningPushConstants,
-};
+use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
@@ -17,6 +15,7 @@ use thyllore_effect_core::{
     build_lightning_ubo, compute_lightning_segment_aabb, inverse_view_proj_f64, LightningDebugView,
     LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 
 pub struct LightningPassNode;
 
@@ -161,6 +160,7 @@ unsafe fn record_lightning_passes(
         return Ok(());
     };
     let render = ctx.frame_render_context(image_index);
+    let device = &render.device.device;
 
     let mut draws = Vec::with_capacity(frame.instances.len());
     for (slot, ((instance_ubo, instance_segments), scissor)) in
@@ -170,22 +170,24 @@ unsafe fn record_lightning_passes(
             continue;
         };
         ubo.record_update(
-            &render.device.device,
+            device,
             command_buffer,
             slot,
             instance_ubo,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
         segments_ubo.record_update(
-            &render.device.device,
+            device,
             command_buffer,
             slot,
             instance_segments,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
-        draws.push(LightningInstanceDraw {
-            ubo_dynamic_offset: ubo.slot_offset(slot)? as u32,
-            segments_dynamic_offset: segments_ubo.slot_offset(slot)? as u32,
+        draws.push(OverlayInstanceDraw {
+            dynamic_offsets: vec![
+                ubo.slot_offset(slot)? as u32,
+                segments_ubo.slot_offset(slot)? as u32,
+            ],
             scissor,
         });
     }
@@ -194,20 +196,23 @@ unsafe fn record_lightning_passes(
     }
 
     let settings = lightning_render_settings(ctx);
-    let push_constants = LightningPushConstants::new(
+    let push_constants = ShadingPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
         settings.debug_view.as_shader_value(),
     );
-
-    record_lightning_resolve_pass(
-        &render,
-        &targets,
-        pipeline,
-        descriptor,
-        &draws,
-        push_constants,
-        image_index,
+    let pass = targets.overlay_pass();
+    LIGHTNING_OVERLAY.record(
+        device,
         command_buffer,
+        &pass,
+        pass.full_area(),
+        pipeline,
+        Some(push_constants.as_bytes()),
+        &[
+            render.graphics.frame_set.sets[image_index],
+            descriptor.descriptor_set,
+        ],
+        &draws,
     )
 }

@@ -56,7 +56,8 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   that composes those primitives (`FlameRenderTargets { history }`, `WaterRenderTargets { history,
   caustic_accum, .. }`) and derives `GpuResource`, so creation and destruction are the primitives' and the
   effect only writes its `*_desc()`; the assembly lives in `src/ecs/systems/<effect>/` (descriptors,
-  pipeline, record, render targets). Wind follows this layout.
+  pipeline with its `OverlayNodeSpec`, passes, render targets; `record.rs` only for non-overlay commands
+  such as wind's shadow bake). Wind follows this layout.
   Pipeline creation never lives in vulkan-core: effects build theirs in
   `src/ecs/systems/<effect>/pipeline.rs`, the core post-process passes in
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.

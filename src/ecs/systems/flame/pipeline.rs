@@ -4,15 +4,23 @@ use vulkanalia::prelude::v1_0::*;
 use crate::ecs::resource::FlameGpuState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
-use crate::vulkanr::pipeline::PushConstantConfig;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
-use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
+use thyllore_vulkan_core::renderer::{
+    OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
+};
 use thyllore_vulkan_core::resource::HistoryTargets;
 
 use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
-use super::record::FlamePushConstants;
+
+/// Blends the shading onto the HDR color and writes the unblended result into the history image.
+pub const FLAME_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+    shaders: &FLAME_RESOLVE,
+    blends: &[OverlayBlend::Premultiplied, OverlayBlend::Opaque],
+    depth_test: None,
+    push_constants: OverlayPushConstants::of::<ShadingPushConstants>(),
+};
 
 pub unsafe fn create_flame_pipeline(
     instance: &Instance,
@@ -45,24 +53,18 @@ pub unsafe fn create_flame_pipeline(
         },
     )?;
 
-    let flame_shading_pipeline = overlay_pipeline(
-        &FLAME_RESOLVE,
+    let flame_shading_pipeline = FLAME_OVERLAY.build_pipeline(
+        rrdevice,
+        rrrender,
         flame_history.render_pass,
-        &[OverlayBlend::Premultiplied, OverlayBlend::Opaque],
-        None,
-    )
-    .push_constants(PushConstantConfig {
-        stage_flags: vk::ShaderStageFlags::FRAGMENT,
-        offset: 0,
-        size: std::mem::size_of::<FlamePushConstants>() as u32,
-    })
-    .descriptor_layouts(&[
-        &graphics_resources.frame_set.layout,
-        &flame_descriptor.layout,
-    ])
-    .build(rrdevice, rrrender, Some(flame_history.extent()))?;
-
+        &[
+            &graphics_resources.frame_set.layout,
+            &flame_descriptor.layout,
+        ],
+        flame_history.extent(),
+    )?;
     log!("Created flame pipelines");
+
     Ok(FlameGpuState {
         shading_pipeline: Some(flame_shading_pipeline),
         descriptor: Some(flame_descriptor),

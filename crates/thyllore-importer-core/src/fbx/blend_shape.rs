@@ -9,6 +9,9 @@ fn remap_shape_offsets(
     offsets: &[[f32; 3]],
     vertex_map: &HashMap<u32, u32>,
 ) -> Vec<SparseDelta> {
+    if offsets.is_empty() {
+        return Vec::new();
+    }
     let mut deltas = Vec::new();
     for (i, &ctrl_idx) in offset_vertices.iter().enumerate() {
         if let Some(&mapped) = vertex_map.get(&ctrl_idx) {
@@ -171,6 +174,20 @@ mod tests {
     fn test_empty() {
         let vertex_map: HashMap<u32, u32> = HashMap::new();
         let offset_vertices: Vec<u32> = vec![];
+        let offsets: [[f32; 3]; 0] = [];
+
+        let deltas = remap_shape_offsets(&offset_vertices, &offsets, &vertex_map);
+
+        assert!(deltas.is_empty());
+    }
+
+    #[test]
+    fn test_missing_offsets_yield_no_deltas() {
+        let mut vertex_map = HashMap::new();
+        vertex_map.insert(0u32, 0u32);
+        vertex_map.insert(1u32, 1u32);
+
+        let offset_vertices: Vec<u32> = vec![0, 1];
         let offsets: [[f32; 3]; 0] = [];
 
         let deltas = remap_shape_offsets(&offset_vertices, &offsets, &vertex_map);

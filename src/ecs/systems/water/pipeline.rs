@@ -49,7 +49,7 @@ pub unsafe fn create_water_pipeline(
         water_targets.history.render_pass,
         &[
             &graphics_resources.frame_set.layout,
-            &water_descriptor.layout(),
+            water_descriptor.layout(),
         ],
         water_targets.extent(),
     )?;

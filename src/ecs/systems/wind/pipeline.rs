@@ -48,7 +48,7 @@ pub unsafe fn create_wind_gpu_state(
         &WIND_SHADOW_BAKE,
         &[
             &graphics_resources.frame_set.layout,
-            &shadow_bake_descriptor.layout(),
+            shadow_bake_descriptor.layout(),
         ],
     )?;
 
@@ -58,7 +58,7 @@ pub unsafe fn create_wind_gpu_state(
         targets.render_pass,
         &[
             &graphics_resources.frame_set.layout,
-            &resolve_descriptor.layout(),
+            resolve_descriptor.layout(),
         ],
         targets.extent(),
     )?;

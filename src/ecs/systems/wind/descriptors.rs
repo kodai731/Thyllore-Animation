@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use crate::vulkanr::descriptor::{
-    ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE,
+    ReflectedDescriptorSets, ReflectedLayoutSpec, WIND_RESOLVE, WIND_SHADOW_BAKE,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
 use crate::vulkanr::resource::GpuResource;
@@ -13,8 +13,7 @@ use thyllore_effect_core::WindUBO;
 
 #[derive(Clone, Debug, Default)]
 pub struct WindResolveDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    sets: ReflectedDescriptorSets,
     pub scene_depth_sampler: vk::Sampler,
 }
 
@@ -26,20 +25,22 @@ impl WindResolveDescriptorSet {
         )
     }
 
-    pub fn layout(&self) -> &ReflectedSetLayout {
-        &self.layout
-    }
-
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+        let sets = ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), 1)?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
-            layout,
-            descriptor_set,
+            sets,
             scene_depth_sampler,
         })
+    }
+
+    pub fn layout(&self) -> &crate::vulkanr::descriptor::ReflectedSetLayout {
+        self.sets.layout()
+    }
+
+    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+        self.sets.set(0)
     }
 
     pub unsafe fn write_all(
@@ -49,8 +50,8 @@ impl WindResolveDescriptorSet {
         shadow_volume: &VolumeImage,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .uniform_dynamic(wind_resolve::WIND, wind_ubo)?
             .apply(rrdevice);
         self.update_shadow_volume(rrdevice, shadow_volume)?;
@@ -62,8 +63,8 @@ impl WindResolveDescriptorSet {
         rrdevice: &RRDevice,
         shadow_volume: &VolumeImage,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .image(
                 wind_resolve::SHADOW_VOLUME_SAMPLER,
                 shadow_volume.view,
@@ -79,8 +80,8 @@ impl WindResolveDescriptorSet {
         rrdevice: &RRDevice,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .image(
                 wind_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
@@ -92,15 +93,14 @@ impl WindResolveDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct WindShadowBakeDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    sets: ReflectedDescriptorSets,
 }
 
 impl WindShadowBakeDescriptorSet {
@@ -111,18 +111,17 @@ impl WindShadowBakeDescriptorSet {
         )
     }
 
-    pub fn layout(&self) -> &ReflectedSetLayout {
-        &self.layout
+    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
+        let sets = ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), 1)?;
+        Ok(Self { sets })
     }
 
-    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+    pub fn layout(&self) -> &crate::vulkanr::descriptor::ReflectedSetLayout {
+        self.sets.layout()
+    }
 
-        Ok(Self {
-            layout,
-            descriptor_set,
-        })
+    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+        self.sets.set(0)
     }
 
     pub unsafe fn write_all(
@@ -131,8 +130,8 @@ impl WindShadowBakeDescriptorSet {
         wind_ubo: &UniformBuffer<WindUBO>,
         shadow_volume: &VolumeImage,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .uniform_dynamic(wind_shadow_bake::WIND, wind_ubo)?
             .apply(rrdevice);
         self.update_shadow_volume(rrdevice, shadow_volume)
@@ -143,8 +142,8 @@ impl WindShadowBakeDescriptorSet {
         rrdevice: &RRDevice,
         shadow_volume: &VolumeImage,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(0)
             .image(
                 wind_shadow_bake::SHADOW_VOLUME_IMAGE,
                 shadow_volume.view,
@@ -156,7 +155,7 @@ impl WindShadowBakeDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
     }
 }
 

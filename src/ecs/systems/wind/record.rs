@@ -46,7 +46,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
             vk::PipelineBindPoint::COMPUTE,
             pipeline.pipeline_layout,
             0,
-            &[frame_set, descriptor.descriptor_set],
+            &[frame_set, descriptor.descriptor_set()],
             &draw.dynamic_offsets,
         );
         device.cmd_dispatch(cmd, group_count_x, group_count_y, extent.depth);

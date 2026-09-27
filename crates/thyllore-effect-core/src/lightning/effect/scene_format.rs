@@ -510,9 +510,76 @@ declare_scene_format! {
             ui {
                 min: 0.0,
                 max: 9999.0,
-                format: "%.0f",
+               format: "%.0f",
                 tooltip: "Seed of the deterministic hash that shapes the channel and the burst jitter",
                 group: "timing",
+            },
+        },
+        light_gain: f32 {
+            get: |e| e.surround.light_gain,
+            set: |e, v| e.surround.light_gain = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Intensity of the point light emitted at the discharge; 0 disables it",
+                group: "surround",
+            },
+        },
+        light_color: [f32; 3] {
+            get: |e| e.surround.light_color,
+            set: |e, v| e.surround.light_color = v,
+            scalars: rgb,
+            ui {
+                kind: Color,
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                group: "surround",
+            },
+        },
+        light_height_fraction: f32 {
+            get: |e| e.surround.light_height_fraction,
+            set: |e, v| e.surround.light_height_fraction = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Where along the bolt (0=start, 1=end) the light is placed",
+                group: "surround",
+            },
+        },
+        impact_radius: f32 {
+            get: |e| e.surround.impact_radius,
+            set: |e, v| e.surround.impact_radius = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Radius of the impact decal in meters; 0 disables it",
+                group: "surround",
+            },
+        },
+        impact_decay: f32 {
+            get: |e| e.surround.impact_decay,
+            set: |e, v| e.surround.impact_decay = v,
+            ui {
+                min: 0.01,
+                max: 5.0,
+                format: "%.2f",
+                tooltip: "Time constant of the impact glow exponential decay in seconds",
+                group: "surround",
+            },
+        },
+        thunder_speed: f32 {
+            get: |e| e.surround.thunder_speed,
+            set: |e, v| e.surround.thunder_speed = v,
+            ui {
+                min: 1.0,
+                max: 1000.0,
+                format: "%.1f",
+                tooltip: "Speed of sound in m/s for thunder delay calculation",
+                group: "surround",
             },
         },
     },
@@ -610,12 +677,12 @@ mod tests {
                 groups.push(param.group);
             }
         }
-        assert_eq!(groups, ["shape", "branch", "look", "timing"]);
+        assert_eq!(groups, ["shape", "branch", "look", "timing", "surround"]);
     }
 
     #[test]
     fn test_colors_are_colors_and_serialize_as_one_vector() {
-        for name in ["core_color", "rim_color"] {
+        for name in ["core_color", "rim_color", "light_color"] {
             assert_eq!(
                 find_ui_param(LIGHTNING_UI_PARAMS, name).map(|p| p.kind),
                 Some(UiKind::Color),
@@ -667,5 +734,69 @@ mod tests {
         assert!(primary.contains(&"rim_color"));
         assert!(primary.contains(&"burst_interval"));
         assert!(primary.contains(&"time_scale"));
+    }
+
+    #[test]
+    fn test_old_ron_without_surround_fields_reads_defaults() {
+        let old_ron = r#"
+(
+  position: (0.0, 1.0, 0.0),
+  rotation: (1.0, 0.0, 0.0, 0.0),
+  source: Point,
+  end_offset: (0.0, -8.0, 0.0),
+  strikes_per_burst: 1,
+  detail_levels: 5,
+  tortuosity: 0.3,
+  roughness: 0.6,
+  core_radius: 0.02,
+  tip_radius_ratio: 0.5,
+  edge_fraction: 0.3,
+  branch_depth: 2,
+  branch_probability: 0.55,
+  branch_count: 1.0,
+  branch_zone_start: 0.1,
+  branch_zone_end: 0.9,
+  branch_angle: 0.9,
+  branch_length_ratio: 0.45,
+  branch_radius_ratio: 0.3,
+  branch_intensity_ratio: 0.7,
+  core_intensity: 10.0,
+  core_color: (1.0, 1.0, 1.0),
+  rim_ratio: 8.0,
+  rim_intensity: 1.5,
+  rim_color: (0.15, 0.6, 1.0),
+  beam_radius: 0.0,
+  beam_arc_count: 8,
+  flash_gain: 0.0,
+  flash_radius: 2.0,
+  end_variance: 0.0,
+  growth_time: 0.0,
+  burst_start: 0.08,
+  burst_interval: 2.0,
+  burst_jitter: 0.2,
+  burst_count: 1,
+  attack_time: 0.01,
+  sustain_time: 0.04,
+  release_time: 0.12,
+  stroke_count: 1,
+  stroke_interval: 0.05,
+  stroke_decay: 0.6,
+  flicker_amplitude: 0.25,
+  flicker_period: 0.03,
+  reseed_level: 2,
+  reseed_period: 1.0,
+  charge_ramp: 0.0,
+  seed: 0,
+)
+"#;
+        let effect: LightningEffect = ron::from_str(old_ron).expect("old RON must deserialize");
+        assert_eq!(effect.position, cgmath::Vector3::new(0.0, 1.0, 0.0));
+        assert_eq!(effect.shape.core_radius, 0.02);
+        assert_eq!(effect.surround.light_gain, 0.0);
+        assert_eq!(effect.surround.light_color, [0.85, 0.92, 1.0]);
+        assert_eq!(effect.surround.light_height_fraction, 0.5);
+        assert_eq!(effect.surround.impact_radius, 0.0);
+        assert_eq!(effect.surround.impact_decay, 0.5);
+        assert_eq!(effect.surround.thunder_speed, 343.0);
     }
 }

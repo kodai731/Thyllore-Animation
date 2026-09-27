@@ -1,4 +1,6 @@
-use super::{LightningBranching, LightningLook, LightningShape, LightningTiming};
+use super::{
+    LightningBranching, LightningLook, LightningShape, LightningSurround, LightningTiming,
+};
 use cgmath::{Matrix4, Quaternion, Vector3};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -12,6 +14,7 @@ pub struct LightningEffect {
     pub branch: LightningBranching,
     pub look: LightningLook,
     pub timing: LightningTiming,
+    pub surround: LightningSurround,
 }
 
 impl Default for LightningEffect {
@@ -26,6 +29,7 @@ impl Default for LightningEffect {
             branch: LightningBranching::default(),
             look: LightningLook::default(),
             timing: LightningTiming::default(),
+            surround: LightningSurround::default(),
         }
     }
 }

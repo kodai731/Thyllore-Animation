@@ -31,6 +31,7 @@ impl Default for FbxNodeInfo {
 pub struct FbxMeshData {
     pub vertex_data: VertexData,
     pub skin_data: Option<SkinData>,
+    pub morph: thyllore_model_core::MeshMorph,
     pub skeleton_id: Option<u32>,
     pub texture_path: Option<String>,
     pub node_index: Option<usize>,
@@ -409,6 +410,7 @@ fn convert_fbx_data_to_mesh(
     FbxMeshData {
         vertex_data,
         skin_data,
+        morph: fbx_data.morph.clone(),
         skeleton_id,
         texture_path: fbx_data.diffuse_texture.clone(),
         node_index,

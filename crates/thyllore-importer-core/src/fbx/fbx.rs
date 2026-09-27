@@ -5,6 +5,7 @@ use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
+use thyllore_model_core::MeshMorph;
 
 #[derive(Clone, Debug)]
 pub struct LoadedConstraint {
@@ -134,6 +135,7 @@ pub struct FbxData {
     pub indices: Vec<u32>,
     pub tex_coords: Vec<[f32; 2]>,
     pub clusters: Vec<ClusterInfo>,
+    pub morph: MeshMorph,
     pub mesh_parts: Vec<MeshPart>,
     pub parent_node: Option<String>,
     pub mesh_node_name: Option<String>,
@@ -152,6 +154,7 @@ impl FbxData {
             indices: Vec::new(),
             tex_coords: Vec::new(),
             clusters: Vec::new(),
+            morph: MeshMorph::default(),
             mesh_parts: Vec::new(),
             parent_node: None,
             mesh_node_name: None,
@@ -303,6 +306,7 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     }
 
     extract_skin_data(&scene, &mut fbx_model, &split_infos);
+    crate::fbx::blend_shape::extract_blend_shapes(&scene, &mut fbx_model, &split_infos);
     extract_animations(&scene, &mut fbx_model);
 
     let bone_name_to_id = build_bone_name_to_id(&fbx_model.nodes);
@@ -320,9 +324,9 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     Ok(fbx_model)
 }
 
-struct MeshSplitInfo {
-    ufbx_mesh_typed_id: usize,
-    vertex_map: HashMap<u32, u32>,
+pub(super) struct MeshSplitInfo {
+    pub(super) ufbx_mesh_typed_id: usize,
+    pub(super) vertex_map: HashMap<u32, u32>,
 }
 
 struct MaterialPart {

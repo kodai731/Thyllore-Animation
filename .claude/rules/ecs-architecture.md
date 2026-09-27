@@ -54,11 +54,18 @@ src/ecs/
 └── mod.rs
 ```
 
-Component and resource types that an effect exposes as parameters (flame, water, wind) are declared once in
-`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them. The
-declaration's `key:` item makes the component a `thyllore_scene_core::SceneComponent` (type key + persisted
-field list), which is all the scene format needs: it never names the effect (see `hierarchy.md`, "Feature
-isolation").
+Component and resource types that an effect exposes as parameters (flame, water, wind, lightning) are declared
+once in `crates/thyllore-effect-core` via struct field attributes (`#[derive(thyllore_scene_core::SceneFields)]`, the
+proc-macro nested at `crates/thyllore-scene-core/derive/` and re-exported by scene-core, usable by any scene component); `src/ecs/component/`
+only wraps them. The effect struct carries `#[scene(key, tag, tags, snapshot, scalars, ui, overwrite, owner?, group?)]`,
+a sub-struct carries `#[params(tag, owner?, group?)]`, and a field carries one of `#[persist(owner?, as?, with?,
+ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
+fields). The tooltip is the field's `///` doc comment, the label is the title-cased public name, and a `[f32; 3]` with
+`ui(...)` is a `Color` unless `kind = Absorption` / `Offset` says otherwise; no generated JSON is checked in. The scene form is nested by struct; the public parameter
+name is the underscore-joined path (`noise.amplitude` → `noise_amplitude`) and is the one string used by
+`ScalarChannel.cli_name`, the batch CLI, MCP and the Blender property identifier. `#[scene(key = ...)]` makes the
+component a `thyllore_scene_core::SceneComponent` (type key + persisted field list), which is all the scene format
+needs: it never names the effect (see `hierarchy.md`, "Feature isolation").
 
 ### Domain ECS Modules
 
@@ -223,7 +230,7 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
    event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
    the domain's per-frame system when missing, so a loaded entity and a spawned one converge
-5. Persist it: give the parameter component a `key:` in `declare_scene_format!` and write
+5. Persist it: give the effect parameter component `#[scene(key = ...)]` (resource: `declare_scene_format!`) and write
    `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
    components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
    Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited

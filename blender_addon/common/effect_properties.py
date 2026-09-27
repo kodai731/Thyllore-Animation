@@ -78,6 +78,19 @@ def convert_offsets_to_engine(values: dict, names: list[str]) -> dict:
     return result
 
 
+def read_path(nested: dict, path: str):
+    """Value at a dotted serde path inside a preset dict."""
+    current = nested
+    for segment in path.split("."):
+        current = current[segment]
+    return current
+
+
+def flatten_by_paths(nested: dict, parameter_paths: list[tuple[str, str]]) -> dict:
+    """Preset dict as `{public name: value}` for every persisted parameter."""
+    return {name: read_path(nested, path) for name, path in parameter_paths}
+
+
 def select_exposed_params(ui_params: list[dict]) -> list[dict]:
     """Mirrors the engine's persisted UI parameters; runtime-only ones are driven by scene playback."""
     return [p for p in ui_params if p["persisted"]]
@@ -142,8 +155,13 @@ def merge_preset_params(preset_values: dict, exposed_values: dict) -> dict:
     return merged
 
 
-def render_params(props, preset_params: Callable[[str], dict]) -> dict:
-    preset_values = preset_params(props.preset)
+def render_params(
+    props,
+    preset_params: Callable[[str], dict],
+    parameter_paths: Callable[[], list[tuple[str, str]]],
+) -> dict:
+    """Flat `{public name: value}` the wheel's `pack_*_ubo` accepts: the preset overwritten by the exposed props."""
+    preset_values = flatten_by_paths(preset_params(props.preset), parameter_paths())
     exposed_values = collect_params(props, type(props).PARAM_NAMES)
     exposed_values = convert_offsets_to_engine(exposed_values, type(props).OFFSET_PARAM_NAMES)
     return merge_preset_params(preset_values, exposed_values)
@@ -283,16 +301,17 @@ def build_effect_property_group(
 
     exposed_params = select_exposed_params(ui_params())
     param_names = [p["name"] for p in exposed_params]
+    exposed_paths = [(p["name"], p["path"]) for p in exposed_params]
     offset_names = offset_param_names(exposed_params)
 
     def apply_preset(self, context):
         preset_values = preset_params(self.preset)
         if preset_values_post_process is not None:
             preset_values = preset_values_post_process(preset_values)
-        preset_values = convert_offsets_to_blender(preset_values, offset_names)
-        for name in param_names:
-            if name in preset_values:
-                setattr(self, name, preset_values[name])
+        flat_values = flatten_by_paths(preset_values, exposed_paths)
+        flat_values = convert_offsets_to_blender(flat_values, offset_names)
+        for name, value in flat_values.items():
+            setattr(self, name, value)
 
     annotations: dict[str, object] = {}
     for param in exposed_params:

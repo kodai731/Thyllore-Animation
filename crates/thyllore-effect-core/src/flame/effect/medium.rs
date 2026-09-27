@@ -1,20 +1,23 @@
 use crate::flame::*;
 
 /// Mixing of the medium with ambient air along the erosion carrier.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "mix")]
 pub struct FlameMix {
-    /// Erosion carrier level (std units, carve-positive) where mixing starts;
-    /// the mixing degree rises smoothly to `hi`.
+    /// Erosion carrier level (std units, carve-positive) where a parcel starts mixing with ambient air: lower mixes more of the body
+    #[persist(ui(min = -3.0, max = 3.0))]
     pub lo: f32,
-    /// Carrier level (std units) where a parcel counts as fully mixed.
+    /// Carrier level (std units) where a parcel counts as fully mixed (thin and cold)
+    #[persist(ui(min = -3.0, max = 4.0))]
     pub hi: f32,
-    /// Height ramp of the mixing degree, gain * h^2 added to the noise term; 0 = off.
+    /// Height ramp added to the mixing degree, gain * h^2: the plume thins and cools toward the top
+    #[persist(ui(min = 0.0, max = 2.0))]
     pub height_gain: f32,
-    /// Wavenumber scale of the mixing eddies relative to the low erosion octave;
-    /// below 1 the mixed and unmixed regions grow larger than the carve detail.
+    /// Wavenumber of the mixing eddies relative to the low erosion octave: below 1 the mixed and unmixed regions grow larger than the carve detail
+    #[persist(ui(min = 0.1, max = 2.0))]
     pub scale: f32,
-    /// Shear-layer ramp of the mixing degree, gain * u^2 over the normalized
-    /// radius (0 on the axis, 1 at the support edge); 0 = off.
+    /// Shear-layer ramp added to the mixing degree, gain * u^2 over the normalized radius: the axis stays an unmixed bright core while the rim thins and cools
+    #[persist(ui(min = 0.0, max = 3.0))]
     pub radial_gain: f32,
 }
 
@@ -31,14 +34,17 @@ impl Default for FlameMix {
 }
 
 /// Density and temperature response of a parcel to its mixing degree m.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "body")]
 pub struct FlameThermal {
-    /// Density curve exponent a: mass factor (1 - m)^a.
+    /// Mass curve of a mixing parcel, (1 - m)^a: larger thins the mixed regions faster
+    #[persist(ui(min = 0.0, max = 4.0))]
     pub density_exp: f32,
-    /// Temperature curve exponent b: T = T_cold + (T_hot - T_cold) (1 - m)^b.
+    /// Temperature curve of a mixing parcel, T_cold + (T_hot - T_cold) (1 - m)^b: larger than Density Exp cools before thinning (dark red tufts remain), smaller thins before cooling
+    #[persist(ui(min = 0.0, max = 4.0))]
     pub temp_exp: f32,
-    /// Wien constant c of the emissivity exp(-c/T) in kelvin; 24000 is physical
-    /// at 0.6 um, smaller values compress the hot/cold contrast like camera exposure.
+    /// Wien constant of the emissivity exp(-c/T): 24000 is physical at 0.6 um, smaller compresses the hot/cold brightness contrast like camera exposure
+    #[persist(ui(min = 0.0, max = 24000.0, format = "%.0f"))]
     pub wien_c_k: f32,
 }
 
@@ -54,23 +60,39 @@ impl Default for FlameThermal {
 
 /// Carve deepening toward the flame's own luminous tip:
 /// relative carve scales as 1 + depth * exp(-mu / reach).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameTipCarve {
     /// Asymptotic extra depth kappa; 0 = uniform depth.
+    #[persist]
     pub depth: f32,
     /// Reach mu0 in remaining-luminous-fraction units (scale-free).
+    #[persist]
     pub reach: f32,
 }
 
+impl Default for FlameTipCarve {
+    fn default() -> Self {
+        Self {
+            depth: 1.0,
+            reach: 0.2,
+        }
+    }
+}
+
 /// Where and how deep the turbulence carves the soot away.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style, group = "motion")]
 pub struct FlameCarve {
+    #[runtime]
     pub near_fade_radius: f32,
-    /// Residual medium fraction left where turbulence carves the soot away; 0 = no floor.
+    /// Translucent floor left where the noise carves the medium away. 0 = fully carved spans become hard holes — the severing moment of Burnout is only visible near 0 (debug); the product look keeps ~0.12
+    #[runtime(ui(min = 0.0, max = 0.5))]
     pub residual: f32,
+    #[nested]
     pub tip: FlameTipCarve,
-    /// Deepening of the erosion mean shrink toward the luminous top, sharing
-    /// the tip carve reach as mu0; 0 = off.
+    /// Age-driven burnout of the rising material: deepens the erosion mean toward the flame top so noise troughs sever the column (base shedding) and detached tongues dissolve (0 = off; the range above ~8 is debug headroom for making the severing obvious, pair with Carve Residual 0)
+    #[persist(ui(min = 0.0, max = 32.0))]
     pub burnout_gain: f32,
 }
 
@@ -79,10 +101,7 @@ impl Default for FlameCarve {
         Self {
             near_fade_radius: 0.0,
             residual: 0.12,
-            tip: FlameTipCarve {
-                depth: 1.0,
-                reach: 0.2,
-            },
+            tip: FlameTipCarve::default(),
             burnout_gain: 0.0,
         }
     }

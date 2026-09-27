@@ -7,7 +7,7 @@ use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::world::{Entity, World};
 
 /// Lightning's animatable channels, grouped like the sub structs of `LightningEffect`.
-/// Codes are persisted in clip files (`PropertyType::Custom(code)`): never reorder or reuse them.
+/// The order of `ALL` is persisted in clip files through `LIGHTNING_DOMAIN`: only append.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LightningParam {
     Shape(LightningShapeParam),
@@ -22,14 +22,12 @@ const LIGHTNING_PARAM_COUNT: usize = LightningShapeParam::ALL.len()
     + LightningTimingParam::ALL.len();
 
 pub(super) const fn lightning_channel(
-    code: u16,
     display_name: &'static str,
     cli_name: &'static str,
     scene_name: &'static str,
     debug_value_range: (f32, f32),
 ) -> ScalarChannel {
     ScalarChannel {
-        code,
         display_name,
         cli_name,
         scene_name,
@@ -49,30 +47,22 @@ impl LightningParam {
         }
     }
 
-    pub const fn code(self) -> u16 {
-        self.channel().code
-    }
-
     pub const fn cli_name(self) -> &'static str {
         self.channel().cli_name
     }
 
-    pub fn from_code(code: u16) -> Option<LightningParam> {
-        LightningParam::ALL
+    pub fn property_type(self) -> PropertyType {
+        let index = LightningParam::ALL
             .iter()
-            .copied()
-            .find(|p| p.code() == code)
-    }
-
-    pub const fn property_type(self) -> PropertyType {
-        PropertyType::Custom(self.code())
+            .position(|p| *p == self)
+            .expect("LightningParam::ALL lists every variant");
+        LIGHTNING_DOMAIN.property_type_at(index)
     }
 
     pub fn from_property_type(property_type: PropertyType) -> Option<LightningParam> {
-        match property_type {
-            PropertyType::Custom(code) => LightningParam::from_code(code),
-            _ => None,
-        }
+        LIGHTNING_DOMAIN
+            .channel_index(property_type)
+            .map(|index| LightningParam::ALL[index])
     }
 
     pub fn from_cli_name(name: &str) -> Option<LightningParam> {
@@ -165,7 +155,7 @@ fn lightning_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: LightningParam) -> &'static ScalarParam<LightningEffect> {
-    find_scalar_param(LIGHTNING_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&LIGHTNING_SCALAR_PARAMS, param.cli_name())
         .expect("every LightningParam cli_name is registered in LIGHTNING_SCALAR_PARAMS")
 }
 
@@ -186,16 +176,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_code_and_cli_name_roundtrip_all_params() {
+    fn test_property_type_and_cli_name_roundtrip_all_params() {
         for param in LightningParam::ALL {
-            assert_eq!(LightningParam::from_code(param.code()), Some(param));
             assert_eq!(
                 LightningParam::from_property_type(param.property_type()),
                 Some(param)
             );
             assert_eq!(LightningParam::from_cli_name(param.cli_name()), Some(param));
         }
-        assert_eq!(LightningParam::from_code(1), None);
+        assert_eq!(
+            LightningParam::from_property_type(PropertyType::Custom(1)),
+            None
+        );
         assert_eq!(LightningParam::from_cli_name("no_such_param"), None);
     }
 
@@ -203,7 +195,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in LightningParam::ALL {
             assert!(
-                find_scalar_param(LIGHTNING_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&LIGHTNING_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );
@@ -211,21 +203,14 @@ mod tests {
     }
 
     #[test]
-    fn test_codes_are_unique_and_start_at_768() {
-        let mut codes: Vec<u16> = LightningParam::ALL.iter().map(|p| p.code()).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), LightningParam::ALL.len());
-        assert!(codes.iter().all(|code| *code >= 768));
-    }
-
-    #[test]
     fn test_channel_table_mirrors_enum() {
         assert_eq!(LIGHTNING_CHANNELS.len(), LightningParam::ALL.len());
         for (channel, param) in LIGHTNING_CHANNELS.iter().zip(LightningParam::ALL) {
-            assert_eq!(channel.code, param.code());
             assert_eq!(channel.cli_name, param.cli_name());
-            assert_eq!(channel.property_type(), param.property_type());
+            assert_eq!(
+                LIGHTNING_DOMAIN.property_type_of(channel),
+                Some(param.property_type())
+            );
         }
     }
 

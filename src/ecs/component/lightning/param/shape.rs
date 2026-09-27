@@ -35,73 +35,60 @@ impl LightningShapeParam {
     pub const fn channel(self) -> ScalarChannel {
         match self {
             LightningShapeParam::EndOffsetX => lightning_channel(
-                768,
                 "End Offset X",
                 "shape_end_offset_x",
                 "EndOffsetX",
                 (-20.0, 20.0),
             ),
             LightningShapeParam::EndOffsetY => lightning_channel(
-                769,
                 "End Offset Y",
                 "shape_end_offset_y",
                 "EndOffsetY",
                 (-20.0, 20.0),
             ),
             LightningShapeParam::EndOffsetZ => lightning_channel(
-                770,
                 "End Offset Z",
                 "shape_end_offset_z",
                 "EndOffsetZ",
                 (-20.0, 20.0),
             ),
             LightningShapeParam::StrikesPerBurst => lightning_channel(
-                771,
                 "Strikes Per Burst",
                 "shape_strikes_per_burst",
                 "StrikesPerBurst",
                 (1.0, 8.0),
             ),
             LightningShapeParam::DetailLevels => lightning_channel(
-                772,
                 "Detail Levels",
                 "shape_detail_levels",
                 "DetailLevels",
                 (1.0, 8.0),
             ),
-            LightningShapeParam::Tortuosity => lightning_channel(
-                773,
-                "Tortuosity",
-                "shape_tortuosity",
-                "Tortuosity",
-                (0.0, 2.0),
-            ),
+            LightningShapeParam::Tortuosity => {
+                lightning_channel("Tortuosity", "shape_tortuosity", "Tortuosity", (0.0, 2.0))
+            }
             LightningShapeParam::Roughness => {
-                lightning_channel(774, "Roughness", "shape_roughness", "Roughness", (0.0, 1.0))
+                lightning_channel("Roughness", "shape_roughness", "Roughness", (0.0, 1.0))
             }
             LightningShapeParam::CoreRadius => lightning_channel(
-                775,
                 "Core Radius",
                 "shape_core_radius",
                 "CoreRadius",
                 (0.001, 1.0),
             ),
             LightningShapeParam::TipRadiusRatio => lightning_channel(
-                776,
                 "Tip Radius Ratio",
                 "shape_tip_radius_ratio",
                 "TipRadiusRatio",
                 (0.0, 1.0),
             ),
             LightningShapeParam::EdgeFraction => lightning_channel(
-                777,
                 "Edge Fraction",
                 "shape_edge_fraction",
                 "EdgeFraction",
                 (0.0, 1.0),
             ),
             LightningShapeParam::EndVariance => lightning_channel(
-                815,
                 "End Variance",
                 "shape_end_variance",
                 "EndVariance",

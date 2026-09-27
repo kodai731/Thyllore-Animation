@@ -8,7 +8,7 @@ use crate::animation::editable::{
     TangentWeightMode,
 };
 use crate::animation::BoneId;
-use crate::ecs::component::{scalar_channel_for_property, ScalarChannel, ScalarChannelDomain};
+use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
@@ -270,8 +270,8 @@ fn build_scalar_curve_selector_inline(
 ) {
     ui.indent();
 
-    for channel in domain.channels {
-        let property_type = channel.property_type();
+    for (index, channel) in domain.channels.iter().enumerate() {
+        let property_type = domain.property_type_at(index);
         let key_count = clip
             .get_scalar_curve(property_type)
             .map(|curve| curve.keyframes.len())
@@ -304,14 +304,18 @@ fn build_scalar_curve_selector_inline(
     }
 
     if ui.small_button("All##scalar") {
-        for channel in domain.channels {
-            editor_state.visible_curves.insert(channel.property_type());
+        for index in 0..domain.channels.len() {
+            editor_state
+                .visible_curves
+                .insert(domain.property_type_at(index));
         }
     }
     ui.same_line();
     if ui.small_button("None##scalar") {
-        for channel in domain.channels {
-            editor_state.visible_curves.remove(&channel.property_type());
+        for index in 0..domain.channels.len() {
+            editor_state
+                .visible_curves
+                .remove(&domain.property_type_at(index));
         }
     }
 
@@ -482,19 +486,18 @@ fn collect_visible_scalar_curves<'a>(
 
 fn scalar_curve_style(property_type: PropertyType) -> ([f32; 4], &'static str) {
     match scalar_channel_for_property(property_type) {
-        Some((domain, channel)) => (scalar_channel_color(domain, channel), channel.display_name),
+        Some((domain, channel)) => (
+            scalar_channel_color(domain, property_type),
+            channel.display_name,
+        ),
         None => ([0.6, 0.6, 0.6, 1.0], "Custom"),
     }
 }
 
-fn scalar_channel_color(domain: &ScalarChannelDomain, channel: &ScalarChannel) -> [f32; 4] {
+fn scalar_channel_color(domain: &ScalarChannelDomain, property_type: PropertyType) -> [f32; 4] {
     // Evenly spaced hues over the domain's channels, alternating brightness
     // for neighbor separability.
-    let index = domain
-        .channels
-        .iter()
-        .position(|c| c.code == channel.code)
-        .unwrap_or(0);
+    let index = domain.channel_index(property_type).unwrap_or(0);
     let hue = index as f32 / domain.channels.len().max(1) as f32;
     let value = if index % 2 == 0 { 1.0 } else { 0.75 };
     hsv_to_rgba(hue, 0.75, value)
@@ -893,9 +896,12 @@ fn add_key_target_property(
         CurveTrackRef::Scalar => editor_state
             .visible_curves
             .iter()
-            .filter_map(|p| scalar_channel_for_property(*p).map(|(_, c)| c))
-            .min_by_key(|c| c.code)
-            .map(|c| c.property_type()),
+            .copied()
+            .filter(|p| scalar_channel_for_property(*p).is_some())
+            .min_by_key(|p| match p {
+                PropertyType::Custom(code) => *code,
+                _ => u16::MAX,
+            }),
         CurveTrackRef::Bone(_) => editor_state.visible_curves.iter().copied().next(),
     }
 }

@@ -187,12 +187,13 @@ pub fn scalar_clip_insert_debug_keys(
     };
 
     let key_count = DEBUG_KEYS_PER_CURVE;
-    for channel in domain.channels {
+    for (index, channel) in domain.channels.iter().enumerate() {
+        let property_type = domain.property_type_at(index);
         let (lo, hi) = channel.debug_value_range;
         for i in 0..key_count {
             let time = span_seconds * i as f32 / (key_count - 1) as f32;
             let value = lo + next_unit() * (hi - lo);
-            scalar_clip_insert_key(clip, channel.property_type(), time, value);
+            scalar_clip_insert_key(clip, property_type, time, value);
         }
     }
 }
@@ -212,7 +213,6 @@ pub(crate) mod test_support {
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
     pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
-        code: 1024,
         display_name: "Level",
         cli_name: "probe_level",
         scene_name: "ProbeLevel",
@@ -220,7 +220,6 @@ pub(crate) mod test_support {
     };
 
     pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
-        code: 1025,
         display_name: "Height",
         cli_name: "probe_height",
         scene_name: "ProbeHeight",
@@ -237,6 +236,12 @@ pub(crate) mod test_support {
     };
 
     crate::scalar_channel_domain!(PROBE_DOMAIN);
+
+    pub fn probe_property(channel: &ScalarChannel) -> PropertyType {
+        PROBE_DOMAIN
+            .property_type_of(channel)
+            .expect("channel belongs to the Probe domain")
+    }
 
     pub const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
         key: "probe",
@@ -258,9 +263,9 @@ pub(crate) mod test_support {
 
     fn probe_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {
         let probe = world.get_component::<ProbeOwner>(entity)?;
-        if property_type == PROBE_LEVEL.property_type() {
+        if property_type == probe_property(&PROBE_LEVEL) {
             Some(probe.level)
-        } else if property_type == PROBE_HEIGHT.property_type() {
+        } else if property_type == probe_property(&PROBE_HEIGHT) {
             Some(probe.position[1])
         } else {
             None
@@ -303,13 +308,13 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
+    use super::test_support::{probe_property, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
     use super::*;
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {
         let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
-        let height = PROBE_LEVEL.property_type();
+        let height = probe_property(&PROBE_LEVEL);
         scalar_clip_insert_key(&mut clip, height, 1.0, 2.0);
         scalar_clip_insert_key(&mut clip, height, 1.0, 3.0);
         let curve = clip.get_scalar_curve(height).unwrap();
@@ -321,7 +326,7 @@ mod tests {
     #[test]
     fn test_sampled_values_clamp_at_curve_ends() {
         let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
-        let height = PROBE_LEVEL.property_type();
+        let height = probe_property(&PROBE_LEVEL);
         scalar_clip_insert_key(&mut clip, height, 0.0, 1.0);
         scalar_clip_insert_key(&mut clip, height, 2.0, 3.0);
 
@@ -341,7 +346,7 @@ mod tests {
 
         assert_eq!(clip.scalar_curves.len(), PROBE_DOMAIN.channels.len());
         for channel in PROBE_DOMAIN.channels {
-            let curve = clip.get_scalar_curve(channel.property_type()).unwrap();
+            let curve = clip.get_scalar_curve(probe_property(channel)).unwrap();
             assert_eq!(curve.keyframes.len(), DEBUG_KEYS_PER_CURVE);
             let (lo, hi) = channel.debug_value_range;
             for key in &curve.keyframes {
@@ -366,11 +371,11 @@ mod tests {
 
         for channel in PROBE_DOMAIN.channels {
             let ka = &a
-                .get_scalar_curve(channel.property_type())
+                .get_scalar_curve(probe_property(channel))
                 .unwrap()
                 .keyframes;
             let kb = &b
-                .get_scalar_curve(channel.property_type())
+                .get_scalar_curve(probe_property(channel))
                 .unwrap()
                 .keyframes;
             let va: Vec<f32> = ka.iter().map(|k| k.value).collect();
@@ -382,12 +387,14 @@ mod tests {
     #[test]
     fn test_delete_keys_at_removes_empty_curves() {
         let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
-        scalar_clip_insert_key(&mut clip, PROBE_LEVEL.property_type(), 1.0, 2.0);
-        scalar_clip_insert_key(&mut clip, PROBE_HEIGHT.property_type(), 4.0, 0.5);
+        scalar_clip_insert_key(&mut clip, probe_property(&PROBE_LEVEL), 1.0, 2.0);
+        scalar_clip_insert_key(&mut clip, probe_property(&PROBE_HEIGHT), 4.0, 0.5);
         scalar_clip_delete_keys_at(&mut clip, 1.0);
-        assert!(clip.get_scalar_curve(PROBE_LEVEL.property_type()).is_none());
         assert!(clip
-            .get_scalar_curve(PROBE_HEIGHT.property_type())
+            .get_scalar_curve(probe_property(&PROBE_LEVEL))
+            .is_none());
+        assert!(clip
+            .get_scalar_curve(probe_property(&PROBE_HEIGHT))
             .is_some());
     }
 }

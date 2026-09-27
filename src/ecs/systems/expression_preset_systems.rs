@@ -7,9 +7,12 @@ use thyllore_avatar_core::expression::systems::library_io::{
 use thyllore_avatar_core::expression::systems::preset::{apply_preset, capture_preset};
 use thyllore_avatar_core::vrchat::gesture::gesture_template_library;
 
+use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::resource::{ExpressionLibraryState, ModelState};
+use crate::ecs::systems::morph_weight_systems::for_each_morph_sibling;
 use crate::ecs::world::{Entity, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn sync_expression_library(world: &mut World) {
     let Some(model_path) = world
@@ -154,4 +157,22 @@ pub fn save_expression_library(world: &World) {
             error
         ),
     }
+}
+
+pub fn apply_expression_preset_on_siblings(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    entity: Entity,
+    preset_index: usize,
+) {
+    for_each_morph_sibling(
+        world,
+        assets,
+        graphics,
+        entity,
+        |world, sibling, channel_names| {
+            apply_expression_preset(world, sibling, preset_index, channel_names);
+        },
+    );
 }

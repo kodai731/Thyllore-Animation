@@ -121,6 +121,66 @@ pub fn find_morph_siblings(
         .collect()
 }
 
+pub(crate) fn for_each_morph_sibling(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    entity: Entity,
+    mut apply: impl FnMut(&mut World, Entity, &[String]),
+) {
+    let siblings = find_morph_siblings(world, entity, assets, graphics);
+    for sibling in siblings {
+        let channel_names =
+            find_morph_channel_names(world, sibling, assets, graphics).unwrap_or_default();
+        apply(world, sibling, &channel_names);
+    }
+}
+
+pub fn set_morph_weight_on_siblings(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    entity: Entity,
+    channel: usize,
+    weight: f32,
+) {
+    let Some(channel_name) = find_morph_channel_names(world, entity, assets, graphics)
+        .and_then(|names| names.get(channel).cloned())
+    else {
+        return;
+    };
+    for_each_morph_sibling(
+        world,
+        assets,
+        graphics,
+        entity,
+        |world, sibling, channel_names| {
+            let Some(sibling_channel) = channel_names.iter().position(|name| *name == channel_name)
+            else {
+                return;
+            };
+            set_morph_weight(world, sibling, sibling_channel, weight, channel_names);
+        },
+    );
+}
+
+pub fn reset_morph_weights_on_siblings(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    entity: Entity,
+) {
+    for_each_morph_sibling(
+        world,
+        assets,
+        graphics,
+        entity,
+        |world, sibling, channel_names| {
+            reset_morph_weights(world, sibling, channel_names);
+        },
+    );
+}
+
 pub fn reset_morph_weights(world: &mut World, entity: Entity, channel_names: &[String]) {
     let preserved_channels: Vec<usize> =
         group_channels(channel_names, &ExpressionGrouping::default())

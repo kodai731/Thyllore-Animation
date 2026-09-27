@@ -13,6 +13,7 @@ pub struct MorphChannel {
 
 #[derive(Clone, Debug, Default)]
 pub struct MeshMorph {
+    pub source_mesh: String,
     pub channels: Vec<MorphChannel>,
 }
 
@@ -64,6 +65,7 @@ mod tests {
 
     fn smile_morph() -> MeshMorph {
         MeshMorph {
+            source_mesh: String::new(),
             channels: vec![
                 MorphChannel {
                     name: "smile".to_string(),

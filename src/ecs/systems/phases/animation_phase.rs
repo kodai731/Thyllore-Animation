@@ -10,7 +10,7 @@ use crate::ecs::resource::{
 use crate::ecs::FrameContext;
 use crate::ecs::{
     apply_morph_weights, playback_upload_animations, run_animation_pipeline,
-    transform_propagation_system, update_weight_heatmap,
+    sync_expression_library, transform_propagation_system, update_weight_heatmap,
 };
 
 pub struct AnimationUpdates {
@@ -28,6 +28,8 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     if !ctx.world.contains_resource::<PoseApplyCache>() {
         ctx.world.insert_resource(PoseApplyCache::default());
     }
+
+    sync_expression_library(ctx.world);
 
     let morph_updated_meshes = apply_morph_weights(ctx.world, ctx.assets, ctx.graphics);
     {

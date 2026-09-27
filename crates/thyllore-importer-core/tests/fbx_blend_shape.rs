@@ -94,5 +94,10 @@ fn test_blend_shape_import() {
         "blink normal_deltas should be empty"
     );
 
+    assert_eq!(
+        morph.source_mesh, "Cube",
+        "source_mesh should match the FBX mesh node name"
+    );
+
     fs::remove_file(&temp_path).ok();
 }

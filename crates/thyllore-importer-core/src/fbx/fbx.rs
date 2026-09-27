@@ -306,7 +306,12 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     }
 
     extract_skin_data(&scene, &mut fbx_model, &split_infos);
-    crate::fbx::blend_shape::extract_blend_shapes(&scene, &mut fbx_model, &split_infos);
+    crate::fbx::blend_shape::extract_blend_shapes(
+        &scene,
+        &mut fbx_model,
+        &split_infos,
+        &mesh_to_node,
+    );
     extract_animations(&scene, &mut fbx_model);
 
     let bone_name_to_id = build_bone_name_to_id(&fbx_model.nodes);

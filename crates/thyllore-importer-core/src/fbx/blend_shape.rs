@@ -53,6 +53,7 @@ pub(super) fn extract_blend_shapes(
     scene: &ufbx::Scene,
     fbx_model: &mut FbxModel,
     split_infos: &[MeshSplitInfo],
+    mesh_to_node: &HashMap<usize, String>,
 ) {
     for ufbx_mesh in &scene.meshes {
         if ufbx_mesh.blend_deformers.is_empty() {
@@ -60,6 +61,7 @@ pub(super) fn extract_blend_shapes(
         }
 
         let typed_id = ufbx_mesh.element.typed_id as usize;
+        let source_name = mesh_to_node.get(&typed_id).cloned().unwrap_or_default();
 
         for blend_deformer in &ufbx_mesh.blend_deformers {
             for channel in &blend_deformer.channels {
@@ -92,6 +94,8 @@ pub(super) fn extract_blend_shapes(
 
                     let normal_deltas =
                         remap_shape_offsets(&offset_vertices, &normal_offsets, &info.vertex_map);
+
+                    fbx_model.fbx_data[fbx_idx].morph.source_mesh = source_name.clone();
 
                     fbx_model.fbx_data[fbx_idx]
                         .morph

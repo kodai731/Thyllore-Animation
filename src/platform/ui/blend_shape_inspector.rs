@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use imgui::Condition;
 use thyllore_avatar_core::expression::components::grouping::{ChannelGroup, ExpressionGrouping};
 use thyllore_avatar_core::expression::systems::grouping::group_channels;
@@ -6,7 +8,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
-use crate::ecs::systems::find_morph_channel_names;
+use crate::ecs::systems::{find_mesh_morph, find_morph_channel_names, find_morph_siblings};
 use crate::ecs::world::{Children, Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -27,34 +29,37 @@ pub fn build_blend_shape_section(
         return;
     };
 
-    for morph_entity in morph_entities {
-        let Some(morph_weights) = world.get_component::<MorphWeights>(morph_entity) else {
+    let representatives = collect_sibling_representatives(world, &morph_entities, assets, graphics);
+
+    for representative in representatives {
+        let Some(morph_weights) = world.get_component::<MorphWeights>(representative) else {
             continue;
         };
-        let Some(channel_names) = find_morph_channel_names(world, morph_entity, assets, graphics)
+        let Some(channel_names) = find_morph_channel_names(world, representative, assets, graphics)
         else {
             continue;
         };
 
         let header = format!(
-            "Blend Shapes (entity {})###blend_shapes_{}",
-            morph_entity, morph_entity
+            "Blend Shapes ({})###blend_shapes_{}",
+            format_section_title(world, representative, assets, graphics),
+            representative
         );
         if !ui.collapsing_header(&header, imgui::TreeNodeFlags::DEFAULT_OPEN) {
             continue;
         }
 
-        let id_token = ui.push_id_int(morph_entity as i32);
-        build_blend_shape_toolbar(ui, ui_events, morph_entity, &mut inspector_state);
+        let id_token = ui.push_id_int(representative as i32);
+        build_blend_shape_toolbar(ui, ui_events, representative, &mut inspector_state);
         build_channel_groups(
             ui,
             ui_events,
-            morph_entity,
+            representative,
             &channel_names,
             &morph_weights.weights,
             &mut inspector_state,
         );
-        build_presets_section(ui, ui_events, world, morph_entity);
+        build_presets_section(ui, ui_events, world, representative);
         id_token.end();
     }
 }
@@ -69,6 +74,36 @@ fn collect_morph_entities(world: &World, entity: Entity) -> Vec<Entity> {
         .chain(children)
         .filter(|&candidate| world.has_component::<MorphWeights>(candidate))
         .collect()
+}
+
+fn collect_sibling_representatives(
+    world: &World,
+    morph_entities: &[Entity],
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Vec<Entity> {
+    let mut covered_entities = HashSet::new();
+    let mut representatives = Vec::new();
+    for &morph_entity in morph_entities {
+        if covered_entities.contains(&morph_entity) {
+            continue;
+        }
+        covered_entities.extend(find_morph_siblings(world, morph_entity, assets, graphics));
+        representatives.push(morph_entity);
+    }
+    representatives
+}
+
+fn format_section_title(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> String {
+    find_mesh_morph(world, entity, assets, graphics)
+        .map(|morph| morph.source_mesh.clone())
+        .filter(|source_mesh| !source_mesh.is_empty())
+        .unwrap_or_else(|| format!("entity {}", entity))
 }
 
 fn build_blend_shape_toolbar(

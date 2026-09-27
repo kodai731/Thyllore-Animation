@@ -9,11 +9,12 @@ use thyllore_avatar_core::expression::systems::library_io::{
 use thyllore_avatar_core::expression::systems::preset::{apply_preset, capture_preset};
 use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
 use thyllore_avatar_core::vrchat::gesture::gesture_template_library;
+use thyllore_model_core::MeshMorph;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedMorphWeights, MorphWeights};
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState, ModelState};
-use crate::ecs::world::{Entity, MeshRef, World};
+use crate::ecs::world::{Entity, MeshRef, Parent, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::mesh_buffer::MeshBuffer;
 
@@ -185,16 +186,25 @@ pub fn find_morph_channel_names(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
 ) -> Option<Vec<String>> {
-    let mesh_ref = world.get_component::<MeshRef>(entity)?;
-    let mesh_idx = assets.get_mesh(mesh_ref.mesh_asset_id)?.graphics_mesh_index;
-    let mesh = graphics.meshes.get(mesh_idx)?;
+    let morph = find_mesh_morph(world, entity, assets, graphics)?;
     Some(
-        mesh.morph
+        morph
             .channels
             .iter()
             .map(|channel| channel.name.clone())
             .collect(),
     )
+}
+
+pub fn find_mesh_morph<'a>(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &'a GraphicsResources,
+) -> Option<&'a MeshMorph> {
+    let mesh_ref = world.get_component::<MeshRef>(entity)?;
+    let mesh_idx = assets.get_mesh(mesh_ref.mesh_asset_id)?.graphics_mesh_index;
+    graphics.meshes.get(mesh_idx).map(|mesh| &mesh.morph)
 }
 
 pub fn set_morph_weight(
@@ -229,6 +239,39 @@ pub fn set_morph_weight(
 fn find_mirror_channel_index(channel_names: &[String], channel: usize) -> Option<usize> {
     let mirror_name = find_mirror_channel(channel_names.get(channel)?)?;
     channel_names.iter().position(|name| *name == mirror_name)
+}
+
+pub fn find_morph_siblings(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Vec<Entity> {
+    let Some(source_mesh) = find_mesh_morph(world, entity, assets, graphics)
+        .map(|morph| &morph.source_mesh)
+        .filter(|source_mesh| !source_mesh.is_empty())
+    else {
+        return vec![entity];
+    };
+    let Some(parent) = world.get_component::<Parent>(entity).map(|parent| parent.0) else {
+        return vec![entity];
+    };
+
+    let is_sibling = |candidate: Entity| {
+        candidate == entity
+            || (world
+                .get_component::<Parent>(candidate)
+                .map(|parent| parent.0)
+                == Some(parent)
+                && find_mesh_morph(world, candidate, assets, graphics)
+                    .is_some_and(|morph| morph.source_mesh == *source_mesh))
+    };
+
+    world
+        .iter_components::<MorphWeights>()
+        .map(|(candidate, _)| candidate)
+        .filter(|&candidate| is_sibling(candidate))
+        .collect()
 }
 
 pub fn reset_morph_weights(world: &mut World, entity: Entity, channel_names: &[String]) {
@@ -335,6 +378,7 @@ mod tests {
         mesh.vertex_data.vertices = vertices.clone();
         mesh.base_vertices = vertices;
         mesh.morph = MeshMorph {
+            source_mesh: String::new(),
             channels: vec![MorphChannel {
                 name: "test".to_string(),
                 position_deltas: vec![

@@ -24,6 +24,10 @@ impl ReflectedDescriptorSets {
         Ok(Self { layout, sets })
     }
 
+    pub fn get(&self, index: usize) -> Option<vk::DescriptorSet> {
+        self.sets.get(index).copied()
+    }
+
     pub fn set(&self, index: usize) -> vk::DescriptorSet {
         self.sets[index]
     }

@@ -4,7 +4,8 @@ use vulkanalia::prelude::v1_0::*;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use crate::vulkanr::descriptor::{
-    ReflectedDescriptorSets, ReflectedLayoutSpec, WIND_RESOLVE, WIND_SHADOW_BAKE,
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE,
+    WIND_SHADOW_BAKE,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
 use crate::vulkanr::resource::GpuResource;
@@ -35,7 +36,7 @@ impl WindResolveDescriptorSet {
         })
     }
 
-    pub fn layout(&self) -> &crate::vulkanr::descriptor::ReflectedSetLayout {
+    pub fn layout(&self) -> &ReflectedSetLayout {
         self.sets.layout()
     }
 
@@ -116,7 +117,7 @@ impl WindShadowBakeDescriptorSet {
         Ok(Self { sets })
     }
 
-    pub fn layout(&self) -> &crate::vulkanr::descriptor::ReflectedSetLayout {
+    pub fn layout(&self) -> &ReflectedSetLayout {
         self.sets.layout()
     }
 

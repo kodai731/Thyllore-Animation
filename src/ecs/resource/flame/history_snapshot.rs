@@ -2,6 +2,7 @@ use cgmath::Matrix4;
 
 use super::FlameRenderSettings;
 use crate::ecs::component::{FlameBaked, FlameEffect};
+use crate::ecs::resource::HistorySnapshotState;
 
 /// The frame state that history reuse depends on. Any difference between two
 /// consecutive frames invalidates the accumulated history.
@@ -13,7 +14,4 @@ pub struct FlameHistorySnapshot {
     pub settings: FlameRenderSettings,
 }
 
-#[derive(Default)]
-pub struct FlameHistorySnapshotState {
-    pub previous: Option<FlameHistorySnapshot>,
-}
+pub type FlameHistorySnapshotState = HistorySnapshotState<FlameHistorySnapshot>;

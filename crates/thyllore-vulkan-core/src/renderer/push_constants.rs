@@ -56,6 +56,35 @@ impl OnionSkinPushConstants {
     }
 }
 
+/// Shading settings every effect overlay hands its fragment shader: the shading mode, the
+/// reference step count and the debug view.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ShadingPushConstants {
+    pub mode: i32,
+    pub step_count: i32,
+    pub debug_view: i32,
+}
+
+impl ShadingPushConstants {
+    pub fn new(mode: i32, step_count: i32, debug_view: i32) -> Self {
+        Self {
+            mode,
+            step_count,
+            debug_view,
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +97,10 @@ mod tests {
     #[test]
     fn test_onion_skin_push_constants_size() {
         assert_eq!(std::mem::size_of::<OnionSkinPushConstants>(), 32);
+    }
+
+    #[test]
+    fn shading_push_constants_are_three_ints() {
+        assert_eq!(std::mem::size_of::<ShadingPushConstants>(), 12);
     }
 }

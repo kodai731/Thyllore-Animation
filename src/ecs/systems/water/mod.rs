@@ -24,6 +24,7 @@ pub use debug_dump::*;
 pub use descriptors::*;
 pub use history_accumulate::*;
 pub use pick::*;
+pub use pipeline::*;
 pub use preset::*;
 pub use probe::*;
 pub use record::*;

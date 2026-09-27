@@ -177,7 +177,7 @@ class WindViewportRenderer:
             self.upsample_batch = batch_for_shader(shader, "TRIS", {"pos": [(-1.0, -1.0), (3.0, -1.0), (-1.0, 3.0)]})
         with self.fb_resolved.bind():
             shader.bind()
-            shader.uniform_sampler("windColorSampler", self.color)
+            shader.uniform_sampler("reducedColorSampler", self.color)
             shader.uniform_sampler("sceneDepthSampler", depth_tex)
             self.upsample_batch.draw(shader)
         return self.resolved

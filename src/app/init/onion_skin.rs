@@ -9,7 +9,7 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
-use thyllore_vulkan_core::renderer::OnionSkinPushConstants;
+use thyllore_vulkan_core::renderer::{OnionSkinPushConstants, OverlayBlend};
 
 fn ghost_blend() -> BlendConfig {
     BlendConfig {
@@ -18,18 +18,6 @@ fn ghost_blend() -> BlendConfig {
         dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
         color_op: vk::BlendOp::ADD,
         src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
-        dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        alpha_op: vk::BlendOp::ADD,
-    }
-}
-
-fn premultiplied_blend() -> BlendConfig {
-    BlendConfig {
-        enable: true,
-        src_color_factor: vk::BlendFactor::ONE,
-        dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ONE,
         dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
         alpha_op: vk::BlendOp::ADD,
     }
@@ -141,7 +129,7 @@ unsafe fn create_onion_skin_pass(
         .no_depth_test()
         .custom_render_pass(composite_render_pass)
         .msaa_samples(vk::SampleCountFlags::_1)
-        .blend(premultiplied_blend())
+        .blend(OverlayBlend::Premultiplied.blend_config())
         .descriptor_layouts(&[&composite_descriptor_layout])
         .build(rrdevice, rrrender, Some(extent))?;
     let composite_framebuffer = OnionSkinPassResources::create_single_framebuffer(

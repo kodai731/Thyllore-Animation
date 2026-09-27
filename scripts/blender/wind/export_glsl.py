@@ -9,7 +9,7 @@ from blender_addon.common.slang_export import export_shader, write_shader  # noq
 
 RESOLVE_SHADER = "wind/resolveFragment.slang"
 BAKE_SHADER = "wind/shadowBakeCompute.slang"
-UPSAMPLE_SHADER = "wind/upsampleFragment.slang"
+UPSAMPLE_SHADER = "overlay/upsampleFragment.slang"
 SHADOW_GRID_SOURCE = "wind/include/shadow_volume.slang"
 RESOLVE_DEFINES = ["WIND_SHADOW_VOLUME"]
 SHADOW_GRID_AXES = ("RADIAL", "HEIGHT", "THETA", "SLOTS")

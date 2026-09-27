@@ -1,5 +1,6 @@
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
 use thyllore_vulkan_core::pipeline::RRPipeline;
+use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayPass};
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 use thyllore_vulkan_core::vulkan::vk;
 
@@ -20,6 +21,15 @@ impl LightningRenderTargets {
         vk::Extent2D {
             width: self.width,
             height: self.height,
+        }
+    }
+
+    pub fn overlay_pass(&self) -> OverlayPass {
+        OverlayPass {
+            render_pass: self.render_pass,
+            framebuffer: self.framebuffer,
+            extent: self.extent(),
+            load: OverlayAttachmentLoad::Keep,
         }
     }
 }

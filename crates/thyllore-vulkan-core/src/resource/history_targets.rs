@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
+use crate::renderer::{OverlayAttachmentLoad, OverlayPass};
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
@@ -103,6 +104,16 @@ impl HistoryTargets {
         vk::Extent2D {
             width: self.width,
             height: self.height,
+        }
+    }
+
+    /// The overlay pass that writes the history image of `history_index`.
+    pub fn overlay_pass(&self, history_index: usize, load: OverlayAttachmentLoad) -> OverlayPass {
+        OverlayPass {
+            render_pass: self.render_pass,
+            framebuffer: self.framebuffers[history_index],
+            extent: self.extent(),
+            load,
         }
     }
 

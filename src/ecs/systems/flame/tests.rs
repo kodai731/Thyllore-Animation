@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
-    apply_flame_param_value, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
-    FlameEffect, FlameParam, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
+    scalar_channel_for_cli_name, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
+    FlameEffect, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
 };
 use crate::ecs::resource::{
     BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
@@ -9,6 +9,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
+use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
 
 use super::*;
@@ -116,6 +117,12 @@ fn resolve_returns_none_without_any_flame() {
     assert_eq!(resolve_selected_flame(&world), None);
 }
 
+fn flame_height_property_type() -> PropertyType {
+    scalar_channel_for_cli_name("height")
+        .map(|(_, channel)| channel.property_type())
+        .expect("flame height channel registered")
+}
+
 fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity {
     use thyllore_anim_core::editable::{curve_add_keyframe, InterpolationType};
 
@@ -123,7 +130,7 @@ fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity
     let clip_id = crate::ecs::systems::find_entity_clip_id(world, entity).expect("flame clip");
     let mut library = world.resource_mut::<ClipLibrary>();
     let clip = library.get_mut(clip_id).expect("clip registered");
-    let curve = clip.get_or_add_scalar_curve(FlameParam::Height.property_type());
+    let curve = clip.get_or_add_scalar_curve(flame_height_property_type());
     let key = curve_add_keyframe(curve, 1.0, 2.0);
     curve
         .get_keyframe_mut(key)
@@ -183,7 +190,7 @@ fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
     let curve = library
         .get(clip_id)
         .expect("scheduled clip is in the library")
-        .get_scalar_curve(FlameParam::Height.property_type())
+        .get_scalar_curve(flame_height_property_type())
         .expect("keyed curve restored");
     assert_eq!(curve.keyframes.len(), 1);
     assert_eq!(curve.keyframes[0].interpolation, InterpolationType::Bezier);

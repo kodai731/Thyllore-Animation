@@ -24,7 +24,11 @@ declare_scene_format! {
             get: |e| [e.rotation.s, e.rotation.v.x, e.rotation.v.y, e.rotation.v.z],
             set: |e, v| e.rotation = Quaternion::new(v[0], v[1], v[2], v[3]),
         },
-        height: f32 = Frame { get: |e| e.height, set: |e, v| e.height = v,
+        height: f32 = Frame {
+            get: |e| e.height,
+            set: |e, v| e.height = v,
+            code: 0,
+            debug_range: (0.5, 4.0),
             ui {
                 primary,
                 min: 0.05,
@@ -33,7 +37,11 @@ declare_scene_format! {
                 group: "body",
             },
         },
-        radius: f32 = Frame { get: |e| e.radius, set: |e, v| e.radius = v,
+        radius: f32 = Frame {
+            get: |e| e.radius,
+            set: |e, v| e.radius = v,
+            code: 1,
+            debug_range: (0.2, 2.0),
             ui {
                 primary,
                 min: 0.05,
@@ -42,8 +50,17 @@ declare_scene_format! {
                 group: "body",
             },
         },
-        sigma_t: f32 = Style { get: |e| e.sigma_t, set: |e, v| e.sigma_t = v },
-        intensity: f32 = Style { get: |e| e.intensity, set: |e, v| e.intensity = v,
+        sigma_t: f32 = Style {
+            get: |e| e.sigma_t,
+            set: |e, v| e.sigma_t = v,
+            code: 3,
+            debug_range: (0.5, 5.0),
+        },
+        intensity: f32 = Style {
+            get: |e| e.intensity,
+            set: |e, v| e.intensity = v,
+            code: 2,
+            debug_range: (0.5, 5.0),
             ui {
                 primary,
                 min: 0.0,
@@ -84,7 +101,10 @@ declare_scene_format! {
         temperature_base_k: f32 = Style {
             get: |e| e.color.temperature_base_k,
             set: |e, v| e.color.temperature_base_k = v,
+            code: 4,
+            debug_range: (800.0, 3000.0),
             ui {
+                label: "Temp Base K",
                 min: 1000.0,
                 max: 6500.0,
                 format: "%.0f",
@@ -94,7 +114,10 @@ declare_scene_format! {
         temperature_tip_k: f32 = Style {
             get: |e| e.color.temperature_tip_k,
             set: |e, v| e.color.temperature_tip_k = v,
+            code: 5,
+            debug_range: (800.0, 3000.0),
             ui {
+                label: "Temp Tip K",
                 min: 1000.0,
                 max: 6500.0,
                 format: "%.0f",
@@ -114,8 +137,11 @@ declare_scene_format! {
         noise_amplitude: f32 = Style {
             get: |e| e.noise.amplitude,
             set: |e, v| e.noise.amplitude = v,
+            code: 9,
+            debug_range: (0.0, 1.5),
             ui {
                 primary,
+                label: "Noise Amp",
                 min: 0.0,
                 max: 3.0,
                 group: "noise",
@@ -149,11 +175,23 @@ declare_scene_format! {
             },
         },
         time_offset: f32 = Frame { get: |e| e.time_offset, set: |e, v| e.time_offset = v },
-        warp_amp: f32 = Style { get: |e| e.warp.amp, set: |e, v| e.warp.amp = v },
-        warp_freq: f32 = Style { get: |e| e.warp.freq, set: |e, v| e.warp.freq = v },
+        warp_amp: f32 = Style {
+            get: |e| e.warp.amp,
+            set: |e, v| e.warp.amp = v,
+            code: 6,
+            debug_range: (0.0, 1.5),
+        },
+        warp_freq: f32 = Style {
+            get: |e| e.warp.freq,
+            set: |e, v| e.warp.freq = v,
+            code: 7,
+            debug_range: (0.5, 8.0),
+        },
         rise_speed: f32 = Style {
             get: |e| e.warp.rise_speed,
             set: |e, v| e.warp.rise_speed = v,
+            code: 8,
+            debug_range: (0.0, 2.5),
         },
         taper_power: f32 = Shape {
             get: |e| e.warp.taper_power,
@@ -163,11 +201,23 @@ declare_scene_format! {
             get: |e| e.edge.radius_tip_ratio,
             set: |e, v| e.edge.radius_tip_ratio = v,
         },
-        edge_low: f32 = Style { get: |e| e.edge.low, set: |e, v| e.edge.low = v },
-        edge_high: f32 = Style { get: |e| e.edge.high, set: |e, v| e.edge.high = v },
+        edge_low: f32 = Style {
+            get: |e| e.edge.low,
+            set: |e, v| e.edge.low = v,
+            code: 14,
+            debug_range: (0.0, 0.4),
+        },
+        edge_high: f32 = Style {
+            get: |e| e.edge.high,
+            set: |e, v| e.edge.high = v,
+            code: 15,
+            debug_range: (0.6, 1.0),
+        },
         white_boost: f32 = Style {
             get: |e| e.edge.white_boost,
             set: |e, v| e.edge.white_boost = v,
+            code: 10,
+            debug_range: (0.0, 4.0),
         },
         wind_direction: [f32; 2] = Frame {
             get: |e| [e.wind.direction.x, e.wind.direction.y],
@@ -176,16 +226,22 @@ declare_scene_format! {
                 wind_x: {
                     get: |e| e.wind.direction.x,
                     set: |e, v| e.wind.direction.x = v,
+                    code: 12,
+                    debug_range: (-1.0, 1.0),
                 },
                 wind_z: {
                     get: |e| e.wind.direction.y,
                     set: |e, v| e.wind.direction.y = v,
+                    code: 13,
+                    debug_range: (-1.0, 1.0),
                 },
             },
         },
         bend_amount: f32 = Frame {
             get: |e| e.wind.bend_amount,
             set: |e, v| e.wind.bend_amount = v,
+            code: 11,
+            debug_range: (0.0, 1.0),
         },
         bend_power: f32 = Frame {
             get: |e| e.wind.bend_power,

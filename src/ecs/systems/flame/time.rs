@@ -1,5 +1,5 @@
 use crate::ecs::component::{
-    apply_flame_param_value, FlameBaked, FlameEffect, FlameParam, FlameTemporalAccum,
+    apply_scalar, FlameBaked, FlameEffect, FlameScalars, FlameTemporalAccum,
 };
 use crate::ecs::resource::LightState;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
@@ -53,8 +53,8 @@ impl TimedEffect for FlameEffect {
     }
 
     fn apply_scalar(&mut self, property_type: PropertyType, value: f32) {
-        if let Some(param) = FlameParam::from_property_type(property_type) {
-            apply_flame_param_value(self, param, value);
+        if let PropertyType::Custom(code) = property_type {
+            apply_scalar::<FlameScalars>(self, code, value);
         }
     }
 }

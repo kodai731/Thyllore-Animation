@@ -3,7 +3,7 @@ use std::rc::Rc;
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{scalar_channel_for_cli_name, FlameParam};
+use crate::ecs::component::scalar_channel_for_cli_name;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
@@ -239,7 +239,9 @@ fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: Edited
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            scalar_channel_for_cli_name(name)
+                .filter(|(domain, _)| domain.name == "Flame")
+                .map(|(_, channel)| (channel.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);
@@ -249,7 +251,9 @@ fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: Edited
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            scalar_channel_for_cli_name(name).map(|(_, channel)| (channel.property_type(), *value))
+            scalar_channel_for_cli_name(name)
+                .filter(|(domain, _)| domain.name == "Water")
+                .map(|(_, channel)| (channel.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);
@@ -259,7 +263,9 @@ fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedS
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            scalar_channel_for_cli_name(name).map(|(_, channel)| (channel.property_type(), *value))
+            scalar_channel_for_cli_name(name)
+                .filter(|(domain, _)| domain.name == "Wind")
+                .map(|(_, channel)| (channel.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);
@@ -269,7 +275,9 @@ fn lightning_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: Ed
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            scalar_channel_for_cli_name(name).map(|(_, channel)| (channel.property_type(), *value))
+            scalar_channel_for_cli_name(name)
+                .filter(|(domain, _)| domain.name == "Lightning")
+                .map(|(_, channel)| (channel.property_type(), *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);

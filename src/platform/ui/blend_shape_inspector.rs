@@ -5,7 +5,7 @@ use thyllore_avatar_core::expression::systems::grouping::group_channels;
 use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::BlendShapeInspectorState;
+use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
 use crate::ecs::systems::find_morph_channel_names;
 use crate::ecs::world::{Children, Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -54,6 +54,7 @@ pub fn build_blend_shape_section(
             &morph_weights.weights,
             &mut inspector_state,
         );
+        build_presets_section(ui, ui_events, world, morph_entity);
         id_token.end();
     }
 }
@@ -162,4 +163,51 @@ fn build_channel_slider(
             weight,
         });
     }
+}
+
+fn build_presets_section(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    world: &World,
+    entity: Entity,
+) {
+    let Some(mut library_state) = world.get_resource_mut::<ExpressionLibraryState>() else {
+        return;
+    };
+    let Some(tree_token) = ui.tree_node("Presets") else {
+        return;
+    };
+
+    for (index, preset) in library_state.library.presets.iter().enumerate() {
+        let weights_label = if preset.weights.is_empty() {
+            "(empty)".to_string()
+        } else {
+            format!("({} weights)", preset.weights.len())
+        };
+        ui.text(format!("{} {}", preset.name, weights_label));
+        ui.same_line();
+        if ui.small_button(format!("Apply##preset_{}", index)) {
+            ui_events.send(UIEvent::ApplyExpressionPreset {
+                entity,
+                preset_index: index,
+            });
+        }
+    }
+
+    ui.separator();
+    ui.input_text("##capture_name", &mut library_state.capture_name)
+        .hint("Preset name")
+        .build();
+    ui.same_line();
+    if ui.button("Capture") && !library_state.capture_name.is_empty() {
+        ui_events.send(UIEvent::CaptureExpressionPreset {
+            entity,
+            name: library_state.capture_name.clone(),
+        });
+    }
+    if ui.button("Save presets") {
+        ui_events.send(UIEvent::SaveExpressionLibrary);
+    }
+
+    tree_token.end();
 }

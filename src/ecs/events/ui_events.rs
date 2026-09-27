@@ -519,6 +519,15 @@ pub enum UIEvent {
     ResetMorphWeights {
         entity: Entity,
     },
+    ApplyExpressionPreset {
+        entity: Entity,
+        preset_index: usize,
+    },
+    CaptureExpressionPreset {
+        entity: Entity,
+        name: String,
+    },
+    SaveExpressionLibrary,
 }
 
 #[derive(Default)]

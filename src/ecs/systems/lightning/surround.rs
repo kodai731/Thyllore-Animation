@@ -10,6 +10,10 @@ use thyllore_effect_core::lightning::analytic::surround::{
 };
 
 pub fn publish_lightning_surround(world: &mut World) {
+    if !world.contains_resource::<LightningSurroundClock>() {
+        world.insert_resource(LightningSurroundClock::default());
+    }
+
     let (Some(mut clock), Some(mut flash), Some(mut events)) = (
         world.get_resource_mut::<LightningSurroundClock>(),
         world.get_resource_mut::<FlashLightState>(),

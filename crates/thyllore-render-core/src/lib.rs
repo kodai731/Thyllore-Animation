@@ -1,6 +1,7 @@
 pub mod backend;
 mod billboard;
 mod buffer_handle;
+mod flash_lighting;
 mod gizmo;
 mod gizmo_data;
 mod mesh;
@@ -13,6 +14,7 @@ mod ubo;
 pub use backend::RenderBackend;
 pub use billboard::{BillboardMesh, BillboardTransform, BillboardVertex};
 pub use buffer_handle::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+pub use flash_lighting::FlashLighting;
 pub use gizmo::{
     BoneDisplayStyle, ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable,
     TransformGizmoHandle,

@@ -22,3 +22,4 @@ gltf = { version = "1.4", features = ["extras", "names", "extensions"] }
 
 [dev-dependencies]
 ufbx = "0.10"
+serde_yaml = "0.9"

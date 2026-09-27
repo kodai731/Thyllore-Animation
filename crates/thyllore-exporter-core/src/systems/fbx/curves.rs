@@ -2,12 +2,11 @@ use thyllore_anim_core::editable::components::morph_track::MorphTrack;
 use thyllore_anim_core::editable::EditableAnimationClip;
 
 use crate::components::fbx::FbxBlendShapeExport;
+use crate::components::morph::MORPH_WEIGHT_TO_PERCENT;
 use crate::fbx_animation::{
     build_channel_exports, build_curve_export, FbxChannel, FbxCurveExport, FbxCurveNodeExport,
     UidAllocator,
 };
-
-const MORPH_WEIGHT_TO_PERCENT: f32 = 100.0;
 
 pub(crate) fn build_animation_curves(
     clip: Option<&EditableAnimationClip>,

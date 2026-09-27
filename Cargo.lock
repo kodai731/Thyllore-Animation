@@ -3793,6 +3793,7 @@ dependencies = [
  "anyhow",
  "ron",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
 ]

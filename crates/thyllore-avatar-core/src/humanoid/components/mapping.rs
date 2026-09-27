@@ -7,6 +7,11 @@ pub struct HumanoidMapping {
     pub by_role: BTreeMap<HumanoidRole, usize>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct StoredHumanoidMapping {
+    pub roles: BTreeMap<HumanoidRole, String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct UnresolvedRole {
     pub role: HumanoidRole,

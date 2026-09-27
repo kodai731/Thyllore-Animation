@@ -93,7 +93,7 @@ fn build_ubo_from_params(
 }
 
 /// World-space corners of the shell proxy box, the same box the engine scissors its
-/// flame pass to (`compute_flame_scissor`) and picks against.
+/// flame pass to (`compute_bounds_scissor`) and picks against.
 #[pyfunction]
 pub fn flame_bounds_corners(
     py: Python<'_>,

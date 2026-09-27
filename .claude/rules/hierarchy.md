@@ -49,6 +49,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
   fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
   offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,
+  `OverlayNodeSpec` / `ReducedResolveTarget` / `OverlayUpsampleDescriptorSet` for fullscreen overlays,
   `HistoryTargets` (an HDR + history ping-pong render pass with its framebuffers, clear and destroy,
   parameterised by `HistoryTargetsDesc`: storage keys, format, sampler, history load op, optional scene
   depth), `AccumulationTarget` (a storage image kept in GENERAL), `ReflectedSetLayout`, `UniformBuffer<T>`,
@@ -56,7 +57,8 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   that composes those primitives (`FlameRenderTargets { history }`, `WaterRenderTargets { history,
   caustic_accum, .. }`) and derives `GpuResource`, so creation and destruction are the primitives' and the
   effect only writes its `*_desc()`; the assembly lives in `src/ecs/systems/<effect>/` (descriptors,
-  pipeline, record, render targets). Wind follows this layout.
+  pipeline with its `OverlayNodeSpec`, passes, render targets; `record.rs` only for non-overlay commands
+  such as wind's shadow bake). Wind follows this layout.
   Pipeline creation never lives in vulkan-core: effects build theirs in
   `src/ecs/systems/<effect>/pipeline.rs`, the core post-process passes in
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
@@ -122,7 +124,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 |---|---|
 | `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
 | `editor/` | Timeline, curves, clips, hierarchy, layout, history, keyframes, poses, constraints |
-| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard |
+| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
 | `timing/` | Frame clock, CPU and GPU frame timing, update phase, render prep |
 | `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui and trace |
 | `batch/` | Batch run schedule and pick capture |

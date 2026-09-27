@@ -122,6 +122,10 @@ fn build_blend_shape_toolbar(
     if ui.button("Reset") {
         ui_events.send(UIEvent::ResetMorphWeights { entity });
     }
+    ui.same_line();
+    if ui.button("Key") {
+        ui_events.send(UIEvent::KeyMorphWeights { entity });
+    }
 }
 
 fn build_channel_groups(

@@ -528,6 +528,9 @@ pub enum UIEvent {
         name: String,
     },
     SaveExpressionLibrary,
+    KeyMorphWeights {
+        entity: Entity,
+    },
 }
 
 #[derive(Default)]

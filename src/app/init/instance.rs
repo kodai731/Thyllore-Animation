@@ -777,6 +777,8 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
         data.ecs_world
+            .insert_resource(crate::ecs::resource::MorphTrackPlayback::default());
+        data.ecs_world
             .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
     }
 

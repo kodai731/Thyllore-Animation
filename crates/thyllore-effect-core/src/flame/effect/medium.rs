@@ -44,7 +44,7 @@ pub struct FlameThermal {
     #[persist(ui(min = 0.0, max = 4.0))]
     pub temp_exp: f32,
     /// Wien constant of the emissivity exp(-c/T): 24000 is physical at 0.6 um, smaller compresses the hot/cold brightness contrast like camera exposure
-    #[persist(ui(label = "Wien C (K)", min = 0.0, max = 24000.0, format = "%.0f"))]
+    #[persist(ui(min = 0.0, max = 24000.0, format = "%.0f"))]
     pub wien_c_k: f32,
 }
 
@@ -92,7 +92,7 @@ pub struct FlameCarve {
     #[nested]
     pub tip: FlameTipCarve,
     /// Age-driven burnout of the rising material: deepens the erosion mean toward the flame top so noise troughs sever the column (base shedding) and detached tongues dissolve (0 = off; the range above ~8 is debug headroom for making the severing obvious, pair with Carve Residual 0)
-    #[persist(ui(label = "Burnout", min = 0.0, max = 32.0))]
+    #[persist(ui(min = 0.0, max = 32.0))]
     pub burnout_gain: f32,
 }
 

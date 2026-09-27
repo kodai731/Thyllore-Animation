@@ -7,10 +7,10 @@ use thyllore_color_core::blackbody_rgb;
 #[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameColor {
     /// Emission color at the flame base (used when blackbody is off)
-    #[persist(ui(primary, kind = Color, label = "Base Color", min = 0.0, max = 1.0, group = "color"))]
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub base: [f32; 3],
     /// Emission color at the flame tip (used when blackbody is off)
-    #[persist(ui(primary, kind = Color, label = "Tip Color", min = 0.0, max = 1.0, group = "color"))]
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub tip: [f32; 3],
     /// Blackbody temperature at the base in kelvin
     #[persist(ui(min = 1000.0, max = 6500.0, format = "%.0f"))]

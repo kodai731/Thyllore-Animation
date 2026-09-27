@@ -49,10 +49,10 @@ pub struct FlameEffect {
     #[nested]
     pub swirl: FlameSwirl,
     /// Medium spread toward the tip: noise features enlarge, drift outward and dissolve as they rise (0 = rigid scroll)
-    #[persist(owner = Style, ui(label = "Spread", min = 0.0, max = 3.0, group = "motion"))]
+    #[persist(owner = Style, ui(min = 0.0, max = 3.0, group = "motion"))]
     pub spread_gain: f32,
     /// Flame density support radius: multiplier for the biweight support radius (how much extra space is allowed for carving). 1.0 is default; higher values result in larger support and may leave chunks at the outer edges.
-    #[persist(owner = Style, ui(label = "Support", min = 1.0, max = 2.5, group = "footer"))]
+    #[persist(owner = Style, ui(min = 1.0, max = 2.5, group = "footer"))]
     pub support_margin: f32,
     #[nested]
     pub meander: FlameMeander,

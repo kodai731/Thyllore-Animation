@@ -1,64 +1,7 @@
 use std::fmt::Debug;
-use std::path::Path;
 
 use serde::de::DeserializeOwned;
-use serde::Serialize;
-use thyllore_scene_core::{find_scalar_param, ScalarParam, SceneComponent, UiKind, UiParam};
-
-/// Compares `current` with a checked-in fixture; `THYLLORE_UPDATE_FIXTURES=1` rewrites the fixture instead.
-pub fn assert_matches_fixture(current: &str, fixture: &str, fixture_path: &str) {
-    if std::env::var_os("THYLLORE_UPDATE_FIXTURES").is_some() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(fixture_path);
-        std::fs::write(&path, format!("{current}\n")).expect("write fixture");
-        return;
-    }
-    assert_eq!(current, fixture.trim(), "fixture {fixture_path} is stale");
-}
-
-pub fn ui_kind_name(kind: UiKind) -> &'static str {
-    match kind {
-        UiKind::Scalar => "scalar",
-        UiKind::Color => "color",
-        UiKind::Absorption => "absorption",
-        UiKind::Offset => "offset",
-    }
-}
-
-pub fn ui_params_json(params: &[UiParam]) -> String {
-    let values: Vec<serde_json::Value> = params
-        .iter()
-        .map(|param| {
-            serde_json::json!({
-                "name": param.name,
-                "path": param.path,
-                "group": param.group,
-                "label": param.display_label(),
-                "kind": ui_kind_name(param.kind),
-                "min": param.min,
-                "max": param.max,
-                "format": param.format,
-                "tooltip": param.tooltip,
-                "persisted": param.persisted,
-                "primary": param.primary,
-            })
-        })
-        .collect();
-    serde_json::to_string_pretty(&values).expect("serialize ui params")
-}
-
-pub fn ownership_json<T: Debug>(ownership: &[(&str, T)]) -> String {
-    let values: Vec<serde_json::Value> = ownership
-        .iter()
-        .map(|(name, tag)| {
-            serde_json::json!({ "name": name, "tag": format!("{tag:?}").to_lowercase() })
-        })
-        .collect();
-    serde_json::to_string_pretty(&values).expect("serialize ownership")
-}
-
-pub fn default_json<C: Default + Serialize>() -> String {
-    serde_json::to_string_pretty(&C::default()).expect("serialize default")
-}
+use thyllore_scene_core::{find_scalar_param, ScalarParam, SceneComponent, UiParam};
 
 fn assert_unique_names(names: &mut Vec<&str>) {
     names.sort_unstable();

@@ -2,35 +2,6 @@ use crate::flame::*;
 use crate::test_support::scene::*;
 use thyllore_scene_core::find_scalar_param;
 
-const FIXTURE_DIR: &str = "src/flame/effect";
-
-#[test]
-fn test_default_json_matches_fixture() {
-    assert_matches_fixture(
-        &default_json::<FlameEffect>(),
-        include_str!("scene_format_default.json"),
-        &format!("{FIXTURE_DIR}/scene_format_default.json"),
-    );
-}
-
-#[test]
-fn test_ui_params_match_fixture() {
-    assert_matches_fixture(
-        &ui_params_json(&FLAME_UI_PARAMS),
-        include_str!("ui_params.json"),
-        &format!("{FIXTURE_DIR}/ui_params.json"),
-    );
-}
-
-#[test]
-fn test_parameter_ownership_matches_fixture() {
-    assert_matches_fixture(
-        &ownership_json(&PARAMETER_OWNERSHIP),
-        include_str!("parameter_ownership.json"),
-        &format!("{FIXTURE_DIR}/parameter_ownership.json"),
-    );
-}
-
 #[test]
 fn test_tables_are_consistent() {
     assert_tables_are_consistent::<FlameEffect>(

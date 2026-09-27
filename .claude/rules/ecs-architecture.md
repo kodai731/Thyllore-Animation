@@ -60,7 +60,8 @@ proc-macro nested at `crates/thyllore-scene-core/derive/` and re-exported by sce
 only wraps them. The effect struct carries `#[scene(key, tag, tags, snapshot, scalars, ui, overwrite, owner?, group?)]`,
 a sub-struct carries `#[params(tag, owner?, group?)]`, and a field carries one of `#[persist(owner?, as?, with?,
 ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
-fields). The tooltip is the field's `///` doc comment. The scene form is nested by struct; the public parameter
+fields). The tooltip is the field's `///` doc comment, the label is the title-cased public name, and a `[f32; 3]` with
+`ui(...)` is a `Color` unless `kind = Absorption` / `Offset` says otherwise; no generated JSON is checked in. The scene form is nested by struct; the public parameter
 name is the underscore-joined path (`noise.amplitude` → `noise_amplitude`) and is the one string used by
 `ScalarChannel.cli_name`, the batch CLI, MCP and the Blender property identifier. `#[scene(key = ...)]` makes the
 component a `thyllore_scene_core::SceneComponent` (type key + persisted field list), which is all the scene format

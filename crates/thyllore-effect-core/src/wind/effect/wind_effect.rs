@@ -121,7 +121,7 @@ pub struct WindTornadoEffect {
     #[persist(ui(min = 0.0, max = 10.0, format = "%.1f", group = "eddy"))]
     pub puff_rise_speed: f32,
     /// Single-scattering albedo of the dust
-    #[persist(ui(primary, kind = Color, min = 0.0, max = 1.0, group = "look"))]
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "look"))]
     #[ubo("albedo.xyz")]
     pub albedo: [f32; 3],
     #[persist(ui(min = 0.0, max = 5.0, group = "look"))]

@@ -14,7 +14,7 @@ pub struct FlameNoise {
     #[persist]
     pub scroll_speed: f32,
     /// Vertical scale of the noise cells: small = tall streaks, 1 = isotropic puffs (in the height-scaled mode)
-    #[persist(ui(label = "Noise Aspect", min = 0.05, max = 1.5))]
+    #[persist(ui(min = 0.05, max = 1.5))]
     pub aniso_y: f32,
     /// < 0.5 uses `aniso_y` as-is, >= 0.5 multiplies it by height / radius.
     #[persist]

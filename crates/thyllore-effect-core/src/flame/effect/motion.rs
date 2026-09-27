@@ -5,7 +5,7 @@ use crate::flame::*;
 #[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameSwirl {
     /// Medium swirl share: strain budget spent on azimuthal shear (0 = off; raising it thins the carve warp)
-    #[persist(ui(label = "Swirl", min = 0.0, max = 1.5, group = "noise"))]
+    #[persist(ui(min = 0.0, max = 1.5, group = "noise"))]
     pub gain: f32,
     /// How fast the swirl layers counter-rotate against the rise (time-only: costs no strain budget)
     #[persist(ui(min = 0.0, max = 4.0, group = "motion"))]
@@ -26,7 +26,7 @@ impl Default for FlameSwirl {
 #[params(tag = ParameterOwner, owner = Style, group = "motion")]
 pub struct FlameTwist {
     /// Azimuthal twist of the noise pattern around the axis (radians at the tip; a rotation never folds, so any amplitude is structurally safe; 0 = off)
-    #[persist(ui(label = "Twist", min = 0.0, max = 8.0))]
+    #[persist(ui(min = 0.0, max = 8.0))]
     pub gain: f32,
     /// Twist rotation rate scale (0 = follow Swirl Speed; > 0 gives the twist its own rate so depth and speed tune independently)
     #[persist(ui(min = 0.0, max = 4.0))]
@@ -38,7 +38,7 @@ pub struct FlameTwist {
 #[params(tag = ParameterOwner, owner = Style, group = "motion")]
 pub struct FlameMeander {
     /// Horizontal meandering motion of the flame (0 = off)
-    #[persist(ui(label = "Meander", min = 0.0, max = 2.0))]
+    #[persist(ui(min = 0.0, max = 2.0))]
     pub amp: f32,
     /// Wavenumber multiplier of the meander modes: 1 = two long bends over the height, ~12 folds the column into a snake with ~4 bends (pillar reference)
     #[persist(ui(min = 0.2, max = 30.0, format = "%.1f"))]
@@ -94,7 +94,7 @@ pub struct FlameBranch {
     #[persist(ui(min = -8.0, max = 8.0))]
     pub gain: f32,
     /// Vortex core radius as a ratio of the local trunk radius: small values shear the medium into thin spirals, near 1 the whole disc turns together and tongues keep the trunk's thickness
-    #[persist(ui(label = "Branch Core", min = 0.05, max = 3.0))]
+    #[persist(ui(min = 0.05, max = 3.0))]
     pub core_radius: f32,
     /// Lateral position of the core at spawn as a ratio of the local trunk radius: 0 on the axis tilts the whole slab, 1 on the shear layer rolls trunk material outward as a billow
     #[persist(ui(min = 0.0, max = 3.0))]
@@ -106,10 +106,10 @@ pub struct FlameBranch {
     #[persist(ui(min = 0.0, max = 1.0))]
     pub spread: f32,
     /// Center of the spawn height band (0 = base, 1 = top)
-    #[persist(ui(label = "Branch Height", min = 0.0, max = 1.0))]
+    #[persist(ui(min = 0.0, max = 1.0))]
     pub spawn_height: f32,
     /// Full width of the spawn height band; 1.0 with center 0.5 spawns elements over the whole trunk
-    #[persist(ui(label = "Branch Height Range", min = 0.0, max = 1.0))]
+    #[persist(ui(min = 0.0, max = 1.0))]
     pub spawn_range: f32,
     #[persist(owner = Frame)]
     pub seed: u32,

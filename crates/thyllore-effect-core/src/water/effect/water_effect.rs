@@ -65,7 +65,7 @@ pub struct WaterTorusEffect {
     pub caustic_strength: f32,
     #[ubo("tint.xyz")]
     /// Scattering tint
-    #[persist(ui(primary, kind = Color, min = 0.0, max = 1.0, group = "look"))]
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "look"))]
     pub tint: [f32; 3],
     #[ubo("flow.z")]
     #[runtime(ui(min = 0.0, max = 100.0))]

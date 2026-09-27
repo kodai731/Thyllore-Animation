@@ -6,14 +6,14 @@ pub struct LightningLook {
     /// Radiance of the saturated channel core
     #[persist(ui(primary, min = 0.0, max = 200.0, format = "%.1f"))]
     pub core_intensity: f32,
-    #[persist(ui(kind = Color, min = 0.0, max = 1.0))]
+    #[persist(ui(min = 0.0, max = 1.0))]
     pub core_color: [f32; 3],
     /// Radius of the rim sheath as a multiple of the core radius
     #[persist(ui(min = 1.0, max = 20.0))]
     pub rim_ratio: f32,
     #[persist(ui(min = 0.0, max = 100.0))]
     pub rim_intensity: f32,
-    #[persist(ui(primary, kind = Color, min = 0.0, max = 1.0))]
+    #[persist(ui(primary, min = 0.0, max = 1.0))]
     pub rim_color: [f32; 3],
     /// Radius of the beam the arcs wrap around; 0 keeps a bare channel
     #[persist(ui(min = 0.0, max = 10.0))]

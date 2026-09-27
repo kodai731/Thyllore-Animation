@@ -168,7 +168,6 @@ pub enum ValueKind {
 pub struct UiAttributes {
     pub primary: bool,
     pub kind: Option<Ident>,
-    pub label: Option<LitStr>,
     pub min: Option<Expr>,
     pub max: Option<Expr>,
     pub format: Option<LitStr>,
@@ -339,8 +338,6 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
     meta.parse_nested_meta(|ui_meta| {
         if ui_meta.path.is_ident("kind") {
             ui.kind = Some(ui_meta.value()?.parse()?);
-        } else if ui_meta.path.is_ident("label") {
-            ui.label = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("min") {
             ui.min = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("max") {
@@ -718,11 +715,10 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
 }
 
 fn component_suffixes(param: &ParamField, len: usize) -> Vec<&'static str> {
-    let color = param
-        .ui
-        .as_ref()
-        .and_then(|ui| ui.kind.as_ref())
-        .is_some_and(|k| k == "Color" || k == "Absorption");
+    let color = param.ui.as_ref().is_some_and(|ui| match &ui.kind {
+        Some(kind) => kind == "Color" || kind == "Absorption",
+        None => len == 3,
+    });
     let suffixes: &[&'static str] = if color {
         &["_r", "_g", "_b"]
     } else {
@@ -736,14 +732,14 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     let field_name = param.ident.to_string();
     let min = ui.min.as_ref().expect("checked at parse");
     let max = ui.max.as_ref().expect("checked at parse");
+    let default_kind = match param.kind {
+        ValueKind::Array(3) => "Color",
+        _ => "Scalar",
+    };
     let kind = ui
         .kind
         .clone()
-        .unwrap_or_else(|| Ident::new("Scalar", proc_macro2::Span::call_site()));
-    let label = match &ui.label {
-        Some(label) => quote!(Some(#label)),
-        None => quote!(None),
-    };
+        .unwrap_or_else(|| Ident::new(default_kind, proc_macro2::Span::call_site()));
     let format = ui
         .format
         .as_ref()
@@ -757,7 +753,7 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
             name: ::thyllore_scene_core::intern_name(prefix, #field_name),
             path: ::thyllore_scene_core::intern_name(path_prefix, #field_name),
             group: #group,
-            label: #label,
+            label: None,
             kind: ::thyllore_scene_core::UiKind::#kind,
             min: #min,
             max: #max,
@@ -962,9 +958,9 @@ mod tests {
     }
 
     #[test]
-    fn color_array_registers_rgb_aliases() {
+    fn three_component_array_with_ui_is_a_color_by_default() {
         let expanded = expand(&format!(
-            "{TOP} struct S {{ #[persist(ui(kind = Color, min = 0.0, max = 1.0))] pub albedo: [f32; 3] }}"
+            "{TOP} struct S {{ #[persist(ui(min = 0.0, max = 1.0))] pub albedo: [f32; 3] }}"
         ));
         for suffix in ["albedo_r", "albedo_g", "albedo_b"] {
             assert!(expanded.contains(&format!("\"{suffix}\"")), "{expanded}");

@@ -7,6 +7,7 @@ pub mod line_mesh_draw;
 pub mod onion_skin;
 pub mod onion_skin_buffers;
 pub mod overlay;
+pub mod overlay_scale;
 pub mod pass_target;
 pub mod push_constants;
 pub mod rayquery;
@@ -31,13 +32,17 @@ pub use line_mesh_draw::{
 pub use onion_skin::{record_onion_skin_composite_pass, record_onion_skin_ghost_pass};
 pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
 pub use overlay::{
-    begin_overlay_render_pass, draw_fullscreen_triangle, set_full_viewport, OverlayAttachmentLoad,
+    OverlayAttachmentLoad, OverlayBlend, OverlayInstanceDraw, OverlayNodeSpec, OverlayPass,
+    OverlayPushConstants,
+};
+pub use overlay_scale::{
+    union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
     TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
 };
-pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants};
+pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};

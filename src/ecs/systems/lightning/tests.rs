@@ -104,7 +104,7 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
 #[test]
 fn default_render_settings_select_closed_form_shading_without_debug_view() {
     let settings = LightningRenderSettings::default();
-    let push = LightningPushConstants::new(
+    let push = thyllore_vulkan_core::renderer::ShadingPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
         settings.debug_view.as_shader_value(),

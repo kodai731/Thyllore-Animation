@@ -1,6 +1,7 @@
+// Depth-aware bilinear upsample of an overlay resolved at a reduced resolution onto the full one.
 import "include/ray.slang";
 
-[[vk::binding(0, 0)]] Sampler2D windColorSampler;
+[[vk::binding(0, 0)]] Sampler2D reducedColorSampler;
 [[vk::binding(1, 0)]] Sampler2D sceneDepthSampler;
 
 static const float DEPTH_WEIGHT_FALLOFF = 32.0;
@@ -17,11 +18,11 @@ float depthWeight(float centerDepth, float tapDepth) {
 
 [shader("fragment")]
 float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
-    uint halfWidth;
-    uint halfHeight;
-    windColorSampler.GetDimensions(halfWidth, halfHeight);
-    float2 halfSize = float2(halfWidth, halfHeight);
-    float2 texelCoord = fragTexCoord * halfSize - 0.5;
+    uint reducedWidth;
+    uint reducedHeight;
+    reducedColorSampler.GetDimensions(reducedWidth, reducedHeight);
+    float2 reducedSize = float2(reducedWidth, reducedHeight);
+    float2 texelCoord = fragTexCoord * reducedSize - 0.5;
     float2 baseCoord = floor(texelCoord);
     float2 fraction = texelCoord - baseCoord;
 
@@ -38,8 +39,8 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
     float4 nearestColor = float4(0.0);
     float nearestWeight = -1.0;
     for (int tap = 0; tap < 4; ++tap) {
-        float2 tapUv = (baseCoord + tapOffsets[tap] + 0.5) / halfSize;
-        float4 tapColor = windColorSampler.Sample(tapUv);
+        float2 tapUv = (baseCoord + tapOffsets[tap] + 0.5) / reducedSize;
+        float4 tapColor = reducedColorSampler.Sample(tapUv);
         float tapDepth = sceneDepthSampler.Sample(tapUv).r;
         float weight = bilinearWeights[tap] * depthWeight(centerDepth, tapDepth);
 

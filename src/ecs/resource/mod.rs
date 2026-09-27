@@ -40,6 +40,7 @@ mod grid_state;
 mod grpc_server_process;
 mod heat_distortion;
 mod hierarchy_state;
+mod history_snapshot;
 #[cfg(feature = "ml")]
 mod inference_actor_state;
 mod keyframe_copy_buffer;
@@ -119,6 +120,7 @@ pub use grid_state::*;
 pub use grpc_server_process::*;
 pub use heat_distortion::*;
 pub use hierarchy_state::*;
+pub use history_snapshot::*;
 #[cfg(feature = "ml")]
 pub use inference_actor_state::*;
 pub use keyframe_copy_buffer::*;

@@ -70,5 +70,5 @@ def test_bake_bindings(exported):
 
 def test_upsample_bindings(exported):
     _, bindings = exported["wind_upsample"]
-    assert [s["name"] for s in bindings["samplers"]] == ["windColorSampler", "sceneDepthSampler"]
+    assert [s["name"] for s in bindings["samplers"]] == ["reducedColorSampler", "sceneDepthSampler"]
     assert bindings["outputs"] == ["outColor"]

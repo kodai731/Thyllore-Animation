@@ -58,6 +58,7 @@ pub mod spring_bone_bake_systems;
 pub mod spring_bone_edit_systems;
 mod spring_bone_gizmo_systems;
 mod spring_bone_systems;
+pub mod temporal_history;
 #[cfg(feature = "auto-rig")]
 mod text_to_animation_systems;
 #[cfg(feature = "auto-rig")]

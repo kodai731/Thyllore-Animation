@@ -27,27 +27,33 @@ declare_scene_format! {
         major_radius: f32 = Frame {
             get: |e| e.major_radius,
             set: |e, v| e.major_radius = v,
+            code: 256,
             ui {
                 min: 0.01,
                 max: 10.0,
                 format: "%.2f",
                 group: "shape",
+                debug_range: (0.5, 5.0),
             },
         },
         minor_radius: f32 = Frame {
             get: |e| e.minor_radius,
             set: |e, v| e.minor_radius = v,
+            code: 257,
             ui {
                 min: 0.01,
                 max: 5.0,
                 format: "%.2f",
                 group: "shape",
+                debug_range: (0.1, 2.0),
             },
         },
         ior: f32 = Frame {
             get: |e| e.ior,
             set: |e, v| e.ior = v,
+            code: 258,
             ui {
+                label: "IOR",
                 min: 1.0,
                 max: 2.5,
                 format: "%.3f",
@@ -57,6 +63,7 @@ declare_scene_format! {
         absorption: [f32; 3] = Frame {
             get: |e| e.absorption,
             set: |e, v| e.absorption = v,
+            code: 259,
             scalars: rgb,
             ui {
                 kind: Absorption,
@@ -65,59 +72,70 @@ declare_scene_format! {
                 format: "%.2f",
                 tooltip: "Beer-Lambert absorption per meter; the picker shows the colour transmitted over the reference distance",
                 group: "optics",
+                debug_range: (0.0, 5.0),
             },
         },
         flow_longitudinal: f32 = Frame {
             get: |e| e.flow_longitudinal,
             set: |e, v| e.flow_longitudinal = v,
+            code: 262,
             ui {
                 primary,
                 min: -5.0,
                 max: 5.0,
                 format: "%.2f",
                 group: "flow",
+                debug_range: (-2.0, 2.0),
             },
         },
         flow_meridional: f32 = Frame {
             get: |e| e.flow_meridional,
             set: |e, v| e.flow_meridional = v,
+            code: 263,
             ui {
                 min: -5.0,
                 max: 5.0,
                 format: "%.2f",
                 group: "flow",
+                debug_range: (-2.0, 2.0),
             },
         },
         wave_amplitude: f32 = Frame {
             get: |e| e.wave_amplitude,
             set: |e, v| e.wave_amplitude = v,
+            code: 264,
             ui {
                 primary,
                 min: 0.0,
                 max: 1.0,
                 format: "%.3f",
                 group: "wave",
+                debug_range: (0.0, 0.5),
             },
         },
         wave_frequency: f32 = Frame {
             get: |e| e.wave_frequency,
             set: |e, v| e.wave_frequency = v,
+            code: 265,
             ui {
                 primary,
                 min: 0.0,
                 max: 50.0,
                 format: "%.1f",
                 group: "wave",
+                debug_range: (1.0, 20.0),
             },
         },
         wave_speed: f32 = Frame {
             get: |e| e.wave_speed,
             set: |e, v| e.wave_speed = v,
+            code: 266,
             ui {
                 min: 0.0,
                 max: 10.0,
                 format: "%.2f",
                 group: "wave",
+                debug_range: (0.0, 5.0),
             },
         },
         wave_dispersion: f32 = Frame {
@@ -143,6 +161,7 @@ declare_scene_format! {
         light_intensity: f32 = Frame {
             get: |e| e.light_intensity,
             set: |e, v| e.light_intensity = v,
+            code: 273,
             ui {
                 primary,
                 min: 0.0,
@@ -154,6 +173,7 @@ declare_scene_format! {
         highlight_sharpness: f32 = Frame {
             get: |e| e.highlight_sharpness,
             set: |e, v| e.highlight_sharpness = v,
+            code: 274,
             ui {
                 min: 1.0,
                 max: 1024.0,
@@ -164,6 +184,7 @@ declare_scene_format! {
         sky_brightness: f32 = Frame {
             get: |e| e.sky_brightness,
             set: |e, v| e.sky_brightness = v,
+            code: 275,
             ui {
                 min: 0.0,
                 max: 2.0,
@@ -174,6 +195,7 @@ declare_scene_format! {
         scatter_strength: f32 = Frame {
             get: |e| e.scatter_strength,
             set: |e, v| e.scatter_strength = v,
+            code: 276,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -184,6 +206,7 @@ declare_scene_format! {
         scatter_anisotropy: f32 = Frame {
             get: |e| e.scatter_anisotropy,
             set: |e, v| e.scatter_anisotropy = v,
+            code: 277,
             ui {
                 min: -0.9,
                 max: 0.9,
@@ -194,6 +217,7 @@ declare_scene_format! {
         reflect_strength: f32 = Frame {
             get: |e| e.reflect_strength,
             set: |e, v| e.reflect_strength = v,
+            code: 267,
             ui {
                 primary,
                 min: 0.0,
@@ -205,6 +229,7 @@ declare_scene_format! {
         refract_strength: f32 = Frame {
             get: |e| e.refract_strength,
             set: |e, v| e.refract_strength = v,
+            code: 268,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -215,6 +240,7 @@ declare_scene_format! {
         caustic_strength: f32 = Frame {
             get: |e| e.caustic_strength,
             set: |e, v| e.caustic_strength = v,
+            code: 272,
             ui {
                 min: 0.0,
                 max: 2.0,
@@ -225,6 +251,7 @@ declare_scene_format! {
         tint: [f32; 3] = Frame {
             get: |e| e.tint,
             set: |e, v| e.tint = v,
+            code: 269,
             scalars: rgb,
             ui {
                 primary,

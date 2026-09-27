@@ -210,8 +210,7 @@ pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {
         .iter()
         .flat_map(|domain| {
             (domain.entities)(world).into_iter().map(move |entity| {
-                let params: serde_json::Map<String, serde_json::Value> = domain
-                    .channels
+                let params: serde_json::Map<String, serde_json::Value> = (domain.channels)()
                     .iter()
                     .filter_map(|channel| {
                         (domain.read)(world, entity, channel.property_type())

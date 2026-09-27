@@ -1,4 +1,4 @@
-use crate::ecs::component::{apply_lightning_param_value, LightningEffect, LightningParam};
+use crate::ecs::component::{apply_scalar, LightningEffect, LightningScalars};
 use crate::ecs::resource::LightningRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
@@ -45,8 +45,8 @@ impl TimedEffect for LightningEffect {
     }
 
     fn apply_scalar(&mut self, property_type: PropertyType, value: f32) {
-        if let Some(param) = LightningParam::from_property_type(property_type) {
-            apply_lightning_param_value(self, param, value);
+        if let PropertyType::Custom(code) = property_type {
+            apply_scalar::<LightningScalars>(self, code, value);
         }
     }
 }

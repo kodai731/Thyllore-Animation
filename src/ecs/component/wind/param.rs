@@ -363,7 +363,7 @@ pub static WIND_CHANNELS: [ScalarChannel; WindParam::ALL.len()] = {
 
 pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Wind",
-    channels: &WIND_CHANNELS,
+    channels: wind_channels,
     has_component: wind_has_component,
     entities: wind_entities,
     read: wind_channel_read,
@@ -371,6 +371,10 @@ pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
 };
 
 crate::scalar_channel_domain!(WIND_DOMAIN);
+
+fn wind_channels() -> &'static [ScalarChannel] {
+    &WIND_CHANNELS
+}
 
 fn wind_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WindTornadoEffect>(entity).is_some()

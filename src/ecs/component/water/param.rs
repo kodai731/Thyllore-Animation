@@ -236,7 +236,7 @@ pub static WATER_CHANNELS: [ScalarChannel; WaterParam::ALL.len()] = {
 
 pub static WATER_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Water",
-    channels: &WATER_CHANNELS,
+    channels: water_channels,
     has_component: water_has_component,
     entities: water_entities,
     read: water_channel_read,
@@ -244,6 +244,10 @@ pub static WATER_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
 };
 
 crate::scalar_channel_domain!(WATER_DOMAIN);
+
+fn water_channels() -> &'static [ScalarChannel] {
+    &WATER_CHANNELS
+}
 
 fn water_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WaterTorusEffect>(entity).is_some()

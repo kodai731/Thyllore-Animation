@@ -77,7 +77,7 @@ impl ScalarChannel {
 pub struct ScalarChannelDomain {
     /// Display name of the domain (also the name of the clip it creates).
     pub name: &'static str,
-    pub channels: &'static [ScalarChannel],
+    pub channels: fn() -> &'static [ScalarChannel],
     pub has_component: fn(&World, Entity) -> bool,
     pub entities: fn(&World) -> Vec<Entity>,
     /// Current component value of a channel (None when the entity lost the
@@ -126,8 +126,7 @@ pub fn scalar_channel_for_property(
     property_type: PropertyType,
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
-        domain
-            .channels
+        (domain.channels)()
             .iter()
             .find(|c| c.property_type() == property_type)
             .map(|c| (*domain, c))
@@ -138,8 +137,7 @@ pub fn scalar_channel_for_cli_name(
     name: &str,
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
-        domain
-            .channels
+        (domain.channels)()
             .iter()
             .find(|c| c.cli_name == name)
             .map(|c| (*domain, c))
@@ -150,8 +148,7 @@ pub fn scalar_channel_for_scene_name(
     name: &str,
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
-        domain
-            .channels
+        (domain.channels)()
             .iter()
             .find(|c| c.scene_name == name)
             .map(|c| (*domain, c))
@@ -161,7 +158,7 @@ pub fn scalar_channel_for_scene_name(
 pub fn scalar_cli_names_joined() -> String {
     scalar_channel_domains()
         .iter()
-        .flat_map(|domain| domain.channels.iter().map(|c| c.cli_name))
+        .flat_map(|domain| (domain.channels)().iter().map(|c| c.cli_name))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -183,7 +180,7 @@ mod tests {
                 "domain {} registered twice",
                 domain.name
             );
-            for channel in domain.channels {
+            for channel in (domain.channels)() {
                 assert!(
                     codes.insert(channel.code),
                     "duplicate code {}",
@@ -209,7 +206,7 @@ mod tests {
         for domain in scalar_channel_domains() {
             let block = scalar_code_block_for_domain(domain.name)
                 .unwrap_or_else(|| panic!("no code block configured for domain {}", domain.name));
-            for channel in domain.channels {
+            for channel in (domain.channels)() {
                 assert!(
                     block.contains(channel.code),
                     "{} channel {} code {} is outside block {}..{}",
@@ -247,7 +244,7 @@ mod tests {
     #[test]
     fn test_lookups_roundtrip_every_channel() {
         for domain in scalar_channel_domains() {
-            for channel in domain.channels {
+            for channel in (domain.channels)() {
                 let (d, c) = scalar_channel_for_property(channel.property_type()).unwrap();
                 assert_eq!(d.name, domain.name);
                 assert_eq!(c.code, channel.code);

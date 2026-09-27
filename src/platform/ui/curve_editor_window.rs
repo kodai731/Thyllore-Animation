@@ -270,7 +270,7 @@ fn build_scalar_curve_selector_inline(
 ) {
     ui.indent();
 
-    for channel in domain.channels {
+    for channel in (domain.channels)() {
         let property_type = channel.property_type();
         let key_count = clip
             .get_scalar_curve(property_type)
@@ -304,13 +304,13 @@ fn build_scalar_curve_selector_inline(
     }
 
     if ui.small_button("All##scalar") {
-        for channel in domain.channels {
+        for channel in (domain.channels)() {
             editor_state.visible_curves.insert(channel.property_type());
         }
     }
     ui.same_line();
     if ui.small_button("None##scalar") {
-        for channel in domain.channels {
+        for channel in (domain.channels)() {
             editor_state.visible_curves.remove(&channel.property_type());
         }
     }
@@ -490,12 +490,12 @@ fn scalar_curve_style(property_type: PropertyType) -> ([f32; 4], &'static str) {
 fn scalar_channel_color(domain: &ScalarChannelDomain, channel: &ScalarChannel) -> [f32; 4] {
     // Evenly spaced hues over the domain's channels, alternating brightness
     // for neighbor separability.
-    let index = domain
-        .channels
+    let channels = (domain.channels)();
+    let index = channels
         .iter()
         .position(|c| c.code == channel.code)
         .unwrap_or(0);
-    let hue = index as f32 / domain.channels.len().max(1) as f32;
+    let hue = index as f32 / channels.len().max(1) as f32;
     let value = if index % 2 == 0 { 1.0 } else { 0.75 };
     hsv_to_rgba(hue, 0.75, value)
 }

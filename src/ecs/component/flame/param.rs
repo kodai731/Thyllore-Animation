@@ -204,7 +204,7 @@ pub static FLAME_CHANNELS: [ScalarChannel; FlameParam::ALL.len()] = {
 
 pub static FLAME_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Flame",
-    channels: &FLAME_CHANNELS,
+    channels: flame_channels,
     has_component: flame_has_component,
     entities: flame_entities,
     read: flame_channel_read,
@@ -212,6 +212,10 @@ pub static FLAME_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
 };
 
 crate::scalar_channel_domain!(FLAME_DOMAIN);
+
+fn flame_channels() -> &'static [ScalarChannel] {
+    &FLAME_CHANNELS
+}
 
 fn flame_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<FlameEffect>(entity).is_some()

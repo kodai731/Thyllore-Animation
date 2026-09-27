@@ -32,14 +32,17 @@ declare_scene_format! {
                 end_offset_x: {
                     get: |e| e.shape.end_offset[0],
                     set: |e, v| e.shape.end_offset[0] = v,
+                    code: 768,
                 },
                 end_offset_y: {
                     get: |e| e.shape.end_offset[1],
                     set: |e, v| e.shape.end_offset[1] = v,
+                    code: 769,
                 },
                 end_offset_z: {
                     get: |e| e.shape.end_offset[2],
                     set: |e, v| e.shape.end_offset[2] = v,
+                    code: 770,
                 },
             },
             ui {
@@ -54,16 +57,19 @@ declare_scene_format! {
         strikes_per_burst: u32 {
             get: |e| e.shape.strikes_per_burst,
             set: |e, v| e.shape.strikes_per_burst = v,
+            code: 771,
             ui {
                 min: 1.0,
                 max: 32.0,
                 format: "%.0f",
                 group: "shape",
+                debug_range: (1.0, 8.0),
             },
         },
         detail_levels: u32 {
             get: |e| e.shape.detail_levels,
             set: |e, v| e.shape.detail_levels = v,
+            code: 772,
             ui {
                 min: 1.0,
                 max: 8.0,
@@ -75,6 +81,7 @@ declare_scene_format! {
         tortuosity: f32 {
             get: |e| e.shape.tortuosity,
             set: |e, v| e.shape.tortuosity = v,
+            code: 773,
             ui {
                 primary,
                 min: 0.0,
@@ -87,6 +94,7 @@ declare_scene_format! {
         roughness: f32 {
             get: |e| e.shape.roughness,
             set: |e, v| e.shape.roughness = v,
+            code: 774,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -98,6 +106,7 @@ declare_scene_format! {
         core_radius: f32 {
             get: |e| e.shape.core_radius,
             set: |e, v| e.shape.core_radius = v,
+            code: 775,
             ui {
                 primary,
                 min: 0.001,
@@ -109,6 +118,7 @@ declare_scene_format! {
         tip_radius_ratio: f32 {
             get: |e| e.shape.tip_radius_ratio,
             set: |e, v| e.shape.tip_radius_ratio = v,
+            code: 776,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -120,6 +130,7 @@ declare_scene_format! {
         edge_fraction: f32 {
             get: |e| e.shape.edge_fraction,
             set: |e, v| e.shape.edge_fraction = v,
+            code: 777,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -131,6 +142,7 @@ declare_scene_format! {
         branch_depth: u32 {
             get: |e| e.branch.depth,
             set: |e, v| e.branch.depth = v,
+            code: 778,
             ui {
                 min: 0.0,
                 max: 5.0,
@@ -142,6 +154,7 @@ declare_scene_format! {
         branch_probability: f32 {
             get: |e| e.branch.probability,
             set: |e, v| e.branch.probability = v,
+            code: 779,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -152,6 +165,7 @@ declare_scene_format! {
         branch_count: f32 {
             get: |e| e.branch.count,
             set: |e, v| e.branch.count = v,
+            code: 812,
             ui {
                 primary,
                 min: 0.0,
@@ -164,6 +178,7 @@ declare_scene_format! {
         branch_zone_start: f32 {
             get: |e| e.branch.zone_start,
             set: |e, v| e.branch.zone_start = v,
+            code: 813,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -175,6 +190,7 @@ declare_scene_format! {
         branch_zone_end: f32 {
             get: |e| e.branch.zone_end,
             set: |e, v| e.branch.zone_end = v,
+            code: 814,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -186,6 +202,7 @@ declare_scene_format! {
         branch_angle: f32 {
             get: |e| e.branch.angle,
             set: |e, v| e.branch.angle = v,
+            code: 780,
             ui {
                 primary,
                 min: 0.0,
@@ -198,6 +215,7 @@ declare_scene_format! {
         branch_length_ratio: f32 {
             get: |e| e.branch.length_ratio,
             set: |e, v| e.branch.length_ratio = v,
+            code: 781,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -208,6 +226,7 @@ declare_scene_format! {
         branch_radius_ratio: f32 {
             get: |e| e.branch.radius_ratio,
             set: |e, v| e.branch.radius_ratio = v,
+            code: 782,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -218,6 +237,7 @@ declare_scene_format! {
         branch_intensity_ratio: f32 {
             get: |e| e.branch.intensity_ratio,
             set: |e, v| e.branch.intensity_ratio = v,
+            code: 783,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -228,6 +248,7 @@ declare_scene_format! {
         core_intensity: f32 {
             get: |e| e.look.core_intensity,
             set: |e, v| e.look.core_intensity = v,
+            code: 784,
             ui {
                 primary,
                 min: 0.0,
@@ -240,6 +261,7 @@ declare_scene_format! {
         core_color: [f32; 3] {
             get: |e| e.look.core_color,
             set: |e, v| e.look.core_color = v,
+            code: 785,
             scalars: rgb,
             ui {
                 kind: Color,
@@ -252,6 +274,7 @@ declare_scene_format! {
         rim_ratio: f32 {
             get: |e| e.look.rim_ratio,
             set: |e, v| e.look.rim_ratio = v,
+            code: 788,
             ui {
                 min: 1.0,
                 max: 20.0,
@@ -263,6 +286,7 @@ declare_scene_format! {
         rim_intensity: f32 {
             get: |e| e.look.rim_intensity,
             set: |e, v| e.look.rim_intensity = v,
+            code: 789,
             ui {
                 min: 0.0,
                 max: 100.0,
@@ -273,6 +297,7 @@ declare_scene_format! {
         rim_color: [f32; 3] {
             get: |e| e.look.rim_color,
             set: |e, v| e.look.rim_color = v,
+            code: 790,
             scalars: rgb,
             ui {
                 primary,
@@ -286,6 +311,7 @@ declare_scene_format! {
         beam_radius: f32 {
             get: |e| e.look.beam_radius,
             set: |e, v| e.look.beam_radius = v,
+            code: 793,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -297,6 +323,7 @@ declare_scene_format! {
         beam_arc_count: u32 {
             get: |e| e.look.beam_arc_count,
             set: |e, v| e.look.beam_arc_count = v,
+            code: 794,
             ui {
                 min: 0.0,
                 max: 64.0,
@@ -307,6 +334,7 @@ declare_scene_format! {
         flash_gain: f32 {
             get: |e| e.look.flash_gain,
             set: |e, v| e.look.flash_gain = v,
+            code: 795,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -318,6 +346,7 @@ declare_scene_format! {
         flash_radius: f32 {
             get: |e| e.look.flash_radius,
             set: |e, v| e.look.flash_radius = v,
+            code: 796,
             ui {
                 min: 0.0,
                 max: 100.0,
@@ -328,6 +357,7 @@ declare_scene_format! {
         end_variance: f32 {
             get: |e| e.shape.end_variance,
             set: |e, v| e.shape.end_variance = v,
+            code: 815,
             ui {
                 min: 0.0,
                 max: 4.0,
@@ -339,6 +369,7 @@ declare_scene_format! {
         growth_time: f32 {
             get: |e| e.timing.growth_time,
             set: |e, v| e.timing.growth_time = v,
+            code: 816,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -350,6 +381,7 @@ declare_scene_format! {
         burst_start: f32 {
             get: |e| e.timing.burst_start,
             set: |e, v| e.timing.burst_start = v,
+            code: 797,
             ui {
                 min: 0.0,
                 max: 10.0,
@@ -360,6 +392,7 @@ declare_scene_format! {
         burst_interval: f32 {
             get: |e| e.timing.burst_interval,
             set: |e, v| e.timing.burst_interval = v,
+            code: 798,
             ui {
                 primary,
                 min: 0.01,
@@ -371,6 +404,7 @@ declare_scene_format! {
         burst_jitter: f32 {
             get: |e| e.timing.burst_jitter,
             set: |e, v| e.timing.burst_jitter = v,
+            code: 799,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -382,6 +416,7 @@ declare_scene_format! {
         burst_count: u32 {
             get: |e| e.timing.burst_count,
             set: |e, v| e.timing.burst_count = v,
+            code: 800,
             ui {
                 min: 0.0,
                 max: 16.0,
@@ -393,6 +428,7 @@ declare_scene_format! {
         attack_time: f32 {
             get: |e| e.timing.attack_time,
             set: |e, v| e.timing.attack_time = v,
+            code: 801,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -403,6 +439,7 @@ declare_scene_format! {
         sustain_time: f32 {
             get: |e| e.timing.sustain_time,
             set: |e, v| e.timing.sustain_time = v,
+            code: 802,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -413,6 +450,7 @@ declare_scene_format! {
         release_time: f32 {
             get: |e| e.timing.release_time,
             set: |e, v| e.timing.release_time = v,
+            code: 803,
             ui {
                 min: 0.0,
                 max: 2.0,
@@ -423,6 +461,7 @@ declare_scene_format! {
         stroke_count: u32 {
             get: |e| e.timing.stroke_count,
             set: |e, v| e.timing.stroke_count = v,
+            code: 804,
             ui {
                 min: 1.0,
                 max: 8.0,
@@ -434,6 +473,7 @@ declare_scene_format! {
         stroke_interval: f32 {
             get: |e| e.timing.stroke_interval,
             set: |e, v| e.timing.stroke_interval = v,
+            code: 805,
             ui {
                 min: 0.001,
                 max: 1.0,
@@ -444,6 +484,7 @@ declare_scene_format! {
         stroke_decay: f32 {
             get: |e| e.timing.stroke_decay,
             set: |e, v| e.timing.stroke_decay = v,
+            code: 806,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -455,6 +496,7 @@ declare_scene_format! {
         flicker_amplitude: f32 {
             get: |e| e.timing.flicker_amplitude,
             set: |e, v| e.timing.flicker_amplitude = v,
+            code: 807,
             ui {
                 min: 0.0,
                 max: 1.0,
@@ -465,6 +507,7 @@ declare_scene_format! {
         flicker_period: f32 {
             get: |e| e.timing.flicker_period,
             set: |e, v| e.timing.flicker_period = v,
+            code: 808,
             ui {
                 min: 0.001,
                 max: 1.0,
@@ -475,6 +518,7 @@ declare_scene_format! {
         reseed_level: u32 {
             get: |e| e.timing.reseed_level,
             set: |e, v| e.timing.reseed_level = v,
+            code: 809,
             ui {
                 min: 0.0,
                 max: 8.0,
@@ -486,6 +530,7 @@ declare_scene_format! {
         reseed_period: f32 {
             get: |e| e.timing.reseed_period,
             set: |e, v| e.timing.reseed_period = v,
+            code: 810,
             ui {
                 min: 0.01,
                 max: 10.0,
@@ -496,6 +541,7 @@ declare_scene_format! {
         charge_ramp: f32 {
             get: |e| e.timing.charge_ramp,
             set: |e, v| e.timing.charge_ramp = v,
+            code: 811,
             ui {
                 min: 0.0,
                 max: 2.0,

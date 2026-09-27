@@ -1,6 +1,7 @@
 use thyllore_anim_core::{AnimationSystem, MorphAnimationSystem};
 use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::MeshMorph;
 
 use crate::model_result::{LoadedMesh, ModelLoadResult};
 
@@ -97,6 +98,7 @@ pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -
             local_vertices: Vec::new(),
             texture: None,
             base_color_factor: color,
+            morph: MeshMorph::default(),
         }],
         nodes: Vec::new(),
         skeletons: Vec::new(),
@@ -197,6 +199,7 @@ pub fn build_uv_sphere_model(radius: f32, segments: u32, rings: u32) -> ModelLoa
             local_vertices: Vec::new(),
             texture: None,
             base_color_factor: [0.9, 0.9, 0.9, 1.0],
+            morph: MeshMorph::default(),
         }],
         nodes: Vec::new(),
         skeletons: Vec::new(),

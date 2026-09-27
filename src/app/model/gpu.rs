@@ -45,6 +45,7 @@ pub(super) unsafe fn upload_model_meshes(
                 height: texture.height,
             },
             base_color_factor: loaded_mesh.base_color_factor,
+            morph: &loaded_mesh.morph,
         };
         graphics.push_mesh(instance, device, command_pool, &source)?;
     }

@@ -13,7 +13,7 @@ use crate::resource::image::{
 use crate::resource::GpuResource;
 use crate::vulkan::*;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
-use thyllore_model_core::{SkeletonId, SkinData};
+use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 use thyllore_render_core::{MaterialUBO, ObjectUBO};
 
 pub use crate::descriptor::{
@@ -56,6 +56,7 @@ pub struct MeshSource<'a> {
     pub node_index: Option<usize>,
     pub texture: TexturePixels<'a>,
     pub base_color_factor: [f32; 4],
+    pub morph: &'a MeshMorph,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -160,6 +161,7 @@ impl GraphicsResources {
         mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
 
         mesh.vertex_data = source.vertex_data.clone();
+        mesh.morph = source.morph.clone();
         mesh.skin_data = source.skin_data.cloned();
         mesh.skeleton_id = source.skeleton_id;
         mesh.node_index = source.node_index;

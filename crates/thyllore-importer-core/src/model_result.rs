@@ -5,6 +5,7 @@ use thyllore_anim_core::{
     AnimationClip, AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
 };
 use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::MeshMorph;
 
 use crate::fbx::{self, LoadedConstraint};
 use crate::gltf;
@@ -25,6 +26,7 @@ pub struct LoadedMesh {
     pub local_vertices: Vec<Vertex>,
     pub texture: Option<TextureSource>,
     pub base_color_factor: [f32; 4],
+    pub morph: MeshMorph,
 }
 
 impl Default for LoadedMesh {
@@ -37,6 +39,7 @@ impl Default for LoadedMesh {
             local_vertices: Vec::new(),
             texture: None,
             base_color_factor: [1.0, 1.0, 1.0, 1.0],
+            morph: MeshMorph::default(),
         }
     }
 }
@@ -88,6 +91,7 @@ impl ModelLoadResult {
                     })
                 }),
                 base_color_factor: m.base_color_factor,
+                morph: MeshMorph::default(),
             })
             .collect();
 
@@ -132,6 +136,7 @@ impl ModelLoadResult {
                 local_vertices: m.local_vertices,
                 texture: m.texture_path.map(TextureSource::File),
                 base_color_factor: [1.0, 1.0, 1.0, 1.0],
+                morph: m.morph,
             })
             .collect();
 

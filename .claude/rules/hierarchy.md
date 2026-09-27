@@ -272,7 +272,10 @@ Concretely:
   `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
   `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
   `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
-  never lists them. Tests of the shared clip, timeline, dispatch and batch code use the test-only
+  never lists them. A channel never carries a hand-written `Custom` code: the domain derives it as the
+  block's `first_code` plus the channel's position in `channels` (`ScalarChannelDomain::property_type_at`),
+  so a new channel is appended to the end of the table and existing ones are never reordered or removed.
+  Tests of the shared clip, timeline, dispatch and batch code use the test-only
   `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
   `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,

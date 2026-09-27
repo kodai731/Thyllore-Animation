@@ -49,6 +49,7 @@ pub(crate) struct FbxClusterExport {
 }
 
 pub(crate) struct FbxBlendShapeExport {
+    pub source_mesh: String,
     pub deformer_uid: i64,
     pub geometry_uid: i64,
     pub channels: Vec<FbxBlendShapeChannelExport>,

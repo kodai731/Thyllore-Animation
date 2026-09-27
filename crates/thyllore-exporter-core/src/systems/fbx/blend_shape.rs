@@ -63,6 +63,7 @@ pub(crate) fn build_blend_shape_exports(
 
         if !channels.is_empty() {
             blend_shapes.push(FbxBlendShapeExport {
+                source_mesh: fbx_data.morph.source_mesh.clone(),
                 deformer_uid,
                 geometry_uid,
                 channels,

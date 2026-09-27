@@ -62,8 +62,13 @@ pub(crate) fn build_full_export_data(
         export_path,
     );
 
-    let (curve_nodes, curves) =
-        build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc, inv_unit_scale);
+    let (curve_nodes, curves) = build_animation_curves(
+        clip,
+        &name_to_model_uid,
+        &blend_shapes,
+        &mut uid_alloc,
+        inv_unit_scale,
+    );
 
     let connections = build_all_connections(
         &bones,

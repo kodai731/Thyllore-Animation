@@ -37,6 +37,7 @@ pub(crate) enum FbxChannel {
     Translation,
     Rotation,
     Scale,
+    DeformPercent,
 }
 
 impl FbxChannel {
@@ -45,6 +46,7 @@ impl FbxChannel {
             FbxChannel::Translation => "Lcl Translation",
             FbxChannel::Rotation => "Lcl Rotation",
             FbxChannel::Scale => "Lcl Scaling",
+            FbxChannel::DeformPercent => "DeformPercent",
         }
     }
 
@@ -53,6 +55,16 @@ impl FbxChannel {
             FbxChannel::Translation => "T",
             FbxChannel::Rotation => "R",
             FbxChannel::Scale => "S",
+            FbxChannel::DeformPercent => "DeformPercent",
+        }
+    }
+
+    pub(crate) fn axis_property_names(&self) -> &'static [&'static str] {
+        match self {
+            FbxChannel::Translation | FbxChannel::Rotation | FbxChannel::Scale => {
+                &["d|X", "d|Y", "d|Z"]
+            }
+            FbxChannel::DeformPercent => &["d|DeformPercent"],
         }
     }
 }
@@ -438,7 +450,7 @@ pub(crate) fn build_channel_exports(
 
     let value_scale = match channel {
         FbxChannel::Translation => inv_unit_scale,
-        FbxChannel::Rotation | FbxChannel::Scale => 1.0,
+        FbxChannel::Rotation | FbxChannel::Scale | FbxChannel::DeformPercent => 1.0,
     };
 
     let curvenode_uid = uid_alloc.allocate();
@@ -1077,9 +1089,10 @@ pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     drop(attrs);
 
     drop(writer.new_node("Properties70")?);
-    write_property_f64(writer, "d|X", "Number", "", "A", cn.default_values[0])?;
-    write_property_f64(writer, "d|Y", "Number", "", "A", cn.default_values[1])?;
-    write_property_f64(writer, "d|Z", "Number", "", "A", cn.default_values[2])?;
+    let axis_names = cn.channel.axis_property_names();
+    for (i, axis) in axis_names.iter().enumerate() {
+        write_property_f64(writer, axis, "Number", "", "A", cn.default_values[i])?;
+    }
     writer.close_node()?;
 
     writer.close_node()?;

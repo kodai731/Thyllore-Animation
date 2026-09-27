@@ -132,7 +132,7 @@ pub(crate) fn generate_animation_connections(
             property: cn.channel.property_name().to_string(),
         });
 
-        let axis_names = ["d|X", "d|Y", "d|Z"];
+        let axis_names = cn.channel.axis_property_names();
         for (i, axis) in axis_names.iter().enumerate() {
             if let Some(curve_uid) = cn.curve_uids[i] {
                 connections.push(FbxConnection::OP {

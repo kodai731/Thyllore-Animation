@@ -1581,4 +1581,54 @@ print("IMPORT_DONE")
         std::fs::remove_file(&source_path).ok();
         std::fs::remove_file(&export_path).ok();
     }
+
+    #[test]
+    fn test_morph_track_exports_as_deform_percent_curve() {
+        let source_path = copy_morph_cube_fixture_to_temp();
+        let source_model =
+            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
+                .expect("load morph_cube");
+
+        let mut clip = EditableAnimationClip::new(0, "smile".to_string());
+        let smile_curve = &mut clip.get_or_add_morph_track("Cube", "smile").curve;
+        thyllore_anim_core::editable::curve_add_keyframe(smile_curve, 0.0, 0.0);
+        thyllore_anim_core::editable::curve_add_keyframe(smile_curve, 1.0, 1.0);
+
+        let export_path = std::env::temp_dir().join("morph_cube_weight_anim_exported.fbx");
+        export_full_fbx(
+            &source_model,
+            Some(&clip),
+            &Skeleton::default(),
+            &export_path,
+        )
+        .expect("export morph_cube with morph track");
+
+        let scene = ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+            .expect("reload exported morph_cube");
+        let find_channel = |name: &str| {
+            scene
+                .blend_channels
+                .iter()
+                .find(|channel| channel.element.name == name)
+                .unwrap_or_else(|| panic!("{name} channel missing"))
+        };
+        let smile = find_channel("smile");
+        let blink = find_channel("blink");
+
+        for (time, expected_smile) in [(0.0, 0.0), (1.0, 1.0)] {
+            let smile_weight = ufbx::evaluate_blend_weight(&scene.anim, smile, time);
+            let blink_weight = ufbx::evaluate_blend_weight(&scene.anim, blink, time);
+            assert!(
+                (smile_weight - expected_smile).abs() < 1e-4,
+                "smile at {time}: expected {expected_smile}, got {smile_weight}"
+            );
+            assert!(
+                blink_weight.abs() < 1e-4,
+                "blink at {time}: expected 0, got {blink_weight}"
+            );
+        }
+
+        std::fs::remove_file(&source_path).ok();
+        std::fs::remove_file(&export_path).ok();
+    }
 }

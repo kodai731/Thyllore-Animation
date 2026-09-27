@@ -1,12 +1,18 @@
+use thyllore_anim_core::editable::components::morph_track::MorphTrack;
 use thyllore_anim_core::editable::EditableAnimationClip;
 
+use crate::components::fbx::FbxBlendShapeExport;
 use crate::fbx_animation::{
-    build_channel_exports, FbxChannel, FbxCurveExport, FbxCurveNodeExport, UidAllocator,
+    build_channel_exports, build_curve_export, FbxChannel, FbxCurveExport, FbxCurveNodeExport,
+    UidAllocator,
 };
+
+const MORPH_WEIGHT_TO_PERCENT: f32 = 100.0;
 
 pub(crate) fn build_animation_curves(
     clip: Option<&EditableAnimationClip>,
     bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
+    blend_shapes: &[FbxBlendShapeExport],
     uid_alloc: &mut UidAllocator,
     inv_unit_scale: f32,
 ) -> (Vec<FbxCurveNodeExport>, Vec<FbxCurveExport>) {
@@ -61,5 +67,49 @@ pub(crate) fn build_animation_curves(
         }
     }
 
+    for morph_track in &clip.morph_tracks {
+        build_morph_track_exports(
+            morph_track,
+            blend_shapes,
+            uid_alloc,
+            &mut curve_nodes,
+            &mut curves,
+        );
+    }
+
     (curve_nodes, curves)
+}
+
+fn build_morph_track_exports(
+    morph_track: &MorphTrack,
+    blend_shapes: &[FbxBlendShapeExport],
+    uid_alloc: &mut UidAllocator,
+    curve_nodes: &mut Vec<FbxCurveNodeExport>,
+    curves: &mut Vec<FbxCurveExport>,
+) {
+    if morph_track.curve.is_empty() {
+        return;
+    }
+
+    let target_channel_uids = blend_shapes
+        .iter()
+        .filter(|blend_shape| blend_shape.source_mesh == morph_track.source_mesh)
+        .flat_map(|blend_shape| &blend_shape.channels)
+        .filter(|channel| channel.name == morph_track.channel)
+        .map(|channel| channel.channel_uid);
+
+    for channel_uid in target_channel_uids {
+        let curve_node_uid = uid_alloc.allocate();
+        let curve_uid = uid_alloc.allocate();
+        let curve = build_curve_export(&morph_track.curve, curve_uid, MORPH_WEIGHT_TO_PERCENT);
+
+        curve_nodes.push(FbxCurveNodeExport {
+            uid: curve_node_uid,
+            bone_model_uid: channel_uid,
+            channel: FbxChannel::DeformPercent,
+            default_values: [curve.default_value, 0.0, 0.0],
+            curve_uids: [Some(curve_uid), None, None],
+        });
+        curves.push(curve);
+    }
 }

@@ -3789,7 +3789,10 @@ dependencies = [
 name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "ron",
  "serde",
+ "tempfile",
  "toml",
 ]
 

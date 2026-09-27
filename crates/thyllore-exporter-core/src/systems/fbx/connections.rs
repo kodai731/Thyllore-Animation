@@ -27,6 +27,7 @@ pub(crate) fn generate_mesh_connections(
     materials: &[FbxMaterialExport],
     textures: &[FbxTextureExport],
     skins: &[FbxSkinExport],
+    blend_shapes: &[FbxBlendShapeExport],
     connections: &mut Vec<FbxConnection>,
 ) {
     for (i, mesh_model) in mesh_models.iter().enumerate() {
@@ -79,6 +80,25 @@ pub(crate) fn generate_mesh_connections(
             connections.push(FbxConnection::OO {
                 child: cluster.bone_model_uid,
                 parent: cluster.uid,
+            });
+        }
+    }
+
+    for blend_shape in blend_shapes {
+        connections.push(FbxConnection::OO {
+            child: blend_shape.deformer_uid,
+            parent: blend_shape.geometry_uid,
+        });
+
+        for channel in &blend_shape.channels {
+            connections.push(FbxConnection::OO {
+                child: channel.channel_uid,
+                parent: blend_shape.deformer_uid,
+            });
+
+            connections.push(FbxConnection::OO {
+                child: channel.shape_uid,
+                parent: channel.channel_uid,
             });
         }
     }

@@ -1,4 +1,5 @@
 pub mod animation;
+pub(crate) mod blend_shape;
 pub(crate) mod build;
 pub(crate) mod connections;
 pub(crate) mod curves;
@@ -1526,5 +1527,58 @@ print("IMPORT_DONE")
 
         std::fs::remove_file(&path_a).ok();
         std::fs::remove_file(&path_b).ok();
+    }
+
+    fn copy_morph_cube_fixture_to_temp() -> PathBuf {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../thyllore-importer-core/tests/data/morph_cube.fbx.txt");
+        let temp = std::env::temp_dir().join("morph_cube_export_source.fbx");
+        std::fs::copy(&fixture, &temp).expect("copy morph_cube fixture");
+        temp
+    }
+
+    #[test]
+    fn test_blend_shapes_survive_full_fbx_export() {
+        let source_path = copy_morph_cube_fixture_to_temp();
+        let source_model =
+            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
+                .expect("load morph_cube");
+
+        let export_path = std::env::temp_dir().join("morph_cube_exported.fbx");
+        export_full_fbx(&source_model, None, &Skeleton::default(), &export_path)
+            .expect("export morph_cube");
+
+        let exported_model =
+            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(export_path.to_str().unwrap())
+                .expect("reload exported morph_cube");
+        assert_eq!(exported_model.fbx_data.len(), 1, "expected one mesh");
+
+        let morph = &exported_model.fbx_data[0].morph;
+        let channel_names: Vec<&str> = morph.channels.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(channel_names, ["smile", "blink"]);
+
+        let expected_deltas = [[0.1_f32, 0.0, 0.0], [0.0, -0.1, 0.0]];
+        for (channel, expected) in morph.channels.iter().zip(expected_deltas) {
+            assert_eq!(
+                channel.position_deltas.len(),
+                1,
+                "{} delta count",
+                channel.name
+            );
+            let delta = channel.position_deltas[0].delta;
+            for axis in 0..3 {
+                assert!(
+                    (delta[axis] - expected[axis]).abs() < 1e-4,
+                    "{} delta axis {}: expected {}, got {}",
+                    channel.name,
+                    axis,
+                    expected[axis],
+                    delta[axis]
+                );
+            }
+        }
+
+        std::fs::remove_file(&source_path).ok();
+        std::fs::remove_file(&export_path).ok();
     }
 }

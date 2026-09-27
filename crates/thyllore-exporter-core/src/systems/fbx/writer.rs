@@ -22,12 +22,22 @@ pub(crate) fn write_full_definitions<W: Write + Seek>(
         .iter()
         .filter(|b| b.node_attribute_uid.is_some())
         .count() as i32;
-    let geometry_count = data.geometries.len() as i32;
+    let blend_shape_channel_count: i32 = data
+        .blend_shapes
+        .iter()
+        .map(|b| b.channels.len() as i32)
+        .sum();
+    let geometry_count = data.geometries.len() as i32 + blend_shape_channel_count;
     let material_count = data.materials.len() as i32;
     let texture_count = data.textures.len() as i32;
     let video_count = data.textures.len() as i32;
-    let deformer_count = data.skins.len() as i32;
-    let sub_deformer_count: i32 = data.skins.iter().map(|s| s.clusters.len() as i32).sum();
+    let deformer_count = data.skins.len() as i32 + data.blend_shapes.len() as i32;
+    let sub_deformer_count: i32 = data
+        .skins
+        .iter()
+        .map(|s| s.clusters.len() as i32)
+        .sum::<i32>()
+        + blend_shape_channel_count;
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
@@ -627,6 +637,104 @@ fn write_cluster<W: Write + Seek>(
     Ok(())
 }
 
+fn write_blend_shape_deformer<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    blend_shape: &FbxBlendShapeExport,
+) -> FbxWriteResult<()> {
+    let mut attrs = writer.new_node("Deformer")?;
+    attrs.append_i64(blend_shape.deformer_uid)?;
+    attrs.append_string_direct("\x00\x01Deformer")?;
+    attrs.append_string_direct("BlendShape")?;
+    drop(attrs);
+
+    {
+        let mut va = writer.new_node("Version")?;
+        va.append_i32(100)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    writer.close_node()?;
+    Ok(())
+}
+
+fn write_blend_shape_channel<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    channel: &FbxBlendShapeChannelExport,
+) -> FbxWriteResult<()> {
+    let mut attrs = writer.new_node("Deformer")?;
+    attrs.append_i64(channel.channel_uid)?;
+    attrs.append_string_direct(&format!("{}\x00\x01SubDeformer", channel.name))?;
+    attrs.append_string_direct("BlendShapeChannel")?;
+    drop(attrs);
+
+    {
+        let mut va = writer.new_node("Version")?;
+        va.append_i32(100)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("DeformPercent")?;
+        va.append_f64(0.0)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("FullWeights")?;
+        va.append_arr_f64_from_iter(None, [100.0_f64])?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    writer.close_node()?;
+    Ok(())
+}
+
+fn write_shape_geometry<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    channel: &FbxBlendShapeChannelExport,
+) -> FbxWriteResult<()> {
+    let mut attrs = writer.new_node("Geometry")?;
+    attrs.append_i64(channel.shape_uid)?;
+    attrs.append_string_direct(&format!("{}S\x00\x01Geometry", channel.name))?;
+    attrs.append_string_direct("Shape")?;
+    drop(attrs);
+
+    {
+        let mut va = writer.new_node("Version")?;
+        va.append_i32(100)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("Indexes")?;
+        va.append_arr_i32_from_iter(None, channel.indexes.iter().copied())?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("Vertices")?;
+        va.append_arr_f64_from_iter(None, channel.vertices.iter().copied())?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    if !channel.normals.is_empty() {
+        let mut va = writer.new_node("Normals")?;
+        va.append_arr_f64_from_iter(None, channel.normals.iter().copied())?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    writer.close_node()?;
+    Ok(())
+}
+
 fn write_full_objects<W: Write + Seek>(
     writer: &mut Writer<W>,
     data: &FullFbxExportData,
@@ -663,6 +771,14 @@ fn write_full_objects<W: Write + Seek>(
         write_skin_deformer(writer, skin)?;
         for cluster in &skin.clusters {
             write_cluster(writer, cluster)?;
+        }
+    }
+
+    for blend_shape in &data.blend_shapes {
+        write_blend_shape_deformer(writer, blend_shape)?;
+        for channel in &blend_shape.channels {
+            write_blend_shape_channel(writer, channel)?;
+            write_shape_geometry(writer, channel)?;
         }
     }
 

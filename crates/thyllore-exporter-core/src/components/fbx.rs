@@ -48,6 +48,21 @@ pub(crate) struct FbxClusterExport {
     pub transform_link: [f64; 16],
 }
 
+pub(crate) struct FbxBlendShapeExport {
+    pub deformer_uid: i64,
+    pub geometry_uid: i64,
+    pub channels: Vec<FbxBlendShapeChannelExport>,
+}
+
+pub(crate) struct FbxBlendShapeChannelExport {
+    pub channel_uid: i64,
+    pub shape_uid: i64,
+    pub name: String,
+    pub indexes: Vec<i32>,
+    pub vertices: Vec<f64>,
+    pub normals: Vec<f64>,
+}
+
 pub(crate) struct FullFbxExportData {
     pub anim_data: FbxExportData,
     pub geometries: Vec<FbxGeometryExport>,
@@ -55,5 +70,6 @@ pub(crate) struct FullFbxExportData {
     pub materials: Vec<FbxMaterialExport>,
     pub textures: Vec<FbxTextureExport>,
     pub skins: Vec<FbxSkinExport>,
+    pub blend_shapes: Vec<FbxBlendShapeExport>,
     pub unit_scale: f32,
 }

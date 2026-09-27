@@ -125,7 +125,7 @@ fn find_spring_bone_setup(world: &World) -> Option<&SpringBoneSetup> {
         .map(|(_, setup)| setup)
 }
 
-fn find_model_path(world: &World) -> Option<String> {
+pub(crate) fn find_model_path(world: &World) -> Option<String> {
     world
         .get_resource::<ModelState>()
         .map(|model_state| model_state.model_path.clone())
@@ -318,7 +318,7 @@ fn build_avatar_sidecar(
     })
 }
 
-fn find_expression_morph<'a>(
+pub(crate) fn find_expression_morph<'a>(
     world: &World,
     assets: &AssetStorage,
     graphics: &'a GraphicsResources,

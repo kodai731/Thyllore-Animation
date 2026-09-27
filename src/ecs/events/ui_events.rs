@@ -544,6 +544,8 @@ pub enum UIEvent {
     AddSpringChainsByPrefix {
         prefix: String,
     },
+    ExportExpressionAnims,
+    ExportMorphTrackAnim,
 }
 
 #[derive(Default)]

@@ -2,6 +2,7 @@ pub mod animation;
 pub mod animation_debug_dump;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_systems;
+mod avatar_export_systems;
 mod avatar_setup_systems;
 mod batch_run_systems;
 mod billboard_systems;
@@ -77,6 +78,7 @@ mod world;
 pub use animation::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_systems::*;
+pub use avatar_export_systems::*;
 pub use avatar_setup_systems::*;
 pub use batch_run_systems::*;
 pub use billboard_systems::*;

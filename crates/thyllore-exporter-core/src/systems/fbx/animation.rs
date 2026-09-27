@@ -137,7 +137,10 @@ fn convert_interpolation_to_flags(interp: InterpolationType) -> i32 {
     }
 }
 
-fn convert_tangent_to_fbx_slope_weight(handle: &BezierHandle, key_interval: f32) -> (f32, f32) {
+pub(crate) fn convert_tangent_to_fbx_slope_weight(
+    handle: &BezierHandle,
+    key_interval: f32,
+) -> (f32, f32) {
     let slope = if handle.time_offset.abs() > 1e-8 {
         handle.value_offset / handle.time_offset
     } else {

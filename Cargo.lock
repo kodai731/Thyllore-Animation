@@ -4033,6 +4033,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "thyllore-unity-verify-fixtures"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "thyllore-avatar-core",
+ "thyllore-exporter-core",
+]
+
+[[package]]
 name = "thyllore-vulkan-core"
 version = "0.0.1"
 dependencies = [

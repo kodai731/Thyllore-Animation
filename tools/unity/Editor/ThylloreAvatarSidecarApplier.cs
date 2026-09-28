@@ -115,23 +115,41 @@ namespace Thyllore.AvatarTools
 
     public static class AvatarSidecarApplier
     {
-        private static ModelImporter FindModelImporter(GameObject root)
+        private static GameObject FindModelAsset(GameObject root)
         {
             var source = PrefabUtility.GetCorrespondingObjectFromSource(root);
             if (source == null)
             {
                 Debug.LogError($"Avatar root \"{root.name}\" is not an instance of a model asset.");
-                return null;
             }
+            return source;
+        }
 
-            var assetPath = AssetDatabase.GetAssetPath(source);
+        private static ModelImporter FindModelImporter(GameObject modelAsset)
+        {
+            var assetPath = AssetDatabase.GetAssetPath(modelAsset);
             var importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
             if (importer == null)
             {
                 Debug.LogError($"Not a model asset: {assetPath}");
             }
-
             return importer;
+        }
+
+        private static SkeletonBone[] BuildSkeleton(GameObject modelAsset)
+        {
+            var skeleton = new List<SkeletonBone>();
+            foreach (var transform in modelAsset.GetComponentsInChildren<Transform>(true))
+            {
+                skeleton.Add(new SkeletonBone
+                {
+                    name = transform.name,
+                    position = transform.localPosition,
+                    rotation = transform.localRotation,
+                    scale = transform.localScale
+                });
+            }
+            return skeleton.ToArray();
         }
 
         private static Transform FindTransformByName(GameObject root, string name)
@@ -152,7 +170,12 @@ namespace Thyllore.AvatarTools
                 return;
             }
 
-            var importer = FindModelImporter(root);
+            var modelAsset = FindModelAsset(root);
+            if (modelAsset == null)
+            {
+                return;
+            }
+            var importer = FindModelImporter(modelAsset);
             if (importer == null)
             {
                 return;
@@ -162,6 +185,7 @@ namespace Thyllore.AvatarTools
             var bones = BuildHumanBones(sidecar);
 
             desc.human = bones;
+            desc.skeleton = BuildSkeleton(modelAsset);
             importer.humanDescription = desc;
             importer.animationType = ModelImporterAnimationType.Human;
             importer.SaveAndReimport();

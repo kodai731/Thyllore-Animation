@@ -62,6 +62,11 @@ Commands:
       Smoke-test the deployed feedback worker (src/ml/worker/smoke.sh). Sources the
       full-mode env file; WORKER_URL is derived from
       THYLLORE_FEEDBACK_TEST_ENDPOINT when not given.
+  unity-verify
+      Headless check of tools/unity/Editor/*.cs: empty Unity project + VRChat
+      SDK via vrc-get, synthetic Blender rig, BatchCheck via -executeMethod
+      (tools/unity/verify/run.sh). UNITY_EDITOR / UNITY_VERIFY_DIR override
+      the editor binary and work dir (default target/unity_verify).
   help
       Show this help.
 EOF
@@ -114,6 +119,9 @@ case "$command" in
             export WORKER_URL="${smoke_endpoint%/v1/feedback}"
         fi
         exec bash "$REPO_ROOT/src/ml/worker/smoke.sh" "$@"
+        ;;
+    unity-verify)
+        exec bash "$REPO_ROOT/tools/unity/verify/run.sh" "$@"
         ;;
     help|-h|--help)
         usage

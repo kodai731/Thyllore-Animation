@@ -1,7 +1,7 @@
 [meta]
 source = "VRChat Avatar Performance Ranking System (creators.vrchat.com/avatars/avatar-performance-ranking-system)"
-verified = false
-note = "values from memory; confirm against the official page before relying on them"
+verified = true
+note = "confirmed against the official page on 2026-09-29"
 
 [pc.triangles]
 excellent = 32000

@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/*", "crates/thyllore-scene-core/derive", "crates/thyllore-effect-core/derive"]
+members = [
+    "crates/*",
+    "crates/thyllore-scene-core/derive",
+    "crates/thyllore-effect-core/derive",
+    "tools/unity/verify/fixtures",
+]
 
 [package]
 name = "thyllore-animation"

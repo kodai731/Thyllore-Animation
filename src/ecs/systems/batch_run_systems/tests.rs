@@ -9,7 +9,7 @@ use crate::ecs::resource::{
     DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
-    spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
+    probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
 
@@ -305,7 +305,7 @@ fn anim_edit_specs_parse_all_forms() {
     assert_eq!(
         edits[1],
         BatchAnimEdit::Key {
-            property_type: PROBE_LEVEL.property_type(),
+            property_type: probe_property(&PROBE_LEVEL),
             time: 1.5,
             value: 2.25
         }
@@ -392,7 +392,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         &[
             BatchAnimEdit::DebugKeys { seed: 7 },
             BatchAnimEdit::Key {
-                property_type: PROBE_LEVEL.property_type(),
+                property_type: probe_property(&PROBE_LEVEL),
                 time: 9.0,
                 value: 3.5,
             },

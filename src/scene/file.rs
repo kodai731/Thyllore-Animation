@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::entities::SceneEntity;
 use crate::hooks::scene::SceneValue;
 
-pub const SCENE_FORMAT_VERSION: u32 = 7;
+pub const SCENE_FORMAT_VERSION: u32 = 8;
 
 pub use thyllore_anim_core::editable::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
 

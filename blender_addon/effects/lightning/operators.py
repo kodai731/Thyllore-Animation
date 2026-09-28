@@ -111,7 +111,7 @@ class THYLLORE_OT_lightning_target_add(bpy.types.Operator):
     def execute(self, context):
         obj = context.active_object
         obj.thyllore_lightning_target = spawn_lightning_child(
-            context, obj, f"{obj.name} Target", tuple(obj.thyllore_lightning.end_offset)
+            context, obj, f"{obj.name} Target", tuple(obj.thyllore_lightning.shape_end_offset)
         )
         return {"FINISHED"}
 
@@ -129,6 +129,6 @@ class THYLLORE_OT_lightning_target_clear(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.active_object
-        obj.thyllore_lightning.end_offset = lightning_local_end_point(obj)
+        obj.thyllore_lightning.shape_end_offset = lightning_local_end_point(obj)
         obj.thyllore_lightning_target = None
         return {"FINISHED"}

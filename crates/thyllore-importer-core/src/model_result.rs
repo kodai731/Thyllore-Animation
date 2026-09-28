@@ -1,9 +1,7 @@
 use cgmath::Matrix4;
 
 use thyllore_anim_core::spring_bone::SpringBoneSetup;
-use thyllore_anim_core::{
-    AnimationClip, AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
-};
+use thyllore_anim_core::{AnimationClip, AnimationSystem, Skeleton, SkeletonId, SkinData};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
 
@@ -65,7 +63,6 @@ pub struct ModelLoadResult {
     pub skeletons: Vec<Skeleton>,
     pub animation_system: AnimationSystem,
     pub clips: Vec<AnimationClip>,
-    pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub node_animation_scale: f32,
     pub constraints: Vec<LoadedConstraint>,
@@ -91,7 +88,7 @@ impl ModelLoadResult {
                     })
                 }),
                 base_color_factor: m.base_color_factor,
-                morph: MeshMorph::default(),
+                morph: m.morph,
             })
             .collect();
 
@@ -116,7 +113,6 @@ impl ModelLoadResult {
             skeletons,
             animation_system: result.animation_system,
             clips: result.clips,
-            morph_animation: result.morph_animation,
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale,
             constraints: Vec::new(),
@@ -159,7 +155,6 @@ impl ModelLoadResult {
             skeletons,
             animation_system: result.animation_system,
             clips: result.clips,
-            morph_animation: MorphAnimationSystem::default(),
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale: 1.0,
             constraints: result.constraints,

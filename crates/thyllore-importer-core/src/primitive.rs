@@ -1,4 +1,4 @@
-use thyllore_anim_core::{AnimationSystem, MorphAnimationSystem};
+use thyllore_anim_core::AnimationSystem;
 use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
@@ -104,7 +104,6 @@ pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -
         skeletons: Vec::new(),
         animation_system: AnimationSystem::default(),
         clips: Vec::new(),
-        morph_animation: MorphAnimationSystem::default(),
         has_skinned_meshes: false,
         node_animation_scale: 1.0,
         constraints: Vec::new(),
@@ -205,7 +204,6 @@ pub fn build_uv_sphere_model(radius: f32, segments: u32, rings: u32) -> ModelLoa
         skeletons: Vec::new(),
         animation_system: AnimationSystem::default(),
         clips: Vec::new(),
-        morph_animation: MorphAnimationSystem::default(),
         has_skinned_meshes: false,
         node_animation_scale: 1.0,
         constraints: Vec::new(),

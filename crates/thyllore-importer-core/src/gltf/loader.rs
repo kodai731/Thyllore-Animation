@@ -5,11 +5,17 @@ use gltf::{Document, Node};
 use std::collections::HashMap;
 use thyllore_anim_core::spring_bone::SpringBoneSetup;
 use thyllore_anim_core::{
-    AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
-    MorphTarget, Skeleton, SkinData, TransformChannel,
+    AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphWeightChannel, Skeleton,
+    SkinData, TransformChannel,
 };
 use thyllore_math_core::*;
 use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::MeshMorph;
+
+use super::morph::{
+    convert_weight_animation_to_channels, morph_source_name, read_mesh_morph, read_target_names,
+    MorphNodeInfo,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct ImageData {
@@ -21,8 +27,7 @@ pub struct ImageData {
 pub struct GltfMeshData {
     pub vertex_data: VertexData,
     pub skin_data: Option<SkinData>,
-    pub morph_targets: Vec<MorphTarget>,
-    pub base_positions: Vec<[f32; 3]>,
+    pub morph: MeshMorph,
     pub skeleton_id: Option<u32>,
     pub image_data: Vec<ImageData>,
     pub node_index: Option<usize>,
@@ -54,7 +59,6 @@ pub struct GltfLoadResult {
     pub nodes: Vec<NodeInfo>,
     pub animation_system: AnimationSystem,
     pub clips: Vec<AnimationClip>,
-    pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
     pub spring_bone_setup: Option<SpringBoneSetup>,
@@ -162,19 +166,13 @@ impl NodeJointMap {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct MorphAnimationRaw {
-    key_frame: f32,
-    weights: Vec<f32>,
-}
-
 struct MeshBuildData {
     vertex_data: VertexData,
     bone_indices: Vec<Vector4<u32>>,
     bone_weights: Vec<Vector4<f32>>,
     base_positions: Vec<[f32; 3]>,
     base_normals: Vec<Vector3<f32>>,
-    morph_targets: Vec<MorphTarget>,
+    morph: MeshMorph,
     image_data: Vec<ImageData>,
     has_joints: bool,
     node_index: usize,
@@ -184,7 +182,9 @@ struct MeshBuildData {
 
 struct GltfParseContext {
     meshes: Vec<MeshBuildData>,
-    morph_animations: Vec<MorphAnimationRaw>,
+    morph_nodes: HashMap<usize, MorphNodeInfo>,
+    morph_channels: Vec<MorphWeightChannel>,
+    morph_clip_name: Option<String>,
     joints: Vec<Joint>,
     joint_animations: Vec<Vec<JointAnimation>>,
     node_animations: Vec<NodeAnimation>,
@@ -201,7 +201,9 @@ impl Default for GltfParseContext {
     fn default() -> Self {
         Self {
             meshes: Vec::new(),
-            morph_animations: Vec::new(),
+            morph_nodes: HashMap::new(),
+            morph_channels: Vec::new(),
+            morph_clip_name: None,
             joints: Vec::new(),
             joint_animations: Vec::new(),
             node_animations: Vec::new(),
@@ -280,13 +282,8 @@ unsafe fn parse_gltf_imported(
     load_white_texture_if_none(ctx);
     initialize_joint_animation(ctx);
 
-    let morph_target_count = ctx
-        .meshes
-        .last()
-        .map(|m| m.morph_targets.len())
-        .unwrap_or(0);
     for animation in gltf.animations() {
-        process_animation(buffers, animation, ctx, morph_target_count)?;
+        process_animation(buffers, animation, ctx)?;
     }
 
     ctx.spring_bone_setup = extract_spring_bone_extension(gltf, &ctx.node_joint_map);
@@ -641,27 +638,6 @@ fn build_vertices(
     }
 }
 
-fn read_morph_targets<'a, 's, F>(reader: &gltf::mesh::Reader<'a, 's, F>) -> Vec<MorphTarget>
-where
-    F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'s [u8]>,
-{
-    let mut morph_targets = Vec::new();
-    for (positions, normals, tangents) in reader.read_morph_targets() {
-        let mut morph_target = MorphTarget::default();
-        if let Some(pos_iter) = positions {
-            morph_target.positions = pos_iter.collect::<Vec<_>>();
-        }
-        if let Some(norm_iter) = normals {
-            morph_target.normals = norm_iter.collect::<Vec<_>>();
-        }
-        if let Some(tan_iter) = tangents {
-            morph_target.tangents = tan_iter.collect::<Vec<_>>();
-        }
-        morph_targets.push(morph_target);
-    }
-    morph_targets
-}
-
 fn load_primitive_texture(
     primitive: &gltf::Primitive,
     images: &[gltf::image::Data],
@@ -780,7 +756,7 @@ unsafe fn process_node(
                 bone_weights: Vec::new(),
                 base_positions: Vec::new(),
                 base_normals: Vec::new(),
-                morph_targets: Vec::new(),
+                morph: MeshMorph::default(),
                 image_data: Vec::new(),
                 has_joints: attrs.has_joints,
                 node_index: node.index(),
@@ -801,7 +777,7 @@ unsafe fn process_node(
 
             mesh_data.vertex_data.indices = indices;
 
-            mesh_data.morph_targets = read_morph_targets(&reader);
+            mesh_data.morph = read_primitive_morph(node, &mesh, &primitive, &reader, ctx);
 
             if let Some(image_data) = load_primitive_texture(&primitive, images) {
                 mesh_data.image_data.push(image_data);
@@ -912,11 +888,37 @@ struct ScaleChannelData {
     out_tangents: Vec<Vector3<f32>>,
 }
 
+fn read_primitive_morph<'a, 's, F>(
+    node: &Node,
+    mesh: &gltf::Mesh,
+    primitive: &gltf::Primitive,
+    reader: &gltf::mesh::Reader<'a, 's, F>,
+    ctx: &mut GltfParseContext,
+) -> MeshMorph
+where
+    F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'s [u8]>,
+{
+    let target_count = primitive.morph_targets().len();
+    if target_count == 0 {
+        return MeshMorph::default();
+    }
+
+    let source_mesh = morph_source_name(node);
+    let target_names = read_target_names(mesh, target_count);
+    ctx.morph_nodes
+        .entry(node.index())
+        .or_insert_with(|| MorphNodeInfo {
+            source_mesh: source_mesh.clone(),
+            target_names: target_names.clone(),
+        });
+
+    read_mesh_morph(reader, &target_names, &source_mesh)
+}
+
 unsafe fn process_animation(
     buffers: &Vec<Data>,
     animation: gltf::Animation,
     ctx: &mut GltfParseContext,
-    morph_target_count: usize,
 ) -> Result<()> {
     use gltf::animation::util::ReadOutputs;
 
@@ -946,7 +948,19 @@ unsafe fn process_animation(
                 ParsedChannelData::Scale(parse_scale_outputs(scales, is_cubic))
             }
             ReadOutputs::MorphTargetWeights(weights) => {
-                collect_morph_weights(weights, morph_target_count, &key_frames, ctx);
+                let weights: Vec<f32> = weights.into_f32().collect();
+                let target_node_index = channel.target().node().index();
+                if let Some(node_info) = ctx.morph_nodes.get(&target_node_index) {
+                    ctx.morph_channels
+                        .extend(convert_weight_animation_to_channels(
+                            &key_frames,
+                            &weights,
+                            interp,
+                            node_info,
+                        ));
+                    ctx.morph_clip_name
+                        .get_or_insert_with(|| animation.name().unwrap_or("Morph").to_string());
+                }
                 ParsedChannelData::MorphWeights
             }
         };
@@ -1086,37 +1100,6 @@ fn parse_scale_outputs(scales: gltf::animation::util::Scales, is_cubic: bool) ->
     data
 }
 
-fn collect_morph_weights(
-    morph_target_weights: gltf::animation::util::MorphTargetWeights,
-    morph_target_count: usize,
-    key_frames: &[f32],
-    ctx: &mut GltfParseContext,
-) {
-    if morph_target_count == 0 {
-        return;
-    }
-
-    let mut current_weight_set = Vec::new();
-    let mut grouped_weights = Vec::new();
-
-    for w in morph_target_weights.into_f32() {
-        current_weight_set.push(w);
-        if current_weight_set.len() >= morph_target_count {
-            grouped_weights.push(current_weight_set.clone());
-            current_weight_set.clear();
-        }
-    }
-
-    for (i, weight_set) in grouped_weights.iter().enumerate() {
-        if i < key_frames.len() {
-            ctx.morph_animations.push(MorphAnimationRaw {
-                key_frame: key_frames[i],
-                weights: weight_set.clone(),
-            });
-        }
-    }
-}
-
 fn apply_joint_animation(
     parsed: &ParsedChannelData,
     key_frames: &[f32],
@@ -1247,30 +1230,17 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         ctx.has_skinned_meshes
     );
 
-    let (meshes, morph_system) = build_meshes_and_morph(
-        ctx.meshes,
-        &ctx.morph_animations,
-        &ctx.joints,
-        skeleton_id,
-        scale,
-    );
+    attach_morph_channels(&mut clips, ctx.morph_channels, ctx.morph_clip_name);
+
+    let meshes = build_meshes(ctx.meshes, &ctx.joints, skeleton_id, scale);
 
     log_gltf_scale_info(&meshes, ctx.has_skinned_meshes);
-
-    if !morph_system.animations.is_empty() {
-        log!(
-            "Morph animation loaded: {} keyframes, {} meshes",
-            morph_system.animations.len(),
-            morph_system.targets.len()
-        );
-    }
 
     GltfLoadResult {
         meshes,
         nodes: ctx.node_infos,
         animation_system,
         clips,
-        morph_animation: morph_system,
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,
         spring_bone_setup: ctx.spring_bone_setup,
@@ -1327,23 +1297,37 @@ fn collect_animation_clips(
     }
 }
 
-fn build_meshes_and_morph(
+fn attach_morph_channels(
+    clips: &mut Vec<AnimationClip>,
+    morph_channels: Vec<MorphWeightChannel>,
+    clip_name: Option<String>,
+) {
+    if morph_channels.is_empty() {
+        return;
+    }
+    log!(
+        "Morph weight animation loaded: {} channels",
+        morph_channels.len()
+    );
+
+    if clips.is_empty() {
+        clips.push(AnimationClip::new(&clip_name.unwrap_or_default()));
+    }
+    let clip = clips
+        .first_mut()
+        .expect("clips verified non-empty by the push above");
+    for morph_channel in morph_channels {
+        clip.add_morph_channel(morph_channel);
+    }
+}
+
+fn build_meshes(
     source_meshes: Vec<MeshBuildData>,
-    morph_animations: &[MorphAnimationRaw],
     joints: &[Joint],
     skeleton_id: Option<u32>,
     scale: f32,
-) -> (Vec<GltfMeshData>, MorphAnimationSystem) {
+) -> Vec<GltfMeshData> {
     let mut meshes = Vec::new();
-    let mut morph_system = MorphAnimationSystem::new();
-    morph_system.scale_factor = scale;
-
-    for anim in morph_animations {
-        morph_system.animations.push(MorphAnimation {
-            key_frame: anim.key_frame,
-            weights: anim.weights.clone(),
-        });
-    }
 
     for mesh in source_meshes {
         let mut vertex_data = mesh.vertex_data;
@@ -1373,22 +1357,12 @@ fn build_meshes_and_morph(
             None
         };
 
-        morph_system.targets.push(mesh.morph_targets.clone());
-
-        let base_verts: Vec<[f32; 3]> = mesh
-            .base_positions
-            .iter()
-            .map(|p| [p[0] * scale, p[1] * scale, p[2] * scale])
-            .collect();
-        morph_system.base_vertices.push(base_verts);
-
         let local_vertices: Vec<Vertex> = mesh.local_vertices.clone();
 
         meshes.push(GltfMeshData {
             vertex_data,
             skin_data,
-            morph_targets: mesh.morph_targets,
-            base_positions: mesh.base_positions,
+            morph: mesh.morph,
             skeleton_id,
             image_data: mesh.image_data,
             node_index: Some(mesh.node_index),
@@ -1397,7 +1371,7 @@ fn build_meshes_and_morph(
         });
     }
 
-    (meshes, morph_system)
+    meshes
 }
 
 fn log_gltf_scale_info(meshes: &[GltfMeshData], has_skinned_meshes: bool) {

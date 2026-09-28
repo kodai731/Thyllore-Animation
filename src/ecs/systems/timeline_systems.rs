@@ -29,6 +29,7 @@ fn resolve_curve_mut(
             .get_mut(&bone_id)
             .map(|t| t.get_curve_mut(property_type)),
         CurveTrackRef::Scalar => clip.get_scalar_curve_mut(property_type),
+        CurveTrackRef::Morph(i) => clip.morph_tracks.get_mut(i).map(|mt| &mut mt.curve),
     }
 }
 
@@ -164,6 +165,11 @@ fn dispatch_keyframe_edit_events(
                             }
                             let curve = clip.get_or_add_scalar_curve(*property_type);
                             curve_add_keyframe(curve, *time, *value);
+                        }
+                        CurveTrackRef::Morph(i) => {
+                            if let Some(mt) = clip.morph_tracks.get_mut(*i) {
+                                curve_add_keyframe(&mut mt.curve, *time, *value);
+                            }
                         }
                     }
                     clip_recalculate_duration(clip);

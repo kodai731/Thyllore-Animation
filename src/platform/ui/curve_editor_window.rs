@@ -256,6 +256,20 @@ fn build_track_list(
             }
         }
     }
+
+    if !clip.morph_tracks.is_empty() {
+        ui.separator();
+        ui.text("Morphs:");
+        ui.separator();
+        for (i, morph_track) in clip.morph_tracks.iter().enumerate() {
+            let is_selected = editor_state.selected_target == Some(CurveEditorTarget::Morph(i));
+            let label = format_morph_track_name(&morph_track.source_mesh, &morph_track.channel);
+            if ui.selectable_config(&label).selected(is_selected).build() {
+                editor_state.select_morph(i);
+                editor_state.view_initialized = false;
+            }
+        }
+    }
 }
 
 /// Every domain channel gets a row, keyed or not: `+` inserts a key at the
@@ -389,6 +403,13 @@ fn build_curve_view(
             collect_visible_curves(track, editor_state)
         }
         Some(CurveEditorTarget::Scalars) => collect_visible_scalar_curves(clip, editor_state),
+        Some(CurveEditorTarget::Morph(i)) => {
+            let Some(morph_track) = clip.morph_tracks.get(i) else {
+                ui.text("Morph track not found");
+                return;
+            };
+            vec![(&morph_track.curve, [1.0, 0.5, 0.2, 1.0], "Weight")]
+        }
         None => {
             ui.text("Select a track from the list");
             return;
@@ -482,6 +503,16 @@ fn collect_visible_scalar_curves<'a>(
         curves.push((curve, color, name));
     }
     curves
+}
+
+fn format_morph_track_name(source_mesh: &str, channel: &str) -> String {
+    let label = format!("{}/{}", source_mesh, channel);
+    if label.chars().count() > 20 {
+        let tail: String = label.chars().skip(label.chars().count() - 17).collect();
+        format!("...{tail}")
+    } else {
+        label
+    }
 }
 
 fn scalar_curve_style(property_type: PropertyType) -> ([f32; 4], &'static str) {
@@ -903,6 +934,7 @@ fn add_key_target_property(
                 _ => u16::MAX,
             }),
         CurveTrackRef::Bone(_) => editor_state.visible_curves.iter().copied().next(),
+        CurveTrackRef::Morph(_) => Some(PropertyType::MorphWeight),
     }
 }
 
@@ -2433,5 +2465,31 @@ fn build_curve_toolbar(
         ui.text_disabled("Apply");
         ui.same_line();
         ui.text_disabled("Del");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_morph_track_name_short() {
+        assert_eq!(format_morph_track_name("mesh", "smile"), "mesh/smile");
+    }
+
+    #[test]
+    fn test_format_morph_track_name_truncated() {
+        let result = format_morph_track_name("very_long_source_mesh", "very_long_channel");
+        assert_eq!(result.len(), 20);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("channel"));
+    }
+
+    #[test]
+    fn test_format_morph_track_name_truncates_multibyte_on_char_boundary() {
+        let result = format_morph_track_name("顔メッシュ", "まばたき左目を閉じる強め表情差分");
+        assert_eq!(result.chars().count(), 20);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("表情差分"));
     }
 }

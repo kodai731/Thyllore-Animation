@@ -37,7 +37,7 @@ pub fn write_rig_fbx(convention: &RigConvention) -> String {
 
     fbx_header(&mut out, convention);
 
-    definitions(&mut out, &nodes);
+    definitions(&mut out);
 
     objects(&mut out, convention, &nodes);
 
@@ -76,11 +76,9 @@ fn fbx_header(out: &mut String, convention: &RigConvention) {
     out.push_str("}\n");
 }
 
-fn definitions(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
+fn definitions(out: &mut String) {
     out.push_str("Definitions:  {\n");
-    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
-    let count = 6 + bone_count;
-    write!(out, "  Count: {}\n", count).unwrap();
+    out.push_str("  Count: 6\n");
     out.push_str("  Version: 100\n");
     out.push_str("  ObjectType: \"GlobalSettings\"\n");
     out.push_str("  ObjectType: \"Model\"\n");
@@ -88,11 +86,6 @@ fn definitions(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
     out.push_str("  ObjectType: \"Geometry\"\n");
     out.push_str("  ObjectType: \"Deformer\"\n");
     out.push_str("  ObjectType: \"Pose\"\n");
-    for _ in 0..bone_count {
-        out.push_str("  Count: 1\n");
-        out.push_str("  Version: 100\n");
-        out.push_str("  ObjectType: \"Deformer\"\n");
-    }
     out.push_str("}\n");
 }
 

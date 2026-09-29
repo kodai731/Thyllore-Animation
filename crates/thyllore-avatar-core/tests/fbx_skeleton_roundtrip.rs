@@ -5,7 +5,7 @@ mod support;
 
 use cgmath::{Matrix3, Matrix4, Quaternion, SquareMatrix};
 
-use support::fbx_ascii::write_skeleton_fbx;
+use support::fbx_ascii::write_rig_fbx;
 use support::rig_convention::rig_convention;
 use support::rig_names::CONVENTIONS;
 use support::rig_nodes::build_rig_nodes;
@@ -44,16 +44,11 @@ fn quaternion_to_matrix(q: Quaternion<f32>) -> Matrix4<f32> {
     m
 }
 
-fn quaternion_distance(a: Quaternion<f32>, b: Quaternion<f32>) -> f32 {
-    let dot = a.s * b.s + a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
-    (2.0_f32 * (dot.abs() - 1.0).abs()).sqrt()
-}
-
 #[test]
 fn test_skeleton_roundtrip_all_conventions() {
     for convention_id in &CONVENTIONS {
         let convention = rig_convention(convention_id);
-        let fbx_text = write_skeleton_fbx(&convention);
+        let fbx_text = write_rig_fbx(&convention);
 
         let mut temp_path = std::env::temp_dir();
         temp_path.push(format!("skeleton_{}.fbx", convention_id));

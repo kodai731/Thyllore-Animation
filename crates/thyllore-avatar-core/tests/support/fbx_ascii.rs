@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use cgmath::{Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
+use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use super::rig_convention::{ContainerNode, RigConvention};
 use super::rig_nodes::build_rig_nodes;
@@ -9,7 +9,27 @@ fn is_armature_container(convention: &RigConvention, node_index: usize) -> bool 
     node_index == 0 && matches!(convention.container, ContainerNode::Armature { .. })
 }
 
-pub fn write_skeleton_fbx(convention: &RigConvention) -> String {
+const BONE_MODEL_BASE: i32 = 1000;
+const ATTRIBUTE_BASE: i32 = 11000;
+const MESH_MODEL_ID: i32 = 20000;
+const GEOMETRY_ID: i32 = 20001;
+const SKIN_ID: i32 = 20002;
+const CLUSTER_BASE: i32 = 21000;
+const BIND_POSE_ID: i32 = 30000;
+
+fn bone_model_id(i: usize) -> i32 {
+    BONE_MODEL_BASE + i as i32
+}
+
+fn attribute_id(i: usize) -> i32 {
+    ATTRIBUTE_BASE + i as i32
+}
+
+fn cluster_id(ci: usize) -> i32 {
+    CLUSTER_BASE + ci as i32
+}
+
+pub fn write_rig_fbx(convention: &RigConvention) -> String {
     let nodes = build_rig_nodes(convention);
     let mut out = String::new();
 
@@ -17,11 +37,11 @@ pub fn write_skeleton_fbx(convention: &RigConvention) -> String {
 
     fbx_header(&mut out, convention);
 
-    definitions(&mut out, convention, &nodes);
+    definitions(&mut out, &nodes);
 
     objects(&mut out, convention, &nodes);
 
-    connections(&mut out, &nodes);
+    connections(&mut out, convention, &nodes);
 
     out
 }
@@ -56,24 +76,29 @@ fn fbx_header(out: &mut String, convention: &RigConvention) {
     out.push_str("}\n");
 }
 
-fn definitions(
-    out: &mut String,
-    _convention: &RigConvention,
-    _nodes: &[super::rig_nodes::RigNode],
-) {
+fn definitions(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
     out.push_str("Definitions:  {\n");
-    out.push_str("  Count: 3\n");
+    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
+    let count = 6 + bone_count;
+    write!(out, "  Count: {}\n", count).unwrap();
     out.push_str("  Version: 100\n");
     out.push_str("  ObjectType: \"GlobalSettings\"\n");
     out.push_str("  ObjectType: \"Model\"\n");
     out.push_str("  ObjectType: \"NodeAttribute\"\n");
+    out.push_str("  ObjectType: \"Geometry\"\n");
+    out.push_str("  ObjectType: \"Deformer\"\n");
+    out.push_str("  ObjectType: \"Pose\"\n");
+    for _ in 0..bone_count {
+        out.push_str("  Count: 1\n");
+        out.push_str("  Version: 100\n");
+        out.push_str("  ObjectType: \"Deformer\"\n");
+    }
     out.push_str("}\n");
 }
 
 fn objects(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) {
     out.push_str("Objects:  {\n");
 
-    let mut id = 1000;
     for (i, node) in nodes.iter().enumerate() {
         let is_container = is_armature_container(convention, i);
         let model_type = if is_container { "Null" } else { "LimbNode" };
@@ -81,7 +106,9 @@ fn objects(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nod
         write!(
             out,
             "  Model: {}, \"Model::{}\", \"{}\" {{\n",
-            id, node.name, model_type
+            bone_model_id(i),
+            node.name,
+            model_type
         )
         .unwrap();
 
@@ -128,43 +155,291 @@ fn objects(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nod
             write!(
                 out,
                 "  NodeAttribute: {}, \"NodeAttribute::\", \"LimbNode\" {{\n",
-                id + 10000
+                attribute_id(i)
             )
             .unwrap();
             out.push_str("    TypeFlags: \"Skeleton\"\n");
             out.push_str("  }\n");
         }
+    }
 
-        id += 1;
+    write_mesh_and_skin(out, convention, nodes);
+
+    out.push_str("}\n");
+}
+
+fn connections(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) {
+    out.push_str("Connections:  {\n");
+
+    for (i, node) in nodes.iter().enumerate() {
+        let is_container = is_armature_container(convention, i);
+        if !is_container {
+            write!(
+                out,
+                "  C: \"OO\",{},{}\n",
+                attribute_id(i),
+                bone_model_id(i)
+            )
+            .unwrap();
+        }
+
+        match node.parent {
+            Some(parent_idx) => {
+                write!(
+                    out,
+                    "  C: \"OO\",{},{}\n",
+                    bone_model_id(i),
+                    bone_model_id(parent_idx)
+                )
+                .unwrap();
+            }
+            None => {
+                write!(out, "  C: \"OO\",{},0\n", bone_model_id(i)).unwrap();
+            }
+        }
+    }
+
+    write!(out, "  C: \"OO\",{},0\n", MESH_MODEL_ID).unwrap();
+    write!(out, "  C: \"OO\",{},{}\n", GEOMETRY_ID, MESH_MODEL_ID).unwrap();
+    write!(out, "  C: \"OO\",{},{}\n", SKIN_ID, GEOMETRY_ID).unwrap();
+
+    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.role.is_some())
+        .collect();
+
+    for (ci, (bone_node_idx, _)) in role_nodes.iter().enumerate() {
+        let cluster_id = cluster_id(ci);
+        let bone_model_id = bone_model_id(*bone_node_idx);
+        write!(out, "  C: \"OO\",{},{}\n", cluster_id, SKIN_ID).unwrap();
+        write!(out, "  C: \"OO\",{},{}\n", bone_model_id, cluster_id).unwrap();
     }
 
     out.push_str("}\n");
 }
 
-fn connections(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
-    out.push_str("Connections:  {\n");
+fn write_mesh_and_skin(
+    out: &mut String,
+    convention: &RigConvention,
+    nodes: &[super::rig_nodes::RigNode],
+) {
+    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
 
-    let mut id = 1000;
-    for (i, node) in nodes.iter().enumerate() {
-        let is_container = i == 0;
-        if !is_container {
-            write!(out, "  C: \"OO\",{},{}\n", id + 10000, id).unwrap();
+    write!(
+        out,
+        "  Model: {}, \"Model::Body\", \"Mesh\" {{\n",
+        MESH_MODEL_ID
+    )
+    .unwrap();
+    out.push_str("    Properties70:  {\n");
+    out.push_str("      P: \"Lcl Translation\", \"Lcl Translation\", \"\", \"A\",0,0,0\n");
+    out.push_str("      P: \"Lcl Rotation\", \"Lcl Rotation\", \"\", \"A\",0,0,0\n");
+    out.push_str("    }\n");
+    out.push_str("  }\n");
+
+    let bones = super::canonical_bones();
+    let positions = super::rig_positions::file_positions(convention);
+    let mut all_vertices: Vec<f64> = Vec::new();
+    let mut polygon_vertex_index: Vec<i32> = Vec::new();
+    let mut vertex_offset = 0;
+
+    for (bi, _bone) in bones.iter().enumerate() {
+        let child_idx = super::rig_nodes::first_child_bone_index(&bones, bi);
+        let dir = super::rig_nodes::bone_direction(&positions, bi, child_idx);
+        let len = match child_idx {
+            Some(ci) => {
+                let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+                let c: Vector3<f64> = [positions[ci][0], positions[ci][1], positions[ci][2]].into();
+                (c - p).magnitude()
+            }
+            None => 0.1 * convention.body_scale / (convention.unit_scale_factor / 100.0),
+        };
+        let half = 0.02 * convention.body_scale / (convention.unit_scale_factor / 100.0);
+
+        let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+        let verts = cube_vertices(p, dir, len, half);
+        for v in &verts {
+            all_vertices.push(v[0]);
+            all_vertices.push(v[1]);
+            all_vertices.push(v[2]);
         }
 
-        match node.parent {
-            Some(parent_idx) => {
-                let parent_id = 1000 + parent_idx;
-                write!(out, "  C: \"OO\",{},{}\n", id, parent_id).unwrap();
-            }
-            None => {
-                write!(out, "  C: \"OO\",{},0\n", id).unwrap();
-            }
-        }
-
-        id += 1;
+        let base = vertex_offset as i32;
+        polygon_vertex_index.extend_from_slice(&[
+            base,
+            base + 1,
+            base + 3,
+            -(base + 2 + 1),
+            base + 4,
+            base + 5,
+            base + 7,
+            -(base + 6 + 1),
+            base,
+            base + 4,
+            base + 5,
+            -(base + 1 + 1),
+            base + 1,
+            base + 2,
+            base + 6,
+            -(base + 5 + 1),
+            base + 2,
+            base + 3,
+            base + 7,
+            -(base + 6 + 1),
+            base + 3,
+            base + 0,
+            base + 4,
+            -(base + 7 + 1),
+        ]);
+        vertex_offset += 8;
     }
 
-    out.push_str("}\n");
+    let vert_count = all_vertices.len() / 3;
+    write!(
+        out,
+        "  Geometry: {}, \"Geometry::Body\", \"Mesh\" {{\n",
+        GEOMETRY_ID
+    )
+    .unwrap();
+    out.push_str("    Vertices: *");
+    write!(out, "{}", 3 * vert_count).unwrap();
+    out.push_str(" { a: ");
+    for (i, v) in all_vertices.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write!(out, "{}", fmt(*v)).unwrap();
+    }
+    out.push_str(" }\n");
+
+    out.push_str("    PolygonVertexIndex: *");
+    write!(out, "{}", polygon_vertex_index.len()).unwrap();
+    out.push_str(" { a: ");
+    for (i, v) in polygon_vertex_index.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write!(out, "{}", v).unwrap();
+    }
+    out.push_str(" }\n");
+
+    out.push_str("  }\n");
+
+    write!(
+        out,
+        "  Deformer: {}, \"Deformer::Skin\", \"Skin\" {{\n",
+        SKIN_ID
+    )
+    .unwrap();
+    out.push_str("    Version: 101\n");
+    out.push_str("  }\n");
+
+    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.role.is_some())
+        .collect();
+
+    for (ci, (_bone_node_idx, bone_node)) in role_nodes.iter().enumerate() {
+        let cluster_id = cluster_id(ci);
+        let bone_name = &bone_node.name;
+        write!(
+            out,
+            "  Deformer: {}, \"SubDeformer::{}\", \"Cluster\" {{\n",
+            cluster_id, bone_name
+        )
+        .unwrap();
+        out.push_str("    Version: 100\n");
+
+        let start = ci * 8;
+        let end = (ci + 1) * 8;
+        let indices: Vec<i32> = (start as i32..end as i32).collect();
+        out.push_str("    Indexes: *8 { a: ");
+        for (i, v) in indices.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", v).unwrap();
+        }
+        out.push_str(" }\n");
+
+        out.push_str("    Weights: *8 { a: ");
+        for i in 0..8 {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str("1");
+        }
+        out.push_str(" }\n");
+
+        let world_mat = world_matrix(bone_node);
+        let flat: Vec<f64> = matrix4_flat(&world_mat);
+        out.push_str("    TransformLink: *16 { a: ");
+        for (i, v) in flat.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+
+        let mesh_to_bone = world_mat.invert().unwrap();
+        let flat_mesh_to_bone: Vec<f64> = matrix4_flat(&mesh_to_bone);
+        out.push_str("    Transform: *16 { a: ");
+        for (i, v) in flat_mesh_to_bone.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+
+        out.push_str("  }\n");
+    }
+
+    let pose_node_count = bone_count + 1;
+    write!(
+        out,
+        "  Pose: {}, \"Pose::BindPose\", \"BindPose\" {{\n",
+        BIND_POSE_ID
+    )
+    .unwrap();
+    out.push_str("    Type: \"BindPose\"\n");
+    out.push_str("    Version: 100\n");
+    write!(out, "    NbPoseNodes: {}\n", pose_node_count).unwrap();
+
+    let mesh_world = Matrix4::identity();
+    let flat_mesh: Vec<f64> = matrix4_flat(&mesh_world);
+    out.push_str("    PoseNode: {\n");
+    write!(out, "      Node: {}\n", MESH_MODEL_ID).unwrap();
+    out.push_str("      Matrix: *16 { a: ");
+    for (i, v) in flat_mesh.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write!(out, "{}", fmt(*v)).unwrap();
+    }
+    out.push_str(" }\n");
+    out.push_str("    }\n");
+
+    for (_bone_node_idx, bone_node) in &role_nodes {
+        let world_mat = world_matrix(bone_node);
+        let flat: Vec<f64> = matrix4_flat(&world_mat);
+        out.push_str("    PoseNode: {\n");
+        write!(out, "      Node: {}\n", bone_model_id(*_bone_node_idx)).unwrap();
+        out.push_str("      Matrix: *16 { a: ");
+        for (i, v) in flat.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+        out.push_str("    }\n");
+    }
+
+    out.push_str("  }\n");
 }
 
 fn world_matrix(node: &super::rig_nodes::RigNode) -> Matrix4<f64> {
@@ -230,4 +505,79 @@ fn matrix_to_euler_degrees(m: Matrix3<f64>) -> [f64; 3] {
 
 fn fmt(v: f64) -> String {
     format!("{:.9}", v)
+}
+
+fn matrix4_flat(m: &Matrix4<f64>) -> Vec<f64> {
+    let mut flat = Vec::with_capacity(16);
+    for c in 0..4 {
+        for r in 0..4 {
+            flat.push(m[c][r]);
+        }
+    }
+    flat
+}
+
+fn cube_vertices(center: Vector3<f64>, dir: Vector3<f64>, length: f64, half: f64) -> [[f64; 3]; 8] {
+    let axis = perpendicular_to(dir);
+    let perp = dir.cross(axis).normalize();
+
+    let tip = center + dir * length;
+    let base = [center, center, center, center];
+    let top = [tip, tip, tip, tip];
+
+    [
+        [
+            base[0][0] - axis.x * half,
+            base[0][1] - axis.y * half,
+            base[0][2] - axis.z * half,
+        ],
+        [
+            base[1][0] + axis.x * half,
+            base[1][1] + axis.y * half,
+            base[1][2] + axis.z * half,
+        ],
+        [
+            base[2][0] - perp.x * half,
+            base[2][1] - perp.y * half,
+            base[2][2] - perp.z * half,
+        ],
+        [
+            base[3][0] + perp.x * half,
+            base[3][1] + perp.y * half,
+            base[3][2] + perp.z * half,
+        ],
+        [
+            top[0][0] - axis.x * half,
+            top[0][1] - axis.y * half,
+            top[0][2] - axis.z * half,
+        ],
+        [
+            top[1][0] + axis.x * half,
+            top[1][1] + axis.y * half,
+            top[1][2] + axis.z * half,
+        ],
+        [
+            top[2][0] - perp.x * half,
+            top[2][1] - perp.y * half,
+            top[2][2] - perp.z * half,
+        ],
+        [
+            top[3][0] + perp.x * half,
+            top[3][1] + perp.y * half,
+            top[3][2] + perp.z * half,
+        ],
+    ]
+}
+
+fn perpendicular_to(v: Vector3<f64>) -> Vector3<f64> {
+    let ax = v.x.abs();
+    let ay = v.y.abs();
+    let az = v.z.abs();
+    if ax < ay && ax < az {
+        Vector3::new(1.0, 0.0, 0.0).cross(v).normalize()
+    } else if ay < az {
+        Vector3::new(0.0, 1.0, 0.0).cross(v).normalize()
+    } else {
+        Vector3::new(0.0, 0.0, 1.0).cross(v).normalize()
+    }
 }

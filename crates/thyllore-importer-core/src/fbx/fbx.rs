@@ -5,46 +5,11 @@ use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
-use thyllore_model_core::MeshMorph;
 
-#[derive(Clone, Debug)]
-pub struct LoadedConstraint {
-    pub constraint_type: ConstraintType,
-    pub priority: u32,
-}
-
-#[derive(Clone, Debug)]
-pub struct BoneNode {
-    pub name: String,
-    pub parent: Option<String>,
-    pub local_transform: Matrix4<f32>,
-    pub default_translation: [f32; 3],
-    pub default_rotation: Quaternion<f32>,
-    pub default_scaling: [f32; 3],
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxAxesInfo {
-    pub up_axis: i32,
-    pub up_axis_sign: i32,
-    pub front_axis: i32,
-    pub front_axis_sign: i32,
-    pub coord_axis: i32,
-    pub coord_axis_sign: i32,
-}
-
-impl Default for FbxAxesInfo {
-    fn default() -> Self {
-        Self {
-            up_axis: 1,
-            up_axis_sign: 1,
-            front_axis: 2,
-            front_axis_sign: 1,
-            coord_axis: 0,
-            coord_axis_sign: 1,
-        }
-    }
-}
+pub use thyllore_file_format_core::fbx::{
+    BoneAnimation, BoneNode, ClusterInfo, FbxAnimation, FbxAxesInfo, FbxData, FbxModel, KeyFrame,
+    LoadedConstraint, MeshPart,
+};
 
 fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
     match axis {
@@ -70,98 +35,6 @@ fn read_axes_from_scene(settings: &ufbx::SceneSettings) -> FbxAxesInfo {
         front_axis_sign,
         coord_axis,
         coord_axis_sign,
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct FbxModel {
-    pub fbx_data: Vec<FbxData>,
-    pub animations: Vec<FbxAnimation>,
-    pub nodes: HashMap<String, BoneNode>,
-    pub unit_scale: f32,
-    pub fps: f32,
-    pub constraints: Vec<LoadedConstraint>,
-    pub axes: FbxAxesInfo,
-    pub source_path: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxAnimation {
-    pub name: String,
-    pub duration: f32,
-    pub bone_animations: HashMap<String, BoneAnimation>,
-}
-
-#[derive(Clone, Debug)]
-pub struct BoneAnimation {
-    pub bone_name: String,
-    pub translation_keys: Vec<KeyFrame<[f32; 3]>>,
-    pub rotation_keys: Vec<KeyFrame<Quaternion<f32>>>,
-    pub scale_keys: Vec<KeyFrame<[f32; 3]>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct KeyFrame<T> {
-    pub time: f32,
-    pub value: T,
-}
-
-#[derive(Clone, Debug)]
-pub struct ClusterInfo {
-    pub bone_name: String,
-    pub transform: Matrix4<f32>,
-    pub transform_link: Matrix4<f32>,
-    pub inverse_bind_pose: Matrix4<f32>,
-    pub vertex_indices: Vec<usize>,
-    pub vertex_weights: Vec<f32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MeshPart {
-    pub mesh_name: String,
-    pub local_positions: Vec<Vector3<f32>>,
-    pub parent_bone: Option<String>,
-    pub local_transform: Matrix4<f32>,
-    pub vertex_offset: usize,
-    pub vertex_count: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxData {
-    pub positions: Vec<Vector3<f32>>,
-    pub local_positions: Vec<Vector3<f32>>,
-    pub normals: Vec<Vector3<f32>>,
-    pub local_normals: Vec<Vector3<f32>>,
-    pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,
-    pub clusters: Vec<ClusterInfo>,
-    pub morph: MeshMorph,
-    pub mesh_parts: Vec<MeshPart>,
-    pub parent_node: Option<String>,
-    pub mesh_node_name: Option<String>,
-    pub material_name: Option<String>,
-    pub diffuse_texture: Option<String>,
-    pub diffuse_color: [f32; 3],
-}
-
-impl FbxData {
-    pub fn new() -> Self {
-        Self {
-            positions: Vec::new(),
-            local_positions: Vec::new(),
-            normals: Vec::new(),
-            local_normals: Vec::new(),
-            indices: Vec::new(),
-            tex_coords: Vec::new(),
-            clusters: Vec::new(),
-            morph: MeshMorph::default(),
-            mesh_parts: Vec::new(),
-            parent_node: None,
-            mesh_node_name: None,
-            material_name: None,
-            diffuse_texture: None,
-            diffuse_color: [0.8, 0.8, 0.8],
-        }
     }
 }
 

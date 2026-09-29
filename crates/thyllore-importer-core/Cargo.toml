@@ -12,6 +12,7 @@ thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-anim-core = { path = "../thyllore-anim-core" }
 thyllore-log-core = { path = "../thyllore-log-core" }
+thyllore-file-format-core = { path = "../thyllore-file-format-core" }
 anyhow = "1"
 cgmath = "0.18"
 serde = { version = "1", features = ["derive"] }

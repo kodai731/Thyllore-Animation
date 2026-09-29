@@ -10,7 +10,7 @@ use thyllore_anim_core::editable::{
     TangentWeightMode,
 };
 use thyllore_anim_core::Skeleton;
-use thyllore_importer_core::fbx::fbx::FbxAxesInfo;
+use thyllore_file_format_core::fbx::FbxAxesInfo;
 
 pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
 

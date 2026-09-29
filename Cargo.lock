@@ -3864,11 +3864,21 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-log-core",
  "thyllore-math-core",
  "thyllore-model-core",
  "ufbx",
+]
+
+[[package]]
+name = "thyllore-file-format-core"
+version = "0.0.1"
+dependencies = [
+ "cgmath",
+ "thyllore-anim-core",
+ "thyllore-model-core",
 ]
 
 [[package]]
@@ -3903,6 +3913,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-log-core",
  "thyllore-math-core",
  "thyllore-model-core",

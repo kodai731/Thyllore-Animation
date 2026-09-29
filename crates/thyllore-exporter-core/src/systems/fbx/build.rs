@@ -2,7 +2,7 @@ use std::path::Path;
 
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::Skeleton;
-use thyllore_importer_core::fbx::fbx::FbxModel;
+use thyllore_file_format_core::fbx::FbxModel;
 
 use super::blend_shape::build_blend_shape_exports;
 use super::connections::{

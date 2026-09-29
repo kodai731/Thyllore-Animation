@@ -1,3 +1,6 @@
+#[path = "rig_names.rs"]
+pub mod rig_names;
+
 #[derive(Clone, Copy, Debug)]
 pub struct CanonicalBone {
     pub role: &'static str,

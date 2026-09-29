@@ -1,8 +1,10 @@
-#[path = "rig_names.rs"]
+#![allow(dead_code)]
+
 pub mod rig_names;
 
-#[path = "rig_convention.rs"]
 pub mod rig_convention;
+
+pub mod rig_positions;
 
 #[derive(Clone, Copy, Debug)]
 pub struct CanonicalBone {

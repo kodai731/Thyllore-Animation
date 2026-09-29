@@ -3810,6 +3810,7 @@ name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "cgmath",
  "ron",
  "serde",
  "serde_json",

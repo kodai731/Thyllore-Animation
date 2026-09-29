@@ -114,18 +114,8 @@ pub fn rig_convention(id: &str) -> RigConvention {
         },
         "blender_apose" => RigConvention {
             id: "blender_apose",
-            character_to_file: &[],
-            up_axis: 1,
-            unit_scale_factor: 100.0,
-            bone_axis: BoneAxisRule::Along([0.0, 1.0, 0.0]),
-            roll_degrees: 0.0,
-            uses_pre_rotation: false,
-            body_scale: 1.0,
             arm_drop_degrees: 45.0,
-            container: ContainerNode::Armature {
-                rotation_x_degrees: -90.0,
-            },
-            leaf_end_bones: true,
+            ..rig_convention("blender")
         },
         "adversarial" => RigConvention {
             id: "adversarial",

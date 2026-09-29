@@ -299,6 +299,8 @@ fn anim_edit_specs_parse_all_forms() {
         "key=probe_level@1.5=2.25",
         "--batch-anim-edit",
         "clear",
+        "--batch-anim-edit",
+        "recipe=tests/x.json",
     ]))
     .unwrap();
     assert_eq!(edits[0], BatchAnimEdit::DebugKeys { seed: 42 });
@@ -311,6 +313,12 @@ fn anim_edit_specs_parse_all_forms() {
         }
     );
     assert_eq!(edits[2], BatchAnimEdit::Clear);
+    assert_eq!(
+        edits[3],
+        BatchAnimEdit::Recipe {
+            path: PathBuf::from("tests/x.json")
+        }
+    );
 }
 
 #[test]
@@ -320,6 +328,7 @@ fn anim_edit_invalid_specs_are_err() {
         "key=height@1.5",
         "key=no_such_param@1.0=2.0",
         "key=height@-1.0=2.0",
+        "recipe=",
         "bogus",
     ] {
         assert!(

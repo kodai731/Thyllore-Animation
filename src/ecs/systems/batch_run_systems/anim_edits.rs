@@ -1,16 +1,27 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 use thyllore_anim_core::editable::PropertyType;
 
+use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
     scalar_cli_names_joined, ClipSchedule,
 };
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::resource::{AvatarSetupState, ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::systems::avatar_setup_systems::{
+    find_first_skeleton, find_model_path, load_or_infer_mapping, skeleton_to_bone_inputs,
+};
+use crate::ecs::systems::clip_library_systems::{
+    clip_library_register_and_activate, find_clip_schedule_owner,
+};
+use crate::ecs::systems::clip_schedule_systems::{
+    clip_schedule_add_instance, clip_schedule_remove_instance,
+};
+use crate::ecs::systems::motion_recipe_systems::recipe_to_clip;
 use crate::ecs::world::World;
 
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
@@ -31,6 +42,9 @@ pub enum BatchAnimEdit {
     TrimEnd {
         seconds: f32,
     },
+    Recipe {
+        path: PathBuf,
+    },
     Clear,
 }
 
@@ -43,7 +57,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -102,7 +116,14 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             value,
         });
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | clear")
+    if let Some(path_str) = spec.strip_prefix("recipe=") {
+        let path = PathBuf::from(path_str.trim());
+        if path.as_os_str().is_empty() {
+            bail!("recipe path must not be empty: '{spec}'");
+        }
+        return Ok(BatchAnimEdit::Recipe { path });
+    }
+    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | clear")
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
@@ -193,9 +214,88 @@ pub fn batch_apply_anim_edits(
                     world,
                 );
             }
+            BatchAnimEdit::Recipe { path } => {
+                apply_recipe_edit(world, assets, path);
+            }
             BatchAnimEdit::Clear => {
                 dispatch_scalar_clip_events(&[UIEvent::ClearScalarKeys], world, assets);
             }
+        }
+    }
+}
+
+fn apply_recipe_edit(world: &mut World, assets: &mut AssetStorage, path: &Path) {
+    let clip = match build_recipe_clip(world, assets, path) {
+        Ok(clip) => clip,
+        Err(error) => {
+            log_warn!("recipe {}: {error:#}", path.display());
+            return;
+        }
+    };
+    let clip_name = clip.name.clone();
+    let duration = clip.duration;
+
+    let replaced_id = world
+        .resource::<ClipLibrary>()
+        .find_source_by_name(&clip_name);
+    if let Some(replaced_id) = replaced_id {
+        world.resource_mut::<ClipLibrary>().remove(replaced_id);
+        world
+            .resource_mut::<ClipLibrary>()
+            .source_to_asset_id
+            .remove(&replaced_id);
+        remove_clip_instances(world, replaced_id);
+    }
+    let source_id =
+        clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), assets, clip);
+
+    let owner = world
+        .resource::<HierarchyState>()
+        .selected_entity
+        .and_then(|selected| find_clip_schedule_owner(world, selected));
+    let Some(schedule) = owner.and_then(|owner| world.get_component_mut::<ClipSchedule>(owner))
+    else {
+        log_warn!(
+            "recipe {}: clip '{clip_name}' registered but no model clip schedule is selected",
+            path.display()
+        );
+        return;
+    };
+    clip_schedule_add_instance(schedule, source_id, duration);
+    log!(
+        "recipe {}: clip '{clip_name}' (src {source_id}) scheduled",
+        path.display()
+    );
+}
+
+fn build_recipe_clip(
+    world: &World,
+    assets: &AssetStorage,
+    path: &Path,
+) -> Result<EditableAnimationClip> {
+    let skeleton = find_first_skeleton(assets).context("no skeleton loaded")?;
+    let model_path = find_model_path(world).context("no model loaded")?;
+    let mapping = match world.get_resource::<AvatarSetupState>() {
+        Some(state) if state.source_model_path == model_path => state.mapping.clone(),
+        _ => load_or_infer_mapping(Path::new(&model_path), &skeleton_to_bone_inputs(skeleton)).0,
+    };
+    let recipe_json = std::fs::read_to_string(path).context("cannot read recipe")?;
+    recipe_to_clip(&recipe_json, skeleton, &mapping)
+}
+
+fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
+    for entity in world.component_entities::<ClipSchedule>() {
+        let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
+            continue;
+        };
+        let instance_ids: Vec<_> = schedule
+            .instances
+            .iter()
+            .filter(|instance| instance.source_id == source_id)
+            .map(|instance| instance.instance_id)
+            .collect();
+        for instance_id in instance_ids {
+            clip_schedule_remove_instance(schedule, instance_id);
         }
     }
 }

@@ -113,7 +113,7 @@ fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
     }
 }
 
-fn find_first_skeleton(assets: &AssetStorage) -> Option<&Skeleton> {
+pub(crate) fn find_first_skeleton(assets: &AssetStorage) -> Option<&Skeleton> {
     assets
         .skeletons
         .values()
@@ -162,7 +162,10 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     state.source_model_path = model_path;
 }
 
-fn load_or_infer_mapping(model_path: &Path, bones: &[BoneInput]) -> (HumanoidMapping, Vec<String>) {
+pub(crate) fn load_or_infer_mapping(
+    model_path: &Path,
+    bones: &[BoneInput],
+) -> (HumanoidMapping, Vec<String>) {
     let mapping_path = humanoid_mapping_path(model_path);
     if mapping_path.exists() {
         match load_mapping(&mapping_path, bones) {

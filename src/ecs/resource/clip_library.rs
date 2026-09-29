@@ -87,4 +87,11 @@ impl ClipLibrary {
     pub fn clip_count(&self) -> usize {
         self.source_clips.len()
     }
+
+    pub fn find_source_by_name(&self, name: &str) -> Option<SourceClipId> {
+        self.source_clips
+            .iter()
+            .find(|(_, s)| s.editable_clip.name == name)
+            .map(|(id, _)| *id)
+    }
 }

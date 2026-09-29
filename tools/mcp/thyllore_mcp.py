@@ -192,6 +192,8 @@ def anim_edit(
       path; creates the curve when the clip is empty)
     - `trim_end=<seconds>`: set the entity's clip instance clip_out through the
       real ClipInstanceTrimEnd event (what releasing a right-edge drag sends)
+    - `recipe=<path.json>`: load a recipe file, convert it to a clip, and replace
+      any existing clip with the same name in the library
     - `clear`: remove all scalar curves
 
     Returns {"ok": true, "anim": {entities, clips, timeline}} —

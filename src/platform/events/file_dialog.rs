@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use crate::app::App;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{AppCommand, ClipLibrary, ModelState, SpringBoneState};
+use crate::ecs::resource::{
+    AppCommand, ClipLibrary, MaterialTextureState, ModelState, SpringBoneState,
+};
 
 pub(super) fn open_file_dialogs(events: &[UIEvent], app: &App) -> Vec<AppCommand> {
     events
@@ -21,6 +23,9 @@ pub(super) fn open_file_dialogs(events: &[UIEvent], app: &App) -> Vec<AppCommand
             }
             UIEvent::ExportModelGltf => open_model_export_dialog(app),
             UIEvent::SpringBoneSaveBake => open_spring_bone_save_dialog(app),
+            UIEvent::PickMaterialTexture { material } => {
+                open_material_texture_dialog(app, material)
+            }
             _ => None,
         })
         .collect()
@@ -107,6 +112,26 @@ fn open_spring_bone_save_dialog(app: &App) -> Option<AppCommand> {
         .save_file()?;
 
     Some(AppCommand::SaveSpringBoneBake { baked_id, path })
+}
+
+fn open_material_texture_dialog(app: &App, material: &str) -> Option<AppCommand> {
+    let model_path = app
+        .data
+        .ecs_world
+        .resource::<MaterialTextureState>()
+        .source_model_path
+        .clone();
+    let model_dir = std::path::Path::new(&model_path).parent()?;
+
+    let path = rfd::FileDialog::new()
+        .add_filter("PNG image", &["png"])
+        .set_directory(model_dir)
+        .pick_file()?;
+
+    Some(AppCommand::AssignMaterialTexture {
+        material: material.to_string(),
+        path,
+    })
 }
 
 fn clip_name(app: &App, source_id: u64) -> Option<String> {

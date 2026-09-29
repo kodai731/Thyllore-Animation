@@ -124,7 +124,7 @@ fn find_spring_bone_setup(world: &World) -> Option<&SpringBoneSetup> {
         .map(|(_, setup)| setup)
 }
 
-pub(crate) fn find_model_path(world: &World) -> Option<String> {
+pub fn find_model_path(world: &World) -> Option<String> {
     world
         .get_resource::<ModelState>()
         .map(|model_state| model_state.model_path.clone())

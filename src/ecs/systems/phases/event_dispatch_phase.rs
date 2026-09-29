@@ -74,7 +74,7 @@ pub fn run_event_dispatch_phase(
     dispatch_spring_bone_bake_ecs_events(&events, world, assets);
     dispatch_spring_bone_edit_events(&events, world, assets);
     dispatch_morph_weight_events(&events, world, assets, graphics);
-    dispatch_avatar_setup_events(&events, world, assets, graphics);
+    let avatar_setup_commands = dispatch_avatar_setup_events(&events, world, assets, graphics);
     #[cfg(feature = "ml")]
     super::event_dispatch::ml::dispatch_curve_suggestion_events(&events, world, assets);
     #[cfg(feature = "auto-rig")]
@@ -85,6 +85,7 @@ pub fn run_event_dispatch_phase(
     let camera_commands = dispatch_camera_light_debug_events(&events, world, model_bounds);
     commands.extend(camera_commands);
     commands.extend(hierarchy_commands);
+    commands.extend(avatar_setup_commands);
 
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::dispatch_text_to_mesh_events(&events, world, &mut commands);
@@ -109,6 +110,7 @@ fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {
                     | UIEvent::ClipBrowserExportGltfAnimationOnly(_)
                     | UIEvent::ExportModelGltf
                     | UIEvent::SpringBoneSaveBake
+                    | UIEvent::PickMaterialTexture { .. }
             )
         })
         .cloned()

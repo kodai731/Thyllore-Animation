@@ -1,9 +1,10 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::AppCommand;
 use crate::ecs::systems::{
     add_spring_chains_by_prefix, export_avatar_sidecar, export_expression_anims,
-    export_morph_track_anim, open_avatar_setup, save_humanoid_mapping, set_avatar_rank_platform,
-    set_humanoid_role,
+    export_morph_track_anim, open_avatar_setup, save_humanoid_mapping, save_material_textures,
+    set_avatar_rank_platform, set_humanoid_role, set_material_texture,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -13,7 +14,9 @@ pub fn dispatch_avatar_setup_events(
     world: &mut World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
-) {
+) -> Vec<AppCommand> {
+    let mut commands = Vec::new();
+
     for event in events {
         match event {
             UIEvent::OpenAvatarSetup => open_avatar_setup(world),
@@ -26,7 +29,13 @@ pub fn dispatch_avatar_setup_events(
             }
             UIEvent::ExportExpressionAnims => export_expression_anims(world, assets, graphics),
             UIEvent::ExportMorphTrackAnim => export_morph_track_anim(world, assets),
+            UIEvent::ClearMaterialTexture { material } => {
+                set_material_texture(world, material, None)
+            }
+            UIEvent::SaveMaterialTextures => commands.extend(save_material_textures(world)),
             _ => {}
         }
     }
+
+    commands
 }

@@ -546,6 +546,13 @@ pub enum UIEvent {
     },
     ExportExpressionAnims,
     ExportMorphTrackAnim,
+    PickMaterialTexture {
+        material: String,
+    },
+    ClearMaterialTexture {
+        material: String,
+    },
+    SaveMaterialTextures,
 }
 
 #[derive(Default)]

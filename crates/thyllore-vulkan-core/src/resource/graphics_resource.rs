@@ -55,6 +55,7 @@ pub struct MeshSource<'a> {
     pub skeleton_id: Option<SkeletonId>,
     pub node_index: Option<usize>,
     pub texture: TexturePixels<'a>,
+    pub material_name: &'a str,
     pub base_color_factor: [f32; 4],
     pub morph: &'a MeshMorph,
 }
@@ -218,7 +219,7 @@ impl GraphicsResources {
         let material_id = self.materials.create_material_with_texture(
             instance,
             rrdevice,
-            &format!("material_{}", mesh_index),
+            source.material_name,
             mesh.image_view,
             mesh.sampler,
             properties,

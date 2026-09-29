@@ -31,6 +31,14 @@ pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
             }
         }
 
+        AppCommand::AssignMaterialTexture { material, path } => {
+            crate::ecs::systems::set_material_texture(
+                &mut app.data.ecs_world,
+                &material,
+                Some(&path),
+            );
+        }
+
         AppCommand::TakeScreenshot => {
             log!("Taking screenshot...");
             let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;

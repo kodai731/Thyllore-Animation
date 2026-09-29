@@ -5,15 +5,17 @@ use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::AvatarSetupState;
+use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
+const NO_TEXTURE_LABEL: &str = "(from model)";
 
 pub fn build_avatar_setup_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut AvatarSetupState,
+    material_textures: &MaterialTextureState,
 ) {
     if !state.is_open {
         return;
@@ -30,6 +32,9 @@ pub fn build_avatar_setup_window(
             };
             if let Some(_tab) = ui.tab_item("Humanoid") {
                 build_humanoid_tab(ui, ui_events, state);
+            }
+            if let Some(_tab) = ui.tab_item("Materials") {
+                build_materials_tab(ui, ui_events, material_textures);
             }
             if let Some(_tab) = ui.tab_item("Validation") {
                 build_validation_tab(ui, state);
@@ -108,6 +113,50 @@ fn build_role_bone_combo(
             ui_events.send(UIEvent::SetHumanoidRole {
                 role,
                 bone: Some(bone_index),
+            });
+        }
+    }
+}
+
+fn build_materials_tab(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    material_textures: &MaterialTextureState,
+) {
+    if ui.button("Save and reload model") {
+        ui_events.send(UIEvent::SaveMaterialTextures);
+    }
+    if material_textures.save_state == MaterialTextureSaveState::Edited {
+        ui.same_line();
+        ui.text_colored(UNRESOLVED_COLOR, "Unsaved changes");
+    }
+
+    let Some(_table) = ui.begin_table("##material_textures", 3) else {
+        return;
+    };
+    ui.table_setup_column("Material");
+    ui.table_setup_column("Base color texture");
+    ui.table_setup_column("##material_texture_actions");
+    ui.table_headers_row();
+
+    for slot in &material_textures.slots {
+        ui.table_next_row();
+        ui.table_next_column();
+        ui.text(&slot.material);
+
+        ui.table_next_column();
+        ui.text(slot.texture.as_deref().unwrap_or(NO_TEXTURE_LABEL));
+
+        ui.table_next_column();
+        if ui.button(format!("Browse##{}", slot.material)) {
+            ui_events.send(UIEvent::PickMaterialTexture {
+                material: slot.material.clone(),
+            });
+        }
+        ui.same_line();
+        if ui.button(format!("Clear##{}", slot.material)) {
+            ui_events.send(UIEvent::ClearMaterialTexture {
+                material: slot.material.clone(),
             });
         }
     }

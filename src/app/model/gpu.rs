@@ -3,8 +3,9 @@ use std::rc::Rc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use super::texture::resolve_texture_pixels;
+use super::texture::{resolve_texture_pixels, DecodedTextureFiles};
 use crate::asset::AssetStorage;
+use crate::ecs::systems::load_model_texture_remap;
 use crate::ecs::world::World;
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::command::RRCommandPool;
@@ -31,8 +32,12 @@ pub(super) unsafe fn upload_model_meshes(
         load_result.meshes.len(),
     )?;
 
+    let texture_remap = load_model_texture_remap(model_path);
+    let mut decoded_files = DecodedTextureFiles::new();
+
     for loaded_mesh in &load_result.meshes {
-        let texture = resolve_texture_pixels(loaded_mesh, model_path);
+        let texture =
+            resolve_texture_pixels(loaded_mesh, model_path, &texture_remap, &mut decoded_files);
         let source = MeshSource {
             vertex_data: &loaded_mesh.vertex_data,
             base_vertices: &loaded_mesh.local_vertices,
@@ -44,6 +49,7 @@ pub(super) unsafe fn upload_model_meshes(
                 width: texture.width,
                 height: texture.height,
             },
+            material_name: &loaded_mesh.material_name,
             base_color_factor: loaded_mesh.base_color_factor,
             morph: &loaded_mesh.morph,
         };

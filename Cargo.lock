@@ -3901,6 +3901,7 @@ dependencies = [
  "png 0.17.16",
  "serde",
  "serde_json",
+ "tempfile",
  "thyllore-anim-core",
  "thyllore-log-core",
  "thyllore-math-core",

@@ -11,9 +11,12 @@ pub struct MaterialTextureSlot {
     pub texture: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum MaterialTextureSaveState {
     #[default]
     Saved,
     Edited,
+    SaveFailed {
+        reason: String,
+    },
 }

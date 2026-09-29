@@ -80,7 +80,7 @@ pub fn set_material_texture(world: &mut World, material: &str, texture_file: Opt
             match make_model_relative_path(texture_file, model_path) {
                 Ok(relative_path) => Some(relative_path),
                 Err(error) => {
-                    log_warn!(
+                    msg_error!(
                         "Cannot assign texture {} to material {}: {}",
                         texture_file.display(),
                         material,
@@ -98,7 +98,7 @@ pub fn set_material_texture(world: &mut World, material: &str, texture_file: Opt
         .iter_mut()
         .find(|slot| slot.material == material)
     else {
-        log_warn!("Cannot assign texture: no material named {}", material);
+        msg_error!("Cannot assign texture: no material named {}", material);
         return;
     };
     if slot.texture == texture {
@@ -111,21 +111,19 @@ pub fn set_material_texture(world: &mut World, material: &str, texture_file: Opt
 pub fn save_material_textures(world: &mut World) -> Option<AppCommand> {
     let mut state = world.resource_mut::<MaterialTextureState>();
     if state.source_model_path.is_empty() {
-        log_warn!("Cannot save material textures: no model loaded");
+        msg_warn!("Cannot save material textures: no model loaded");
         return None;
     }
 
     let remap = build_texture_remap(&state.slots);
     let remap_path = material_texture_remap_path(Path::new(&state.source_model_path));
     if let Err(error) = save_material_texture_remap(&remap_path, &remap) {
-        log_warn!(
-            "Failed to save material textures {}: {}",
-            remap_path.display(),
-            error
-        );
+        let reason = format!("Cannot write {}: {}", remap_path.display(), error);
+        msg_error!("{}", reason);
+        state.save_state = MaterialTextureSaveState::SaveFailed { reason };
         return None;
     }
-    log!("Saved material textures to {}", remap_path.display());
+    msg_info!("Saved material textures to {}", remap_path.display());
 
     state.save_state = MaterialTextureSaveState::Saved;
     Some(AppCommand::LoadModel {
@@ -208,6 +206,23 @@ mod tests {
         let state = world.resource::<MaterialTextureState>();
         assert_eq!(state.slots, vec![make_slot("skin", None)]);
         assert_eq!(state.save_state, MaterialTextureSaveState::Saved);
+    }
+
+    #[test]
+    fn test_save_failure_is_kept_in_state_without_reload() {
+        let mut world = make_world(vec![make_slot("skin", Some("skin.png"))]);
+        world
+            .resource_mut::<MaterialTextureState>()
+            .source_model_path = "/missing_material_texture_dir/avatar.fbx".to_string();
+
+        let command = save_material_textures(&mut world);
+
+        assert!(command.is_none());
+        let state = world.resource::<MaterialTextureState>();
+        assert!(matches!(
+            state.save_state,
+            MaterialTextureSaveState::SaveFailed { .. }
+        ));
     }
 
     #[test]

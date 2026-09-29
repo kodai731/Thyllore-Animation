@@ -215,15 +215,15 @@ pub fn set_avatar_rank_platform(world: &mut World, platform: Platform) {
 
 pub fn save_humanoid_mapping(world: &World) {
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot save humanoid mapping: no model loaded");
+        msg_error!("Cannot save humanoid mapping: no model loaded");
         return;
     };
     let state = world.resource::<AvatarSetupState>();
 
     let mapping_path = humanoid_mapping_path(Path::new(&model_path));
     match save_mapping(&mapping_path, &state.mapping, &state.bones) {
-        Ok(()) => log!("Saved humanoid mapping to {}", mapping_path.display()),
-        Err(error) => log_warn!(
+        Ok(()) => msg_info!("Saved humanoid mapping to {}", mapping_path.display()),
+        Err(error) => msg_error!(
             "Failed to save humanoid mapping {}: {}",
             mapping_path.display(),
             error
@@ -233,18 +233,18 @@ pub fn save_humanoid_mapping(world: &World) {
 
 pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, prefix: &str) {
     let Some(skeleton) = find_first_skeleton(assets) else {
-        log_warn!("Cannot add spring chains: no skeleton loaded");
+        msg_error!("Cannot add spring chains: no skeleton loaded");
         return;
     };
     let Some(spring_entity) = find_spring_bone_setup_entity(world) else {
-        log_warn!("Cannot add spring chains: no SpringBoneSetup entity found");
+        msg_error!("Cannot add spring chains: no SpringBoneSetup entity found");
         return;
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
     let roots = find_prefix_chain_roots(&bones, prefix);
     if roots.is_empty() {
-        log_warn!("No spring chain roots found for prefix \"{}\"", prefix);
+        msg_error!("No spring chain roots found for prefix \"{}\"", prefix);
         return;
     }
 
@@ -268,15 +268,15 @@ fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
 
 pub fn export_avatar_sidecar(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot export avatar sidecar: no model loaded");
+        msg_error!("Cannot export avatar sidecar: no model loaded");
         return;
     };
 
     let sidecar = build_avatar_sidecar(world, assets, graphics);
     let path = sidecar_path(Path::new(&model_path));
     match write_sidecar_json(&path, &sidecar) {
-        Ok(()) => log!("Exported avatar sidecar to {}", path.display()),
-        Err(error) => log_warn!(
+        Ok(()) => msg_info!("Exported avatar sidecar to {}", path.display()),
+        Err(error) => msg_error!(
             "Failed to export avatar sidecar {}: {}",
             path.display(),
             error

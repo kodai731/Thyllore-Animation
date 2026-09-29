@@ -8,6 +8,7 @@ use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
+const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
 const NO_TEXTURE_LABEL: &str = "(from model)";
 
@@ -126,9 +127,16 @@ fn build_materials_tab(
     if ui.button("Save and reload model") {
         ui_events.send(UIEvent::SaveMaterialTextures);
     }
-    if material_textures.save_state == MaterialTextureSaveState::Edited {
-        ui.same_line();
-        ui.text_colored(UNRESOLVED_COLOR, "Unsaved changes");
+    match &material_textures.save_state {
+        MaterialTextureSaveState::Saved => {}
+        MaterialTextureSaveState::Edited => {
+            ui.same_line();
+            ui.text_colored(UNRESOLVED_COLOR, "Unsaved changes");
+        }
+        MaterialTextureSaveState::SaveFailed { reason } => {
+            let _wrap = ui.push_text_wrap_pos();
+            ui.text_colored(FAILURE_COLOR, reason);
+        }
     }
 
     let Some(_table) = ui.begin_table("##material_textures", 3) else {

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "name": "wave",
+  "prompt": "friendly wave greeting",
+ "duration_seconds": 2.8,
+  "fps": 30,
+  "loop": true,
+  "poses": [
+    {
+      "time": 0.0,
+      "rotations": {
+        "RightUpperArm": [0.0, 0.0, 0.0],
+        "RightLowerArm": [0.0, 0.0, 0.0]
+      }
+    },
+    {
+      "time": 0.4,
+      "ease": "ease_out",
+      "rotations": {
+        "RightUpperArm": [-90.0, 0.0, -30.0],
+        "RightLowerArm": [0.0, 0.0, 0.0]
+      }
+    },
+    {
+      "time": 0.8,
+      "rotations": {
+        "RightUpperArm": [-90.0, 0.0, -30.0],
+        "RightLowerArm": [0.0, 0.0, 0.0]
+      },
+      "morph": {
+        "preset:smile": 1.0
+      }
+    },
+    {
+     "time": 2.8,
+      "rotations": {
+        "RightUpperArm": [0.0, 0.0, 0.0],
+        "RightLowerArm": [0.0, 0.0, 0.0]
+      }
+    }
+  ],
+  "cycle": {
+    "start": 0.4,
+    "end": 1.2,
+    "count": 2
+  },
+  "hand_presets": {
+    "RightHand": "open"
+  },
+  "copilot": {
+    "extend": [
+      {"curve": "right_upper_arm_x", "horizon_frames": 8}
+    ]
+  }
+}

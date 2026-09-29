@@ -224,8 +224,6 @@ fn write_mesh_and_skin(
     convention: &RigConvention,
     nodes: &[super::rig_nodes::RigNode],
 ) {
-    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
-
     write!(
         out,
         "  Model: {}, \"Model::Body\", \"Mesh\" {{\n",
@@ -398,48 +396,7 @@ fn write_mesh_and_skin(
         out.push_str("  }\n");
     }
 
-    let pose_node_count = bone_count + 1;
-    write!(
-        out,
-        "  Pose: {}, \"Pose::BindPose\", \"BindPose\" {{\n",
-        BIND_POSE_ID
-    )
-    .unwrap();
-    out.push_str("    Type: \"BindPose\"\n");
-    out.push_str("    Version: 100\n");
-    write!(out, "    NbPoseNodes: {}\n", pose_node_count).unwrap();
-
-    let mesh_world = Matrix4::identity();
-    let flat_mesh: Vec<f64> = matrix4_flat(&mesh_world);
-    out.push_str("    PoseNode: {\n");
-    write!(out, "      Node: {}\n", MESH_MODEL_ID).unwrap();
-    out.push_str("      Matrix: *16 { a: ");
-    for (i, v) in flat_mesh.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        write!(out, "{}", fmt(*v)).unwrap();
-    }
-    out.push_str(" }\n");
-    out.push_str("    }\n");
-
-    for (_bone_node_idx, bone_node) in &role_nodes {
-        let world_mat = world_matrix(bone_node);
-        let flat: Vec<f64> = matrix4_flat(&world_mat);
-        out.push_str("    PoseNode: {\n");
-        write!(out, "      Node: {}\n", bone_model_id(*_bone_node_idx)).unwrap();
-        out.push_str("      Matrix: *16 { a: ");
-        for (i, v) in flat.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            write!(out, "{}", fmt(*v)).unwrap();
-        }
-        out.push_str(" }\n");
-        out.push_str("    }\n");
-    }
-
-    out.push_str("  }\n");
+    write_bind_pose(out, nodes);
 }
 
 fn world_matrix(node: &super::rig_nodes::RigNode) -> Matrix4<f64> {
@@ -580,4 +537,56 @@ fn perpendicular_to(v: Vector3<f64>) -> Vector3<f64> {
     } else {
         Vector3::new(0.0, 0.0, 1.0).cross(v).normalize()
     }
+}
+
+fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
+    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
+    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.role.is_some())
+        .collect();
+
+    let pose_node_count = bone_count + 1;
+    write!(
+        out,
+        "  Pose: {}, \"Pose::BindPose\", \"BindPose\" {{\n",
+        BIND_POSE_ID
+    )
+    .unwrap();
+    out.push_str("    Type: \"BindPose\"\n");
+    out.push_str("    Version: 100\n");
+    write!(out, "    NbPoseNodes: {}\n", pose_node_count).unwrap();
+
+    let mesh_world = Matrix4::identity();
+    let flat_mesh: Vec<f64> = matrix4_flat(&mesh_world);
+    out.push_str("    PoseNode: {\n");
+    write!(out, "      Node: {}\n", MESH_MODEL_ID).unwrap();
+    out.push_str("      Matrix: *16 { a: ");
+    for (i, v) in flat_mesh.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write!(out, "{}", fmt(*v)).unwrap();
+    }
+    out.push_str(" }\n");
+    out.push_str("    }\n");
+
+    for (_bone_node_idx, bone_node) in &role_nodes {
+        let world_mat = world_matrix(bone_node);
+        let flat: Vec<f64> = matrix4_flat(&world_mat);
+        out.push_str("    PoseNode: {\n");
+        write!(out, "      Node: {}\n", bone_model_id(*_bone_node_idx)).unwrap();
+        out.push_str("      Matrix: *16 { a: ");
+        for (i, v) in flat.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+        out.push_str("    }\n");
+    }
+
+    out.push_str("  }\n");
 }

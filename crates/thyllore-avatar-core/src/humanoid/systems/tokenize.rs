@@ -2,9 +2,13 @@ use crate::expression::components::side::{MarkerPosition, Side, SIDE_MARKERS};
 use crate::humanoid::components::tokens::BoneNameTokens;
 
 pub fn tokenize_bone_name(name: &str) -> BoneNameTokens {
-    let (stripped, side) = strip_side_markers(name);
+    let (stripped, side) = strip_side_markers(strip_namespace(name));
     let tokens = split_into_tokens(&stripped);
     BoneNameTokens { tokens, side }
+}
+
+fn strip_namespace(name: &str) -> &str {
+    name.rsplit(':').next().unwrap_or(name)
 }
 
 fn strip_side_markers(name: &str) -> (String, Option<Side>) {
@@ -207,6 +211,13 @@ mod tests {
     fn test_trailing_l_r_tokens() {
         let tokens = tokenize_bone_name("UpperArm l");
         assert_eq!(tokens.tokens, vec!["upper", "arm"]);
+        assert_eq!(tokens.side, Some(Side::Left));
+    }
+
+    #[test]
+    fn test_namespace_prefix() {
+        let tokens = tokenize_bone_name("mixamorig:LeftForeArm");
+        assert_eq!(tokens.tokens, vec!["fore", "arm"]);
         assert_eq!(tokens.side, Some(Side::Left));
     }
 }

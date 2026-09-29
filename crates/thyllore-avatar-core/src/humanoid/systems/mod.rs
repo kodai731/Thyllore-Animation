@@ -1,3 +1,4 @@
+pub mod character_frame;
 pub mod hierarchy;
 pub mod infer;
 pub mod mapping_io;

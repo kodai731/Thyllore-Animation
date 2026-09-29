@@ -1,4 +1,5 @@
 pub mod chain;
+pub mod character_frame;
 pub mod mapping;
 pub mod mapping_issues;
 pub mod naming;

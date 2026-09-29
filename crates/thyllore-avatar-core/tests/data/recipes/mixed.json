@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "name": "mixed_axes",
+  "prompt": "全身の複合回転",
+  "duration_seconds": 2.0,
+  "fps": 10,
+  "loop": false,
+  "poses": [
+    {
+      "time": 0.0,
+      "rotations": {
+        "Spine": [0, 0, 0],
+        "LeftUpperArm": [0, 0, 0],
+        "RightUpperArm": [0, 0, 0]
+      }
+    },
+    {
+      "time": 0.8,
+      "ease": "linear",
+      "rotations": {
+        "Spine": [10, 25, -5],
+        "Chest": [-15, 10, 0],
+        "Neck": [5, -20, 0],
+        "Head": [20, 15, -10],
+        "RightShoulder": [0, 0, 15],
+        "LeftShoulder": [0, 0, -15],
+        "RightUpperArm": [20, -35, 40],
+        "LeftUpperArm": [-30, 45, -60],
+        "RightLowerArm": [0, -70, 10],
+        "LeftLowerArm": [0, 80, 0],
+        "RightHand": [10, 0, -25],
+        "LeftHand": [-10, 20, 30],
+        "RightUpperLeg": [-45, 10, 5],
+        "LeftUpperLeg": [30, -10, -5],
+        "RightLowerLeg": [60, 0, 0],
+        "LeftLowerLeg": [20, 0, 0],
+        "RightFoot": [-20, 5, 0],
+        "LeftFoot": [15, -5, 0]
+      },
+      "hips_translation": [0.05, -0.2, 0.1]
+    },
+    {
+      "time": 2.0,
+      "ease": "ease_in_out",
+      "rotations": {
+        "Spine": [-5, -30, 10],
+        "RightUpperArm": [-60, 20, -15],
+        "LeftUpperArm": [70, -25, 15],
+        "RightUpperLeg": [20, 0, 0]
+      },
+      "hips_translation": [0, 0, 0]
+    }
+  ]
+}

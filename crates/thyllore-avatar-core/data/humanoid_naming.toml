@@ -8,7 +8,7 @@ patterns = [["spine"]]
 
 [[role]]
 part = "Chest"
-patterns = [["chest"]]
+patterns = [["chest"], ["spine1"], ["spine", "02"]]
 
 [[role]]
 part = "UpperChest"

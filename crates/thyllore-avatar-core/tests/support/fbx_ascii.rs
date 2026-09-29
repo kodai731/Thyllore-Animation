@@ -324,77 +324,7 @@ fn write_mesh_and_skin(
 
     out.push_str("  }\n");
 
-    write!(
-        out,
-        "  Deformer: {}, \"Deformer::Skin\", \"Skin\" {{\n",
-        SKIN_ID
-    )
-    .unwrap();
-    out.push_str("    Version: 101\n");
-    out.push_str("  }\n");
-
-    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.role.is_some())
-        .collect();
-
-    for (ci, (_bone_node_idx, bone_node)) in role_nodes.iter().enumerate() {
-        let cluster_id = cluster_id(ci);
-        let bone_name = &bone_node.name;
-        write!(
-            out,
-            "  Deformer: {}, \"SubDeformer::{}\", \"Cluster\" {{\n",
-            cluster_id, bone_name
-        )
-        .unwrap();
-        out.push_str("    Version: 100\n");
-
-        let start = ci * 8;
-        let end = (ci + 1) * 8;
-        let indices: Vec<i32> = (start as i32..end as i32).collect();
-        out.push_str("    Indexes: *8 { a: ");
-        for (i, v) in indices.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            write!(out, "{}", v).unwrap();
-        }
-        out.push_str(" }\n");
-
-        out.push_str("    Weights: *8 { a: ");
-        for i in 0..8 {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push_str("1");
-        }
-        out.push_str(" }\n");
-
-        let world_mat = world_matrix(bone_node);
-        let flat: Vec<f64> = matrix4_flat(&world_mat);
-        out.push_str("    TransformLink: *16 { a: ");
-        for (i, v) in flat.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            write!(out, "{}", fmt(*v)).unwrap();
-        }
-        out.push_str(" }\n");
-
-        let mesh_to_bone = world_mat.invert().unwrap();
-        let flat_mesh_to_bone: Vec<f64> = matrix4_flat(&mesh_to_bone);
-        out.push_str("    Transform: *16 { a: ");
-        for (i, v) in flat_mesh_to_bone.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            write!(out, "{}", fmt(*v)).unwrap();
-        }
-        out.push_str(" }\n");
-
-        out.push_str("  }\n");
-    }
+    write_skin_and_clusters(out, nodes);
 
     write_bind_pose(out, nodes);
 }
@@ -589,4 +519,78 @@ fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
     }
 
     out.push_str("  }\n");
+}
+
+fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
+    write!(
+        out,
+        "  Deformer: {}, \"Deformer::Skin\", \"Skin\" {{\n",
+        SKIN_ID
+    )
+    .unwrap();
+    out.push_str("    Version: 101\n");
+    out.push_str("  }\n");
+
+    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.role.is_some())
+        .collect();
+
+    for (ci, (_bone_node_idx, bone_node)) in role_nodes.iter().enumerate() {
+        let cluster_id = cluster_id(ci);
+        let bone_name = &bone_node.name;
+        write!(
+            out,
+            "  Deformer: {}, \"SubDeformer::{}\", \"Cluster\" {{\n",
+            cluster_id, bone_name
+        )
+        .unwrap();
+        out.push_str("    Version: 100\n");
+
+        let start = ci * 8;
+        let end = (ci + 1) * 8;
+        let indices: Vec<i32> = (start as i32..end as i32).collect();
+        out.push_str("    Indexes: *8 { a: ");
+        for (i, v) in indices.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", v).unwrap();
+        }
+        out.push_str(" }\n");
+
+        out.push_str("    Weights: *8 { a: ");
+        for i in 0..8 {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str("1");
+        }
+        out.push_str(" }\n");
+
+        let world_mat = world_matrix(bone_node);
+        let flat: Vec<f64> = matrix4_flat(&world_mat);
+        out.push_str("    TransformLink: *16 { a: ");
+        for (i, v) in flat.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+
+        let mesh_to_bone = world_mat.invert().unwrap();
+        let flat_mesh_to_bone: Vec<f64> = matrix4_flat(&mesh_to_bone);
+        out.push_str("    Transform: *16 { a: ");
+        for (i, v) in flat_mesh_to_bone.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write!(out, "{}", fmt(*v)).unwrap();
+        }
+        out.push_str(" }\n");
+
+        out.push_str("  }\n");
+    }
 }

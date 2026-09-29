@@ -4,6 +4,8 @@ pub mod rig_names;
 
 pub mod rig_convention;
 
+pub mod rig_nodes;
+
 pub mod rig_positions;
 
 #[derive(Clone, Copy, Debug)]

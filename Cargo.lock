@@ -3815,6 +3815,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thyllore-importer-core",
  "toml",
 ]
 

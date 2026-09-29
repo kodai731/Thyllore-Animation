@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod fbx_ascii;
+
 pub mod rig_names;
 
 pub mod rig_convention;

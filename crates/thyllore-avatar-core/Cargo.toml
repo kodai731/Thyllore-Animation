@@ -17,3 +17,4 @@ toml = "0.8"
 [dev-dependencies]
 cgmath = "0.18"
 tempfile = "3"
+thyllore-importer-core = { path = "../thyllore-importer-core" }

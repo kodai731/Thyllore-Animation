@@ -76,25 +76,24 @@ fn cross(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
 }
 
 #[cfg(test)]
-fn rotate_and_scale(v: [f32; 3], rx: f32, rz: f32, s: f32) -> [f32; 3] {
-    let cos_x = rx.cos();
-    let sin_x = rx.sin();
-    let out = [
-        v[0],
-        cos_x * v[1] - sin_x * v[2],
-        sin_x * v[1] + cos_x * v[2],
-    ];
-    let cos_z = rz.cos();
-    let sin_z = rz.sin();
-    [
-        s * (cos_z * out[0] - sin_z * out[1]),
-        s * (sin_z * out[0] + cos_z * out[1]),
-        s * out[2],
-    ]
-}
-
-#[cfg(test)]
 mod tests {
+    fn rotate_and_scale(v: [f32; 3], rx: f32, rz: f32, s: f32) -> [f32; 3] {
+        let cos_x = rx.cos();
+        let sin_x = rx.sin();
+        let out = [
+            v[0],
+            cos_x * v[1] - sin_x * v[2],
+            sin_x * v[1] + cos_x * v[2],
+        ];
+        let cos_z = rz.cos();
+        let sin_z = rz.sin();
+        [
+            s * (cos_z * out[0] - sin_z * out[1]),
+            s * (sin_z * out[0] + cos_z * out[1]),
+            s * out[2],
+        ]
+    }
+
     use std::collections::BTreeMap;
 
     use super::*;

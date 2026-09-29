@@ -51,7 +51,10 @@ fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
         .collect()
 }
 
-fn compute_bone_global_transform(skeleton: &Skeleton, bone_index: usize) -> Matrix4<f32> {
+pub(crate) fn compute_bone_global_transform(
+    skeleton: &Skeleton,
+    bone_index: usize,
+) -> Matrix4<f32> {
     let bone = &skeleton.bones[bone_index];
     let mut global_transform = bone.local_transform;
     let mut parent_id = bone.parent_id;

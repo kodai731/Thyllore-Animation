@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context};
 use thyllore_avatar_core::expression::components::preset::{ExpressionLibrary, ExpressionPreset};
-use thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::infer::infer_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
@@ -38,7 +37,7 @@ fn main() -> anyhow::Result<()> {
     let rig: Rig = serde_json::from_str(&std::fs::read_to_string(rig_path)?)
         .with_context(|| format!("parse {}", rig_path.display()))?;
     let bones = to_bone_inputs(&rig);
-    let (mapping, unresolved) = infer_mapping(&bones, &HumanoidNamingRules::default());
+    let (mapping, unresolved) = infer_mapping(&bones);
     println!(
         "humanoid: {} roles mapped, {} unresolved",
         mapping.by_role.len(),

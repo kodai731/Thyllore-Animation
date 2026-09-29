@@ -3,7 +3,6 @@ use std::path::Path;
 
 use cgmath::Matrix4;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::infer::{collect_unresolved_roles, infer_mapping};
@@ -172,7 +171,7 @@ fn load_or_infer_mapping(model_path: &Path, bones: &[BoneInput]) -> (HumanoidMap
         }
     }
 
-    let (mapping, _) = infer_mapping(bones, &HumanoidNamingRules::default());
+    let (mapping, _) = infer_mapping(bones);
     (mapping, Vec::new())
 }
 

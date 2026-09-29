@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
-use crate::humanoid::components::chain::HUMANOID_CHAINS;
 use crate::humanoid::components::mapping::{HumanoidMapping, UnresolvedRole};
-use crate::humanoid::components::naming::HumanoidNamingRules;
-use crate::humanoid::components::role::{HumanoidRole, REQUIRED};
+use crate::humanoid::components::role::{HumanoidRole, HUMANOID_CHAINS, REQUIRED};
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::humanoid::components::tokens::BoneNameTokens;
 
@@ -18,11 +16,8 @@ struct MatchCandidate {
     role: HumanoidRole,
 }
 
-pub fn infer_mapping(
-    bones: &[BoneInput],
-    rules: &HumanoidNamingRules,
-) -> (HumanoidMapping, Vec<UnresolvedRole>) {
-    let (mut mapping, _) = infer_mapping_by_name(bones, rules);
+pub fn infer_mapping(bones: &[BoneInput]) -> (HumanoidMapping, Vec<UnresolvedRole>) {
+    let (mut mapping, _) = infer_mapping_by_name(bones);
     for chain in HUMANOID_CHAINS {
         drop_roles_off_chain(&mut mapping, bones, chain);
     }
@@ -34,15 +29,12 @@ pub fn infer_mapping(
     (mapping, unresolved)
 }
 
-pub fn infer_mapping_by_name(
-    bones: &[BoneInput],
-    rules: &HumanoidNamingRules,
-) -> (HumanoidMapping, Vec<UnresolvedRole>) {
+pub fn infer_mapping_by_name(bones: &[BoneInput]) -> (HumanoidMapping, Vec<UnresolvedRole>) {
     let bone_tokens: Vec<BoneNameTokens> = bones
         .iter()
         .map(|bone| tokenize_bone_name(&bone.name))
         .collect();
-    let mut candidates = collect_match_candidates(&bone_tokens, rules);
+    let mut candidates = collect_match_candidates(&bone_tokens);
     candidates.sort();
 
     let mut by_role: BTreeMap<HumanoidRole, usize> = BTreeMap::new();
@@ -129,26 +121,16 @@ fn find_single_bone_between(
     }
 }
 
-fn collect_match_candidates(
-    bone_tokens: &[BoneNameTokens],
-    rules: &HumanoidNamingRules,
-) -> Vec<MatchCandidate> {
+fn collect_match_candidates(bone_tokens: &[BoneNameTokens]) -> Vec<MatchCandidate> {
     let mut candidates = Vec::new();
     for role in HumanoidRole::ALL {
-        let Some(entry) = rules
-            .role
-            .iter()
-            .find(|entry| entry.part == role_to_part(role))
-        else {
-            continue;
-        };
+        let patterns = role.name_patterns();
 
         for (bone_index, tokens) in bone_tokens.iter().enumerate() {
             if tokens.side != role.side() {
                 continue;
             }
-            let Some(pattern_rank) = entry
-                .patterns
+            let Some(pattern_rank) = patterns
                 .iter()
                 .position(|pattern| pattern_matches(&tokens.tokens, pattern))
             else {
@@ -159,7 +141,7 @@ fn collect_match_candidates(
                 extra_token_count: tokens
                     .tokens
                     .len()
-                    .saturating_sub(entry.patterns[pattern_rank].len()),
+                    .saturating_sub(patterns[pattern_rank].len()),
                 bone_index,
                 role,
             });
@@ -168,7 +150,7 @@ fn collect_match_candidates(
     candidates
 }
 
-fn pattern_matches(bone_tokens: &[String], pattern: &[String]) -> bool {
+fn pattern_matches(bone_tokens: &[String], pattern: &[&str]) -> bool {
     if pattern.len() == 1 {
         let joined = bone_tokens.join("");
         if joined == pattern[0] {
@@ -178,7 +160,7 @@ fn pattern_matches(bone_tokens: &[String], pattern: &[String]) -> bool {
 
     let mut pattern_pos = 0;
     for token in bone_tokens {
-        if pattern_pos < pattern.len() && token == &pattern[pattern_pos] {
+        if pattern_pos < pattern.len() && token == pattern[pattern_pos] {
             pattern_pos += 1;
         }
     }
@@ -186,56 +168,9 @@ fn pattern_matches(bone_tokens: &[String], pattern: &[String]) -> bool {
     pattern_pos == pattern.len()
 }
 
-fn role_to_part(role: HumanoidRole) -> &'static str {
-    match role {
-        HumanoidRole::Hips => "Hips",
-        HumanoidRole::Spine => "Spine",
-        HumanoidRole::Chest => "Chest",
-        HumanoidRole::UpperChest => "UpperChest",
-        HumanoidRole::Neck => "Neck",
-        HumanoidRole::Head => "Head",
-        HumanoidRole::Jaw => "Jaw",
-        HumanoidRole::LeftShoulder | HumanoidRole::RightShoulder => "Shoulder",
-        HumanoidRole::LeftUpperArm | HumanoidRole::RightUpperArm => "UpperArm",
-        HumanoidRole::LeftLowerArm | HumanoidRole::RightLowerArm => "LowerArm",
-        HumanoidRole::LeftHand | HumanoidRole::RightHand => "Hand",
-        HumanoidRole::LeftUpperLeg | HumanoidRole::RightUpperLeg => "UpperLeg",
-        HumanoidRole::LeftLowerLeg | HumanoidRole::RightLowerLeg => "LowerLeg",
-        HumanoidRole::LeftFoot | HumanoidRole::RightFoot => "Foot",
-        HumanoidRole::LeftToes | HumanoidRole::RightToes => "Toes",
-        HumanoidRole::LeftEye | HumanoidRole::RightEye => "Eye",
-        HumanoidRole::LeftThumbProximal | HumanoidRole::RightThumbProximal => "ThumbProximal",
-        HumanoidRole::LeftThumbIntermediate | HumanoidRole::RightThumbIntermediate => {
-            "ThumbIntermediate"
-        }
-        HumanoidRole::LeftThumbDistal | HumanoidRole::RightThumbDistal => "ThumbDistal",
-        HumanoidRole::LeftIndexProximal | HumanoidRole::RightIndexProximal => "IndexProximal",
-        HumanoidRole::LeftIndexIntermediate | HumanoidRole::RightIndexIntermediate => {
-            "IndexIntermediate"
-        }
-        HumanoidRole::LeftIndexDistal | HumanoidRole::RightIndexDistal => "IndexDistal",
-        HumanoidRole::LeftMiddleProximal | HumanoidRole::RightMiddleProximal => "MiddleProximal",
-        HumanoidRole::LeftMiddleIntermediate | HumanoidRole::RightMiddleIntermediate => {
-            "MiddleIntermediate"
-        }
-        HumanoidRole::LeftMiddleDistal | HumanoidRole::RightMiddleDistal => "MiddleDistal",
-        HumanoidRole::LeftRingProximal | HumanoidRole::RightRingProximal => "RingProximal",
-        HumanoidRole::LeftRingIntermediate | HumanoidRole::RightRingIntermediate => {
-            "RingIntermediate"
-        }
-        HumanoidRole::LeftRingDistal | HumanoidRole::RightRingDistal => "RingDistal",
-        HumanoidRole::LeftLittleProximal | HumanoidRole::RightLittleProximal => "LittleProximal",
-        HumanoidRole::LeftLittleIntermediate | HumanoidRole::RightLittleIntermediate => {
-            "LittleIntermediate"
-        }
-        HumanoidRole::LeftLittleDistal | HumanoidRole::RightLittleDistal => "LittleDistal",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::humanoid::components::role::REQUIRED;
 
     fn make_bone(name: &str) -> BoneInput {
         BoneInput {
@@ -304,8 +239,7 @@ mod tests {
     #[test]
     fn test_blender_style_resolves_required() {
         let bones = blender_style_skeleton();
-        let rules = HumanoidNamingRules::default();
-        let (mapping, unresolved) = infer_mapping_by_name(&bones, &rules);
+        let (mapping, unresolved) = infer_mapping_by_name(&bones);
 
         for role in REQUIRED {
             assert!(
@@ -329,8 +263,7 @@ mod tests {
     #[test]
     fn test_unity_style_resolves_required() {
         let bones = unity_style_skeleton();
-        let rules = HumanoidNamingRules::default();
-        let (mapping, unresolved) = infer_mapping_by_name(&bones, &rules);
+        let (mapping, unresolved) = infer_mapping_by_name(&bones);
 
         for role in REQUIRED {
             assert!(
@@ -354,8 +287,7 @@ mod tests {
     #[test]
     fn test_no_duplicate_assignments() {
         let bones = blender_style_skeleton();
-        let rules = HumanoidNamingRules::default();
-        let (mapping, _) = infer_mapping_by_name(&bones, &rules);
+        let (mapping, _) = infer_mapping_by_name(&bones);
 
         let mut indices: Vec<_> = mapping.by_role.values().copied().collect();
         indices.sort();
@@ -390,8 +322,7 @@ mod tests {
     fn test_infer_mapping_drops_role_outside_parent_chain() {
         let mut bones = left_arm_skeleton("LeftLowerArm", 4);
         bones.push(make_bone("Head"));
-        let rules = HumanoidNamingRules::default();
-        let (mapping, _) = infer_mapping(&bones, &rules);
+        let (mapping, _) = infer_mapping(&bones);
 
         assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), Some(&1));
         assert_eq!(mapping.by_role.get(&HumanoidRole::LeftHand), Some(&5));
@@ -401,8 +332,7 @@ mod tests {
     #[test]
     fn test_infer_mapping_fills_single_bone_gap() {
         let bones = left_arm_skeleton("Segment001", 4);
-        let rules = HumanoidNamingRules::default();
-        let (mapping, unresolved) = infer_mapping(&bones, &rules);
+        let (mapping, unresolved) = infer_mapping(&bones);
 
         assert_eq!(mapping.by_role.get(&HumanoidRole::LeftLowerArm), Some(&4));
         assert!(unresolved
@@ -414,8 +344,7 @@ mod tests {
     fn test_infer_mapping_leaves_gap_when_several_bones_between() {
         let mut bones = left_arm_skeleton("Segment001", 6);
         bones.push(make_child_bone("Segment002", 4));
-        let rules = HumanoidNamingRules::default();
-        let (mapping, unresolved) = infer_mapping(&bones, &rules);
+        let (mapping, unresolved) = infer_mapping(&bones);
 
         assert!(!mapping.by_role.contains_key(&HumanoidRole::LeftLowerArm));
         assert!(unresolved

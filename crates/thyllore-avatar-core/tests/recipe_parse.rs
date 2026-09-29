@@ -13,11 +13,11 @@ fn recipe_path(name: &str) -> String {
 fn test_wave_json_parses() {
     let json = recipe_path("wave.json");
     let recipe = parse_recipe(&json).unwrap();
-    assert_eq!(recipe.name, "wave");
+    assert_eq!(recipe.name, "wave_right_hand");
     assert_eq!(recipe.version, 1);
     assert!((recipe.duration_seconds - 2.8).abs() < 1e-6);
     assert_eq!(recipe.fps, 30);
-    assert!(recipe.is_loop);
+    assert!(!recipe.is_loop);
     assert_eq!(recipe.poses.len(), 4);
     assert!(recipe.cycle.is_some());
     let cycle = recipe.cycle.as_ref().unwrap();
@@ -25,9 +25,6 @@ fn test_wave_json_parses() {
     assert!((cycle.end - 1.2).abs() < 1e-6);
     assert_eq!(cycle.count, 2);
     assert!(!recipe.hand_presets.is_empty());
-    let third = &recipe.poses[2];
-    assert!((third.time - 0.8).abs() < 1e-6);
-    assert!(third.morph.contains_key("preset:smile"));
 }
 
 #[test]

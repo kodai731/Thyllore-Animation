@@ -1,41 +1,48 @@
 {
   "version": 1,
-  "name": "wave",
-  "prompt": "friendly wave greeting",
- "duration_seconds": 2.8,
+  "name": "wave_right_hand",
+  "prompt": "右手を振って挨拶する",
+  "duration_seconds": 2.8,
   "fps": 30,
-  "loop": true,
+  "loop": false,
   "poses": [
     {
       "time": 0.0,
+      "ease": "ease_in_out",
       "rotations": {
-        "RightUpperArm": [0.0, 0.0, 0.0],
-        "RightLowerArm": [0.0, 0.0, 0.0]
+        "RightUpperArm": [0, 0, 20],
+        "RightLowerArm": [0, 0, 90],
+        "Head": [0, 10, 0]
+      },
+      "hips_translation": [0, 0, 0],
+      "morph": {
+        "preset:smile": 0.6
       }
     },
     {
       "time": 0.4,
-      "ease": "ease_out",
       "rotations": {
-        "RightUpperArm": [-90.0, 0.0, -30.0],
-        "RightLowerArm": [0.0, 0.0, 0.0]
+        "RightLowerArm": [0, 0, 110],
+        "RightHand": [0, 0, 20]
       }
     },
     {
       "time": 0.8,
       "rotations": {
-        "RightUpperArm": [-90.0, 0.0, -30.0],
-        "RightLowerArm": [0.0, 0.0, 0.0]
-      },
-      "morph": {
-        "preset:smile": 1.0
+        "RightLowerArm": [0, 0, 70],
+        "RightHand": [0, 0, -20]
       }
     },
     {
-     "time": 2.8,
+      "time": 2.8,
       "rotations": {
-        "RightUpperArm": [0.0, 0.0, 0.0],
-        "RightLowerArm": [0.0, 0.0, 0.0]
+        "RightUpperArm": [0, 0, 0],
+        "RightLowerArm": [0, 0, 0],
+        "RightHand": [0, 0, 0],
+        "Head": [0, 0, 0]
+      },
+      "morph": {
+        "preset:smile": 0.0
       }
     }
   ],
@@ -48,8 +55,7 @@
     "RightHand": "open"
   },
   "copilot": {
-    "extend": [
-      {"curve": "right_upper_arm_x", "horizon_frames": 8}
-    ]
+    "extend": [],
+    "ease": []
   }
 }

@@ -31,7 +31,7 @@ use crate::ecs::world::{Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
+pub(crate) fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
         .bones
         .iter()

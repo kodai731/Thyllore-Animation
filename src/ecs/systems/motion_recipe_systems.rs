@@ -1,12 +1,16 @@
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::quaternion_to_euler_degrees;
 
 use crate::animation::{BoneId, Skeleton};
-use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
+use crate::ecs::systems::avatar_setup_systems::{
+    compute_bone_global_transform, skeleton_to_bone_inputs,
+};
 
 pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
     let bones = skeleton
@@ -23,6 +27,47 @@ pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
         })
         .collect();
     RetargetSkeleton { bones }
+}
+
+pub fn recipe_to_clip(
+    recipe_json: &str,
+    skeleton: &Skeleton,
+    mapping: &HumanoidMapping,
+) -> anyhow::Result<EditableAnimationClip> {
+    let recipe = thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(recipe_json)?;
+
+    let bones = skeleton_to_bone_inputs(skeleton);
+    let frame = thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame(
+        mapping, &bones,
+    )
+    .ok_or_else(|| anyhow::anyhow!("failed to derive character frame"))?;
+
+    let rest_pose =
+        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(mapping, &bones);
+
+    let retarget_skeleton = skeleton_to_retarget_skeleton(skeleton);
+    let ctx = thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context(
+        &retarget_skeleton,
+        mapping,
+        &frame,
+        rest_pose,
+    )
+    .ok_or_else(|| anyhow::anyhow!("failed to build retarget context"))?;
+
+    let curves = thyllore_avatar_core::motion::systems::recipe_curves::build_recipe_curves(&recipe);
+    let baked = thyllore_avatar_core::motion::systems::bake::bake_recipe_motion(&ctx, &curves);
+
+    let hips_bone = *mapping
+        .by_role
+        .get(&HumanoidRole::Hips)
+        .ok_or_else(|| anyhow::anyhow!("mapping has no Hips bone"))?;
+
+    Ok(baked_motion_to_clip(
+        &baked,
+        skeleton,
+        hips_bone,
+        &recipe.name,
+    ))
 }
 
 fn extract_rotation(matrix: &Matrix4<f32>) -> Quaternion<f32> {
@@ -100,6 +145,8 @@ pub fn baked_motion_to_clip(
 mod tests {
     use super::*;
     use cgmath::{Rad, Rotation3};
+    use thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules;
+    use thyllore_avatar_core::humanoid::systems::infer::infer_mapping;
     use thyllore_math_core::euler_degrees_to_quaternion;
 
     fn make_chain_skeleton(bone_count: usize) -> Skeleton {
@@ -216,5 +263,72 @@ mod tests {
         assert!((tx - 1.0).abs() < 0.001, "tx={:.3}, expected 1.0", tx);
         assert!((ty - 2.0).abs() < 0.001, "ty={:.3}, expected 2.0", ty);
         assert!((tz - 3.0).abs() < 0.001, "tz={:.3}, expected 3.0", tz);
+    }
+
+    #[test]
+    fn test_recipe_to_clip_wave() {
+        use std::fs;
+        use std::path::Path;
+
+        let test_data_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
+        let fbx_txt_path = test_data_dir.join("rigs/mixamo.fbx.txt");
+        let recipe_path = test_data_dir.join("recipes/wave.json");
+
+        let fbx_path = std::env::temp_dir().join("motion_recipe_to_clip_mixamo.fbx");
+        fs::copy(&fbx_txt_path, &fbx_path).unwrap();
+        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
+            fbx_path.to_str().unwrap(),
+        );
+        fs::remove_file(&fbx_path).ok();
+        let (fbx_result, _) = load_result.expect("Failed to load FBX");
+        let skeleton = fbx_result
+            .animation_system
+            .skeletons
+            .first()
+            .expect("No skeleton in loaded model")
+            .clone();
+
+        let bones = skeleton_to_bone_inputs(&skeleton);
+        let (mapping, _) = infer_mapping(&bones, &HumanoidNamingRules::default());
+
+        let recipe_json = fs::read_to_string(recipe_path).expect("Failed to read recipe");
+
+        let clip = recipe_to_clip(&recipe_json, &skeleton, &mapping).unwrap();
+
+        assert_eq!(clip.name, "wave_right_hand");
+        assert!(
+            (clip.duration - 2.8).abs() < 1e-4,
+            "duration={:.4}, expected 2.8",
+            clip.duration
+        );
+
+        let right_lower_arm_bone_idx = mapping
+            .by_role
+            .get(&HumanoidRole::RightLowerArm)
+            .expect("RightLowerArm not found in mapping");
+        let track = clip
+            .get_track(*right_lower_arm_bone_idx as BoneId)
+            .expect("RightLowerArm track not found");
+
+        let key_count = track.rotation_x.keyframes.len();
+        assert!(
+            key_count == 85,
+            "RightLowerArm rotation key count={}, expected 85 (2.8 * 30 + 1)",
+            key_count
+        );
+
+        let hips_bone_idx = mapping
+            .by_role
+            .get(&HumanoidRole::Hips)
+            .expect("Hips not found in mapping");
+        let hips_track = clip
+            .get_track(*hips_bone_idx as BoneId)
+            .expect("Hips track not found");
+
+        assert!(
+            !hips_track.translation_x.keyframes.is_empty(),
+            "Hips translation keys are empty"
+        );
     }
 }

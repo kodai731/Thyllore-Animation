@@ -7,6 +7,7 @@ pub struct SparseDelta {
 #[derive(Clone, Debug)]
 pub struct MorphChannel {
     pub name: String,
+    pub default_weight: f32,
     pub position_deltas: Vec<SparseDelta>,
     pub normal_deltas: Vec<SparseDelta>,
 }
@@ -20,6 +21,14 @@ pub struct MeshMorph {
 impl MeshMorph {
     pub fn channel_index(&self, name: &str) -> Option<usize> {
         self.channels.iter().position(|c| c.name == name)
+    }
+
+    pub fn channel_names(&self) -> Vec<String> {
+        self.channels.iter().map(|c| c.name.clone()).collect()
+    }
+
+    pub fn default_weights(&self) -> Vec<f32> {
+        self.channels.iter().map(|c| c.default_weight).collect()
     }
 }
 
@@ -69,6 +78,7 @@ mod tests {
             channels: vec![
                 MorphChannel {
                     name: "smile".to_string(),
+                    default_weight: 0.0,
                     position_deltas: vec![
                         SparseDelta {
                             vertex_index: 1,
@@ -83,6 +93,7 @@ mod tests {
                 },
                 MorphChannel {
                     name: "blink".to_string(),
+                    default_weight: 0.0,
                     position_deltas: vec![SparseDelta {
                         vertex_index: 6,
                         delta: [0.0, -0.3, 0.0],

@@ -102,6 +102,7 @@ pub(super) fn extract_blend_shapes(
                         .channels
                         .push(MorphChannel {
                             name: channel_name.clone(),
+                            default_weight: channel.weight as f32,
                             position_deltas,
                             normal_deltas,
                         });

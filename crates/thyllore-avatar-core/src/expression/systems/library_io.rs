@@ -56,10 +56,10 @@ mod tests {
         assert_eq!(loaded.presets[0].name, "happy");
         assert_eq!(loaded.presets[1].name, "angry");
 
-        let applied1 = apply_preset(&loaded.presets[0], &names);
+        let applied1 = apply_preset(&loaded.presets[0], &names, &[]);
         assert_eq!(applied1.weights, vec![0.0, 1.0, 0.5]);
 
-        let applied2 = apply_preset(&loaded.presets[1], &names);
+        let applied2 = apply_preset(&loaded.presets[1], &names, &[]);
         assert_eq!(applied2.weights, vec![1.0, 0.0, 0.0]);
     }
 

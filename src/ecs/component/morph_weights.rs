@@ -1,12 +1,14 @@
+use thyllore_model_core::MeshMorph;
+
 #[derive(Clone, Debug)]
 pub struct MorphWeights {
     pub weights: Vec<f32>,
 }
 
 impl MorphWeights {
-    pub fn zeroed(channel_count: usize) -> Self {
+    pub fn from_defaults(morph: &MeshMorph) -> Self {
         Self {
-            weights: vec![0.0; channel_count],
+            weights: morph.default_weights(),
         }
     }
 }

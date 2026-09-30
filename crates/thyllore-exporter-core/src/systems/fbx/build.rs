@@ -26,7 +26,7 @@ pub(crate) fn build_full_export_data(
     export_path: &Path,
 ) -> anyhow::Result<FullFbxExportData> {
     let inv_unit_scale = 1.0_f32 / fbx_model.unit_scale;
-    let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
+    let has_skinned_meshes = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
 
     let mesh_node_names: std::collections::HashSet<String> = fbx_model
         .fbx_data
@@ -40,7 +40,7 @@ pub(crate) fn build_full_export_data(
         &mut uid_alloc,
         &mesh_node_names,
         inv_unit_scale,
-        needs_coord_conversion,
+        has_skinned_meshes,
     );
 
     let stack_uid = uid_alloc.allocate();
@@ -86,7 +86,6 @@ pub(crate) fn build_full_export_data(
     let anim_data = FbxExportData {
         clip_name,
         duration_ktime,
-        needs_coord_conversion,
         axes: fbx_model.axes.clone(),
         fps: fbx_model.fps,
         bones,

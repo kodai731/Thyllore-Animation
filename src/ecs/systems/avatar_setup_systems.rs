@@ -5,9 +5,11 @@ use cgmath::Matrix4;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::infer::{collect_unresolved_roles, infer_mapping};
 use thyllore_avatar_core::humanoid::systems::mapping_io::{
     humanoid_mapping_path, load_mapping, save_mapping,
+};
+use thyllore_avatar_core::humanoid::systems::name_match::{
+    collect_unresolved_roles, infer_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
 use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;

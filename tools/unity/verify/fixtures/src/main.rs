@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context};
 use thyllore_avatar_core::expression::components::preset::{ExpressionLibrary, ExpressionPreset};
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::infer::infer_mapping;
+use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::sidecar::{
     build_sidecar, write_sidecar_json, SidecarInput, SidecarSpringChain,

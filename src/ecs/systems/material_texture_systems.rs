@@ -7,7 +7,8 @@ use thyllore_avatar_core::material::systems::texture_remap_io::{
 };
 
 use crate::ecs::resource::{
-    AppCommand, MaterialTextureSaveState, MaterialTextureSlot, MaterialTextureState,
+    MaterialTextureSaveState, MaterialTextureSlot, MaterialTextureState, SceneLoadCommand,
+    SceneLoadQueue,
 };
 use crate::ecs::systems::find_model_path;
 use crate::ecs::world::World;
@@ -108,11 +109,11 @@ pub fn set_material_texture(world: &mut World, material: &str, texture_file: Opt
     state.save_state = MaterialTextureSaveState::Edited;
 }
 
-pub fn save_material_textures(world: &mut World) -> Option<AppCommand> {
+pub fn save_material_textures(world: &mut World) {
     let mut state = world.resource_mut::<MaterialTextureState>();
     if state.source_model_path.is_empty() {
         msg_warn!("Cannot save material textures: no model loaded");
-        return None;
+        return;
     }
 
     let remap = build_texture_remap(&state.slots);
@@ -121,14 +122,16 @@ pub fn save_material_textures(world: &mut World) -> Option<AppCommand> {
         let reason = format!("Cannot write {}: {}", remap_path.display(), error);
         msg_error!("{}", reason);
         state.save_state = MaterialTextureSaveState::SaveFailed { reason };
-        return None;
+        return;
     }
     msg_info!("Saved material textures to {}", remap_path.display());
 
     state.save_state = MaterialTextureSaveState::Saved;
-    Some(AppCommand::LoadModel {
-        path: state.source_model_path.clone(),
-    })
+    world
+        .resource_mut::<SceneLoadQueue>()
+        .push(SceneLoadCommand::LoadModel {
+            path: state.source_model_path.clone(),
+        });
 }
 
 fn build_texture_remap(slots: &[MaterialTextureSlot]) -> MaterialTextureRemap {
@@ -155,6 +158,7 @@ mod tests {
             slots,
             save_state: MaterialTextureSaveState::Saved,
         });
+        world.insert_resource(SceneLoadQueue::default());
         world
     }
 
@@ -215,9 +219,9 @@ mod tests {
             .resource_mut::<MaterialTextureState>()
             .source_model_path = "/missing_material_texture_dir/avatar.fbx".to_string();
 
-        let command = save_material_textures(&mut world);
+        save_material_textures(&mut world);
 
-        assert!(command.is_none());
+        assert!(world.resource_mut::<SceneLoadQueue>().take().is_empty());
         let state = world.resource::<MaterialTextureState>();
         assert!(matches!(
             state.save_state,

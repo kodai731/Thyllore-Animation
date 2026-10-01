@@ -2,21 +2,21 @@ use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::Camera;
-use crate::ecs::resource::LightState;
+use crate::ecs::resource::{
+    Camera, LightState, OutputCommand, OutputQueue, SceneLoadCommand, SceneLoadQueue,
+};
 use crate::ecs::systems::{camera_move_to_look_at, camera_reset};
 use crate::ecs::world::World;
-
-use crate::ecs::resource::AppCommand;
 
 pub fn dispatch_camera_light_debug_events(
     events: &[UIEvent],
     world: &mut World,
     model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
-) -> Vec<AppCommand> {
+) {
     let mut camera = world.resource_mut::<Camera>();
     let mut rt_debug = world.resource_mut::<LightState>();
-    let mut commands = Vec::new();
+    let mut scene_loads = world.resource_mut::<SceneLoadQueue>();
+    let mut outputs = world.resource_mut::<OutputQueue>();
 
     for event in events {
         match event {
@@ -79,46 +79,44 @@ pub fn dispatch_camera_light_debug_events(
             }
 
             UIEvent::LoadModel { path } => {
-                commands.push(AppCommand::LoadModel { path: path.clone() });
+                scene_loads.push(SceneLoadCommand::LoadModel { path: path.clone() });
             }
 
             UIEvent::LoadModelAdditive { path } => {
-                commands.push(AppCommand::LoadModelAdditive { path: path.clone() });
+                scene_loads.push(SceneLoadCommand::LoadModelAdditive { path: path.clone() });
             }
 
             UIEvent::SpawnDebugPrimitive { kind } => {
-                commands.push(AppCommand::SpawnDebugPrimitive { kind: *kind });
+                scene_loads.push(SceneLoadCommand::SpawnDebugPrimitive { kind: *kind });
             }
 
             UIEvent::TakeScreenshot => {
-                commands.push(AppCommand::TakeScreenshot);
+                outputs.push(OutputCommand::TakeScreenshot);
             }
 
             #[cfg(debug_assertions)]
             UIEvent::DebugShadowInfo => {
-                commands.push(AppCommand::DebugShadowInfo);
+                outputs.push(OutputCommand::DebugShadowInfo);
             }
 
             #[cfg(debug_assertions)]
             UIEvent::DebugBillboardDepth => {
-                commands.push(AppCommand::DebugBillboardDepth);
+                outputs.push(OutputCommand::DebugBillboardDepth);
             }
 
             UIEvent::DumpDebugInfo => {
-                commands.push(AppCommand::DumpDebugInfo);
+                outputs.push(OutputCommand::DumpDebugInfo);
             }
 
             UIEvent::DumpAnimationDebug => {
-                commands.push(AppCommand::DumpAnimationDebug);
+                outputs.push(OutputCommand::DumpAnimationDebug);
             }
 
             UIEvent::CaptureNow(capture) => {
-                commands.push(AppCommand::CaptureNow(capture.clone()));
+                outputs.push(OutputCommand::CaptureNow(capture.clone()));
             }
 
             _ => {}
         }
     }
-
-    commands
 }

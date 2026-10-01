@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::app::App;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{AppCommand, AppCommandQueue, CpuFrameTimings};
+use crate::ecs::resource::CpuFrameTimings;
 use crate::ecs::systems::phases::{run_event_dispatch_phase, run_last_phase};
 
 pub struct FrameInput<'a> {
@@ -18,9 +18,9 @@ impl App {
     pub unsafe fn drive_frame(
         &mut self,
         input: FrameInput<'_>,
-        open_file_dialogs: impl FnOnce(&[UIEvent], &App) -> Vec<AppCommand>,
+        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
     ) -> Result<()> {
-        self.dispatch_ui_events(open_file_dialogs);
+        self.dispatch_ui_events(queue_file_dialog_commands);
 
         let gpu_wait_start = Instant::now();
         let image_index = self.begin_frame()?;
@@ -55,22 +55,17 @@ impl App {
 
     unsafe fn dispatch_ui_events(
         &mut self,
-        open_file_dialogs: impl FnOnce(&[UIEvent], &App) -> Vec<AppCommand>,
+        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
     ) {
         let model_bounds = self.data.graphics_resources.calculate_model_bounds();
-        let (file_events, mut commands) = run_event_dispatch_phase(
+        let file_dialog_events = run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
             &self.data.graphics_resources,
             model_bounds,
         );
-        commands.extend(open_file_dialogs(&file_events, self));
+        queue_file_dialog_commands(&file_dialog_events, self);
 
-        self.data
-            .ecs_world
-            .resource_mut::<AppCommandQueue>()
-            .commands
-            .append(&mut commands);
         self.apply_app_commands();
     }
 }

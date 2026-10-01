@@ -1,6 +1,6 @@
 use cgmath::Matrix4;
 
-use thyllore_importer_core::fbx::fbx::FbxData;
+use thyllore_file_format_core::fbx::FbxData;
 
 use crate::components::fbx::*;
 use crate::fbx_animation::UidAllocator;

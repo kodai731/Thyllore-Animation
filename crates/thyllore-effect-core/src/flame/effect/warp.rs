@@ -2,15 +2,22 @@ use crate::flame::*;
 use cgmath::Vector2;
 
 /// Rising warp of the noise coordinate.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameWarp {
+    #[persist]
     pub amp: f32,
+    #[persist]
     pub freq: f32,
+    #[persist]
     pub rise_speed: f32,
+    #[persist(owner = Shape)]
     pub taper_power: f32,
+    #[runtime]
     pub y_scale: f32,
     /// Penetration depth of the tip-asymptotic warp strain, in the same
     /// remaining-luminous-fraction units as the tip carve reach.
+    #[persist]
     pub reach: f32,
 }
 
@@ -28,10 +35,14 @@ impl Default for FlameWarp {
 }
 
 /// Horizontal wind bending the column.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Frame)]
 pub struct FlameWind {
+    #[persist(as = [f32; 2], scalars)]
     pub direction: Vector2<f32>,
+    #[persist]
     pub bend_amount: f32,
+    #[persist]
     pub bend_power: f32,
 }
 

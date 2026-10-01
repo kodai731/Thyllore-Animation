@@ -51,12 +51,12 @@ expected_params = [p["name"] for p in fx.flame_ui_params() if p["persisted"]]
 assert list(cls.PARAM_NAMES) == expected_params, (
     f"exposed params {cls.PARAM_NAMES} must mirror the persisted engine UI params {expected_params}"
 )
-candle_params = fx.flame_preset_params("candle")
+persisted_names = {name for name, _ in fx.flame_parameter_paths()}
 collected = flame_render_params(obj.thyllore_flame)
-assert set(collected.keys()) == set(candle_params.keys()), "render params must cover every preset key"
+assert set(collected.keys()) == persisted_names, "render params must cover every persisted parameter"
 assert collected["height"] == obj.thyllore_flame.height
 obj.thyllore_flame.preset = "blue"
-assert not obj.thyllore_flame.use_blackbody and abs(obj.thyllore_flame.color_base[2] - 1.0) < 1e-5, "blue preset must reach the color props"
+assert not obj.thyllore_flame.color_use_blackbody and abs(obj.thyllore_flame.color_base[2] - 1.0) < 1e-5, "blue preset must reach the color props"
 assert flame_render_params(obj.thyllore_flame)["color_base"][2] == obj.thyllore_flame.color_base[2]
 
 print("ADDON_SMOKE ok", flush=True)

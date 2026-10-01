@@ -28,6 +28,20 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
         ctx.world.insert_resource(PoseApplyCache::default());
     }
 
+    sync_expression_library(ctx.world);
+    sync_avatar_setup(ctx.world, ctx.assets, ctx.graphics);
+    sync_material_textures(ctx.world, ctx.graphics);
+
+    evaluate_morph_tracks(ctx.world, ctx.assets, ctx.graphics);
+    let morph_updated_meshes = apply_morph_weights(ctx.world, ctx.assets, ctx.graphics);
+    {
+        let mut pose_apply_cache = ctx.world.resource_mut::<PoseApplyCache>();
+        for mesh_index in &morph_updated_meshes {
+            pose_apply_cache.skinned_cache.remove(mesh_index);
+            pose_apply_cache.node_cache.remove(mesh_index);
+        }
+    }
+
     let eval_result = {
         let clip_library = ctx.world.resource::<ClipLibrary>();
         let mut pose_apply_cache = ctx.world.resource_mut::<PoseApplyCache>();
@@ -49,6 +63,11 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     let heatmap_updated_meshes = apply_weight_heatmap_update(ctx);
 
     let mut updated_meshes = eval_result.updated_meshes;
+    for mesh_index in morph_updated_meshes {
+        if !updated_meshes.contains(&mesh_index) {
+            updated_meshes.push(mesh_index);
+        }
+    }
     for mesh_index in heatmap_updated_meshes {
         if !updated_meshes.contains(&mesh_index) {
             updated_meshes.push(mesh_index);

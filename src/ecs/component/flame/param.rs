@@ -48,42 +48,18 @@ impl FlameParam {
         FlameParam::EdgeHigh,
     ];
 
-    /// Stable scalar-curve code persisted in clip files (`PropertyType::Custom(code)`).
-    /// Never reorder or reuse codes. Flame owns the 0..=15 block.
-    pub const fn code(self) -> u16 {
-        match self {
-            FlameParam::Height => 0,
-            FlameParam::Radius => 1,
-            FlameParam::Intensity => 2,
-            FlameParam::SigmaT => 3,
-            FlameParam::TemperatureBaseK => 4,
-            FlameParam::TemperatureTipK => 5,
-            FlameParam::WarpAmp => 6,
-            FlameParam::WarpFreq => 7,
-            FlameParam::RiseSpeed => 8,
-            FlameParam::NoiseAmplitude => 9,
-            FlameParam::WhiteBoost => 10,
-            FlameParam::BendAmount => 11,
-            FlameParam::WindX => 12,
-            FlameParam::WindZ => 13,
-            FlameParam::EdgeLow => 14,
-            FlameParam::EdgeHigh => 15,
-        }
-    }
-
-    pub fn from_code(code: u16) -> Option<FlameParam> {
-        FlameParam::ALL.iter().copied().find(|p| p.code() == code)
-    }
-
-    pub const fn property_type(self) -> PropertyType {
-        PropertyType::Custom(self.code())
+    pub fn property_type(self) -> PropertyType {
+        let index = FlameParam::ALL
+            .iter()
+            .position(|p| *p == self)
+            .expect("FlameParam::ALL lists every variant");
+        FLAME_DOMAIN.property_type_at(index)
     }
 
     pub fn from_property_type(property_type: PropertyType) -> Option<FlameParam> {
-        match property_type {
-            PropertyType::Custom(code) => FlameParam::from_code(code),
-            _ => None,
-        }
+        FLAME_DOMAIN
+            .channel_index(property_type)
+            .map(|index| FlameParam::ALL[index])
     }
 
     pub const fn display_name(self) -> &'static str {
@@ -114,16 +90,16 @@ impl FlameParam {
             FlameParam::Radius => "radius",
             FlameParam::Intensity => "intensity",
             FlameParam::SigmaT => "sigma_t",
-            FlameParam::TemperatureBaseK => "temperature_base_k",
-            FlameParam::TemperatureTipK => "temperature_tip_k",
+            FlameParam::TemperatureBaseK => "color_temperature_base_k",
+            FlameParam::TemperatureTipK => "color_temperature_tip_k",
             FlameParam::WarpAmp => "warp_amp",
             FlameParam::WarpFreq => "warp_freq",
-            FlameParam::RiseSpeed => "rise_speed",
+            FlameParam::RiseSpeed => "warp_rise_speed",
             FlameParam::NoiseAmplitude => "noise_amplitude",
-            FlameParam::WhiteBoost => "white_boost",
-            FlameParam::BendAmount => "bend_amount",
-            FlameParam::WindX => "wind_x",
-            FlameParam::WindZ => "wind_z",
+            FlameParam::WhiteBoost => "edge_white_boost",
+            FlameParam::BendAmount => "wind_bend_amount",
+            FlameParam::WindX => "wind_direction_x",
+            FlameParam::WindZ => "wind_direction_y",
             FlameParam::EdgeLow => "edge_low",
             FlameParam::EdgeHigh => "edge_high",
         }
@@ -183,7 +159,6 @@ impl FlameParam {
 
     const fn channel(self) -> ScalarChannel {
         ScalarChannel {
-            code: self.code(),
             display_name: self.display_name(),
             cli_name: self.cli_name(),
             scene_name: self.scene_name(),
@@ -235,7 +210,7 @@ fn flame_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: FlameParam) -> &'static ScalarParam<FlameEffect> {
-    find_scalar_param(FLAME_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&FLAME_SCALAR_PARAMS, param.cli_name())
         .expect("every FlameParam cli_name is registered in FLAME_SCALAR_PARAMS")
 }
 
@@ -252,15 +227,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_code_roundtrip_all_params() {
+    fn test_property_type_roundtrip_all_params() {
         for param in FlameParam::ALL {
-            assert_eq!(FlameParam::from_code(param.code()), Some(param));
             assert_eq!(
                 FlameParam::from_property_type(param.property_type()),
                 Some(param)
             );
         }
-        assert_eq!(FlameParam::from_code(999), None);
+        assert_eq!(
+            FlameParam::from_property_type(PropertyType::Custom(u16::MAX)),
+            None
+        );
         assert_eq!(
             FlameParam::from_property_type(PropertyType::TranslationX),
             None
@@ -279,7 +256,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in FlameParam::ALL {
             assert!(
-                find_scalar_param(FLAME_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&FLAME_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );
@@ -287,21 +264,15 @@ mod tests {
     }
 
     #[test]
-    fn test_codes_are_unique() {
-        let mut codes: Vec<u16> = FlameParam::ALL.iter().map(|p| p.code()).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), FlameParam::ALL.len());
-    }
-
-    #[test]
     fn test_channel_table_mirrors_enum() {
         assert_eq!(FLAME_CHANNELS.len(), FlameParam::ALL.len());
         for (channel, param) in FLAME_CHANNELS.iter().zip(FlameParam::ALL) {
-            assert_eq!(channel.code, param.code());
             assert_eq!(channel.cli_name, param.cli_name());
             assert_eq!(channel.scene_name, param.scene_name());
-            assert_eq!(channel.property_type(), param.property_type());
+            assert_eq!(
+                FLAME_DOMAIN.property_type_of(channel),
+                Some(param.property_type())
+            );
         }
     }
 

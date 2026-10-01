@@ -1,11 +1,7 @@
 use super::*;
-use crate::flame_trail::{FlameTrailSample, FlameTrailState};
-use cgmath::{Deg, InnerSpace, Matrix3, Matrix4, Quaternion, Vector2, Vector3, Vector4};
+use cgmath::{Deg, Matrix4, Quaternion, Vector3};
 use thyllore_color_core::blackbody_rgb;
-use thyllore_math_core::{
-    evaluate_chebyshev, fit_chebyshev, fit_erf_response, integrate_chebyshev,
-    pack_coefficients_vec4, parametric_height_falloff, smooth_step,
-};
+use thyllore_math_core::{evaluate_chebyshev, fit_chebyshev, integrate_chebyshev};
 
 fn evaluate_chebyshev12_unrolled(slots: &[[f32; 4]; 3], x01: f32) -> f32 {
     let c: Vec<f32> = slots.iter().flatten().copied().collect();

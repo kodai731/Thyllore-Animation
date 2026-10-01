@@ -57,6 +57,11 @@ pub fn clip_recalculate_duration(clip: &mut EditableAnimationClip) {
             max_time = max_time.max(last_kf.time);
         }
     }
+    for morph_track in &clip.morph_tracks {
+        if let Some(last_kf) = morph_track.curve.keyframes.last() {
+            max_time = max_time.max(last_kf.time);
+        }
+    }
 
     clip.duration = max_time.max(clip.min_duration);
 }
@@ -133,5 +138,16 @@ mod tests {
             .unwrap()
             .get_curve(PropertyType::TranslationX)
             .is_empty());
+    }
+
+    #[test]
+    fn recalculate_duration_includes_morph_track_keys() {
+        let mut clip = EditableAnimationClip::new(1, "morph".to_string());
+        let track = clip.get_or_add_morph_track("face", "smile");
+        curve_add_keyframe(&mut track.curve, 0.0, 0.0);
+        curve_add_keyframe(&mut track.curve, 5.0, 1.0);
+
+        clip_recalculate_duration(&mut clip);
+        assert!((clip.duration - 5.0).abs() < 1e-6);
     }
 }

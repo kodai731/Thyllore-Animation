@@ -2,7 +2,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
-    GpuTimingsSink, ModelState, TimelineState,
+    GpuTimingsSink, ModelState, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::world::World;
@@ -42,6 +42,11 @@ pub fn apply_engine_overrides(
 
     let actions: Vec<&dyn BatchAction> = overrides.debug_actions.iter().map(Box::as_ref).collect();
     batch_apply_debug_actions(world, &actions);
+    if !overrides.scheduled_actions.is_empty() {
+        world.insert_resource(ScheduledBatchActions {
+            pending: overrides.scheduled_actions.clone(),
+        });
+    }
 
     if overrides.batch_play {
         start_batch_playback(world);

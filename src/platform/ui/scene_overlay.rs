@@ -599,7 +599,7 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
     let mut effect_copy = effect.clone();
     draw_tiered_params(
         ui,
-        thyllore_effect_core::WIND_UI_PARAMS,
+        &thyllore_effect_core::WIND_UI_PARAMS,
         &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
@@ -740,9 +740,9 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
     if target_name.is_none() {
         draw_params(
             ui,
-            &["end_offset"],
-            thyllore_effect_core::LIGHTNING_UI_PARAMS,
-            thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+            &["shape_end_offset"],
+            &thyllore_effect_core::LIGHTNING_UI_PARAMS,
+            &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
             |ui, edited| lightning_key_button(ui, ui_events, edited),
         );
@@ -750,10 +750,10 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
 
     draw_tiered_params(
         ui,
-        thyllore_effect_core::LIGHTNING_UI_PARAMS,
-        thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+        &thyllore_effect_core::LIGHTNING_UI_PARAMS,
+        &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
-        &["end_offset"],
+        &["shape_end_offset"],
         |ui, edited| lightning_key_button(ui, ui_events, edited),
     );
 
@@ -949,7 +949,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
 
                     draw_tiered_params(
                         ui,
-                        thyllore_effect_core::WATER_UI_PARAMS,
+                        &thyllore_effect_core::WATER_UI_PARAMS,
                         &thyllore_effect_core::WATER_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
@@ -1427,8 +1427,8 @@ fn build_flame_section(
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
                     let advanced_open = draw_tiered_params(
                         ui,
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
+                        &thyllore_effect_core::FLAME_UI_PARAMS,
+                        &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
                         |ui, edited| flame_key_button(ui, ui_events, edited),

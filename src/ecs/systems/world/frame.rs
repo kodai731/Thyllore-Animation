@@ -3,9 +3,8 @@ use anyhow::Result;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::UpdatePhaseTimings;
 use crate::ecs::systems::phases::{
-    collect_mesh_positions, run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase,
-    run_input_phase, run_onion_skin_phase, run_render_prep_phase, run_timeline_phase,
-    run_transform_phase_ecs,
+    run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase, run_input_phase,
+    run_onion_skin_phase, run_render_prep_phase, run_timeline_phase, run_transform_phase_ecs,
 };
 use crate::ecs::FrameContext;
 

@@ -12,6 +12,15 @@ pub struct MorphChannel {
     pub normal_deltas: Vec<SparseDelta>,
 }
 
+impl MorphChannel {
+    pub fn deforms_mesh(&self) -> bool {
+        self.position_deltas
+            .iter()
+            .chain(&self.normal_deltas)
+            .any(|delta| delta.delta != [0.0; 3])
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct MeshMorph {
     pub source_mesh: String,
@@ -111,6 +120,37 @@ mod tests {
             b,
             a
         );
+    }
+
+    #[test]
+    fn test_channel_with_only_zero_deltas_does_not_deform() {
+        let separator = MorphChannel {
+            name: "=====MOUTH=====".to_string(),
+            default_weight: 0.0,
+            position_deltas: vec![SparseDelta {
+                vertex_index: 0,
+                delta: [0.0, 0.0, 0.0],
+            }],
+            normal_deltas: Vec::new(),
+        };
+
+        assert!(!separator.deforms_mesh());
+        assert!(smile_morph().channels[0].deforms_mesh());
+    }
+
+    #[test]
+    fn test_channel_with_tiny_delta_still_deforms() {
+        let silence = MorphChannel {
+            name: "vrc.v_sil".to_string(),
+            default_weight: 0.0,
+            position_deltas: vec![SparseDelta {
+                vertex_index: 0,
+                delta: [0.0, 2.0e-6, 0.0],
+            }],
+            normal_deltas: Vec::new(),
+        };
+
+        assert!(silence.deforms_mesh());
     }
 
     #[test]

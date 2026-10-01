@@ -8,9 +8,17 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
-use crate::ecs::systems::{find_mesh_morph, find_morph_channel_names, find_morph_siblings};
+use crate::ecs::systems::{
+    find_deforming_morph_channels, find_mesh_morph, find_morph_channel_names, find_morph_siblings,
+};
 use crate::ecs::world::{Children, Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+
+struct ChannelView<'a> {
+    names: &'a [String],
+    weights: &'a [f32],
+    deforming_channels: &'a [usize],
+}
 
 pub fn build_blend_shape_section(
     ui: &imgui::Ui,
@@ -39,6 +47,8 @@ pub fn build_blend_shape_section(
         else {
             continue;
         };
+        let deforming_channels =
+            find_deforming_morph_channels(world, representative, assets, graphics);
 
         let header = format!(
             "Blend Shapes ({})###blend_shapes_{}",
@@ -55,8 +65,11 @@ pub fn build_blend_shape_section(
             ui,
             ui_events,
             representative,
-            &channel_names,
-            &morph_weights.weights,
+            &ChannelView {
+                names: &channel_names,
+                weights: &morph_weights.weights,
+                deforming_channels: &deforming_channels,
+            },
             &mut inspector_state,
         );
         build_presets_section(ui, ui_events, world, representative);
@@ -132,12 +145,11 @@ fn build_channel_groups(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     entity: Entity,
-    channel_names: &[String],
-    weights: &[f32],
+    view: &ChannelView,
     inspector_state: &mut BlendShapeInspectorState,
 ) {
-    for group in group_channels(channel_names, &ExpressionGrouping::default()) {
-        let visible_channels = filter_channels(&group, channel_names, &inspector_state.search);
+    for group in group_channels(view.names, &ExpressionGrouping::default()) {
+        let visible_channels = filter_channels(&group, view, &inspector_state.search);
         if visible_channels.is_empty() {
             continue;
         }
@@ -163,21 +175,22 @@ fn build_channel_groups(
                 ui_events,
                 entity,
                 channel,
-                &channel_names[channel],
-                weights,
+                &view.names[channel],
+                view.weights,
             );
         }
         tree_token.end();
     }
 }
 
-fn filter_channels(group: &ChannelGroup, channel_names: &[String], search: &str) -> Vec<usize> {
+fn filter_channels(group: &ChannelGroup, view: &ChannelView, search: &str) -> Vec<usize> {
     let search = search.to_lowercase();
     group
         .channel_indices
         .iter()
         .copied()
-        .filter(|&channel| channel_names[channel].to_lowercase().contains(&search))
+        .filter(|channel| view.deforming_channels.contains(channel))
+        .filter(|&channel| view.names[channel].to_lowercase().contains(&search))
         .collect()
 }
 

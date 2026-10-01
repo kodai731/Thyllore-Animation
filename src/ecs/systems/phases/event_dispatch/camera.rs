@@ -7,11 +7,12 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::{camera_move_to_look_at, camera_reset};
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn dispatch_camera_light_debug_events(
     events: &[UIEvent],
     world: &mut World,
-    model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
+    graphics: &GraphicsResources,
 ) {
     let mut camera = world.resource_mut::<Camera>();
     let mut rt_debug = world.resource_mut::<LightState>();
@@ -25,7 +26,7 @@ pub fn dispatch_camera_light_debug_events(
             }
 
             UIEvent::MoveCameraToModel => {
-                if let Some((min, max, center)) = model_bounds {
+                if let Some((min, max, center)) = graphics.calculate_model_bounds() {
                     let size = max - min;
                     let max_dim = size.x.max(size.y).max(size.z);
                     let distance = max_dim * 2.0;
@@ -54,7 +55,7 @@ pub fn dispatch_camera_light_debug_events(
             UIEvent::MoveLightToBounds(target) => {
                 use crate::ecs::events::light_move_target::LightMoveTarget;
 
-                if let Some((min, max, _)) = model_bounds {
+                if let Some((min, max, _)) = graphics.calculate_model_bounds() {
                     let offset = 2.0;
                     let current = rt_debug.light_position;
                     let new_pos = match target {

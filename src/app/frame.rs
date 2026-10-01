@@ -57,12 +57,10 @@ impl App {
         &mut self,
         queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
     ) {
-        let model_bounds = self.data.graphics_resources.calculate_model_bounds();
         let file_dialog_events = run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
             &self.data.graphics_resources,
-            model_bounds,
         );
         queue_file_dialog_commands(&file_dialog_events, self);
 

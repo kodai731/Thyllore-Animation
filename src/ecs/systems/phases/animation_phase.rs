@@ -69,15 +69,6 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
             let entity_transform = find_skin_entity_transform(ctx.world);
             let final_transforms = apply_entity_transform(transforms, &entity_transform);
 
-            log!(
-                "BoneGizmo: type={:?}, bones={}, head_pos=[{:.3},{:.3},{:.3}]",
-                anim_type,
-                final_transforms.len(),
-                final_transforms.first().map_or(0.0, |t| t[3][0]),
-                final_transforms.first().map_or(0.0, |t| t[3][1]),
-                final_transforms.first().map_or(0.0, |t| t[3][2]),
-            );
-
             let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
             bone_gizmo.cached_skeleton_id = Some(*skel_id);
             bone_gizmo.cached_animation_type = anim_type.clone();

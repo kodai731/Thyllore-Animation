@@ -1,5 +1,3 @@
-use cgmath::Vector3;
-
 use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::world::World;
@@ -32,7 +30,6 @@ pub fn run_event_dispatch_phase(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
-    model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
 ) -> Vec<UIEvent> {
     #[cfg(feature = "text-to-motion")]
     super::event_dispatch::ml::drain_grpc_responses(world, assets);
@@ -79,7 +76,7 @@ pub fn run_event_dispatch_phase(
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::dispatch_model_loaded_for_animation(&events, world);
 
-    dispatch_camera_light_debug_events(&events, world, model_bounds);
+    dispatch_camera_light_debug_events(&events, world, graphics);
 
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::dispatch_text_to_mesh_events(&events, world);

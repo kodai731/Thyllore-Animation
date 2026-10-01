@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use thyllore_avatar_core::expression::components::grouping::ExpressionGrouping;
 use thyllore_avatar_core::expression::systems::grouping::group_channels;
 use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
@@ -34,6 +36,33 @@ pub fn find_morph_channel_names(
     graphics: &GraphicsResources,
 ) -> Option<Vec<String>> {
     find_mesh_morph(world, entity, assets, graphics).map(MeshMorph::channel_names)
+}
+
+pub fn find_deforming_morph_channels(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Vec<usize> {
+    let deforming_names: HashSet<&str> = find_morph_siblings(world, entity, assets, graphics)
+        .into_iter()
+        .filter_map(|sibling| find_mesh_morph(world, sibling, assets, graphics))
+        .flat_map(|morph| &morph.channels)
+        .filter(|channel| channel.deforms_mesh())
+        .map(|channel| channel.name.as_str())
+        .collect();
+
+    let Some(morph) = find_mesh_morph(world, entity, assets, graphics) else {
+        return Vec::new();
+    };
+
+    morph
+        .channels
+        .iter()
+        .enumerate()
+        .filter(|(_, channel)| deforming_names.contains(channel.name.as_str()))
+        .map(|(channel_index, _)| channel_index)
+        .collect()
 }
 
 pub fn find_mesh_morph<'a>(

@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use cgmath::Matrix4;
 
-use crate::animation::{BoneId, BoneLocalPose, SkeletonId};
+use crate::animation::{BoneId, BoneLocalPose, Skeleton, SkeletonId, SkeletonPose};
 use crate::asset::AssetStorage;
+use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::{AnimationType, ClipLibrary, PoseApplyCache};
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 use crate::ecs::{apply_pose_overrides, compute_pose_global_transforms};
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
@@ -82,45 +83,26 @@ fn apply_blended_animations(
         dt,
     );
 
+    let pose_inputs = SharedPoseInputs {
+        assets,
+        constraints: &shared_constraints,
+        spring_result: &spring_result,
+        pose_overrides,
+    };
+    let mut evaluated_globals: HashMap<(Entity, SkeletonId), Option<Vec<Matrix4<f32>>>> =
+        HashMap::new();
+
     for info in entities {
         let Some(skeleton) = assets.get_skeleton_by_skeleton_id(info.skeleton_id) else {
             continue;
         };
 
-        let has_spring = spring_result
+        let Some(globals) = evaluated_globals
+            .entry((info.entity, info.skeleton_id))
+            .or_insert_with(|| evaluate_skeleton_globals(info, skeleton, nodes, &pose_inputs))
             .as_ref()
-            .map_or(false, |(skel_id, _, _)| *skel_id == info.skeleton_id);
-
-        let (globals, _pose) = if has_spring {
-            let (_, ref cached_globals, ref cached_pose) = spring_result
-                .as_ref()
-                .expect("has_spring is true so spring_result is Some");
-
-            if info.animation_type == AnimationType::Node {
-                compute_node_global_transforms(nodes, skeleton, cached_pose);
-            }
-
-            (cached_globals.clone(), None)
-        } else {
-            let Some(mut pose) = evaluate_entity_blend(info, assets) else {
-                continue;
-            };
-
-            if let Some(ref cs) = shared_constraints {
-                apply_constraints(cs, skeleton, &mut pose);
-            }
-
-            if !pose_overrides.is_empty() {
-                apply_pose_overrides(&mut pose, pose_overrides);
-            }
-
-            if info.animation_type == AnimationType::Node {
-                compute_node_global_transforms(nodes, skeleton, &pose);
-            }
-
-            let globals = compute_pose_global_transforms(skeleton, &pose);
-
-            (globals, Some(pose))
+        else {
+            continue;
         };
 
         if first_bone_transforms.is_none() {
@@ -159,13 +141,13 @@ fn apply_blended_animations(
                 )
             }
             _ => {
-                if should_skip_skinned(pose_apply_cache, info.mesh_idx, &globals) {
+                if should_skip_skinned(pose_apply_cache, info.mesh_idx, globals) {
                     continue;
                 }
                 pose_apply_cache
                     .skinned_cache
                     .insert(info.mesh_idx, globals.clone());
-                apply_skinning_to_single_mesh(graphics, info.mesh_idx, &globals, skeleton)
+                apply_skinning_to_single_mesh(graphics, info.mesh_idx, globals, skeleton)
             }
         };
 
@@ -175,6 +157,47 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+struct SharedPoseInputs<'a> {
+    assets: &'a AssetStorage,
+    constraints: &'a Option<ConstraintSet>,
+    spring_result: &'a Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)>,
+    pose_overrides: &'a HashMap<BoneId, BoneLocalPose>,
+}
+
+fn evaluate_skeleton_globals(
+    info: &AnimatedEntityInfo,
+    skeleton: &Skeleton,
+    nodes: &mut [NodeData],
+    inputs: &SharedPoseInputs,
+) -> Option<Vec<Matrix4<f32>>> {
+    let spring_result = inputs
+        .spring_result
+        .as_ref()
+        .filter(|(skeleton_id, _, _)| *skeleton_id == info.skeleton_id);
+    if let Some((_, spring_globals, spring_pose)) = spring_result {
+        if info.animation_type == AnimationType::Node {
+            compute_node_global_transforms(nodes, skeleton, spring_pose);
+        }
+        return Some(spring_globals.clone());
+    }
+
+    let mut pose = evaluate_entity_blend(info, inputs.assets)?;
+
+    if let Some(constraints) = inputs.constraints {
+        apply_constraints(constraints, skeleton, &mut pose);
+    }
+
+    if !inputs.pose_overrides.is_empty() {
+        apply_pose_overrides(&mut pose, inputs.pose_overrides);
+    }
+
+    if info.animation_type == AnimationType::Node {
+        compute_node_global_transforms(nodes, skeleton, &pose);
+    }
+
+    Some(compute_pose_global_transforms(skeleton, &pose))
 }
 
 #[inline]

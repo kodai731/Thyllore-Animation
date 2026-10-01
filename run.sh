@@ -68,10 +68,15 @@ Commands:
       full-mode env file; WORKER_URL is derived from
       THYLLORE_FEEDBACK_TEST_ENDPOINT when not given.
   unity-verify
-      Headless check of tools/unity/Editor/*.cs: empty Unity project + VRChat
-      SDK via vrc-get, synthetic Blender rig, BatchCheck via -executeMethod
-      (tools/unity/verify/run.sh). UNITY_EDITOR / UNITY_VERIFY_DIR override
-      the editor binary and work dir (default target/unity_verify).
+      End-to-end avatar check on a synthetic rig (tools/unity/verify/run.sh):
+      Blender builds a cube with a humanoid armature and blend shapes, the
+      engine (batch run, needs the GPU and a display) edits and keys the blend
+      shapes and exports the sidecar and .anim files, Unity (empty project +
+      VRChat SDK via vrc-get) applies tools/unity/Editor/*.cs and BatchCheck
+      compares the sampled animation with the engine's. UNITY_EDITOR /
+      UNITY_VERIFY_DIR / BLENDER override the editor binary, the work dir
+      (default target/unity_verify) and the Blender launcher (default
+      blender/docker/run_background.sh).
   help
       Show this help.
 EOF

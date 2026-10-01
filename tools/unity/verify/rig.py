@@ -1,5 +1,4 @@
 import bpy
-import json
 import os
 import sys
 from mathutils import Vector
@@ -91,6 +90,7 @@ def add_shape_keys(body):
     body.shape_key_add(name="Basis", from_mix=False)
     for index, name in enumerate(SHAPE_KEYS):
         key = body.shape_key_add(name=name, from_mix=False)
+        key.value = 0.0
         key.data[0].co.z += 0.01 * (index + 1)
 
 
@@ -106,23 +106,6 @@ def export(arm_obj, body):
         bake_anim=False,
         mesh_smooth_type="FACE",
     )
-
-    names = [name for name, _, _, _ in BONES]
-    rig = {
-        "bones": [
-            {
-                "name": name,
-                "parent": names.index(parent) if parent else None,
-                "rest_position": [head[0], head[1], head[2]],
-            }
-            for name, parent, head, _ in BONES
-        ],
-        "channels": SHAPE_KEYS,
-        "expression_mesh": "Body",
-        "spring_root": "Left_braid_1",
-    }
-    with open(os.path.join(OUT_DIR, "rig.json"), "w") as f:
-        json.dump(rig, f, indent=2)
     print("EXPORTED", fbx_path)
 
 

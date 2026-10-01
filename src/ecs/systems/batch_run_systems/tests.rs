@@ -6,7 +6,8 @@ use crate::ecs::component::{FlameEffect, MotionPath};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
+    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, ScheduledBatchAction,
+    ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
@@ -633,4 +634,76 @@ fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
     let pixels = vec![value; (width * height * 3) as usize];
     writer.write_image_data(&pixels).unwrap();
     writer.finish().unwrap();
+}
+
+#[test]
+fn scheduled_actions_parse_frame_and_action() {
+    let scheduled = scheduled_actions_resolve_from_args(&args(&[
+        "bin",
+        "--batch-debug-action-at",
+        "12:timeline_time=0.5",
+        "--batch-debug-action-at",
+        "3:reset_camera",
+    ]))
+    .unwrap();
+
+    assert_eq!(
+        scheduled,
+        vec![
+            ScheduledBatchAction {
+                frame: 12,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 3,
+                action: "reset_camera".to_string(),
+            },
+        ]
+    );
+}
+
+#[test]
+fn scheduled_actions_reject_malformed_specs() {
+    for spec in ["reset_camera", "x:reset_camera", "5:bogus", "5:"] {
+        assert!(
+            scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at", spec]))
+                .is_err(),
+            "{spec} must be rejected"
+        );
+    }
+    assert!(
+        scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at"])).is_err()
+    );
+}
+
+#[test]
+fn scheduled_actions_apply_once_their_frame_is_reached() {
+    let mut world = World::new();
+    world.insert_resource(UIEventQueue::default());
+    world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
+    world.insert_resource(ScheduledBatchActions {
+        pending: vec![
+            ScheduledBatchAction {
+                frame: 2,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 1,
+                action: "reset_camera".to_string(),
+            },
+        ],
+    });
+
+    world.resource_mut::<FrameClock>().frame = 1;
+    batch_apply_scheduled_actions(&mut world);
+    let first_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+
+    world.resource_mut::<FrameClock>().frame = 2;
+    batch_apply_scheduled_actions(&mut world);
+    batch_apply_scheduled_actions(&mut world);
+    let second_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+
+    assert!(matches!(first_frame_events[..], [UIEvent::ResetCamera]));
+    assert!(matches!(second_frame_events[..], [UIEvent::TimelineSetTime(time)] if time == 0.5));
+    assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
 }

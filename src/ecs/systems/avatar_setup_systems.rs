@@ -28,7 +28,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{AvatarSetupState, ExpressionLibraryState, ModelState};
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
-use crate::ecs::world::{Entity, World};
+use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -238,8 +238,8 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
         msg_error!("Cannot add spring chains: no skeleton loaded");
         return;
     };
-    let Some(spring_entity) = find_spring_bone_setup_entity(world) else {
-        msg_error!("Cannot add spring chains: no SpringBoneSetup entity found");
+    let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+        msg_error!("Cannot add spring chains: no animated model loaded");
         return;
     };
 
@@ -259,6 +259,20 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
             skeleton,
         );
     }
+}
+
+fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {
+    if let Some(entity) = find_spring_bone_setup_entity(world) {
+        return Some(entity);
+    }
+
+    let model_entity = world
+        .iter_components::<Animator>()
+        .map(|(entity, _)| entity)
+        .next()?;
+    world.insert_component(model_entity, SpringBoneSetup::default());
+    world.insert_component(model_entity, WithSpringBone);
+    Some(model_entity)
 }
 
 fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
@@ -397,6 +411,31 @@ mod tests {
         };
         mesh.skin_data = skin;
         mesh
+    }
+
+    #[test]
+    fn test_spring_setup_is_created_on_the_animated_model_when_missing() {
+        let mut world = World::new();
+        let model = world
+            .entity()
+            .with_name("model")
+            .with_animator(Animator::new())
+            .build();
+
+        let created = find_or_create_spring_bone_setup_entity(&mut world);
+        let found_again = find_or_create_spring_bone_setup_entity(&mut world);
+
+        assert_eq!(created, Some(model));
+        assert_eq!(found_again, Some(model));
+        assert!(world.has_component::<SpringBoneSetup>(model));
+        assert!(world.has_component::<WithSpringBone>(model));
+    }
+
+    #[test]
+    fn test_spring_setup_is_not_created_without_an_animated_model() {
+        let mut world = World::new();
+
+        assert_eq!(find_or_create_spring_bone_setup_entity(&mut world), None);
     }
 
     #[test]

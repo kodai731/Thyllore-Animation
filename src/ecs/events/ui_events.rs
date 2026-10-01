@@ -515,7 +515,7 @@ pub enum UIEvent {
     OpenScalarCurveEditor,
     SetMorphWeight {
         entity: Entity,
-        channel: usize,
+        channel: String,
         weight: f32,
     },
     ResetMorphWeights {

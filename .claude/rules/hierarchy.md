@@ -243,7 +243,10 @@ Concretely:
 - `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
   `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
-  never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
+  never names one. `--batch-debug-action-at <frame>:<action>` runs the same action once `FrameClock`
+  reaches the frame (`ScheduledBatchActions`, applied in the First phase), which is how a headless run
+  performs steps that must follow the model load or each other (avatar edits:
+  `src/ecs/systems/avatar_batch_actions.rs`). A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
   `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
 - A readback at the capture frame is a **request resource** under `src/ecs/resource/<effect>/batch.rs`
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to

@@ -211,7 +211,7 @@ fn build_channel_slider(
     if ui.slider(&label, 0.0f32, 1.0f32, &mut weight) {
         ui_events.send(UIEvent::SetMorphWeight {
             entity,
-            channel,
+            channel: channel_name.to_string(),
             weight,
         });
     }

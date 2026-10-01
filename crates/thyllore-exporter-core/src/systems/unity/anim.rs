@@ -74,12 +74,22 @@ fn write_curve_keys(out: &mut String, keys: &[UnityKey]) {
         out.push_str("      - serializedVersion: 3\n");
         let _ = writeln!(out, "        time: {}", key.time);
         let _ = writeln!(out, "        value: {}", key.value);
-        let _ = writeln!(out, "        inSlope: {}", key.in_slope);
-        let _ = writeln!(out, "        outSlope: {}", key.out_slope);
+        let _ = writeln!(out, "        inSlope: {}", format_slope(key.in_slope));
+        let _ = writeln!(out, "        outSlope: {}", format_slope(key.out_slope));
         out.push_str("        tangentMode: 0\n");
         out.push_str("        weightedMode: 0\n");
         out.push_str("        inWeight: 0.33333334\n");
         out.push_str("        outWeight: 0.33333334\n");
+    }
+}
+
+fn format_slope(slope: f32) -> String {
+    if slope == f32::INFINITY {
+        "Infinity".to_string()
+    } else if slope == f32::NEG_INFINITY {
+        "-Infinity".to_string()
+    } else {
+        slope.to_string()
     }
 }
 

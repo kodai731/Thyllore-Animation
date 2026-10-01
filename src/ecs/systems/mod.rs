@@ -2,6 +2,7 @@ pub mod animation;
 pub mod animation_debug_dump;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_systems;
+mod avatar_batch_actions;
 mod avatar_export_systems;
 mod avatar_setup_systems;
 mod batch_run_systems;

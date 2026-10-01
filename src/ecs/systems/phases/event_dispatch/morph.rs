@@ -21,7 +21,7 @@ pub fn dispatch_morph_weight_events(
                 channel,
                 weight,
             } => {
-                set_morph_weight_on_siblings(world, assets, graphics, *entity, *channel, *weight);
+                set_morph_weight_on_siblings(world, assets, graphics, *entity, channel, *weight);
             }
             UIEvent::ResetMorphWeights { entity } => {
                 reset_morph_weights_on_siblings(world, assets, graphics, *entity);

@@ -195,6 +195,33 @@ fn view_mode_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     )
 }
 
+#[derive(Debug)]
+pub struct TimelineTime(pub f32);
+
+impl BatchAction for TimelineTime {
+    fn name(&self) -> &'static str {
+        "timeline_time"
+    }
+    fn apply(&self, world: &mut World) {
+        world
+            .resource_mut::<UIEventQueue>()
+            .send(UIEvent::TimelineSetTime(self.0));
+    }
+}
+
+fn timeline_time_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let seconds_text = text.strip_prefix("timeline_time=")?.trim();
+    Some(
+        seconds_text
+            .parse::<f32>()
+            .ok()
+            .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+            .map(|seconds| Box::new(TimelineTime(seconds)) as Box<dyn BatchAction>)
+            .ok_or_else(|| anyhow::anyhow!("invalid timeline_time seconds '{seconds_text}'")),
+    )
+}
+
+crate::batch_action!("timeline_time", timeline_time_parse);
 crate::batch_action!("view_mode", view_mode_parse);
 crate::batch_action!("black_background", unit_action_parse::<BlackBackground>);
 

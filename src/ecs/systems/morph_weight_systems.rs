@@ -164,16 +164,11 @@ pub fn set_morph_weight_on_siblings(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     entity: Entity,
-    channel: usize,
+    channel_name: &str,
     weight: f32,
 ) {
-    let Some(channel_name) = find_morph_channel_names(world, entity, assets, graphics)
-        .and_then(|names| names.get(channel).cloned())
-    else {
-        return;
-    };
     for_each_morph_sibling(world, assets, graphics, entity, |world, sibling, morph| {
-        let Some(sibling_channel) = morph.channel_index(&channel_name) else {
+        let Some(sibling_channel) = morph.channel_index(channel_name) else {
             return;
         };
         let channel_names = morph.channel_names();

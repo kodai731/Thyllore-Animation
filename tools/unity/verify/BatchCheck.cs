@@ -1,8 +1,10 @@
 #if UNITY_EDITOR
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -11,9 +13,49 @@ using VRC.SDK3.Dynamics.PhysBone.Components;
 
 namespace Thyllore.AvatarTools
 {
+    [Serializable]
+    public class MorphTrackDump
+    {
+        [JsonProperty("clip")]
+        public string clip;
+
+        [JsonProperty("anim_file")]
+        public string anim_file;
+
+        [JsonProperty("duration")]
+        public float duration;
+
+        [JsonProperty("samples")]
+        public List<MorphTrackDumpSample> samples = new List<MorphTrackDumpSample>();
+    }
+
+    [Serializable]
+    public class MorphTrackDumpSample
+    {
+        [JsonProperty("time")]
+        public float time;
+
+        [JsonProperty("weights")]
+        public List<MorphTrackDumpWeight> weights = new List<MorphTrackDumpWeight>();
+    }
+
+    [Serializable]
+    public class MorphTrackDumpWeight
+    {
+        [JsonProperty("source_mesh")]
+        public string source_mesh;
+
+        [JsonProperty("channel")]
+        public string channel;
+
+        [JsonProperty("weight")]
+        public float weight;
+    }
+
     public static class BatchCheck
     {
         private const string AssetDir = "Assets/Avatar";
+        private const float MorphWeightTolerance = 0.002f;
         private static int failures;
 
         private static void Check(bool condition, string label)
@@ -42,7 +84,8 @@ namespace Thyllore.AvatarTools
         {
             var fbxSource = Environment.GetEnvironmentVariable("THYLLORE_FBX");
             var sidecarPath = Environment.GetEnvironmentVariable("THYLLORE_SIDECAR");
-            var animSource = Environment.GetEnvironmentVariable("THYLLORE_ANIM");
+            var expressionAnimSource = Environment.GetEnvironmentVariable("THYLLORE_EXPRESSION_ANIM");
+            var morphSamplesPath = Environment.GetEnvironmentVariable("THYLLORE_MORPH_SAMPLES");
 
             Directory.CreateDirectory(AssetDir);
             var fbxAsset = Path.Combine(AssetDir, Path.GetFileName(fbxSource));
@@ -67,11 +110,9 @@ namespace Thyllore.AvatarTools
             CheckSpringChains(root, sidecar);
 
             CheckExpressions(root, sidecar);
+            CheckAnimClip(expressionAnimSource);
 
-            if (!string.IsNullOrEmpty(animSource))
-            {
-                CheckAnimClip(animSource);
-            }
+            CheckMorphTrackAnimation(root, morphSamplesPath);
         }
 
         private static GameObject Instantiate(string fbxAsset)
@@ -130,18 +171,22 @@ namespace Thyllore.AvatarTools
 
         private static void CheckSpringChains(GameObject root, AvatarSidecar sidecar)
         {
-            var chain = sidecar.spring_chains[0];
-            var bone = root.GetComponentsInChildren<Transform>(true).First(t => t.name == chain.root).GetComponent<VRCPhysBone>();
-            Check(bone != null, "VRCPhysBone added");
-            if (bone == null) return;
-            Check(Mathf.Approximately(bone.pull, 0.7f), $"pull {bone.pull}");
-            Check(Mathf.Approximately(bone.spring, 0.6f), $"spring {bone.spring}");
-            Check(Mathf.Approximately(bone.gravity, 0.2f), $"gravity {bone.gravity}");
+            Check(sidecar.spring_chains.Count > 0, $"sidecar spring chains {sidecar.spring_chains.Count}");
+            foreach (var chain in sidecar.spring_chains)
+            {
+                var bone = root.GetComponentsInChildren<Transform>(true).First(t => t.name == chain.root).GetComponent<VRCPhysBone>();
+                Check(bone != null, $"VRCPhysBone added to {chain.root}");
+                if (bone == null) continue;
+                Check(Mathf.Approximately(bone.pull, Mathf.Clamp01(chain.stiffness)), $"{chain.root} pull {bone.pull}");
+                Check(Mathf.Approximately(bone.spring, Mathf.Clamp01(1f - chain.drag)), $"{chain.root} spring {bone.spring}");
+                Check(Mathf.Approximately(bone.gravity, Mathf.Clamp01(chain.gravity)), $"{chain.root} gravity {bone.gravity}");
+            }
         }
 
         private static void CheckExpressions(GameObject root, AvatarSidecar sidecar)
         {
             var mesh = root.GetComponentsInChildren<SkinnedMeshRenderer>(true).First(s => s.name == sidecar.expression_mesh).sharedMesh;
+            Check(sidecar.expressions.Count > 0, $"sidecar expressions {sidecar.expressions.Count}");
             foreach (var expression in sidecar.expressions)
             {
                 foreach (var weight in expression.weights)
@@ -151,13 +196,19 @@ namespace Thyllore.AvatarTools
             }
         }
 
-        private static void CheckAnimClip(string animSource)
+        private static AnimationClip ImportAnimClip(string animSource)
         {
             var animAsset = Path.Combine(AssetDir, Path.GetFileName(animSource));
             File.Copy(animSource, animAsset, true);
             AssetDatabase.ImportAsset(animAsset, ImportAssetOptions.ForceSynchronousImport);
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(animAsset);
-            Check(clip != null, "anim clip loaded");
+            Check(clip != null, $"anim clip loaded: {Path.GetFileName(animSource)}");
+            return clip;
+        }
+
+        private static void CheckAnimClip(string animSource)
+        {
+            var clip = ImportAnimClip(animSource);
             if (clip == null) return;
 
             var bindings = AnimationUtility.GetCurveBindings(clip);
@@ -168,6 +219,63 @@ namespace Thyllore.AvatarTools
                 Debug.Log($"BATCHCHECK INFO binding path='{binding.path}' type={binding.type.Name} prop={binding.propertyName} keys={curve.length}");
             }
             Debug.Log($"BATCHCHECK INFO clip length={clip.length} frameRate={clip.frameRate}");
+        }
+
+        private static void CheckMorphTrackAnimation(GameObject root, string morphSamplesPath)
+        {
+            var dump = JsonConvert.DeserializeObject<MorphTrackDump>(File.ReadAllText(morphSamplesPath));
+            Check(dump.samples.Count > 1, $"engine morph samples {dump.samples.Count}");
+
+            var clip = ImportAnimClip(Path.Combine(Path.GetDirectoryName(morphSamplesPath), dump.anim_file));
+            if (clip == null) return;
+            Check(Mathf.Abs(clip.length - dump.duration) < 1e-3f, $"clip length {clip.length} == engine duration {dump.duration}");
+
+            var renderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true).ToDictionary(r => r.name);
+            var comparedWeights = 0;
+            var maxError = 0f;
+            var worstCase = "none";
+
+            AnimationMode.StartAnimationMode();
+            try
+            {
+                foreach (var sample in dump.samples)
+                {
+                    AnimationMode.BeginSampling();
+                    AnimationMode.SampleAnimationClip(root, clip, sample.time);
+                    AnimationMode.EndSampling();
+
+                    foreach (var expected in sample.weights)
+                    {
+                        if (!renderers.TryGetValue(expected.source_mesh, out var renderer))
+                        {
+                            Check(false, $"mesh {expected.source_mesh} exists under avatar root");
+                            return;
+                        }
+                        var blendShapeIndex = renderer.sharedMesh.GetBlendShapeIndex(expected.channel);
+                        if (blendShapeIndex < 0)
+                        {
+                            Check(false, $"blend shape {expected.channel} exists on {expected.source_mesh}");
+                            return;
+                        }
+
+                        var appliedWeight = renderer.GetBlendShapeWeight(blendShapeIndex) / 100f;
+                        var error = Mathf.Abs(appliedWeight - expected.weight);
+                        comparedWeights++;
+                        if (error > maxError)
+                        {
+                            maxError = error;
+                            worstCase = $"{expected.channel} at {sample.time:F3}s: engine {expected.weight:F4}, unity {appliedWeight:F4}";
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                AnimationMode.StopAnimationMode();
+            }
+
+            Check(comparedWeights > 0, $"compared {comparedWeights} weights over {dump.samples.Count} sample times");
+            Check(maxError <= MorphWeightTolerance, $"morph animation matches engine: max error {maxError:F5} ({worstCase})");
         }
     }
 }

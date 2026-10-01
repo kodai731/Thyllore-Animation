@@ -98,16 +98,7 @@ impl App {
     }
 
     pub unsafe fn apply_app_commands(&mut self) {
-        let commands = std::mem::take(
-            &mut self
-                .data
-                .ecs_world
-                .resource_mut::<crate::ecs::resource::AppCommandQueue>()
-                .commands,
-        );
-        for command in commands {
-            crate::app::command::apply_app_command(self, command);
-        }
+        crate::app::command::apply_queued_commands(self);
 
         self.spawn_pending_debug_primitives();
     }

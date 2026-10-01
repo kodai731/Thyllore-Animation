@@ -35,7 +35,9 @@ A crate holds code that is meaningful without the engine: pure math, domain type
 operations, GPU primitives, importers and exporters, codegen used by build scripts.
 
 - Every crate is named `thyllore-<topic>-core` (or `-api`, `-debug`, `-client`, and `-derive` for the
-  proc-macro companion of a `-core` crate) and states its layer and what it must not depend on in
+  proc-macro companion of a `-core` crate; Rust forbids proc-macros inside a library crate, so a derive that
+  belongs to one core crate nests in its directory and is re-exported by it like serde does:
+  `thyllore-scene-core/derive/` is `#[derive(SceneFields)]`, `thyllore-effect-core/derive/` is `#[derive(UboPack)]`) and states its layer and what it must not depend on in
   `Cargo.toml` `description`. The two build-script helpers (`thyllore-shader-manifest`,
   `thyllore-spirv-reflect`) are named for the artefact they produce instead; no further exception.
 - A crate never depends on `World`, `Entity`, `AssetStorage` or `App`.
@@ -197,7 +199,7 @@ inside the effect stage.
 Every feature (today the effects flame, water, wind) is a set of directories that only it may name. Code
 outside those directories reaches a feature through a contract (`src/hooks/`), a registry it subscribes to
 (`src/effect/subscription.rs`), or reflection metadata the feature's own declaration generates
-(`declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
+(`#[derive(SceneFields)]` / `declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
 `UiParam` tables). The rule is about generic files, not only about effects: a file whose job would not change if
 one feature were deleted (a phase, a shared system, a resource module, a pass, an app init step) must
 compile and behave the same without that feature, so it never names the feature's components, resources,
@@ -224,13 +226,15 @@ Concretely:
   `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
   engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
   `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
-  `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item. Hooks are
+  `<Effect>::TYPE_KEY`, which comes from the effect struct's `#[scene(key = ...)]` attribute (resource:
+  `declare_scene_format!`). Hooks are
   registered at link time (`inventory`): `scene_owner!(Effect { icon, placement, prepare_loaded? })`
   and `scene_attachment!(C)` in the component's own file both submit the hook, and
   `SceneComponentHooks::collect()` gathers every submission at app start (duplicate keys fail there).
   There is no list of scene components anywhere.
-- Adding a persisted parameter = one entry in the effect's `declare_scene_format!` table. Nothing in
-  `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
+- Adding a persisted parameter = one `#[persist(...)]` attribute on the field, in the struct that owns it (a
+  sub-struct derives `SceneFields` with `#[params(tag = ...)]`, the effect marks it `#[nested]`); its public name
+  is `<parent>_<field>` and its scene path `parent.field`. Nothing in `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
   = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
   own per-frame system when missing, never by the loader.
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,
@@ -239,7 +243,10 @@ Concretely:
 - `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
   `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
-  never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
+  never names one. `--batch-debug-action-at <frame>:<action>` runs the same action once `FrameClock`
+  reaches the frame (`ScheduledBatchActions`, applied in the First phase), which is how a headless run
+  performs steps that must follow the model load or each other (avatar edits:
+  `src/ecs/systems/avatar_batch_actions.rs`). A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
   `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
 - A readback at the capture frame is a **request resource** under `src/ecs/resource/<effect>/batch.rs`
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
@@ -270,7 +277,10 @@ Concretely:
   `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
   `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
   `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
-  never lists them. Tests of the shared clip, timeline, dispatch and batch code use the test-only
+  never lists them. A channel never carries a hand-written `Custom` code: the domain derives it as the
+  block's `first_code` plus the channel's position in `channels` (`ScalarChannelDomain::property_type_at`),
+  so a new channel is appended to the end of the table and existing ones are never reordered or removed.
+  Tests of the shared clip, timeline, dispatch and batch code use the test-only
   `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
   `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
@@ -352,11 +362,11 @@ and drives one frame. It is the only place that sees `App` as a whole.
 Files: `init/` and `cleanup.rs` (construction, teardown), `config.rs` (`AppConfig`: parsed engine flags and
 resolved bootstrap hooks) and `bootstrap.rs` (applies them), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `frame.rs` (`App::drive_frame`: the one frame driver, runs
-`FRAME_SCHEDULE` end to end: event dispatch and `AppCommand`s, `begin_frame`, `update`, `render`, Last;
+`FRAME_SCHEDULE` end to end: event dispatch and queued commands, `begin_frame`, `update`, `render`, Last;
 a step that needs the presented image goes at its end, never into `render.rs` or `src/platform/`),
 `render.rs` (`begin_frame` / `render`), `update.rs` (per-frame update and
-imgui buffers), `command.rs` (`apply_app_command`: the one place that executes an `AppCommand` recorded by
-the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph),
+imgui buffers), `command.rs` (`apply_queued_commands`: the one place that executes the commands queued in
+the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
@@ -370,7 +380,7 @@ once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `r
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
 `screenshot.rs` (swapchain and image readback to a host buffer, PNG encoding), `export_actions.rs` (clip and
-model export entry points run from `AppCommand`). A feature may be removed
+model export entry points run from `OutputCommand`). A feature may be removed
 without touching the frame loop; if removing it would break `begin_frame` / `render`, it is not a feature.
 
 Belongs here:

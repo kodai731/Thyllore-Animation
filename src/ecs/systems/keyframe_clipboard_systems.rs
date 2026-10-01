@@ -55,12 +55,26 @@ fn copy_keyframes(
     let mut entries = Vec::new();
 
     for sel in &timeline_state.selected_keyframes {
-        let curve = match sel.track {
-            CurveTrackRef::Bone(bone_id) => clip
-                .tracks
-                .get(&bone_id)
-                .map(|track| track.get_curve(sel.property_type)),
-            CurveTrackRef::Scalar => clip.get_scalar_curve(sel.property_type),
+        let (curve, source_mesh, channel) = match sel.track {
+            CurveTrackRef::Bone(bone_id) => (
+                clip.tracks
+                    .get(&bone_id)
+                    .map(|track| track.get_curve(sel.property_type)),
+                None,
+                None,
+            ),
+            CurveTrackRef::Scalar => (clip.get_scalar_curve(sel.property_type), None, None),
+            CurveTrackRef::Morph(i) => {
+                let mt = match clip.morph_tracks.get(i) {
+                    Some(mt) => mt,
+                    None => continue,
+                };
+                (
+                    Some(&mt.curve),
+                    Some(mt.source_mesh.clone()),
+                    Some(mt.channel.clone()),
+                )
+            }
         };
         if let Some(curve) = curve {
             if let Some(kf) = curve.get_keyframe(sel.keyframe_id) {
@@ -69,6 +83,8 @@ fn copy_keyframes(
                 }
                 entries.push(CopiedKeyframe {
                     bone_id: sel.track.bone_id(),
+                    source_mesh,
+                    channel,
                     property_type: sel.property_type,
                     relative_time: kf.time,
                     value: kf.value,
@@ -125,7 +141,12 @@ fn paste_entry_into_clip(
             Some(track) => track.get_curve_mut(entry.property_type),
             None => return,
         },
-        None => clip.get_or_add_scalar_curve(entry.property_type),
+        None => match (&entry.source_mesh, &entry.channel) {
+            (Some(source_mesh), Some(channel)) => {
+                &mut clip.get_or_add_morph_track(source_mesh, channel).curve
+            }
+            _ => clip.get_or_add_scalar_curve(entry.property_type),
+        },
     };
     let new_id = curve_add_keyframe(curve, time, entry.value);
     curve.set_keyframe_interpolation(new_id, entry.interpolation);

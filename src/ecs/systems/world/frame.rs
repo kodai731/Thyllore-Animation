@@ -97,7 +97,6 @@ unsafe fn run_update_phase(
             run_first_phase(ctx.world);
         }
         FramePhase::Input => {
-            let mesh_positions = collect_mesh_positions(ctx.graphics);
             let mut ecs_ctx = EcsContext {
                 time: ctx.time,
                 delta_time: ctx.delta_time,
@@ -105,7 +104,6 @@ unsafe fn run_update_phase(
                 swapchain_extent: ctx.swapchain_extent,
                 world: ctx.world,
                 assets: ctx.assets,
-                mesh_positions,
             };
             run_input_phase(&mut ecs_ctx)?;
         }
@@ -117,7 +115,6 @@ unsafe fn run_update_phase(
                 swapchain_extent: ctx.swapchain_extent,
                 world: ctx.world,
                 assets: ctx.assets,
-                mesh_positions: Vec::new(),
             };
             run_transform_phase_ecs(&mut ecs_ctx);
         }

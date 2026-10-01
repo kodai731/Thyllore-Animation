@@ -25,7 +25,6 @@ use crate::ecs::{
 };
 use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
 use crate::math::screen_to_world_ray;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     process_pending_mesh_selection(ctx);
@@ -1134,23 +1133,6 @@ fn process_pending_mesh_selection(ctx: &mut EcsContext) {
     readback.is_ctrl = readback_state.is_ctrl;
 }
 
-pub fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {
-    if graphics.meshes.is_empty() {
-        return Vec::new();
-    }
-
-    graphics
-        .meshes
-        .iter()
-        .flat_map(|mesh| {
-            mesh.vertex_data
-                .vertices
-                .iter()
-                .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1186,7 +1168,6 @@ mod tests {
             swapchain_extent: (1, 1),
             world: &mut world,
             assets: &mut assets,
-            mesh_positions: Vec::new(),
         };
 
         sync_transform_gizmo(&mut ctx);

@@ -1,0 +1,112 @@
+[meta]
+source = "VRChat Avatar Performance Ranking System (creators.vrchat.com/avatars/avatar-performance-ranking-system)"
+verified = true
+note = "confirmed against the official page on 2026-09-29"
+
+[pc.triangles]
+excellent = 32000
+good = 70000
+medium = 70000
+poor = 70000
+
+[pc.texture_memory_mb]
+excellent = 40
+good = 75
+medium = 110
+poor = 150
+
+[pc.skinned_meshes]
+excellent = 1
+good = 2
+medium = 8
+poor = 16
+
+[pc.meshes]
+excellent = 4
+good = 8
+medium = 16
+poor = 24
+
+[pc.material_slots]
+excellent = 4
+good = 8
+medium = 16
+poor = 32
+
+[pc.physbone_components]
+excellent = 4
+good = 8
+medium = 16
+poor = 32
+
+[pc.physbone_transforms]
+excellent = 16
+good = 64
+medium = 128
+poor = 256
+
+[pc.physbone_colliders]
+excellent = 4
+good = 8
+medium = 16
+poor = 32
+
+[pc.bones]
+excellent = 75
+good = 150
+medium = 256
+poor = 400
+
+[quest.triangles]
+excellent = 7500
+good = 10000
+medium = 15000
+poor = 20000
+
+[quest.texture_memory_mb]
+excellent = 10
+good = 18
+medium = 25
+poor = 40
+
+[quest.skinned_meshes]
+excellent = 1
+good = 1
+medium = 2
+poor = 2
+
+[quest.meshes]
+excellent = 1
+good = 1
+medium = 2
+poor = 2
+
+[quest.material_slots]
+excellent = 1
+good = 1
+medium = 2
+poor = 4
+
+[quest.physbone_components]
+excellent = 0
+good = 4
+medium = 6
+poor = 8
+
+[quest.physbone_transforms]
+excellent = 0
+good = 16
+medium = 32
+poor = 64
+
+[quest.physbone_colliders]
+excellent = 0
+good = 4
+medium = 8
+poor = 16
+
+[quest.bones]
+excellent = 75
+good = 90
+medium = 150
+poor = 150

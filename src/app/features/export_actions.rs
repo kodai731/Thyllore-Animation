@@ -10,11 +10,11 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
         return;
     };
 
-    let (fbx_model, needs_coord_conversion) = app
+    let (fbx_model, has_skinned_meshes) = app
         .data
         .ecs_world
         .get_resource::<FbxModelCache>()
-        .map(|cache| (cache.fbx_model().cloned(), cache.needs_coord_conversion()))
+        .map(|cache| (cache.fbx_model().cloned(), cache.has_skinned_meshes()))
         .unwrap_or((None, false));
 
     let result = match fbx_model {
@@ -25,7 +25,7 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
             &clip,
             &skeleton,
             path,
-            needs_coord_conversion,
+            has_skinned_meshes,
             crate::loader::fbx::fbx::FbxAxesInfo::default(),
             24.0,
         ),

@@ -23,6 +23,7 @@ pub struct LoadedMesh {
     pub node_index: Option<usize>,
     pub local_vertices: Vec<Vertex>,
     pub texture: Option<TextureSource>,
+    pub material_name: String,
     pub base_color_factor: [f32; 4],
     pub morph: MeshMorph,
 }
@@ -36,10 +37,15 @@ impl Default for LoadedMesh {
             node_index: None,
             local_vertices: Vec::new(),
             texture: None,
+            material_name: name_unnamed_material(0),
             base_color_factor: [1.0, 1.0, 1.0, 1.0],
             morph: MeshMorph::default(),
         }
     }
+}
+
+pub fn name_unnamed_material(mesh_index: usize) -> String {
+    format!("material_{}", mesh_index)
 }
 
 #[derive(Clone, Debug)]
@@ -74,12 +80,14 @@ impl ModelLoadResult {
         let meshes = result
             .meshes
             .into_iter()
-            .map(|m| LoadedMesh {
+            .enumerate()
+            .map(|(mesh_index, m)| LoadedMesh {
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,
                 node_index: m.node_index,
                 local_vertices: m.local_vertices,
+                material_name: name_unnamed_material(mesh_index),
                 texture: m.image_data.first().map(|img| {
                     TextureSource::Embedded(TextureData {
                         data: img.data.clone(),
@@ -124,13 +132,17 @@ impl ModelLoadResult {
         let meshes = result
             .meshes
             .into_iter()
-            .map(|m| LoadedMesh {
+            .enumerate()
+            .map(|(mesh_index, m)| LoadedMesh {
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,
                 node_index: m.node_index,
                 local_vertices: m.local_vertices,
                 texture: m.texture_path.map(TextureSource::File),
+                material_name: m
+                    .material_name
+                    .unwrap_or_else(|| name_unnamed_material(mesh_index)),
                 base_color_factor: [1.0, 1.0, 1.0, 1.0],
                 morph: m.morph,
             })

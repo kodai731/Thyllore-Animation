@@ -34,6 +34,7 @@ pub struct FbxMeshData {
     pub morph: thyllore_model_core::MeshMorph,
     pub skeleton_id: Option<u32>,
     pub texture_path: Option<String>,
+    pub material_name: Option<String>,
     pub node_index: Option<usize>,
     pub local_vertices: Vec<Vertex>,
     pub base_positions: Vec<[f32; 3]>,
@@ -61,7 +62,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLo
     let has_skinned_meshes = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
 
     let skeleton_id = if has_armature {
-        let skeleton = convert_nodes_to_skeleton(&fbx_model.nodes, has_skinned_meshes);
+        let skeleton = convert_nodes_to_skeleton(&fbx_model.nodes);
         Some(animation_system.add_skeleton(skeleton))
     } else {
         None
@@ -87,7 +88,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLo
         clips.push(clip);
     }
 
-    let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes, has_skinned_meshes);
+    let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes);
 
     let mut meshes = Vec::new();
     for fbx_data in &fbx_model.fbx_data {
@@ -110,10 +111,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLo
 
 fn convert_bone_nodes_to_node_info(
     bone_nodes: &HashMap<String, super::fbx::BoneNode>,
-    needs_coord_conversion: bool,
 ) -> Vec<FbxNodeInfo> {
-    use thyllore_math_core::coordinate_system::fbx_to_world;
-
     let mut nodes = Vec::new();
     let mut name_to_index: HashMap<String, usize> = HashMap::new();
 
@@ -131,21 +129,11 @@ fn convert_bone_nodes_to_node_info(
                 .as_ref()
                 .and_then(|parent_name| name_to_index.get(parent_name).copied());
 
-            let is_root_or_root_child = parent_index.is_none()
-                || *name == "RootNode"
-                || bone_node.parent.as_ref().map_or(false, |p| p == "RootNode");
-
-            let local_transform = if needs_coord_conversion && is_root_or_root_child {
-                fbx_to_world() * bone_node.local_transform
-            } else {
-                bone_node.local_transform
-            };
-
             nodes.push(FbxNodeInfo {
                 index,
                 name: (*name).clone(),
                 parent_index,
-                local_transform,
+                local_transform: bone_node.local_transform,
             });
         }
     }
@@ -191,10 +179,7 @@ fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
     }
 }
 
-fn convert_nodes_to_skeleton(
-    nodes: &HashMap<String, super::fbx::BoneNode>,
-    needs_coord_conversion: bool,
-) -> Skeleton {
+fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> Skeleton {
     let mut skeleton = Skeleton::new("fbx_skeleton");
 
     let mut name_to_id: HashMap<String, u32> = HashMap::new();
@@ -204,13 +189,7 @@ fn convert_nodes_to_skeleton(
     for name in &sorted_names {
         if let Some(node) = nodes.get(*name) {
             if node.parent.is_none() {
-                add_bone_recursive(
-                    &mut skeleton,
-                    *name,
-                    nodes,
-                    &mut name_to_id,
-                    needs_coord_conversion,
-                );
+                add_bone_recursive(&mut skeleton, *name, nodes, &mut name_to_id);
             }
         }
     }
@@ -218,13 +197,7 @@ fn convert_nodes_to_skeleton(
     for name in &sorted_names {
         if !name_to_id.contains_key(*name) {
             if let Some(_node) = nodes.get(*name) {
-                add_bone_recursive(
-                    &mut skeleton,
-                    *name,
-                    nodes,
-                    &mut name_to_id,
-                    needs_coord_conversion,
-                );
+                add_bone_recursive(&mut skeleton, *name, nodes, &mut name_to_id);
             }
         }
     }
@@ -237,10 +210,7 @@ fn add_bone_recursive(
     name: &str,
     nodes: &HashMap<String, super::fbx::BoneNode>,
     name_to_id: &mut HashMap<String, u32>,
-    needs_coord_conversion: bool,
 ) -> u32 {
-    use thyllore_math_core::coordinate_system::fbx_to_world;
-
     if let Some(&id) = name_to_id.get(name) {
         return id;
     }
@@ -254,13 +224,7 @@ fn add_bone_recursive(
         if let Some(&pid) = name_to_id.get(parent_name) {
             Some(pid)
         } else {
-            let pid = add_bone_recursive(
-                skeleton,
-                parent_name,
-                nodes,
-                name_to_id,
-                needs_coord_conversion,
-            );
+            let pid = add_bone_recursive(skeleton, parent_name, nodes, name_to_id);
             Some(pid)
         }
     } else {
@@ -271,15 +235,7 @@ fn add_bone_recursive(
     name_to_id.insert(name.to_string(), bone_id);
 
     if let Some(bone) = skeleton.get_bone_mut(bone_id) {
-        let is_root_or_root_child = parent_id.is_none()
-            || name == "RootNode"
-            || node.parent.as_ref().map_or(false, |p| p == "RootNode");
-
-        if needs_coord_conversion && is_root_or_root_child {
-            bone.local_transform = fbx_to_world() * node.local_transform;
-        } else {
-            bone.local_transform = node.local_transform;
-        }
+        bone.local_transform = node.local_transform;
     }
 
     let mut child_names: Vec<&String> = nodes
@@ -293,13 +249,7 @@ fn add_bone_recursive(
     child_names.sort();
 
     for child_name in child_names {
-        add_bone_recursive(
-            skeleton,
-            child_name,
-            nodes,
-            name_to_id,
-            needs_coord_conversion,
-        );
+        add_bone_recursive(skeleton, child_name, nodes, name_to_id);
     }
 
     bone_id
@@ -413,6 +363,7 @@ fn convert_fbx_data_to_mesh(
         morph: fbx_data.morph.clone(),
         skeleton_id,
         texture_path: fbx_data.diffuse_texture.clone(),
+        material_name: fbx_data.material_name.clone(),
         node_index,
         local_vertices,
         base_positions,

@@ -54,10 +54,8 @@ fn role_to_string(
 fn test_convention(convention_id: &str) {
     let bones = load_fixture_bones(convention_id);
 
-    let (mapping, unresolved) = thyllore_avatar_core::humanoid::systems::infer::infer_mapping(
-        &bones,
-        &thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules::default(),
-    );
+    let (mapping, unresolved) =
+        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
 
     let unresolved_required: Vec<_> = unresolved
         .iter()

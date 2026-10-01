@@ -2,12 +2,17 @@ use crate::expression::components::preset::{ExpressionPreset, PresetApplication}
 
 const CAPTURE_EPSILON: f32 = 1e-6;
 
-pub fn apply_preset(preset: &ExpressionPreset, channel_names: &[String]) -> PresetApplication {
+pub fn apply_preset(
+    preset: &ExpressionPreset,
+    channel_names: &[String],
+    default_weights: &[f32],
+) -> PresetApplication {
     let mut weights = Vec::with_capacity(channel_names.len());
     let mut unknown_channels = Vec::new();
 
-    for name in channel_names {
-        let weight = preset.weights.get(name).copied().unwrap_or(0.0);
+    for (index, name) in channel_names.iter().enumerate() {
+        let default_weight = default_weights.get(index).copied().unwrap_or(0.0);
+        let weight = preset.weights.get(name).copied().unwrap_or(default_weight);
         weights.push(weight);
     }
 
@@ -64,7 +69,7 @@ mod tests {
             .collect(),
         };
 
-        let result = apply_preset(&preset, &names);
+        let result = apply_preset(&preset, &names, &[]);
 
         assert_eq!(result.weights, vec![1.0, 0.5, 0.0]);
         assert!(result.unknown_channels.is_empty());
@@ -78,7 +83,7 @@ mod tests {
             weights: [("eye_angry".to_string(), 1.0)].into_iter().collect(),
         };
 
-        let result = apply_preset(&preset, &names);
+        let result = apply_preset(&preset, &names, &[]);
 
         assert_eq!(result.weights, vec![1.0, 0.0, 0.0]);
         assert!(result.unknown_channels.is_empty());
@@ -97,7 +102,7 @@ mod tests {
             .collect(),
         };
 
-        let result = apply_preset(&preset, &names);
+        let result = apply_preset(&preset, &names, &[]);
 
         assert_eq!(result.weights, vec![1.0, 0.0, 0.0]);
         assert_eq!(result.unknown_channels, vec!["unknown_channel"]);
@@ -146,7 +151,7 @@ mod tests {
         let original_weights = [1.0, 0.5, 0.0];
 
         let preset = capture_preset("roundtrip", &names, &original_weights);
-        let applied = apply_preset(&preset, &names);
+        let applied = apply_preset(&preset, &names, &[]);
 
         assert_eq!(applied.weights, vec![1.0, 0.5, 0.0]);
         assert!(applied.unknown_channels.is_empty());
@@ -160,9 +165,22 @@ mod tests {
         let preset = capture_preset("roundtrip", &names, &original_weights);
 
         let old_names = vec!["eye_angry".to_string(), "mouth_smile".to_string()];
-        let applied = apply_preset(&preset, &old_names);
+        let applied = apply_preset(&preset, &old_names, &[]);
 
         assert_eq!(applied.weights, vec![1.0, 0.5]);
         assert_eq!(applied.unknown_channels, vec!["eyebrow_raise"]);
+    }
+
+    #[test]
+    fn test_apply_preset_falls_back_to_default_weight() {
+        let names = vec!["Toe_heels".to_string(), "eye_angry".to_string()];
+        let preset = ExpressionPreset {
+            name: "test".to_string(),
+            weights: [("eye_angry".to_string(), 0.8)].into_iter().collect(),
+        };
+
+        let result = apply_preset(&preset, &names, &[1.0, 0.0]);
+
+        assert_eq!(result.weights, vec![1.0, 0.8]);
     }
 }

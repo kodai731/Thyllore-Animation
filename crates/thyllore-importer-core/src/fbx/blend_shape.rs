@@ -2,20 +2,20 @@ use std::collections::HashMap;
 
 use thyllore_model_core::{MorphChannel, SparseDelta};
 
-use super::fbx::{FbxModel, MeshSplitInfo};
+use super::fbx::{ControlPointVertexMap, FbxModel, MeshSplitInfo};
 
 fn remap_shape_offsets(
     offset_vertices: &[u32],
     offsets: &[[f32; 3]],
-    vertex_map: &HashMap<u32, u32>,
+    vertex_map: &ControlPointVertexMap,
 ) -> Vec<SparseDelta> {
     if offsets.is_empty() {
         return Vec::new();
     }
     let mut deltas = Vec::new();
     for (i, &ctrl_idx) in offset_vertices.iter().enumerate() {
-        if let Some(&mapped) = vertex_map.get(&ctrl_idx) {
-            let offset = offsets.get(i).copied().unwrap_or([0.0, 0.0, 0.0]);
+        let offset = offsets.get(i).copied().unwrap_or([0.0, 0.0, 0.0]);
+        for &mapped in vertex_map.get(&ctrl_idx).into_iter().flatten() {
             deltas.push(SparseDelta {
                 vertex_index: mapped,
                 delta: offset,
@@ -102,6 +102,7 @@ pub(super) fn extract_blend_shapes(
                         .channels
                         .push(MorphChannel {
                             name: channel_name.clone(),
+                            default_weight: channel.weight as f32,
                             position_deltas,
                             normal_deltas,
                         });
@@ -120,9 +121,9 @@ mod tests {
     #[test]
     fn test_full_overlap() {
         let mut vertex_map = HashMap::new();
-        vertex_map.insert(0u32, 0u32);
-        vertex_map.insert(1u32, 1u32);
-        vertex_map.insert(2u32, 2u32);
+        vertex_map.insert(0u32, vec![0u32]);
+        vertex_map.insert(1u32, vec![1u32]);
+        vertex_map.insert(2u32, vec![2u32]);
 
         let offset_vertices: Vec<u32> = vec![0, 1, 2];
         let offsets: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]];
@@ -141,8 +142,8 @@ mod tests {
     #[test]
     fn test_partial_overlap() {
         let mut vertex_map = HashMap::new();
-        vertex_map.insert(1u32, 0u32);
-        vertex_map.insert(3u32, 1u32);
+        vertex_map.insert(1u32, vec![0u32]);
+        vertex_map.insert(3u32, vec![1u32]);
 
         let offset_vertices: Vec<u32> = vec![0, 1, 2, 3];
         let offsets: [[f32; 3]; 4] = [
@@ -164,7 +165,7 @@ mod tests {
     #[test]
     fn test_no_overlap() {
         let mut vertex_map = HashMap::new();
-        vertex_map.insert(10u32, 0u32);
+        vertex_map.insert(10u32, vec![0u32]);
 
         let offset_vertices: Vec<u32> = vec![0, 1, 2];
         let offsets: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]];
@@ -176,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        let vertex_map: HashMap<u32, u32> = HashMap::new();
+        let vertex_map: ControlPointVertexMap = HashMap::new();
         let offset_vertices: Vec<u32> = vec![];
         let offsets: [[f32; 3]; 0] = [];
 
@@ -186,10 +187,34 @@ mod tests {
     }
 
     #[test]
+    fn test_split_control_point_receives_delta_on_every_vertex() {
+        let mut vertex_map = HashMap::new();
+        vertex_map.insert(0u32, vec![0u32, 2u32]);
+        vertex_map.insert(1u32, vec![1u32]);
+
+        let offset_vertices: Vec<u32> = vec![0, 1];
+        let offsets: [[f32; 3]; 2] = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]];
+
+        let deltas = remap_shape_offsets(&offset_vertices, &offsets, &vertex_map);
+
+        let mut pairs: Vec<(u32, [f32; 3])> =
+            deltas.iter().map(|d| (d.vertex_index, d.delta)).collect();
+        pairs.sort_by_key(|(index, _)| *index);
+        assert_eq!(
+            pairs,
+            vec![
+                (0, [1.0, 0.0, 0.0]),
+                (1, [0.0, 2.0, 0.0]),
+                (2, [1.0, 0.0, 0.0])
+            ]
+        );
+    }
+
+    #[test]
     fn test_missing_offsets_yield_no_deltas() {
         let mut vertex_map = HashMap::new();
-        vertex_map.insert(0u32, 0u32);
-        vertex_map.insert(1u32, 1u32);
+        vertex_map.insert(0u32, vec![0u32]);
+        vertex_map.insert(1u32, vec![1u32]);
 
         let offset_vertices: Vec<u32> = vec![0, 1];
         let offsets: [[f32; 3]; 0] = [];

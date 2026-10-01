@@ -8,10 +8,7 @@ fn test_rest_pose(
 ) {
     let bones = load_fixture_bones(convention_id);
 
-    let (mapping, _) = thyllore_avatar_core::humanoid::systems::infer::infer_mapping(
-        &bones,
-        &thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules::default(),
-    );
+    let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
 
     let frame = thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame(
         &mapping, &bones,

@@ -782,6 +782,8 @@ impl App {
             .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::AvatarSetupState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::MaterialTextureState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {

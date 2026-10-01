@@ -1,8 +1,6 @@
-pub mod chain;
 pub mod character_frame;
 pub mod mapping;
 pub mod mapping_issues;
-pub mod naming;
 pub mod rest_pose;
 pub mod role;
 pub mod skeleton_input;

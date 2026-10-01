@@ -120,9 +120,9 @@ pub(super) fn spawn_mesh_entities(
             .with_mesh(asset_id, mesh.object_index)
             .build();
 
-        let channel_count = graphics.meshes[mesh_idx].morph.channels.len();
-        if channel_count > 0 {
-            world.insert_component(entity, MorphWeights::zeroed(channel_count));
+        let morph = &graphics.meshes[mesh_idx].morph;
+        if !morph.channels.is_empty() {
+            world.insert_component(entity, MorphWeights::from_defaults(morph));
         }
 
         log!(

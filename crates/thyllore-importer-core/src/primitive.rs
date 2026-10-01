@@ -3,7 +3,7 @@ use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
 
-use crate::model_result::{LoadedMesh, ModelLoadResult};
+use crate::model_result::{name_unnamed_material, LoadedMesh, ModelLoadResult};
 
 /// Build a box model with face normals (24 vertices, 12 triangles).
 pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -> ModelLoadResult {
@@ -97,6 +97,7 @@ pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -
             node_index: None,
             local_vertices: Vec::new(),
             texture: None,
+            material_name: name_unnamed_material(0),
             base_color_factor: color,
             morph: MeshMorph::default(),
         }],
@@ -197,6 +198,7 @@ pub fn build_uv_sphere_model(radius: f32, segments: u32, rings: u32) -> ModelLoa
             node_index: None,
             local_vertices: Vec::new(),
             texture: None,
+            material_name: name_unnamed_material(0),
             base_color_factor: [0.9, 0.9, 0.9, 1.0],
             morph: MeshMorph::default(),
         }],

@@ -13,6 +13,7 @@ use crate::ecs::resource::{ExpressionLibraryState, ModelState};
 use crate::ecs::systems::morph_weight_systems::for_each_morph_sibling;
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_model_core::MeshMorph;
 
 pub fn sync_expression_library(world: &mut World) {
     let Some(model_path) = world
@@ -59,16 +60,14 @@ pub fn apply_expression_preset(
     world: &mut World,
     entity: Entity,
     preset_index: usize,
-    channel_names: &[String],
+    morph: &MeshMorph,
 ) {
     let Some(application) = world
         .get_resource::<ExpressionLibraryState>()
         .and_then(|state| {
-            state
-                .library
-                .presets
-                .get(preset_index)
-                .map(|preset| apply_preset(preset, channel_names))
+            state.library.presets.get(preset_index).map(|preset| {
+                apply_preset(preset, &morph.channel_names(), &morph.default_weights())
+            })
         })
     else {
         return;
@@ -166,13 +165,7 @@ pub fn apply_expression_preset_on_siblings(
     entity: Entity,
     preset_index: usize,
 ) {
-    for_each_morph_sibling(
-        world,
-        assets,
-        graphics,
-        entity,
-        |world, sibling, channel_names| {
-            apply_expression_preset(world, sibling, preset_index, channel_names);
-        },
-    );
+    for_each_morph_sibling(world, assets, graphics, entity, |world, sibling, morph| {
+        apply_expression_preset(world, sibling, preset_index, morph);
+    });
 }

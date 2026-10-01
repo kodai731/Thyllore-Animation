@@ -33,14 +33,7 @@ pub fn find_morph_channel_names(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
 ) -> Option<Vec<String>> {
-    let morph = find_mesh_morph(world, entity, assets, graphics)?;
-    Some(
-        morph
-            .channels
-            .iter()
-            .map(|channel| channel.name.clone())
-            .collect(),
-    )
+    find_mesh_morph(world, entity, assets, graphics).map(MeshMorph::channel_names)
 }
 
 pub fn find_mesh_morph<'a>(
@@ -126,13 +119,14 @@ pub(crate) fn for_each_morph_sibling(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     entity: Entity,
-    mut apply: impl FnMut(&mut World, Entity, &[String]),
+    mut apply: impl FnMut(&mut World, Entity, &MeshMorph),
 ) {
     let siblings = find_morph_siblings(world, entity, assets, graphics);
     for sibling in siblings {
-        let channel_names =
-            find_morph_channel_names(world, sibling, assets, graphics).unwrap_or_default();
-        apply(world, sibling, &channel_names);
+        let Some(morph) = find_mesh_morph(world, sibling, assets, graphics) else {
+            continue;
+        };
+        apply(world, sibling, morph);
     }
 }
 
@@ -149,19 +143,13 @@ pub fn set_morph_weight_on_siblings(
     else {
         return;
     };
-    for_each_morph_sibling(
-        world,
-        assets,
-        graphics,
-        entity,
-        |world, sibling, channel_names| {
-            let Some(sibling_channel) = channel_names.iter().position(|name| *name == channel_name)
-            else {
-                return;
-            };
-            set_morph_weight(world, sibling, sibling_channel, weight, channel_names);
-        },
-    );
+    for_each_morph_sibling(world, assets, graphics, entity, |world, sibling, morph| {
+        let Some(sibling_channel) = morph.channel_index(&channel_name) else {
+            return;
+        };
+        let channel_names = morph.channel_names();
+        set_morph_weight(world, sibling, sibling_channel, weight, &channel_names);
+    });
 }
 
 pub fn reset_morph_weights_on_siblings(
@@ -170,20 +158,14 @@ pub fn reset_morph_weights_on_siblings(
     graphics: &GraphicsResources,
     entity: Entity,
 ) {
-    for_each_morph_sibling(
-        world,
-        assets,
-        graphics,
-        entity,
-        |world, sibling, channel_names| {
-            reset_morph_weights(world, sibling, channel_names);
-        },
-    );
+    for_each_morph_sibling(world, assets, graphics, entity, |world, sibling, morph| {
+        reset_morph_weights(world, sibling, morph);
+    });
 }
 
-pub fn reset_morph_weights(world: &mut World, entity: Entity, channel_names: &[String]) {
+pub fn reset_morph_weights(world: &mut World, entity: Entity, morph: &MeshMorph) {
     let preserved_channels: Vec<usize> =
-        group_channels(channel_names, &ExpressionGrouping::default())
+        group_channels(&morph.channel_names(), &ExpressionGrouping::default())
             .into_iter()
             .filter(|group| group.exclude_from_reset)
             .flat_map(|group| group.channel_indices)
@@ -195,7 +177,10 @@ pub fn reset_morph_weights(world: &mut World, entity: Entity, channel_names: &[S
 
     for (channel, weight) in morph_weights.weights.iter_mut().enumerate() {
         if !preserved_channels.contains(&channel) {
-            *weight = 0.0;
+            *weight = morph
+                .channels
+                .get(channel)
+                .map_or(0.0, |c| c.default_weight);
         }
     }
 }
@@ -288,6 +273,7 @@ mod tests {
             source_mesh: String::new(),
             channels: vec![MorphChannel {
                 name: "test".to_string(),
+                default_weight: 0.0,
                 position_deltas: vec![
                     SparseDelta {
                         vertex_index: 0,
@@ -307,8 +293,29 @@ mod tests {
     fn make_morph_world(channel_count: usize) -> (World, Entity) {
         let mut world = World::new();
         let entity = world.spawn();
-        world.insert_component(entity, MorphWeights::zeroed(channel_count));
+        world.insert_component(
+            entity,
+            MorphWeights {
+                weights: vec![0.0; channel_count],
+            },
+        );
         (world, entity)
+    }
+
+    fn named_morph(names: &[&str], default_weights: &[f32]) -> MeshMorph {
+        MeshMorph {
+            source_mesh: String::new(),
+            channels: names
+                .iter()
+                .enumerate()
+                .map(|(index, name)| MorphChannel {
+                    name: name.to_string(),
+                    default_weight: default_weights.get(index).copied().unwrap_or(0.0),
+                    position_deltas: Vec::new(),
+                    normal_deltas: Vec::new(),
+                })
+                .collect(),
+        }
     }
 
     fn channel_names(names: &[&str]) -> Vec<String> {
@@ -422,8 +429,8 @@ mod tests {
 
     #[test]
     fn test_reset_morph_weights_keeps_excluded_groups() {
-        let names = channel_names(&["eye_angry", "Shrink", "mouth_smile"]);
-        let (mut world, entity) = make_morph_world(names.len());
+        let morph = named_morph(&["eye_angry", "Shrink", "mouth_smile"], &[]);
+        let (mut world, entity) = make_morph_world(morph.channels.len());
         world.insert_component(
             entity,
             MorphWeights {
@@ -431,8 +438,34 @@ mod tests {
             },
         );
 
-        reset_morph_weights(&mut world, entity, &names);
+        reset_morph_weights(&mut world, entity, &morph);
 
         assert_eq!(morph_weights_of(&world, entity), vec![0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_reset_morph_weights_returns_to_default_weight() {
+        let morph = named_morph(&["Toe_heels", "mouth_smile"], &[1.0, 0.0]);
+        let (mut world, entity) = make_morph_world(morph.channels.len());
+        world.insert_component(
+            entity,
+            MorphWeights {
+                weights: vec![0.2, 0.7],
+            },
+        );
+
+        reset_morph_weights(&mut world, entity, &morph);
+
+        assert_eq!(morph_weights_of(&world, entity), vec![1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_morph_weights_from_defaults_uses_channel_default_weight() {
+        let morph = named_morph(&["Toe_heels", "Corset", "mouth_smile"], &[1.0, 1.0, 0.0]);
+
+        assert_eq!(
+            MorphWeights::from_defaults(&morph).weights,
+            vec![1.0, 1.0, 0.0]
+        );
     }
 }

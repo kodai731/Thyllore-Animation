@@ -3,12 +3,13 @@ use std::path::Path;
 
 use cgmath::Matrix4;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::infer::{collect_unresolved_roles, infer_mapping};
 use thyllore_avatar_core::humanoid::systems::mapping_io::{
     humanoid_mapping_path, load_mapping, save_mapping,
+};
+use thyllore_avatar_core::humanoid::systems::name_match::{
+    collect_unresolved_roles, infer_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
 use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;
@@ -128,7 +129,7 @@ fn find_spring_bone_setup(world: &World) -> Option<&SpringBoneSetup> {
         .map(|(_, setup)| setup)
 }
 
-pub(crate) fn find_model_path(world: &World) -> Option<String> {
+pub fn find_model_path(world: &World) -> Option<String> {
     world
         .get_resource::<ModelState>()
         .map(|model_state| model_state.model_path.clone())
@@ -178,7 +179,7 @@ pub(crate) fn load_or_infer_mapping(
         }
     }
 
-    let (mapping, _) = infer_mapping(bones, &HumanoidNamingRules::default());
+    let (mapping, _) = infer_mapping(bones);
     (mapping, Vec::new())
 }
 
@@ -222,15 +223,15 @@ pub fn set_avatar_rank_platform(world: &mut World, platform: Platform) {
 
 pub fn save_humanoid_mapping(world: &World) {
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot save humanoid mapping: no model loaded");
+        msg_error!("Cannot save humanoid mapping: no model loaded");
         return;
     };
     let state = world.resource::<AvatarSetupState>();
 
     let mapping_path = humanoid_mapping_path(Path::new(&model_path));
     match save_mapping(&mapping_path, &state.mapping, &state.bones) {
-        Ok(()) => log!("Saved humanoid mapping to {}", mapping_path.display()),
-        Err(error) => log_warn!(
+        Ok(()) => msg_info!("Saved humanoid mapping to {}", mapping_path.display()),
+        Err(error) => msg_error!(
             "Failed to save humanoid mapping {}: {}",
             mapping_path.display(),
             error
@@ -240,18 +241,18 @@ pub fn save_humanoid_mapping(world: &World) {
 
 pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, prefix: &str) {
     let Some(skeleton) = find_first_skeleton(assets) else {
-        log_warn!("Cannot add spring chains: no skeleton loaded");
+        msg_error!("Cannot add spring chains: no skeleton loaded");
         return;
     };
     let Some(spring_entity) = find_spring_bone_setup_entity(world) else {
-        log_warn!("Cannot add spring chains: no SpringBoneSetup entity found");
+        msg_error!("Cannot add spring chains: no SpringBoneSetup entity found");
         return;
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
     let roots = find_prefix_chain_roots(&bones, prefix);
     if roots.is_empty() {
-        log_warn!("No spring chain roots found for prefix \"{}\"", prefix);
+        msg_error!("No spring chain roots found for prefix \"{}\"", prefix);
         return;
     }
 
@@ -275,15 +276,15 @@ fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
 
 pub fn export_avatar_sidecar(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot export avatar sidecar: no model loaded");
+        msg_error!("Cannot export avatar sidecar: no model loaded");
         return;
     };
 
     let sidecar = build_avatar_sidecar(world, assets, graphics);
     let path = sidecar_path(Path::new(&model_path));
     match write_sidecar_json(&path, &sidecar) {
-        Ok(()) => log!("Exported avatar sidecar to {}", path.display()),
-        Err(error) => log_warn!(
+        Ok(()) => msg_info!("Exported avatar sidecar to {}", path.display()),
+        Err(error) => msg_error!(
             "Failed to export avatar sidecar {}: {}",
             path.display(),
             error

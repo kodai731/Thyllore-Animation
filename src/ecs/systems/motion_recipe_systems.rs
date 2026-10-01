@@ -145,8 +145,7 @@ pub fn baked_motion_to_clip(
 mod tests {
     use super::*;
     use cgmath::{Rad, Rotation3};
-    use thyllore_avatar_core::humanoid::components::naming::HumanoidNamingRules;
-    use thyllore_avatar_core::humanoid::systems::infer::infer_mapping;
+    use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
     use thyllore_math_core::euler_degrees_to_quaternion;
 
     fn make_chain_skeleton(bone_count: usize) -> Skeleton {
@@ -290,7 +289,7 @@ mod tests {
             .clone();
 
         let bones = skeleton_to_bone_inputs(&skeleton);
-        let (mapping, _) = infer_mapping(&bones, &HumanoidNamingRules::default());
+        let (mapping, _) = infer_mapping(&bones);
 
         let recipe_json = fs::read_to_string(recipe_path).expect("Failed to read recipe");
 

@@ -40,6 +40,7 @@ pub(super) fn read_target_names(mesh: &gltf::Mesh, target_count: usize) -> Vec<S
 pub(super) fn read_mesh_morph<'a, 's, F>(
     reader: &gltf::mesh::Reader<'a, 's, F>,
     target_names: &[String],
+    default_weights: &[f32],
     source_mesh: &str,
 ) -> MeshMorph
 where
@@ -53,6 +54,7 @@ where
                 .get(index)
                 .cloned()
                 .unwrap_or_else(|| format!("target_{index}")),
+            default_weight: default_weights.get(index).copied().unwrap_or(0.0),
             position_deltas: sparse_deltas(positions),
             normal_deltas: sparse_deltas(normals),
         })

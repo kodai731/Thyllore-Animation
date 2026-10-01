@@ -56,6 +56,10 @@ pub enum AppCommand {
     DeleteEntities {
         entities: Vec<u64>,
     },
+    AssignMaterialTexture {
+        material: String,
+        path: PathBuf,
+    },
 }
 
 #[derive(Default)]

@@ -1,7 +1,6 @@
-use crate::humanoid::components::chain::HUMANOID_CHAINS;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::mapping_issues::MappingIssue;
-use crate::humanoid::components::role::{HumanoidRole, REQUIRED};
+use crate::humanoid::components::role::{HumanoidRole, HUMANOID_CHAINS, REQUIRED};
 use crate::humanoid::components::skeleton_input::BoneInput;
 
 use super::hierarchy::is_ancestor;

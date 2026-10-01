@@ -912,7 +912,8 @@ where
             target_names: target_names.clone(),
         });
 
-    read_mesh_morph(reader, &target_names, &source_mesh)
+    let default_weights = mesh.weights().unwrap_or(&[]);
+    read_mesh_morph(reader, &target_names, default_weights, &source_mesh)
 }
 
 unsafe fn process_animation(

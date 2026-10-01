@@ -47,7 +47,7 @@ fn sanitize_filename(name: &str) -> String {
 
 pub fn export_expression_anims(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot export expression anims: no model loaded");
+        msg_error!("Cannot export expression anims: no model loaded");
         return;
     };
 
@@ -57,14 +57,14 @@ pub fn export_expression_anims(world: &World, assets: &AssetStorage, graphics: &
     let morph = match find_expression_morph(world, assets, graphics) {
         Some(m) => m,
         None => {
-            log_warn!("Cannot export expression anims: no expression mesh found");
+            msg_error!("Cannot export expression anims: no expression mesh found");
             return;
         }
     };
 
     let source_mesh = &morph.source_mesh;
     if source_mesh.is_empty() {
-        log_warn!("Cannot export expression anims: expression mesh has no source_mesh path");
+        msg_error!("Cannot export expression anims: expression mesh has no source_mesh path");
         return;
     }
 
@@ -82,11 +82,11 @@ pub fn export_expression_anims(world: &World, assets: &AssetStorage, graphics: &
         let yaml = write_expression_anim(&preset.name, source_mesh, &preset.weights);
         match fs::write(&path, yaml) {
             Ok(()) => written += 1,
-            Err(error) => log_warn!("Failed to write {}: {}", path.display(), error),
+            Err(error) => msg_error!("Failed to write {}: {}", path.display(), error),
         }
     }
 
-    log!(
+    msg_info!(
         "Wrote {} expression .anim file(s) to {}",
         written,
         export_dir.display()
@@ -98,13 +98,13 @@ pub fn export_morph_track_anim(world: &World, _assets: &AssetStorage) {
     let clip_id = match timeline.current_clip_id {
         Some(id) => id,
         None => {
-            log_warn!("Cannot export morph track anim: no clip selected");
+            msg_error!("Cannot export morph track anim: no clip selected");
             return;
         }
     };
 
     let Some(model_path) = find_model_path(world) else {
-        log_warn!("Cannot export morph track anim: no model loaded");
+        msg_error!("Cannot export morph track anim: no model loaded");
         return;
     };
 
@@ -112,14 +112,14 @@ pub fn export_morph_track_anim(world: &World, _assets: &AssetStorage) {
     let source_clip = match library.get_source(clip_id) {
         Some(s) => s,
         None => {
-            log_warn!("Cannot export morph track anim: clip not found");
+            msg_error!("Cannot export morph track anim: clip not found");
             return;
         }
     };
 
     let curves = morph_track_curves(&source_clip.editable_clip);
     if curves.is_empty() {
-        log_warn!(
+        msg_error!(
             "Cannot export morph track anim: clip \"{}\" has no morph tracks",
             source_clip.name()
         );
@@ -135,8 +135,8 @@ pub fn export_morph_track_anim(world: &World, _assets: &AssetStorage) {
     let yaml = write_unity_anim(source_clip.name(), &curves, source_clip.duration(), false);
 
     match fs::write(&path, yaml) {
-        Ok(()) => log!("Wrote morph track .anim to {}", path.display()),
-        Err(error) => log_warn!("Failed to write {}: {}", path.display(), error),
+        Ok(()) => msg_info!("Wrote morph track .anim to {}", path.display()),
+        Err(error) => msg_error!("Failed to write {}: {}", path.display(), error),
     }
 }
 

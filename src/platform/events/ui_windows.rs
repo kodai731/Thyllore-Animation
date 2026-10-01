@@ -10,8 +10,8 @@ use crate::platform::ui::{
 
 use crate::ecs::resource::{
     AvatarSetupState, ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState,
-    HierarchyState, MessageLog, PanelLayout, PoseLibrary, TimelineInteractionState, TimelineState,
-    ViewportInput,
+    HierarchyState, MaterialTextureState, MessageLog, PanelLayout, PoseLibrary,
+    TimelineInteractionState, TimelineState, ViewportInput,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::UIEventQueue;
@@ -64,7 +64,8 @@ pub(super) fn build_ui_windows(
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut avatar_setup = app.data.ecs_world.resource_mut::<AvatarSetupState>();
-        build_avatar_setup_window(ui, &mut *ui_events, &mut *avatar_setup);
+        let material_textures = app.data.ecs_world.resource::<MaterialTextureState>();
+        build_avatar_setup_window(ui, &mut *ui_events, &mut *avatar_setup, &material_textures);
     }
 
     #[cfg(feature = "auto-rig")]

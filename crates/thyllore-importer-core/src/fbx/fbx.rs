@@ -5,46 +5,11 @@ use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
-use thyllore_model_core::MeshMorph;
 
-#[derive(Clone, Debug)]
-pub struct LoadedConstraint {
-    pub constraint_type: ConstraintType,
-    pub priority: u32,
-}
-
-#[derive(Clone, Debug)]
-pub struct BoneNode {
-    pub name: String,
-    pub parent: Option<String>,
-    pub local_transform: Matrix4<f32>,
-    pub default_translation: [f32; 3],
-    pub default_rotation: Quaternion<f32>,
-    pub default_scaling: [f32; 3],
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxAxesInfo {
-    pub up_axis: i32,
-    pub up_axis_sign: i32,
-    pub front_axis: i32,
-    pub front_axis_sign: i32,
-    pub coord_axis: i32,
-    pub coord_axis_sign: i32,
-}
-
-impl Default for FbxAxesInfo {
-    fn default() -> Self {
-        Self {
-            up_axis: 1,
-            up_axis_sign: 1,
-            front_axis: 2,
-            front_axis_sign: 1,
-            coord_axis: 0,
-            coord_axis_sign: 1,
-        }
-    }
-}
+pub use thyllore_file_format_core::fbx::{
+    BoneAnimation, BoneNode, ClusterInfo, FbxAnimation, FbxAxesInfo, FbxData, FbxModel, KeyFrame,
+    LoadedConstraint, MeshPart,
+};
 
 fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
     match axis {
@@ -70,98 +35,6 @@ fn read_axes_from_scene(settings: &ufbx::SceneSettings) -> FbxAxesInfo {
         front_axis_sign,
         coord_axis,
         coord_axis_sign,
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct FbxModel {
-    pub fbx_data: Vec<FbxData>,
-    pub animations: Vec<FbxAnimation>,
-    pub nodes: HashMap<String, BoneNode>,
-    pub unit_scale: f32,
-    pub fps: f32,
-    pub constraints: Vec<LoadedConstraint>,
-    pub axes: FbxAxesInfo,
-    pub source_path: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxAnimation {
-    pub name: String,
-    pub duration: f32,
-    pub bone_animations: HashMap<String, BoneAnimation>,
-}
-
-#[derive(Clone, Debug)]
-pub struct BoneAnimation {
-    pub bone_name: String,
-    pub translation_keys: Vec<KeyFrame<[f32; 3]>>,
-    pub rotation_keys: Vec<KeyFrame<Quaternion<f32>>>,
-    pub scale_keys: Vec<KeyFrame<[f32; 3]>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct KeyFrame<T> {
-    pub time: f32,
-    pub value: T,
-}
-
-#[derive(Clone, Debug)]
-pub struct ClusterInfo {
-    pub bone_name: String,
-    pub transform: Matrix4<f32>,
-    pub transform_link: Matrix4<f32>,
-    pub inverse_bind_pose: Matrix4<f32>,
-    pub vertex_indices: Vec<usize>,
-    pub vertex_weights: Vec<f32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MeshPart {
-    pub mesh_name: String,
-    pub local_positions: Vec<Vector3<f32>>,
-    pub parent_bone: Option<String>,
-    pub local_transform: Matrix4<f32>,
-    pub vertex_offset: usize,
-    pub vertex_count: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct FbxData {
-    pub positions: Vec<Vector3<f32>>,
-    pub local_positions: Vec<Vector3<f32>>,
-    pub normals: Vec<Vector3<f32>>,
-    pub local_normals: Vec<Vector3<f32>>,
-    pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,
-    pub clusters: Vec<ClusterInfo>,
-    pub morph: MeshMorph,
-    pub mesh_parts: Vec<MeshPart>,
-    pub parent_node: Option<String>,
-    pub mesh_node_name: Option<String>,
-    pub material_name: Option<String>,
-    pub diffuse_texture: Option<String>,
-    pub diffuse_color: [f32; 3],
-}
-
-impl FbxData {
-    pub fn new() -> Self {
-        Self {
-            positions: Vec::new(),
-            local_positions: Vec::new(),
-            normals: Vec::new(),
-            local_normals: Vec::new(),
-            indices: Vec::new(),
-            tex_coords: Vec::new(),
-            clusters: Vec::new(),
-            morph: MeshMorph::default(),
-            mesh_parts: Vec::new(),
-            parent_node: None,
-            mesh_node_name: None,
-            material_name: None,
-            diffuse_texture: None,
-            diffuse_color: [0.8, 0.8, 0.8],
-        }
     }
 }
 
@@ -230,6 +103,7 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     log!("=== Loading FBX file with ufbx: {} ===", path);
 
     let opts = ufbx::LoadOpts {
+        target_axes: ufbx::CoordinateAxes::right_handed_y_up(),
         target_unit_meters: 1.0,
         space_conversion: ufbx::SpaceConversion::ModifyGeometry,
         ..Default::default()
@@ -331,7 +205,16 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
 
 pub(super) struct MeshSplitInfo {
     pub(super) ufbx_mesh_typed_id: usize,
-    pub(super) vertex_map: HashMap<u32, u32>,
+    pub(super) vertex_map: ControlPointVertexMap,
+}
+
+pub(super) type ControlPointVertexMap = HashMap<u32, Vec<u32>>;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct CornerKey {
+    control_point: u32,
+    uv_bits: [u32; 2],
+    normal_bits: [u32; 3],
 }
 
 struct MaterialPart {
@@ -341,7 +224,8 @@ struct MaterialPart {
     local_normals: Vec<Vector3<f32>>,
     tex_coords: Vec<[f32; 2]>,
     indices: Vec<u32>,
-    vertex_map: HashMap<u32, u32>,
+    vertex_map: ControlPointVertexMap,
+    corner_to_vertex: HashMap<CornerKey, u32>,
 }
 
 impl MaterialPart {
@@ -354,11 +238,12 @@ impl MaterialPart {
             tex_coords: Vec::new(),
             indices: Vec::new(),
             vertex_map: HashMap::new(),
+            corner_to_vertex: HashMap::new(),
         }
     }
 }
 
-fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, HashMap<u32, u32>)> {
+fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, ControlPointVertexMap)> {
     let num_materials = mesh.materials.len().max(1);
     let mut parts: Vec<MaterialPart> = (0..num_materials).map(|_| MaterialPart::new()).collect();
 
@@ -381,31 +266,35 @@ fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, HashMap<u32
         for &idx in &tri_indices[..num_corners] {
             let uidx = idx as usize;
             let ctrl_idx = mesh.vertex_indices[uidx];
-            let next_id = part.vertex_map.len() as u32;
-            let mapped = *part.vertex_map.entry(ctrl_idx).or_insert(next_id);
+            let normal = if mesh.vertex_normal.exists {
+                let n = mesh.vertex_normal[uidx];
+                Vector3::new(n.x as f32, n.y as f32, n.z as f32)
+            } else {
+                Vector3::new(0.0, 1.0, 0.0)
+            };
+            let tex_coord = if mesh.vertex_uv.exists {
+                let uv = mesh.vertex_uv[uidx];
+                [uv.x as f32, 1.0 - uv.y as f32]
+            } else {
+                [0.5, 0.5]
+            };
+            let key = CornerKey {
+                control_point: ctrl_idx,
+                uv_bits: [tex_coord[0].to_bits(), tex_coord[1].to_bits()],
+                normal_bits: [normal.x.to_bits(), normal.y.to_bits(), normal.z.to_bits()],
+            };
 
+            let next_id = part.positions.len() as u32;
+            let mapped = *part.corner_to_vertex.entry(key).or_insert(next_id);
             if mapped == next_id {
                 let pos = mesh.vertex_position[uidx];
                 let v = Vector3::new(pos.x as f32, pos.y as f32, pos.z as f32);
                 part.positions.push(v);
                 part.local_positions.push(v);
-
-                if mesh.vertex_normal.exists {
-                    let n = mesh.vertex_normal[uidx];
-                    let normal = Vector3::new(n.x as f32, n.y as f32, n.z as f32);
-                    part.normals.push(normal);
-                    part.local_normals.push(normal);
-                } else {
-                    part.normals.push(Vector3::new(0.0, 1.0, 0.0));
-                    part.local_normals.push(Vector3::new(0.0, 1.0, 0.0));
-                }
-
-                if mesh.vertex_uv.exists {
-                    let uv = mesh.vertex_uv[uidx];
-                    part.tex_coords.push([uv.x as f32, 1.0 - uv.y as f32]);
-                } else {
-                    part.tex_coords.push([0.5, 0.5]);
-                }
+                part.normals.push(normal);
+                part.local_normals.push(normal);
+                part.tex_coords.push(tex_coord);
+                part.vertex_map.entry(ctrl_idx).or_default().push(mapped);
             }
 
             part.indices.push(mapped);
@@ -491,7 +380,7 @@ fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos:
                     let ctrl_idx = cluster.vertices[i];
                     let weight = cluster.weights[i] as f32;
 
-                    if let Some(&mapped) = info.vertex_map.get(&ctrl_idx) {
+                    for &mapped in info.vertex_map.get(&ctrl_idx).into_iter().flatten() {
                         vertex_indices.push(mapped as usize);
                         vertex_weights.push(weight);
                     }

@@ -8,11 +8,11 @@ pub(super) fn insert_model_caches(
     fbx_model: Option<FbxModel>,
 ) {
     if let Some(fbx) = fbx_model {
-        let needs_coord_conversion = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
+        let has_skinned_meshes = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
         world.insert_resource(FbxModelCache::new(
             fbx,
             model_name.to_string(),
-            needs_coord_conversion,
+            has_skinned_meshes,
         ));
         world.insert_resource(GltfModelCache::empty());
         return;

@@ -9,7 +9,10 @@ use crate::ecs::resource::{
     AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PoseApplyCache, WeightHeatmapState,
 };
 use crate::ecs::FrameContext;
-use crate::ecs::{playback_upload_animations, run_animation_pipeline, update_weight_heatmap};
+use crate::ecs::{
+    apply_morph_weights, evaluate_morph_tracks, playback_upload_animations, run_animation_pipeline,
+    sync_avatar_setup, sync_expression_library, sync_material_textures, update_weight_heatmap,
+};
 
 pub struct AnimationUpdates {
     pub updated_meshes: Vec<usize>,

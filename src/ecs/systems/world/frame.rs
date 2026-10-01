@@ -6,9 +6,9 @@ use crate::animation::SkeletonId;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{AnimationType, UpdatePhaseTimings};
 use crate::ecs::systems::phases::{
-    collect_mesh_positions, run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase,
-    run_input_phase, run_onion_skin_phase, run_render_prep_phase, run_timeline_phase,
-    run_transform_propagate_phase, run_view_phase_ecs, run_view_phase_gpu,
+    run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase, run_input_phase,
+    run_onion_skin_phase, run_render_prep_phase, run_timeline_phase, run_transform_propagate_phase,
+    run_view_phase_ecs, run_view_phase_gpu,
 };
 use crate::ecs::FrameContext;
 

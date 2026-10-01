@@ -5,9 +5,10 @@ use super::keyframe::{BezierHandle, InterpolationType, SourceClipId, TangentWeig
 
 #[derive(Clone, Debug)]
 pub struct CopiedKeyframe {
-    /// `Some` for bone-track curves; `None` for clip-level scalar curves
-    /// (`PropertyType::Custom`), which have no bone and are never mirrored.
+    /// `None` for scalar curves and morph curves.
     pub bone_id: Option<BoneId>,
+    pub source_mesh: Option<String>,
+    pub channel: Option<String>,
     pub property_type: PropertyType,
     pub relative_time: f32,
     pub value: f32,

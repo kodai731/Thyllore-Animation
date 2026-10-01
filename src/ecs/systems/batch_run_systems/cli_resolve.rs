@@ -2,12 +2,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 
-use crate::ecs::resource::{BatchRun, CaptureOutput, CaptureSchedule};
+use crate::ecs::resource::{BatchRun, CaptureOutput, CaptureSchedule, ScheduledBatchAction};
 use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 
 use super::anim_edits::{anim_edits_resolve_from_args, BatchAnimEdit};
 use super::batch_action::BatchAction;
-use super::debug_actions::debug_actions_resolve_from_args;
+use super::debug_actions::{debug_actions_resolve_from_args, scheduled_actions_resolve_from_args};
 
 const BATCH_SCREENSHOT_FLAG: &str = "--batch-screenshot";
 const BATCH_SCREENSHOT_SEQUENCE_FLAG: &str = "--batch-screenshot-sequence";
@@ -21,6 +21,7 @@ const BATCH_PLAY_FLAG: &str = "--batch-play";
 const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
 pub(super) const BATCH_ANIM_EDIT_FLAG: &str = "--batch-anim-edit";
 pub(super) const BATCH_DEBUG_ACTION_FLAG: &str = "--batch-debug-action";
+pub(super) const BATCH_DEBUG_ACTION_AT_FLAG: &str = "--batch-debug-action-at";
 pub const BATCH_LIST_DEBUG_ACTIONS_FLAG: &str = "--batch-list-debug-actions";
 pub(super) const DEFAULT_SCREENSHOT_FRAME: u64 = 120;
 
@@ -37,6 +38,7 @@ pub struct EngineCliOverrides {
     pub anim_edits: Vec<BatchAnimEdit>,
     pub anim_dump_path: Option<String>,
     pub debug_actions: Vec<Box<dyn BatchAction>>,
+    pub scheduled_actions: Vec<ScheduledBatchAction>,
 }
 
 pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverrides> {
@@ -51,6 +53,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         anim_edits: anim_edits_resolve_from_args(args)?,
         anim_dump_path: flag_value_resolve_from_args(args, BATCH_ANIM_DUMP_FLAG)?,
         debug_actions: debug_actions_resolve_from_args(args)?,
+        scheduled_actions: scheduled_actions_resolve_from_args(args)?,
     })
 }
 

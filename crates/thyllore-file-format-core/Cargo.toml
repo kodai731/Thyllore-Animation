@@ -1,0 +1,13 @@
+[package]
+name = "thyllore-file-format-core"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["kodai731"]
+description = "Layer 2 file format data shared by importer-core and exporter-core (FBX scene model). Pure data; no ufbx / fbxcel, no ECS or Vulkan dependency"
+repository = "https://github.com/kodai731/Thyllore-Animation"
+
+[dependencies]
+thyllore-model-core = { path = "../thyllore-model-core" }
+thyllore-anim-core = { path = "../thyllore-anim-core" }
+cgmath = "0.18"

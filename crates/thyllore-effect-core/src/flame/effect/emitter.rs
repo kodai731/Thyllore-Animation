@@ -1,10 +1,14 @@
 use crate::flame::*;
 
 /// Emitter shape: 0 = axial column, 1 = ring of `ring_major_radius`, 2 = SDF billboard slab.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner)]
 pub struct FlameEmitter {
+    #[runtime]
     pub kind: u32,
+    #[runtime]
     pub ring_major_radius: f32,
+    #[runtime]
     pub ring_angular_speed: f32,
 }
 

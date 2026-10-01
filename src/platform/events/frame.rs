@@ -104,7 +104,7 @@ unsafe fn render_frame(
             dt_ms,
             imgui_build_ms,
         },
-        super::file_dialog::open_file_dialogs,
+        super::file_dialog::queue_file_dialog_commands,
     );
 
     if let Err(e) = frame_result {

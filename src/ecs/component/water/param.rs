@@ -56,46 +56,18 @@ impl WaterParam {
         WaterParam::TintG,
         WaterParam::TintB,
     ];
-    pub const fn code(self) -> u16 {
-        match self {
-            WaterParam::MajorRadius => 256,
-            WaterParam::MinorRadius => 257,
-            WaterParam::Ior => 258,
-            WaterParam::AbsorptionR => 259,
-            WaterParam::AbsorptionG => 260,
-            WaterParam::AbsorptionB => 261,
-            WaterParam::FlowLongitudinal => 262,
-            WaterParam::FlowMeridional => 263,
-            WaterParam::WaveAmplitude => 264,
-            WaterParam::WaveFrequency => 265,
-            WaterParam::WaveSpeed => 266,
-            WaterParam::ReflectStrength => 267,
-            WaterParam::RefractStrength => 268,
-            WaterParam::CausticStrength => 272,
-            WaterParam::LightIntensity => 273,
-            WaterParam::HighlightSharpness => 274,
-            WaterParam::SkyBrightness => 275,
-            WaterParam::ScatterStrength => 276,
-            WaterParam::ScatterAnisotropy => 277,
-            WaterParam::TintR => 269,
-            WaterParam::TintG => 270,
-            WaterParam::TintB => 271,
-        }
-    }
-
-    pub fn from_code(code: u16) -> Option<WaterParam> {
-        WaterParam::ALL.iter().copied().find(|p| p.code() == code)
-    }
-
-    pub const fn property_type(self) -> PropertyType {
-        PropertyType::Custom(self.code())
+    pub fn property_type(self) -> PropertyType {
+        let index = WaterParam::ALL
+            .iter()
+            .position(|p| *p == self)
+            .expect("WaterParam::ALL lists every variant");
+        WATER_DOMAIN.property_type_at(index)
     }
 
     pub fn from_property_type(property_type: PropertyType) -> Option<WaterParam> {
-        match property_type {
-            PropertyType::Custom(code) => WaterParam::from_code(code),
-            _ => None,
-        }
+        WATER_DOMAIN
+            .channel_index(property_type)
+            .map(|index| WaterParam::ALL[index])
     }
 
     pub const fn display_name(self) -> &'static str {
@@ -215,7 +187,6 @@ impl WaterParam {
 
     const fn channel(self) -> ScalarChannel {
         ScalarChannel {
-            code: self.code(),
             display_name: self.display_name(),
             cli_name: self.cli_name(),
             scene_name: self.scene_name(),
@@ -267,7 +238,7 @@ fn water_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: WaterParam) -> &'static ScalarParam<WaterTorusEffect> {
-    find_scalar_param(WATER_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&WATER_SCALAR_PARAMS, param.cli_name())
         .expect("every WaterParam cli_name is registered in WATER_SCALAR_PARAMS")
 }
 
@@ -284,15 +255,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_code_roundtrip_all_params() {
+    fn test_property_type_roundtrip_all_params() {
         for param in WaterParam::ALL {
-            assert_eq!(WaterParam::from_code(param.code()), Some(param));
             assert_eq!(
                 WaterParam::from_property_type(param.property_type()),
                 Some(param)
             );
         }
-        assert_eq!(WaterParam::from_code(999), None);
+        assert_eq!(
+            WaterParam::from_property_type(PropertyType::Custom(u16::MAX)),
+            None
+        );
         assert_eq!(
             WaterParam::from_property_type(PropertyType::TranslationX),
             None
@@ -311,7 +284,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in WaterParam::ALL {
             assert!(
-                find_scalar_param(WATER_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&WATER_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );
@@ -319,21 +292,15 @@ mod tests {
     }
 
     #[test]
-    fn test_codes_are_unique() {
-        let mut codes: Vec<u16> = WaterParam::ALL.iter().map(|p| p.code()).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), WaterParam::ALL.len());
-    }
-
-    #[test]
     fn test_channel_table_mirrors_enum() {
         assert_eq!(WATER_CHANNELS.len(), WaterParam::ALL.len());
         for (channel, param) in WATER_CHANNELS.iter().zip(WaterParam::ALL) {
-            assert_eq!(channel.code, param.code());
             assert_eq!(channel.cli_name, param.cli_name());
             assert_eq!(channel.scene_name, param.scene_name());
-            assert_eq!(channel.property_type(), param.property_type());
+            assert_eq!(
+                WATER_DOMAIN.property_type_of(channel),
+                Some(param.property_type())
+            );
         }
     }
 

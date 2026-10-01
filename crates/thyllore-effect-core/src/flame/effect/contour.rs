@@ -1,14 +1,19 @@
 use crate::flame::*;
 
 /// Contour and radiative-transfer options of the erosion chain.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameContour {
+    #[persist]
     pub wiggle_amp: f32,
     /// 0 = world-Y anisotropy axis, 1 = advect direction axis.
+    #[persist]
     pub aniso_axis_advect: f32,
     /// RTE band count in mode 0: <= 1 legacy linear path, >= 2 per-band Beer-Lambert.
+    #[persist]
     pub rte_bands: f32,
     /// RTE absorption wavelength dispersion: 0 = grey body, 1 = Rayleigh 1/lambda.
+    #[persist]
     pub sigma_dispersion: f32,
 }
 

@@ -23,7 +23,6 @@ pub struct EcsContext<'a> {
     pub swapchain_extent: (u32, u32),
     pub world: &'a mut World,
     pub assets: &'a mut AssetStorage,
-    pub mesh_positions: Vec<Vector3<f32>>,
 }
 
 impl<'a> EcsContext<'a> {

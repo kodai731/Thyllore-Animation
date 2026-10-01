@@ -22,6 +22,7 @@ from gpu_extras.batch import batch_for_shader
 import thyllore_effect_core as fx
 
 import blender_addon.effects.wind as addon
+from blender_addon.common.effect_properties import flatten_by_paths
 from blender_addon.effects.wind import draw_handler
 from blender_addon.effects.wind.draw_handler import WindViewportRenderer
 from blender_addon.effects.wind.wind_shader import specialization_key
@@ -40,7 +41,8 @@ def column_major(columns):
 
 
 def params_from_effect(effect):
-    defaults = fx.wind_preset_params("column")
+    paths = fx.wind_parameter_paths()
+    defaults = flatten_by_paths(fx.wind_preset_params("column"), paths)
     return {
         k: (int(v) if isinstance(defaults[k], int) and not isinstance(defaults[k], bool) else v)
         for k, v in effect.items() if k in defaults

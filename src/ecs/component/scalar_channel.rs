@@ -25,14 +25,17 @@ impl ScalarCodeBlock {
     }
 }
 
-pub fn scalar_code_blocks() -> Vec<ScalarCodeBlock> {
-    ron::from_str(SCALAR_CODE_BLOCKS_RON)
-        .expect("scalar_channel_domains.ron is a list of code blocks")
+pub fn scalar_code_blocks() -> &'static [ScalarCodeBlock] {
+    static BLOCKS: OnceLock<Vec<ScalarCodeBlock>> = OnceLock::new();
+    BLOCKS.get_or_init(|| {
+        ron::from_str(SCALAR_CODE_BLOCKS_RON)
+            .expect("scalar_channel_domains.ron is a list of code blocks")
+    })
 }
 
-pub fn scalar_code_block_for_domain(domain_name: &str) -> Option<ScalarCodeBlock> {
+pub fn scalar_code_block_for_domain(domain_name: &str) -> Option<&'static ScalarCodeBlock> {
     scalar_code_blocks()
-        .into_iter()
+        .iter()
         .find(|block| block.name == domain_name)
 }
 
@@ -45,12 +48,11 @@ pub fn next_free_scalar_code() -> u16 {
         .unwrap_or(0)
 }
 
-/// One animatable scalar channel exposed by a component domain. `code` is the
-/// stable `PropertyType::Custom` payload persisted in clip files — never
-/// reorder or reuse codes.
+/// One animatable scalar channel exposed by a component domain. Its
+/// `PropertyType::Custom` code is not stored here: the owning domain derives it
+/// from the channel's position in its table (`ScalarChannelDomain::property_type_at`).
 #[derive(Clone, Copy, Debug)]
 pub struct ScalarChannel {
-    pub code: u16,
     pub display_name: &'static str,
     /// Stable snake_case identifier used by batch CLI flags and anim dumps.
     /// Unique across every registered domain.
@@ -61,19 +63,15 @@ pub struct ScalarChannel {
     pub debug_value_range: (f32, f32),
 }
 
-impl ScalarChannel {
-    pub const fn property_type(&self) -> PropertyType {
-        PropertyType::Custom(self.code)
-    }
-}
-
 /// A component domain whose scalar fields animate through clip scalar curves.
 /// Registering a domain with `scalar_channel_domain!` is all the curve editor,
 /// timeline, batch CLI and scene serialization need to animate its channels.
 /// Applying sampled curve values back to the component stays inside the
 /// domain's own system.
 ///
-/// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it.
+/// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it:
+/// the channel at `channels[i]` owns code `first_code + i`. Codes are persisted in clip files,
+/// so channels are only ever appended to the table, never reordered or removed.
 pub struct ScalarChannelDomain {
     /// Display name of the domain (also the name of the clip it creates).
     pub name: &'static str,
@@ -85,6 +83,33 @@ pub struct ScalarChannelDomain {
     pub read: fn(&World, Entity, PropertyType) -> Option<f32>,
     /// Domain-local playback time used to sample curves.
     pub local_time: fn(&World, Entity) -> Option<f32>,
+}
+
+impl ScalarChannelDomain {
+    pub fn property_type_at(&self, channel_index: usize) -> PropertyType {
+        PropertyType::Custom(self.first_code() + channel_index as u16)
+    }
+
+    pub fn property_type_of(&self, channel: &ScalarChannel) -> Option<PropertyType> {
+        self.channels
+            .iter()
+            .position(|c| c.cli_name == channel.cli_name)
+            .map(|index| self.property_type_at(index))
+    }
+
+    pub fn channel_index(&self, property_type: PropertyType) -> Option<usize> {
+        let PropertyType::Custom(code) = property_type else {
+            return None;
+        };
+        let index = code.checked_sub(self.first_code())? as usize;
+        (index < self.channels.len()).then_some(index)
+    }
+
+    fn first_code(&self) -> u16 {
+        scalar_code_block_for_domain(self.name)
+            .unwrap_or_else(|| panic!("no code block configured for domain {}", self.name))
+            .first_code
+    }
 }
 
 /// Link-time registration of a domain: `scalar_channel_domain!(MY_DOMAIN)` next to the static.
@@ -127,10 +152,8 @@ pub fn scalar_channel_for_property(
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
         domain
-            .channels
-            .iter()
-            .find(|c| c.property_type() == property_type)
-            .map(|c| (*domain, c))
+            .channel_index(property_type)
+            .map(|index| (*domain, &domain.channels[index]))
     })
 }
 
@@ -183,11 +206,11 @@ mod tests {
                 "domain {} registered twice",
                 domain.name
             );
-            for channel in domain.channels {
+            for (index, channel) in domain.channels.iter().enumerate() {
                 assert!(
-                    codes.insert(channel.code),
-                    "duplicate code {}",
-                    channel.code
+                    codes.insert(domain.property_type_at(index)),
+                    "duplicate code {:?}",
+                    domain.property_type_at(index)
                 );
                 assert!(
                     cli_names.insert(channel.cli_name),
@@ -209,15 +232,21 @@ mod tests {
         for domain in scalar_channel_domains() {
             let block = scalar_code_block_for_domain(domain.name)
                 .unwrap_or_else(|| panic!("no code block configured for domain {}", domain.name));
-            for channel in domain.channels {
+            assert!(
+                domain.channels.len() <= block.code_count as usize,
+                "{} has {} channels but its block holds {}",
+                domain.name,
+                domain.channels.len(),
+                block.code_count
+            );
+            for index in 0..domain.channels.len() {
+                let PropertyType::Custom(code) = domain.property_type_at(index) else {
+                    panic!("scalar channels are Custom properties");
+                };
                 assert!(
-                    block.contains(channel.code),
-                    "{} channel {} code {} is outside block {}..{}",
-                    domain.name,
-                    channel.cli_name,
-                    channel.code,
-                    block.first_code,
-                    block.end_code()
+                    block.contains(code),
+                    "{} channel {index} code {code}",
+                    domain.name
                 );
             }
         }
@@ -247,14 +276,17 @@ mod tests {
     #[test]
     fn test_lookups_roundtrip_every_channel() {
         for domain in scalar_channel_domains() {
-            for channel in domain.channels {
-                let (d, c) = scalar_channel_for_property(channel.property_type()).unwrap();
+            for (index, channel) in domain.channels.iter().enumerate() {
+                let property_type = domain.property_type_at(index);
+                assert_eq!(domain.property_type_of(channel), Some(property_type));
+                assert_eq!(domain.channel_index(property_type), Some(index));
+                let (d, c) = scalar_channel_for_property(property_type).unwrap();
                 assert_eq!(d.name, domain.name);
-                assert_eq!(c.code, channel.code);
-                let (_, c) = scalar_channel_for_cli_name(channel.cli_name).unwrap();
-                assert_eq!(c.code, channel.code);
-                let (_, c) = scalar_channel_for_scene_name(channel.scene_name).unwrap();
-                assert_eq!(c.code, channel.code);
+                assert_eq!(c.cli_name, channel.cli_name);
+                let (d, c) = scalar_channel_for_cli_name(channel.cli_name).unwrap();
+                assert_eq!(d.property_type_of(c), Some(property_type));
+                let (d, c) = scalar_channel_for_scene_name(channel.scene_name).unwrap();
+                assert_eq!(d.property_type_of(c), Some(property_type));
             }
         }
         assert!(scalar_channel_for_cli_name("no_such_channel").is_none());

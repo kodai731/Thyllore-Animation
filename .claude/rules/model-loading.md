@@ -10,6 +10,9 @@ paths:
 
 - Importers (glTF / FBX / PNG) live in `crates/thyllore-importer-core` and return pure model-core + anim-core
   types; `src/loader/` only re-exports them.
+- The FBX scene data both the importer and the exporter use (`FbxModel`, `FbxData`, `BoneNode`, ...) lives in
+  `crates/thyllore-file-format-core`; `thyllore-exporter-core` depends on that crate and names
+  `thyllore-importer-core` only in tests, never the other way round.
 - `App::load_model(path)` / `App::load_model_additive(path)` (`src/app/scene_model.rs`) are the runtime entry
   points; `src/app/model/` turns the importer result into `AssetStorage` entries, GPU meshes and acceleration
   structures, then runs `ModelLoadHooks` (`src/hooks/model_load.rs`) without naming a domain.
@@ -18,5 +21,5 @@ paths:
   default model, edit the scene file, not the code.
 - Sample models live under `assets/models/<name>/`; textures are resolved relative to the model file
   (`src/app/model/texture.rs`).
-- At runtime a model is loaded through `AppCommand::LoadModel` / `LoadModelAdditive`, applied by `App` in
-  `src/app/command.rs`; the platform layer only records the command.
+- At runtime a model is loaded through `SceneLoadCommand::LoadModel` / `LoadModelAdditive`, pushed to
+  `SceneLoadQueue` and applied by `App` in `src/app/command.rs`.

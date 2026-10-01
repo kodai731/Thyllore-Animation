@@ -186,7 +186,7 @@ def anim_edit(
       4 deterministic random keys inside safe ranges (same as the UI
       "Random Keys (Debug)" button)
     - `key=<param>@<time>=<value>`: insert one key (param = snake_case channel
-      name, e.g. height, intensity, temperature_base_k, wind_x)
+      name, e.g. height, intensity, color_temperature_base_k, wind_direction_x)
     - `key_at_playhead=<param>`: insert a key at the current playhead with the
       component's current value (the Curve Editor's per-property `+` button
       path; creates the curve when the clip is empty)

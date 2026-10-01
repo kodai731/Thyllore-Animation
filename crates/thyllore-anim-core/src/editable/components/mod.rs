@@ -7,6 +7,7 @@ pub mod curve;
 pub mod keyframe;
 pub mod keyframe_copy;
 pub mod mirror;
+pub mod morph_track;
 pub mod snap_settings;
 pub mod source_clip;
 pub mod track;

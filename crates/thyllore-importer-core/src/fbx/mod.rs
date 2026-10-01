@@ -1,3 +1,4 @@
+mod blend_shape;
 pub mod fbx;
 pub mod loader;
 

@@ -15,7 +15,7 @@ strike geometry and brightness both change between them. The pins are applied af
 The imgui overlay (x < 300, 600 <= y <= 690 at 2560x1440) jitters between runs, so it is
 excluded from every comparison.
 
-    uv run --with numpy --with pillow python3 tools/lightning_idempotency_gate.py [--dood] [--batch-lightning-set core_intensity=12.0]
+    uv run --with numpy --with pillow python3 tools/lightning_idempotency_gate.py [--dood] [--batch-lightning-set look_core_intensity=12.0]
 
 Exit code 0 = ran to completion (the JSON line on stdout holds pass/fail).
 """
@@ -39,7 +39,7 @@ HUD_MASK_MAX_X = 300
 HUD_MASK_MIN_Y = 600
 HUD_MASK_MAX_Y = 690
 TIME_EVOLUTION_MIN_DIFF_PIXELS = 1000
-BURST_TIMING_PINS = ["burst_start=0.0", "burst_jitter=0.0", "reseed_period=0.02"]
+BURST_TIMING_PINS = ["timing_burst_start=0.0", "timing_burst_jitter=0.0", "timing_reseed_period=0.02"]
 EARLY_BURST_TIME = 0.02
 LATE_SUSTAIN_TIME = 0.045
 

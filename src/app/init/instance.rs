@@ -774,6 +774,16 @@ impl App {
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
             .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::MorphTrackPlayback::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::AvatarSetupState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::MaterialTextureState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
@@ -1168,7 +1178,10 @@ impl App {
 
     fn register_editor_resources(data: &mut AppData) {
         Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AppCommandQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::EntityRemovalQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::CameraFlyInput>(data);

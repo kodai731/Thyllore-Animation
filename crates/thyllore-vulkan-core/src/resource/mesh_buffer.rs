@@ -10,7 +10,7 @@ use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkan::Instance;
-use thyllore_model_core::{SkeletonId, SkinData};
+use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
 #[derive(Clone, Debug)]
 pub struct MeshBuffer {
@@ -29,6 +29,7 @@ pub struct MeshBuffer {
     pub node_index: Option<usize>,
     pub base_vertices: Vec<Vertex>,
     pub base_colors: Option<Vec<Vector4<f32>>>,
+    pub morph: MeshMorph,
 }
 
 impl Default for MeshBuffer {
@@ -49,6 +50,7 @@ impl Default for MeshBuffer {
             node_index: None,
             base_vertices: Vec::new(),
             base_colors: None,
+            morph: MeshMorph::default(),
         }
     }
 }

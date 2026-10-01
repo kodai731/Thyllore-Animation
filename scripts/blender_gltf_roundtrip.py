@@ -26,6 +26,18 @@ def clear_scene():
         bpy.data.actions.remove(block)
 
 
+def count_fcurves(action):
+    if hasattr(action, "fcurves"):
+        return len(action.fcurves)
+
+    return sum(
+        len(channelbag.fcurves)
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+    )
+
+
 def main():
     input_path, output_path = parse_args()
     if not input_path or not output_path:
@@ -47,7 +59,7 @@ def main():
     print(f"Imported: {obj_count} objects, {armature_count} armatures, {action_count} actions")
 
     for action in bpy.data.actions:
-        print(f"  Action '{action.name}': {len(action.fcurves)} fcurves, "
+        print(f"  Action '{action.name}': {count_fcurves(action)} fcurves, "
               f"range={action.frame_range[0]:.1f}-{action.frame_range[1]:.1f}")
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

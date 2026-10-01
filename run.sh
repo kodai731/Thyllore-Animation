@@ -50,6 +50,11 @@ Commands:
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
+  blend --background [blender args...]
+      Run the same Docker Blender on the NVIDIA GPU without a window, every
+      argument passed to Blender (blender/docker/run_background.sh). That script
+      is what BlenderPath in .claude/local/paths.md points to:
+        ./run.sh blend --background --python scripts/blender_gltf_roundtrip.py -- in.glb out.glb
   blender-verify [--mode degrade|full|private] [--zip PATH] [args...]
       Launch a pristine Blender GUI in Docker with NO addon installed
       (blender/docker/run_gui.sh --no-install). The ZIP is mounted at
@@ -62,6 +67,16 @@ Commands:
       Smoke-test the deployed feedback worker (src/ml/worker/smoke.sh). Sources the
       full-mode env file; WORKER_URL is derived from
       THYLLORE_FEEDBACK_TEST_ENDPOINT when not given.
+  unity-verify
+      End-to-end avatar check on a synthetic rig (tools/unity/verify/run.sh):
+      Blender builds a cube with a humanoid armature and blend shapes, the
+      engine (batch run, needs the GPU and a display) edits and keys the blend
+      shapes and exports the sidecar and .anim files, Unity (empty project +
+      VRChat SDK via vrc-get) applies tools/unity/Editor/*.cs and BatchCheck
+      compares the sampled animation with the engine's. UNITY_EDITOR /
+      UNITY_VERIFY_DIR / BLENDER override the editor binary, the work dir
+      (default target/unity_verify) and the Blender launcher (default
+      blender/docker/run_background.sh).
   help
       Show this help.
 EOF
@@ -94,6 +109,9 @@ case "$command" in
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;
     blend)
+        if [[ "${1:-}" == "--background" ]]; then
+            exec bash "$REPO_ROOT/blender/docker/run_background.sh" "$@"
+        fi
         exec bash "$REPO_ROOT/blender/docker/run_gui.sh" --no-install "$@"
         ;;
     blender-verify)
@@ -114,6 +132,9 @@ case "$command" in
             export WORKER_URL="${smoke_endpoint%/v1/feedback}"
         fi
         exec bash "$REPO_ROOT/src/ml/worker/smoke.sh" "$@"
+        ;;
+    unity-verify)
+        exec bash "$REPO_ROOT/tools/unity/verify/run.sh" "$@"
         ;;
     help|-h|--help)
         usage

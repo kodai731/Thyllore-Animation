@@ -47,34 +47,23 @@ fn test_round_trip_bit_identity() {
 }
 
 #[test]
-fn test_ui_params_subset_of_preset_keys() {
+fn test_ui_param_paths_resolve_inside_the_preset_dict() {
     Python::attach(|py| {
         let ui_list = super::flame_ui_params(py).unwrap();
-        let ui_names: Vec<String> = ui_list
-            .try_iter()
-            .unwrap()
-            .map(|item| {
-                let dict: Bound<'_, PyDict> = item.unwrap().cast_into::<PyDict>().unwrap();
-                let name_obj = dict.get_item("name").unwrap().unwrap();
-                let name: String = name_obj.extract().unwrap();
-                name
-            })
-            .collect();
-
         let preset_dict: Bound<'_, PyDict> = super::flame_preset_params(py, "campfire").unwrap();
-        let all_keys: Vec<String> = preset_dict
-            .keys()
-            .into_iter()
-            .map(|k| k.extract().unwrap())
-            .collect();
 
-        for name in &ui_names {
-            assert!(
-                all_keys.contains(name),
-                "UI param '{}' not found in preset keys: {:?}",
-                name,
-                all_keys
-            );
+        for item in ui_list.try_iter().unwrap() {
+            let dict: Bound<'_, PyDict> = item.unwrap().cast_into::<PyDict>().unwrap();
+            let path: String = dict.get_item("path").unwrap().unwrap().extract().unwrap();
+            let mut current = preset_dict.clone().into_any();
+            for segment in path.split('.') {
+                current = current
+                    .cast::<PyDict>()
+                    .unwrap()
+                    .get_item(segment)
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("UI param path '{path}' missing at '{segment}'"));
+            }
         }
     });
 }

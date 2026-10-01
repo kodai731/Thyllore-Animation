@@ -4,5 +4,6 @@ pub mod clip_ops;
 pub mod curve_ops;
 pub mod manager;
 pub mod mirror;
+pub mod morph_sample;
 pub mod snap;
 pub mod tangent;

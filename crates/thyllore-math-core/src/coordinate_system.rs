@@ -110,15 +110,6 @@ pub fn blender_to_engine_rows() -> [[f32; 4]; 4] {
     rows
 }
 
-/// FBX Z-up → ワールド Y-up 変換（X軸周りに-90度回転）
-pub fn fbx_to_world() -> Matrix4<f32> {
-    BLENDER_TO_ENGINE
-}
-
-pub fn world_to_fbx() -> Matrix4<f32> {
-    ENGINE_TO_BLENDER
-}
-
 /// glTF Y-up → ワールド Y-up 変換（恒等変換）
 pub fn gltf_to_world() -> Matrix4<f32> {
     Matrix4::identity()
@@ -341,11 +332,10 @@ mod tests {
     use cgmath::{vec3, vec4, InnerSpace, Matrix4, SquareMatrix, Vector3};
 
     #[test]
-    fn test_fbx_to_world() {
-        let transform = fbx_to_world();
-        let fbx_up = vec4(0.0, 0.0, 1.0, 0.0);
-        let world_up = transform * fbx_up;
-        assert_eq!(world_up, vec4(0.0, 1.0, 0.0, 0.0));
+    fn test_blender_to_engine_maps_z_up_to_y_up() {
+        let blender_up = vec4(0.0, 0.0, 1.0, 0.0);
+        let engine_up = BLENDER_TO_ENGINE * blender_up;
+        assert_eq!(engine_up, vec4(0.0, 1.0, 0.0, 0.0));
     }
 
     #[test]

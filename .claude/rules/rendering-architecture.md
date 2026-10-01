@@ -64,7 +64,7 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 ## Frame flow
 
 `App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI
-events and applies the `AppCommand`s, then calls three `App` methods in order and closes with Last:
+events and applies the queued commands, then calls three `App` methods in order and closes with Last:
 
 1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
    effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`

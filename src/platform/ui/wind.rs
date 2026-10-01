@@ -91,8 +91,8 @@ pub(super) fn build_wind_section(
     let mut effect_copy = effect.clone();
     draw_tiered_params(
         ui,
-        thyllore_effect_core::WIND_UI_PARAMS,
-        thyllore_effect_core::WIND_SCALAR_PARAMS,
+        &thyllore_effect_core::WIND_UI_PARAMS,
+        &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
         |ui, edited| wind_key_button(ui, ui_events, edited),

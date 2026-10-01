@@ -300,6 +300,7 @@ mod tests {
     fn make_ui_param(name: &'static str, group: &'static str, primary: bool) -> UiParam {
         UiParam {
             name,
+            path: name,
             group,
             label: None,
             kind: UiKind::Scalar,

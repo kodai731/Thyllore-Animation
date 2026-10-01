@@ -43,7 +43,7 @@ def lightning_local_end_point(lightning_obj):
     target_point = target_local_point(lightning_obj)
     if target_point is not None:
         return tuple(target_point)
-    return tuple(lightning_obj.thyllore_lightning.end_offset)
+    return tuple(lightning_obj.thyllore_lightning.shape_end_offset)
 
 
 def lightning_default_preset() -> str:
@@ -55,10 +55,12 @@ def lightning_default_preset() -> str:
 def lightning_render_params(lightning_obj) -> dict:
     import thyllore_effect_core as fx
 
-    params = effect_properties.render_params(lightning_obj.thyllore_lightning, fx.lightning_preset_params)
+    params = effect_properties.render_params(
+        lightning_obj.thyllore_lightning, fx.lightning_preset_params, fx.lightning_parameter_paths
+    )
     target_point = target_local_point(lightning_obj)
     if target_point is not None:
-        params["end_offset"] = [float(v) for v in coordinates.blender_to_engine_point(target_point)]
+        params["shape_end_offset"] = [float(v) for v in coordinates.blender_to_engine_point(target_point)]
     return params
 
 

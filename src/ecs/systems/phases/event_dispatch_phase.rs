@@ -1,11 +1,11 @@
-use cgmath::Vector3;
-
 use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::world::World;
 use crate::ecs::UIEventQueue;
 use crate::hooks::effect_ui_event::EffectUiEventDispatchHooks;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
+use super::event_dispatch::avatar_setup::dispatch_avatar_setup_events;
 use super::event_dispatch::camera::dispatch_camera_light_debug_events;
 use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
 use super::event_dispatch::clip_instance::dispatch_clip_instance_events;
@@ -15,6 +15,7 @@ use super::event_dispatch::constraint::{
 };
 use super::event_dispatch::edit_history::dispatch_edit_history_events;
 use super::event_dispatch::hierarchy::dispatch_hierarchy_events;
+use super::event_dispatch::morph::dispatch_morph_weight_events;
 use super::event_dispatch::overlay::dispatch_overlay_events;
 use super::event_dispatch::pose_library::dispatch_pose_library_events;
 use super::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
@@ -25,39 +26,34 @@ use super::event_dispatch::spring_bone::{
 use super::event_dispatch::timeline::{
     dispatch_buffer_events, dispatch_keyframe_clipboard_events, dispatch_timeline_events,
 };
-use crate::ecs::resource::AppCommand;
 
 pub fn run_event_dispatch_phase(
     world: &mut World,
     assets: &mut AssetStorage,
-    model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
-) -> (Vec<UIEvent>, Vec<AppCommand>) {
-    let mut commands: Vec<AppCommand> = Vec::new();
-
+    graphics: &GraphicsResources,
+) -> Vec<UIEvent> {
     #[cfg(feature = "text-to-motion")]
-    super::event_dispatch::ml::drain_grpc_responses(world, assets, &mut commands);
+    super::event_dispatch::ml::drain_grpc_responses(world, assets);
 
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::poll_mesh_server_status(world);
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::poll_rigging_server_status(world);
 
-    let events: Vec<UIEvent> = {
-        let has_resource = world.contains_resource::<UIEventQueue>();
-        if !has_resource {
-            dispatch_effect_ui_hooks(world, assets);
-            return (Vec::new(), commands);
-        }
-        let mut ui_events = world.get_resource_mut::<UIEventQueue>().unwrap();
-        ui_events.drain().collect()
+    let Some(events) = world
+        .get_resource_mut::<UIEventQueue>()
+        .map(|mut ui_events| ui_events.drain().collect::<Vec<UIEvent>>())
+    else {
+        dispatch_effect_ui_hooks(world, assets);
+        return Vec::new();
     };
 
     if events.is_empty() {
         dispatch_effect_ui_hooks(world, assets);
-        return (Vec::new(), commands);
+        return Vec::new();
     }
 
-    let hierarchy_commands = dispatch_hierarchy_events(&events, world, assets);
+    dispatch_hierarchy_events(&events, world, assets);
     dispatch_timeline_events(&events, world, assets);
     dispatch_keyframe_clipboard_events(&events, world);
     dispatch_buffer_events(&events, world);
@@ -74,6 +70,8 @@ pub fn run_event_dispatch_phase(
     dispatch_pose_library_events(&events, world, assets);
     dispatch_spring_bone_bake_ecs_events(&events, world, assets);
     dispatch_spring_bone_edit_events(&events, world, assets);
+    dispatch_morph_weight_events(&events, world, assets, graphics);
+    dispatch_avatar_setup_events(&events, world, assets, graphics);
     #[cfg(feature = "ml")]
     super::event_dispatch::ml::dispatch_curve_suggestion_events(&events, world, assets);
     #[cfg(feature = "auto-rig")]
@@ -81,18 +79,14 @@ pub fn run_event_dispatch_phase(
     #[cfg(feature = "auto-rig")]
     super::event_dispatch::ml::dispatch_model_loaded_for_animation(&events, world);
 
-    let camera_commands = dispatch_camera_light_debug_events(&events, world, model_bounds);
-    commands.extend(camera_commands);
-    commands.extend(hierarchy_commands);
+    dispatch_camera_light_debug_events(&events, world, graphics);
 
     #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_text_to_mesh_events(&events, world, &mut commands);
+    super::event_dispatch::ml::dispatch_text_to_mesh_events(&events, world);
     #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_auto_rig_events(&events, world, &mut commands);
+    super::event_dispatch::ml::dispatch_auto_rig_events(&events, world);
 
-    let file_events = filter_file_dialog_events(&events);
-
-    (file_events, commands)
+    filter_file_dialog_events(&events)
 }
 
 fn dispatch_effect_ui_hooks(world: &mut World, assets: &mut AssetStorage) {
@@ -118,6 +112,7 @@ fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {
                     | UIEvent::ClipBrowserExportGltfAnimationOnly(_)
                     | UIEvent::ExportModelGltf
                     | UIEvent::SpringBoneSaveBake
+                    | UIEvent::PickMaterialTexture { .. }
             )
         })
         .cloned()

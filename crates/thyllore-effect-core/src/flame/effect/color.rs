@@ -3,13 +3,25 @@ use thyllore_color_core::blackbody_rgb;
 
 /// Emission color: either the authored base/tip pair or a blackbody pair
 /// sampled from the base/tip temperatures.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameColor {
+    /// Emission color at the flame base (used when blackbody is off)
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub base: [f32; 3],
+    /// Emission color at the flame tip (used when blackbody is off)
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub tip: [f32; 3],
+    /// Blackbody temperature at the base in kelvin
+    #[persist(ui(min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_base_k: f32,
+    /// Blackbody temperature at the tip in kelvin
+    #[persist(ui(min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_tip_k: f32,
+    /// Derive the base/tip colors from the blackbody temperatures
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.0f"))]
     pub use_blackbody: bool,
+    #[persist]
     pub occlusion_lum_ref: f32,
 }
 

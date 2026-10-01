@@ -100,9 +100,9 @@ pub(super) fn build_lightning_section(
     if target_name.is_none() {
         draw_params(
             ui,
-            &["end_offset"],
-            thyllore_effect_core::LIGHTNING_UI_PARAMS,
-            thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+            &["shape_end_offset"],
+            &thyllore_effect_core::LIGHTNING_UI_PARAMS,
+            &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
             |ui, edited| lightning_key_button(ui, ui_events, edited),
         );
@@ -110,10 +110,10 @@ pub(super) fn build_lightning_section(
 
     draw_tiered_params(
         ui,
-        thyllore_effect_core::LIGHTNING_UI_PARAMS,
-        thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+        &thyllore_effect_core::LIGHTNING_UI_PARAMS,
+        &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
-        &["end_offset"],
+        &["shape_end_offset"],
         |ui, edited| lightning_key_button(ui, ui_events, edited),
     );
 

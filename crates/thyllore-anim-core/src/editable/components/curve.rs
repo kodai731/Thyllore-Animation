@@ -18,6 +18,7 @@ pub enum PropertyType {
     /// Application-defined scalar channel (e.g. effect parameters). The u16 code's
     /// meaning is owned by the application; core treats it as an opaque curve key.
     Custom(u16),
+    MorphWeight,
 }
 
 impl PropertyType {
@@ -33,6 +34,7 @@ impl PropertyType {
             PropertyType::ScaleY => "Scale Y",
             PropertyType::ScaleZ => "Scale Z",
             PropertyType::Custom(_) => "Custom",
+            PropertyType::MorphWeight => "MorphWeight",
         }
     }
 
@@ -48,6 +50,7 @@ impl PropertyType {
             PropertyType::ScaleY => "Scl.Y",
             PropertyType::ScaleZ => "Scl.Z",
             PropertyType::Custom(_) => "Custom",
+            PropertyType::MorphWeight => "MorphWeight",
         }
     }
 }

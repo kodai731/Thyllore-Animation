@@ -1,3 +1,5 @@
+mod avatar_setup_window;
+mod blend_shape_inspector;
 mod bottom_panel;
 mod clip_browser_window;
 mod constraint_inspector;
@@ -24,6 +26,8 @@ pub(crate) mod timeline_window;
 mod viewport_window;
 mod water;
 mod wind;
+pub use avatar_setup_window::*;
+pub use blend_shape_inspector::*;
 pub use bottom_panel::*;
 pub use clip_browser_window::*;
 pub use constraint_inspector::*;

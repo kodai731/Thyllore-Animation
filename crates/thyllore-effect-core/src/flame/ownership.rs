@@ -31,15 +31,15 @@ pub const TEXTURE_FIT_TURBULENCE_PARAMETERS: &[&str] =
 pub const TEXTURE_FIT_COLOR_PARAMETERS: &[&str] = &[
     "color_base",
     "color_tip",
-    "temperature_base_k",
-    "temperature_tip_k",
-    "use_blackbody",
+    "color_temperature_base_k",
+    "color_temperature_tip_k",
+    "color_use_blackbody",
 ];
 
 /// Frame parameters the texture fit's tilt group is declared to write — the one
 /// documented exception where a fit writes Frame-owned parameters (user opt-in
 /// via the tilt group checkbox).
-pub const TEXTURE_FIT_TILT_PARAMETERS: &[&str] = &["wind_direction", "bend_amount"];
+pub const TEXTURE_FIT_TILT_PARAMETERS: &[&str] = &["wind_direction", "wind_bend_amount"];
 
 pub fn changed_parameters(
     before: &[(&'static str, Vec<f32>)],

@@ -12,7 +12,7 @@ select_exposed_params = effect_properties.select_exposed_params
 def wind_render_params(props) -> dict:
     import thyllore_effect_core as fx
 
-    return effect_properties.render_params(props, fx.wind_preset_params)
+    return effect_properties.render_params(props, fx.wind_preset_params, fx.wind_parameter_paths)
 
 
 def build_wind_property_group():

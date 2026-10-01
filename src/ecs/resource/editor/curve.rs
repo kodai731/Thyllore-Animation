@@ -9,6 +9,7 @@ pub enum CurveEditorTarget {
     Bone(BoneId),
     /// Clip-level scalar curves (`PropertyType::Custom`), e.g. flame parameters.
     Scalars,
+    Morph(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -90,10 +91,15 @@ impl CurveEditorState {
         self.selected_target = Some(CurveEditorTarget::Scalars);
     }
 
+    pub fn select_morph(&mut self, index: usize) {
+        self.selected_target = Some(CurveEditorTarget::Morph(index));
+    }
+
     pub fn selected_track_ref(&self) -> Option<CurveTrackRef> {
         match self.selected_target {
             Some(CurveEditorTarget::Bone(id)) => Some(CurveTrackRef::Bone(id)),
             Some(CurveEditorTarget::Scalars) => Some(CurveTrackRef::Scalar),
+            Some(CurveEditorTarget::Morph(i)) => Some(CurveTrackRef::Morph(i)),
             None => None,
         }
     }

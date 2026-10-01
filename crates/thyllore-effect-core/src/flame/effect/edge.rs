@@ -1,12 +1,18 @@
 use crate::flame::*;
 
 /// Erosion edge window and the tip silhouette of the medium.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameEdge {
+    #[persist]
     pub low: f32,
+    #[persist]
     pub high: f32,
+    #[persist]
     pub white_boost: f32,
+    #[persist(owner = Shape)]
     pub radius_tip_ratio: f32,
+    #[persist]
     pub outer_sharpen: f32,
 }
 

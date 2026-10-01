@@ -256,7 +256,7 @@ pub fn apply_flame_overrides(effect: &mut FlameEffect, overrides: &[(String, f32
             continue;
         }
 
-        let param = find_scalar_param(FLAME_SCALAR_PARAMS, key)
+        let param = find_scalar_param(&FLAME_SCALAR_PARAMS, key)
             .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -456,99 +456,6 @@ mod tests {
         for key in flame_set_valid_keys() {
             let mut effect = FlameEffect::default();
             apply_flame_overrides(&mut effect, &[(key.to_string(), 1.0)]);
-        }
-    }
-
-    /// Every key the pre-registry FLAME_SET_KEYS table accepted must keep working.
-    #[test]
-    fn set_legacy_keys_stay_accepted() {
-        let legacy_keys = [
-            "warp_amp",
-            "warp_freq",
-            "rise_speed",
-            "taper_power",
-            "radius_tip_ratio",
-            "edge_low",
-            "edge_high",
-            "white_boost",
-            "bend_amount",
-            "bend_power",
-            "wind_x",
-            "wind_z",
-            "noise_amplitude",
-            "noise_contrast",
-            "noise_frequency",
-            "noise_scroll_speed",
-            "sigma_t",
-            "intensity",
-            "height",
-            "radius",
-            "time",
-            "time_scale",
-            "time_offset",
-            "rot_z_deg",
-            "temperature_base_k",
-            "temperature_tip_k",
-            "envelope_peak",
-            "envelope_base",
-            "envelope_tail",
-            "radial_sharpness",
-            "emitter_kind",
-            "ring_major_radius",
-            "ring_angular_speed",
-            "noise_aniso_y",
-            "warp_y_scale",
-            "occlusion_lum_ref",
-            "contour_wiggle_amp",
-            "aniso_axis_advect",
-            "rte_bands",
-            "sigma_dispersion",
-            "boundary_amp",
-            "near_fade_radius",
-            "carve_residual",
-            "tip_carve_depth",
-            "tip_carve_reach",
-            "warp_reach",
-            "swirl_gain",
-            "swirl_speed",
-            "spread_gain",
-            "support_margin",
-            "meander_amp",
-            "meander_frequency",
-            "mix_lo",
-            "mix_hi",
-            "mix_height_gain",
-            "mix_scale",
-            "mix_radial_gain",
-            "density_exp",
-            "temp_exp",
-            "wien_c_k",
-            "wave_segments",
-            "boundary_freq",
-            "boundary_speed",
-            "boundary_radius_ratio",
-            "edge_outer_sharpen",
-            "noise_scale_mode",
-            "erosion_noise_gain",
-            "twist_gain",
-            "twist_speed",
-            "burnout_gain",
-            "noise_shaping_scale",
-            "optical_depth",
-            "branch_period",
-            "branch_life",
-            "branch_gain",
-            "branch_core_radius",
-            "branch_core_offset",
-            "branch_reach",
-            "branch_spread",
-            "branch_spawn_height",
-            "branch_spawn_range",
-            "branch_seed",
-        ];
-        let valid = flame_set_valid_keys();
-        for key in legacy_keys {
-            assert!(valid.contains(&key), "legacy key {key} no longer accepted");
         }
     }
 

@@ -22,6 +22,7 @@ from gpu_extras.batch import batch_for_shader
 import thyllore_effect_core as fx
 
 import blender_addon.effects.lightning as addon
+from blender_addon.common.effect_properties import flatten_by_paths
 from blender_addon.effects.lightning.draw_handler import LightningViewportRenderer, _load_shader
 
 UBO_BLOCKS = (("model", 0, 16), ("inverse_model", 16, 16), ("core", 32, 4), ("rim", 36, 4), ("shape", 40, 4), ("inv_view_proj", 48, 16))
@@ -37,17 +38,18 @@ def column_major(columns):
 
 
 def params_from_effect(effect):
-    defaults = fx.lightning_preset_params("bolt")
+    paths = fx.lightning_parameter_paths()
+    defaults = flatten_by_paths(fx.lightning_preset_params("bolt"), paths)
     params = {
         k: (int(v) if isinstance(defaults[k], int) and not isinstance(defaults[k], bool) else v)
         for k, v in effect.items() if k in defaults
     }
-    source = params.get("source")
+    source = params.get("shape_source")
     if isinstance(source, (int, float)):
         if source == 0:
-            params["source"] = "Point"
+            params["shape_source"] = {"kind": "Point"}
         else:
-            del params["source"]
+            del params["shape_source"]
     return params
 
 

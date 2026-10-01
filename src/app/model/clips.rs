@@ -21,7 +21,6 @@ pub(super) fn register_imported_animation(
     {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         clip_library.animation = load_result.animation_system.clone();
-        clip_library.morph_animation = load_result.morph_animation.clone();
     }
 
     for skeleton in &load_result.skeletons {

@@ -9,6 +9,15 @@ pub const FLAME_STYLE_VERSION: u32 = 1;
 /// drift. `direct` fields map 1:1 onto an effect field path; `custom` fields
 /// need a conversion and are handled by the callers in
 /// `flame_style_from_effect` / `apply_flame_style`.
+macro_rules! parameter_name {
+    ($first:ident) => {
+        stringify!($first)
+    };
+    ($first:ident, $($rest:ident),+) => {
+        concat!(stringify!($first), "_", parameter_name!($($rest),+))
+    };
+}
+
 macro_rules! declare_style_group {
     (
         $(#[$doc:meta])*
@@ -44,7 +53,7 @@ macro_rules! declare_style_group {
             $(
                 if let Some(value) = group.$field {
                     $effect.$($path).+ = value;
-                    applied.push(stringify!($field));
+                    applied.push(parameter_name!($($path),+));
                 }
             )*
         }

@@ -1,48 +1,78 @@
 use crate::flame::*;
 use cgmath::{Matrix4, Quaternion, Vector3};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[scene(key = "flame", tag = ParameterOwner, owner = Frame, tags = PARAMETER_OWNERSHIP, snapshot = flame_parameter_snapshot, scalars = FLAME_SCALAR_PARAMS, ui = FLAME_UI_PARAMS, overwrite = overwrite_persisted_fields)]
 pub struct FlameEffect {
+    #[persist(as = [f32; 3])]
     pub position: Vector3<f32>,
+    #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
+    #[persist(ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
+    #[persist(ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub radius: f32,
+    #[persist(owner = Style)]
     pub sigma_t: f32,
-    /// Line-of-sight optical thickness tau0 = sigma_t * radius; > 0 derives
-    /// sigma_t as optical_depth / radius, 0 = use sigma_t directly.
-    pub optical_depth: f32,
+    #[persist(owner = Style, ui(primary, min = 0.0, max = 10.0, group = "body"))]
     pub intensity: f32,
+    #[nested]
+    pub color: FlameColor,
+    #[nested]
+    pub noise: FlameNoise,
+    #[runtime]
     pub time: f32,
+    #[persist(ui(primary, min = 0.0, max = 4.0, group = "footer"))]
     pub time_scale: f32,
+    #[persist]
     pub time_offset: f32,
-    pub coefficients: FlameCoefficients,
-    pub light_position_world: Vector3<f32>,
+    #[nested]
+    pub warp: FlameWarp,
+    #[nested]
+    pub edge: FlameEdge,
+    #[nested]
+    pub wind: FlameWind,
+    #[persist(owner = Style)]
     pub self_shadow_strength: f32,
+    #[nested]
+    pub envelope: FlameEnvelope,
+    #[nested(runtime)]
+    pub emitter: FlameEmitter,
+    #[nested(runtime)]
+    pub boundary: FlameBoundary,
+    #[persist(owner = Shape)]
     pub radial_sharpness: f32,
-    /// Age-coordinate radial opening of the medium toward the tip; 0 = off.
+    #[nested]
+    pub contour: FlameContour,
+    #[nested]
+    pub carve: FlameCarve,
+    #[nested]
+    pub swirl: FlameSwirl,
+    /// Medium spread toward the tip: noise features enlarge, drift outward and dissolve as they rise (0 = rigid scroll)
+    #[persist(owner = Style, ui(min = 0.0, max = 3.0, group = "motion"))]
     pub spread_gain: f32,
-    /// Multiplier on the shell support radius, kept matched across density
-    /// support, proxy shape, and analytic integration; 1.0 = default.
+    /// Flame density support radius: multiplier for the biweight support radius (how much extra space is allowed for carving). 1.0 is default; higher values result in larger support and may leave chunks at the outer edges.
+    #[persist(owner = Style, ui(min = 1.0, max = 2.5, group = "footer"))]
     pub support_margin: f32,
+    #[nested]
+    pub meander: FlameMeander,
+    #[nested]
+    pub mix: FlameMix,
+    #[nested]
+    pub thermal: FlameThermal,
     /// Closed-form segments per ray of the wave walk: finer noise needs more
     /// (the segment grid aliases at noise frequency > ~2 with 64); 64 = default.
+    #[persist]
     pub wave_segments: u32,
-    pub color: FlameColor,
-    pub noise: FlameNoise,
-    pub warp: FlameWarp,
-    pub wind: FlameWind,
-    pub edge: FlameEdge,
-    pub envelope: FlameEnvelope,
-    pub emitter: FlameEmitter,
-    pub contour: FlameContour,
-    pub boundary: FlameBoundary,
-    pub carve: FlameCarve,
-    pub mix: FlameMix,
-    pub thermal: FlameThermal,
-    pub swirl: FlameSwirl,
+    #[nested]
     pub twist: FlameTwist,
-    pub meander: FlameMeander,
+    /// Line-of-sight optical thickness tau0 = sigma_t * radius: > 0 derives sigma_t as tau0 / radius so resizing the flame keeps its opacity (0 = use the raw sigma_t channel directly)
+    #[persist(owner = Style, ui(min = 0.0, max = 16.0, group = "body"))]
+    pub optical_depth: f32,
+    #[nested]
     pub branch: FlameBranch,
+    pub coefficients: FlameCoefficients,
+    pub light_position_world: Vector3<f32>,
 }
 
 impl Default for FlameEffect {
@@ -123,4 +153,20 @@ pub fn build_flame_inverse_model_matrix(effect: &FlameEffect) -> Matrix4<f32> {
     Matrix4::from_nonuniform_scale(1.0 / radius, 1.0 / height, 1.0 / radius)
         * Matrix4::from(effect.rotation.conjugate())
         * Matrix4::from_translation(-effect.position)
+}
+
+impl crate::EffectPresets for FlameEffect {
+    const PRESET_NAMES: &'static [&'static str] = crate::FLAME_PRESET_NAMES;
+
+    fn apply_preset(&mut self, name: &str) -> bool {
+        crate::apply_flame_preset(self, name)
+    }
+}
+
+impl crate::Placement for FlameEffect {
+    fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
+        self.time = time;
+        self.position = Vector3::from(position);
+        crate::scene_convert::quaternion_wxyz::set(&mut self.rotation, rotation);
+    }
 }

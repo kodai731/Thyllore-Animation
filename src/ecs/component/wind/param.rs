@@ -93,64 +93,18 @@ impl WindParam {
         WindParam::PuffRiseSpeed,
     ];
 
-    pub const fn code(self) -> u16 {
-        match self {
-            WindParam::ColumnHeight => 512,
-            WindParam::WallRadiusBase => 515,
-            WindParam::WallRadiusTop => 516,
-            WindParam::WallWidthQ => 517,
-            WindParam::WallStrength => 518,
-            WindParam::TopFade => 519,
-            WindParam::Density => 520,
-            WindParam::AlbedoR => 521,
-            WindParam::AlbedoG => 522,
-            WindParam::AlbedoB => 523,
-            WindParam::AmbientBrightness => 524,
-            WindParam::PhaseG => 531,
-            WindParam::SunIntensity => 532,
-            WindParam::RiseInitialHeight => 525,
-            WindParam::RiseDuration => 526,
-            WindParam::SpreadStart => 527,
-            WindParam::SpreadRate => 528,
-            WindParam::DissipateStart => 529,
-            WindParam::DissipateTime => 530,
-            WindParam::Circulation => 533,
-            WindParam::StreakOrder => 534,
-            WindParam::StreakTwist => 535,
-            WindParam::StreakRiseSpeed => 536,
-            WindParam::StreakAmplitude => 537,
-            WindParam::EddyAmplitude => 538,
-            WindParam::EddyCellTheta => 539,
-            WindParam::EddyCellHeight => 540,
-            WindParam::EddyCellRadial => 541,
-            WindParam::EddyShear => 542,
-            WindParam::EddySpeedSpread => 556,
-            WindParam::EddyRiseSpeed => 543,
-            WindParam::EddyReseedPeriod => 544,
-            WindParam::EddyErosion => 555,
-            WindParam::PuffCountTheta => 548,
-            WindParam::PuffCountHeight => 549,
-            WindParam::PuffRadius => 550,
-            WindParam::PuffRadiusJitter => 551,
-            WindParam::PuffOffsetQ => 552,
-            WindParam::PuffStrength => 553,
-            WindParam::PuffRiseSpeed => 554,
-        }
-    }
-
-    pub fn from_code(code: u16) -> Option<WindParam> {
-        WindParam::ALL.iter().copied().find(|p| p.code() == code)
-    }
-
-    pub const fn property_type(self) -> PropertyType {
-        PropertyType::Custom(self.code())
+    pub fn property_type(self) -> PropertyType {
+        let index = WindParam::ALL
+            .iter()
+            .position(|p| *p == self)
+            .expect("WindParam::ALL lists every variant");
+        WIND_DOMAIN.property_type_at(index)
     }
 
     pub fn from_property_type(property_type: PropertyType) -> Option<WindParam> {
-        match property_type {
-            PropertyType::Custom(code) => WindParam::from_code(code),
-            _ => None,
-        }
+        WIND_DOMAIN
+            .channel_index(property_type)
+            .map(|index| WindParam::ALL[index])
     }
 
     pub const fn display_name(self) -> &'static str {
@@ -342,7 +296,6 @@ impl WindParam {
 
     const fn channel(self) -> ScalarChannel {
         ScalarChannel {
-            code: self.code(),
             display_name: self.display_name(),
             cli_name: self.cli_name(),
             scene_name: self.scene_name(),
@@ -394,7 +347,7 @@ fn wind_local_time(world: &World, entity: Entity) -> Option<f32> {
 }
 
 fn scalar_param(param: WindParam) -> &'static ScalarParam<WindTornadoEffect> {
-    find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name())
+    find_scalar_param(&WIND_SCALAR_PARAMS, param.cli_name())
         .expect("every WindParam cli_name is registered in WIND_SCALAR_PARAMS")
 }
 
@@ -411,16 +364,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_code_and_cli_name_roundtrip_all_params() {
+    fn test_property_type_and_cli_name_roundtrip_all_params() {
         for param in WindParam::ALL {
-            assert_eq!(WindParam::from_code(param.code()), Some(param));
             assert_eq!(
                 WindParam::from_property_type(param.property_type()),
                 Some(param)
             );
             assert_eq!(WindParam::from_cli_name(param.cli_name()), Some(param));
         }
-        assert_eq!(WindParam::from_code(999), None);
+        assert_eq!(
+            WindParam::from_property_type(PropertyType::Custom(u16::MAX)),
+            None
+        );
         assert_eq!(WindParam::from_cli_name("no_such_param"), None);
     }
 
@@ -428,7 +383,7 @@ mod tests {
     fn test_every_cli_name_is_in_the_scalar_registry() {
         for param in WindParam::ALL {
             assert!(
-                find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name()).is_some(),
+                find_scalar_param(&WIND_SCALAR_PARAMS, param.cli_name()).is_some(),
                 "{:?}",
                 param
             );
@@ -436,21 +391,14 @@ mod tests {
     }
 
     #[test]
-    fn test_codes_are_unique_and_start_at_512() {
-        let mut codes: Vec<u16> = WindParam::ALL.iter().map(|p| p.code()).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), WindParam::ALL.len());
-        assert!(codes.iter().all(|code| *code >= 512));
-    }
-
-    #[test]
     fn test_channel_table_mirrors_enum() {
         assert_eq!(WIND_CHANNELS.len(), WindParam::ALL.len());
         for (channel, param) in WIND_CHANNELS.iter().zip(WindParam::ALL) {
-            assert_eq!(channel.code, param.code());
             assert_eq!(channel.cli_name, param.cli_name());
-            assert_eq!(channel.property_type(), param.property_type());
+            assert_eq!(
+                WIND_DOMAIN.property_type_of(channel),
+                Some(param.property_type())
+            );
         }
     }
 

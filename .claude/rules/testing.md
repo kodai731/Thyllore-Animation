@@ -108,6 +108,7 @@ same check locally with `scripts/ci_v2_curve_copilot_inference_smoke.sh`.
 | Blender addon (`blender_addon/**`) | `scripts/run_blender_debug.sh` — builds the debug wheel + addon, installs, launches the test scene; the operator smoke runs headless via `blender_addon/tests/curve_copilot_operator_smoke.py` |
 | engine ML systems (`src/ecs/systems/curve_copilot/`, `src/ml/`) | `cargo check --lib` + `cargo test --lib curve_suggestion` |
 | Animation / ECS / rendering (no ML) | `cargo test --lib` + `cargo test --test ecs_tests --no-default-features` |
+| Avatar workflow (blend shape edit / keying, `.anim` and sidecar export, `tools/unity/**`) | `./run.sh unity-verify` — Blender rig → engine batch run (GPU + display) → Unity batch; fails when Unity's sampled blend shape weights differ from the engine's |
 
 ONNX Runtime must be present at `vendor/onnxruntime/onnxruntime-linux-x64-*/lib/`
 and `ORT_DYLIB_PATH` set (see `.cargo/config.toml`) for any test that loads a model.

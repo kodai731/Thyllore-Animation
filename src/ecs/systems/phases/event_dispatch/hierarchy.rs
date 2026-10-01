@@ -4,7 +4,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
-use crate::ecs::resource::{Camera, ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::resource::{
+    Camera, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue, HierarchyState, TimelineState,
+};
 use crate::ecs::systems::{
     camera_move_to_look_at, collapse_entity, expand_entity, hierarchy_collapse_bone,
     hierarchy_deselect_all, hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
@@ -14,23 +16,13 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::{Children, Entity, Transform, World};
 
-pub fn dispatch_hierarchy_events(
-    events: &[UIEvent],
-    world: &mut World,
-    assets: &AssetStorage,
-) -> Vec<crate::ecs::resource::AppCommand> {
-    let commands = dispatch_hierarchy_entity_events(events, world);
+pub fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+    dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
-    commands
 }
 
-fn dispatch_hierarchy_entity_events(
-    events: &[UIEvent],
-    world: &mut World,
-) -> Vec<crate::ecs::resource::AppCommand> {
-    let mut commands = Vec::new();
-
+fn dispatch_hierarchy_entity_events(events: &[UIEvent], world: &mut World) {
     for event in events {
         match event {
             UIEvent::SelectEntity(entity) => {
@@ -112,9 +104,11 @@ fn dispatch_hierarchy_entity_events(
                     hierarchy_state.selected_entity = None;
                     hierarchy_state.multi_selection.clear();
 
-                    commands.push(crate::ecs::resource::AppCommand::DeleteEntities {
-                        entities: all_to_delete,
-                    });
+                    world.resource_mut::<EntityRemovalQueue>().push(
+                        EntityRemovalCommand::DeleteEntities {
+                            entities: all_to_delete,
+                        },
+                    );
                 }
             }
 
@@ -134,8 +128,6 @@ fn dispatch_hierarchy_entity_events(
             _ => {}
         }
     }
-
-    commands
 }
 
 fn dispatch_hierarchy_bone_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {

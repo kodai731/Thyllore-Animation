@@ -5,7 +5,7 @@ warmup frames and reports median / p95 for the lightning pass plus cpu_dt_ms. Th
 cameras also capture a flame scene so the G4 "within +-50% of the flame" target is
 recorded next to the lightning numbers. Nothing is judged, the values are only reported.
 
-    uv run --with numpy python3 tools/lightning_cost.py [--dood] [--frames 120] [--lightning-set core_intensity=12.0]
+    uv run --with numpy python3 tools/lightning_cost.py [--dood] [--frames 120] [--lightning-set look_core_intensity=12.0]
                                                         [--engine target/debug/thyllore-animation]
 
 Exit code 0 = every camera measured (the JSON line on stdout holds the numbers).

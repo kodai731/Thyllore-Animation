@@ -246,10 +246,6 @@ impl App {
         log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
         log!("  animation clips count: {}", clip_library.clip_count());
         log!(
-            "  morph_animations count: {}",
-            clip_library.morph_animation.animations.len()
-        );
-        log!(
             "  skeletons count: {}",
             clip_library.animation.skeletons.len()
         );

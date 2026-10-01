@@ -50,6 +50,11 @@ Commands:
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
+  blend --background [blender args...]
+      Run the same Docker Blender on the NVIDIA GPU without a window, every
+      argument passed to Blender (blender/docker/run_background.sh). That script
+      is what BlenderPath in .claude/local/paths.md points to:
+        ./run.sh blend --background --python scripts/blender_gltf_roundtrip.py -- in.glb out.glb
   blender-verify [--mode degrade|full|private] [--zip PATH] [args...]
       Launch a pristine Blender GUI in Docker with NO addon installed
       (blender/docker/run_gui.sh --no-install). The ZIP is mounted at
@@ -99,6 +104,9 @@ case "$command" in
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;
     blend)
+        if [[ "${1:-}" == "--background" ]]; then
+            exec bash "$REPO_ROOT/blender/docker/run_background.sh" "$@"
+        fi
         exec bash "$REPO_ROOT/blender/docker/run_gui.sh" --no-install "$@"
         ;;
     blender-verify)

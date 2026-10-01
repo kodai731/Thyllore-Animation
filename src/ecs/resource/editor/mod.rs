@@ -1,3 +1,5 @@
+mod avatar_setup;
+mod blend_shape_inspector;
 mod clip_browser;
 mod clip_library;
 mod constraint;
@@ -6,6 +8,7 @@ mod curve_buffer;
 #[cfg(feature = "ml")]
 mod curve_suggestion;
 mod edit_history;
+mod expression_library;
 mod hierarchy;
 mod keyframe_copy;
 mod panel_layout;
@@ -15,6 +18,8 @@ mod timeline;
 mod timeline_interaction;
 mod transform_gizmo;
 
+pub use avatar_setup::*;
+pub use blend_shape_inspector::*;
 pub use clip_browser::*;
 pub use clip_library::*;
 pub use constraint::*;
@@ -23,6 +28,7 @@ pub use curve_buffer::*;
 #[cfg(feature = "ml")]
 pub use curve_suggestion::*;
 pub use edit_history::*;
+pub use expression_library::*;
 pub use hierarchy::*;
 pub use keyframe_copy::*;
 pub use panel_layout::*;

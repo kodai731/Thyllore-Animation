@@ -125,7 +125,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | Path | Contents |
 |---|---|
 | `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
-| `editor/` | Timeline, curves, clips, hierarchy, layout, history, keyframes, poses, constraints |
+| `editor/` | Timeline, curves, clips, hierarchy, layout, history, keyframes, poses, constraints, avatar setup, blend shape inspector, expression library |
 | `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
 | `timing/` | Frame clock, CPU and GPU frame timing, update phase, render prep |
 | `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui and trace |
@@ -136,8 +136,8 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
 | `wind/` | Wind effect data, render targets, batch capture |
 | `app/` | App command and exit, message log, scene state |
-| `model/` | FBX and glTF model caches |
-| `animation/` | Bone pose override, pose apply cache, spring bone state |
+| `model/` | FBX and glTF model caches, material texture slots |
+| `animation/` | Bone pose override, pose apply cache, spring bone state, morph track playback |
 | `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
 
 `mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
@@ -149,7 +149,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and its domain table, spring bone |
 | `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
 | `render/` | camera state, render handles, field-driven look |
-| `model/` | GLB source |
+| `model/` | GLB source, morph weights |
 | `ml/` | inference actor |
 | `mesh/` | GPU mesh types and vertex attribute presets |
 | `flame/` | Flame effect components |

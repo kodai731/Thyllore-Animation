@@ -7,7 +7,6 @@ mod flame_effect;
 mod medium;
 mod motion;
 mod noise;
-mod scene_format;
 mod warp;
 
 pub use color::*;
@@ -19,5 +18,7 @@ pub use flame_effect::*;
 pub use medium::*;
 pub use motion::*;
 pub use noise::*;
-pub use scene_format::*;
 pub use warp::*;
+
+#[cfg(test)]
+mod tests;

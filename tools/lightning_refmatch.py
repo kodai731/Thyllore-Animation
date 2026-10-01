@@ -1,7 +1,7 @@
 """Capture the lightning reference-matching arms and prepare them for analysis.
 
 Each arm pairs a reference footage directory with a lightning preset. For every arm the tool
-captures a background (core_intensity=0, rim_intensity=0) used to detect the viewport, then
+captures a background (look_core_intensity=0, look_rim_intensity=0) used to detect the viewport, then
 captures the frame sequence three times: shaded colour into `<capture>/color/`, the coverage
 debug view into `<capture>/coverage/`, and the core debug view into `<capture>/core/`.
 
@@ -117,13 +117,13 @@ def background_path(out_dir: Path, arm: str) -> Path:
 
 
 def capture_background(out_dir: Path, arm: str, dood: bool) -> None:
-    """Capture the scene with lightning core_intensity=0 and rim_intensity=0."""
+    """Capture the scene with lightning look_core_intensity=0 and look_rim_intensity=0."""
     command = [
         str(engine_path()),
         "--batch-screenshot", str(background_path(out_dir, arm)),
         "--batch-scene", SCENE,
-        "--batch-lightning-set", "core_intensity=0",
-        "--batch-lightning-set", "rim_intensity=0",
+        "--batch-lightning-set", "look_core_intensity=0",
+        "--batch-lightning-set", "look_rim_intensity=0",
         "--batch-frames", str(BACKGROUND_FRAMES),
     ]
     run_engine(command, f"background {arm}", dood)
@@ -143,7 +143,7 @@ def capture_sequence(out_dir: Path, config: dict, dood: bool,
             "--batch-screenshot-sequence", sequence_spec,
             "--batch-scene", SCENE,
             "--batch-lightning-preset", config["preset"],
-            "--batch-lightning-set", "burst_jitter=0",
+            "--batch-lightning-set", "timing_burst_jitter=0",
             "--batch-frames", str(start_frame),
         ]
         if debug_view:

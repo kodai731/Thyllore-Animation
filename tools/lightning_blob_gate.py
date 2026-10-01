@@ -15,7 +15,7 @@ lightning_idempotency_gate.py.
 
     uv run --with numpy --with pillow python3 tools/lightning_blob_gate.py --self-check
 
-    uv run --with numpy --with pillow python3 tools/lightning_blob_gate.py [--dood] [--batch-lightning-set core_intensity=12.0]
+    uv run --with numpy --with pillow python3 tools/lightning_blob_gate.py [--dood] [--batch-lightning-set look_core_intensity=12.0]
 
 Exit code 0 = ran to completion (the JSON line on stdout holds pass/fail).
 """
@@ -44,8 +44,8 @@ HUD_MASK_MAX_Y = 690
 DEFAULT_DILATE_PX = 16
 DEFAULT_LUMINANCE_MARGIN = 10.0
 AXIS_SAMPLES = 128
-BURST_TIMING_PINS = ["burst_start=0.0", "burst_jitter=0.0"]
-BACKGROUND_LIGHTNING_OFF = ["core_intensity=0.0", "rim_intensity=0.0"]
+BURST_TIMING_PINS = ["timing_burst_start=0.0", "timing_burst_jitter=0.0"]
+BACKGROUND_LIGHTNING_OFF = ["look_core_intensity=0.0", "look_rim_intensity=0.0"]
 
 
 def rows_from_columns(columns: list[list[float]]) -> np.ndarray:

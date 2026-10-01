@@ -16,6 +16,7 @@ use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::MeshBuffer;
 use crate::vulkanr::vulkan::Instance;
+use thyllore_model_core::MeshMorph;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
 use thyllore_vulkan_core::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
@@ -209,6 +210,7 @@ unsafe fn create_quad_mesh_buffer(
         node_index: None,
         base_vertices: Vec::new(),
         base_colors: None,
+        morph: MeshMorph::default(),
     })
 }
 

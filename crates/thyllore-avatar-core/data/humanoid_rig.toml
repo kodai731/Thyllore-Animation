@@ -1,0 +1,167 @@
+# `paired = true` declares the roles Left<part> and Right<part>; `[[chain]]` lists parts from ancestor to descendant.
+
+[[role]]
+part = "Hips"
+required = true
+patterns = [["hips"], ["hip"], ["pelvis"]]
+
+[[role]]
+part = "UpperLeg"
+paired = true
+required = true
+patterns = [["upper", "leg"], ["upperleg"], ["thigh"], ["up", "leg"], ["upleg"]]
+
+[[role]]
+part = "LowerLeg"
+paired = true
+required = true
+patterns = [["lower", "leg"], ["lowerleg"], ["knee"], ["calf"], ["shin"], ["leg"]]
+
+[[role]]
+part = "Foot"
+paired = true
+required = true
+patterns = [["foot"], ["ankle"]]
+
+[[role]]
+part = "Spine"
+required = true
+patterns = [["spine"]]
+
+[[role]]
+part = "Chest"
+patterns = [["chest"]]
+
+[[role]]
+part = "UpperChest"
+patterns = [["upper", "chest"], ["upperchest"]]
+
+[[role]]
+part = "Neck"
+patterns = [["neck"]]
+
+[[role]]
+part = "Head"
+required = true
+patterns = [["head"]]
+
+[[role]]
+part = "Shoulder"
+paired = true
+patterns = [["shoulder"], ["clavicle"]]
+
+[[role]]
+part = "UpperArm"
+paired = true
+required = true
+patterns = [["upper", "arm"], ["upperarm"], ["arm"]]
+
+[[role]]
+part = "LowerArm"
+paired = true
+required = true
+patterns = [["lower", "arm"], ["lowerarm"], ["forearm"], ["fore", "arm"], ["elbow"]]
+
+[[role]]
+part = "Hand"
+paired = true
+required = true
+patterns = [["hand"], ["wrist"]]
+
+[[role]]
+part = "Toes"
+paired = true
+patterns = [["toes"], ["toe"]]
+
+[[role]]
+part = "Eye"
+paired = true
+patterns = [["eye"]]
+
+[[role]]
+part = "Jaw"
+patterns = [["jaw"]]
+
+[[role]]
+part = "ThumbProximal"
+paired = true
+patterns = [["thumb", "proximal"], ["thumb", "1"], ["thumb1"]]
+
+[[role]]
+part = "ThumbIntermediate"
+paired = true
+patterns = [["thumb", "intermediate"], ["thumb", "2"], ["thumb2"]]
+
+[[role]]
+part = "ThumbDistal"
+paired = true
+patterns = [["thumb", "distal"], ["thumb", "3"], ["thumb3"]]
+
+[[role]]
+part = "IndexProximal"
+paired = true
+patterns = [["index", "proximal"], ["index", "1"], ["index1"]]
+
+[[role]]
+part = "IndexIntermediate"
+paired = true
+patterns = [["index", "intermediate"], ["index", "2"], ["index2"]]
+
+[[role]]
+part = "IndexDistal"
+paired = true
+patterns = [["index", "distal"], ["index", "3"], ["index3"]]
+
+[[role]]
+part = "MiddleProximal"
+paired = true
+patterns = [["middle", "proximal"], ["middle", "1"], ["middle1"]]
+
+[[role]]
+part = "MiddleIntermediate"
+paired = true
+patterns = [["middle", "intermediate"], ["middle", "2"], ["middle2"]]
+
+[[role]]
+part = "MiddleDistal"
+paired = true
+patterns = [["middle", "distal"], ["middle", "3"], ["middle3"]]
+
+[[role]]
+part = "RingProximal"
+paired = true
+patterns = [["ring", "proximal"], ["ring", "1"], ["ring1"]]
+
+[[role]]
+part = "RingIntermediate"
+paired = true
+patterns = [["ring", "intermediate"], ["ring", "2"], ["ring2"]]
+
+[[role]]
+part = "RingDistal"
+paired = true
+patterns = [["ring", "distal"], ["ring", "3"], ["ring3"]]
+
+[[role]]
+part = "LittleProximal"
+paired = true
+patterns = [["little", "proximal"], ["little", "1"], ["little1"], ["pinky", "proximal"], ["pinky", "1"], ["pinky1"]]
+
+[[role]]
+part = "LittleIntermediate"
+paired = true
+patterns = [["little", "intermediate"], ["little", "2"], ["little2"], ["pinky", "intermediate"], ["pinky", "2"], ["pinky2"]]
+
+[[role]]
+part = "LittleDistal"
+paired = true
+patterns = [["little", "distal"], ["little", "3"], ["little3"], ["pinky", "distal"], ["pinky", "3"], ["pinky3"]]
+
+[[chain]]
+parts = ["Hips", "Spine", "Chest", "UpperChest", "Neck", "Head"]
+
+[[chain]]
+parts = ["Shoulder", "UpperArm", "LowerArm", "Hand"]
+
+[[chain]]
+parts = ["UpperLeg", "LowerLeg", "Foot", "Toes"]

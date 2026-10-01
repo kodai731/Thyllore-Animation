@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
 use cgmath::{Quaternion, Vector3};
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::vrchat::rank::Platform;
 
 use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
@@ -511,6 +513,46 @@ pub enum UIEvent {
     RemoveLightningWaypoint(usize),
     UpdateLightningRenderSettings(LightningRenderSettings),
     OpenScalarCurveEditor,
+    SetMorphWeight {
+        entity: Entity,
+        channel: String,
+        weight: f32,
+    },
+    ResetMorphWeights {
+        entity: Entity,
+    },
+    ApplyExpressionPreset {
+        entity: Entity,
+        preset_index: usize,
+    },
+    CaptureExpressionPreset {
+        entity: Entity,
+        name: String,
+    },
+    SaveExpressionLibrary,
+    KeyMorphWeights {
+        entity: Entity,
+    },
+    OpenAvatarSetup,
+    SetHumanoidRole {
+        role: HumanoidRole,
+        bone: Option<usize>,
+    },
+    SaveHumanoidMapping,
+    SetAvatarRankPlatform(Platform),
+    ExportAvatarSidecar,
+    AddSpringChainsByPrefix {
+        prefix: String,
+    },
+    ExportExpressionAnims,
+    ExportMorphTrackAnim,
+    PickMaterialTexture {
+        material: String,
+    },
+    ClearMaterialTexture {
+        material: String,
+    },
+    SaveMaterialTextures,
 }
 
 #[derive(Default)]

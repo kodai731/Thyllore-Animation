@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
-use crate::animation::{AnimationSystem, MorphAnimationSystem};
+use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {
     pub animation: AnimationSystem,
-    pub morph_animation: MorphAnimationSystem,
 
     pub source_clips: HashMap<SourceClipId, SourceClip>,
     pub dirty_sources: HashSet<SourceClipId>,
@@ -19,7 +18,6 @@ impl ClipLibrary {
     pub fn new() -> Self {
         Self {
             animation: AnimationSystem::new(),
-            morph_animation: MorphAnimationSystem::new(),
             source_clips: HashMap::new(),
             dirty_sources: HashSet::new(),
             next_source_id: 1,
@@ -29,7 +27,6 @@ impl ClipLibrary {
 
     pub fn clear(&mut self) {
         self.animation.clear();
-        self.morph_animation = MorphAnimationSystem::new();
         self.clear_editable();
     }
 

@@ -111,20 +111,14 @@ ensure_vrchat_sdk() {
     fi
     echo "installing VRChat SDK"
     run_in_container "$IMAGE_TAG" vrc-get install com.vrchat.avatars --yes
-    python3 - "$PROJECT_DIR/Packages/manifest.json" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-manifest = json.load(open(path))
-manifest["dependencies"]["com.unity.test-framework"] = "1.1.33"
-json.dump(manifest, open(path, "w"), indent=2)
-PYEOF
 }
 
 sync_scripts() {
-    local editor_dir="$PROJECT_DIR/Assets/Thyllore/Editor"
+    bash "$REPO_ROOT/unity/sync_package.sh" "$WORK_DIR" >/dev/null
+    local editor_dir="$PROJECT_DIR/Assets/Editor"
     rm -rf "$editor_dir"
     mkdir -p "$editor_dir"
-    cp "$REPO_ROOT/tools/unity/Editor/"*.cs "$DOCKER_DIR/Editor/"*.cs "$editor_dir/"
+    cp "$DOCKER_DIR/Editor/"*.cs "$editor_dir/"
 }
 
 sync_model() {
@@ -148,7 +142,7 @@ build_scene() {
         -e THYLLORE_ANIM_DIR_ASSET="$ASSET_DIR/${MODEL_STEM}_unity" \
         "$IMAGE_TAG" \
         unity-editor -nographics -logFile /work/setup.log \
-            -projectPath /work/project -executeMethod Thyllore.AvatarTools.SceneSetup.Run
+            -projectPath /work/project -executeMethod Thyllore.Avatar.SceneSetup.Run
     grep -E "error CS|SCENESETUP" "$WORK_DIR/setup.log" | grep -v "com.vrchat.base" || true
 }
 
@@ -172,7 +166,7 @@ launch_gui() {
         -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
         "$IMAGE_TAG" \
         /opt/unity/Editor/Unity -logFile /work/gui.log \
-            -projectPath /work/project -executeMethod Thyllore.AvatarTools.SceneSetup.Open
+            -projectPath /work/project -executeMethod Thyllore.Avatar.SceneSetup.Open
 }
 
 ensure_project

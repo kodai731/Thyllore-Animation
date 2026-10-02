@@ -11,7 +11,7 @@ using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Dynamics.PhysBone.Components;
 
-namespace Thyllore.AvatarTools
+namespace Thyllore.Avatar
 {
     [Serializable]
     public class MorphTrackDump
@@ -87,6 +87,7 @@ namespace Thyllore.AvatarTools
             var expressionAnimSource = Environment.GetEnvironmentVariable("THYLLORE_EXPRESSION_ANIM");
             var morphSamplesPath = Environment.GetEnvironmentVariable("THYLLORE_MORPH_SAMPLES");
 
+            CheckPackageIdentity();
             Directory.CreateDirectory(AssetDir);
             var fbxAsset = Path.Combine(AssetDir, Path.GetFileName(fbxSource));
             File.Copy(fbxSource, fbxAsset, true);
@@ -115,6 +116,15 @@ namespace Thyllore.AvatarTools
             CheckMorphTrackAnimation(root, morphSamplesPath);
         }
 
+        private static void CheckPackageIdentity()
+        {
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(Package).Assembly);
+            Check(package != null, "editor scripts come from a package");
+            if (package == null) return;
+            Check(package.name == Package.Name, $"package name {package.name} == {Package.Name}");
+            Check(package.displayName == Package.DisplayName, $"package displayName {package.displayName} == {Package.DisplayName}");
+        }
+
         private static GameObject Instantiate(string fbxAsset)
         {
             foreach (var old in UnityEngine.Object.FindObjectsOfType<GameObject>())
@@ -132,7 +142,7 @@ namespace Thyllore.AvatarTools
             Check(importer.animationType == ModelImporterAnimationType.Human, "importer animationType Human");
             Check(importer.humanDescription.human.Length == 19, $"humanDescription bones {importer.humanDescription.human.Length}");
 
-            var avatar = AssetDatabase.LoadAllAssetsAtPath(fbxAsset).OfType<Avatar>().FirstOrDefault();
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(fbxAsset).OfType<UnityEngine.Avatar>().FirstOrDefault();
             Check(avatar != null, "avatar sub-asset exists");
             if (avatar == null) return;
             Check(avatar.isValid, "avatar isValid");

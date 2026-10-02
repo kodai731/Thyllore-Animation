@@ -8,12 +8,12 @@ using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace Thyllore.AvatarTools
+namespace Thyllore.Avatar
 {
     public static class SceneSetup
     {
-        private const string ScenePath = "Assets/Thyllore/Avatar.unity";
-        private const string ControllerPath = "Assets/Thyllore/Expressions.controller";
+        private const string ScenePath = "Assets/Avatar.unity";
+        private const string ControllerPath = "Assets/Expressions.controller";
 
         public static void Run()
         {

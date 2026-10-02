@@ -9,9 +9,9 @@ using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Dynamics.PhysBone.Components;
 using VRC.SDKBase;
 
-namespace Thyllore.AvatarTools
+namespace Thyllore.Avatar
 {
-    public class ThylloreAvatarSidecarWindow : EditorWindow
+    public class SidecarWindow : EditorWindow
     {
         private GameObject avatar_root;
         private string sidecar_path;
@@ -19,10 +19,10 @@ namespace Thyllore.AvatarTools
         private AvatarSidecar loaded_sidecar;
         private string load_error;
 
-        [MenuItem("Tools/Thyllore/Apply Avatar Sidecar")]
+        [MenuItem(Package.MenuRoot + "Apply Sidecar")]
         public static void ShowWindow()
         {
-            GetWindow<ThylloreAvatarSidecarWindow>("Apply Avatar Sidecar");
+            GetWindow<SidecarWindow>("Apply Sidecar");
         }
 
         private void OnGUI()

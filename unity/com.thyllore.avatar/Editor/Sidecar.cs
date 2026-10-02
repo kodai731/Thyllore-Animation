@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace Thyllore.AvatarTools
+namespace Thyllore.Avatar
 {
     [Serializable]
     public class AvatarSidecar

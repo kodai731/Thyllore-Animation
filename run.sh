@@ -77,6 +77,14 @@ Commands:
       UNITY_VERIFY_DIR / BLENDER override the editor binary, the work dir
       (default target/unity_verify) and the Blender launcher (default
       blender/docker/run_background.sh).
+  unity --model PATH.fbx [--fresh] [--setup-only] [--software-gl]
+      Open the Unity Editor GUI (GameCI 2022.3.22f1 image + VRChat SDK) on
+      the NVIDIA GPU with a scene that already holds the model, the sidecar
+      applied and an Animator with every .anim the engine exported next to
+      the model, so the expression presets can be scrubbed in the Animation
+      window (unity/docker/run_gui.sh). The project persists in
+      target/unity_gui; UNITY_GUI_DIR overrides it:
+        ./run.sh unity --model assets/models/purchased/Shinano_ver1.02/FBX/Shinano.fbx
   help
       Show this help.
 EOF
@@ -135,6 +143,9 @@ case "$command" in
         ;;
     unity-verify)
         exec bash "$REPO_ROOT/tools/unity/verify/run.sh" "$@"
+        ;;
+    unity)
+        exec bash "$REPO_ROOT/unity/docker/run_gui.sh" "$@"
         ;;
     help|-h|--help)
         usage

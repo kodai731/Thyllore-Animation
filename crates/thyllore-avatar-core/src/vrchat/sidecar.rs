@@ -91,6 +91,10 @@ fn build_hybrid_bone_map(
     map
 }
 
+pub fn count_viseme_channels(channel_names: &[String]) -> usize {
+    build_viseme_map(channel_names).len()
+}
+
 fn build_viseme_map(channel_names: &[String]) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for (key, channel) in &VISEME_CHANNELS {
@@ -140,6 +144,16 @@ pub fn sidecar_path(model_path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_count_viseme_channels_ignores_non_viseme_names() {
+        let names: Vec<String> = ["vrc.v_aa", "vrc.v_ou", "Corset", "eye_blink"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        assert_eq!(super::count_viseme_channels(&names), 2);
+        assert_eq!(super::count_viseme_channels(&[]), 0);
+    }
+
     use super::*;
     use crate::humanoid::components::role::HumanoidRole;
 

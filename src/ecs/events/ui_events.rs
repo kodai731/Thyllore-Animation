@@ -529,6 +529,9 @@ pub enum UIEvent {
         entity: Entity,
         name: String,
     },
+    RemoveExpressionPreset {
+        preset_index: usize,
+    },
     SaveExpressionLibrary,
     KeyMorphWeights {
         entity: Entity,

@@ -28,11 +28,11 @@ impl SnapshotValues for LightningSource {
 #[params(tag = LightningParameterOwner, owner = Frame, group = "shape")]
 pub struct LightningShape {
     /// End point of the main strike relative to the effect origin
-    #[persist(ui(kind = Offset, min = -50.0, max = 50.0))]
+    #[persist(debug_range = (-20.0, 20.0), ui(kind = Offset, min = -50.0, max = 50.0))]
     pub end_offset: [f32; 3],
     #[persist]
     pub source: LightningSource,
-    #[persist(ui(min = 1.0, max = 32.0, format = "%.0f"))]
+    #[persist(debug_range = (1.0, 8.0), ui(min = 1.0, max = 32.0, format = "%.0f"))]
     pub strikes_per_burst: u32,
     /// Midpoint displacement subdivisions of the channel; the segment count is 2^detail_levels
     #[persist(ui(min = 1.0, max = 8.0, format = "%.0f"))]

@@ -1,0 +1,129 @@
+Flame	0	height	Height	Height	0.5	4.0
+Flame	1	radius	Radius	Radius	0.2	2.0
+Flame	2	intensity	Intensity	Intensity	0.5	5.0
+Flame	3	sigma_t	SigmaT	Sigma T	0.5	5.0
+Flame	4	color_temperature_base_k	TemperatureBaseK	Temp Base K	800.0	3000.0
+Flame	5	color_temperature_tip_k	TemperatureTipK	Temp Tip K	800.0	3000.0
+Flame	6	warp_amp	Amp	Amp	0.0	1.5
+Flame	7	warp_freq	Freq	Freq	0.5	8.0
+Flame	8	warp_rise_speed	RiseSpeed	Rise Speed	0.0	2.5
+Flame	9	noise_amplitude	Amplitude	Noise Amp	0.0	1.5
+Flame	10	edge_white_boost	WhiteBoost	White Boost	0.0	4.0
+Flame	11	wind_bend_amount	BendAmount	Bend Amount	0.0	1.0
+Flame	12	wind_direction_x	DirectionX	Direction X	-1.0	1.0
+Flame	13	wind_direction_y	DirectionY	Direction Y	-1.0	1.0
+Flame	14	edge_low	Low	Low	0.0	0.4
+Flame	15	edge_high	High	High	0.6	1.0
+Lightning	768	shape_end_offset_x	EndOffsetX	End Offset X	-20.0	20.0
+Lightning	769	shape_end_offset_y	EndOffsetY	End Offset Y	-20.0	20.0
+Lightning	770	shape_end_offset_z	EndOffsetZ	End Offset Z	-20.0	20.0
+Lightning	771	shape_strikes_per_burst	StrikesPerBurst	Strikes Per Burst	1.0	8.0
+Lightning	772	shape_detail_levels	DetailLevels	Detail Levels	1.0	8.0
+Lightning	773	shape_tortuosity	Tortuosity	Tortuosity	0.0	2.0
+Lightning	774	shape_roughness	Roughness	Roughness	0.0	1.0
+Lightning	775	shape_core_radius	CoreRadius	Core Radius	0.001	1.0
+Lightning	776	shape_tip_radius_ratio	TipRadiusRatio	Tip Radius Ratio	0.0	1.0
+Lightning	777	shape_edge_fraction	EdgeFraction	Edge Fraction	0.0	1.0
+Lightning	778	shape_end_variance	EndVariance	End Variance	0.0	4.0
+Lightning	779	branch_depth	BranchDepth	Branch Depth	0.0	5.0
+Lightning	780	branch_probability	BranchProbability	Branch Probability	0.0	1.0
+Lightning	781	branch_count	BranchCount	Branch Count	0.0	32.0
+Lightning	782	branch_zone_start	BranchZoneStart	Branch Zone Start	0.0	1.0
+Lightning	783	branch_zone_end	BranchZoneEnd	Branch Zone End	0.0	1.0
+Lightning	784	branch_angle	BranchAngle	Branch Angle	0.0	1.57
+Lightning	785	branch_length_ratio	BranchLengthRatio	Branch Length Ratio	0.0	1.0
+Lightning	786	branch_radius_ratio	BranchRadiusRatio	Branch Radius Ratio	0.0	1.0
+Lightning	787	branch_intensity_ratio	BranchIntensityRatio	Branch Intensity Ratio	0.0	1.0
+Lightning	788	look_core_intensity	CoreIntensity	Core Intensity	0.0	200.0
+Lightning	789	look_core_color_r	CoreColorR	Core Color R	0.0	1.0
+Lightning	790	look_core_color_g	CoreColorG	Core Color G	0.0	1.0
+Lightning	791	look_core_color_b	CoreColorB	Core Color B	0.0	1.0
+Lightning	792	look_rim_ratio	RimRatio	Rim Ratio	1.0	20.0
+Lightning	793	look_rim_intensity	RimIntensity	Rim Intensity	0.0	100.0
+Lightning	794	look_rim_color_r	RimColorR	Rim Color R	0.0	1.0
+Lightning	795	look_rim_color_g	RimColorG	Rim Color G	0.0	1.0
+Lightning	796	look_rim_color_b	RimColorB	Rim Color B	0.0	1.0
+Lightning	797	look_beam_radius	BeamRadius	Beam Radius	0.0	10.0
+Lightning	798	look_beam_arc_count	BeamArcCount	Beam Arc Count	0.0	64.0
+Lightning	799	look_flash_gain	FlashGain	Flash Gain	0.0	10.0
+Lightning	800	look_flash_radius	FlashRadius	Flash Radius	0.0	100.0
+Lightning	801	timing_burst_start	BurstStart	Burst Start	0.0	10.0
+Lightning	802	timing_burst_interval	BurstInterval	Burst Interval	0.01	10.0
+Lightning	803	timing_burst_jitter	BurstJitter	Burst Jitter	0.0	1.0
+Lightning	804	timing_burst_count	BurstCount	Burst Count	0.0	16.0
+Lightning	805	timing_attack_time	AttackTime	Attack Time	0.0	1.0
+Lightning	806	timing_sustain_time	SustainTime	Sustain Time	0.0	1.0
+Lightning	807	timing_release_time	ReleaseTime	Release Time	0.0	2.0
+Lightning	808	timing_stroke_count	StrokeCount	Stroke Count	1.0	8.0
+Lightning	809	timing_stroke_interval	StrokeInterval	Stroke Interval	0.001	1.0
+Lightning	810	timing_stroke_decay	StrokeDecay	Stroke Decay	0.0	1.0
+Lightning	811	timing_flicker_amplitude	FlickerAmplitude	Flicker Amplitude	0.0	1.0
+Lightning	812	timing_flicker_period	FlickerPeriod	Flicker Period	0.001	1.0
+Lightning	813	timing_reseed_level	ReseedLevel	Reseed Level	0.0	8.0
+Lightning	814	timing_reseed_period	ReseedPeriod	Reseed Period	0.01	10.0
+Lightning	815	timing_charge_ramp	ChargeRamp	Charge Ramp	0.0	2.0
+Lightning	816	timing_growth_time	GrowthTime	Growth Time	0.0	1.0
+Probe	1024	probe_level	ProbeLevel	Level	0.0	1.0
+Probe	1025	probe_height	ProbeHeight	Height	0.5	4.0
+Water	256	major_radius	MajorRadius	Major Radius	0.5	5.0
+Water	257	minor_radius	MinorRadius	Minor Radius	0.1	2.0
+Water	258	ior	Ior	IOR	1.0	2.5
+Water	259	absorption_r	AbsorptionR	Absorption R	0.0	5.0
+Water	260	absorption_g	AbsorptionG	Absorption G	0.0	5.0
+Water	261	absorption_b	AbsorptionB	Absorption B	0.0	5.0
+Water	262	flow_longitudinal	FlowLongitudinal	Flow Longitudinal	-2.0	2.0
+Water	263	flow_meridional	FlowMeridional	Flow Meridional	-2.0	2.0
+Water	264	wave_amplitude	WaveAmplitude	Wave Amplitude	0.0	0.5
+Water	265	wave_frequency	WaveFrequency	Wave Frequency	1.0	20.0
+Water	266	wave_speed	WaveSpeed	Wave Speed	0.0	5.0
+Water	267	reflect_strength	ReflectStrength	Reflect Strength	0.0	1.0
+Water	268	refract_strength	RefractStrength	Refract Strength	0.0	1.0
+Water	269	caustic_strength	CausticStrength	Caustic Strength	0.0	2.0
+Water	270	light_intensity	LightIntensity	Light Intensity	0.0	20.0
+Water	271	highlight_sharpness	HighlightSharpness	Highlight Sharpness	1.0	1024.0
+Water	272	sky_brightness	SkyBrightness	Sky Brightness	0.0	2.0
+Water	273	scatter_strength	ScatterStrength	Scatter Strength	0.0	10.0
+Water	274	scatter_anisotropy	ScatterAnisotropy	Scatter Anisotropy	-0.9	0.9
+Water	275	tint_r	TintR	Tint R	0.0	1.0
+Water	276	tint_g	TintG	Tint G	0.0	1.0
+Water	277	tint_b	TintB	Tint B	0.0	1.0
+Wind	512	column_height	ColumnHeight	Column Height	0.5	10.0
+Wind	513	wall_radius_base	WallRadiusBase	Wall Radius Base	0.05	5.0
+Wind	514	wall_radius_top	WallRadiusTop	Wall Radius Top	0.05	5.0
+Wind	515	wall_width_q	WallWidthQ	Wall Width Q	0.01	2.0
+Wind	516	wall_strength	WallStrength	Wall Strength	0.0	4.0
+Wind	517	top_fade	TopFade	Top Fade	0.05	1.0
+Wind	518	density	Density	Density	0.0	20.0
+Wind	519	albedo_r	AlbedoR	Albedo R	0.0	1.0
+Wind	520	albedo_g	AlbedoG	Albedo G	0.0	1.0
+Wind	521	albedo_b	AlbedoB	Albedo B	0.0	1.0
+Wind	522	ambient_brightness	AmbientBrightness	Ambient Brightness	0.0	5.0
+Wind	523	phase_g	PhaseG	Phase G	-0.95	0.95
+Wind	524	sun_intensity	SunIntensity	Sun Intensity	0.0	10.0
+Wind	525	rise_initial_height	RiseInitialHeight	Rise Initial Height	0.0	1.0
+Wind	526	rise_duration	RiseDuration	Rise Duration	0.1	10.0
+Wind	527	spread_start	SpreadStart	Spread Start	0.0	10.0
+Wind	528	spread_rate	SpreadRate	Spread Rate	0.0	5.0
+Wind	529	dissipate_start	DissipateStart	Dissipate Start	0.0	10.0
+Wind	530	dissipate_time	DissipateTime	Dissipate Time	0.0	10.0
+Wind	531	circulation	Circulation	Circulation	0.0	100.0
+Wind	532	streak_order	StreakOrder	Streak Order	1.0	16.0
+Wind	533	streak_twist	StreakTwist	Streak Twist	0.0	20.0
+Wind	534	streak_rise_speed	StreakRiseSpeed	Streak Rise Speed	0.0	10.0
+Wind	535	streak_amplitude	StreakAmplitude	Streak Amplitude	0.0	1.0
+Wind	536	eddy_amplitude	EddyAmplitude	Eddy Amplitude	0.0	1.0
+Wind	537	eddy_cell_theta	EddyCellTheta	Eddy Cell Theta	0.01	2.0
+Wind	538	eddy_cell_height	EddyCellHeight	Eddy Cell Height	0.01	2.0
+Wind	539	eddy_cell_radial	EddyCellRadial	Eddy Cell Radial	0.01	1.0
+Wind	540	eddy_shear	EddyShear	Eddy Shear	0.0	1.0
+Wind	541	eddy_speed_spread	EddySpeedSpread	Eddy Speed Spread	0.0	1.0
+Wind	542	eddy_rise_speed	EddyRiseSpeed	Eddy Rise Speed	0.0	10.0
+Wind	543	eddy_reseed_period	EddyReseedPeriod	Eddy Reseed Period	0.1	10.0
+Wind	544	eddy_erosion	EddyErosion	Eddy Erosion	0.0	0.95
+Wind	545	puff_count_theta	PuffCountTheta	Puff Count Theta	0.0	16.0
+Wind	546	puff_count_height	PuffCountHeight	Puff Count Height	0.0	16.0
+Wind	547	puff_radius	PuffRadius	Puff Radius	0.01	1.0
+Wind	548	puff_radius_jitter	PuffRadiusJitter	Puff Radius Jitter	0.0	1.0
+Wind	549	puff_offset_q	PuffOffsetQ	Puff Offset Q	0.0	1.0
+Wind	550	puff_strength	PuffStrength	Puff Strength	0.0	4.0
+Wind	551	puff_rise_speed	PuffRiseSpeed	Puff Rise Speed	0.0	10.0

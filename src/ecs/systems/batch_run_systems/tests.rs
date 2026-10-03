@@ -417,7 +417,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         .find(|c| c["id"].as_u64() == Some(clip_id))
         .expect("clip in dump");
     let curves = clip["scalar_curves"].as_array().unwrap();
-    assert_eq!(curves.len(), PROBE_DOMAIN.channels.len());
+    assert_eq!(curves.len(), PROBE_DOMAIN.channels().len());
     let level = curves
         .iter()
         .find(|c| c["property"] == PROBE_LEVEL.cli_name)

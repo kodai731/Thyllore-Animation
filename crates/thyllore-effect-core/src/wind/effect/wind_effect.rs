@@ -17,20 +17,20 @@ pub struct WindTornadoEffect {
     pub position: Vector3<f32>,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
-    #[persist(ui(primary, min = 0.1, max = 20.0, group = "shape"))]
+    #[persist(debug_range = (0.5, 10.0), ui(primary, min = 0.1, max = 20.0, group = "shape"))]
     pub column_height: f32,
-    #[persist(ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
+    #[persist(debug_range = (0.05, 5.0), ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_base: f32,
-    #[persist(ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
+    #[persist(debug_range = (0.05, 5.0), ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_top: f32,
     /// Half width of the wall shell in squared-radius units; the radial thickness is about wall_width_q / (2 R)
-    #[persist(ui(min = 0.001, max = 5.0, format = "%.3f", group = "shape"))]
+    #[persist(debug_range = (0.01, 2.0), ui(min = 0.001, max = 5.0, format = "%.3f", group = "shape"))]
     pub wall_width_q: f32,
     /// Fraction of the height over which the density fades to zero at the top
-    #[persist(ui(min = 0.01, max = 1.0, group = "shape"))]
+    #[persist(debug_range = (0.05, 1.0), ui(min = 0.01, max = 1.0, group = "shape"))]
     pub top_fade: f32,
     /// Extinction coefficient per meter at unit shell density
-    #[persist(ui(primary, min = 0.0, max = 50.0, group = "density"))]
+    #[persist(debug_range = (0.0, 20.0), ui(primary, min = 0.0, max = 50.0, group = "density"))]
     pub density: f32,
     #[persist(ui(min = 0.0, max = 4.0, group = "density"))]
     pub wall_strength: f32,

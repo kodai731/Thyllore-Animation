@@ -61,6 +61,7 @@ pub struct ScalarChannel {
     pub scene_name: &'static str,
     /// Conservative value range for generated debug keys.
     pub debug_value_range: (f32, f32),
+    pub renamed_from: &'static [&'static str],
 }
 
 /// A component domain whose scalar fields animate through clip scalar curves.
@@ -70,12 +71,12 @@ pub struct ScalarChannel {
 /// domain's own system.
 ///
 /// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it:
-/// the channel at `channels[i]` owns code `first_code + i`. Codes are persisted in clip files,
+/// the channel at `channels()[i]` owns code `first_code + i`. Codes are persisted in clip files,
 /// so channels are only ever appended to the table, never reordered or removed.
 pub struct ScalarChannelDomain {
     /// Display name of the domain (also the name of the clip it creates).
     pub name: &'static str,
-    pub channels: &'static [ScalarChannel],
+    pub channel_table: fn() -> &'static [ScalarChannel],
     pub has_component: fn(&World, Entity) -> bool,
     pub entities: fn(&World) -> Vec<Entity>,
     /// Current component value of a channel (None when the entity lost the
@@ -86,12 +87,16 @@ pub struct ScalarChannelDomain {
 }
 
 impl ScalarChannelDomain {
+    pub fn channels(&self) -> &'static [ScalarChannel] {
+        (self.channel_table)()
+    }
+
     pub fn property_type_at(&self, channel_index: usize) -> PropertyType {
         PropertyType::Custom(self.first_code() + channel_index as u16)
     }
 
     pub fn property_type_of(&self, channel: &ScalarChannel) -> Option<PropertyType> {
-        self.channels
+        self.channels()
             .iter()
             .position(|c| c.cli_name == channel.cli_name)
             .map(|index| self.property_type_at(index))
@@ -102,7 +107,7 @@ impl ScalarChannelDomain {
             return None;
         };
         let index = code.checked_sub(self.first_code())? as usize;
-        (index < self.channels.len()).then_some(index)
+        (index < self.channels().len()).then_some(index)
     }
 
     fn first_code(&self) -> u16 {
@@ -153,7 +158,7 @@ pub fn scalar_channel_for_property(
     scalar_channel_domains().iter().find_map(|domain| {
         domain
             .channel_index(property_type)
-            .map(|index| (*domain, &domain.channels[index]))
+            .map(|index| (*domain, &domain.channels()[index]))
     })
 }
 
@@ -162,7 +167,7 @@ pub fn scalar_channel_for_cli_name(
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
         domain
-            .channels
+            .channels()
             .iter()
             .find(|c| c.cli_name == name)
             .map(|c| (*domain, c))
@@ -174,9 +179,9 @@ pub fn scalar_channel_for_scene_name(
 ) -> Option<(&'static ScalarChannelDomain, &'static ScalarChannel)> {
     scalar_channel_domains().iter().find_map(|domain| {
         domain
-            .channels
+            .channels()
             .iter()
-            .find(|c| c.scene_name == name)
+            .find(|c| c.scene_name == name || c.renamed_from.contains(&name))
             .map(|c| (*domain, c))
     })
 }
@@ -184,7 +189,7 @@ pub fn scalar_channel_for_scene_name(
 pub fn scalar_cli_names_joined() -> String {
     scalar_channel_domains()
         .iter()
-        .flat_map(|domain| domain.channels.iter().map(|c| c.cli_name))
+        .flat_map(|domain| domain.channels().iter().map(|c| c.cli_name))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -206,7 +211,7 @@ mod tests {
                 "domain {} registered twice",
                 domain.name
             );
-            for (index, channel) in domain.channels.iter().enumerate() {
+            for (index, channel) in domain.channels().iter().enumerate() {
                 assert!(
                     codes.insert(domain.property_type_at(index)),
                     "duplicate code {:?}",
@@ -217,11 +222,12 @@ mod tests {
                     "duplicate cli name {}",
                     channel.cli_name
                 );
-                assert!(
-                    scene_names.insert(channel.scene_name),
-                    "duplicate scene name {}",
-                    channel.scene_name
-                );
+                for scene_name in std::iter::once(&channel.scene_name).chain(channel.renamed_from) {
+                    assert!(
+                        scene_names.insert(*scene_name),
+                        "duplicate scene name {scene_name}"
+                    );
+                }
             }
         }
         assert!(!codes.is_empty());
@@ -233,13 +239,13 @@ mod tests {
             let block = scalar_code_block_for_domain(domain.name)
                 .unwrap_or_else(|| panic!("no code block configured for domain {}", domain.name));
             assert!(
-                domain.channels.len() <= block.code_count as usize,
+                domain.channels().len() <= block.code_count as usize,
                 "{} has {} channels but its block holds {}",
                 domain.name,
-                domain.channels.len(),
+                domain.channels().len(),
                 block.code_count
             );
-            for index in 0..domain.channels.len() {
+            for index in 0..domain.channels().len() {
                 let PropertyType::Custom(code) = domain.property_type_at(index) else {
                     panic!("scalar channels are Custom properties");
                 };
@@ -276,7 +282,7 @@ mod tests {
     #[test]
     fn test_lookups_roundtrip_every_channel() {
         for domain in scalar_channel_domains() {
-            for (index, channel) in domain.channels.iter().enumerate() {
+            for (index, channel) in domain.channels().iter().enumerate() {
                 let property_type = domain.property_type_at(index);
                 assert_eq!(domain.property_type_of(channel), Some(property_type));
                 assert_eq!(domain.channel_index(property_type), Some(index));

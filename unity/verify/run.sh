@@ -43,9 +43,7 @@ ENGINE_EDITS=(
     "14:key_morph_weights"
 
     "16:add_spring_chains=$SPRING_BONE_PREFIX"
-    "16:export_avatar_sidecar"
-    "16:export_expression_anims"
-    "16:export_morph_track_anim"
+    "16:export_unity_avatar"
 
     "18:dump_morph_track_samples"
 )

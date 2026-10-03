@@ -89,6 +89,7 @@ namespace Thyllore.Avatar
             EditorGUILayout.LabelField("Visemes", loaded_sidecar.visemes.Count.ToString());
             EditorGUILayout.LabelField("Expressions", loaded_sidecar.expressions.Count.ToString());
             EditorGUILayout.LabelField("Spring chains", loaded_sidecar.spring_chains.Count.ToString());
+            EditorGUILayout.LabelField("Materials", loaded_sidecar.materials.Count.ToString());
             EditorGUILayout.LabelField("Expression mesh", loaded_sidecar.expression_mesh ?? "(none)");
         }
 
@@ -97,6 +98,10 @@ namespace Thyllore.Avatar
             GUILayout.Space(8);
             using (new EditorGUI.DisabledScope(avatar_root == null))
             {
+                if (GUILayout.Button("Apply Import Settings"))
+                {
+                    AvatarSidecarApplier.ApplyImportSettings(avatar_root);
+                }
                 if (GUILayout.Button("Apply Humanoid"))
                 {
                     AvatarSidecarApplier.ApplyHumanoid(avatar_root, loaded_sidecar);
@@ -108,6 +113,10 @@ namespace Thyllore.Avatar
                 if (GUILayout.Button("Apply Spring Chains"))
                 {
                     AvatarSidecarApplier.ApplySpringChains(avatar_root, loaded_sidecar);
+                }
+                if (GUILayout.Button("Apply Materials"))
+                {
+                    AvatarSidecarApplier.ApplyMaterials(avatar_root, loaded_sidecar);
                 }
             }
         }
@@ -160,6 +169,39 @@ namespace Thyllore.Avatar
                     return t;
             }
             return null;
+        }
+
+        /// Unity's default "Calculate" recomputes blend shape normals and flips them on this kind of
+        /// mesh (delta magnitude 2), which darkens the mouth and nose; legacy normals keep the FBX ones.
+        public static void ApplyImportSettings(GameObject root)
+        {
+            if (root == null)
+            {
+                Debug.LogError("Avatar root is not assigned.");
+                return;
+            }
+
+            var modelAsset = FindModelAsset(root);
+            if (modelAsset == null)
+            {
+                return;
+            }
+            var importer = FindModelImporter(modelAsset);
+            if (importer == null)
+            {
+                return;
+            }
+
+            importer.importBlendShapeNormals = ModelImporterNormals.None;
+            var serialized = new SerializedObject(importer);
+            var legacyNormals = serialized.FindProperty("m_LegacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes");
+            if (legacyNormals != null)
+            {
+                legacyNormals.boolValue = true;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+            importer.SaveAndReimport();
+            Debug.Log($"Applied import settings (blend shape normals: None, legacy) to {importer.assetPath}");
         }
 
         public static void ApplyHumanoid(GameObject root, AvatarSidecar sidecar)
@@ -339,6 +381,66 @@ namespace Thyllore.Avatar
             bone.pull = Mathf.Clamp01(chain.stiffness);
             bone.spring = Mathf.Clamp01(1f - chain.drag);
             bone.gravity = Mathf.Clamp01(chain.gravity);
+        }
+
+        /// Builds one Standard material per sidecar entry from the texture copied next to the model
+        /// (<model dir>/Textures/<file name>) and assigns it through the importer's material remap.
+        public static void ApplyMaterials(GameObject root, AvatarSidecar sidecar)
+        {
+            if (root == null)
+            {
+                Debug.LogError("Avatar root is not assigned.");
+                return;
+            }
+
+            var modelAsset = FindModelAsset(root);
+            if (modelAsset == null)
+            {
+                return;
+            }
+            var importer = FindModelImporter(modelAsset);
+            if (importer == null)
+            {
+                return;
+            }
+
+            var modelDir = Path.GetDirectoryName(importer.assetPath).Replace('\\', '/');
+            var materialDir = $"{modelDir}/Materials";
+            Directory.CreateDirectory(materialDir);
+            var applied = 0;
+
+            foreach (var entry in sidecar.materials)
+            {
+                var texturePath = $"{modelDir}/Textures/{Path.GetFileName(entry.Value)}";
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+                if (texture == null)
+                {
+                    Debug.LogWarning($"Texture for material \"{entry.Key}\" not found at {texturePath} — skipping.");
+                    continue;
+                }
+
+                var material = LoadOrCreateMaterial($"{materialDir}/{entry.Key}.mat");
+                material.mainTexture = texture;
+                EditorUtility.SetDirty(material);
+                importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), entry.Key), material);
+                applied++;
+            }
+
+            AssetDatabase.SaveAssets();
+            importer.SaveAndReimport();
+            Debug.Log($"Applied {applied} material texture(s) to {importer.assetPath}");
+        }
+
+        private static Material LoadOrCreateMaterial(string path)
+        {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material != null)
+            {
+                return material;
+            }
+            material = new Material(Shader.Find("Standard"));
+            AssetDatabase.CreateAsset(material, path);
+            return material;
         }
     }
 }

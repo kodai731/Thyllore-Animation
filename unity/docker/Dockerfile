@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && curl -L --fail --retry 3 --retry-delay 2 -o /usr/local/bin/vrc-get \
         "https://github.com/vrc-get/vrc-get/releases/download/v${VRC_GET_VERSION}/x86_64-unknown-linux-musl-vrc-get" \
-    && chmod +x /usr/local/bin/vrc-get
+    && chmod +x /usr/local/bin/vrc-get \
+    && mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 
 WORKDIR /project

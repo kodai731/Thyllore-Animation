@@ -12,10 +12,13 @@ MODEL=""
 FRESH=0
 SETUP_ONLY=0
 SOFTWARE_GL=0
+CAPTURE=0
+FACING="+z"
 
 usage() {
     cat <<USAGE
 Usage: $0 --model PATH.fbx [--fresh] [--setup-only] [--software-gl]
+          [--capture [--facing +z|-z]]
 
 Opens the Unity Editor GUI (GameCI 2022.3.22f1 image, VRChat SDK via vrc-get)
 on the host display with a scene that already contains the model, the
@@ -31,6 +34,10 @@ only resync the model and the editor scripts.
   --fresh            delete the cached Unity project first (re-creates it and
                      reinstalls the VRChat SDK, several minutes)
   --setup-only       build the scene in batch mode and exit without a window
+  --capture          after the scene is built, render the face for the neutral
+                     pose and every sidecar expression into
+                     target/unity_gui/preview/<expression>.png (batch, no window)
+  --facing +z|-z     with --capture: side the face points to (default +z)
   --software-gl      Mesa llvmpipe instead of the NVIDIA GPU
 
 The host Unity Personal license (~/.config/unity3d/Unity/licenses) and
@@ -44,6 +51,8 @@ while [[ $# -gt 0 ]]; do
         --fresh) FRESH=1; shift ;;
         --setup-only) SETUP_ONLY=1; shift ;;
         --software-gl) SOFTWARE_GL=1; shift ;;
+        --capture) CAPTURE=1; shift ;;
+        --facing) FACING="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage; exit 2 ;;
     esac
@@ -62,7 +71,7 @@ if [[ ! -f "$LICENSE_DIR/UnityEntitlementLicense.xml" ]]; then
     echo "no Unity license in $LICENSE_DIR (sign in once with Unity Hub on this machine)" >&2
     exit 1
 fi
-if [[ "$SETUP_ONLY" -eq 0 && -z "${DISPLAY:-}" ]]; then
+if [[ "$SETUP_ONLY" -eq 0 && "$CAPTURE" -eq 0 && -z "${DISPLAY:-}" ]]; then
     echo "DISPLAY is not set - run from a graphical session" >&2
     exit 1
 fi
@@ -132,6 +141,26 @@ sync_model() {
     if [[ -d "$MODEL_DIR/${MODEL_STEM}_unity" ]]; then
         cp -r "$MODEL_DIR/${MODEL_STEM}_unity" "$PROJECT_DIR/$ASSET_DIR/"
     fi
+    sync_material_textures
+}
+
+sync_material_textures() {
+    local sidecar="$MODEL_DIR/$MODEL_STEM.avatar.json"
+    if [[ ! -f "$sidecar" ]]; then
+        return
+    fi
+    local texture_dir="$PROJECT_DIR/$ASSET_DIR/Textures"
+    mkdir -p "$texture_dir"
+    python3 - "$sidecar" "$MODEL_DIR" "$texture_dir" <<'PYEOF'
+import json, os, shutil, sys
+sidecar, model_dir, texture_dir = sys.argv[1:4]
+for material, texture in json.load(open(sidecar)).get("materials", {}).items():
+    source = os.path.normpath(os.path.join(model_dir, texture))
+    if not os.path.isfile(source):
+        print(f"texture for material {material} not found: {source}", file=sys.stderr)
+        continue
+    shutil.copy(source, os.path.join(texture_dir, os.path.basename(texture)))
+PYEOF
 }
 
 build_scene() {
@@ -144,6 +173,19 @@ build_scene() {
         unity-editor -nographics -logFile /work/setup.log \
             -projectPath /work/project -executeMethod Thyllore.Avatar.SceneSetup.Run
     grep -E "error CS|SCENESETUP" "$WORK_DIR/setup.log" | grep -v "com.vrchat.base" || true
+}
+
+capture_faces() {
+    echo "capturing faces (batch)"
+    rm -rf "$WORK_DIR/preview"
+    run_in_container \
+        -e THYLLORE_PREVIEW_DIR=/work/preview \
+        -e THYLLORE_SIDECAR_ASSET="$ASSET_DIR/$MODEL_STEM.avatar.json" \
+        -e THYLLORE_PREVIEW_FACING="$FACING" \
+        "$IMAGE_TAG" \
+        unity-editor -logFile /work/capture.log \
+            -projectPath /work/project -executeMethod Thyllore.Avatar.FacePreview.Capture
+    grep -E "error CS|FACEPREVIEW" "$WORK_DIR/capture.log" | grep -v "com.vrchat.base" || true
 }
 
 launch_gui() {
@@ -174,6 +216,8 @@ ensure_vrchat_sdk
 sync_scripts
 sync_model
 build_scene
-if [[ "$SETUP_ONLY" -eq 0 ]]; then
+if [[ "$CAPTURE" -eq 1 ]]; then
+    capture_faces
+elif [[ "$SETUP_ONLY" -eq 0 ]]; then
     launch_gui
 fi

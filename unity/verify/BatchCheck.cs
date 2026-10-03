@@ -95,7 +95,7 @@ namespace Thyllore.Avatar
 
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var sidecar = AvatarSidecarLoader.Load(sidecarPath);
-            Check(sidecar.schema == 1, "sidecar schema");
+            Check(sidecar.schema == 2, "sidecar schema");
             Check(sidecar.humanoid.Count == 19, $"sidecar humanoid count {sidecar.humanoid.Count}");
             Check(sidecar.visemes.Count == 15, $"sidecar viseme count {sidecar.visemes.Count}");
 

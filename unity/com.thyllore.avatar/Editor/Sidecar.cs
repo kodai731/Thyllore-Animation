@@ -31,6 +31,9 @@ namespace Thyllore.Avatar
         [JsonProperty("spring_chains")]
         public List<SidecarSpringChain> spring_chains = new List<SidecarSpringChain>();
 
+        [JsonProperty("materials")]
+        public Dictionary<string, string> materials = new Dictionary<string, string>();
+
         [JsonProperty("stats")]
         public AvatarStats stats = new AvatarStats();
     }
@@ -113,7 +116,7 @@ namespace Thyllore.Avatar
 
     public static class AvatarSidecarLoader
     {
-        public const int SupportedSchema = 1;
+        public const int SupportedSchema = 2;
 
         public static AvatarSidecar Load(string path)
         {

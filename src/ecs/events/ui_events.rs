@@ -543,12 +543,10 @@ pub enum UIEvent {
     },
     SaveHumanoidMapping,
     SetAvatarRankPlatform(Platform),
-    ExportAvatarSidecar,
+    ExportUnityAvatar,
     AddSpringChainsByPrefix {
         prefix: String,
     },
-    ExportExpressionAnims,
-    ExportMorphTrackAnim,
     PickMaterialTexture {
         material: String,
     },

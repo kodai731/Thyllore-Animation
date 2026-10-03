@@ -12,7 +12,7 @@ namespace Thyllore.Avatar
 {
     public static class SceneSetup
     {
-        private const string ScenePath = "Assets/Avatar.unity";
+        public const string ScenePath = "Assets/Avatar.unity";
         private const string ControllerPath = "Assets/Expressions.controller";
 
         public static void Run()
@@ -53,9 +53,11 @@ namespace Thyllore.Avatar
             var sidecar = LoadSidecar(sidecarAsset);
             if (sidecar != null)
             {
-                var humanoidRoot = Instantiate(fbxAsset);
-                AvatarSidecarApplier.ApplyHumanoid(humanoidRoot, sidecar);
-                UnityEngine.Object.DestroyImmediate(humanoidRoot);
+                var importRoot = Instantiate(fbxAsset);
+                AvatarSidecarApplier.ApplyImportSettings(importRoot);
+                AvatarSidecarApplier.ApplyHumanoid(importRoot, sidecar);
+                AvatarSidecarApplier.ApplyMaterials(importRoot, sidecar);
+                UnityEngine.Object.DestroyImmediate(importRoot);
             }
 
             var root = Instantiate(fbxAsset);
@@ -79,7 +81,7 @@ namespace Thyllore.Avatar
                 return null;
             }
             var sidecar = AvatarSidecarLoader.Load(sidecarAsset);
-            Debug.Log($"SCENESETUP sidecar humanoid={sidecar.humanoid.Count} visemes={sidecar.visemes.Count} expressions={sidecar.expressions.Count} spring_chains={sidecar.spring_chains.Count}");
+            Debug.Log($"SCENESETUP sidecar humanoid={sidecar.humanoid.Count} visemes={sidecar.visemes.Count} expressions={sidecar.expressions.Count} spring_chains={sidecar.spring_chains.Count} materials={sidecar.materials.Count}");
             return sidecar;
         }
 

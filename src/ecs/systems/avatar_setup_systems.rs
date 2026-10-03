@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
@@ -26,7 +26,9 @@ use thyllore_model_core::MeshMorph;
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
-use crate::ecs::resource::{AvatarSetupState, ExpressionLibraryState, ModelState};
+use crate::ecs::resource::{
+    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
+};
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
@@ -321,6 +323,16 @@ fn build_avatar_sidecar(
     let spring_chains = find_spring_bone_setup(world)
         .map(|setup| collect_sidecar_spring_chains(setup, &state.bones))
         .unwrap_or_default();
+    let materials: BTreeMap<String, String> = world
+        .resource::<MaterialTextureState>()
+        .slots
+        .iter()
+        .filter_map(|slot| {
+            slot.texture
+                .as_ref()
+                .map(|texture| (slot.material.clone(), texture.clone()))
+        })
+        .collect();
 
     build_sidecar(SidecarInput {
         mapping: &state.mapping,
@@ -329,6 +341,7 @@ fn build_avatar_sidecar(
         expression_mesh_name: expression_morph.map(|morph| morph.source_mesh.as_str()),
         library: &library_state.library,
         spring_chains: &spring_chains,
+        materials: &materials,
         stats: &state.stats,
     })
 }

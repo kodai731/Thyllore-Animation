@@ -9,7 +9,7 @@ use crate::stats::components::stats::AvatarStats;
 use crate::vrchat::blink::find_blink_candidates;
 use crate::vrchat::viseme::VISEME_CHANNELS;
 
-pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
+pub const SIDECAR_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -21,6 +21,8 @@ pub struct AvatarSidecar {
     pub expression_mesh: Option<String>,
     pub expressions: Vec<SidecarExpression>,
     pub spring_chains: Vec<SidecarSpringChain>,
+    /// Base colour texture per material name, as a `/` separated path relative to the model.
+    pub materials: BTreeMap<String, String>,
     pub stats: AvatarStats,
 }
 
@@ -56,6 +58,7 @@ pub struct SidecarInput<'a> {
     pub expression_mesh_name: Option<&'a str>,
     pub library: &'a ExpressionLibrary,
     pub spring_chains: &'a [SidecarSpringChain],
+    pub materials: &'a BTreeMap<String, String>,
     pub stats: &'a AvatarStats,
 }
 
@@ -74,6 +77,7 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
         expression_mesh,
         expressions,
         spring_chains: input.spring_chains.to_vec(),
+        materials: input.materials.clone(),
         stats: input.stats.clone(),
     }
 }
@@ -209,6 +213,8 @@ mod tests {
             texture_bytes: 0,
         };
 
+        let mut materials = BTreeMap::new();
+        materials.insert("face".to_string(), "../PNG/face.png".to_string());
         let input = SidecarInput {
             mapping: &mapping,
             bones: &bones,
@@ -216,6 +222,7 @@ mod tests {
             expression_mesh_name: Some("face_expression"),
             library: &library,
             spring_chains: &[],
+            materials: &materials,
             stats: &stats,
         };
 
@@ -223,7 +230,8 @@ mod tests {
 
         let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
 
-        assert_eq!(value["schema"], 1);
+        assert_eq!(value["schema"], 2);
+        assert_eq!(value["materials"]["face"], "../PNG/face.png");
 
         assert_eq!(value["humanoid"]["Hips"], "Hips");
 
@@ -265,6 +273,7 @@ mod tests {
             expression_mesh: None,
             expressions: vec![],
             spring_chains: vec![],
+            materials: BTreeMap::new(),
             stats: AvatarStats::default(),
         };
 
@@ -273,6 +282,6 @@ mod tests {
         let data = fs::read_to_string(&path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-        assert_eq!(parsed["schema"], 1);
+        assert_eq!(parsed["schema"], 2);
     }
 }

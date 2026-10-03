@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Type};
+use syn::punctuated::Punctuated;
+use syn::{
+    Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Token, Type,
+};
 
 pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     let Data::Struct(data) = &input.data else {
@@ -141,6 +144,8 @@ pub struct ParamField {
     pub kind: ValueKind,
     pub component_scalars: bool,
     pub doc: String,
+    pub debug_range: Option<(Expr, Expr)>,
+    pub renamed_from: Vec<LitStr>,
 }
 
 pub enum Conversion {
@@ -256,6 +261,8 @@ pub fn parse_param_field(
     let mut with: Option<Path> = None;
     let mut ui: Option<UiAttributes> = None;
     let mut scalars = false;
+    let mut debug_range: Option<(Expr, Expr)> = None;
+    let mut renamed_from: Vec<LitStr> = Vec::new();
 
     if !matches!(attr.meta, Meta::Path(_)) {
         attr.meta.require_list()?.parse_nested_meta(|meta| {
@@ -269,6 +276,21 @@ pub fn parse_param_field(
                 ui = Some(parse_ui_attributes(&meta)?);
             } else if meta.path.is_ident("scalars") {
                 scalars = true;
+            } else if meta.path.is_ident("debug_range") {
+                let value = meta.value()?;
+                let content;
+                syn::parenthesized!(content in value);
+                let lo: Expr = content.parse()?;
+                content.parse::<Token![,]>()?;
+                let hi: Expr = content.parse()?;
+                debug_range = Some((lo, hi));
+            } else if meta.path.is_ident("renamed_from") {
+                let value = meta.value()?;
+                let content;
+                syn::bracketed!(content in value);
+                renamed_from = Punctuated::<LitStr, Token![,]>::parse_terminated(&content)?
+                    .into_iter()
+                    .collect();
             } else {
                 return Err(meta.error("unknown field attribute key"));
             }
@@ -329,6 +351,8 @@ pub fn parse_param_field(
         kind,
         component_scalars,
         doc: String::new(),
+        debug_range,
+        renamed_from,
     })
 }
 
@@ -506,9 +530,8 @@ fn expand_record(name: &Ident, fields: &[FieldSpec]) -> TokenStream {
     }
 }
 
-fn marker_ident(field: &Ident) -> Ident {
-    let camel: String = field
-        .to_string()
+fn pascal_case(snake: &str) -> String {
+    snake
         .split('_')
         .map(|word| {
             let mut chars = word.chars();
@@ -517,7 +540,11 @@ fn marker_ident(field: &Ident) -> Ident {
                 None => String::new(),
             }
         })
-        .collect();
+        .collect()
+}
+
+fn marker_ident(field: &Ident) -> Ident {
+    let camel = pascal_case(&field.to_string());
     format_ident!("{camel}FieldPath")
 }
 
@@ -660,12 +687,19 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
     let component = quote!(component);
     let read = read_value(param, &component);
     let write_stored = write_value(param, &component, &quote!(stored));
+    let debug_range = match &param.debug_range {
+        Some((lo, hi)) => quote!(Some((#lo, #hi))),
+        None => quote!(None),
+    };
+    let renamed_from = &param.renamed_from;
 
     let push = |suffix: &str, get_body: TokenStream, set_body: TokenStream| {
         let name = format!("{field_name}{suffix}");
+        let scene_name = pascal_case(&name);
         quote! {
             out.push(::thyllore_scene_core::ScalarParam {
                 name: ::thyllore_scene_core::intern_name(prefix, #name),
+                scene_name: #scene_name,
                 get: |root: &R| {
                     let component: &Self = P::get(root);
                     #get_body
@@ -674,6 +708,8 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
                     let component: &mut Self = P::get_mut(root);
                     #set_body
                 },
+                debug_range: #debug_range,
+                renamed_from: &[#(#renamed_from),*],
             });
         }
     };
@@ -980,6 +1016,42 @@ mod tests {
         assert!(expanded.contains("\"dir_x\""), "{expanded}");
         assert!(expanded.contains("\"dir_y\""), "{expanded}");
         assert!(!expanded.contains("\"dir_z\""), "{expanded}");
+    }
+
+    #[test]
+    fn scene_name_is_the_pascal_cased_field_and_suffix_without_prefix() {
+        let expanded = expand("#[params(tag = Owner, owner = Look)] struct L { #[persist(ui(min = 0.0, max = 1.0))] pub core_color: [f32; 3], #[persist] pub ior: f32 }");
+        assert!(
+            expanded.contains("name : :: thyllore_scene_core :: intern_name (prefix , \"core_color_r\") , scene_name : \"CoreColorR\""),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("intern_name (prefix , \"ior\") , scene_name : \"Ior\""),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn debug_range_and_renamed_from_reach_every_component_scalar() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(scalars, debug_range = (0.0, 2.0), renamed_from = [\"OldDirX\", \"Dir\"])] pub dir: [f32; 2], #[persist] pub plain: f32 }}"
+        ));
+        assert_eq!(
+            expanded
+                .matches(
+                    "debug_range : Some ((0.0 , 2.0)) , renamed_from : & [\"OldDirX\" , \"Dir\"]"
+                )
+                .count(),
+            2,
+            "{expanded}"
+        );
+        assert_eq!(
+            expanded
+                .matches("debug_range : None , renamed_from : & []")
+                .count(),
+            1,
+            "{expanded}"
+        );
     }
 
     #[test]

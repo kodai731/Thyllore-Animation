@@ -10,8 +10,11 @@ pub use thyllore_scene_derive::SceneFields;
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
     pub name: &'static str,
+    pub scene_name: &'static str,
     pub get: fn(&C) -> f32,
     pub set: fn(&mut C, f32),
+    pub debug_range: Option<(f32, f32)>,
+    pub renamed_from: &'static [&'static str],
 }
 
 pub fn find_scalar_param<'a, C>(
@@ -465,6 +468,7 @@ macro_rules! declare_scene_format {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
+                scene_name: stringify!($name),
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> f32 = $get;
@@ -479,6 +483,8 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: None,
+                renamed_from: &[],
             },
         ])
     };
@@ -489,6 +495,7 @@ macro_rules! declare_scene_format {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
+                scene_name: stringify!($name),
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> u32 = $get;
@@ -503,6 +510,8 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: None,
+                renamed_from: &[],
             },
         ])
     };
@@ -513,6 +522,7 @@ macro_rules! declare_scene_format {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
+                scene_name: stringify!($name),
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> bool = $get;
@@ -527,6 +537,8 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
+                debug_range: None,
+                renamed_from: &[],
             },
         ])
     };
@@ -556,8 +568,11 @@ macro_rules! declare_scene_format {
         }
         $crate::ScalarParam {
             name: concat!(stringify!($name), $suffix),
+            scene_name: concat!(stringify!($name), $suffix),
             get: $crate::get_rgb_channel::<$component, Field, $channel>,
             set: $crate::set_rgb_channel::<$component, Field, $channel>,
+            debug_range: None,
+            renamed_from: &[],
         }
     }};
 }

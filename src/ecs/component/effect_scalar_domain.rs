@@ -63,6 +63,7 @@ fn build_effect_scalar_channel<S: ScalarDomainSource>(name: &str) -> ScalarChann
         cli_name: scalar.name,
         scene_name: scalar.scene_name,
         debug_value_range,
+        renamed_from: scalar.renamed_from,
     }
 }
 

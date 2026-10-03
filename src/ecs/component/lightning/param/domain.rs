@@ -32,6 +32,7 @@ pub(super) const fn lightning_channel(
         cli_name,
         scene_name,
         debug_value_range,
+        renamed_from: &[],
     }
 }
 

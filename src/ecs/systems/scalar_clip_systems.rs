@@ -226,6 +226,7 @@ pub(crate) mod test_support {
         cli_name: "probe_level",
         scene_name: "ProbeLevel",
         debug_value_range: (0.0, 1.0),
+        renamed_from: &[],
     };
 
     pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
@@ -233,6 +234,7 @@ pub(crate) mod test_support {
         cli_name: "probe_height",
         scene_name: "ProbeHeight",
         debug_value_range: (0.5, 4.0),
+        renamed_from: &[],
     };
 
     pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {

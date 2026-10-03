@@ -61,6 +61,7 @@ pub struct ScalarChannel {
     pub scene_name: &'static str,
     /// Conservative value range for generated debug keys.
     pub debug_value_range: (f32, f32),
+    pub renamed_from: &'static [&'static str],
 }
 
 /// A component domain whose scalar fields animate through clip scalar curves.
@@ -180,7 +181,7 @@ pub fn scalar_channel_for_scene_name(
         domain
             .channels()
             .iter()
-            .find(|c| c.scene_name == name)
+            .find(|c| c.scene_name == name || c.renamed_from.contains(&name))
             .map(|c| (*domain, c))
     })
 }
@@ -221,11 +222,12 @@ mod tests {
                     "duplicate cli name {}",
                     channel.cli_name
                 );
-                assert!(
-                    scene_names.insert(channel.scene_name),
-                    "duplicate scene name {}",
-                    channel.scene_name
-                );
+                for scene_name in std::iter::once(&channel.scene_name).chain(channel.renamed_from) {
+                    assert!(
+                        scene_names.insert(*scene_name),
+                        "duplicate scene name {scene_name}"
+                    );
+                }
             }
         }
         assert!(!codes.is_empty());

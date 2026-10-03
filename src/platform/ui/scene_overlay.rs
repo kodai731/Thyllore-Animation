@@ -3,7 +3,7 @@ use std::rc::Rc;
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{FlameParam, LightningParam, WATER_DOMAIN, WIND_DOMAIN};
+use crate::ecs::component::{LightningParam, FLAME_DOMAIN, WATER_DOMAIN, WIND_DOMAIN};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
@@ -239,7 +239,12 @@ fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: Edited
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            FLAME_DOMAIN
+                .channels()
+                .iter()
+                .find(|channel| channel.cli_name == *name)
+                .and_then(|channel| FLAME_DOMAIN.property_type_of(channel))
+                .map(|property_type| (property_type, *value))
         })
         .collect();
     send_key_button(ui, ui_events, edited, keys);

@@ -335,6 +335,16 @@ pub fn parse_param_field(
             "`scalars` applies to [f32; N] values",
         ));
     }
+    if let ValueKind::Array(len) = kind {
+        if !renamed_from.is_empty() && renamed_from.len() != len {
+            return Err(Error::new_spanned(
+                field,
+                format!(
+                    "`renamed_from` on a [f32; {len}] value lists one former name per component"
+                ),
+            ));
+        }
+    }
     let component_scalars = scalars || (ui.is_some() && matches!(kind, ValueKind::Array(_)));
 
     Ok(ParamField {
@@ -694,42 +704,47 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
         Some((lo, hi)) => quote!(Some((#lo, #hi))),
         None => quote!(None),
     };
-    let renamed_from = &param.renamed_from;
+    let field_renamed_from = &param.renamed_from;
+    let all_renamed_from = quote!(&[#(#field_renamed_from),*]);
 
-    let push = |suffix: &str, get_body: TokenStream, set_body: TokenStream| {
-        let name = format!("{field_name}{suffix}");
-        let scene_name = pascal_case(&name);
-        quote! {
-            out.push(::thyllore_scene_core::ScalarParam {
-                name: ::thyllore_scene_core::intern_name(prefix, #name),
-                scene_name: #scene_name,
-                get: |root: &R| {
-                    let component: &Self = P::get(root);
-                    #get_body
-                },
-                set: |root: &mut R, value: f32| {
-                    let component: &mut Self = P::get_mut(root);
-                    #set_body
-                },
-                debug_range: #debug_range,
-                renamed_from: &[#(#renamed_from),*],
-            });
-        }
-    };
+    let push =
+        |suffix: &str, renamed_from: TokenStream, get_body: TokenStream, set_body: TokenStream| {
+            let name = format!("{field_name}{suffix}");
+            let scene_name = pascal_case(&name);
+            quote! {
+                out.push(::thyllore_scene_core::ScalarParam {
+                    name: ::thyllore_scene_core::intern_name(prefix, #name),
+                    scene_name: #scene_name,
+                    get: |root: &R| {
+                        let component: &Self = P::get(root);
+                        #get_body
+                    },
+                    set: |root: &mut R, value: f32| {
+                        let component: &mut Self = P::get_mut(root);
+                        #set_body
+                    },
+                    debug_range: #debug_range,
+                    renamed_from: #renamed_from,
+                });
+            }
+        };
 
     match param.kind {
         ValueKind::F32 => vec![push(
             "",
+            all_renamed_from,
             quote!(#read),
             quote!(let stored = value; #write_stored),
         )],
         ValueKind::U32 => vec![push(
             "",
+            all_renamed_from,
             quote!(#read as f32),
             quote!(let stored = value.round() as u32; #write_stored),
         )],
         ValueKind::Bool => vec![push(
             "",
+            all_renamed_from,
             quote!(u8::from(#read) as f32),
             quote!(let stored = value != 0.0; #write_stored),
         )],
@@ -738,8 +753,13 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
             .into_iter()
             .enumerate()
             .map(|(index, suffix)| {
+                let component_renamed_from = match field_renamed_from.get(index) {
+                    Some(former_name) => quote!(&[#former_name]),
+                    None => quote!(&[]),
+                };
                 push(
                     suffix,
+                    component_renamed_from,
                     quote!(#read[#index]),
                     quote! {
                         let mut stored = #read;
@@ -1039,17 +1059,23 @@ mod tests {
     }
 
     #[test]
-    fn debug_range_and_renamed_from_reach_every_component_scalar() {
+    fn debug_range_reaches_every_component_and_renamed_from_is_split_per_component() {
         let expanded = expand(&format!(
-            "{TOP} struct S {{ #[persist(scalars, debug_range = (0.0, 2.0), renamed_from = [\"OldDirX\", \"Dir\"])] pub dir: [f32; 2], #[persist] pub plain: f32 }}"
+            "{TOP} struct S {{ #[persist(scalars, debug_range = (0.0, 2.0), renamed_from = [\"OldDirX\", \"OldDirZ\"])] pub dir: [f32; 2], #[persist(renamed_from = [\"Flat\", \"Level\"])] pub plain: f32, #[persist] pub bare: f32 }}"
         ));
-        assert_eq!(
-            expanded
-                .matches(
-                    "debug_range : Some ((0.0 , 2.0)) , renamed_from : & [\"OldDirX\" , \"Dir\"]"
-                )
-                .count(),
-            2,
+        for former_name in ["OldDirX", "OldDirZ"] {
+            assert_eq!(
+                expanded
+                    .matches(&format!(
+                        "debug_range : Some ((0.0 , 2.0)) , renamed_from : & [\"{former_name}\"]"
+                    ))
+                    .count(),
+                1,
+                "{expanded}"
+            );
+        }
+        assert!(
+            expanded.contains("debug_range : None , renamed_from : & [\"Flat\" , \"Level\"]"),
             "{expanded}"
         );
         assert_eq!(
@@ -1058,6 +1084,17 @@ mod tests {
                 .count(),
             1,
             "{expanded}"
+        );
+    }
+
+    #[test]
+    fn rejects_renamed_from_whose_count_differs_from_the_component_count() {
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(scalars, renamed_from = [\"OldDirX\"])] pub dir: [f32; 2] }}"
+        ));
+        assert!(
+            message.contains("one former name per component"),
+            "{message}"
         );
     }
 

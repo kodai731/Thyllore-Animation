@@ -5,11 +5,11 @@ use cgmath::Vector2;
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameWarp {
-    #[persist]
+    #[persist(debug_range = (0.0, 1.5), renamed_from = ["WarpAmp"])]
     pub amp: f32,
-    #[persist]
+    #[persist(debug_range = (0.5, 8.0), renamed_from = ["WarpFreq"])]
     pub freq: f32,
-    #[persist]
+    #[persist(debug_range = (0.0, 2.5))]
     pub rise_speed: f32,
     #[persist(owner = Shape)]
     pub taper_power: f32,
@@ -38,9 +38,9 @@ impl Default for FlameWarp {
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = ParameterOwner, owner = Frame)]
 pub struct FlameWind {
-    #[persist(as = [f32; 2], scalars)]
+    #[persist(as = [f32; 2], scalars, debug_range = (-1.0, 1.0), renamed_from = ["WindX", "WindZ"])]
     pub direction: Vector2<f32>,
-    #[persist]
+    #[persist(debug_range = (0.0, 1.0))]
     pub bend_amount: f32,
     #[persist]
     pub bend_power: f32,

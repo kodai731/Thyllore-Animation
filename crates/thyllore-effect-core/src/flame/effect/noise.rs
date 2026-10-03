@@ -4,7 +4,7 @@ use crate::flame::*;
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = ParameterOwner, owner = Style, group = "noise")]
 pub struct FlameNoise {
-    #[persist(ui(primary, min = 0.0, max = 3.0))]
+    #[persist(debug_range = (0.0, 1.5), renamed_from = ["NoiseAmplitude"], ui(label = "Noise Amp", primary, min = 0.0, max = 3.0))]
     pub amplitude: f32,
     /// Scales the edge smoothstep window half-width as hw0 / contrast; 1.0 keeps the authored window.
     #[persist(ui(primary, min = 0.25, max = 4.0))]

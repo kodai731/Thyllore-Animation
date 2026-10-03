@@ -4,16 +4,16 @@ Flame	2	intensity	Intensity	Intensity	0.5	5.0
 Flame	3	sigma_t	SigmaT	Sigma T	0.5	5.0
 Flame	4	color_temperature_base_k	TemperatureBaseK	Temp Base K	800.0	3000.0
 Flame	5	color_temperature_tip_k	TemperatureTipK	Temp Tip K	800.0	3000.0
-Flame	6	warp_amp	WarpAmp	Warp Amp	0.0	1.5
-Flame	7	warp_freq	WarpFreq	Warp Freq	0.5	8.0
+Flame	6	warp_amp	Amp	Amp	0.0	1.5
+Flame	7	warp_freq	Freq	Freq	0.5	8.0
 Flame	8	warp_rise_speed	RiseSpeed	Rise Speed	0.0	2.5
-Flame	9	noise_amplitude	NoiseAmplitude	Noise Amp	0.0	1.5
+Flame	9	noise_amplitude	Amplitude	Noise Amp	0.0	1.5
 Flame	10	edge_white_boost	WhiteBoost	White Boost	0.0	4.0
-Flame	11	wind_bend_amount	BendAmount	Bend	0.0	1.0
-Flame	12	wind_direction_x	WindX	Wind X	-1.0	1.0
-Flame	13	wind_direction_y	WindZ	Wind Z	-1.0	1.0
-Flame	14	edge_low	EdgeLow	Edge Low	0.0	0.4
-Flame	15	edge_high	EdgeHigh	Edge High	0.6	1.0
+Flame	11	wind_bend_amount	BendAmount	Bend Amount	0.0	1.0
+Flame	12	wind_direction_x	DirectionX	Direction X	-1.0	1.0
+Flame	13	wind_direction_y	DirectionY	Direction Y	-1.0	1.0
+Flame	14	edge_low	Low	Low	0.0	0.4
+Flame	15	edge_high	High	High	0.6	1.0
 Lightning	768	shape_end_offset_x	EndOffsetX	End Offset X	-20.0	20.0
 Lightning	769	shape_end_offset_y	EndOffsetY	End Offset Y	-20.0	20.0
 Lightning	770	shape_end_offset_z	EndOffsetZ	End Offset Z	-20.0	20.0

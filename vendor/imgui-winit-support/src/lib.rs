@@ -464,16 +464,17 @@ impl WinitPlatform {
                 io.add_key_event(Key::ModSuper, state.super_key());
             }
             WindowEvent::KeyboardInput { ref event, .. } => {
-                if let Some(txt) = &event.text {
+                let key = event.key_without_modifiers();
+                let pressed = event.state == ElementState::Pressed;
+
+                // X11 attaches `text` to key releases as well, so only presses may type.
+                if let (true, Some(txt)) = (pressed, &event.text) {
                     for ch in txt.chars() {
                         if ch != '\u{7f}' {
                             io.add_input_character(ch)
                         }
                     }
                 }
-
-                let key = event.key_without_modifiers();
-                let pressed = event.state == ElementState::Pressed;
 
                 // We map both left and right ctrl to `ModCtrl`, etc.
                 // imgui is told both "left control is pressed" and
@@ -482,8 +483,6 @@ impl WinitPlatform {
                 // specific key. Same applies to other modifiers.
                 // https://github.com/ocornut/imgui/issues/5047
                 handle_key_modifier(io, &key, pressed);
-
-                println!("KEY EVENT: {event:?}");
 
                 // Add main key event
                 if let Some(key) = to_imgui_key(key, event.location) {

@@ -157,7 +157,8 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+`ui_event.rs` holds `UiEventHook` and the `ui_event!` macro, and `run_ui_event_hooks` iterates hooks in
+stage→name order without knowing feature names. `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
 instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
 instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
 registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS

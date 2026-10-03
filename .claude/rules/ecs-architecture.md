@@ -308,6 +308,14 @@ and Flecs deferred events):
 
 This prevents mutation during iteration and ensures deterministic ordering.
 
+New UI interactions are added as a per-feature event type `E` dispatched by
+`src/ecs/systems/phases/event_dispatch/<feature>.rs`. That dispatcher is registered in the same file with
+`crate::ui_event!(E => dispatch_fn, Stage)` (`src/hooks/ui_event.rs`; `DispatchStage` = Early / Normal / Late;
+order-dependent calls within the same stage are prohibited). The sending side pushes into `EventQueue<E>`
+(`src/ecs/events/queue.rs`). File-dialog requests go to `EventQueue<DialogRequest>`
+(`src/ecs/events/dialog_request.rs`) and `src/platform/events/file_dialog.rs` drains them. The central
+`UIEvent` is being migrated and should not receive new variants (avatar setup is the first migration example).
+
 ## Bones are NOT Entities
 
 - Bones are data within `Skeleton.bones: Vec<Bone>`

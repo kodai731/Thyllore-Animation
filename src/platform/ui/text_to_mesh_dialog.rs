@@ -1,5 +1,5 @@
-use crate::ecs::events::UIEventQueue;
 use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
 
@@ -37,7 +37,6 @@ impl Default for TextToMeshDialogState {
 
 pub fn build_text_to_mesh_dialog(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     dialog: &mut TextToMeshDialogState,
     world: &World,
 ) {
@@ -65,13 +64,13 @@ pub fn build_text_to_mesh_dialog(
         .build(|| {
             build_mode_tabs(ui, dialog);
             ui.separator();
-            build_input_section(ui, ui_events, dialog, &status, &mut should_close);
+            build_input_section(ui, world, dialog, &status, &mut should_close);
             ui.separator();
             build_status_section(ui, &status, &error_msg, gen_time, dialog);
 
             if has_glb {
                 ui.separator();
-                build_result_section(ui, ui_events, vertex_count, face_count, &mut should_close);
+                build_result_section(ui, world, vertex_count, face_count, &mut should_close);
             }
         });
 
@@ -95,7 +94,7 @@ fn build_mode_tabs(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState) {
 
 fn build_input_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     dialog: &mut TextToMeshDialogState,
     status: &TextToMeshStatus,
     should_close: &mut bool,
@@ -157,7 +156,7 @@ fn build_input_section(
     } else {
         let _disabled = ui.begin_disabled(!can_generate);
         if ui.button("Generate") {
-            ui_events.send(crate::ecs::events::UIEvent::TextToMeshGenerate {
+            world.send_command(AutoRigEvent::TextToMeshGenerate {
                 prompt: dialog.prompt_buf.trim().to_string(),
                 target_faces: dialog.target_faces as u32,
                 seed: dialog.seed as u32,
@@ -173,7 +172,7 @@ fn build_input_section(
     ui.same_line();
     if ui.button("Cancel") {
         if is_busy {
-            ui_events.send(crate::ecs::events::UIEvent::TextToMeshCancel);
+            world.send_command(AutoRigEvent::TextToMeshCancel);
             dialog.generate_start_time = None;
         } else {
             *should_close = true;
@@ -306,7 +305,7 @@ fn build_status_section(
 
 fn build_result_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     vertex_count: Option<u32>,
     face_count: Option<u32>,
     should_close: &mut bool,
@@ -320,12 +319,12 @@ fn build_result_section(
     ui.spacing();
 
     if ui.button("Apply to Scene") {
-        ui_events.send(crate::ecs::events::UIEvent::TextToMeshApply);
+        world.send_command(AutoRigEvent::TextToMeshApply);
         *should_close = true;
     }
 
     ui.same_line();
     if ui.button("Dismiss") {
-        ui_events.send(crate::ecs::events::UIEvent::TextToMeshCancel);
+        world.send_command(AutoRigEvent::TextToMeshCancel);
     }
 }

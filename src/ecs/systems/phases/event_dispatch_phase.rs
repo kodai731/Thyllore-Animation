@@ -1,109 +1,29 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::{apply_queued_ui_commands, UIEvent};
 use crate::ecs::world::World;
 use crate::ecs::UIEventQueue;
-use crate::hooks::ui_event::run_ui_event_hooks;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::event_dispatch::camera::dispatch_camera_light_debug_events;
-use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
-use super::event_dispatch::clip_instance::dispatch_clip_instance_events;
-use super::event_dispatch::constraint::{
-    dispatch_constraint_bake_events, dispatch_constraint_edit_events,
-    dispatch_debug_constraint_events,
-};
-use super::event_dispatch::edit_history::dispatch_edit_history_events;
-use super::event_dispatch::hierarchy::dispatch_hierarchy_events;
-use super::event_dispatch::morph::dispatch_morph_weight_events;
 use super::event_dispatch::overlay::dispatch_overlay_events;
-use super::event_dispatch::pose_library::dispatch_pose_library_events;
-use super::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
-use super::event_dispatch::scene::dispatch_scene_events;
-use super::event_dispatch::spring_bone::{
-    dispatch_spring_bone_bake_ecs_events, dispatch_spring_bone_edit_events,
-};
-use super::event_dispatch::timeline::{
-    dispatch_buffer_events, dispatch_keyframe_clipboard_events, dispatch_timeline_events,
-};
 
 pub fn run_event_dispatch_phase(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
-) -> Vec<UIEvent> {
+) {
     #[cfg(feature = "text-to-motion")]
-    super::event_dispatch::ml::drain_grpc_responses(world, assets);
+    super::event_dispatch::ml::text_to_motion::drain_grpc_responses(world, assets);
 
     #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::poll_mesh_server_status(world);
+    super::event_dispatch::ml::auto_rig::poll_mesh_server_status(world);
     #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::poll_rigging_server_status(world);
+    super::event_dispatch::ml::auto_rig::poll_rigging_server_status(world);
 
-    let events: Vec<UIEvent> = match world.get_resource_mut::<UIEventQueue>() {
+    let effect_events: Vec<UIEvent> = match world.get_resource_mut::<UIEventQueue>() {
         Some(mut ui_events) => ui_events.drain().collect(),
         None => Vec::new(),
     };
+    dispatch_overlay_events(&effect_events, world);
 
-    if !events.is_empty() {
-        dispatch_queued_ui_events(&events, world, assets, graphics);
-    }
-    run_ui_event_hooks(world, assets, graphics);
-
-    filter_file_dialog_events(&events)
-}
-
-fn dispatch_queued_ui_events(
-    events: &[UIEvent],
-    world: &mut World,
-    assets: &mut AssetStorage,
-    graphics: &GraphicsResources,
-) {
-    dispatch_hierarchy_events(events, world, assets);
-    dispatch_timeline_events(events, world, assets);
-    dispatch_keyframe_clipboard_events(events, world);
-    dispatch_buffer_events(events, world);
-    dispatch_clip_instance_events(events, world);
-    dispatch_edit_history_events(events, world);
-    dispatch_scalar_clip_events(events, world, assets);
-    dispatch_scene_events(events, world);
-    dispatch_overlay_events(events, world);
-    dispatch_debug_constraint_events(events, world, assets);
-    dispatch_constraint_edit_events(events, world);
-    dispatch_constraint_bake_events(events, world, assets);
-    dispatch_pose_library_events(events, world, assets);
-    dispatch_spring_bone_bake_ecs_events(events, world, assets);
-    dispatch_spring_bone_edit_events(events, world, assets);
-    dispatch_morph_weight_events(events, world, assets, graphics);
-    #[cfg(feature = "ml")]
-    super::event_dispatch::ml::dispatch_curve_suggestion_events(events, world, assets);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_text_to_animation_events(events, world, assets);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_model_loaded_for_animation(events, world);
-
-    dispatch_camera_light_debug_events(events, world, graphics);
-
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_text_to_mesh_events(events, world);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_auto_rig_events(events, world);
-}
-
-fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {
-    events
-        .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                UIEvent::ClipBrowserLoadFromFile
-                    | UIEvent::ClipBrowserSaveToFile(_)
-                    | UIEvent::ClipBrowserExportFbx(_)
-                    | UIEvent::ClipBrowserExportGltf(_)
-                    | UIEvent::ClipBrowserExportGltfAnimationOnly(_)
-                    | UIEvent::ExportModelGltf
-                    | UIEvent::SpringBoneSaveBake
-            )
-        })
-        .cloned()
-        .collect()
+    apply_queued_ui_commands(world, assets, graphics);
 }

@@ -1,6 +1,5 @@
 use imgui::Condition;
 
-use crate::ecs::events::UIEventQueue;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
 
@@ -11,7 +10,6 @@ use super::message_window::build_message_window_content;
 
 pub fn build_bottom_panel(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     ecs_world: &World,
     message_log: &mut MessageLog,
@@ -33,11 +31,11 @@ pub fn build_bottom_panel(
             imgui::TabBar::new("bottom_tabs").build(ui, || {
                 #[cfg(debug_assertions)]
                 imgui::TabItem::new("Debug").build(ui, || {
-                    build_debug_panel_content(ui, ui_events, debug_state, ecs_world);
+                    build_debug_panel_content(ui, debug_state, ecs_world);
                 });
 
                 imgui::TabItem::new(&msg_tab_label).build(ui, || {
-                    build_message_window_content(ui, ui_events, message_log);
+                    build_message_window_content(ui, ecs_world, message_log);
                 });
             });
         });

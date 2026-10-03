@@ -1,12 +1,10 @@
 use crate::app::{features::export_actions, App};
-#[cfg(feature = "auto-rig")]
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand,
     SceneLoadCommand,
 };
 #[cfg(feature = "auto-rig")]
-use crate::ecs::UIEventQueue;
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -62,8 +60,9 @@ unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
                         "SceneLoadCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
                         source
                     );
-                    let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                    ui_events.send(UIEvent::ModelLoadedFromMemory { source });
+                    app.data
+                        .ecs_world
+                        .send_command(AutoRigEvent::ModelLoadedFromMemory { source });
                 }
                 Err(e) => {
                     log_error!("Failed to load generated mesh: {}", e);

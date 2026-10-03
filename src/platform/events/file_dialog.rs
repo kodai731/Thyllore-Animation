@@ -1,45 +1,32 @@
 use std::path::PathBuf;
 
 use crate::app::App;
-use crate::ecs::events::{DialogRequest, EventQueue, UIEvent};
+use crate::ecs::events::{ClipExportFormat, DialogRequest, EventQueue};
 use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, ModelState, OutputCommand,
     SpringBoneState,
 };
 
-pub(super) fn queue_file_dialog_commands(events: &[UIEvent], app: &App) {
-    for event in events {
-        match event {
-            UIEvent::ClipBrowserLoadFromFile => queue_command(app, open_clip_load_dialog()),
-            UIEvent::ClipBrowserSaveToFile(source_id) => {
-                queue_command(app, open_clip_save_dialog(app, *source_id))
-            }
-            UIEvent::ClipBrowserExportFbx(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Fbx),
-            ),
-            UIEvent::ClipBrowserExportGltf(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Gltf),
-            ),
-            UIEvent::ClipBrowserExportGltfAnimationOnly(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::GltfAnimationOnly),
-            ),
-            UIEvent::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
-            UIEvent::SpringBoneSaveBake => queue_command(app, open_spring_bone_save_dialog(app)),
-            _ => {}
-        }
-    }
-
+pub(super) fn queue_file_dialog_commands(app: &App) {
     let requests: Vec<DialogRequest> = app
         .data
         .ecs_world
-        .get_resource_mut::<EventQueue<DialogRequest>>()
-        .map(|mut queue| queue.drain().collect())
-        .unwrap_or_default();
+        .resource_mut::<EventQueue<DialogRequest>>()
+        .drain()
+        .collect();
     for request in requests {
         match request {
+            DialogRequest::LoadClip => queue_command(app, open_clip_load_dialog()),
+            DialogRequest::SaveClip(source_id) => {
+                queue_command(app, open_clip_save_dialog(app, source_id))
+            }
+            DialogRequest::ExportClip { source_id, format } => {
+                queue_command(app, open_clip_export_dialog(app, source_id, format))
+            }
+            DialogRequest::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
+            DialogRequest::SaveSpringBoneBake => {
+                queue_command(app, open_spring_bone_save_dialog(app))
+            }
             DialogRequest::PickMaterialTexture { material } => {
                 queue_command(app, open_material_texture_dialog(app, &material))
             }
@@ -73,13 +60,6 @@ fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<OutputCommand> {
         .save_file()?;
 
     Some(OutputCommand::SaveClipToFile { source_id, path })
-}
-
-#[derive(Clone, Copy)]
-enum ClipExportFormat {
-    Fbx,
-    Gltf,
-    GltfAnimationOnly,
 }
 
 fn open_clip_export_dialog(

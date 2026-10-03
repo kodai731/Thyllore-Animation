@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, MotionPath};
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::events::{UIEventQueue, UiCommandQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
     DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, ScheduledBatchAction,
@@ -216,13 +216,13 @@ fn apply_engine_overrides_without_a_batch_run_captures_through_the_event_queue()
         resolve_engine_cli_overrides(&args(&["bin", "--batch-debug-action", "dump_wall_probe"]))
             .unwrap();
     let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
+    world.insert_resource(UiCommandQueue::default());
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
     assert!(world.get_resource::<BatchRun>().is_none());
     assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
 
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+    let commands = drained_command_names(&world);
+    assert!(commands[0].starts_with("CaptureNow("), "{commands:?}");
 }
 
 #[test]
@@ -438,7 +438,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
 fn debug_actions_apply_sets_view_mode_and_queues_events() {
     let mut world = World::new();
     world.insert_resource(DebugViewState::default());
-    world.insert_resource(UIEventQueue::new());
+    world.insert_resource(UiCommandQueue::default());
     batch_apply_debug_actions(
         &mut world,
         &[
@@ -450,8 +450,7 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
         world.resource::<DebugViewState>().debug_view_mode,
         DebugViewMode::Normal
     );
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::ResetCamera));
+    assert_eq!(drained_command_names(&world), vec!["ResetCamera"]);
 }
 
 #[test]
@@ -680,6 +679,7 @@ fn scheduled_actions_reject_malformed_specs() {
 fn scheduled_actions_apply_once_their_frame_is_reached() {
     let mut world = World::new();
     world.insert_resource(UIEventQueue::default());
+    world.insert_resource(UiCommandQueue::default());
     world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
     world.insert_resource(ScheduledBatchActions {
         pending: vec![
@@ -696,14 +696,22 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
 
     world.resource_mut::<FrameClock>().frame = 1;
     batch_apply_scheduled_actions(&mut world);
-    let first_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    let first_frame_commands = drained_command_names(&world);
 
     world.resource_mut::<FrameClock>().frame = 2;
     batch_apply_scheduled_actions(&mut world);
     batch_apply_scheduled_actions(&mut world);
-    let second_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    let second_frame_commands = drained_command_names(&world);
 
-    assert!(matches!(first_frame_events[..], [UIEvent::ResetCamera]));
-    assert!(matches!(second_frame_events[..], [UIEvent::TimelineSetTime(time)] if time == 0.5));
+    assert_eq!(first_frame_commands, vec!["ResetCamera"]);
+    assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
     assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
+}
+
+fn drained_command_names(world: &World) -> Vec<String> {
+    world
+        .resource_mut::<UiCommandQueue>()
+        .drain()
+        .map(|command| format!("{:?}", command))
+        .collect()
 }

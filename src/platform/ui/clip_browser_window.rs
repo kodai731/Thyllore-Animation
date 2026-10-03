@@ -1,15 +1,15 @@
 use imgui::Condition;
 
 use crate::animation::editable::SourceClipId;
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache};
+use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::world::World;
 
 use super::layout_snapshot::LayoutSnapshot;
 
 pub fn build_clip_browser_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     world: &World,
@@ -25,27 +25,22 @@ pub fn build_clip_browser_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_toolbar(ui, ui_events, browser_state, world);
+            build_toolbar(ui, browser_state, world);
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
-            build_clip_list(ui, ui_events, clip_library, browser_state, world);
+            build_clip_list(ui, clip_library, browser_state, world);
         });
 }
 
-fn build_toolbar(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    browser_state: &ClipBrowserState,
-    world: &World,
-) {
+fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World) {
     if ui.small_button("+ New") {
-        ui_events.send(UIEvent::ClipBrowserCreateEmpty);
+        world.send_command(ClipBrowserEvent::CreateEmpty);
     }
 
     ui.same_line();
     if ui.small_button("Load") {
-        ui_events.send(UIEvent::ClipBrowserLoadFromFile);
+        send_dialog_request(world, DialogRequest::LoadClip);
     }
 
     ui.same_line();
@@ -53,7 +48,7 @@ fn build_toolbar(
     if has_selection {
         if ui.small_button("Save") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserSaveToFile(id));
+                send_dialog_request(world, DialogRequest::SaveClip(id));
             }
         }
     } else {
@@ -64,7 +59,13 @@ fn build_toolbar(
     if has_selection {
         if ui.small_button("FBX") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserExportFbx(id));
+                send_dialog_request(
+                    world,
+                    DialogRequest::ExportClip {
+                        source_id: id,
+                        format: ClipExportFormat::Fbx,
+                    },
+                );
             }
         }
     } else {
@@ -78,12 +79,18 @@ fn build_toolbar(
     if has_selection {
         if ui.small_button("glTF") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserExportGltf(id));
+                send_dialog_request(
+                    world,
+                    DialogRequest::ExportClip {
+                        source_id: id,
+                        format: ClipExportFormat::Gltf,
+                    },
+                );
             }
         }
     } else if has_model {
         if ui.small_button("glTF") {
-            ui_events.send(UIEvent::ExportModelGltf);
+            send_dialog_request(world, DialogRequest::ExportModelGltf);
         }
     } else {
         ui.text_disabled("glTF");
@@ -93,7 +100,13 @@ fn build_toolbar(
     if has_selection {
         if ui.small_button("glTF (anim only)") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserExportGltfAnimationOnly(id));
+                send_dialog_request(
+                    world,
+                    DialogRequest::ExportClip {
+                        source_id: id,
+                        format: ClipExportFormat::GltfAnimationOnly,
+                    },
+                );
             }
         }
     } else {
@@ -105,7 +118,7 @@ fn build_toolbar(
     if can_duplicate {
         if ui.small_button("Dup") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserDuplicate(id));
+                world.send_command(ClipBrowserEvent::Duplicate(id));
             }
         }
     } else {
@@ -116,7 +129,7 @@ fn build_toolbar(
     if can_duplicate {
         if ui.small_button("Del") {
             if let Some(id) = browser_state.selected_clip_id {
-                ui_events.send(UIEvent::ClipBrowserDelete(id));
+                world.send_command(ClipBrowserEvent::Delete(id));
             }
         }
     } else {
@@ -133,7 +146,6 @@ fn build_filter_bar(ui: &imgui::Ui, browser_state: &mut ClipBrowserState) {
 
 fn build_clip_list(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     world: &World,

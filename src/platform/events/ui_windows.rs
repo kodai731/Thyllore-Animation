@@ -8,14 +8,12 @@ use crate::platform::ui::{
     LayoutSnapshot, SceneOverlayState, StatusBarState, SuggestionOverlay, ViewportInfo,
 };
 
-use crate::ecs::events::EventQueue;
 use crate::ecs::resource::{
     AvatarSetupState, ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState,
     HierarchyState, MaterialTextureState, MessageLog, PanelLayout, PoseLibrary,
     TimelineInteractionState, TimelineState, ViewportInput,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
-use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::UIEventQueue;
 
 #[cfg(feature = "auto-rig")]
@@ -33,7 +31,6 @@ pub(super) fn build_ui_windows(
     text_to_animation_dialog: &mut crate::platform::ui::TextToAnimationDialogState,
 ) {
     let display_size = ui.io().display_size;
-    app.data.ecs_world.init_event_queue::<AvatarSetupEvent>();
 
     let layout_snapshot = {
         let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
@@ -65,15 +62,11 @@ pub(super) fn build_ui_windows(
     build_curve_editor(ui, app);
 
     {
-        let mut avatar_setup_events = app
-            .data
-            .ecs_world
-            .resource_mut::<EventQueue<AvatarSetupEvent>>();
         let mut avatar_setup = app.data.ecs_world.resource_mut::<AvatarSetupState>();
         let material_textures = app.data.ecs_world.resource::<MaterialTextureState>();
         build_avatar_setup_window(
             ui,
-            &mut *avatar_setup_events,
+            &app.data.ecs_world,
             &mut *avatar_setup,
             &material_textures,
         );
@@ -90,19 +83,8 @@ pub(super) fn build_ui_windows(
             overlay_state.open_text_to_animation_dialog = false;
         }
 
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-        build_text_to_mesh_dialog(
-            ui,
-            &mut *ui_events,
-            text_to_mesh_dialog,
-            &app.data.ecs_world,
-        );
-        build_text_to_animation_dialog(
-            ui,
-            &mut *ui_events,
-            text_to_animation_dialog,
-            &app.data.ecs_world,
-        );
+        build_text_to_mesh_dialog(ui, text_to_mesh_dialog, &app.data.ecs_world);
+        build_text_to_animation_dialog(ui, text_to_animation_dialog, &app.data.ecs_world);
     }
 
     consume_needs_focus(app);
@@ -125,11 +107,9 @@ pub(super) fn build_side_panel_windows(
     }
 
     {
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut msg_log = app.data.ecs_world.resource_mut::<MessageLog>();
         build_bottom_panel(
             ui,
-            &mut *ui_events,
             #[cfg(debug_assertions)]
             debug_state,
             &app.data.ecs_world,
@@ -140,10 +120,8 @@ pub(super) fn build_side_panel_windows(
 
     {
         let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_hierarchy_window(
             ui,
-            &mut *ui_events,
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,
@@ -154,10 +132,8 @@ pub(super) fn build_side_panel_windows(
     {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_clip_browser_window(
             ui,
-            &mut *ui_events,
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
@@ -167,15 +143,8 @@ pub(super) fn build_side_panel_windows(
 
     {
         let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-        let mut avatar_setup_events = app
-            .data
-            .ecs_world
-            .resource_mut::<EventQueue<AvatarSetupEvent>>();
         build_inspector_window(
             ui,
-            &mut *ui_events,
-            &mut *avatar_setup_events,
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,
@@ -239,11 +208,10 @@ pub(super) fn build_timeline_and_fixed_overlays(
             .ecs_world
             .resource_mut::<TimelineInteractionState>();
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
         build_timeline_window(
             ui,
-            &mut *ui_events,
+            &app.data.ecs_world,
             &mut *timeline_state,
             &mut *timeline_interaction,
             &*clip_library,
@@ -303,7 +271,6 @@ pub(super) fn build_curve_editor(ui: &imgui::Ui, app: &mut App) {
     };
     let timeline_state = app.data.ecs_world.resource::<TimelineState>();
     let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-    let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
     let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
     let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
     let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
@@ -336,7 +303,7 @@ pub(super) fn build_curve_editor(ui: &imgui::Ui, app: &mut App) {
 
     build_curve_editor_window(
         ui,
-        &mut *ui_events,
+        &app.data.ecs_world,
         &*timeline_state,
         &*clip_library,
         &mut *curve_editor,

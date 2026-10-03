@@ -1,5 +1,5 @@
-use crate::ecs::events::UIEventQueue;
 use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 
 pub struct TextToAnimationDialogState {
@@ -20,7 +20,6 @@ impl Default for TextToAnimationDialogState {
 
 pub fn build_text_to_animation_dialog(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     dialog: &mut TextToAnimationDialogState,
     world: &World,
 ) {
@@ -41,7 +40,7 @@ pub fn build_text_to_animation_dialog(
         .build(|| {
             build_input_section(
                 ui,
-                ui_events,
+                world,
                 &mut dialog.prompt_buf,
                 &mut dialog.duration,
                 &snapshot,
@@ -87,7 +86,7 @@ fn is_in_progress(status: &TextToAnimationStatus) -> bool {
 
 fn build_input_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     prompt_buf: &mut String,
     duration: &mut f32,
     snapshot: &StateSnapshot,
@@ -117,7 +116,7 @@ fn build_input_section(
     } else {
         let _disabled = ui.begin_disabled(!can_generate);
         if ui.button("Generate") {
-            ui_events.send(crate::ecs::events::UIEvent::TextToAnimationGenerate {
+            world.send_command(AutoRigEvent::TextToAnimationGenerate {
                 prompt: prompt_buf.trim().to_string(),
                 duration_seconds: *duration,
             });
@@ -127,7 +126,7 @@ fn build_input_section(
     ui.same_line();
     if ui.button("Cancel") {
         if in_progress {
-            ui_events.send(crate::ecs::events::UIEvent::TextToAnimationCancel);
+            world.send_command(AutoRigEvent::TextToAnimationCancel);
         } else {
             *should_close = true;
         }

@@ -1,8 +1,8 @@
 use winit::event::{ElementState, WindowEvent};
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::MouseInput;
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::platform::ui::StatusBarState;
 
 pub(crate) fn dispatch_window_event(
@@ -49,11 +49,7 @@ pub(crate) fn dispatch_window_event(
                         .resource_mut::<crate::ecs::ModelState>()
                         .texture_fit_path = path.to_string();
                 } else {
-                    let mut ui_events = app
-                        .data
-                        .ecs_world
-                        .resource_mut::<crate::ecs::UIEventQueue>();
-                    ui_events.send(UIEvent::LoadModel {
+                    app.data.ecs_world.send_command(CameraEvent::LoadModel {
                         path: path.to_string(),
                     });
                 }

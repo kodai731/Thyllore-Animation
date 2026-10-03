@@ -1,4 +1,4 @@
-/// Events of one type sent through `World::send_event`, drained by its `ui_event!` hook.
+/// A FIFO of one event type: the UI command queue and the dialog requests the platform drains.
 #[derive(Clone, Debug)]
 pub struct EventQueue<E> {
     events: Vec<E>,

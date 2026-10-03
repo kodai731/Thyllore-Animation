@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 
 use crate::ecs::component::MorphWeights;
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
+use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::world::{Entity, World};
 
 use super::avatar_export_systems::dump_morph_track_samples;
@@ -17,11 +17,9 @@ fn find_morph_entities(world: &World) -> Vec<Entity> {
     entities
 }
 
-fn send_to_morph_entities(world: &mut World, build_event: impl Fn(Entity) -> UIEvent) {
-    let entities = find_morph_entities(world);
-    let mut ui_events = world.resource_mut::<UIEventQueue>();
-    for entity in entities {
-        ui_events.send(build_event(entity));
+fn send_to_morph_entities(world: &World, build_event: impl Fn(Entity) -> MorphEvent) {
+    for entity in find_morph_entities(world) {
+        world.send_command(build_event(entity));
     }
 }
 
@@ -36,7 +34,7 @@ impl BatchAction for SetMorphWeight {
         "morph_weight"
     }
     fn apply(&self, world: &mut World) {
-        send_to_morph_entities(world, |entity| UIEvent::SetMorphWeight {
+        send_to_morph_entities(world, |entity| MorphEvent::SetMorphWeight {
             entity,
             channel: self.channel.clone(),
             weight: self.weight,
@@ -70,7 +68,7 @@ impl BatchAction for KeyMorphWeights {
         "key_morph_weights"
     }
     fn apply(&self, world: &mut World) {
-        send_to_morph_entities(world, |entity| UIEvent::KeyMorphWeights { entity });
+        send_to_morph_entities(world, |entity| MorphEvent::KeyMorphWeights { entity });
     }
 }
 
@@ -88,12 +86,10 @@ impl BatchAction for CaptureExpression {
             log_warn!("capture_expression: no entity has morph weights");
             return;
         };
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::CaptureExpressionPreset {
-                entity,
-                name: self.preset_name.clone(),
-            });
+        world.send_command(MorphEvent::CaptureExpressionPreset {
+            entity,
+            name: self.preset_name.clone(),
+        });
     }
 }
 
@@ -120,7 +116,7 @@ impl BatchAction for AddSpringChains {
         "add_spring_chains"
     }
     fn apply(&self, world: &mut World) {
-        world.send_event(AvatarSetupEvent::AddSpringChainsByPrefix {
+        world.send_command(AvatarSetupEvent::AddSpringChainsByPrefix {
             prefix: self.prefix.clone(),
         });
     }
@@ -147,7 +143,7 @@ impl BatchAction for ExportUnityAvatar {
         "export_unity_avatar"
     }
     fn apply(&self, world: &mut World) {
-        world.send_event(AvatarSetupEvent::ExportUnityAvatar);
+        world.send_command(AvatarSetupEvent::ExportUnityAvatar);
     }
 }
 
@@ -179,6 +175,7 @@ crate::batch_action!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::events::UiCommandQueue;
 
     #[test]
     fn test_morph_weight_parses_channel_names_with_dots_and_colons() {
@@ -210,7 +207,7 @@ mod tests {
     #[test]
     fn test_morph_weight_reaches_every_morph_entity_by_channel_name() {
         let mut world = World::new();
-        world.insert_resource(UIEventQueue::default());
+        world.insert_resource(UiCommandQueue::default());
         let first = world.entity().with_name("first").build();
         let second = world.entity().with_name("second").build();
         world.insert_component(first, MorphWeights { weights: vec![0.0] });
@@ -222,19 +219,25 @@ mod tests {
         }
         .apply(&mut world);
 
-        let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-        let targets: Vec<Entity> = events
-            .iter()
-            .filter_map(|event| match event {
-                UIEvent::SetMorphWeight {
-                    entity,
-                    channel,
-                    weight,
-                } if channel == "smile" && *weight == 0.5 => Some(*entity),
-                _ => None,
+        let sent: Vec<String> = world
+            .resource_mut::<UiCommandQueue>()
+            .drain()
+            .map(|command| format!("{:?}", command))
+            .collect();
+        let expected: Vec<String> = [first, second]
+            .into_iter()
+            .map(|entity| {
+                format!(
+                    "{:?}",
+                    MorphEvent::SetMorphWeight {
+                        entity,
+                        channel: "smile".to_string(),
+                        weight: 0.5,
+                    }
+                )
             })
             .collect();
-        assert_eq!(targets, vec![first, second]);
+        assert_eq!(sent, expected);
     }
 
     #[test]

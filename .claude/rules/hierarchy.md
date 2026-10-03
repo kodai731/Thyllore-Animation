@@ -157,8 +157,7 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`ui_event.rs` holds `UiEventHook` and the `ui_event!` macro, and `run_ui_event_hooks` iterates hooks in
-stage→name order without knowing feature names. `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
 instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
 instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
 registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
@@ -173,8 +172,8 @@ handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks`
 naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, max instances, spawn
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
-`UIEvent::AddEffect(key)` / `SelectEffectInstance { key, index }`, the batch `add_<key>` action sends the
-same event, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+`ScalarCurveEvent::AddEffect(key)` / `OverlayEvent::SelectEffectInstance { key, index }`, the batch `add_<key>`
+action sends the same command, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
 `spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
 its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
@@ -253,7 +252,7 @@ Concretely:
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
   check. The effect's `cli.rs` hook inserts it for a startup flag; a `dump_*` action is the generic
   `CaptureRequest<T>` registered with `capture_action!("dump_x", T)`, which inserts `T` inside a batch run
-  and sends `UIEvent::CaptureNow(T)` otherwise (the same event a debug window button sends). The
+  and sends `CameraEvent::CaptureNow(T)` otherwise (the same command a debug window button sends). The
   request type implements `BatchCapture` (`src/hooks/batch_capture.rs`: `capture(&self, CaptureContext)`
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
@@ -317,8 +316,9 @@ matches.
 Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
 shrink it):
 
-- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
-  `src/ecs/systems/phases/event_dispatch/overlay.rs`, `src/platform/ui/scene_overlay.rs`,
+- UI event plumbing: the effect-only `UIEvent` queue left in `src/ecs/events/ui_events.rs`
+  (`UpdateFlameEffect`, `ApplyWaterPreset`, ...; every other UI interaction is a `UiCommand`),
+  `src/ecs/systems/phases/event_dispatch/overlay.rs::dispatch_overlay_events`, `src/platform/ui/scene_overlay.rs`,
   `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
 - Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
 - Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
@@ -338,8 +338,8 @@ file. Enum fields are persisted by name through a `String` field (`ToneMapOperat
 
 ## src/platform/
 
-Window, input, imgui orchestration and the UI windows. Reads resources, records `UIEvent`s, calls one
-dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Window, input, imgui orchestration and the UI windows. Reads resources, sends `UiCommand`s
+(`World::send_command`) and `DialogRequest`s, calls one dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
 
 ## src/vulkanr/
 

@@ -1,42 +1,33 @@
 use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory};
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_clip_browser_ecs_events(
-    events: &[UIEvent],
+#[derive(Clone, Debug)]
+pub enum ClipBrowserEvent {
+    CreateEmpty,
+    Duplicate(SourceClipId),
+    Delete(SourceClipId),
+    ResampleSelectedModelAnimations { fps: f32 },
+}
+
+impl UiCommand for ClipBrowserEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        dispatch_clip_browser_events(&[*self], world, assets);
+    }
+}
+
+fn dispatch_clip_browser_events(
+    events: &[ClipBrowserEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
     for event in events {
         match event {
-            UIEvent::ClipInstanceAdd {
-                entity,
-                source_id,
-                start_time,
-            } => {
-                let duration = {
-                    let clip_library = world.resource::<ClipLibrary>();
-                    clip_library
-                        .get(*source_id)
-                        .map(|c| c.duration)
-                        .unwrap_or(1.0)
-                };
-
-                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(
-                        schedule, *source_id, duration,
-                    );
-
-                    if let Some(last) = schedule.instances.last_mut() {
-                        last.start_time = *start_time;
-                    }
-                }
-            }
-
-            UIEvent::ClipBrowserCreateEmpty => {
+            ClipBrowserEvent::CreateEmpty => {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
                 let editable = crate::animation::editable::EditableAnimationClip::new(
                     0,
@@ -58,7 +49,7 @@ pub fn dispatch_clip_browser_ecs_events(
                 log!("Created empty clip (id={})", id);
             }
 
-            UIEvent::ClipBrowserDuplicate(source_id) => {
+            ClipBrowserEvent::Duplicate(source_id) => {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
                 if let Some(original) = clip_library.get(*source_id).cloned() {
                     let mut duplicate = original;
@@ -80,7 +71,7 @@ pub fn dispatch_clip_browser_ecs_events(
                 }
             }
 
-            UIEvent::ClipBrowserDelete(source_id) => {
+            ClipBrowserEvent::Delete(source_id) => {
                 let ref_count = count_source_references(*source_id, world);
                 if ref_count == 0 {
                     let removed_source = {
@@ -105,7 +96,7 @@ pub fn dispatch_clip_browser_ecs_events(
                 }
             }
 
-            UIEvent::ResampleSelectedModelAnimations { fps } => {
+            ClipBrowserEvent::ResampleSelectedModelAnimations { fps } => {
                 match crate::ecs::systems::clip_library_systems::clip_library_resample_selected_model(
                     world, assets, *fps,
                 ) {
@@ -117,8 +108,6 @@ pub fn dispatch_clip_browser_ecs_events(
                     None => log_warn!("Resample: no model with animations is selected"),
                 }
             }
-
-            _ => {}
         }
     }
 }

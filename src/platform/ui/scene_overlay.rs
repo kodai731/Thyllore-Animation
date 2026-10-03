@@ -10,6 +10,11 @@ use crate::ecs::resource::{
     CoordinateSpace, LightningDebugCapture, ModelState, TransformGizmoMode, TransformGizmoState,
     WaterDebugCapture, WeightHeatmapState, WindDebugCapture,
 };
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+#[cfg(feature = "auto-rig")]
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::{
     FLAME_SPAWN_HOOK, LIGHTNING_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK,
 };
@@ -55,10 +60,10 @@ pub fn build_scene_overlay(
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            build_model_section(ui, ui_events, overlay_state, ecs_world);
+            build_model_section(ui, overlay_state, ecs_world);
             ui.separator();
 
-            build_screenshot_section(ui, ui_events);
+            build_screenshot_section(ui, ecs_world);
             ui.separator();
 
             build_overlay_section(ui, ui_events, ecs_world);
@@ -81,12 +86,7 @@ pub fn build_scene_overlay(
         });
 }
 
-fn build_model_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut SceneOverlayState,
-    _ecs_world: &World,
-) {
+fn build_model_section(ui: &imgui::Ui, state: &mut SceneOverlayState, ecs_world: &World) {
     if ui.button("Open FBX") {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
@@ -94,7 +94,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected FBX file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -107,7 +107,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected glTF file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -119,7 +119,7 @@ fn build_model_section(
             for path in paths {
                 let path_str = path.to_string_lossy().to_string();
                 log!("Adding GLB file: {}", path_str);
-                ui_events.send(UIEvent::LoadModelAdditive { path: path_str });
+                ecs_world.send_command(CameraEvent::LoadModelAdditive { path: path_str });
             }
         }
     }
@@ -138,7 +138,7 @@ fn build_model_section(
     }
 
     #[cfg(feature = "auto-rig")]
-    build_auto_rig_section(ui, ui_events, _ecs_world);
+    build_auto_rig_section(ui, ecs_world);
 
     let model_name = if state.model.model_path.is_empty() {
         "None"
@@ -150,7 +150,7 @@ fn build_model_section(
 }
 
 #[cfg(feature = "auto-rig")]
-fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::GlbSource;
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::world::Parent;
@@ -180,7 +180,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
             });
 
             if has_glb_source && ui.button("Auto Rig") {
-                ui_events.send(UIEvent::AutoRigGenerate {
+                ecs_world.send_command(AutoRigEvent::AutoRigGenerate {
                     num_sample_points: 65536,
                 });
             }
@@ -189,14 +189,14 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
         AutoRigStatus::WaitingForServer => {
             ui.text("Rigging: waiting for server...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
         AutoRigStatus::Rigging => {
             ui.text("Rigging: processing...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -210,11 +210,11 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ));
             }
             if ui.button("Apply Rig") {
-                ui_events.send(UIEvent::AutoRigApply);
+                ecs_world.send_command(AutoRigEvent::AutoRigApply);
             }
             ui.same_line();
             if ui.button("Discard##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -223,61 +223,61 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
             }
             if ui.button("Dismiss##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
     }
 }
 
-fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+fn build_screenshot_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Screenshot") {
-        ui_events.send(UIEvent::TakeScreenshot);
+        ecs_world.send_command(CameraEvent::TakeScreenshot);
     }
 }
 
-fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn water_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             WaterParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-fn lightning_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             LightningParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
 fn send_key_button(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
     edited: EditedScalars,
     keys: Vec<(PropertyType, f32)>,
 ) {
@@ -287,7 +287,7 @@ fn send_key_button(
     ui.same_line();
     if ui.small_button(format!("K##{first_name}")) {
         for (property_type, value) in keys {
-            ui_events.send(UIEvent::InsertScalarKey {
+            ecs_world.send_command(ScalarCurveEvent::InsertScalarKey {
                 property_type,
                 value,
             });
@@ -300,13 +300,13 @@ fn build_overlay_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world
         if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
             let mut visible = bone_gizmo.visible;
             if ui.checkbox("Show Bones", &mut visible) {
-                ui_events.send(UIEvent::SetBoneGizmoVisible(visible));
+                ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(visible));
             }
         }
         if let Some(heatmap) = ecs_world.get_resource::<WeightHeatmapState>() {
             let mut enabled = heatmap.enabled;
             if ui.checkbox("Show Weight Heatmap (selected bone)", &mut enabled) {
-                ui_events.send(UIEvent::SetWeightHeatmapEnabled(enabled));
+                ecs_world.send_command(OverlayEvent::SetWeightHeatmapEnabled(enabled));
             }
         }
     }
@@ -395,7 +395,9 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, e
             .display_format("%.3f")
             .build(&mut state_copy.gizmo_scale);
 
-        ui_events.send(UIEvent::UpdateTransformGizmoState(Box::new(state_copy)));
+        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
+            state_copy,
+        )));
     }
 }
 
@@ -415,7 +417,7 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Max Blur Radius", 1.0, 32.0)
                 .build(&mut dof_copy.max_blur_radius);
 
-            ui_events.send(UIEvent::UpdateDepthOfField(dof_copy));
+            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(dof_copy));
         }
 
         if let Some(params) = ecs_world.get_resource::<PhysicalCameraParameters>() {
@@ -428,7 +430,7 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Focal Length (mm)", 10.0, 200.0)
                 .build(&mut params_copy.focal_length_mm);
 
-            ui_events.send(UIEvent::UpdatePhysicalCamera(params_copy));
+            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(params_copy));
         }
     }
 }
@@ -461,7 +463,7 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs
             ui.slider_config("High Percent", 0.5, 1.0)
                 .build(&mut ae_copy.high_percent);
 
-            ui_events.send(UIEvent::UpdateAutoExposure(ae_copy));
+            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(ae_copy));
         }
 
         if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
@@ -506,7 +508,7 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
                 crate::ecs::compute_total_ghost_count(&config_copy)
             ));
 
-            ui_events.send(UIEvent::UpdateOnionSkinning(config_copy));
+            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(config_copy));
         }
     }
 }
@@ -544,7 +546,7 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
     let _section_id = ui.push_id("wind");
 
     if ui.button("Add Wind") {
-        ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
+        ecs_world.send_command(ScalarCurveEvent::AddEffect(WIND_SPAWN_HOOK.key));
     }
 
     let winds = ecs_world.entities_with::<WindTornadoEffect>();
@@ -564,7 +566,7 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
+            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                 key: WIND_SPAWN_HOOK.key,
                 index: current,
             });
@@ -584,7 +586,7 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
         applied_preset.as_deref(),
     ) {
         if selected_wind_entity.is_some() {
-            ui_events.send(UIEvent::ClearScalarKeys);
+            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
             ui_events.send(UIEvent::ApplyWindPreset(chosen));
             effect_applied_this_frame = true;
         }
@@ -603,7 +605,7 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
         &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
-        |ui, edited| wind_key_button(ui, ui_events, edited),
+        |ui, edited| wind_key_button(ui, ecs_world, edited),
     );
     if !effect_applied_this_frame {
         ui_events.send(UIEvent::UpdateWindEffect {
@@ -612,12 +614,12 @@ fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &
         });
     }
     if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
+        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
     if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
         draw_wind_render_settings(ui, ui_events, ecs_world);
         if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+            ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WindDebugCapture)));
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(
@@ -681,7 +683,7 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
     let _section_id = ui.push_id("lightning");
 
     if ui.button("Add Lightning") {
-        ui_events.send(UIEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
+        ecs_world.send_command(ScalarCurveEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
     }
 
     let lightnings = ecs_world.entities_with::<LightningEffect>();
@@ -701,7 +703,7 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
+            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                 key: LIGHTNING_SPAWN_HOOK.key,
                 index: current,
             });
@@ -721,7 +723,7 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
         applied_preset.as_deref(),
     ) {
         if selected_entity.is_some() {
-            ui_events.send(UIEvent::ClearScalarKeys);
+            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
             ui_events.send(UIEvent::ApplyLightningPreset(chosen));
             effect_applied_this_frame = true;
         }
@@ -744,7 +746,7 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
             &thyllore_effect_core::LIGHTNING_UI_PARAMS,
             &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
-            |ui, edited| lightning_key_button(ui, ui_events, edited),
+            |ui, edited| lightning_key_button(ui, ecs_world, edited),
         );
     }
 
@@ -754,7 +756,7 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
         &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
         &["shape_end_offset"],
-        |ui, edited| lightning_key_button(ui, ui_events, edited),
+        |ui, edited| lightning_key_button(ui, ecs_world, edited),
     );
 
     if !effect_applied_this_frame {
@@ -764,14 +766,14 @@ fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_wor
         });
     }
     if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
+        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
     if !ui.collapsing_header("Lightning Debug", imgui::TreeNodeFlags::empty()) {
         return;
     }
     draw_lightning_render_settings(ui, ui_events, ecs_world);
     if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::CaptureNow(Rc::new(LightningDebugCapture)));
+        ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(LightningDebugCapture)));
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -892,7 +894,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
         let _section_id = ui.push_id("water");
         // Add Water button (before instance selector, accessible even when no water exists)
         if ui.button("Add Water") {
-            ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
+            ecs_world.send_command(ScalarCurveEvent::AddEffect(WATER_SPAWN_HOOK.key));
         }
 
         // Instance selector
@@ -915,7 +917,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
                 })
                 .collect();
             if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectEffectInstance {
+                ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                     key: WATER_SPAWN_HOOK.key,
                     index: current,
                 });
@@ -936,7 +938,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
                 applied_preset.as_deref(),
             ) {
                 if selected_water_entity.is_some() {
-                    ui_events.send(UIEvent::ClearScalarKeys);
+                    ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
                     ui_events.send(UIEvent::ApplyWaterPreset(chosen));
                     effect_applied_this_frame = true;
                 }
@@ -953,7 +955,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
                         &thyllore_effect_core::WATER_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
-                        |ui, edited| water_key_button(ui, ui_events, edited),
+                        |ui, edited| water_key_button(ui, ecs_world, edited),
                     );
 
                     if !effect_applied_this_frame {
@@ -964,7 +966,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
                     }
 
                     if ui.button("Curves") {
-                        ui_events.send(UIEvent::OpenScalarCurveEditor);
+                        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
                     }
                 }
             }
@@ -972,7 +974,7 @@ fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: 
         if ui.collapsing_header("Water Debug", imgui::TreeNodeFlags::empty()) {
             draw_water_render_settings(ui, ui_events, ecs_world);
             if ui.button("Dump Debug") {
-                ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
+                ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WaterDebugCapture)));
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text(
@@ -1116,7 +1118,7 @@ fn build_flame_section(
                 })
                 .collect();
             if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectEffectInstance {
+                ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                     key: FLAME_SPAWN_HOOK.key,
                     index: current,
                 });
@@ -1143,7 +1145,7 @@ fn build_flame_section(
                     // Keyed scalar curves re-stamp their channels every
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
-                    ui_events.send(UIEvent::ClearScalarKeys);
+                    ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
                     ui_events.send(UIEvent::ApplyFlamePreset(chosen));
                     effect_applied_this_frame = true;
                 }
@@ -1431,7 +1433,7 @@ fn build_flame_section(
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                        |ui, edited| flame_key_button(ui, ecs_world, edited),
                     );
                     if advanced_open {
                         draw_flame_manual_params(ui, &mut effect_copy);
@@ -1441,7 +1443,7 @@ fn build_flame_section(
                     }
 
                     if ui.button("Clear Flame Keys") {
-                        ui_events.send(UIEvent::ClearScalarKeys);
+                        ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
                     }
                     ui.same_line();
                     if ui.button("Random Keys (Debug)") {
@@ -1449,13 +1451,13 @@ fn build_flame_section(
                             .duration_since(std::time::UNIX_EPOCH)
                             .map(|d| d.as_millis() as u64)
                             .unwrap_or(0);
-                        ui_events.send(UIEvent::InsertScalarDebugKeys { seed });
+                        ecs_world.send_command(ScalarCurveEvent::InsertScalarDebugKeys { seed });
                     }
                     if ui.button("Curves") {
-                        ui_events.send(UIEvent::OpenScalarCurveEditor);
+                        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
                     }
                     if ui.button("Add Flame") {
-                        ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
+                        ecs_world.send_command(ScalarCurveEvent::AddEffect(FLAME_SPAWN_HOOK.key));
                     }
 
                     // Trail checkbox and slider

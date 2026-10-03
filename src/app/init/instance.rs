@@ -30,7 +30,6 @@ use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
-use crate::ecs::resource::Camera;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use vulkanalia::Device as VkDevice;
@@ -321,12 +320,7 @@ impl App {
     }
 
     fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
-        data.ecs_world.insert_resource(Camera::default());
-        data.ecs_world.insert_resource(LightState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::DebugViewState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::PostProcessFrameTargets::default());
+        run_startup_phase(&mut data.ecs_world, StartupPhase::CoreResources);
         data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world
@@ -363,30 +357,6 @@ impl App {
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
-
-        #[cfg(feature = "ml")]
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::InferenceActorState::default());
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
-        }
-
-        #[cfg(feature = "text-to-motion")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::GrpcServerProcess::default());
-
-        #[cfg(feature = "auto-rig")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::TextToAnimationState::default());
-
-        #[cfg(feature = "auto-rig")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::TextToMeshState::default());
-
-        #[cfg(feature = "auto-rig")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::AutoRigState::default());
 
         let viewport_width = rrswapchain.swapchain_extent.width;
         let viewport_height = rrswapchain.swapchain_extent.height;
@@ -1128,9 +1098,7 @@ impl App {
         Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
         Self::register_editor_resources(data);
         Self::register_post_processing_resources(data);
-
-        #[cfg(feature = "ml")]
-        Self::register_ml_resources(data);
+        run_startup_phase(&mut data.ecs_world, StartupPhase::Ml);
     }
 
     fn register_vulkan_resources(
@@ -1183,40 +1151,6 @@ impl App {
 
     fn register_post_processing_resources(data: &mut AppData) {
         run_startup_phase(&mut data.ecs_world, StartupPhase::PostProcessing);
-    }
-
-    #[cfg(feature = "ml")]
-    fn register_ml_resources(data: &mut AppData) {
-        use crate::ecs::component::InferenceActorSetup;
-        use crate::ecs::world::EntityBuilder;
-        use crate::ml::{
-            resolve_curve_copilot_model_path, CurveCopilotMode, FeedbackSenderHandle,
-            InferenceModelKind, CURVE_COPILOT_ACTOR_ID,
-        };
-
-        let Some(model_path) = resolve_curve_copilot_model_path() else {
-            return;
-        };
-
-        let mode = data
-            .ecs_world
-            .get_resource::<CurveCopilotMode>()
-            .map(|mode| *mode)
-            .unwrap_or_default();
-        log!("Curve copilot mode: {:?}", mode);
-
-        if mode.sends_feedback() {
-            if let Some(handle) = FeedbackSenderHandle::spawn_from_env(&model_path) {
-                data.ecs_world.insert_resource(handle);
-            }
-        }
-
-        EntityBuilder::new(&mut data.ecs_world).with_inference_actor(InferenceActorSetup {
-            actor_id: CURVE_COPILOT_ACTOR_ID,
-            model_path,
-            model_kind: InferenceModelKind::CurveCopilot,
-            enabled: true,
-        });
     }
 
     pub unsafe fn init_imgui_rendering(

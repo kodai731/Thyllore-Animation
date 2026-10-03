@@ -28,3 +28,6 @@ impl InferenceActorState {
         self.actors.get(&actor_id)?.thread_handle.max_steps()
     }
 }
+
+#[cfg(feature = "ml")]
+crate::startup_resource!(InferenceActorState, CoreResources);

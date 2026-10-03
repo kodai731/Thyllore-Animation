@@ -85,3 +85,5 @@ declare_scene_format! {
 }
 
 crate::scene_resource!(Camera);
+
+crate::startup_resource!(Camera, CoreResources);

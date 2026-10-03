@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::{DialogRequest, EventQueue, UIEvent};
 use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, ModelState, OutputCommand,
     SpringBoneState,
@@ -29,6 +29,20 @@ pub(super) fn queue_file_dialog_commands(events: &[UIEvent], app: &App) {
             UIEvent::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
             UIEvent::SpringBoneSaveBake => queue_command(app, open_spring_bone_save_dialog(app)),
             _ => {}
+        }
+    }
+
+    let requests: Vec<DialogRequest> = app
+        .data
+        .ecs_world
+        .get_resource_mut::<EventQueue<DialogRequest>>()
+        .map(|mut queue| queue.drain().collect())
+        .unwrap_or_default();
+    for request in requests {
+        match request {
+            DialogRequest::PickMaterialTexture { material } => {
+                queue_command(app, open_material_texture_dialog(app, &material))
+            }
         }
     }
 }

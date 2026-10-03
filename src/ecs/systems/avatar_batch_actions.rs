@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 
 use crate::ecs::component::MorphWeights;
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::{Entity, World};
 
 use super::avatar_export_systems::dump_morph_track_samples;
@@ -119,11 +120,9 @@ impl BatchAction for AddSpringChains {
         "add_spring_chains"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::AddSpringChainsByPrefix {
-                prefix: self.prefix.clone(),
-            });
+        world.send_event(AvatarSetupEvent::AddSpringChainsByPrefix {
+            prefix: self.prefix.clone(),
+        });
     }
 }
 
@@ -148,9 +147,7 @@ impl BatchAction for ExportUnityAvatar {
         "export_unity_avatar"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ExportUnityAvatar);
+        world.send_event(AvatarSetupEvent::ExportUnityAvatar);
     }
 }
 

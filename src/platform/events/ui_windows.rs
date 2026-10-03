@@ -8,12 +8,14 @@ use crate::platform::ui::{
     LayoutSnapshot, SceneOverlayState, StatusBarState, SuggestionOverlay, ViewportInfo,
 };
 
+use crate::ecs::events::EventQueue;
 use crate::ecs::resource::{
     AvatarSetupState, ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState,
     HierarchyState, MaterialTextureState, MessageLog, PanelLayout, PoseLibrary,
     TimelineInteractionState, TimelineState, ViewportInput,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::UIEventQueue;
 
 #[cfg(feature = "auto-rig")]
@@ -31,6 +33,7 @@ pub(super) fn build_ui_windows(
     text_to_animation_dialog: &mut crate::platform::ui::TextToAnimationDialogState,
 ) {
     let display_size = ui.io().display_size;
+    app.data.ecs_world.init_event_queue::<AvatarSetupEvent>();
 
     let layout_snapshot = {
         let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
@@ -62,10 +65,18 @@ pub(super) fn build_ui_windows(
     build_curve_editor(ui, app);
 
     {
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        let mut avatar_setup_events = app
+            .data
+            .ecs_world
+            .resource_mut::<EventQueue<AvatarSetupEvent>>();
         let mut avatar_setup = app.data.ecs_world.resource_mut::<AvatarSetupState>();
         let material_textures = app.data.ecs_world.resource::<MaterialTextureState>();
-        build_avatar_setup_window(ui, &mut *ui_events, &mut *avatar_setup, &material_textures);
+        build_avatar_setup_window(
+            ui,
+            &mut *avatar_setup_events,
+            &mut *avatar_setup,
+            &material_textures,
+        );
     }
 
     #[cfg(feature = "auto-rig")]
@@ -157,9 +168,14 @@ pub(super) fn build_side_panel_windows(
     {
         let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        let mut avatar_setup_events = app
+            .data
+            .ecs_world
+            .resource_mut::<EventQueue<AvatarSetupEvent>>();
         build_inspector_window(
             ui,
             &mut *ui_events,
+            &mut *avatar_setup_events,
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,

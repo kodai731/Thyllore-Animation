@@ -1,9 +1,10 @@
 use imgui::Condition;
 
 use crate::asset::AssetStorage;
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::events::{EventQueue, UIEvent, UIEventQueue};
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -16,6 +17,7 @@ use super::spring_bone_inspector::build_spring_bone_section;
 pub fn build_inspector_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
+    avatar_setup_events: &mut EventQueue<AvatarSetupEvent>,
     world: &World,
     state: &HierarchyState,
     assets: &AssetStorage,
@@ -74,7 +76,7 @@ pub fn build_inspector_window(
 
                 ui.separator();
                 if ui.button("Avatar Setup...") {
-                    ui_events.send(UIEvent::OpenAvatarSetup);
+                    avatar_setup_events.send(AvatarSetupEvent::OpenAvatarSetup);
                 }
             } else {
                 ui.text("No entity selected");

@@ -4,8 +4,9 @@ use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::events::EventQueue;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
@@ -14,7 +15,7 @@ const NO_TEXTURE_LABEL: &str = "(from model)";
 
 pub fn build_avatar_setup_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    events: &mut EventQueue<AvatarSetupEvent>,
     state: &mut AvatarSetupState,
     material_textures: &MaterialTextureState,
 ) {
@@ -32,27 +33,31 @@ pub fn build_avatar_setup_window(
                 return;
             };
             if let Some(_tab) = ui.tab_item("Humanoid") {
-                build_humanoid_tab(ui, ui_events, state);
+                build_humanoid_tab(ui, events, state);
             }
             if let Some(_tab) = ui.tab_item("Materials") {
-                build_materials_tab(ui, ui_events, material_textures);
+                build_materials_tab(ui, events, material_textures);
             }
             if let Some(_tab) = ui.tab_item("Validation") {
                 build_validation_tab(ui, state);
             }
             if let Some(_tab) = ui.tab_item("Stats") {
-                build_stats_tab(ui, ui_events, state);
+                build_stats_tab(ui, events, state);
             }
             if let Some(_tab) = ui.tab_item("Export") {
-                build_export_tab(ui, ui_events, state);
+                build_export_tab(ui, events, state);
             }
         });
     state.is_open = is_open;
 }
 
-fn build_humanoid_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &AvatarSetupState) {
+fn build_humanoid_tab(
+    ui: &imgui::Ui,
+    events: &mut EventQueue<AvatarSetupEvent>,
+    state: &AvatarSetupState,
+) {
     if ui.button("Save mapping") {
-        ui_events.send(UIEvent::SaveHumanoidMapping);
+        events.send(AvatarSetupEvent::SaveHumanoidMapping);
     }
 
     let Some(_table) = ui.begin_table("##humanoid_roles", 2) else {
@@ -63,7 +68,7 @@ fn build_humanoid_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &Avat
         ui.table_next_column();
         build_role_label(ui, state, role);
         ui.table_next_column();
-        build_role_bone_combo(ui, ui_events, state, role);
+        build_role_bone_combo(ui, events, state, role);
     }
 }
 
@@ -83,7 +88,7 @@ fn build_role_label(ui: &imgui::Ui, state: &AvatarSetupState, role: HumanoidRole
 
 fn build_role_bone_combo(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    events: &mut EventQueue<AvatarSetupEvent>,
     state: &AvatarSetupState,
     role: HumanoidRole,
 ) {
@@ -102,7 +107,7 @@ fn build_role_bone_combo(
         .selected(current_bone.is_none())
         .build()
     {
-        ui_events.send(UIEvent::SetHumanoidRole { role, bone: None });
+        events.send(AvatarSetupEvent::SetHumanoidRole { role, bone: None });
     }
     for (bone_index, bone) in state.bones.iter().enumerate() {
         let label = format!("{}##{}", bone.name, bone_index);
@@ -111,7 +116,7 @@ fn build_role_bone_combo(
             .selected(current_bone == Some(bone_index))
             .build()
         {
-            ui_events.send(UIEvent::SetHumanoidRole {
+            events.send(AvatarSetupEvent::SetHumanoidRole {
                 role,
                 bone: Some(bone_index),
             });
@@ -121,11 +126,11 @@ fn build_role_bone_combo(
 
 fn build_materials_tab(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    events: &mut EventQueue<AvatarSetupEvent>,
     material_textures: &MaterialTextureState,
 ) {
     if ui.button("Save and reload model") {
-        ui_events.send(UIEvent::SaveMaterialTextures);
+        events.send(AvatarSetupEvent::SaveMaterialTextures);
     }
     match &material_textures.save_state {
         MaterialTextureSaveState::Saved => {}
@@ -157,13 +162,13 @@ fn build_materials_tab(
 
         ui.table_next_column();
         if ui.button(format!("Browse##{}", slot.material)) {
-            ui_events.send(UIEvent::PickMaterialTexture {
+            events.send(AvatarSetupEvent::PickMaterialTexture {
                 material: slot.material.clone(),
             });
         }
         ui.same_line();
         if ui.button(format!("Clear##{}", slot.material)) {
-            ui_events.send(UIEvent::ClearMaterialTexture {
+            events.send(AvatarSetupEvent::ClearMaterialTexture {
                 material: slot.material.clone(),
             });
         }
@@ -210,10 +215,14 @@ fn format_mapping_issue(issue: &MappingIssue) -> String {
     }
 }
 
-fn build_stats_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &AvatarSetupState) {
+fn build_stats_tab(
+    ui: &imgui::Ui,
+    events: &mut EventQueue<AvatarSetupEvent>,
+    state: &AvatarSetupState,
+) {
     for (label, platform) in [("PC", Platform::Pc), ("Quest", Platform::Quest)] {
         if ui.radio_button_bool(label, state.platform == platform) && state.platform != platform {
-            ui_events.send(UIEvent::SetAvatarRankPlatform(platform));
+            events.send(AvatarSetupEvent::SetAvatarRankPlatform(platform));
         }
         ui.same_line();
     }
@@ -255,9 +264,13 @@ fn rank_color(rank: PerformanceRank) -> [f32; 4] {
     }
 }
 
-fn build_export_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &mut AvatarSetupState) {
+fn build_export_tab(
+    ui: &imgui::Ui,
+    events: &mut EventQueue<AvatarSetupEvent>,
+    state: &mut AvatarSetupState,
+) {
     if ui.button("Export for Unity") {
-        ui_events.send(UIEvent::ExportUnityAvatar);
+        events.send(AvatarSetupEvent::ExportUnityAvatar);
     }
     ui.text_disabled("sidecar JSON, expression .anim files, current clip .anim");
     ui.separator();
@@ -266,7 +279,7 @@ fn build_export_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &mut Av
         .build();
     let prefix = state.spring_prefix.trim();
     if ui.button("Add spring chains") && !prefix.is_empty() {
-        ui_events.send(UIEvent::AddSpringChainsByPrefix {
+        events.send(AvatarSetupEvent::AddSpringChainsByPrefix {
             prefix: prefix.to_string(),
         });
     }

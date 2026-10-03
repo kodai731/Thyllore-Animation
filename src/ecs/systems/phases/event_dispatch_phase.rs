@@ -5,7 +5,6 @@ use crate::ecs::UIEventQueue;
 use crate::hooks::ui_event::run_ui_event_hooks;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::event_dispatch::avatar_setup::dispatch_avatar_setup_events;
 use super::event_dispatch::camera::dispatch_camera_light_debug_events;
 use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
 use super::event_dispatch::clip_instance::dispatch_clip_instance_events;
@@ -75,7 +74,6 @@ fn dispatch_queued_ui_events(
     dispatch_spring_bone_bake_ecs_events(events, world, assets);
     dispatch_spring_bone_edit_events(events, world, assets);
     dispatch_morph_weight_events(events, world, assets, graphics);
-    dispatch_avatar_setup_events(events, world, assets, graphics);
     #[cfg(feature = "ml")]
     super::event_dispatch::ml::dispatch_curve_suggestion_events(events, world, assets);
     #[cfg(feature = "auto-rig")]
@@ -104,7 +102,6 @@ fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {
                     | UIEvent::ClipBrowserExportGltfAnimationOnly(_)
                     | UIEvent::ExportModelGltf
                     | UIEvent::SpringBoneSaveBake
-                    | UIEvent::PickMaterialTexture { .. }
             )
         })
         .cloned()

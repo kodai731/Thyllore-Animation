@@ -404,10 +404,14 @@ impl World {
         self.resources.contains::<R>()
     }
 
-    pub fn send_event<E: 'static>(&mut self, event: E) {
+    pub fn init_event_queue<E: 'static>(&mut self) {
         if !self.contains_resource::<EventQueue<E>>() {
             self.insert_resource(EventQueue::<E>::default());
         }
+    }
+
+    pub fn send_event<E: 'static>(&mut self, event: E) {
+        self.init_event_queue::<E>();
         self.resource_mut::<EventQueue<E>>().send(event);
     }
 

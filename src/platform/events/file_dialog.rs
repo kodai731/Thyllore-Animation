@@ -28,9 +28,6 @@ pub(super) fn queue_file_dialog_commands(events: &[UIEvent], app: &App) {
             ),
             UIEvent::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
             UIEvent::SpringBoneSaveBake => queue_command(app, open_spring_bone_save_dialog(app)),
-            UIEvent::PickMaterialTexture { material } => {
-                queue_command(app, open_material_texture_dialog(app, material))
-            }
             _ => {}
         }
     }

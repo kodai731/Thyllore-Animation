@@ -52,3 +52,5 @@ fn ray_sphere_entry(
         None
     }
 }
+
+crate::pick_hook!("lightning", find_lightning_by_pick_ray);

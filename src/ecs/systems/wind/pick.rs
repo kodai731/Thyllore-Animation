@@ -18,3 +18,5 @@ pub fn find_wind_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f3
         })
         .min_by(|(_, a), (_, b)| a.total_cmp(b))
 }
+
+crate::pick_hook!("wind", find_wind_by_pick_ray);

@@ -41,21 +41,25 @@ pub(crate) fn dispatch_window_event(
 
         WindowEvent::DroppedFile(path_buf) => {
             if let Some(path) = path_buf.to_str() {
-                if path.to_ascii_lowercase().ends_with(".png") {
-                    // A dropped PNG fills the texture-fit path field (selection
-                    // only — applying stays on the explicit Apply button).
-                    app.data
-                        .ecs_world
-                        .resource_mut::<crate::ecs::ModelState>()
-                        .texture_fit_path = path.to_string();
-                } else {
-                    let mut ui_events = app
-                        .data
-                        .ecs_world
-                        .resource_mut::<crate::ecs::UIEventQueue>();
-                    ui_events.send(UIEvent::LoadModel {
-                        path: path.to_string(),
-                    });
+                let extension = std::path::Path::new(path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_ascii_lowercase());
+
+                let handler = extension
+                    .and_then(|ext| crate::hooks::dropped_file::find_dropped_file_hook(&ext));
+
+                match handler {
+                    Some(apply) => apply(&mut app.data.ecs_world, path),
+                    None => {
+                        let mut ui_events = app
+                            .data
+                            .ecs_world
+                            .resource_mut::<crate::ecs::UIEventQueue>();
+                        ui_events.send(UIEvent::LoadModel {
+                            path: path.to_string(),
+                        });
+                    }
                 }
             }
         }

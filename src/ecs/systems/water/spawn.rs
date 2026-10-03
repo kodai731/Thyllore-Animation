@@ -1,8 +1,10 @@
+use super::ui_command::WaterUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
-use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::resource::{HierarchyState, WaterHistorySnapshotState, WaterRenderSettings};
+use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
+use crate::hooks::effect_ui_event::EffectUiQueue;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
@@ -76,15 +78,21 @@ pub fn resolve_selected_water(world: &World) -> Option<Entity> {
     world.entities_with::<WaterTorusEffect>().first().copied()
 }
 
-/// Position and rotation live on the Transform; the effect only mirrors them for the UBO.
-pub fn write_water_transform(
-    world: &mut World,
-    entity: Entity,
-    translation: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-) {
-    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
-        transform.translation = translation;
-        transform.rotation = rotation;
+fn insert_water_default_resources(world: &mut World) {
+    if !world.contains_resource::<WaterRenderSettings>() {
+        world.insert_resource(WaterRenderSettings::default());
+    }
+    if !world.contains_resource::<WaterHistorySnapshotState>() {
+        world.insert_resource(WaterHistorySnapshotState::default());
+    }
+    if !world.contains_resource::<EffectUiQueue<WaterUiCommand>>() {
+        world.insert_resource(EffectUiQueue::<WaterUiCommand>::default());
     }
 }
+
+crate::effect_default_resource!("water", insert_water_default_resources);
+
+crate::ui_event_hook!(
+    WATER_SPAWN_HOOK.key,
+    super::ui_apply::dispatch_water_ui_events
+);

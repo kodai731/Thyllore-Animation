@@ -48,6 +48,7 @@ pub(crate) fn handle_redraw_requested(
 
     let mut overlay_state = SceneOverlayState {
         model: app.resource::<crate::ecs::ModelState>().clone(),
+        viewport: Default::default(),
         #[cfg(feature = "auto-rig")]
         open_text_to_mesh_dialog: false,
         #[cfg(feature = "auto-rig")]

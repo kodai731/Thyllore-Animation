@@ -5,7 +5,6 @@ use crate::ecs::resource::UpdatePhaseTimings;
 use crate::ecs::systems::phases::{
     run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase, run_input_phase,
     run_onion_skin_phase, run_render_prep_phase, run_timeline_phase, run_transform_phase_ecs,
-    run_transform_phase_gpu,
 };
 use crate::ecs::FrameContext;
 
@@ -130,7 +129,6 @@ unsafe fn run_update_phase(
             run_onion_skin_phase(ctx, &carry.updated_meshes)?;
         }
         FramePhase::RenderPrep => {
-            run_transform_phase_gpu(ctx)?;
             run_render_prep_phase(ctx)?;
         }
         FramePhase::EventDispatch | FramePhase::Last => {

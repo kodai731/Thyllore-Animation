@@ -247,18 +247,32 @@ pub(super) fn build_timeline_and_fixed_overlays(
             let lib = app.data.ecs_world.resource::<ClipLibrary>();
             crate::ecs::systems::timeline_effective_duration(&timeline_state, &lib)
         };
-        let cpu_ms = app.last_frame_interval * 1000.0;
+        let timings = app
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::CpuFrameTimings>();
+        let (cpu_ms, wait_ms) = match timings {
+            Some(t) => (
+                crate::ecs::resource::cpu_ms(&t),
+                crate::ecs::resource::wait_ms(&t),
+            ),
+            None => (0.0, 0.0),
+        };
         let gpu_ms = app
             .data
             .ecs_world
             .get_resource::<crate::ecs::resource::GpuPassTimings>()
             .and_then(|t| t.frame_total_ms);
+        let times = crate::platform::ui::FrameTimeValues {
+            cpu_ms,
+            wait_ms,
+            gpu_ms,
+        };
         draw_status_bar(
             ui,
             status_bar_state,
             delta_time,
-            cpu_ms,
-            gpu_ms,
+            times,
             viewport_info,
             &*timeline_state,
             clip_duration,

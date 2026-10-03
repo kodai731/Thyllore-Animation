@@ -14,6 +14,8 @@ use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
 
+use std::time::Instant;
+
 use anyhow::{anyhow, Result};
 
 impl App {
@@ -409,7 +411,11 @@ impl App {
         }
     }
 
-    pub unsafe fn render(&mut self, image_index: usize, draw_data: &imgui::DrawData) -> Result<()> {
+    pub unsafe fn render(
+        &mut self,
+        image_index: usize,
+        draw_data: &imgui::DrawData,
+    ) -> Result<f32> {
         let frame_slot = self.resource::<FrameSync>().current_frame;
 
         Self::update_imgui_buffers(
@@ -451,10 +457,12 @@ impl App {
             .wait_semaphores(signal_semaphores)
             .swapchains(swapchains)
             .image_indices(image_indices);
+        let present_start = Instant::now();
         let present_result = self
             .rrdevice
             .device
             .queue_present_khr(self.rrdevice.present_queue, &present_info);
+        let present_ms = present_start.elapsed().as_secs_f32() * 1000.0;
         let changed = present_result == Ok(vk::SuccessCode::SUBOPTIMAL_KHR)
             || present_result == Err(vk::ErrorCode::OUT_OF_DATE_KHR);
 
@@ -470,7 +478,7 @@ impl App {
         let current_frame = self.resource::<FrameSync>().current_frame;
         self.frame = current_frame;
 
-        Ok(())
+        Ok(present_ms)
     }
 
     pub unsafe fn begin_offscreen_render_pass(

@@ -52,12 +52,6 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let t = Instant::now();
     crate::ecs::systems::batch_run_update_orbit(&mut ctx.world);
     sub.insert("orbit".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-    let t = Instant::now();
-    crate::ecs::systems::motion_path_sync(ctx);
-    sub.insert(
-        "motion_path".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
 
     run_frame_prep_hooks(ctx, FramePrepStage::Advance, &mut sub);
 

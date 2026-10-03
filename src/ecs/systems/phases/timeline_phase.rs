@@ -13,6 +13,7 @@ use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
 use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
+use crate::ecs::systems::motion_path_sync;
 use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
@@ -22,6 +23,8 @@ pub fn run_timeline_phase(ctx: &mut FrameContext) {
 
     #[cfg(feature = "ml")]
     run_inference_actor_phase(ctx);
+
+    motion_path_sync(ctx);
 }
 
 fn update_timeline(ctx: &mut FrameContext) {

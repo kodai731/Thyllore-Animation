@@ -1,7 +1,7 @@
 use crate::lightning::LightningParameterOwner;
 /// Branch tree grown off the main channel.
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
-#[params(tag = LightningParameterOwner, owner = Frame, group = "branch")]
+#[params(tag = LightningParameterOwner, owner = Frame, group = "branch", scene_prefix = "Branch")]
 pub struct LightningBranching {
     /// Recursion depth of the branch tree; 0 leaves the main channel alone
     #[persist(ui(min = 0.0, max = 5.0, format = "%.0f"))]

@@ -18,7 +18,8 @@ pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     let name = &input.ident;
 
     let record = expand_record(name, &fields);
-    let scene_fields = expand_scene_fields_impl(name, &attrs.tag, &fields);
+    let scene_prefix: Option<String> = attrs.scene_prefix.as_ref().map(|s| s.value());
+    let scene_fields = expand_scene_fields_impl(name, &attrs.tag, scene_prefix.as_deref(), &fields);
     let component = match &attrs.scene {
         Some(scene) => expand_component_tables(name, &attrs.tag, scene, &fields),
         None => quote!(),
@@ -37,6 +38,7 @@ pub struct StructAttributes {
     pub tag: Path,
     pub owner: Option<Ident>,
     pub group: Option<LitStr>,
+    pub scene_prefix: Option<LitStr>,
     pub scene: Option<SceneNames>,
 }
 
@@ -72,6 +74,7 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
     let mut tag: Option<Path> = None;
     let mut owner: Option<Ident> = None;
     let mut group: Option<LitStr> = None;
+    let mut scene_prefix: Option<LitStr> = None;
     let mut key: Option<LitStr> = None;
     let mut tags: Option<Ident> = None;
     let mut snapshot: Option<Ident> = None;
@@ -86,6 +89,8 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
             owner = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("group") {
             group = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("scene_prefix") {
+            scene_prefix = Some(meta.value()?.parse()?);
         } else if is_scene && meta.path.is_ident("key") {
             key = Some(meta.value()?.parse()?);
         } else if is_scene && meta.path.is_ident("tags") {
@@ -124,6 +129,7 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
         tag: tag.ok_or_else(|| Error::new_spanned(attr, "struct attribute requires `tag`"))?,
         owner,
         group,
+        scene_prefix,
         scene,
     })
 }
@@ -561,7 +567,12 @@ fn marker_ident(field: &Ident) -> Ident {
     format_ident!("{camel}FieldPath")
 }
 
-fn expand_scene_fields_impl(name: &Ident, tag: &Path, fields: &[FieldSpec]) -> TokenStream {
+fn expand_scene_fields_impl(
+    name: &Ident,
+    tag: &Path,
+    scene_prefix: Option<&str>,
+    fields: &[FieldSpec],
+) -> TokenStream {
     let mut markers = Vec::new();
     let mut scalars = Vec::new();
     let mut uis = Vec::new();
@@ -587,11 +598,11 @@ fn expand_scene_fields_impl(name: &Ident, tag: &Path, fields: &[FieldSpec]) -> T
                 snapshots.push(quote! {
                     out.push(::thyllore_scene_core::SnapshotValues::snapshot_values(&#read));
                 });
-                scalars.extend(expand_scalars(param));
+                scalars.extend(expand_scalars(param, scene_prefix));
                 uis.extend(expand_ui(param, true));
             }
             FieldSpec::Runtime(param) => {
-                scalars.extend(expand_scalars(param));
+                scalars.extend(expand_scalars(param, scene_prefix));
                 uis.extend(expand_ui(param, false));
             }
             FieldSpec::Nested(nested) => {
@@ -695,7 +706,7 @@ fn expand_scene_fields_impl(name: &Ident, tag: &Path, fields: &[FieldSpec]) -> T
     }
 }
 
-fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
+fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenStream> {
     let field_name = param.ident.to_string();
     let component = quote!(component);
     let read = read_value(param, &component);
@@ -710,7 +721,10 @@ fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
     let push =
         |suffix: &str, renamed_from: TokenStream, get_body: TokenStream, set_body: TokenStream| {
             let name = format!("{field_name}{suffix}");
-            let scene_name = pascal_case(&name);
+            let scene_name = match scene_prefix {
+                Some(prefix) => format!("{}{}", prefix, pascal_case(&name)),
+                None => pascal_case(&name),
+            };
             quote! {
                 out.push(::thyllore_scene_core::ScalarParam {
                     name: ::thyllore_scene_core::intern_name(prefix, #name),
@@ -1187,5 +1201,18 @@ mod tests {
     fn rejects_enum() {
         let input: DeriveInput = syn::parse_str("enum E { A }").expect("valid enum");
         assert!(expand_scene_fields(&input).is_err());
+    }
+
+    #[test]
+    fn scene_prefix_prepends_to_scene_name() {
+        let expanded = expand("#[params(tag = Owner, owner = Frame, group = \"branch\", scene_prefix = \"Branch\")] struct B { #[persist(ui(min = 0.0, max = 5.0))] pub depth: u32, #[persist(ui(min = 0.0, max = 1.0))] pub probability: f32 }");
+        assert!(
+            expanded.contains("scene_name : \"BranchDepth\""),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("scene_name : \"BranchProbability\""),
+            "{expanded}"
+        );
     }
 }

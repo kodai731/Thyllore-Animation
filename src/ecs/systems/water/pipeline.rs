@@ -49,7 +49,7 @@ pub unsafe fn create_water_pipeline(
         water_targets.history.render_pass,
         &[
             &graphics_resources.frame_set.layout,
-            &water_descriptor.layout,
+            water_descriptor.layout(),
         ],
         water_targets.extent(),
     )?;
@@ -119,10 +119,16 @@ unsafe fn create_water_caustic_pipelines(
         hdr_color_view,
     )?;
 
-    let splat_pipeline =
-        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_SPLAT, &[&descriptor.splat_layout])?;
-    let apply_pipeline =
-        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_APPLY, &[&descriptor.apply_layout])?;
+    let splat_pipeline = RRPipeline::new_compute(
+        rrdevice,
+        &WATER_CAUSTIC_SPLAT,
+        &[&descriptor.splat_layout()],
+    )?;
+    let apply_pipeline = RRPipeline::new_compute(
+        rrdevice,
+        &WATER_CAUSTIC_APPLY,
+        &[&descriptor.apply_layout()],
+    )?;
 
     gpu_state.caustic_splat_pipeline = Some(splat_pipeline);
     gpu_state.caustic_apply_pipeline = Some(apply_pipeline);

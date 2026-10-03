@@ -1,7 +1,9 @@
 use crate::vulkanr::core::*;
 use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+};
 use crate::vulkanr::image::create_scene_depth_sampler;
 use crate::vulkanr::resource::{GpuResource, UniformBuffer};
 use thyllore_effect_core::FlameUBO;
@@ -20,8 +22,7 @@ pub struct FlameImageBindings {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRFlameDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
+    sets: ReflectedDescriptorSets,
     pub scene_depth_sampler: vk::Sampler,
 }
 
@@ -33,14 +34,24 @@ impl RRFlameDescriptorSet {
         )
     }
 
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        self.sets.layout()
+    }
+
+    pub fn descriptor_set(&self, history_index: usize) -> vk::DescriptorSet {
+        self.sets.set(history_index)
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let sets = layout.allocate_sets(rrdevice, FLAME_HISTORY_SET_COUNT)?;
+        let sets = ReflectedDescriptorSets::create(
+            rrdevice,
+            &Self::layout_spec(),
+            FLAME_HISTORY_SET_COUNT,
+        )?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
-            layout,
-            descriptor_sets: [sets[0], sets[1]],
+            sets,
             scene_depth_sampler,
         })
     }
@@ -51,9 +62,9 @@ impl RRFlameDescriptorSet {
         flame_ubo: &UniformBuffer<FlameUBO>,
         images: FlameImageBindings,
     ) -> Result<()> {
-        for descriptor_set in self.descriptor_sets {
-            self.layout
-                .writer(descriptor_set)
+        for history_index in 0..FLAME_HISTORY_SET_COUNT {
+            self.sets
+                .writer(history_index)
                 .uniform_dynamic(flame_resolve::FLAME, flame_ubo)?
                 .apply(rrdevice);
         }
@@ -65,10 +76,10 @@ impl RRFlameDescriptorSet {
         rrdevice: &RRDevice,
         images: FlameImageBindings,
     ) -> Result<()> {
-        for (history_index, descriptor_set) in self.descriptor_sets.into_iter().enumerate() {
+        for history_index in 0..FLAME_HISTORY_SET_COUNT {
             let previous_history_view = images.history_image_views[1 - history_index];
-            self.layout
-                .writer(descriptor_set)
+            self.sets
+                .writer(history_index)
                 .image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
                     previous_history_view,
@@ -93,7 +104,7 @@ impl RRFlameDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }
 }

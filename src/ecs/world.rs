@@ -11,6 +11,7 @@ use crate::ecs::component::{
 };
 #[cfg(feature = "ml")]
 use crate::ecs::component::{InferenceActorSetup, WithInferenceActor};
+use crate::ecs::events::EventQueue;
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -401,6 +402,13 @@ impl World {
 
     pub fn contains_resource<R: Resource>(&self) -> bool {
         self.resources.contains::<R>()
+    }
+
+    pub fn send_event<E: 'static>(&mut self, event: E) {
+        if !self.contains_resource::<EventQueue<E>>() {
+            self.insert_resource(EventQueue::<E>::default());
+        }
+        self.resource_mut::<EventQueue<E>>().send(event);
     }
 
     pub fn spawn(&mut self) -> Entity {

@@ -9,3 +9,4 @@ pub mod model_load;
 pub mod pass;
 pub mod scene;
 pub mod scene_resource;
+pub mod ui_event;

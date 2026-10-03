@@ -3,98 +3,20 @@ pub(crate) mod blend_shape;
 pub(crate) mod build;
 pub(crate) mod connections;
 pub(crate) mod curves;
+pub(crate) mod export;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;
 pub(crate) mod writer;
 
-use std::path::Path;
-
-use fbxcel::low::FbxVersion;
-use fbxcel::writer::v7400::binary::Writer;
-
-use thyllore_anim_core::editable::EditableAnimationClip;
-use thyllore_anim_core::Skeleton;
-use thyllore_file_format_core::fbx::FbxModel;
-
-use crate::systems::fbx::build::build_full_export_data;
-use crate::systems::fbx::writer::*;
-
-pub fn export_full_fbx(
-    fbx_model: &FbxModel,
-    clip: Option<&EditableAnimationClip>,
-    skeleton: &Skeleton,
-    path: &Path,
-) -> anyhow::Result<()> {
-    let export_data = build_full_export_data(fbx_model, clip, skeleton, path)?;
-
-    let file = std::fs::File::create(path)?;
-    let writer = Writer::new(file, FbxVersion::V7_4)
-        .map_err(|e| anyhow::anyhow!("FBX writer init failed: {}", e))?;
-
-    write_full_fbx_binary(writer, &export_data)
-        .map_err(|e| anyhow::anyhow!("FBX write failed: {}", e))?;
-
-    Ok(())
-}
+pub use export::export_full_fbx;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::systems::fbx::geometry::{
-        convert_positions_to_fbx, convert_uvs_to_fbx, encode_triangle_polygon_indices,
-    };
-    use crate::systems::fbx::skin::matrix4_to_flat_f64_scaled;
-    use cgmath::Matrix4;
-    use std::path::PathBuf;
-    use thyllore_file_format_core::fbx::FbxData;
-
-    #[test]
-    fn test_encode_triangle_polygon_indices() {
-        let indices = vec![0, 1, 2, 3, 4, 5];
-        let encoded = encode_triangle_polygon_indices(&indices);
-        assert_eq!(encoded, vec![0, 1, -3, 3, 4, -6]);
-    }
-
-    #[test]
-    fn test_encode_triangle_polygon_indices_single() {
-        let indices = vec![0, 1, 2];
-        let encoded = encode_triangle_polygon_indices(&indices);
-        assert_eq!(encoded, vec![0, 1, -3]);
-    }
-
-    #[test]
-    fn test_convert_uvs_to_fbx_flip() {
-        let mut fbx_data = FbxData::new();
-        fbx_data.tex_coords = vec![[0.5, 0.3]];
-        let uv_values = convert_uvs_to_fbx(&fbx_data);
-        assert!((uv_values[0] - 0.5).abs() < 1e-6);
-        assert!((uv_values[1] - 0.7).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_matrix4_to_flat_f64_scaled() {
-        use cgmath::SquareMatrix;
-        let identity = Matrix4::<f32>::identity();
-        let flat = matrix4_to_flat_f64_scaled(&identity, 2.0);
-        assert!((flat[0] - 1.0).abs() < 1e-8);
-        assert!((flat[5] - 1.0).abs() < 1e-8);
-        assert!((flat[10] - 1.0).abs() < 1e-8);
-        assert!((flat[15] - 1.0).abs() < 1e-8);
-        assert!((flat[12] - 0.0).abs() < 1e-8);
-    }
-
-    #[test]
-    fn test_convert_positions_to_fbx_no_scale() {
-        let mut fbx_data = FbxData::new();
-        fbx_data.positions = vec![cgmath::Vector3::new(0.01, 0.02, 0.03)];
-        fbx_data.local_positions = vec![];
-
-        let positions = convert_positions_to_fbx(&fbx_data, 1.0);
-        assert!((positions[0] - 0.01).abs() < 1e-6);
-        assert!((positions[1] - 0.02).abs() < 1e-6);
-        assert!((positions[2] - 0.03).abs() < 1e-6);
-    }
+    use std::path::{Path, PathBuf};
+    use thyllore_anim_core::editable::EditableAnimationClip;
+    use thyllore_file_format_core::fbx::FbxModel;
 
     #[test]
     fn test_fbx_roundtrip_stickman() {

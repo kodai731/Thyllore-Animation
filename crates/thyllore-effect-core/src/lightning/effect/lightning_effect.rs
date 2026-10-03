@@ -1,5 +1,6 @@
 use crate::lightning::{
-    LightningBranching, LightningLook, LightningParameterOwner, LightningShape, LightningTiming,
+    LightningBranching, LightningLook, LightningParameterOwner, LightningShape, LightningSurround,
+    LightningTiming,
 };
 use cgmath::{Matrix4, Quaternion, Vector3};
 
@@ -24,6 +25,8 @@ pub struct LightningEffect {
     pub look: LightningLook,
     #[nested]
     pub timing: LightningTiming,
+    #[nested]
+    pub surround: LightningSurround,
 }
 
 impl Default for LightningEffect {
@@ -38,6 +41,7 @@ impl Default for LightningEffect {
             branch: LightningBranching::default(),
             look: LightningLook::default(),
             timing: LightningTiming::default(),
+            surround: LightningSurround::default(),
         }
     }
 }

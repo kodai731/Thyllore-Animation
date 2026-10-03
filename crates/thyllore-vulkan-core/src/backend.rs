@@ -5,8 +5,8 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 
 use thyllore_render_core::{
-    BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
-    ObjectUBO, ProjectionData, RenderBackend, VertexBufferHandle, FRAMES_IN_FLIGHT,
+    BufferMemoryType, DistanceAttenuation, FlashLighting, FrameUBO, IndexBufferHandle, LineMesh,
+    MeshId, ObjectUBO, ProjectionData, RenderBackend, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
 use crate::command::RRCommandPool;
@@ -313,6 +313,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         shadow_strength: f32,
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
+        flash: FlashLighting,
     ) -> Result<()> {
         let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
             return Ok(());
@@ -337,6 +338,25 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             shadow_strength,
             enable_distance_attenuation: distance_attenuation.as_int(),
             exposure_value,
+            flash_light: thyllore_math_core::Vec4::new(
+                flash.light_position[0],
+                flash.light_position[1],
+                flash.light_position[2],
+                flash.light_intensity,
+            ),
+            flash_color: thyllore_math_core::Vec4::new(
+                flash.light_color[0],
+                flash.light_color[1],
+                flash.light_color[2],
+                0.0,
+            ),
+            impact_decal: thyllore_math_core::Vec4::new(
+                flash.impact_position[0],
+                flash.impact_position[1],
+                flash.impact_position[2],
+                flash.impact_radius,
+            ),
+            impact_strength: thyllore_math_core::Vec4::new(flash.impact_strength, 0.0, 0.0, 0.0),
         };
 
         scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)

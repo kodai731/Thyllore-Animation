@@ -1,10 +1,14 @@
 use super::passes::compute_lightning_scissor;
+use super::surround::publish_lightning_surround;
 use super::*;
 use crate::ecs::component::{
     EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
-use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
-use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
+use crate::ecs::resource::{
+    DischargeEvents, FlashLightState, HierarchyState, LightningRenderSettings,
+    LightningSurroundClock, PickRay, ProjectionData,
+};
+use crate::ecs::world::{Children, Entity, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
 use thyllore_effect_core::{
@@ -462,4 +466,70 @@ fn spawn_waypoint_returns_none_at_cap() {
     }
 
     assert!(spawn_lightning_waypoint(&mut world, lightning).is_none());
+}
+
+fn surround_world(effect: LightningEffect) -> (World, Entity) {
+    let mut world = World::new();
+    world.insert_resource(LightningSurroundClock::default());
+    world.insert_resource(FlashLightState::default());
+    world.insert_resource(DischargeEvents::default());
+    let entity = spawn_lightning(&mut world, "Lightning", effect);
+    (world, entity)
+}
+
+fn set_lightning_time(world: &mut World, entity: Entity, time: f32) {
+    world
+        .get_component_mut::<LightningEffect>(entity)
+        .expect("lightning effect")
+        .time = time;
+}
+
+#[test]
+fn discharge_light_is_published_only_with_light_gain() {
+    let mut lit = lightning_inside_first_burst();
+    lit.surround.light_gain = 1.0;
+    let (mut world, _) = surround_world(lit);
+    publish_lightning_surround(&mut world);
+    let light = world.resource::<FlashLightState>().light;
+    assert!(
+        matches!(light, Some(light) if light.intensity > 0.0),
+        "{light:?}"
+    );
+
+    let (mut dark_world, _) = surround_world(lightning_inside_first_burst());
+    publish_lightning_surround(&mut dark_world);
+    assert!(dark_world.resource::<FlashLightState>().light.is_none());
+}
+
+#[test]
+fn crossing_a_burst_start_pushes_one_discharge_event() {
+    let effect = LightningEffect::default();
+    let burst_start = burst_start_time(&effect, 0);
+    let (mut world, entity) = surround_world(effect);
+
+    set_lightning_time(&mut world, entity, burst_start - 0.01);
+    publish_lightning_surround(&mut world);
+    set_lightning_time(&mut world, entity, burst_start + 0.01);
+    publish_lightning_surround(&mut world);
+
+    let drained = world.resource_mut::<DischargeEvents>().drain();
+    assert_eq!(drained.len(), 1);
+    assert_eq!(drained[0].entity, entity);
+    assert_eq!(world.resource::<DischargeEvents>().iter().count(), 0);
+}
+
+#[test]
+fn impact_is_full_strength_right_after_the_burst_starts() {
+    let mut effect = LightningEffect::default();
+    effect.surround.impact_radius = 1.0;
+    effect.time = burst_start_time(&effect, 0);
+    let (mut world, _) = surround_world(effect);
+
+    publish_lightning_surround(&mut world);
+
+    let impact = world.resource::<FlashLightState>().impact;
+    assert!(
+        matches!(impact, Some(impact) if (impact.strength - 1.0).abs() < 1e-4),
+        "{impact:?}"
+    );
 }

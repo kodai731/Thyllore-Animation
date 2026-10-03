@@ -165,6 +165,10 @@ declare_gpu_block! {
         pub shadow_strength: f32,
         pub enable_distance_attenuation: i32,
         pub exposure_value: f32,
+        pub flash_light: Vec4,
+        pub flash_color: Vec4,
+        pub impact_decal: Vec4,
+        pub impact_strength: Vec4,
     }
 }
 
@@ -180,6 +184,10 @@ impl Default for SceneUniformData {
             shadow_strength: 1.0,
             enable_distance_attenuation: 0,
             exposure_value: 1.0,
+            flash_light: Vec4::new(0.0, 0.0, 0.0, 0.0),
+            flash_color: Vec4::new(0.0, 0.0, 0.0, 0.0),
+            impact_decal: Vec4::new(0.0, 0.0, 0.0, 0.0),
+            impact_strength: Vec4::new(0.0, 0.0, 0.0, 0.0),
         }
     }
 }

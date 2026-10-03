@@ -1231,6 +1231,8 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::LightningRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::FlashLightState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::DischargeEvents>(data);
     }
 
     #[cfg(feature = "ml")]

@@ -164,7 +164,7 @@ EventDispatch first, then `begin_frame`, the update phases through `run_frame()`
 once the image is presented. The slots are:
 
 ```
-EventDispatch → run_event_dispatch_phase()   # UIEvent → World, AppCommand queue; file dialogs; apply commands
+EventDispatch → run_event_dispatch_phase()   # UIEvent → World, command queues; file dialogs; apply commands
 First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
 Input         → run_input_phase()            # Input handling, gizmo interaction
 Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
@@ -179,7 +179,7 @@ Last          → run_last_phase()             # Requested BatchCapture readback
 ```
 
 `run_frame()` runs `update_phases()`, the slots between EventDispatch and Last; `App::drive_frame`
-owns the two ends because they need `App` (file dialogs and `AppCommand`s before, the presented image
+owns the two ends because they need `App` (file dialogs and queued commands before, the presented image
 after).
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)
@@ -193,10 +193,17 @@ after).
 - **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
   mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
   sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
-  routes Slate input before `UWorld::Tick`). What the engine asks of the platform (file dialogs,
-  `AppCommand`s) is the dispatch's return value, applied by `App` before `begin_frame`; readbacks of the
-  finished image are Last (Bevy `PostUpdate` egui output, Unreal `ProcessLocalPlayerSlateOperations`
-  after the world tick)
+  routes Slate input before `UWorld::Tick`). The file dialogs the engine asks of the platform are the
+  dispatch's return value; what `App` must do is pushed to a command queue and applied by `App` before
+  `begin_frame`; readbacks of the finished image are Last (Bevy `PostUpdate` egui output, Unreal
+  `ProcessLocalPlayerSlateOperations` after the world tick)
+- **Commands are queued by stage, not returned**: a dispatcher or system pushes to the `CommandQueue<C>`
+  resource of its command type (`src/ecs/resource/app_command.rs`) and never returns commands to its
+  caller. One queue exists per stage whose order is required, and `App` drains them in that order
+  (`src/app/command.rs::apply_queued_commands`): `EntityRemovalQueue` (ids of the scene before any load)
+  → `SceneLoadQueue` (model loads, spawns) → `AssetEditQueue` (edits of the loaded model's assets) →
+  `OutputQueue` (screenshots, dumps, saves, exports, which only read). Inside a queue the order is
+  unspecified; a command that needs a new ordering guarantee gets a new queue, not a position in a list
 
 ### Adding New Phases
 
@@ -273,7 +280,8 @@ Core Types (src/ecs/component/, src/ecs/resource/)
 - Sending events to `UIEventQueue`
 - Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase`)
 - Platform-specific I/O (file dialogs, window management, imgui orchestration)
-- Converting file dialog results into `AppCommand` (applied by `App`, never by the platform layer)
+- Converting file dialog results into commands and pushing them to their `CommandQueue` (applied by `App`,
+  never by the platform layer)
 
 **NOT allowed in platform layer**:
 - Directly calling multiple ECS system functions to process events
@@ -379,7 +387,7 @@ small structural hierarchies can use optimized storage rather than full entity r
 | Phase System | Coordinator fns | DependsOn pipeline | SystemGroup hierarchy | User-defined | Schedule + SystemSet |
 | Global State | Resource | Singleton | Singleton Component | Context Variable | Resource |
 | Events | UIEventQueue | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
-| Deferred Changes | AppCommand + AppCommandQueue | Sync point flush | EntityCommandBuffer | - | Commands |
+| Deferred Changes | `CommandQueue<C>` per stage | Sync point flush | EntityCommandBuffer | - | Commands |
 
 ### Key Patterns Adopted from Each
 

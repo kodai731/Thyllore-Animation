@@ -89,6 +89,8 @@ pub fn mirror_keyframes(
 
             CopiedKeyframe {
                 bone_id: mirrored_bone_id,
+                source_mesh: entry.source_mesh.clone(),
+                channel: entry.channel.clone(),
                 property_type: entry.property_type,
                 relative_time: entry.relative_time,
                 value: mirrored_value,
@@ -157,6 +159,8 @@ mod tests {
         let buffer = KeyframeCopyBuffer {
             entries: vec![CopiedKeyframe {
                 bone_id: Some(1),
+                source_mesh: None,
+                channel: None,
                 property_type: PropertyType::TranslationX,
                 relative_time: 0.0,
                 value: 5.0,

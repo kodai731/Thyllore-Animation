@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use thyllore_importer_core::fbx::fbx::FbxData;
+use thyllore_file_format_core::fbx::FbxData;
 
 use crate::components::fbx::*;
 use crate::fbx_animation::{decompose_matrix_to_trs, UidAllocator};
@@ -9,7 +9,7 @@ pub(crate) fn build_mesh_model_exports(
     fbx_data_list: &[FbxData],
     geometries: &[FbxGeometryExport],
     bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
-    nodes: &std::collections::HashMap<String, thyllore_importer_core::fbx::fbx::BoneNode>,
+    nodes: &std::collections::HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
     uid_alloc: &mut UidAllocator,
     inv_unit_scale: f32,
 ) -> Vec<FbxMeshModelExport> {
@@ -67,7 +67,7 @@ pub(crate) fn build_mesh_model_exports(
 pub(crate) fn resolve_mesh_parent_uids(
     mesh_models: &mut [FbxMeshModelExport],
     fbx_data_list: &[FbxData],
-    nodes: &std::collections::HashMap<String, thyllore_importer_core::fbx::fbx::BoneNode>,
+    nodes: &std::collections::HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
     bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
     mesh_name_to_uid: &std::collections::HashMap<String, i64>,
 ) {

@@ -243,7 +243,10 @@ Concretely:
 - `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
   `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
-  never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
+  never names one. `--batch-debug-action-at <frame>:<action>` runs the same action once `FrameClock`
+  reaches the frame (`ScheduledBatchActions`, applied in the First phase), which is how a headless run
+  performs steps that must follow the model load or each other (avatar edits:
+  `src/ecs/systems/avatar_batch_actions.rs`). A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
   `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
 - A readback at the capture frame is a **request resource** under `src/ecs/resource/<effect>/batch.rs`
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
@@ -359,11 +362,11 @@ and drives one frame. It is the only place that sees `App` as a whole.
 Files: `init/` and `cleanup.rs` (construction, teardown), `config.rs` (`AppConfig`: parsed engine flags and
 resolved bootstrap hooks) and `bootstrap.rs` (applies them), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `frame.rs` (`App::drive_frame`: the one frame driver, runs
-`FRAME_SCHEDULE` end to end: event dispatch and `AppCommand`s, `begin_frame`, `update`, `render`, Last;
+`FRAME_SCHEDULE` end to end: event dispatch and queued commands, `begin_frame`, `update`, `render`, Last;
 a step that needs the presented image goes at its end, never into `render.rs` or `src/platform/`),
 `render.rs` (`begin_frame` / `render`), `update.rs` (per-frame update and
-imgui buffers), `command.rs` (`apply_app_command`: the one place that executes an `AppCommand` recorded by
-the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph),
+imgui buffers), `command.rs` (`apply_queued_commands`: the one place that executes the commands queued in
+the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
@@ -377,7 +380,7 @@ once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `r
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
 `screenshot.rs` (swapchain and image readback to a host buffer, PNG encoding), `export_actions.rs` (clip and
-model export entry points run from `AppCommand`). A feature may be removed
+model export entry points run from `OutputCommand`). A feature may be removed
 without touching the frame loop; if removing it would break `begin_frame` / `render`, it is not a feature.
 
 Belongs here:

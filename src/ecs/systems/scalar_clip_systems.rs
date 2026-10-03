@@ -17,14 +17,11 @@ pub fn find_entity_clip_id(world: &World, entity: Entity) -> Option<SourceClipId
         .and_then(|schedule| schedule.first_instance().map(|i| i.source_id))
 }
 
-/// Returns the entity's clip, creating the clip (named after the domain) and a
-/// schedule instance (start 0, speed 1, so clip-local time equals timeline
-/// time) on first use.
-pub fn ensure_entity_clip(
+pub fn ensure_entity_clip_named(
     world: &mut World,
     assets: &mut AssetStorage,
     entity: Entity,
-    domain: &ScalarChannelDomain,
+    name: &str,
 ) -> SourceClipId {
     if let Some(id) = find_entity_clip_id(world, entity) {
         return id;
@@ -32,7 +29,7 @@ pub fn ensure_entity_clip(
 
     let source_id = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let editable = EditableAnimationClip::new(0, domain.name.to_string());
+        let editable = EditableAnimationClip::new(0, name.to_string());
         super::clip_library_systems::clip_library_register_and_activate(
             &mut clip_library,
             assets,
@@ -55,6 +52,18 @@ pub fn ensure_entity_clip(
     world.insert_component(entity, schedule);
 
     source_id
+}
+
+/// Returns the entity's clip, creating the clip (named after the domain) and a
+/// schedule instance (start 0, speed 1, so clip-local time equals timeline
+/// time) on first use.
+pub fn ensure_entity_clip(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    entity: Entity,
+    domain: &ScalarChannelDomain,
+) -> SourceClipId {
+    ensure_entity_clip_named(world, assets, entity, domain.name)
 }
 
 /// Gives a scalar-domain entity its clip when nothing scheduled one for it.

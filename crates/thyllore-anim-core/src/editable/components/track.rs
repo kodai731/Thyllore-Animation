@@ -51,6 +51,9 @@ impl BoneTrack {
             PropertyType::Custom(_) => {
                 panic!("BoneTrack has no custom scalar curves; use EditableAnimationClip::get_scalar_curve")
             }
+            PropertyType::MorphWeight => {
+                panic!("BoneTrack has no morph weight curves; use EditableAnimationClip::get_morph_track")
+            }
         }
     }
 
@@ -67,6 +70,9 @@ impl BoneTrack {
             PropertyType::ScaleZ => &mut self.scale_z,
             PropertyType::Custom(_) => {
                 panic!("BoneTrack has no custom scalar curves; use EditableAnimationClip::get_scalar_curve_mut")
+            }
+            PropertyType::MorphWeight => {
+                panic!("BoneTrack has no morph weight curves; use EditableAnimationClip::get_morph_track")
             }
         }
     }

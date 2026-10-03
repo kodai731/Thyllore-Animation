@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
@@ -18,15 +18,17 @@ use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
 use thyllore_avatar_core::vrchat::sidecar::{
-    build_sidecar, sidecar_path, write_sidecar_json, AvatarSidecar, SidecarInput,
-    SidecarSpringChain,
+    build_sidecar, count_viseme_channels, sidecar_path, write_sidecar_json, AvatarSidecar,
+    SidecarInput, SidecarSpringChain,
 };
 use thyllore_model_core::MeshMorph;
 
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
-use crate::ecs::resource::{AvatarSetupState, ExpressionLibraryState, ModelState};
+use crate::ecs::resource::{
+    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
+};
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
@@ -321,6 +323,16 @@ fn build_avatar_sidecar(
     let spring_chains = find_spring_bone_setup(world)
         .map(|setup| collect_sidecar_spring_chains(setup, &state.bones))
         .unwrap_or_default();
+    let materials: BTreeMap<String, String> = world
+        .resource::<MaterialTextureState>()
+        .slots
+        .iter()
+        .filter_map(|slot| {
+            slot.texture
+                .as_ref()
+                .map(|texture| (slot.material.clone(), texture.clone()))
+        })
+        .collect();
 
     build_sidecar(SidecarInput {
         mapping: &state.mapping,
@@ -329,8 +341,27 @@ fn build_avatar_sidecar(
         expression_mesh_name: expression_morph.map(|morph| morph.source_mesh.as_str()),
         library: &library_state.library,
         spring_chains: &spring_chains,
+        materials: &materials,
         stats: &state.stats,
     })
+}
+
+pub(crate) fn find_expression_morph_entity(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Option<Entity> {
+    world
+        .iter_components::<MeshRef>()
+        .filter_map(|(entity, _)| {
+            find_mesh_morph(world, entity, assets, graphics).map(|morph| (entity, morph))
+        })
+        .filter(|(_, morph)| !morph.channels.is_empty())
+        .max_by_key(|(_, morph)| {
+            let channel_names = morph.channel_names();
+            (count_viseme_channels(&channel_names), channel_names.len())
+        })
+        .map(|(entity, _)| entity)
 }
 
 pub(crate) fn find_expression_morph<'a>(
@@ -338,10 +369,8 @@ pub(crate) fn find_expression_morph<'a>(
     assets: &AssetStorage,
     graphics: &'a GraphicsResources,
 ) -> Option<&'a MeshMorph> {
-    world
-        .iter_components::<MeshRef>()
-        .filter_map(|(entity, _)| find_mesh_morph(world, entity, assets, graphics))
-        .find(|morph| !morph.channels.is_empty())
+    let entity = find_expression_morph_entity(world, assets, graphics)?;
+    find_mesh_morph(world, entity, assets, graphics)
 }
 
 fn collect_sidecar_spring_chains(

@@ -132,6 +132,21 @@ pub fn capture_expression_preset(
     }
 }
 
+pub fn remove_expression_preset(world: &mut World, preset_index: usize) {
+    let Some(mut state) = world.get_resource_mut::<ExpressionLibraryState>() else {
+        return;
+    };
+    if preset_index >= state.library.presets.len() {
+        log_warn!(
+            "Cannot remove expression preset {}: out of range",
+            preset_index
+        );
+        return;
+    }
+    let removed = state.library.presets.remove(preset_index);
+    log!("Removed expression preset {}", removed.name);
+}
+
 pub fn save_expression_library(world: &World) {
     let Some(model_path) = world
         .get_resource::<ModelState>()

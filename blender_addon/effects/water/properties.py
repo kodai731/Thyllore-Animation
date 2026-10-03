@@ -15,7 +15,7 @@ display_property_names = effect_properties.display_property_names
 def water_render_params(props) -> dict:
     import thyllore_effect_core as fx
 
-    return effect_properties.render_params(props, fx.water_preset_params)
+    return effect_properties.render_params(props, fx.water_preset_params, fx.water_parameter_paths)
 
 
 def build_water_property_group():

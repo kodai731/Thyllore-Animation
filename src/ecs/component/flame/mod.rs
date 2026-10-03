@@ -1,9 +1,9 @@
 mod bone_attachment;
 mod effect;
-mod scalar_domain;
+mod param;
 mod trail;
 
 pub use bone_attachment::*;
 pub use effect::*;
-pub use scalar_domain::*;
+pub use param::*;
 pub use trail::*;

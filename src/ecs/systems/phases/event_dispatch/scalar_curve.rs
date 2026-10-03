@@ -218,10 +218,11 @@ fn edit_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::component::{FlameEffect, FlameParam};
     use crate::ecs::systems::phases::event_dispatch::edit_history::dispatch_edit_history_events;
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
     use crate::ecs::systems::scalar_clip_systems::test_support::{
-        spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
+        probe_property, spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
     };
     use crate::hooks::effect_spawn::EffectSpawnHooks;
     use crate::scene::test_support::ProbeOwner;
@@ -243,7 +244,7 @@ mod tests {
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
-                property_type: PROBE_LEVEL.property_type(),
+                property_type: probe_property(&PROBE_LEVEL),
                 value: 2.5,
             }],
             &mut world,
@@ -254,7 +255,7 @@ mod tests {
         let lib = world.get_resource::<ClipLibrary>().unwrap();
         let clip = lib.get(clip_id).expect("clip registered");
         let curve = clip
-            .get_scalar_curve(PROBE_LEVEL.property_type())
+            .get_scalar_curve(probe_property(&PROBE_LEVEL))
             .expect("scalar curve");
         assert_eq!(curve.keyframes.len(), 1);
         assert!((curve.keyframes[0].value - 2.5).abs() < 1e-6);
@@ -267,7 +268,7 @@ mod tests {
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
-                property_type: PROBE_LEVEL.property_type(),
+                property_type: probe_property(&PROBE_LEVEL),
                 value: 2.5,
             }],
             &mut world,
@@ -300,7 +301,7 @@ mod tests {
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKeyAtPlayhead {
-                property_type: PROBE_HEIGHT.property_type(),
+                property_type: probe_property(&PROBE_HEIGHT),
             }],
             &mut world,
             &mut assets,
@@ -311,7 +312,7 @@ mod tests {
         let curve = lib
             .get(clip_id)
             .unwrap()
-            .get_scalar_curve(PROBE_HEIGHT.property_type())
+            .get_scalar_curve(probe_property(&PROBE_HEIGHT))
             .expect("curve created from empty clip");
         assert_eq!(curve.keyframes.len(), 1);
         assert!((curve.keyframes[0].time - 2.0).abs() < 1e-6);

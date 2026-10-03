@@ -5,7 +5,7 @@ use crate::{BoneId, Skeleton, SkeletonId};
 
 pub type AnimationClipId = u32;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Interpolation {
     Step,
     Linear,
@@ -271,6 +271,7 @@ pub struct AnimationClip {
     pub name: String,
     pub duration: f32,
     pub channels: HashMap<BoneId, TransformChannel>,
+    pub morph_channels: Vec<MorphWeightChannel>,
 }
 
 impl AnimationClip {
@@ -280,12 +281,29 @@ impl AnimationClip {
             name: name.to_string(),
             duration: 0.0,
             channels: HashMap::new(),
+            morph_channels: Vec::new(),
         }
     }
 
     pub fn add_channel(&mut self, bone_id: BoneId, channel: TransformChannel) {
         self.channels.insert(bone_id, channel);
     }
+
+    pub fn add_morph_channel(&mut self, morph_channel: MorphWeightChannel) {
+        let last_key_time = morph_channel
+            .keyframes
+            .last()
+            .map_or(0.0, |keyframe| keyframe.time);
+        self.duration = self.duration.max(last_key_time);
+        self.morph_channels.push(morph_channel);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphWeightChannel {
+    pub source_mesh: String,
+    pub channel: String,
+    pub keyframes: Vec<Keyframe<f32>>,
 }
 
 pub fn compose_transform(
@@ -356,76 +374,6 @@ impl AnimationSystem {
     pub fn clear(&mut self) {
         self.skeletons.clear();
         self.next_skeleton_id = 0;
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct MorphTarget {
-    pub positions: Vec<[f32; 3]>,
-    pub normals: Vec<[f32; 3]>,
-    pub tangents: Vec<[f32; 3]>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct MorphAnimation {
-    pub key_frame: f32,
-    pub weights: Vec<f32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MorphAnimationSystem {
-    pub animations: Vec<MorphAnimation>,
-    pub targets: Vec<Vec<MorphTarget>>,
-    pub base_vertices: Vec<Vec<[f32; 3]>>,
-    pub scale_factor: f32,
-}
-
-impl Default for MorphAnimationSystem {
-    fn default() -> Self {
-        Self {
-            animations: Vec::new(),
-            targets: Vec::new(),
-            base_vertices: Vec::new(),
-            scale_factor: 1.0,
-        }
-    }
-}
-
-impl MorphAnimationSystem {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.animations.is_empty()
-    }
-
-    pub fn get_animation_index(&self, time: f32) -> usize {
-        if self.animations.is_empty() {
-            return 0;
-        }
-
-        let start_key_frame = self
-            .animations
-            .first()
-            .expect("animations verified non-empty by early return above")
-            .key_frame;
-        let end_key_frame = self
-            .animations
-            .last()
-            .expect("animations verified non-empty by early return above")
-            .key_frame;
-        let period = end_key_frame - start_key_frame;
-        let mod_time = time.rem_euclid(period);
-
-        let idx = self.animations.partition_point(|a| a.key_frame < mod_time);
-        idx.min(self.animations.len() - 1)
-    }
-
-    pub fn clear(&mut self) {
-        self.animations.clear();
-        self.targets.clear();
-        self.base_vertices.clear();
     }
 }
 

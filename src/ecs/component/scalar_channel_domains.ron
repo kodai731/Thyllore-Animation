@@ -1,5 +1,7 @@
 // Disjoint blocks of PropertyType::Custom codes owned by each scalar channel domain.
-// Codes are persisted in clip files: never move a block, and give a new domain the next free one.
+// A channel's code is its block's first_code plus its position in the domain's channel table,
+// and codes are persisted in clip files: never move a block, append new channels at the end of
+// their table, and give a new domain the next free block.
 [
     (name: "Flame", first_code: 0, code_count: 256),
     (name: "Water", first_code: 256, code_count: 256),
@@ -7,5 +9,4 @@
     (name: "Lightning", first_code: 768, code_count: 256),
     // Lib test fixture domain (scalar_clip_systems::test_support); shipped clips never use it.
     (name: "Probe", first_code: 1024, code_count: 256),
-    (name: "TestScalars", first_code: 1280, code_count: 256),
 ]

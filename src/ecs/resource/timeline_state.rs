@@ -20,13 +20,14 @@ pub enum SelectionModifier {
 pub enum CurveTrackRef {
     Bone(BoneId),
     Scalar,
+    Morph(usize),
 }
 
 impl CurveTrackRef {
     pub fn bone_id(self) -> Option<BoneId> {
         match self {
             CurveTrackRef::Bone(id) => Some(id),
-            CurveTrackRef::Scalar => None,
+            CurveTrackRef::Scalar | CurveTrackRef::Morph(_) => None,
         }
     }
 }

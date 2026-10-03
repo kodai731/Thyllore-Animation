@@ -4,17 +4,17 @@ pub enum FbxModelCache {
     Loaded {
         fbx_model: FbxModel,
         source_path: String,
-        needs_coord_conversion: bool,
+        has_skinned_meshes: bool,
     },
     Empty,
 }
 
 impl FbxModelCache {
-    pub fn new(fbx_model: FbxModel, source_path: String, needs_coord_conversion: bool) -> Self {
+    pub fn new(fbx_model: FbxModel, source_path: String, has_skinned_meshes: bool) -> Self {
         Self::Loaded {
             fbx_model,
             source_path,
-            needs_coord_conversion,
+            has_skinned_meshes,
         }
     }
 
@@ -36,12 +36,11 @@ impl FbxModelCache {
         }
     }
 
-    pub fn needs_coord_conversion(&self) -> bool {
+    pub fn has_skinned_meshes(&self) -> bool {
         match self {
             Self::Loaded {
-                needs_coord_conversion,
-                ..
-            } => *needs_coord_conversion,
+                has_skinned_meshes, ..
+            } => *has_skinned_meshes,
             Self::Empty => false,
         }
     }

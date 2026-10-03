@@ -63,15 +63,8 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         return Ok(BatchAnimEdit::DebugKeys { seed });
     }
     if let Some(param_str) = spec.strip_prefix("key_at_playhead=") {
-        let (_, channel) = scalar_channel_for_cli_name(param_str.trim()).ok_or_else(|| {
-            anyhow::anyhow!(
-                "unknown scalar channel '{}'. Valid channels: {}",
-                param_str,
-                scalar_cli_names_joined()
-            )
-        })?;
         return Ok(BatchAnimEdit::KeyAtPlayhead {
-            property_type: channel.property_type(),
+            property_type: scalar_property_for_cli_name(param_str)?,
         });
     }
     if let Some(seconds_str) = spec.strip_prefix("trim_end=") {
@@ -91,13 +84,7 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         let (time_str, value_str) = rest.split_once('=').ok_or_else(|| {
             anyhow::anyhow!("key spec must be key=<param>@<time>=<value>, got '{spec}'")
         })?;
-        let (_, channel) = scalar_channel_for_cli_name(param_str.trim()).ok_or_else(|| {
-            anyhow::anyhow!(
-                "unknown scalar channel '{}'. Valid channels: {}",
-                param_str,
-                scalar_cli_names_joined()
-            )
-        })?;
+        let property_type = scalar_property_for_cli_name(param_str)?;
         let time: f32 = time_str
             .trim()
             .parse()
@@ -110,12 +97,25 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             bail!("key time must be >= 0 and value finite: '{spec}'");
         }
         return Ok(BatchAnimEdit::Key {
-            property_type: channel.property_type(),
+            property_type,
             time,
             value,
         });
     }
     bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | clear")
+}
+
+fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
+    let (domain, channel) = scalar_channel_for_cli_name(name.trim()).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown scalar channel '{}'. Valid channels: {}",
+            name,
+            scalar_cli_names_joined()
+        )
+    })?;
+    domain
+        .property_type_of(channel)
+        .ok_or_else(|| anyhow::anyhow!("scalar channel '{name}' is not in its domain table"))
 }
 
 /// Apply anim edits through the production scalar-clip event dispatcher, so batch
@@ -210,10 +210,12 @@ pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {
         .iter()
         .flat_map(|domain| {
             (domain.entities)(world).into_iter().map(move |entity| {
-                let params: serde_json::Map<String, serde_json::Value> = (domain.channels)()
+                let params: serde_json::Map<String, serde_json::Value> = domain
+                    .channels
                     .iter()
-                    .filter_map(|channel| {
-                        (domain.read)(world, entity, channel.property_type())
+                    .enumerate()
+                    .filter_map(|(index, channel)| {
+                        (domain.read)(world, entity, domain.property_type_at(index))
                             .map(|value| (channel.cli_name.to_string(), value.into()))
                     })
                     .collect();

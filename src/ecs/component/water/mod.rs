@@ -1,5 +1,5 @@
 mod effect;
-mod scalar_domain;
+mod param;
 
 pub use effect::*;
-pub use scalar_domain::*;
+pub use param::*;

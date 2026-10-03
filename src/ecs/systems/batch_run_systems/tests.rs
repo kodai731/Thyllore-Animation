@@ -6,10 +6,11 @@ use crate::ecs::component::{FlameEffect, MotionPath};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
+    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, ScheduledBatchAction,
+    ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
-    spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
+    probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
 
@@ -305,7 +306,7 @@ fn anim_edit_specs_parse_all_forms() {
     assert_eq!(
         edits[1],
         BatchAnimEdit::Key {
-            property_type: PROBE_LEVEL.property_type(),
+            property_type: probe_property(&PROBE_LEVEL),
             time: 1.5,
             value: 2.25
         }
@@ -392,7 +393,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         &[
             BatchAnimEdit::DebugKeys { seed: 7 },
             BatchAnimEdit::Key {
-                property_type: PROBE_LEVEL.property_type(),
+                property_type: probe_property(&PROBE_LEVEL),
                 time: 9.0,
                 value: 3.5,
             },
@@ -416,7 +417,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         .find(|c| c["id"].as_u64() == Some(clip_id))
         .expect("clip in dump");
     let curves = clip["scalar_curves"].as_array().unwrap();
-    assert_eq!(curves.len(), (PROBE_DOMAIN.channels)().len());
+    assert_eq!(curves.len(), PROBE_DOMAIN.channels.len());
     let level = curves
         .iter()
         .find(|c| c["property"] == PROBE_LEVEL.cli_name)
@@ -633,4 +634,76 @@ fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
     let pixels = vec![value; (width * height * 3) as usize];
     writer.write_image_data(&pixels).unwrap();
     writer.finish().unwrap();
+}
+
+#[test]
+fn scheduled_actions_parse_frame_and_action() {
+    let scheduled = scheduled_actions_resolve_from_args(&args(&[
+        "bin",
+        "--batch-debug-action-at",
+        "12:timeline_time=0.5",
+        "--batch-debug-action-at",
+        "3:reset_camera",
+    ]))
+    .unwrap();
+
+    assert_eq!(
+        scheduled,
+        vec![
+            ScheduledBatchAction {
+                frame: 12,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 3,
+                action: "reset_camera".to_string(),
+            },
+        ]
+    );
+}
+
+#[test]
+fn scheduled_actions_reject_malformed_specs() {
+    for spec in ["reset_camera", "x:reset_camera", "5:bogus", "5:"] {
+        assert!(
+            scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at", spec]))
+                .is_err(),
+            "{spec} must be rejected"
+        );
+    }
+    assert!(
+        scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at"])).is_err()
+    );
+}
+
+#[test]
+fn scheduled_actions_apply_once_their_frame_is_reached() {
+    let mut world = World::new();
+    world.insert_resource(UIEventQueue::default());
+    world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
+    world.insert_resource(ScheduledBatchActions {
+        pending: vec![
+            ScheduledBatchAction {
+                frame: 2,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 1,
+                action: "reset_camera".to_string(),
+            },
+        ],
+    });
+
+    world.resource_mut::<FrameClock>().frame = 1;
+    batch_apply_scheduled_actions(&mut world);
+    let first_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+
+    world.resource_mut::<FrameClock>().frame = 2;
+    batch_apply_scheduled_actions(&mut world);
+    batch_apply_scheduled_actions(&mut world);
+    let second_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+
+    assert!(matches!(first_frame_events[..], [UIEvent::ResetCamera]));
+    assert!(matches!(second_frame_events[..], [UIEvent::TimelineSetTime(time)] if time == 0.5));
+    assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
 }

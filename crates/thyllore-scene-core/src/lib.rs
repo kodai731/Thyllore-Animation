@@ -1,17 +1,17 @@
+mod fields;
 mod scene_component;
 
 use std::borrow::Cow;
 
+pub use fields::{intern_name, nested_prefix, FieldPath, RootPath, SceneFields, SceneTables, Then};
 pub use scene_component::SceneComponent;
+pub use thyllore_scene_derive::SceneFields;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
     pub name: &'static str,
-    pub code: Option<u16>,
     pub get: fn(&C) -> f32,
     pub set: fn(&mut C, f32),
-    pub debug_range: Option<(f32, f32)>,
-    pub renamed_from: &'static [&'static str],
 }
 
 pub fn find_scalar_param<'a, C>(
@@ -38,8 +38,11 @@ pub enum UiKind {
 pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
 
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
+#[derive(Clone, Copy, Debug)]
 pub struct UiParam {
     pub name: &'static str,
+    /// Dotted location of the persisted value inside the component's serde form.
+    pub path: &'static str,
     pub group: &'static str,
     pub label: Option<&'static str>,
     pub kind: UiKind,
@@ -159,16 +162,10 @@ macro_rules! declare_scene_format {
             $( $name:ident : $ty:tt = $tag:ident {
                 get: $get:expr,
                 set: $set:expr
-                $(, code: $code:literal)?
-                $(, debug_range: ($dr_min:expr, $dr_max:expr))?
-                $(, renamed_from: [$($renamed:literal),+])?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
-                    set: $alias_set:expr
-                    $(, code: $alias_code:literal)?
-                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))?
-                    $(, renamed_from: [$($alias_renamed:literal),+])? $(,)?
+                    set: $alias_set:expr $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -220,16 +217,10 @@ macro_rules! declare_scene_format {
                 $( $name : $ty {
                     get: $get,
                     set: $set
-                    $(, code: $code)?
-                    $(, debug_range: ($dr_min, $dr_max))?
-                    $(, renamed_from: [$($renamed),+])?
                     $(, default: $default)?
                     $(, scalars { $( $alias : {
                         get: $alias_get,
                         set: $alias_set,
-                        $( code: $alias_code, )?
-                        $( debug_range: ($alias_dr_min, $alias_dr_max), )?
-                        $( renamed_from: [$($alias_renamed),+], )?
                     } ),+ })?
                     $(, scalars: $channels)?
                     $(, ui {
@@ -275,16 +266,10 @@ macro_rules! declare_scene_format {
             $( $name:ident : $ty:tt {
                 get: $get:expr,
                 set: $set:expr
-                $(, code: $code:literal)?
-                $(, debug_range: ($dr_min:expr, $dr_max:expr))?
-                $(, renamed_from: [$($renamed:literal),+])?
                 $(, default: $default:expr)?
                 $(, scalars { $( $alias:ident : {
                     get: $alias_get:expr,
-                    set: $alias_set:expr
-                    $(, code: $alias_code:literal)?
-                    $(, debug_range: ($alias_dr_min:expr, $alias_dr_max:expr))?
-                    $(, renamed_from: [$($alias_renamed:literal),+])? $(,)?
+                    set: $alias_set:expr $(,)?
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
@@ -393,10 +378,11 @@ macro_rules! declare_scene_format {
         pub const $scalars_name: &[$crate::ScalarParam<$component>] =
             $crate::declare_scene_format!(@scalars $component, [
                 $(
-                    ($name, $ty, $get, $set, $crate::declare_scene_format!(@scalar_code $(, $code)?) $(, $channels)?, $crate::declare_scene_format!(@debug_range $(, ($dr_min, $dr_max))?), $crate::declare_scene_format!(@renamed_from $(, [$($renamed),+])?))
-                    $( $( ($alias, f32, $alias_get, $alias_set, $crate::declare_scene_format!(@scalar_code $(, $alias_code)?), $crate::declare_scene_format!(@debug_range $(, ($alias_dr_min, $alias_dr_max))?), $crate::declare_scene_format!(@renamed_from $(, [$($alias_renamed),+])?)) )+ )?
+                    ($name, $ty, $get, $set)
+                    $( $( ($alias, f32, $alias_get, $alias_set) )+ )?
+                    $( ($name, $channels, $get, $set) )?
                 )+
-                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set, None, None, &[]) )*
+                $( ($runtime_name, $runtime_ty, $runtime_get, $runtime_set) )*
             ], []);
 
         /// Display metadata of the parameters that declared a `ui` node, in declaration order.
@@ -404,6 +390,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($name),
+                    path: stringify!($name),
                     group: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $ui_label)?),
                     kind: $crate::declare_scene_format!(@ui_kind $(, $ui_kind)?),
@@ -418,6 +405,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($runtime_name),
+                    path: stringify!($runtime_name),
                     group: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $rt_ui_label)?),
                     kind: $crate::UiKind::Scalar,
@@ -467,35 +455,16 @@ macro_rules! declare_scene_format {
     (@default $component_value:ident, $component:ty, $ty:tt, $get:expr, $default:expr) => {
         $default
     };
-    (@scalar_code) => {
-        None
-    };
-    (@scalar_code, $code:literal) => {
-        Some($code)
-    };
-    (@debug_range) => {
-        None
-    };
-    (@debug_range, ($dr_min:expr, $dr_max:expr)) => {
-        Some(($dr_min, $dr_max))
-    };
-    (@renamed_from) => {
-        &[]
-    };
-    (@renamed_from, [$($renamed:literal),+]) => {
-        &[$($renamed),+]
-    };
     (@scalars $component:ty, [], [ $($acc:tt)* ]) => {
         &[ $($acc)* ]
     };
     (@scalars $component:ty,
-        [ ($name:ident, f32, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
+        [ ($name:ident, f32, $get:expr, $set:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
-                code: $code,
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> f32 = $get;
@@ -510,19 +479,16 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
-                debug_range: $debug_range,
-                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, u32, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
+        [ ($name:ident, u32, $get:expr, $set:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
-                code: $code,
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> u32 = $get;
@@ -537,19 +503,16 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
-                debug_range: $debug_range,
-                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, bool, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
+        [ ($name:ident, bool, $get:expr, $set:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
             $crate::ScalarParam {
                 name: stringify!($name),
-                code: $code,
                 get: {
                     fn get_scalar(component: &$component) -> f32 {
                         let get: fn(&$component) -> bool = $get;
@@ -564,46 +527,37 @@ macro_rules! declare_scene_format {
                     }
                     set_scalar
                 },
-                debug_range: $debug_range,
-                renamed_from: $renamed_from,
             },
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $ty:tt, $get:expr, $set:expr, $code:expr, rgb, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
+        [ ($name:ident, rgb, $get:expr, $set:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)*
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 0, "_r", $code, $debug_range),
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 1, "_g", $code, $debug_range),
-            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 2, "_b", $code, $debug_range),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 0, "_r"),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 1, "_g"),
+            $crate::declare_scene_format!(@rgb_channel $component, $name, $get, $set, 2, "_b"),
         ])
     };
     (@scalars $component:ty,
-        [ ($name:ident, $other:tt, $get:expr, $set:expr, $code:expr, $debug_range:expr, $renamed_from:expr) $($rest:tt)* ],
+        [ ($name:ident, $other:tt, $get:expr, $set:expr) $($rest:tt)* ],
         [ $($acc:tt)* ]
     ) => {
         $crate::declare_scene_format!(@scalars $component, [ $($rest)* ], [ $($acc)* ])
     };
     (@rgb_channel $component:ty, $name:ident, $get:expr, $set:expr,
-        $channel:literal, $suffix:literal, $code:expr, $debug_range:expr
+        $channel:literal, $suffix:literal
     ) => {{
         struct Field;
         impl $crate::RgbField<$component> for Field {
             const GET: fn(&$component) -> [f32; 3] = $get;
             const SET: fn(&mut $component, [f32; 3]) = $set;
         }
-        const BASE_CODE: Option<u16> = $code;
         $crate::ScalarParam {
             name: concat!(stringify!($name), $suffix),
-            code: match BASE_CODE {
-                Some(base) => Some(base + $channel),
-                None => None,
-            },
             get: $crate::get_rgb_channel::<$component, Field, $channel>,
             set: $crate::set_rgb_channel::<$component, Field, $channel>,
-            debug_range: $debug_range,
-            renamed_from: &[],
         }
     }};
 }
@@ -623,6 +577,7 @@ mod tests {
     fn test_display_label_prefers_explicit_label() {
         let explicit = UiParam {
             name: "swirl_gain",
+            path: "swirl_gain",
             group: "",
             label: Some("Swirl"),
             kind: UiKind::Scalar,
@@ -645,6 +600,7 @@ mod tests {
     fn test_color_component_names_follow_rgb_suffixes() {
         let tint = UiParam {
             name: "tint",
+            path: "tint",
             group: "",
             label: None,
             kind: UiKind::Color,
@@ -656,170 +612,5 @@ mod tests {
             primary: false,
         };
         assert_eq!(tint.color_component_names(), ["tint_r", "tint_g", "tint_b"]);
-    }
-
-    #[derive(Clone, Default)]
-    pub struct TestEffect {
-        intensity: f32,
-        count: u32,
-        enabled: bool,
-        color: [f32; 3],
-        offset: [f32; 2],
-    }
-
-    declare_scene_format! {
-        component: TestEffect,
-        record: TestEffectRecord,
-        items {
-            key: "test_effect",
-            snapshot: test_snapshot,
-            scalars: TEST_SCALAR_PARAMS,
-            ui: TEST_UI_PARAMS,
-            overwrite: test_overwrite,
-        },
-        persisted {
-            intensity: f32 {
-                get: |c: &TestEffect| c.intensity,
-                set: |c: &mut TestEffect, v: f32| { c.intensity = v; }
-                , code: 10
-                , debug_range: (0.0, 5.0)
-                , ui {
-                    min: 0.0,
-                    max: 10.0
-                    , group: "test"
-                }
-            },
-            count: u32 {
-                get: |c: &TestEffect| c.count,
-                set: |c: &mut TestEffect, v: u32| { c.count = v; }
-                , code: 20
-                , renamed_from: ["legacy_count", "old_count"]
-            },
-            enabled: bool {
-                get: |c: &TestEffect| c.enabled,
-                set: |c: &mut TestEffect, v: bool| { c.enabled = v; }
-            },
-            color: [f32; 3] {
-                get: |c: &TestEffect| c.color,
-                set: |c: &mut TestEffect, v: [f32; 3]| { c.color = v; }
-                , code: 30
-                , scalars: rgb
-            },
-            offset: [f32; 2] {
-                get: |c: &TestEffect| c.offset,
-                set: |c: &mut TestEffect, v: [f32; 2]| { c.offset = v; },
-                scalars {
-                    offset_x: {
-                        get: |c: &TestEffect| c.offset[0],
-                        set: |c: &mut TestEffect, v: f32| { c.offset[0] = v; },
-                        code: 40,
-                    },
-                    offset_y: {
-                        get: |c: &TestEffect| c.offset[1],
-                        set: |c: &mut TestEffect, v: f32| { c.offset[1] = v; },
-                        renamed_from: ["offset_v"],
-                    },
-                }
-            },
-        },
-        runtime {},
-    }
-
-    #[test]
-    fn test_scalar_param_code_with_literal() {
-        let intensity = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "intensity")
-            .unwrap();
-        assert_eq!(intensity.code, Some(10));
-
-        let count = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "count")
-            .unwrap();
-        assert_eq!(count.code, Some(20));
-    }
-
-    #[test]
-    fn test_scalar_param_code_none_when_missing() {
-        let enabled = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "enabled")
-            .unwrap();
-        assert_eq!(enabled.code, None);
-    }
-
-    #[test]
-    fn test_alias_code_follows_alias_declaration() {
-        let offset_x = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "offset_x")
-            .unwrap();
-        let offset_y = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "offset_y")
-            .unwrap();
-        assert_eq!(offset_x.code, Some(40));
-        assert_eq!(offset_y.code, None);
-    }
-
-    #[test]
-    fn test_rgb_channel_codes_are_offset_from_base() {
-        let cr = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "color_r")
-            .unwrap();
-        let cg = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "color_g")
-            .unwrap();
-        let cb = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "color_b")
-            .unwrap();
-        assert_eq!(cr.code, Some(30));
-        assert_eq!(cg.code, Some(31));
-        assert_eq!(cb.code, Some(32));
-    }
-
-    #[test]
-    fn test_scalar_param_debug_range() {
-        let intensity = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "intensity")
-            .unwrap();
-        assert_eq!(intensity.debug_range, Some((0.0, 5.0)));
-    }
-
-    #[test]
-    fn test_scalar_param_debug_range_none_when_missing() {
-        let count = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "count")
-            .unwrap();
-        assert_eq!(count.debug_range, None);
-    }
-
-    #[test]
-    fn test_scalar_param_renamed_from() {
-        let count = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "count")
-            .unwrap();
-        let offset_y = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "offset_y")
-            .unwrap();
-        assert_eq!(count.renamed_from, ["legacy_count", "old_count"]);
-        assert_eq!(offset_y.renamed_from, ["offset_v"]);
-    }
-
-    #[test]
-    fn test_scalar_param_renamed_from_empty_when_missing() {
-        let intensity = TEST_SCALAR_PARAMS
-            .iter()
-            .find(|p| p.name == "intensity")
-            .unwrap();
-        assert!(intensity.renamed_from.is_empty());
     }
 }

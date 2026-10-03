@@ -1,0 +1,81 @@
+; FBX 7.4.0 project file
+FBXHeaderExtension:  {
+  FBXVersion: 7400
+}
+GlobalSettings:  {
+  Properties70:  {
+    P: "UpAxis", "int", "Integer", "",1
+    P: "UnitScaleFactor", "double", "Number", "",100
+  }
+}
+Definitions:  {
+  Count: 6
+  Version: 100
+  ObjectType: "GlobalSettings"
+  ObjectType: "Geometry"
+  ObjectType: "Model"
+  ObjectType: "Deformer"
+  ObjectType: "AnimationStack"
+  ObjectType: "AnimationLayer"
+}
+Objects:  {
+  Geometry: 1000, "Geometry::Cube", "Mesh" {
+    Vertices: *24 {
+      a: -1,-1,-1,1,-1,-1,-1,1,-1,1,1,-1,-1,-1,1,1,-1,1,-1,1,1,1,1,1
+    }
+    PolygonVertexIndex: *24 {
+      a: 0,1,3,-3,4,5,7,-7,0,1,5,-5,2,3,7,-7,0,2,6,-5,1,3,7,-6
+    }
+  }
+  Model: 2000, "Model::Cube", "Mesh" {
+    Properties70:  {
+      P: "RotationOffset", "Vector3", "", "",0,0,0
+      P: "ScalingOffset", "Vector3", "", "",1,1,1
+      P: "RotationPivot", "Vector3", "", "",0,0,0
+      P: "ScalingPivot", "Vector3", "", "",0,0,0
+    }
+  }
+  Deformer: 3000, "Deformer::Morpher", "BlendShape" {
+  }
+  Deformer: 3100, "SubDeformer::smile", "BlendShapeChannel" {
+    Properties70:  {
+      P: "DeformPercent", "number", "Number", "",0
+    }
+    FullWeights: *1 {
+      a: 100
+    }
+  }
+  Geometry: 3200, "Geometry::smileS", "Shape" {
+    Indexes: *1 {
+      a: 0
+    }
+    Vertices: *3 {
+      a: 0.1,0,0
+    }
+  }
+  Deformer: 3300, "SubDeformer::blink", "BlendShapeChannel" {
+    Properties70:  {
+      P: "DeformPercent", "number", "Number", "",0
+    }
+    FullWeights: *1 {
+      a: 100
+    }
+  }
+  Geometry: 3400, "Geometry::blinkS", "Shape" {
+    Indexes: *1 {
+      a: 1
+    }
+    Vertices: *3 {
+      a: 0,-0.1,0
+    }
+  }
+}
+Connections:  {
+  C: "OO",2000,0
+  C: "OO",1000,2000
+  C: "OO",3000,1000
+  C: "OO",3100,3000
+  C: "OO",3200,3100
+  C: "OO",3300,3000
+  C: "OO",3400,3300
+}

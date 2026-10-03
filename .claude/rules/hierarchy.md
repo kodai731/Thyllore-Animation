@@ -181,7 +181,13 @@ record (time advance, bone attachment, trails at `Advance`; history accumulation
 `Accumulate`, which runs after the previous frame's GPU timings are written) is registered from
 `src/ecs/systems/<effect>/` and `src/ecs/systems/phases/render_prep_phase.rs` runs `FramePrepHooks`
 (a `World` resource collected at app start, sorted by stage then name) without naming an effect. A hook
-file describes a contract only; it never names a concrete effect.
+file describes a contract only; it never names a concrete effect. `startup.rs` holds the `StartupHook` contract
+(`name`, `StartupPhase` enum with declaration order CoreResources / Editor / PostProcessing / Ml, and
+`run: fn(&mut World)`) and the `startup_resource!(T, Phase)` macro (inserts `T::default()` if absent) and
+`startup_hook!("Name", Phase, fn)` macro: a resource that needs a default value is inserted by writing
+`startup_resource!(T, Editor)` next to its definition, and `App::create` in `src/app/init/instance.rs`
+calls `run_startup_phase` per phase in name order without naming a type; feature-gated resources register
+with `#[cfg(feature)]` in their own file.
 
 ## src/effect/
 

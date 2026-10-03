@@ -172,7 +172,8 @@ namespace Thyllore.Avatar
         }
 
         /// Unity's default "Calculate" recomputes blend shape normals and flips them on this kind of
-        /// mesh (delta magnitude 2), which darkens the mouth and nose; legacy normals keep the FBX ones.
+        /// mesh (delta magnitude 2), which darkens the mouth and nose. "None" keeps the FBX normals and is
+        /// what purchased avatars ship with; the legacy flag stays off (VRChat SDK only warns for Calculate).
         public static void ApplyImportSettings(GameObject root)
         {
             if (root == null)
@@ -197,11 +198,11 @@ namespace Thyllore.Avatar
             var legacyNormals = serialized.FindProperty("m_LegacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes");
             if (legacyNormals != null)
             {
-                legacyNormals.boolValue = true;
+                legacyNormals.boolValue = false;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
             }
             importer.SaveAndReimport();
-            Debug.Log($"Applied import settings (blend shape normals: None, legacy) to {importer.assetPath}");
+            Debug.Log($"Applied import settings (blend shape normals: None) to {importer.assetPath}");
         }
 
         public static void ApplyHumanoid(GameObject root, AvatarSidecar sidecar)

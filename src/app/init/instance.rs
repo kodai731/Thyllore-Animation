@@ -12,6 +12,7 @@ use crate::ecs::{
     ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
     ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
 };
+use crate::hooks::startup::{run_startup_phase, StartupPhase};
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
@@ -1217,20 +1218,7 @@ impl App {
     }
 
     fn register_post_processing_resources(data: &mut AppData) {
-        Self::insert_default_if_missing::<crate::ecs::resource::PhysicalCameraParameters>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::Exposure>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::DepthOfField>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ToneMapping>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::LensEffects>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::BloomSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::LightningRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
+        run_startup_phase(&mut data.ecs_world, StartupPhase::PostProcessing);
     }
 
     #[cfg(feature = "ml")]

@@ -4,11 +4,11 @@ set -euo pipefail
 # End-to-end check of the avatar workflow on a synthetic rig (nothing from purchased avatars):
 #   1. Blender builds a cube with a humanoid armature and blend shapes (rig.py)
 #   2. the engine loads it, edits and keys blend shapes, and exports the sidecar and .anim files
-#   3. Unity imports the FBX, applies the sidecar (tools/unity/Editor) and samples the .anim;
+#   3. Unity imports the FBX, applies the sidecar (unity/com.thyllore.avatar) and samples the .anim;
 #      BatchCheck.cs compares the sampled weights with what the engine evaluated
 
 VERIFY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$VERIFY_DIR/../../.." && pwd)"
+REPO_ROOT="$(cd "$VERIFY_DIR/../.." && pwd)"
 WORK_DIR="${UNITY_VERIFY_DIR:-$REPO_ROOT/target/unity_verify}"
 PROJECT_DIR="$WORK_DIR/project"
 UNITY_EDITOR="${UNITY_EDITOR:-$HOME/Unity/Hub/Editor/2022.3.22f1/Editor/Unity}"
@@ -43,9 +43,7 @@ ENGINE_EDITS=(
     "14:key_morph_weights"
 
     "16:add_spring_chains=$SPRING_BONE_PREFIX"
-    "16:export_avatar_sidecar"
-    "16:export_expression_anims"
-    "16:export_morph_track_anim"
+    "16:export_unity_avatar"
 
     "18:dump_morph_track_samples"
 )
@@ -88,20 +86,13 @@ ensure_vrchat_sdk() {
     fi
     echo "installing VRChat SDK"
     (cd "$PROJECT_DIR" && "$VRC_GET" install com.vrchat.avatars --yes)
-    python3 - "$PROJECT_DIR/Packages/manifest.json" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-manifest = json.load(open(path))
-manifest["dependencies"]["com.unity.test-framework"] = "1.1.33"
-json.dump(manifest, open(path, "w"), indent=2)
-PYEOF
 }
 
 sync_scripts() {
-    local editor_dir="$PROJECT_DIR/Assets/Thyllore/Editor"
-    rm -rf "$editor_dir"
+    bash "$REPO_ROOT/unity/sync_package.sh" "$WORK_DIR" >/dev/null
+    local editor_dir="$PROJECT_DIR/Assets/Editor"
+    rm -rf "$editor_dir" "$PROJECT_DIR/Assets/Thyllore" "$PROJECT_DIR/Assets/Thyllore.meta"
     mkdir -p "$editor_dir"
-    cp "$REPO_ROOT/tools/unity/Editor/"*.cs "$editor_dir/"
     cp "$VERIFY_DIR/BatchCheck.cs" "$editor_dir/"
     rm -rf "$PROJECT_DIR/Assets/Avatar" "$PROJECT_DIR/Assets/Avatar.meta"
 }
@@ -149,7 +140,7 @@ run_batch_check() {
     THYLLORE_EXPRESSION_ANIM="$UNITY_EXPORT_DIR/$EXPRESSION_NAME.anim" \
     THYLLORE_MORPH_SAMPLES="$MORPH_SAMPLES_JSON" \
     "$UNITY_EDITOR" -batchmode -nographics -projectPath "$PROJECT_DIR" \
-        -executeMethod Thyllore.AvatarTools.BatchCheck.Run -logFile "$WORK_DIR/batch.log"
+        -executeMethod Thyllore.Avatar.BatchCheck.Run -logFile "$WORK_DIR/batch.log"
     local status=$?
     set -e
 

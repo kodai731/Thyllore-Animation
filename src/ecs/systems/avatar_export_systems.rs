@@ -8,7 +8,9 @@ use thyllore_exporter_core::systems::unity::curves::{morph_track_curves, write_e
 use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, ExpressionLibraryState, TimelineState};
-use crate::ecs::systems::avatar_setup_systems::{find_expression_morph, find_model_path};
+use crate::ecs::systems::avatar_setup_systems::{
+    export_avatar_sidecar, find_expression_morph, find_model_path,
+};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -49,7 +51,13 @@ fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
-pub fn export_expression_anims(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
+pub fn export_unity_avatar(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
+    export_avatar_sidecar(world, assets, graphics);
+    export_expression_anims(world, assets, graphics);
+    export_morph_track_anim(world);
+}
+
+fn export_expression_anims(world: &World, assets: &AssetStorage, graphics: &GraphicsResources) {
     let Some(model_path) = find_model_path(world) else {
         msg_error!("Cannot export expression anims: no model loaded");
         return;
@@ -136,11 +144,11 @@ fn write_export_file(path: &Path, content: String) -> Result<(), String> {
         .map_err(|error| format!("{}: {}", path.display(), error))
 }
 
-pub fn export_morph_track_anim(world: &World, _assets: &AssetStorage) {
+fn export_morph_track_anim(world: &World) {
     let morph_clip = match find_current_morph_track_clip(world) {
         Ok(morph_clip) => morph_clip,
         Err(reason) => {
-            msg_error!("Cannot export morph track anim: {}", reason);
+            msg_info!("Skipped current clip .anim: {}", reason);
             return;
         }
     };

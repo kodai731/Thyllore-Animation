@@ -141,44 +141,16 @@ fn add_spring_chains_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
 }
 
 #[derive(Debug, Default)]
-pub struct ExportAvatarSidecar;
+pub struct ExportUnityAvatar;
 
-impl BatchAction for ExportAvatarSidecar {
+impl BatchAction for ExportUnityAvatar {
     fn name(&self) -> &'static str {
-        "export_avatar_sidecar"
+        "export_unity_avatar"
     }
     fn apply(&self, world: &mut World) {
         world
             .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ExportAvatarSidecar);
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ExportExpressionAnims;
-
-impl BatchAction for ExportExpressionAnims {
-    fn name(&self) -> &'static str {
-        "export_expression_anims"
-    }
-    fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ExportExpressionAnims);
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ExportMorphTrackAnim;
-
-impl BatchAction for ExportMorphTrackAnim {
-    fn name(&self) -> &'static str {
-        "export_morph_track_anim"
-    }
-    fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ExportMorphTrackAnim);
+            .send(UIEvent::ExportUnityAvatar);
     }
 }
 
@@ -199,16 +171,8 @@ crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
 crate::batch_action!("add_spring_chains", add_spring_chains_parse);
 crate::batch_action!(
-    "export_avatar_sidecar",
-    unit_action_parse::<ExportAvatarSidecar>
-);
-crate::batch_action!(
-    "export_expression_anims",
-    unit_action_parse::<ExportExpressionAnims>
-);
-crate::batch_action!(
-    "export_morph_track_anim",
-    unit_action_parse::<ExportMorphTrackAnim>
+    "export_unity_avatar",
+    unit_action_parse::<ExportUnityAvatar>
 );
 crate::batch_action!(
     "dump_morph_track_samples",

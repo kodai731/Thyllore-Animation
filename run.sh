@@ -68,15 +68,23 @@ Commands:
       full-mode env file; WORKER_URL is derived from
       THYLLORE_FEEDBACK_TEST_ENDPOINT when not given.
   unity-verify
-      End-to-end avatar check on a synthetic rig (tools/unity/verify/run.sh):
+      End-to-end avatar check on a synthetic rig (unity/verify/run.sh):
       Blender builds a cube with a humanoid armature and blend shapes, the
       engine (batch run, needs the GPU and a display) edits and keys the blend
       shapes and exports the sidecar and .anim files, Unity (empty project +
-      VRChat SDK via vrc-get) applies tools/unity/Editor/*.cs and BatchCheck
+      VRChat SDK via vrc-get) installs the unity/com.thyllore.avatar package and BatchCheck
       compares the sampled animation with the engine's. UNITY_EDITOR /
       UNITY_VERIFY_DIR / BLENDER override the editor binary, the work dir
       (default target/unity_verify) and the Blender launcher (default
       blender/docker/run_background.sh).
+  unity --model PATH.fbx [--fresh] [--setup-only] [--software-gl]
+      Open the Unity Editor GUI (GameCI 2022.3.22f1 image + VRChat SDK) on
+      the NVIDIA GPU with a scene that already holds the model, the sidecar
+      applied and an Animator with every .anim the engine exported next to
+      the model, so the expression presets can be scrubbed in the Animation
+      window (unity/docker/run_gui.sh). The project persists in
+      target/unity_gui; UNITY_GUI_DIR overrides it:
+        ./run.sh unity --model assets/models/purchased/Shinano_ver1.02/FBX/Shinano.fbx
   help
       Show this help.
 EOF
@@ -134,7 +142,10 @@ case "$command" in
         exec bash "$REPO_ROOT/src/ml/worker/smoke.sh" "$@"
         ;;
     unity-verify)
-        exec bash "$REPO_ROOT/tools/unity/verify/run.sh" "$@"
+        exec bash "$REPO_ROOT/unity/verify/run.sh" "$@"
+        ;;
+    unity)
+        exec bash "$REPO_ROOT/unity/docker/run_gui.sh" "$@"
         ;;
     help|-h|--help)
         usage

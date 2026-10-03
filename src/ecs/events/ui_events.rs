@@ -480,6 +480,9 @@ pub enum UIEvent {
         entity: Entity,
         name: String,
     },
+    RemoveExpressionPreset {
+        preset_index: usize,
+    },
     SaveExpressionLibrary,
     KeyMorphWeights {
         entity: Entity,
@@ -491,12 +494,10 @@ pub enum UIEvent {
     },
     SaveHumanoidMapping,
     SetAvatarRankPlatform(Platform),
-    ExportAvatarSidecar,
+    ExportUnityAvatar,
     AddSpringChainsByPrefix {
         prefix: String,
     },
-    ExportExpressionAnims,
-    ExportMorphTrackAnim,
     PickMaterialTexture {
         material: String,
     },

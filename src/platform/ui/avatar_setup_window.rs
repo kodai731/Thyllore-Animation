@@ -256,15 +256,10 @@ fn rank_color(rank: PerformanceRank) -> [f32; 4] {
 }
 
 fn build_export_tab(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &mut AvatarSetupState) {
-    if ui.button("Write sidecar JSON") {
-        ui_events.send(UIEvent::ExportAvatarSidecar);
+    if ui.button("Export for Unity") {
+        ui_events.send(UIEvent::ExportUnityAvatar);
     }
-    if ui.button("Write expression .anim files") {
-        ui_events.send(UIEvent::ExportExpressionAnims);
-    }
-    if ui.button("Write current clip .anim") {
-        ui_events.send(UIEvent::ExportMorphTrackAnim);
-    }
+    ui.text_disabled("sidecar JSON, expression .anim files, current clip .anim");
     ui.separator();
 
     ui.input_text("Bone name prefix", &mut state.spring_prefix)

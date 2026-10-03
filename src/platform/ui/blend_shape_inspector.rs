@@ -9,7 +9,8 @@ use crate::ecs::component::MorphWeights;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
 use crate::ecs::systems::{
-    find_deforming_morph_channels, find_mesh_morph, find_morph_channel_names, find_morph_siblings,
+    find_deforming_morph_channels, find_expression_morph_entity, find_mesh_morph,
+    find_morph_channel_names, find_morph_siblings,
 };
 use crate::ecs::world::{Children, Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -72,8 +73,11 @@ pub fn build_blend_shape_section(
             },
             &mut inspector_state,
         );
-        build_presets_section(ui, ui_events, world, representative);
         id_token.end();
+    }
+
+    if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
+        build_presets_section(ui, ui_events, world, expression_entity);
     }
 }
 
@@ -241,6 +245,12 @@ fn build_presets_section(
         if ui.small_button(format!("Apply##preset_{}", index)) {
             ui_events.send(UIEvent::ApplyExpressionPreset {
                 entity,
+                preset_index: index,
+            });
+        }
+        ui.same_line();
+        if ui.small_button(format!("Remove##preset_{}", index)) {
+            ui_events.send(UIEvent::RemoveExpressionPreset {
                 preset_index: index,
             });
         }

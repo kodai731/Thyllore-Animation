@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace Thyllore.AvatarTools
+namespace Thyllore.Avatar
 {
     [Serializable]
     public class AvatarSidecar
@@ -30,6 +30,9 @@ namespace Thyllore.AvatarTools
 
         [JsonProperty("spring_chains")]
         public List<SidecarSpringChain> spring_chains = new List<SidecarSpringChain>();
+
+        [JsonProperty("materials")]
+        public Dictionary<string, string> materials = new Dictionary<string, string>();
 
         [JsonProperty("stats")]
         public AvatarStats stats = new AvatarStats();
@@ -113,7 +116,7 @@ namespace Thyllore.AvatarTools
 
     public static class AvatarSidecarLoader
     {
-        public const int SupportedSchema = 1;
+        public const int SupportedSchema = 2;
 
         public static AvatarSidecar Load(string path)
         {

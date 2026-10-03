@@ -177,6 +177,7 @@ pub struct UiAttributes {
     pub max: Option<Expr>,
     pub format: Option<LitStr>,
     pub group: Option<LitStr>,
+    pub label: Option<LitStr>,
 }
 
 pub fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
@@ -370,6 +371,8 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
             ui.format = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("group") {
             ui.group = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("label") {
+            ui.label = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("primary") {
             ui.primary = true;
         } else {
@@ -781,6 +784,10 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
         .as_ref()
         .map_or_else(|| "%.2f".to_string(), LitStr::value);
     let group = ui.group.as_ref().map_or_else(String::new, LitStr::value);
+    let label = match &ui.label {
+        Some(label) => quote!(Some(#label)),
+        None => quote!(None),
+    };
     let tooltip = &param.doc;
     let primary = ui.primary;
 
@@ -789,7 +796,7 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
             name: ::thyllore_scene_core::intern_name(prefix, #field_name),
             path: ::thyllore_scene_core::intern_name(path_prefix, #field_name),
             group: #group,
-            label: None,
+            label: #label,
             kind: ::thyllore_scene_core::UiKind::#kind,
             min: #min,
             max: #max,

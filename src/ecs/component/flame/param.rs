@@ -179,7 +179,7 @@ pub static FLAME_CHANNELS: [ScalarChannel; FlameParam::ALL.len()] = {
 
 pub static FLAME_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Flame",
-    channels: &FLAME_CHANNELS,
+    channel_table: || &FLAME_CHANNELS,
     has_component: flame_has_component,
     entities: flame_entities,
     read: flame_channel_read,

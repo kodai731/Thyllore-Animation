@@ -5,7 +5,7 @@ use crate::ecs::component::scalar_channel_domains;
 fn scalar_channel_table() -> String {
     let mut lines: Vec<String> = Vec::new();
     for domain in scalar_channel_domains() {
-        for (i, channel) in domain.channels.iter().enumerate() {
+        for (i, channel) in domain.channels().iter().enumerate() {
             let code = domain.property_type_at(i);
             let PropertyType::Custom(code_value) = code else {
                 unreachable!("property_type_at always returns Custom");

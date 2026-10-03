@@ -120,7 +120,7 @@ pub static LIGHTNING_CHANNELS: [ScalarChannel; LIGHTNING_PARAM_COUNT] = {
 
 pub static LIGHTNING_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Lightning",
-    channels: &LIGHTNING_CHANNELS,
+    channel_table: || &LIGHTNING_CHANNELS,
     has_component: lightning_has_component,
     entities: lightning_entities,
     read: lightning_channel_read,

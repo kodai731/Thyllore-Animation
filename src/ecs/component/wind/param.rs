@@ -316,7 +316,7 @@ pub static WIND_CHANNELS: [ScalarChannel; WindParam::ALL.len()] = {
 
 pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Wind",
-    channels: &WIND_CHANNELS,
+    channel_table: || &WIND_CHANNELS,
     has_component: wind_has_component,
     entities: wind_entities,
     read: wind_channel_read,

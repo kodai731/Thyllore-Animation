@@ -84,3 +84,43 @@ pub(crate) fn encode_triangle_polygon_indices(indices: &[u32]) -> Vec<i32> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_triangle_polygon_indices() {
+        let indices = vec![0, 1, 2, 3, 4, 5];
+        let encoded = encode_triangle_polygon_indices(&indices);
+        assert_eq!(encoded, vec![0, 1, -3, 3, 4, -6]);
+    }
+
+    #[test]
+    fn test_encode_triangle_polygon_indices_single() {
+        let indices = vec![0, 1, 2];
+        let encoded = encode_triangle_polygon_indices(&indices);
+        assert_eq!(encoded, vec![0, 1, -3]);
+    }
+
+    #[test]
+    fn test_convert_uvs_to_fbx_flip() {
+        let mut fbx_data = FbxData::new();
+        fbx_data.tex_coords = vec![[0.5, 0.3]];
+        let uv_values = convert_uvs_to_fbx(&fbx_data);
+        assert!((uv_values[0] - 0.5).abs() < 1e-6);
+        assert!((uv_values[1] - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_convert_positions_to_fbx_no_scale() {
+        let mut fbx_data = FbxData::new();
+        fbx_data.positions = vec![cgmath::Vector3::new(0.01, 0.02, 0.03)];
+        fbx_data.local_positions = vec![];
+
+        let positions = convert_positions_to_fbx(&fbx_data, 1.0);
+        assert!((positions[0] - 0.01).abs() < 1e-6);
+        assert!((positions[1] - 0.02).abs() < 1e-6);
+        assert!((positions[2] - 0.03).abs() < 1e-6);
+    }
+}

@@ -561,6 +561,8 @@ pub struct UIEventQueue {
     events: Vec<UIEvent>,
 }
 
+crate::startup_resource!(UIEventQueue, Editor);
+
 impl UIEventQueue {
     pub fn new() -> Self {
         Self { events: Vec::new() }

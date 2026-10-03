@@ -8,17 +8,6 @@ pub enum StartupPhase {
     Ml,
 }
 
-impl StartupPhase {
-    pub fn label(self) -> &'static str {
-        match self {
-            StartupPhase::CoreResources => "core_resources",
-            StartupPhase::Editor => "editor",
-            StartupPhase::PostProcessing => "post_processing",
-            StartupPhase::Ml => "ml",
-        }
-    }
-}
-
 pub type StartupRunFn = fn(&mut World);
 
 #[derive(Clone, Copy)]

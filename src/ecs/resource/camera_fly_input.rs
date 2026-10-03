@@ -6,3 +6,5 @@ pub struct CameraFlyInput {
     pub boost: bool,
     pub delta_seconds: f32,
 }
+
+crate::startup_resource!(CameraFlyInput, Editor);

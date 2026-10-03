@@ -20,3 +20,5 @@ pub struct HierarchyState {
     pub selected_bone_id: Option<BoneId>,
     pub expanded_bone_ids: HashSet<BoneId>,
 }
+
+crate::startup_resource!(HierarchyState, Editor);

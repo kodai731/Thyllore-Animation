@@ -75,6 +75,8 @@ pub struct CurveEditorState {
     pub needs_focus: bool,
 }
 
+crate::startup_resource!(CurveEditorState, Editor);
+
 impl CurveEditorState {
     pub fn selected_bone_id(&self) -> Option<BoneId> {
         match self.selected_target {

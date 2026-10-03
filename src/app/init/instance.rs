@@ -9,8 +9,8 @@ use crate::ecs::systems::{
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
-    ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
-    ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
+    ClipLibrary, GpuDescriptors, LightState, MaterialRegistry, MeshAssets, ModelState, NodeAssets,
+    PipelineManager, SceneState, TimelineState,
 };
 use crate::hooks::startup::{run_startup_phase, StartupPhase};
 use crate::vulkanr::command::*;
@@ -1178,43 +1178,7 @@ impl App {
     }
 
     fn register_editor_resources(data: &mut AppData) {
-        Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::EntityRemovalQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::CameraFlyInput>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ViewportInput>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ImGuiInputCapture>(data);
-        Self::insert_default_if_missing::<HierarchyState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ObjectIdReadback>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::CurveEditorState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::TimelineInteractionState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::KeyframeCopyBuffer>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::CurveEditorBuffer>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ClipBrowserState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::BonePoseOverride>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::SpringBoneState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FrameClock>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AppExit>(data);
-
-        if !data.ecs_world.contains_resource::<TimelineState>() {
-            data.ecs_world.insert_resource(TimelineState::new());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::EditHistory>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::EditHistory::new(100));
-        }
+        run_startup_phase(&mut data.ecs_world, StartupPhase::Editor);
     }
 
     fn register_post_processing_resources(data: &mut AppData) {
@@ -1253,12 +1217,6 @@ impl App {
             model_kind: InferenceModelKind::CurveCopilot,
             enabled: true,
         });
-    }
-
-    fn insert_default_if_missing<T: Default + 'static>(data: &mut AppData) {
-        if !data.ecs_world.contains_resource::<T>() {
-            data.ecs_world.insert_resource(T::default());
-        }
     }
 
     pub unsafe fn init_imgui_rendering(

@@ -4,6 +4,6 @@ namespace Thyllore.Avatar
     {
         public const string Name = "com.thyllore.avatar";
         public const string DisplayName = "Thyllore Avatar";
-        public const string MenuRoot = "Tools/" + DisplayName + "/";
+        public const string MenuRoot = "Tools/Thyllore/Avatar/";
     }
 }

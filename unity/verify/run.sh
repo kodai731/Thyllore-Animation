@@ -91,7 +91,7 @@ ensure_vrchat_sdk() {
 sync_scripts() {
     bash "$REPO_ROOT/unity/sync_package.sh" "$WORK_DIR" >/dev/null
     local editor_dir="$PROJECT_DIR/Assets/Editor"
-    rm -rf "$editor_dir"
+    rm -rf "$editor_dir" "$PROJECT_DIR/Assets/Thyllore" "$PROJECT_DIR/Assets/Thyllore.meta"
     mkdir -p "$editor_dir"
     cp "$VERIFY_DIR/BatchCheck.cs" "$editor_dir/"
     rm -rf "$PROJECT_DIR/Assets/Avatar" "$PROJECT_DIR/Assets/Avatar.meta"

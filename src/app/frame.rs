@@ -4,7 +4,10 @@ use anyhow::Result;
 
 use crate::app::App;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::CpuFrameTimings;
+use crate::ecs::resource::{
+    CpuFrameTimings, STAGE_EVENT_DISPATCH, STAGE_GPU_WAIT, STAGE_IMGUI_BUILD, STAGE_PRESENT,
+    STAGE_RENDER_CPU, STAGE_UPDATE,
+};
 use crate::ecs::systems::phases::{run_event_dispatch_phase, run_last_phase};
 
 pub struct FrameInput<'a> {
@@ -20,7 +23,7 @@ impl App {
         input: FrameInput<'_>,
         queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
     ) -> Result<()> {
-        self.dispatch_ui_events(queue_file_dialog_commands);
+        let event_dispatch_ms = self.dispatch_ui_events(queue_file_dialog_commands);
 
         let gpu_wait_start = Instant::now();
         let image_index = self.begin_frame()?;
@@ -31,8 +34,8 @@ impl App {
         let update_ms = update_start.elapsed().as_secs_f32() * 1000.0;
 
         let render_cpu_start = Instant::now();
-        self.render(image_index, input.draw_data)?;
-        let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0;
+        let present_ms = self.render(image_index, input.draw_data)?;
+        let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0 - present_ms;
 
         run_last_phase(&self.data.ecs_world, |slot| {
             self.capture_context(image_index, slot)
@@ -42,10 +45,12 @@ impl App {
             frame: self.frame as u64,
             dt_ms: input.dt_ms,
             stages: vec![
-                ("imgui_build".to_string(), input.imgui_build_ms),
-                ("gpu_wait".to_string(), gpu_wait_ms),
-                ("update".to_string(), update_ms),
-                ("render_cpu".to_string(), render_cpu_ms),
+                (STAGE_IMGUI_BUILD.to_string(), input.imgui_build_ms),
+                (STAGE_EVENT_DISPATCH.to_string(), event_dispatch_ms),
+                (STAGE_GPU_WAIT.to_string(), gpu_wait_ms),
+                (STAGE_UPDATE.to_string(), update_ms),
+                (STAGE_RENDER_CPU.to_string(), render_cpu_ms),
+                (STAGE_PRESENT.to_string(), present_ms),
             ],
             imgui_vtx: input.draw_data.total_vtx_count as u32,
             imgui_idx: input.draw_data.total_idx_count as u32,
@@ -56,7 +61,8 @@ impl App {
     unsafe fn dispatch_ui_events(
         &mut self,
         queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
-    ) {
+    ) -> f32 {
+        let start = Instant::now();
         let file_dialog_events = run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
@@ -65,5 +71,6 @@ impl App {
         queue_file_dialog_commands(&file_dialog_events, self);
 
         self.apply_app_commands();
+        start.elapsed().as_secs_f32() * 1000.0
     }
 }

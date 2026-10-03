@@ -149,6 +149,9 @@ impl Drop for GrpcServerProcess {
     }
 }
 
+#[cfg(feature = "text-to-motion")]
+crate::startup_resource!(GrpcServerProcess, CoreResources);
+
 fn kill_wsl_server() {
     let _ = Command::new("wsl")
         .args(["--", "pkill", "-f", "anim_ml.server.service"])

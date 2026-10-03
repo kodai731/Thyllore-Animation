@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
 use crate::animation::BoneId;
-use crate::ecs::world::Entity;
+use crate::ecs::world::{Entity, World};
 
 pub use thyllore_anim_core::editable::SnapSettings;
 
@@ -103,6 +103,14 @@ pub struct TimelineState {
     /// frame. Lets the timeline range cover drag-extended instances whose
     /// source clip is shorter (or empty).
     pub schedule_extent_seconds: f32,
+}
+
+crate::startup_hook!("TimelineState", Editor, insert_timeline_state_if_missing);
+
+fn insert_timeline_state_if_missing(world: &mut World) {
+    if !world.contains_resource::<TimelineState>() {
+        world.insert_resource(TimelineState::new());
+    }
 }
 
 impl TimelineState {

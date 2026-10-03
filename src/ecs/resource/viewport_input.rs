@@ -6,3 +6,5 @@ pub struct ViewportInput {
     pub focused: bool,
     pub resize_pending: Option<(u32, u32)>,
 }
+
+crate::startup_resource!(ViewportInput, Editor);

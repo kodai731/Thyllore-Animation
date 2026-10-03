@@ -17,3 +17,5 @@ pub struct ObjectIdReadback {
     pub is_shift: bool,
     pub is_ctrl: bool,
 }
+
+crate::startup_resource!(ObjectIdReadback, Editor);

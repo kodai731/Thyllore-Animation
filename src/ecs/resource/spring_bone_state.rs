@@ -66,3 +66,5 @@ impl Default for SpringBoneState {
         }
     }
 }
+
+crate::startup_resource!(SpringBoneState, Editor);

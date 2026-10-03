@@ -11,6 +11,8 @@ pub struct MouseInput {
     prev_drag_pos: Option<[f32; 2]>,
 }
 
+crate::startup_resource!(MouseInput, Editor);
+
 impl MouseInput {
     pub fn compute_drag_delta(&mut self, imgui_wants_mouse: bool, viewport_hovered: bool) {
         self.delta = [0.0, 0.0];

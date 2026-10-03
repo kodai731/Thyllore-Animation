@@ -20,3 +20,5 @@ impl Default for LightState {
         }
     }
 }
+
+crate::startup_resource!(LightState, CoreResources);

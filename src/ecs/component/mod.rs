@@ -18,6 +18,8 @@ mod morph_weights;
 mod motion_path;
 mod render;
 mod scalar_channel;
+#[cfg(test)]
+mod scalar_channel_golden;
 mod spring_bone;
 mod water;
 mod wind;

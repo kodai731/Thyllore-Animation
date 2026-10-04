@@ -1,13 +1,13 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AppliedFlameStyle, FlameEffect, FlameParam};
+use crate::ecs::component::{AppliedFlameStyle, FlameEffect};
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{BatchRun, ClipLibrary, FlameWallProbeCapture, HierarchyState};
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
 
 use super::test_support::{
-    flame_with_keyed_clip, ray_towards_origin, spawn_default_flame, wall_probe_overrides,
-    world_with_flame_at,
+    flame_height_property, flame_with_keyed_clip, ray_towards_origin, spawn_default_flame,
+    wall_probe_overrides, world_with_flame_at,
 };
 use super::*;
 use crate::ecs::component::EditorDisplay;
@@ -167,7 +167,7 @@ fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
     let curve = library
         .get(clip_id)
         .expect("scheduled clip is in the library")
-        .get_scalar_curve(FlameParam::Height.property_type())
+        .get_scalar_curve(flame_height_property())
         .expect("keyed curve restored");
     assert_eq!(curve.keyframes.len(), 1);
     assert_eq!(curve.keyframes[0].interpolation, InterpolationType::Bezier);

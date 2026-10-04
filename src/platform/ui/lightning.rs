@@ -3,7 +3,7 @@ use std::rc::Rc;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::{
-    AppliedLightningPreset, LightningEffect, LightningParam, LightningPath, LightningTarget,
+    AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, LIGHTNING_DOMAIN,
 };
 use crate::ecs::resource::{
     LightningDebugCapture, LightningDebugView, LightningRenderSettings, LightningShadingMode,
@@ -23,7 +23,9 @@ fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            LightningParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            LIGHTNING_DOMAIN
+                .property_type_for_cli_name(name)
+                .map(|property_type| (property_type, *value))
         })
         .collect();
     send_key_button(ui, ecs_world, edited, keys);

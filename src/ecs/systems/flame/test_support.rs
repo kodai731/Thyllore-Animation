@@ -1,8 +1,9 @@
 use cgmath::Vector3;
+use thyllore_anim_core::editable::PropertyType;
 
 use super::{spawn_flame, spawn_flame_with_clip, DEFAULT_FLAME_NAME};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{FlameEffect, FlameParam};
+use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::resource::{ClipLibrary, PickRay};
 use crate::ecs::systems::{resolve_engine_cli_overrides, EngineCliOverrides};
 use crate::ecs::world::{Entity, World};
@@ -14,6 +15,12 @@ pub(super) fn spawn_default_flame(world: &mut World, name: &str) -> Entity {
     spawn_flame(world, name, FlameEffect::default())
 }
 
+pub(super) fn flame_height_property() -> PropertyType {
+    FLAME_DOMAIN
+        .property_type_for_cli_name("height")
+        .expect("flame declares a height channel")
+}
+
 pub(super) fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity {
     use thyllore_anim_core::editable::{curve_add_keyframe, InterpolationType};
 
@@ -21,7 +28,7 @@ pub(super) fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage
     let clip_id = crate::ecs::systems::find_entity_clip_id(world, entity).expect("flame clip");
     let mut library = world.resource_mut::<ClipLibrary>();
     let clip = library.get_mut(clip_id).expect("clip registered");
-    let curve = clip.get_or_add_scalar_curve(FlameParam::Height.property_type());
+    let curve = clip.get_or_add_scalar_curve(flame_height_property());
     let key = curve_add_keyframe(curve, 1.0, 2.0);
     curve
         .get_keyframe_mut(key)

@@ -1,6 +1,6 @@
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::FlameParam;
+use crate::ecs::component::FLAME_DOMAIN;
 use crate::ecs::resource::{FlameUIState, ViewportInput};
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
@@ -15,7 +15,9 @@ fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            FLAME_DOMAIN
+                .property_type_for_cli_name(name)
+                .map(|property_type| (property_type, *value))
         })
         .collect();
     send_key_button(ui, ecs_world, edited, keys);

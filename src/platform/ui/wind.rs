@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{AppliedWindPreset, WindParam, WindTornadoEffect};
+use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
@@ -18,7 +18,9 @@ fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
-            WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+            WIND_DOMAIN
+                .property_type_for_cli_name(name)
+                .map(|property_type| (property_type, *value))
         })
         .collect();
     send_key_button(ui, ecs_world, edited, keys);

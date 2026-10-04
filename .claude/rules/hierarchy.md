@@ -321,21 +321,29 @@ Concretely:
   of a stage in name order, timing each under `<name>_<stage>`. A shared system that only touches one
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
-- Animatable scalar fields reach the curve editor, timeline, batch CLI and scene files through
-  `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
-  `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
-  `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
-  never lists them. A channel never carries a hand-written `Custom` code: the domain derives it as the
-  block's `first_code` plus the channel's position in `channels` (`ScalarChannelDomain::property_type_at`),
-  so a new channel is appended to the end of the table and existing ones are never reordered or removed.
-  Tests of the shared clip, timeline, dispatch and batch code use the test-only
-  `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
-  `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
+- Animatable scalar fields reach the curve editor, timeline, batch CLI and clip files through
+  `ScalarDomainSource` (`src/ecs/component/effect_scalar_domain.rs`): each effect writes
+  `scalar_channel_domain!(MY_DOMAIN)` next to its static domain and `scalar_channel_domains()` collects
+  them at link time. A field becomes a channel with `#[persist(curve)]` in effect-core (every component of
+  a `[f32; N]` exposed with `scalars` / `ui`); nothing carries a number. The `PropertyType::Custom` code
+  of a channel is process-local: the registry gives each domain `CODES_PER_DOMAIN` codes by its position
+  in name order and the channel takes its position in declaration order (`collect_scalars`, nested
+  structs expanded in place), so adding, moving or removing a field renumbers nothing on disk. Clip files
+  (`AnimationClipFile.scalar_curves`) key a curve by the channel's `cli_name`; `src/scene/clip_io.rs`
+  resolves names on save and load, and a renamed channel keeps its old name loadable through
+  `#[persist(renamed_from = [..])]` (one former name per component of a `[f32; N]`). Each effect builds
+  its domain from one `scalar_domain.rs` (`src/ecs/component/<effect>/scalar_domain.rs`) implementing
+  `ScalarDomainSource` (name, tables, local time); display name / debug range / get / set come from the
+  effect-core derive (`#[persist(curve, debug_range = (lo, hi), ui(label = ..))]`). The registry tests
+  only check that names are unique across domains and that a domain fits its code range; there is no
+  golden table. Tests of the shared clip, timeline, dispatch and
+  batch code use the test-only `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support`
+  (built on the `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
   never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
   (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
 - Components and resources of an effect live in `src/ecs/component/<effect>/` and
-  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `param.rs`, `render_targets.rs`,
+  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `scalar_domain.rs`, `render_targets.rs`,
   `batch.rs`, ...), never as `<effect>_*.rs` files in the shared directory.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
   `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.

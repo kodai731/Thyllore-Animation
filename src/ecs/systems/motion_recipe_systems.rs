@@ -16,7 +16,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::resource::{
     AnimationType, AvatarSetupState, ClipLibrary, HierarchyState, RecipeClipSource,
-    RecipeClipSources,
+    RecipeClipSources, TimelineState,
 };
 use crate::ecs::systems::avatar_setup_systems::{
     compute_bone_global_transform, find_first_skeleton, find_model_path, load_or_infer_mapping,
@@ -189,15 +189,7 @@ pub fn apply_recipe_file(
         .resource::<ClipLibrary>()
         .find_source_by_name(&clip_name);
     if let Some(replaced_id) = replaced_id {
-        world.resource_mut::<ClipLibrary>().remove(replaced_id);
-        world
-            .resource_mut::<ClipLibrary>()
-            .source_to_asset_id
-            .remove(&replaced_id);
-        remove_clip_instances(world, replaced_id);
-        if let Some(ref mut recipe_sources) = world.get_resource_mut::<RecipeClipSources>() {
-            recipe_sources.by_clip.remove(&replaced_id);
-        }
+        remove_recipe_clip(world, replaced_id);
     }
 
     let source_id =
@@ -221,6 +213,9 @@ pub fn apply_recipe_file(
             "recipe {}: clip '{clip_name}' registered but no model clip schedule was found",
             path.display()
         );
+        if let Some(ref mut timeline) = world.get_resource_mut::<TimelineState>() {
+            timeline.current_clip_id = Some(source_id);
+        }
         return Ok(source_id);
     };
     clip_schedule_add_instance(schedule, source_id, duration);
@@ -228,6 +223,10 @@ pub fn apply_recipe_file(
         "recipe {}: clip '{clip_name}' (src {source_id}) scheduled",
         path.display()
     );
+
+    if let Some(ref mut timeline) = world.get_resource_mut::<TimelineState>() {
+        timeline.current_clip_id = Some(source_id);
+    }
 
     Ok(source_id)
 }
@@ -270,6 +269,18 @@ fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
         for instance_id in instance_ids {
             clip_schedule_remove_instance(schedule, instance_id);
         }
+    }
+}
+
+fn remove_recipe_clip(world: &mut World, clip: SourceClipId) {
+    world.resource_mut::<ClipLibrary>().remove(clip);
+    world
+        .resource_mut::<ClipLibrary>()
+        .source_to_asset_id
+        .remove(&clip);
+    remove_clip_instances(world, clip);
+    if let Some(ref mut recipe_sources) = world.get_resource_mut::<RecipeClipSources>() {
+        recipe_sources.by_clip.remove(&clip);
     }
 }
 
@@ -347,16 +358,7 @@ pub fn rebake_recipe_clip(
         .and_then(|recipe_sources| recipe_sources.by_clip.get(&clip).map(|s| s.path.clone()))
         .with_context(|| format!("clip {clip} has no recipe source"))?;
 
-    world.resource_mut::<ClipLibrary>().remove(clip);
-    world
-        .resource_mut::<ClipLibrary>()
-        .source_to_asset_id
-        .remove(&clip);
-    remove_clip_instances(world, clip);
-    world
-        .resource_mut::<RecipeClipSources>()
-        .by_clip
-        .remove(&clip);
+    remove_recipe_clip(world, clip);
 
     apply_recipe_file(world, assets, &path)
 }
@@ -740,6 +742,7 @@ mod tests {
     #[test]
     fn test_set_pose_rotation_rewrites_recipe_and_rebakes() {
         let (mut world, mut assets) = make_recipe_world(1);
+        world.insert_resource(TimelineState::new());
         let copy_path = copy_wave_recipe_to_temp();
 
         let id = apply_recipe_file(&mut world, &mut assets, &copy_path).unwrap();
@@ -771,6 +774,11 @@ mod tests {
                 .zip(new_rotation.iter())
                 .any(|(old, new)| (old - new).abs() > 1e-3),
             "rotation near t=0.4 should change: before {old_rotation:?}, after {new_rotation:?}"
+        );
+
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(new_id)
         );
 
         std::fs::remove_file(&copy_path).ok();

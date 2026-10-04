@@ -156,6 +156,9 @@ fn dispatch_timeline_events(events: &[TimelineEvent], world: &mut World, assets:
 
     if modified {
         transition_to_baked_override_if_needed(world);
+        if let Some(cid) = clip_id {
+            crate::ecs::systems::motion_recipe_systems::detach_recipe_clip(world, cid);
+        }
     }
 
     for event in events {

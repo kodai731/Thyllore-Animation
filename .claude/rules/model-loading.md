@@ -21,5 +21,5 @@ paths:
   default model, edit the scene file, not the code.
 - Sample models live under `assets/models/<name>/`; textures are resolved relative to the model file
   (`src/app/model/texture.rs`).
-- At runtime a model is loaded through `AppCommand::LoadModel` / `LoadModelAdditive`, applied by `App` in
-  `src/app/command.rs`; the platform layer only records the command.
+- At runtime a model is loaded through `SceneLoadCommand::LoadModel` / `LoadModelAdditive`, pushed to
+  `SceneLoadQueue` and applied by `App` in `src/app/command.rs`.

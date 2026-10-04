@@ -1,90 +1,92 @@
 use crate::app::{features::export_actions, App};
+use crate::ecs::resource::{
+    AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand,
+    SceneLoadCommand,
+};
 #[cfg(feature = "auto-rig")]
-use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{AppCommand, ClipLibrary};
-#[cfg(feature = "auto-rig")]
-use crate::ecs::UIEventQueue;
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 
-pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
+pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
+    for command in take_queued_commands::<EntityRemovalCommand>(app) {
+        apply_entity_removal_command(app, command);
+    }
+
+    for command in take_queued_commands::<SceneLoadCommand>(app) {
+        apply_scene_load_command(app, command);
+    }
+
+    for command in take_queued_commands::<AssetEditCommand>(app) {
+        apply_asset_edit_command(app, command);
+    }
+
+    for command in take_queued_commands::<OutputCommand>(app) {
+        apply_output_command(app, command);
+    }
+}
+
+fn take_queued_commands<C: 'static>(app: &App) -> Vec<C> {
+    app.data.ecs_world.resource_mut::<CommandQueue<C>>().take()
+}
+
+unsafe fn apply_entity_removal_command(app: &mut App, command: EntityRemovalCommand) {
     match command {
-        AppCommand::LoadModel { path } => {
+        EntityRemovalCommand::DeleteEntities { entities } => {
+            if let Err(e) = app.delete_entities(&entities) {
+                log_error!("Failed to delete entities: {:?}", e);
+            }
+        }
+    }
+}
+
+unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
+    match command {
+        SceneLoadCommand::LoadModel { path } => {
             if let Err(e) = app.load_model(&path) {
                 log_error!("Failed to load model: {:?}", e);
             }
         }
 
-        AppCommand::LoadModelAdditive { path } => {
+        SceneLoadCommand::LoadModelAdditive { path } => {
             if let Err(e) = app.load_model_additive(&path) {
                 log_error!("Failed to add model: {:?}", e);
             }
         }
 
-        AppCommand::SpawnDebugPrimitive { kind } => {
+        #[cfg(feature = "auto-rig")]
+        SceneLoadCommand::LoadModelFromMemory { glb_data, source } => {
+            match app.load_model_from_glb(&glb_data) {
+                Ok(()) => {
+                    log!(
+                        "SceneLoadCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
+                        source
+                    );
+                    app.data
+                        .ecs_world
+                        .send_command(AutoRigEvent::ModelLoadedFromMemory { source });
+                }
+                Err(e) => {
+                    log_error!("Failed to load generated mesh: {}", e);
+                    let mut state = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::TextToMeshState>();
+                    state.status = crate::ecs::resource::TextToMeshStatus::Error;
+                    state.error_message = Some(format!("Failed to load GLB: {}", e));
+                }
+            }
+        }
+
+        SceneLoadCommand::SpawnDebugPrimitive { kind } => {
             if let Err(e) = app.spawn_debug_primitive(kind) {
                 log_error!("Failed to spawn debug primitive: {:?}", e);
             }
         }
+    }
+}
 
-        AppCommand::DeleteEntities { entities } => {
-            if let Err(e) = app.delete_entities(&entities) {
-                log_error!("Failed to delete entities: {:?}", e);
-            }
-        }
-
-        AppCommand::AssignMaterialTexture { material, path } => {
-            crate::ecs::systems::set_material_texture(
-                &mut app.data.ecs_world,
-                &material,
-                Some(&path),
-            );
-        }
-
-        AppCommand::TakeScreenshot => {
-            log!("Taking screenshot...");
-            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
-            match app.save_screenshot(image_index) {
-                Ok(path) => msg_info!("Screenshot saved: {}", path),
-                Err(e) => log_error!("Screenshot failed: {:?}", e),
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        AppCommand::DebugShadowInfo => {
-            crate::debugview::log_shadow_debug_info(
-                &app.data.ecs_world,
-                &app.data.raytracing,
-                &app.data.graphics_resources,
-            );
-        }
-
-        #[cfg(debug_assertions)]
-        AppCommand::DebugBillboardDepth => {
-            crate::debugview::collect_and_log_billboard_debug(
-                &app.data.ecs_world,
-                &app.data.raytracing,
-            );
-        }
-
-        AppCommand::DumpDebugInfo => {
-            app.dump_debug_info();
-        }
-
-        AppCommand::CaptureNow(capture) => {
-            app.capture_now(capture.as_ref());
-        }
-
-        AppCommand::DumpAnimationDebug => {
-            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-            if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
-                &app.data.ecs_world,
-                &app.data.ecs_assets,
-                &*clip_library,
-            ) {
-                log_warn!("Animation debug dump failed: {:?}", e);
-            }
-        }
-
-        AppCommand::LoadClipFromFile { path } => {
+unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
+    match command {
+        AssetEditCommand::LoadClipFromFile { path } => {
             let bone_name_to_id = app
                 .data
                 .ecs_assets
@@ -105,7 +107,64 @@ pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
             }
         }
 
-        AppCommand::SaveClipToFile { source_id, path } => {
+        AssetEditCommand::AssignMaterialTexture { material, path } => {
+            crate::ecs::systems::set_material_texture(
+                &mut app.data.ecs_world,
+                &material,
+                Some(&path),
+            );
+        }
+    }
+}
+
+unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
+    match command {
+        OutputCommand::TakeScreenshot => {
+            log!("Taking screenshot...");
+            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+            match app.save_screenshot(image_index) {
+                Ok(path) => msg_info!("Screenshot saved: {}", path),
+                Err(e) => log_error!("Screenshot failed: {:?}", e),
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        OutputCommand::DebugShadowInfo => {
+            crate::debugview::log_shadow_debug_info(
+                &app.data.ecs_world,
+                &app.data.raytracing,
+                &app.data.graphics_resources,
+            );
+        }
+
+        #[cfg(debug_assertions)]
+        OutputCommand::DebugBillboardDepth => {
+            crate::debugview::collect_and_log_billboard_debug(
+                &app.data.ecs_world,
+                &app.data.raytracing,
+            );
+        }
+
+        OutputCommand::DumpDebugInfo => {
+            app.dump_debug_info();
+        }
+
+        OutputCommand::CaptureNow(capture) => {
+            app.capture_now(capture.as_ref());
+        }
+
+        OutputCommand::DumpAnimationDebug => {
+            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+            if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+                &*clip_library,
+            ) {
+                log_warn!("Animation debug dump failed: {:?}", e);
+            }
+        }
+
+        OutputCommand::SaveClipToFile { source_id, path } => {
             use crate::ecs::systems::clip_library_systems::{
                 clip_library_save_to_file, clip_library_update_save_metadata,
             };
@@ -125,7 +184,7 @@ pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
             }
         }
 
-        AppCommand::SaveSpringBoneBake { baked_id, path } => {
+        OutputCommand::SaveSpringBoneBake { baked_id, path } => {
             use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
 
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
@@ -135,41 +194,18 @@ pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
             }
         }
 
-        AppCommand::ExportClipFbx { source_id, path } => {
+        OutputCommand::ExportClipFbx { source_id, path } => {
             export_actions::export_clip_fbx(app, source_id, &path)
         }
 
-        AppCommand::ExportClipGltf { source_id, path } => {
+        OutputCommand::ExportClipGltf { source_id, path } => {
             export_actions::export_clip_gltf(app, source_id, &path)
         }
 
-        AppCommand::ExportClipGltfAnimationOnly { source_id, path } => {
+        OutputCommand::ExportClipGltfAnimationOnly { source_id, path } => {
             export_actions::export_clip_gltf_animation_only(app, source_id, &path)
         }
 
-        AppCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
-
-        #[cfg(feature = "auto-rig")]
-        AppCommand::LoadModelFromMemory { glb_data, source } => {
-            match app.load_model_from_glb(&glb_data) {
-                Ok(()) => {
-                    log!(
-                        "AppCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
-                        source
-                    );
-                    let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                    ui_events.send(UIEvent::ModelLoadedFromMemory { source });
-                }
-                Err(e) => {
-                    log_error!("Failed to load generated mesh: {}", e);
-                    let mut state = app
-                        .data
-                        .ecs_world
-                        .resource_mut::<crate::ecs::resource::TextToMeshState>();
-                    state.status = crate::ecs::resource::TextToMeshStatus::Error;
-                    state.error_message = Some(format!("Failed to load GLB: {}", e));
-                }
-            }
-        }
+        OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
     }
 }

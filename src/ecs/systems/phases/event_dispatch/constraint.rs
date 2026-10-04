@@ -1,9 +1,45 @@
+use crate::animation::{ConstraintId, ConstraintType};
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
-use crate::ecs::world::World;
+use crate::ecs::events::UiCommand;
+use crate::ecs::world::{Entity, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_debug_constraint_events(
-    events: &[UIEvent],
+#[derive(Clone, Debug)]
+pub enum ConstraintEvent {
+    CreateTestConstraints,
+    ClearTestConstraints,
+    AddTestSpringBones,
+    ClearSpringBones,
+    Add {
+        entity: Entity,
+        constraint_type_index: u8,
+    },
+    Remove {
+        entity: Entity,
+        constraint_id: ConstraintId,
+    },
+    Update {
+        entity: Entity,
+        constraint_id: ConstraintId,
+        constraint: ConstraintType,
+    },
+    BakeToKeyframes {
+        entity: Entity,
+        sample_fps: f32,
+    },
+}
+
+impl UiCommand for ConstraintEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        let events = [*self];
+        dispatch_debug_constraint_events(&events, world, assets);
+        dispatch_constraint_edit_events(&events, world);
+        dispatch_constraint_bake_events(&events, world, assets);
+    }
+}
+
+fn dispatch_debug_constraint_events(
+    events: &[ConstraintEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
@@ -16,16 +52,16 @@ pub fn dispatch_debug_constraint_events(
 
     for event in events {
         match event {
-            UIEvent::CreateTestConstraints => {
+            ConstraintEvent::CreateTestConstraints => {
                 create_test_constraints(world, assets);
             }
-            UIEvent::ClearTestConstraints => {
+            ConstraintEvent::ClearTestConstraints => {
                 clear_test_constraints(world);
             }
-            UIEvent::AddTestSpringBones => {
+            ConstraintEvent::AddTestSpringBones => {
                 create_test_spring_bones(world, assets);
             }
-            UIEvent::ClearSpringBones => {
+            ConstraintEvent::ClearSpringBones => {
                 let is_baked = world
                     .get_resource::<crate::ecs::resource::SpringBoneState>()
                     .map_or(false, |s| s.baked_clip_source_id.is_some());
@@ -39,26 +75,26 @@ pub fn dispatch_debug_constraint_events(
     }
 }
 
-pub fn dispatch_constraint_edit_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_constraint_edit_events(events: &[ConstraintEvent], world: &mut World) {
     use crate::ecs::systems::constraint_edit_systems::{
         handle_constraint_add, handle_constraint_remove, handle_constraint_update,
     };
 
     for event in events {
         match event {
-            UIEvent::ConstraintAdd {
+            ConstraintEvent::Add {
                 entity,
                 constraint_type_index,
             } => {
                 handle_constraint_add(world, *entity, *constraint_type_index);
             }
-            UIEvent::ConstraintRemove {
+            ConstraintEvent::Remove {
                 entity,
                 constraint_id,
             } => {
                 handle_constraint_remove(world, *entity, *constraint_id);
             }
-            UIEvent::ConstraintUpdate {
+            ConstraintEvent::Update {
                 entity,
                 constraint_id,
                 constraint,
@@ -70,8 +106,8 @@ pub fn dispatch_constraint_edit_events(events: &[UIEvent], world: &mut World) {
     }
 }
 
-pub fn dispatch_constraint_bake_events(
-    events: &[UIEvent],
+fn dispatch_constraint_bake_events(
+    events: &[ConstraintEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
@@ -82,7 +118,7 @@ pub fn dispatch_constraint_bake_events(
     };
 
     for event in events {
-        let UIEvent::ConstraintBakeToKeyframes { entity, sample_fps } = event else {
+        let ConstraintEvent::BakeToKeyframes { entity, sample_fps } = event else {
             continue;
         };
 

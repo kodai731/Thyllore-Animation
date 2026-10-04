@@ -1,45 +1,57 @@
 use std::path::PathBuf;
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::{ClipExportFormat, DialogRequest, EventQueue};
 use crate::ecs::resource::{
-    AppCommand, ClipLibrary, MaterialTextureState, ModelState, SpringBoneState,
+    AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, ModelState, OutputCommand,
+    SpringBoneState,
 };
 
-pub(super) fn open_file_dialogs(events: &[UIEvent], app: &App) -> Vec<AppCommand> {
-    events
-        .iter()
-        .filter_map(|event| match event {
-            UIEvent::ClipBrowserLoadFromFile => open_clip_load_dialog(),
-            UIEvent::ClipBrowserSaveToFile(source_id) => open_clip_save_dialog(app, *source_id),
-            UIEvent::ClipBrowserExportFbx(source_id) => {
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Fbx)
+pub(super) fn queue_file_dialog_commands(app: &App) {
+    let requests: Vec<DialogRequest> = app
+        .data
+        .ecs_world
+        .resource_mut::<EventQueue<DialogRequest>>()
+        .drain()
+        .collect();
+    for request in requests {
+        match request {
+            DialogRequest::LoadClip => queue_command(app, open_clip_load_dialog()),
+            DialogRequest::SaveClip(source_id) => {
+                queue_command(app, open_clip_save_dialog(app, source_id))
             }
-            UIEvent::ClipBrowserExportGltf(source_id) => {
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Gltf)
+            DialogRequest::ExportClip { source_id, format } => {
+                queue_command(app, open_clip_export_dialog(app, source_id, format))
             }
-            UIEvent::ClipBrowserExportGltfAnimationOnly(source_id) => {
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::GltfAnimationOnly)
+            DialogRequest::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
+            DialogRequest::SaveSpringBoneBake => {
+                queue_command(app, open_spring_bone_save_dialog(app))
             }
-            UIEvent::ExportModelGltf => open_model_export_dialog(app),
-            UIEvent::SpringBoneSaveBake => open_spring_bone_save_dialog(app),
-            UIEvent::PickMaterialTexture { material } => {
-                open_material_texture_dialog(app, material)
+            DialogRequest::PickMaterialTexture { material } => {
+                queue_command(app, open_material_texture_dialog(app, &material))
             }
-            _ => None,
-        })
-        .collect()
+        }
+    }
 }
 
-fn open_clip_load_dialog() -> Option<AppCommand> {
+fn queue_command<C: 'static>(app: &App, command: Option<C>) {
+    if let Some(command) = command {
+        app.data
+            .ecs_world
+            .resource_mut::<CommandQueue<C>>()
+            .push(command);
+    }
+}
+
+fn open_clip_load_dialog() -> Option<AssetEditCommand> {
     let path = rfd::FileDialog::new()
         .add_filter("Animation RON", &["anim.ron", "ron"])
         .pick_file()?;
 
-    Some(AppCommand::LoadClipFromFile { path })
+    Some(AssetEditCommand::LoadClipFromFile { path })
 }
 
-fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<AppCommand> {
+fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<OutputCommand> {
     let current_name = clip_name(app, source_id).unwrap_or_else(|| "clip".to_string());
 
     let path = rfd::FileDialog::new()
@@ -47,21 +59,14 @@ fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<AppCommand> {
         .set_file_name(format!("{}.anim.ron", current_name))
         .save_file()?;
 
-    Some(AppCommand::SaveClipToFile { source_id, path })
-}
-
-#[derive(Clone, Copy)]
-enum ClipExportFormat {
-    Fbx,
-    Gltf,
-    GltfAnimationOnly,
+    Some(OutputCommand::SaveClipToFile { source_id, path })
 }
 
 fn open_clip_export_dialog(
     app: &App,
     source_id: u64,
     format: ClipExportFormat,
-) -> Option<AppCommand> {
+) -> Option<OutputCommand> {
     let clip_name = clip_name(app, source_id)?;
     let (filter_name, extension, default_filename) = match format {
         ClipExportFormat::Fbx => ("FBX Binary", "fbx", format!("{}.fbx", clip_name)),
@@ -74,15 +79,15 @@ fn open_clip_export_dialog(
     let path = save_file_dialog(filter_name, extension, &default_filename)?;
 
     Some(match format {
-        ClipExportFormat::Fbx => AppCommand::ExportClipFbx { source_id, path },
-        ClipExportFormat::Gltf => AppCommand::ExportClipGltf { source_id, path },
+        ClipExportFormat::Fbx => OutputCommand::ExportClipFbx { source_id, path },
+        ClipExportFormat::Gltf => OutputCommand::ExportClipGltf { source_id, path },
         ClipExportFormat::GltfAnimationOnly => {
-            AppCommand::ExportClipGltfAnimationOnly { source_id, path }
+            OutputCommand::ExportClipGltfAnimationOnly { source_id, path }
         }
     })
 }
 
-fn open_model_export_dialog(app: &App) -> Option<AppCommand> {
+fn open_model_export_dialog(app: &App) -> Option<OutputCommand> {
     let model_path = app
         .data
         .ecs_world
@@ -96,10 +101,10 @@ fn open_model_export_dialog(app: &App) -> Option<AppCommand> {
 
     let path = save_file_dialog("glTF Binary", "glb", &format!("{}.glb", model_stem))?;
 
-    Some(AppCommand::ExportModelGltf { path })
+    Some(OutputCommand::ExportModelGltf { path })
 }
 
-fn open_spring_bone_save_dialog(app: &App) -> Option<AppCommand> {
+fn open_spring_bone_save_dialog(app: &App) -> Option<OutputCommand> {
     let baked_id = app
         .data
         .ecs_world
@@ -111,10 +116,10 @@ fn open_spring_bone_save_dialog(app: &App) -> Option<AppCommand> {
         .set_file_name("spring_baked.anim.ron")
         .save_file()?;
 
-    Some(AppCommand::SaveSpringBoneBake { baked_id, path })
+    Some(OutputCommand::SaveSpringBoneBake { baked_id, path })
 }
 
-fn open_material_texture_dialog(app: &App, material: &str) -> Option<AppCommand> {
+fn open_material_texture_dialog(app: &App, material: &str) -> Option<AssetEditCommand> {
     let model_path = app
         .data
         .ecs_world
@@ -128,7 +133,7 @@ fn open_material_texture_dialog(app: &App, material: &str) -> Option<AppCommand>
         .set_directory(model_dir)
         .pick_file()?;
 
-    Some(AppCommand::AssignMaterialTexture {
+    Some(AssetEditCommand::AssignMaterialTexture {
         material: material.to_string(),
         path,
     })

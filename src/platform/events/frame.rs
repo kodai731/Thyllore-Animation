@@ -2,9 +2,6 @@ use std::time::Instant;
 
 use crate::app::frame::FrameInput;
 use crate::app::App;
-#[cfg(debug_assertions)]
-use crate::platform::ui::{build_click_debug_overlay, DebugWindowState};
-use crate::platform::ui::{SceneOverlayState, StatusBarState};
 use crate::vulkanr::vulkan::*;
 
 use crate::ecs::resource::{ImGuiInputCapture, MouseInput};
@@ -14,11 +11,6 @@ pub(crate) fn handle_redraw_requested(
     platform: &mut imgui_winit_support::WinitPlatform,
     window: &winit::window::Window,
     app: &mut App,
-    status_bar_state: &mut StatusBarState,
-    #[cfg(feature = "auto-rig")]
-    text_to_mesh_dialog: &mut crate::platform::ui::TextToMeshDialogState,
-    #[cfg(feature = "auto-rig")]
-    text_to_animation_dialog: &mut crate::platform::ui::TextToAnimationDialogState,
 ) {
     let dt_ms = if let Some(last) = app.last_frame_instant {
         let elapsed = last.elapsed().as_secs_f32() * 1000.0;
@@ -39,44 +31,7 @@ pub(crate) fn handle_redraw_requested(
 
     super::input::update_mouse_input(&app.data.ecs_world, ui);
 
-    #[cfg(debug_assertions)]
-    let mut debug_state = DebugWindowState {
-        debug_view_mode: app
-            .resource::<crate::ecs::resource::DebugViewState>()
-            .debug_view_mode,
-    };
-
-    let mut overlay_state = SceneOverlayState {
-        model: app.resource::<crate::ecs::ModelState>().clone(),
-        #[cfg(feature = "auto-rig")]
-        open_text_to_mesh_dialog: false,
-        #[cfg(feature = "auto-rig")]
-        open_text_to_animation_dialog: false,
-    };
-
-    super::ui_windows::build_ui_windows(
-        ui,
-        app,
-        #[cfg(debug_assertions)]
-        &mut debug_state,
-        &mut overlay_state,
-        status_bar_state,
-        #[cfg(feature = "auto-rig")]
-        text_to_mesh_dialog,
-        #[cfg(feature = "auto-rig")]
-        text_to_animation_dialog,
-    );
-
-    *app.resource_mut::<crate::ecs::ModelState>() = overlay_state.model;
-
-    #[cfg(debug_assertions)]
-    {
-        app.resource_mut::<crate::ecs::resource::DebugViewState>()
-            .debug_view_mode = debug_state.debug_view_mode;
-    }
-
-    #[cfg(debug_assertions)]
-    build_click_debug_overlay(ui, &app.data.ecs_world);
+    super::ui_windows::build_ui_windows(ui, app);
 
     platform.prepare_render(ui, window);
 
@@ -104,7 +59,7 @@ unsafe fn render_frame(
             dt_ms,
             imgui_build_ms,
         },
-        super::file_dialog::open_file_dialogs,
+        super::file_dialog::queue_file_dialog_commands,
     );
 
     if let Err(e) = frame_result {

@@ -10,7 +10,6 @@ use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
     scalar_cli_names_joined, ClipSchedule,
 };
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{AvatarSetupState, ClipLibrary, HierarchyState, TimelineState};
 use crate::ecs::systems::avatar_setup_systems::{
     find_first_skeleton, find_model_path, load_or_infer_mapping, skeleton_to_bone_inputs,
@@ -22,6 +21,8 @@ use crate::ecs::systems::clip_schedule_systems::{
     clip_schedule_add_instance, clip_schedule_remove_instance,
 };
 use crate::ecs::systems::motion_recipe_systems::recipe_to_clip;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
 
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
@@ -157,7 +158,7 @@ pub fn batch_apply_anim_edits(
         match edit {
             BatchAnimEdit::DebugKeys { seed } => {
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarDebugKeys { seed: *seed }],
+                    &[ScalarCurveEvent::InsertScalarDebugKeys { seed: *seed }],
                     world,
                     assets,
                 );
@@ -174,7 +175,7 @@ pub fn batch_apply_anim_edits(
                     previous
                 };
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarKey {
+                    &[ScalarCurveEvent::InsertScalarKey {
                         property_type: *property_type,
                         value: *value,
                     }],
@@ -185,7 +186,7 @@ pub fn batch_apply_anim_edits(
             }
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarKeyAtPlayhead {
+                    &[ScalarCurveEvent::InsertScalarKeyAtPlayhead {
                         property_type: *property_type,
                     }],
                     world,
@@ -206,7 +207,7 @@ pub fn batch_apply_anim_edits(
                     continue;
                 };
                 crate::ecs::systems::timeline_systems::process_clip_instance_events(
-                    &[UIEvent::ClipInstanceTrimEnd {
+                    &[ClipInstanceEvent::TrimEnd {
                         entity,
                         instance_id,
                         new_clip_out: *seconds,
@@ -218,7 +219,7 @@ pub fn batch_apply_anim_edits(
                 apply_recipe_edit(world, assets, path);
             }
             BatchAnimEdit::Clear => {
-                dispatch_scalar_clip_events(&[UIEvent::ClearScalarKeys], world, assets);
+                dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);
             }
         }
     }
@@ -300,7 +301,7 @@ fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
     }
 }
 
-/// Serialize the animation-facing world state (flames, their scheduled clips,
+/// Serialize the animation-facing world state (effects, their scheduled clips,
 /// every clip's scalar curves, timeline) so agents can inspect edits without a
 /// window. Written once at engine exit; the file is the access surface.
 pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {
@@ -311,7 +312,7 @@ pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {
         .flat_map(|domain| {
             (domain.entities)(world).into_iter().map(move |entity| {
                 let params: serde_json::Map<String, serde_json::Value> = domain
-                    .channels
+                    .channels()
                     .iter()
                     .enumerate()
                     .filter_map(|(index, channel)| {

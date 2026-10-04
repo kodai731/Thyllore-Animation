@@ -336,6 +336,13 @@ impl App {
             .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::object_pick::ObjectPickHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::dispatch_prep::DispatchPrepHooks::collect()?);
+        let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;
+        ui_windows.init_window_state(&mut data.ecs_world);
+        data.ecs_world.insert_resource(ui_windows);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -423,8 +430,8 @@ impl App {
                 .msaa_samples(vk::SampleCountFlags::_1)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully
-                // covered", which the tonemap needs to keep the grid color. The flame
-                // composites over it afterwards with premultiplied blending.
+                // covered", which the tonemap needs to keep the grid color. Effects
+                // composite over it afterwards with premultiplied blending.
                 .blend(BlendConfig {
                     enable: true,
                     src_color_factor: vk::BlendFactor::SRC_ALPHA,
@@ -1177,8 +1184,14 @@ impl App {
     }
 
     fn register_editor_resources(data: &mut AppData) {
-        Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AppCommandQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::events::UiCommandQueue>(data);
+        Self::insert_default_if_missing::<
+            crate::ecs::events::EventQueue<crate::ecs::events::DialogRequest>,
+        >(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::EntityRemovalQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::CameraFlyInput>(data);
@@ -1222,12 +1235,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::BloomSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::LightningRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
+        crate::hooks::effect_defaults::apply_effect_default_resources(&mut data.ecs_world);
     }
 
     #[cfg(feature = "ml")]

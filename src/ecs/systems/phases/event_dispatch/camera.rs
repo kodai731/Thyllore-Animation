@@ -1,31 +1,63 @@
 use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
-use crate::ecs::resource::Camera;
-use crate::ecs::resource::LightState;
+use crate::ecs::events::{DebugPrimitiveKind, UiCommand};
+use crate::ecs::resource::{Camera, OutputCommand, OutputQueue, SceneLoadCommand, SceneLoadQueue};
 use crate::ecs::systems::{camera_move_to_look_at, camera_reset};
 use crate::ecs::world::World;
+use crate::hooks::batch_capture::BatchCapture;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use std::rc::Rc;
 
-use crate::ecs::resource::AppCommand;
+#[derive(Clone, Debug)]
+pub enum CameraEvent {
+    LoadModel {
+        path: String,
+    },
+    LoadModelAdditive {
+        path: String,
+    },
+    SpawnDebugPrimitive {
+        kind: DebugPrimitiveKind,
+    },
+    ResetCamera,
+    ResetCameraUp,
+    MoveCameraToModel,
+    TakeScreenshot,
+    #[cfg(debug_assertions)]
+    DebugShadowInfo,
+    #[cfg(debug_assertions)]
+    DebugBillboardDepth,
+    DumpDebugInfo,
+    DumpAnimationDebug,
+    /// Runs one readback right away, outside the batch schedule (a debug window button).
+    CaptureNow(Rc<dyn BatchCapture>),
+}
 
-pub fn dispatch_camera_light_debug_events(
-    events: &[UIEvent],
-    world: &mut World,
-    model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
-) -> Vec<AppCommand> {
+impl UiCommand for CameraEvent {
+    fn apply(
+        self: Box<Self>,
+        world: &mut World,
+        _: &mut AssetStorage,
+        graphics: &GraphicsResources,
+    ) {
+        dispatch_camera_events(&[*self], world, graphics);
+    }
+}
+
+fn dispatch_camera_events(events: &[CameraEvent], world: &mut World, graphics: &GraphicsResources) {
     let mut camera = world.resource_mut::<Camera>();
-    let mut rt_debug = world.resource_mut::<LightState>();
-    let mut commands = Vec::new();
+    let mut scene_loads = world.resource_mut::<SceneLoadQueue>();
+    let mut outputs = world.resource_mut::<OutputQueue>();
 
     for event in events {
         match event {
-            UIEvent::ResetCamera | UIEvent::ResetCameraUp => {
+            CameraEvent::ResetCamera | CameraEvent::ResetCameraUp => {
                 camera_reset(&mut camera);
             }
 
-            UIEvent::MoveCameraToModel => {
-                if let Some((min, max, center)) = model_bounds {
+            CameraEvent::MoveCameraToModel => {
+                if let Some((min, max, center)) = graphics.calculate_model_bounds() {
                     let size = max - min;
                     let max_dim = size.x.max(size.y).max(size.z);
                     let distance = max_dim * 2.0;
@@ -41,84 +73,43 @@ pub fn dispatch_camera_light_debug_events(
                 }
             }
 
-            UIEvent::MoveCameraToLightGizmo => {
-                let light_pos = rt_debug.light_position;
-                let offset = Vector3::new(2.0, 2.0, 2.0);
-                camera_move_to_look_at(&mut camera, light_pos, offset);
+            CameraEvent::LoadModel { path } => {
+                scene_loads.push(SceneLoadCommand::LoadModel { path: path.clone() });
             }
 
-            UIEvent::SetLightPosition(pos) => {
-                rt_debug.light_position = *pos;
+            CameraEvent::LoadModelAdditive { path } => {
+                scene_loads.push(SceneLoadCommand::LoadModelAdditive { path: path.clone() });
             }
 
-            UIEvent::MoveLightToBounds(target) => {
-                use crate::ecs::events::light_move_target::LightMoveTarget;
-
-                if let Some((min, max, _)) = model_bounds {
-                    let offset = 2.0;
-                    let current = rt_debug.light_position;
-                    let new_pos = match target {
-                        LightMoveTarget::XMin => Vector3::new(min.x - offset, current.y, current.z),
-                        LightMoveTarget::XMax => Vector3::new(max.x + offset, current.y, current.z),
-                        LightMoveTarget::YMin => Vector3::new(current.x, min.y - offset, current.z),
-                        LightMoveTarget::YMax => Vector3::new(current.x, max.y + offset, current.z),
-                        LightMoveTarget::ZMin => Vector3::new(current.x, current.y, min.z - offset),
-                        LightMoveTarget::ZMax => Vector3::new(current.x, current.y, max.z + offset),
-                        LightMoveTarget::None => current,
-                    };
-                    rt_debug.light_position = new_pos;
-
-                    log!(
-                        "Light moved to bounds {:?}: ({:.2}, {:.2}, {:.2})",
-                        target,
-                        new_pos.x,
-                        new_pos.y,
-                        new_pos.z
-                    );
-                }
+            CameraEvent::SpawnDebugPrimitive { kind } => {
+                scene_loads.push(SceneLoadCommand::SpawnDebugPrimitive { kind: *kind });
             }
 
-            UIEvent::LoadModel { path } => {
-                commands.push(AppCommand::LoadModel { path: path.clone() });
-            }
-
-            UIEvent::LoadModelAdditive { path } => {
-                commands.push(AppCommand::LoadModelAdditive { path: path.clone() });
-            }
-
-            UIEvent::SpawnDebugPrimitive { kind } => {
-                commands.push(AppCommand::SpawnDebugPrimitive { kind: *kind });
-            }
-
-            UIEvent::TakeScreenshot => {
-                commands.push(AppCommand::TakeScreenshot);
+            CameraEvent::TakeScreenshot => {
+                outputs.push(OutputCommand::TakeScreenshot);
             }
 
             #[cfg(debug_assertions)]
-            UIEvent::DebugShadowInfo => {
-                commands.push(AppCommand::DebugShadowInfo);
+            CameraEvent::DebugShadowInfo => {
+                outputs.push(OutputCommand::DebugShadowInfo);
             }
 
             #[cfg(debug_assertions)]
-            UIEvent::DebugBillboardDepth => {
-                commands.push(AppCommand::DebugBillboardDepth);
+            CameraEvent::DebugBillboardDepth => {
+                outputs.push(OutputCommand::DebugBillboardDepth);
             }
 
-            UIEvent::DumpDebugInfo => {
-                commands.push(AppCommand::DumpDebugInfo);
+            CameraEvent::DumpDebugInfo => {
+                outputs.push(OutputCommand::DumpDebugInfo);
             }
 
-            UIEvent::DumpAnimationDebug => {
-                commands.push(AppCommand::DumpAnimationDebug);
+            CameraEvent::DumpAnimationDebug => {
+                outputs.push(OutputCommand::DumpAnimationDebug);
             }
 
-            UIEvent::CaptureNow(capture) => {
-                commands.push(AppCommand::CaptureNow(capture.clone()));
+            CameraEvent::CaptureNow(capture) => {
+                outputs.push(OutputCommand::CaptureNow(capture.clone()));
             }
-
-            _ => {}
         }
     }
-
-    commands
 }

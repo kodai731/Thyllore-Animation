@@ -157,7 +157,16 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+`dispatch_prep.rs` holds the `DispatchPrepHook` contract (name, run taking `(&mut World, &mut AssetStorage)`) and
+the `dispatch_prep_hook!` macro: per-frame work that must reach `World` before the frame's UI commands apply
+(draining a worker's responses, polling a server) is registered from its own file and
+`run_event_dispatch_phase` runs `DispatchPrepHooks` in name order; the phase file carries no `cfg` and names no
+feature. `ui_window.rs` holds the `UiWindowHook` contract (name, `UiPanel`, order, `init` that inserts the window's own
+state resource once, `build` taking `(&imgui::Ui, &World, &AssetStorage, &GraphicsResources)`) and the
+`ui_window!` macro: every editor window registers itself from its file in `src/platform/ui/`, `UiWindows::collect()`
+sorts them by panel, order and name, and `src/platform/events/ui_windows.rs` publishes `LayoutSnapshot` and the
+viewport image into `World` and runs the list without naming a window. A window reads everything from `World`
+(`LayoutSnapshot`, `ViewportInput`, its own state resource) and never from `App`. `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
 instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
 instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
 registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
@@ -172,16 +181,55 @@ handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks`
 naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, max instances, spawn
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
-`UIEvent::AddEffect(key)` / `SelectEffectInstance { key, index }`, the batch `add_<key>` action sends the
-same event, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+`ScalarCurveEvent::AddEffect(key)` / `OverlayEvent::SelectEffectInstance { key, index }`, the batch `add_<key>`
+action sends the same command, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
 `spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
 its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
 record (time advance, bone attachment, trails at `Advance`; history accumulation and dump sinks at
 `Accumulate`, which runs after the previous frame's GPU timings are written) is registered from
 `src/ecs/systems/<effect>/` and `src/ecs/systems/phases/render_prep_phase.rs` runs `FramePrepHooks`
-(a `World` resource collected at app start, sorted by stage then name) without naming an effect. A hook
+(a `World` resource collected at app start, sorted by stage then name) without naming an effect.
+An effect's UI command enum is defined in its own directory (e.g. `src/ecs/systems/flame/ui_command.rs`),
+implements `UiCommand`, and is sent via `World::send_command` — no registration is needed, the generic
+`apply_queued_ui_commands` in `event_dispatch_phase.rs` applies it by trait dispatch. The generic event
+dispatch phase therefore never names an effect.
+`src/ecs/systems/effect_edit.rs` holds the `apply_effect_update` and `apply_effect_preset` functions: these provide
+common logic for updating effects and applying presets across all effects (with transforms derived
+from `SceneOwner::placement`). Each effect only needs to implement the `EffectPreset` trait in its
+own directory to participate in this shared system. A hook
 file describes a contract only; it never names a concrete effect.
+
+## Hook or command?
+
+Two mechanisms let a feature take part without being named by shared code. Pick by the nature of the thing,
+not by taste:
+
+```
+Does the thing exist for the whole run, as a fixed set known at link time
+(a window, a pass node, a per-frame step or poll, a scene component type, a CLI flag group)?
+  yes → it is a participant: register it with a hook (`inventory`, `*_hook!` / `ui_window!` /
+        `scene_owner!`), collect once at startup into a World resource, iterate in a fixed order
+        (stage / panel / order / name). The shared runner never names an entry.
+  no  → Is it a piece of data produced at some moment that must be applied once, later, in order
+        (a UI interaction, a batch action's request, a dialog result)?
+          yes → it is a message: give it a type that applies itself (`UiCommand`, `BatchAction`,
+                `CommandQueue<C>`), push it into the one World queue for its kind, drain in FIFO.
+                No registration: the sender and the type's `apply` are the whole wiring.
+          no  → it is state: a component or a resource, read by systems.
+```
+
+Consequences of the split:
+
+- A hook has an identity (`name`, panel / stage) and an order; a command has neither, only its position in
+  the queue. Two commands that must apply in order are sent in order or merged into one command; two hooks
+  that must run in order get different stages / orders.
+- A hook may carry `init: fn(&mut World)` to insert the state it owns once (`ui_window!` does); a command
+  never inserts resources, it only mutates what the init of a hook or `src/app/init/` created.
+- `cfg(feature)` / `debug_assertions` live in the file that registers the hook or declares the command type
+  (`#![cfg]` at the top of the file), never in the runner or the queue.
+- Wrong fits to recognise: a queue of "draw me" requests is a window list in disguise (use a hook); a hook
+  whose body only forwards one event is a command in disguise (use the command's `apply`).
 
 ## src/effect/
 
@@ -243,13 +291,16 @@ Concretely:
 - `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
   `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
-  never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
+  never names one. `--batch-debug-action-at <frame>:<action>` runs the same action once `FrameClock`
+  reaches the frame (`ScheduledBatchActions`, applied in the First phase), which is how a headless run
+  performs steps that must follow the model load or each other (avatar edits:
+  `src/ecs/systems/avatar_batch_actions.rs`). A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
   `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
 - A readback at the capture frame is a **request resource** under `src/ecs/resource/<effect>/batch.rs`
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
   check. The effect's `cli.rs` hook inserts it for a startup flag; a `dump_*` action is the generic
   `CaptureRequest<T>` registered with `capture_action!("dump_x", T)`, which inserts `T` inside a batch run
-  and sends `UIEvent::CaptureNow(T)` otherwise (the same event a debug window button sends). The
+  and sends `CameraEvent::CaptureNow(T)` otherwise (the same command a debug window button sends). The
   request type implements `BatchCapture` (`src/hooks/batch_capture.rs`: `capture(&self, CaptureContext)`
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
@@ -270,21 +321,29 @@ Concretely:
   of a stage in name order, timing each under `<name>_<stage>`. A shared system that only touches one
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
-- Animatable scalar fields reach the curve editor, timeline, batch CLI and scene files through
-  `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
-  `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
-  `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
-  never lists them. A channel never carries a hand-written `Custom` code: the domain derives it as the
-  block's `first_code` plus the channel's position in `channels` (`ScalarChannelDomain::property_type_at`),
-  so a new channel is appended to the end of the table and existing ones are never reordered or removed.
-  Tests of the shared clip, timeline, dispatch and batch code use the test-only
-  `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
-  `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
+- Animatable scalar fields reach the curve editor, timeline, batch CLI and clip files through
+  `ScalarDomainSource` (`src/ecs/component/effect_scalar_domain.rs`): each effect writes
+  `scalar_channel_domain!(MY_DOMAIN)` next to its static domain and `scalar_channel_domains()` collects
+  them at link time. A field becomes a channel with `#[persist(curve)]` in effect-core (every component of
+  a `[f32; N]` exposed with `scalars` / `ui`); nothing carries a number. The `PropertyType::Custom` code
+  of a channel is process-local: the registry gives each domain `CODES_PER_DOMAIN` codes by its position
+  in name order and the channel takes its position in declaration order (`collect_scalars`, nested
+  structs expanded in place), so adding, moving or removing a field renumbers nothing on disk. Clip files
+  (`AnimationClipFile.scalar_curves`) key a curve by the channel's `cli_name`; `src/scene/clip_io.rs`
+  resolves names on save and load, and a renamed channel keeps its old name loadable through
+  `#[persist(renamed_from = [..])]` (one former name per component of a `[f32; N]`). Each effect builds
+  its domain from one `scalar_domain.rs` (`src/ecs/component/<effect>/scalar_domain.rs`) implementing
+  `ScalarDomainSource` (name, tables, local time); display name / debug range / get / set come from the
+  effect-core derive (`#[persist(curve, debug_range = (lo, hi), ui(label = ..))]`). The registry tests
+  only check that names are unique across domains and that a domain fits its code range; there is no
+  golden table. Tests of the shared clip, timeline, dispatch and
+  batch code use the test-only `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support`
+  (built on the `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
   never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
   (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
 - Components and resources of an effect live in `src/ecs/component/<effect>/` and
-  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `param.rs`, `render_targets.rs`,
+  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `scalar_domain.rs`, `render_targets.rs`,
   `batch.rs`, ...), never as `<effect>_*.rs` files in the shared directory.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
   `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.
@@ -310,20 +369,6 @@ Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hook
 must hit nothing but the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)`
 matches.
 
-Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
-shrink it):
-
-- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
-  `src/ecs/systems/phases/event_dispatch/overlay.rs`, `src/platform/ui/scene_overlay.rs`,
-  `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
-- Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
-- Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
-  other effect resources; `src/paths.rs` flame asset directories.
-- Registries written by hand: `EntityIcon::{Flame, Water, Wind}` in `src/ecs/component/editor.rs`,
-  `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
-- Tests of shared code naming an effect: the flame batch flag / wall probe / orbit tests in
-  `batch_run_systems/tests.rs` (they follow `orbit.rs` and the flame `cli.rs` hook when those move).
-
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)
 and writing `scene_resource!(Type)` next to it; `SceneResourceHooks::collect()` gathers every registration
@@ -334,8 +379,12 @@ file. Enum fields are persisted by name through a `String` field (`ToneMapOperat
 
 ## src/platform/
 
-Window, input, imgui orchestration and the UI windows. Reads resources, records `UIEvent`s, calls one
-dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Window, input, imgui orchestration and the UI windows. Reads resources, sends `UiCommand`s
+(`World::send_command`) and `DialogRequest`s, calls one dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Each window in `src/platform/ui/` registers itself with `ui_window!` and keeps its window-local state in a
+resource it inserts through the hook's `init`; `src/platform/events/` never lists windows, states or
+`cfg` branches for them (a window behind a cargo feature or `debug_assertions` puts the `#![cfg]` at the top of
+its own file).
 
 ## src/vulkanr/
 
@@ -359,11 +408,11 @@ and drives one frame. It is the only place that sees `App` as a whole.
 Files: `init/` and `cleanup.rs` (construction, teardown), `config.rs` (`AppConfig`: parsed engine flags and
 resolved bootstrap hooks) and `bootstrap.rs` (applies them), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `frame.rs` (`App::drive_frame`: the one frame driver, runs
-`FRAME_SCHEDULE` end to end: event dispatch and `AppCommand`s, `begin_frame`, `update`, `render`, Last;
+`FRAME_SCHEDULE` end to end: event dispatch and queued commands, `begin_frame`, `update`, `render`, Last;
 a step that needs the presented image goes at its end, never into `render.rs` or `src/platform/`),
 `render.rs` (`begin_frame` / `render`), `update.rs` (per-frame update and
-imgui buffers), `command.rs` (`apply_app_command`: the one place that executes an `AppCommand` recorded by
-the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph),
+imgui buffers), `command.rs` (`apply_queued_commands`: the one place that executes the commands queued in
+the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
@@ -377,7 +426,7 @@ once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `r
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
 `screenshot.rs` (swapchain and image readback to a host buffer, PNG encoding), `export_actions.rs` (clip and
-model export entry points run from `AppCommand`). A feature may be removed
+model export entry points run from `OutputCommand`). A feature may be removed
 without touching the frame loop; if removing it would break `begin_frame` / `render`, it is not a feature.
 
 Belongs here:

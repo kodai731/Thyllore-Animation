@@ -30,6 +30,10 @@ pub unsafe fn rebuild_acceleration_structures(
     mesh_transforms: &[cgmath::Matrix4<f32>],
 ) -> Result<()> {
     log!("Rebuilding acceleration structures...");
+    if let Some(mut previous) = raytracing.acceleration_structure.take() {
+        device.device.device_wait_idle()?;
+        previous.destroy(&device.device);
+    }
 
     let mut acceleration_structure = RRAccelerationStructure::new();
 

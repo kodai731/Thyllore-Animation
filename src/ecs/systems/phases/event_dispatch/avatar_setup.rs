@@ -1,41 +1,94 @@
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::vrchat::rank::Platform;
+
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
-use crate::ecs::resource::AppCommand;
+use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
 use crate::ecs::systems::{
-    add_spring_chains_by_prefix, export_avatar_sidecar, export_expression_anims,
-    export_morph_track_anim, open_avatar_setup, save_humanoid_mapping, save_material_textures,
-    set_avatar_rank_platform, set_humanoid_role, set_material_texture,
+    add_spring_chains_by_prefix, export_unity_avatar, open_avatar_setup, save_humanoid_mapping,
+    save_material_textures, set_avatar_rank_platform, set_humanoid_role, set_material_texture,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_avatar_setup_events(
-    events: &[UIEvent],
-    world: &mut World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-) -> Vec<AppCommand> {
-    let mut commands = Vec::new();
+#[derive(Clone, Debug)]
+pub enum AvatarSetupEvent {
+    OpenAvatarSetup,
+    SetHumanoidRole {
+        role: HumanoidRole,
+        bone: Option<usize>,
+    },
+    SaveHumanoidMapping,
+    SetAvatarRankPlatform(Platform),
+    ExportUnityAvatar,
+    AddSpringChainsByPrefix {
+        prefix: String,
+    },
+    PickMaterialTexture {
+        material: String,
+    },
+    ClearMaterialTexture {
+        material: String,
+    },
+    SaveMaterialTextures,
+}
 
-    for event in events {
-        match event {
-            UIEvent::OpenAvatarSetup => open_avatar_setup(world),
-            UIEvent::SetHumanoidRole { role, bone } => set_humanoid_role(world, *role, *bone),
-            UIEvent::SaveHumanoidMapping => save_humanoid_mapping(world),
-            UIEvent::SetAvatarRankPlatform(platform) => set_avatar_rank_platform(world, *platform),
-            UIEvent::ExportAvatarSidecar => export_avatar_sidecar(world, assets, graphics),
-            UIEvent::AddSpringChainsByPrefix { prefix } => {
-                add_spring_chains_by_prefix(world, assets, prefix)
+impl UiCommand for AvatarSetupEvent {
+    fn apply(
+        self: Box<Self>,
+        world: &mut World,
+        assets: &mut AssetStorage,
+        graphics: &GraphicsResources,
+    ) {
+        match *self {
+            AvatarSetupEvent::OpenAvatarSetup => open_avatar_setup(world),
+            AvatarSetupEvent::SetHumanoidRole { role, bone } => {
+                set_humanoid_role(world, role, bone)
             }
-            UIEvent::ExportExpressionAnims => export_expression_anims(world, assets, graphics),
-            UIEvent::ExportMorphTrackAnim => export_morph_track_anim(world, assets),
-            UIEvent::ClearMaterialTexture { material } => {
-                set_material_texture(world, material, None)
+            AvatarSetupEvent::SaveHumanoidMapping => save_humanoid_mapping(world),
+            AvatarSetupEvent::SetAvatarRankPlatform(platform) => {
+                set_avatar_rank_platform(world, platform)
             }
-            UIEvent::SaveMaterialTextures => commands.extend(save_material_textures(world)),
-            _ => {}
+            AvatarSetupEvent::ExportUnityAvatar => export_unity_avatar(world, assets, graphics),
+            AvatarSetupEvent::AddSpringChainsByPrefix { prefix } => {
+                add_spring_chains_by_prefix(world, assets, &prefix)
+            }
+            AvatarSetupEvent::PickMaterialTexture { material } => {
+                send_dialog_request(world, DialogRequest::PickMaterialTexture { material })
+            }
+            AvatarSetupEvent::ClearMaterialTexture { material } => {
+                set_material_texture(world, &material, None)
+            }
+            AvatarSetupEvent::SaveMaterialTextures => save_material_textures(world),
         }
     }
+}
 
-    commands
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::events::EventQueue;
+
+    #[test]
+    fn test_pick_material_texture_sends_dialog_request() {
+        let mut world = World::new();
+        world.insert_resource(EventQueue::<DialogRequest>::default());
+        let mut assets = AssetStorage::new();
+        let graphics = GraphicsResources::default();
+
+        Box::new(AvatarSetupEvent::PickMaterialTexture {
+            material: "test_material".to_string(),
+        })
+        .apply(&mut world, &mut assets, &graphics);
+
+        let requests: Vec<DialogRequest> = world
+            .resource_mut::<EventQueue<DialogRequest>>()
+            .drain()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![DialogRequest::PickMaterialTexture {
+                material: "test_material".to_string(),
+            }]
+        );
+    }
 }

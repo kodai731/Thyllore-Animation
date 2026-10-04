@@ -1,7 +1,18 @@
+use crate::animation::editable::BezierHandle;
+use crate::animation::editable::InterpolationType;
+use crate::animation::editable::KeyframeId;
+use crate::animation::editable::PropertyType;
+use crate::animation::editable::SourceClipId;
+use crate::animation::editable::TangentType;
+use crate::animation::editable::TangentWeightMode;
+use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::CurveEditorState;
+use crate::ecs::resource::CurveTrackRef;
+use crate::ecs::resource::SelectedKeyframe;
+use crate::ecs::resource::SelectionModifier;
 use crate::ecs::resource::{
     BonePoseOverride, ClipLibrary, CurveEditorBuffer, EditHistory, KeyframeCopyBuffer,
     TimelineState,
@@ -11,10 +22,110 @@ use crate::ecs::systems::{
     timeline_process_events,
 };
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::spring_bone::transition_to_baked_override_if_needed;
 
-pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+#[derive(Clone, Debug)]
+pub enum TimelineEvent {
+    Play,
+    Pause,
+    Stop,
+    SetTime(f32),
+    SetSpeed(f32),
+    ToggleLoop,
+    SelectClip(SourceClipId),
+    ToggleTrack(BoneId),
+    ExpandTrack(BoneId),
+    CollapseTrack(BoneId),
+    SelectKeyframe {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        modifier: SelectionModifier,
+    },
+    AddKeyframe {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        time: f32,
+        value: f32,
+    },
+    DeleteSelectedKeyframes,
+    MoveSelectedKeyframes {
+        time_delta: f32,
+    },
+    SetKeyframeSelection {
+        keyframes: Vec<SelectedKeyframe>,
+        modifier: SelectionModifier,
+    },
+    DeleteKeyframe {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
+    MoveKeyframe {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        new_time: f32,
+        new_value: f32,
+    },
+    SetKeyframeInterpolation {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        interpolation: InterpolationType,
+    },
+    SetKeyframeTangent {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        in_tangent: BezierHandle,
+        out_tangent: BezierHandle,
+    },
+    SetTangentType {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        tangent_type: TangentType,
+    },
+    SetTangentWeightMode {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        weight_mode: TangentWeightMode,
+    },
+    SetSnapToFrame(bool),
+    SetSnapToKey(bool),
+    SetFrameRate(f32),
+    CopyKeyframes,
+    PasteKeyframes {
+        paste_time: f32,
+    },
+    MirrorPaste {
+        paste_time: f32,
+    },
+    CaptureBuffer,
+    SwapBuffer,
+    BoneSetKey,
+    ZoomIn {
+        max_zoom: f32,
+    },
+    ZoomOut {
+        min_zoom: f32,
+    },
+}
+
+impl UiCommand for TimelineEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        let events = [*self];
+        dispatch_timeline_events(&events, world, assets);
+        dispatch_keyframe_clipboard_events(&events, world);
+        dispatch_buffer_events(&events, world);
+    }
+}
+
+fn dispatch_timeline_events(events: &[TimelineEvent], world: &mut World, assets: &AssetStorage) {
     let mut timeline_state = world.resource_mut::<TimelineState>();
     let mut clip_library = world.resource_mut::<ClipLibrary>();
 
@@ -49,7 +160,7 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
 
     for event in events {
         match event {
-            UIEvent::TimelineSelectClip(source_id) => {
+            TimelineEvent::SelectClip(source_id) => {
                 let lib = world.resource::<ClipLibrary>();
                 let duration = lib.get(*source_id).map(|c| c.duration).unwrap_or(1.0);
                 let asset_id = lib.get_asset_id_for_source(*source_id);
@@ -76,7 +187,7 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
                 }
             }
 
-            UIEvent::TimelinePlay => {
+            TimelineEvent::Play => {
                 if let Some(mut overrides) = world.get_resource_mut::<BonePoseOverride>() {
                     overrides.clear();
                 }
@@ -89,8 +200,15 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
     dispatch_bone_set_key_events(events, world, assets);
 }
 
-fn dispatch_bone_set_key_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
-    if !events.iter().any(|e| matches!(e, UIEvent::BoneSetKey)) {
+fn dispatch_bone_set_key_events(
+    events: &[TimelineEvent],
+    world: &mut World,
+    assets: &AssetStorage,
+) {
+    if !events
+        .iter()
+        .any(|e| matches!(e, TimelineEvent::BoneSetKey))
+    {
         return;
     }
 
@@ -135,11 +253,11 @@ fn dispatch_bone_set_key_events(events: &[UIEvent], world: &mut World, assets: &
     }
 }
 
-pub fn dispatch_keyframe_clipboard_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_keyframe_clipboard_events(events: &[TimelineEvent], world: &mut World) {
     let has_paste = events.iter().any(|e| {
         matches!(
             e,
-            UIEvent::TimelinePasteKeyframes { .. } | UIEvent::TimelineMirrorPaste { .. }
+            TimelineEvent::PasteKeyframes { .. } | TimelineEvent::MirrorPaste { .. }
         )
     });
 
@@ -177,10 +295,10 @@ pub fn dispatch_keyframe_clipboard_events(events: &[UIEvent], world: &mut World)
     }
 }
 
-pub fn dispatch_buffer_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_buffer_events(events: &[TimelineEvent], world: &mut World) {
     for event in events {
         match event {
-            UIEvent::TimelineCaptureBuffer => {
+            TimelineEvent::CaptureBuffer => {
                 let timeline_state = world.resource::<TimelineState>();
                 let clip_library = world.resource::<ClipLibrary>();
                 let curve_editor = world.resource::<CurveEditorState>();
@@ -202,7 +320,7 @@ pub fn dispatch_buffer_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::TimelineSwapBuffer => {
+            TimelineEvent::SwapBuffer => {
                 let curve_editor = world.resource::<CurveEditorState>();
                 let timeline_state = world.resource::<TimelineState>();
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -286,7 +404,7 @@ mod tests {
 
         // Double-click path: TimelineSelectClip on the scalar clip
         dispatch_timeline_events(
-            &[UIEvent::TimelineSelectClip(probe_clip)],
+            &[TimelineEvent::SelectClip(probe_clip)],
             &mut world,
             &assets,
         );
@@ -303,7 +421,7 @@ mod tests {
 
         // Selecting a model clip must not repoint the scalar schedule either
         dispatch_timeline_events(
-            &[UIEvent::TimelineSelectClip(model_clip)],
+            &[TimelineEvent::SelectClip(model_clip)],
             &mut world,
             &assets,
         );

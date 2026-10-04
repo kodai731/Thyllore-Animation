@@ -8,13 +8,20 @@ use crate::animation::editable::{
     TangentWeightMode,
 };
 use crate::animation::BoneId;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
     CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, PoseLibrary, TangentHandleType,
     TimelineState,
 };
+#[cfg(feature = "ml")]
+use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
+use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,
@@ -100,9 +107,9 @@ enum ReleasedButton {
     Middle,
 }
 
-pub fn build_curve_editor_window(
+fn draw_curve_editor_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
@@ -150,7 +157,7 @@ pub fn build_curve_editor_window(
             .build(|| {
                 build_track_list(
                     ui,
-                    ui_events,
+                    world,
                     timeline_state,
                     clip_library,
                     editor_state,
@@ -167,7 +174,7 @@ pub fn build_curve_editor_window(
             .build(|| {
                 build_curve_view(
                     ui,
-                    ui_events,
+                    world,
                     timeline_state,
                     clip_library,
                     editor_state,
@@ -192,7 +199,7 @@ fn get_current_clip<'a>(
 
 fn build_track_list(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
@@ -218,7 +225,7 @@ fn build_track_list(
         ui.text(format!("{label}:"));
         ui.separator();
         if let Some(domain) = scalar_domain {
-            build_scalar_curve_selector_inline(ui, ui_events, clip, editor_state, domain);
+            build_scalar_curve_selector_inline(ui, world, clip, editor_state, domain);
         }
         return;
     }
@@ -277,14 +284,14 @@ fn build_track_list(
 /// use), so an empty clip opened in the editor still offers a keying path.
 fn build_scalar_curve_selector_inline(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     clip: &EditableAnimationClip,
     editor_state: &mut CurveEditorState,
     domain: &'static ScalarChannelDomain,
 ) {
     ui.indent();
 
-    for (index, channel) in domain.channels.iter().enumerate() {
+    for (index, channel) in domain.channels().iter().enumerate() {
         let property_type = domain.property_type_at(index);
         let key_count = clip
             .get_scalar_curve(property_type)
@@ -309,7 +316,7 @@ fn build_scalar_curve_selector_inline(
         }
         ui.same_line();
         if ui.small_button(&format!("+##key_{}", channel.cli_name)) {
-            ui_events.send(UIEvent::InsertScalarKeyAtPlayhead { property_type });
+            world.send_command(ScalarCurveEvent::InsertScalarKeyAtPlayhead { property_type });
             editor_state.visible_curves.insert(property_type);
         }
         if ui.is_item_hovered() {
@@ -318,7 +325,7 @@ fn build_scalar_curve_selector_inline(
     }
 
     if ui.small_button("All##scalar") {
-        for index in 0..domain.channels.len() {
+        for index in 0..domain.channels().len() {
             editor_state
                 .visible_curves
                 .insert(domain.property_type_at(index));
@@ -326,7 +333,7 @@ fn build_scalar_curve_selector_inline(
     }
     ui.same_line();
     if ui.small_button("None##scalar") {
-        for index in 0..domain.channels.len() {
+        for index in 0..domain.channels().len() {
             editor_state
                 .visible_curves
                 .remove(&domain.property_type_at(index));
@@ -378,7 +385,7 @@ fn build_curve_selector_inline(
 
 fn build_curve_view(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
@@ -386,7 +393,7 @@ fn build_curve_view(
     suggestion_overlays: &[SuggestionOverlay],
     pose_library: &mut PoseLibrary,
 ) {
-    build_curve_toolbar(ui, ui_events, curve_buffer, pose_library, clip_library);
+    build_curve_toolbar(ui, world, curve_buffer, pose_library, clip_library);
     ui.separator();
 
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
@@ -469,7 +476,7 @@ fn build_curve_view(
 
     handle_curve_view_interaction(
         ui,
-        ui_events,
+        world,
         editor_state,
         &vt,
         &curves_to_draw,
@@ -483,7 +490,7 @@ fn build_curve_view(
 
     #[cfg(feature = "ml")]
     if let Some(bone_id) = track_ref.bone_id() {
-        handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
+        handle_suggestion_keyboard(ui, world, bone_id, editor_state, suggestion_overlays);
     }
 }
 
@@ -529,7 +536,7 @@ fn scalar_channel_color(domain: &ScalarChannelDomain, property_type: PropertyTyp
     // Evenly spaced hues over the domain's channels, alternating brightness
     // for neighbor separability.
     let index = domain.channel_index(property_type).unwrap_or(0);
-    let hue = index as f32 / domain.channels.len().max(1) as f32;
+    let hue = index as f32 / domain.channels().len().max(1) as f32;
     let value = if index % 2 == 0 { 1.0 } else { 0.75 };
     hsv_to_rgba(hue, 0.75, value)
 }
@@ -737,7 +744,7 @@ fn draw_clipped_curve_content(
 
 fn handle_curve_view_interaction(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
@@ -750,7 +757,7 @@ fn handle_curve_view_interaction(
 
     handle_mouse_interaction(
         ui,
-        ui_events,
+        world,
         editor_state,
         vt,
         curves_to_draw,
@@ -776,13 +783,13 @@ fn handle_curve_view_interaction(
         }
     }
 
-    build_keyframe_context_menu(ui, ui_events, editor_state, track_ref);
-    build_curve_editor_context_menu(ui, ui_events, editor_state, track_ref);
+    build_keyframe_context_menu(ui, world, editor_state, track_ref);
+    build_curve_editor_context_menu(ui, world, editor_state, track_ref);
 }
 
 fn build_keyframe_context_menu(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     editor_state: &mut CurveEditorState,
     track_ref: CurveTrackRef,
 ) {
@@ -795,7 +802,7 @@ fn build_keyframe_context_menu(
         if ui.selectable_config("Delete Key").build() {
             if editor_state.selected_keyframes.len() > 1 {
                 for sel in &editor_state.selected_keyframes {
-                    ui_events.send(UIEvent::TimelineDeleteKeyframe {
+                    world.send_command(TimelineEvent::DeleteKeyframe {
                         track: track_ref,
                         property_type: sel.property_type.clone(),
                         keyframe_id: sel.keyframe_id,
@@ -804,7 +811,7 @@ fn build_keyframe_context_menu(
                 editor_state.selected_keyframes.clear();
                 editor_state.selection_anchor = None;
             } else {
-                ui_events.send(UIEvent::TimelineDeleteKeyframe {
+                world.send_command(TimelineEvent::DeleteKeyframe {
                     track: track_ref,
                     property_type: ctx_kf.property_type.clone(),
                     keyframe_id: ctx_kf.keyframe_id,
@@ -821,7 +828,7 @@ fn build_keyframe_context_menu(
         ui.separator();
 
         if ui.selectable_config("  Linear").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+            world.send_command(TimelineEvent::SetKeyframeInterpolation {
                 track: track_ref,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
@@ -830,7 +837,7 @@ fn build_keyframe_context_menu(
         }
 
         if ui.selectable_config("  Bezier").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+            world.send_command(TimelineEvent::SetKeyframeInterpolation {
                 track: track_ref,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
@@ -839,7 +846,7 @@ fn build_keyframe_context_menu(
         }
 
         if ui.selectable_config("  Stepped").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+            world.send_command(TimelineEvent::SetKeyframeInterpolation {
                 track: track_ref,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
@@ -862,7 +869,7 @@ fn build_keyframe_context_menu(
 
         for (label, tangent_type) in &tangent_options {
             if ui.selectable_config(label).build() {
-                ui_events.send(UIEvent::TimelineSetTangentType {
+                world.send_command(TimelineEvent::SetTangentType {
                     track: track_ref,
                     property_type: ctx_kf.property_type,
                     keyframe_id: ctx_kf.keyframe_id,
@@ -876,7 +883,7 @@ fn build_keyframe_context_menu(
         ui.separator();
 
         if ui.selectable_config("  Non-Weighted").build() {
-            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
+            world.send_command(TimelineEvent::SetTangentWeightMode {
                 track: track_ref,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
@@ -885,7 +892,7 @@ fn build_keyframe_context_menu(
         }
 
         if ui.selectable_config("  Weighted").build() {
-            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
+            world.send_command(TimelineEvent::SetTangentWeightMode {
                 track: track_ref,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
@@ -897,14 +904,14 @@ fn build_keyframe_context_menu(
 
 fn build_curve_editor_context_menu(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     editor_state: &CurveEditorState,
     track_ref: CurveTrackRef,
 ) {
     ui.popup("curve_editor_context_menu", || {
         if ui.selectable_config("Add Key").build() {
             if let Some(property_type) = add_key_target_property(editor_state, track_ref) {
-                ui_events.send(UIEvent::TimelineAddKeyframe {
+                world.send_command(TimelineEvent::AddKeyframe {
                     track: track_ref,
                     property_type,
                     time: editor_state.context_menu_click_time.max(0.0),
@@ -940,7 +947,7 @@ fn add_key_target_property(
 
 fn handle_mouse_interaction(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
@@ -968,7 +975,7 @@ fn handle_mouse_interaction(
 
     if mouse_released {
         handle_mouse_release(
-            ui_events,
+            world,
             editor_state,
             vt,
             mouse_pos,
@@ -978,7 +985,7 @@ fn handle_mouse_interaction(
     }
     if middle_released {
         handle_mouse_release(
-            ui_events,
+            world,
             editor_state,
             vt,
             mouse_pos,
@@ -990,7 +997,7 @@ fn handle_mouse_interaction(
     if is_hovered && mouse_clicked && in_ruler_area {
         editor_state.interaction = CurveInteractionMode::ScrubbingRuler;
         let time = vt.x_to_time(mouse_pos[0]).clamp(0.0, duration);
-        ui_events.send(UIEvent::TimelineSetTime(time));
+        world.send_command(TimelineEvent::SetTime(time));
     }
 
     if is_hovered
@@ -1032,7 +1039,7 @@ fn handle_mouse_interaction(
     ) && mouse_down
     {
         let time = vt.x_to_time(mouse_pos[0]).clamp(0.0, duration);
-        ui_events.send(UIEvent::TimelineSetTime(time));
+        world.send_command(TimelineEvent::SetTime(time));
     }
 
     if is_hovered {
@@ -1041,7 +1048,7 @@ fn handle_mouse_interaction(
 }
 
 fn handle_mouse_release(
-    ui_events: &mut UIEventQueue,
+    world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
@@ -1056,7 +1063,7 @@ fn handle_mouse_release(
                 if let Some(track_ref) = editor_state.selected_track_ref() {
                     let (in_tangent, out_tangent) =
                         compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
-                    ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+                    world.send_command(TimelineEvent::SetKeyframeTangent {
                         track: track_ref,
                         property_type: dragging.property_type,
                         keyframe_id: dragging.keyframe_id,
@@ -1075,7 +1082,7 @@ fn handle_mouse_release(
                         - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
 
                     for sel in &editor_state.selected_keyframes {
-                        ui_events.send(UIEvent::TimelineMoveKeyframe {
+                        world.send_command(TimelineEvent::MoveKeyframe {
                             track: track_ref,
                             property_type: sel.property_type.clone(),
                             keyframe_id: sel.keyframe_id,
@@ -2264,7 +2271,7 @@ fn draw_buffer_curve_overlay(
 #[cfg(feature = "ml")]
 fn handle_suggestion_keyboard(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     bone_id: BoneId,
     editor_state: &CurveEditorState,
     suggestion_overlays: &[SuggestionOverlay],
@@ -2274,7 +2281,7 @@ fn handle_suggestion_keyboard(
 
     if shift && ui.is_key_pressed(imgui::Key::C) {
         for property_type in &editor_state.visible_curves {
-            ui_events.send(UIEvent::CurveSuggestionRequest {
+            world.send_command(CurveSuggestionEvent::Request {
                 bone_id,
                 property_type: *property_type,
             });
@@ -2282,11 +2289,11 @@ fn handle_suggestion_keyboard(
     }
 
     if ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
-        ui_events.send(UIEvent::CurveSuggestionAccept);
+        world.send_command(CurveSuggestionEvent::Accept);
     }
 
     if ui.is_key_pressed(imgui::Key::Escape) && !suggestion_overlays.is_empty() {
-        ui_events.send(UIEvent::CurveSuggestionDismiss);
+        world.send_command(CurveSuggestionEvent::Dismiss);
     }
 }
 
@@ -2389,19 +2396,19 @@ fn draw_suggestion_curve_overlay(
 
 fn build_curve_toolbar(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     curve_buffer: &CurveEditorBuffer,
     pose_library: &mut PoseLibrary,
     clip_library: &ClipLibrary,
 ) {
     if ui.small_button("Capture") {
-        ui_events.send(UIEvent::TimelineCaptureBuffer);
+        world.send_command(TimelineEvent::CaptureBuffer);
     }
 
     ui.same_line();
     if !curve_buffer.is_empty() {
         if ui.small_button("Swap") {
-            ui_events.send(UIEvent::TimelineSwapBuffer);
+            world.send_command(TimelineEvent::SwapBuffer);
         }
     } else {
         ui.text_disabled("Swap");
@@ -2421,7 +2428,7 @@ fn build_curve_toolbar(
 
     if ui.small_button("Save Pose") {
         let name = format!("Pose {}", pose_library.poses.len() + 1);
-        ui_events.send(UIEvent::PoseLibrarySaveCurrent { name });
+        world.send_command(PoseLibraryEvent::SaveCurrent { name });
     }
 
     ui.same_line();
@@ -2455,11 +2462,11 @@ fn build_curve_toolbar(
 
     if let Some(id) = pose_library.selected_pose_id {
         if ui.small_button("Apply##pose") {
-            ui_events.send(UIEvent::PoseLibraryApply(id));
+            world.send_command(PoseLibraryEvent::Apply(id));
         }
         ui.same_line();
         if ui.small_button("Del##pose") {
-            ui_events.send(UIEvent::PoseLibraryDelete(id));
+            world.send_command(PoseLibraryEvent::Delete(id));
         }
     } else {
         ui.text_disabled("Apply");
@@ -2493,3 +2500,72 @@ mod tests {
         assert!(result.ends_with("表情差分"));
     }
 }
+
+fn build_curve_editor_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let scalar_domain = {
+        let current = world.resource::<TimelineState>().current_clip_id;
+        current.and_then(|_| {
+            crate::ecs::component::scalar_channel_domains()
+                .iter()
+                .copied()
+                .find(|domain| {
+                    (domain.entities)(world).iter().any(|&entity| {
+                        crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(world, entity)
+                            == current
+                    })
+                })
+        })
+    };
+    let suggestion_overlays = collect_suggestion_overlays(world);
+
+    let timeline_state = world.resource::<TimelineState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut curve_editor = world.resource_mut::<CurveEditorState>();
+    let curve_buffer = world.resource::<CurveEditorBuffer>();
+    let mut pose_library = world.resource_mut::<PoseLibrary>();
+    draw_curve_editor_window(
+        ui,
+        world,
+        &timeline_state,
+        &clip_library,
+        &mut curve_editor,
+        &curve_buffer,
+        &suggestion_overlays,
+        &mut pose_library,
+        scalar_domain,
+    );
+    curve_editor.needs_focus = false;
+}
+
+#[cfg(feature = "ml")]
+fn collect_suggestion_overlays(world: &World) -> Vec<SuggestionOverlay> {
+    world
+        .get_resource::<crate::ecs::resource::CurveSuggestionState>()
+        .map(|state| {
+            state
+                .suggestions
+                .iter()
+                .map(|s| SuggestionOverlay {
+                    property_type: s.property_type,
+                    time: s.predicted_time,
+                    value: s.predicted_value,
+                    tangent_in: s.tangent_in,
+                    tangent_out: s.tangent_out,
+                    confidence: s.confidence,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(not(feature = "ml"))]
+fn collect_suggestion_overlays(_: &World) -> Vec<SuggestionOverlay> {
+    Vec::new()
+}
+
+crate::ui_window!("curve_editor", Floating, 0, build_curve_editor_window);

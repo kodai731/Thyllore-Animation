@@ -1,6 +1,10 @@
-use crate::ecs::resource::TimelineState;
-
-use super::viewport_window::ViewportInfo;
+use crate::asset::AssetStorage;
+use crate::ecs::resource::{
+    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ViewportInput,
+};
+use crate::ecs::world::World;
+use crate::hooks::ui_window::init_window_state;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;
@@ -61,13 +65,13 @@ impl StatusBarState {
     }
 }
 
-pub fn draw_status_bar(
+fn draw_status_bar(
     ui: &imgui::Ui,
     state: &mut StatusBarState,
     delta_time: f32,
     cpu_ms: f32,
     gpu_ms: Option<f32>,
-    viewport_info: &ViewportInfo,
+    viewport: &ViewportInput,
     timeline_state: &TimelineState,
     clip_duration: f32,
 ) {
@@ -103,8 +107,8 @@ pub fn draw_status_bar(
 
     let text_size = ui.calc_text_size(&text);
 
-    let vp_right = viewport_info.position[0] + viewport_info.size[0];
-    let vp_bottom = viewport_info.position[1] + viewport_info.size[1];
+    let vp_right = viewport.position[0] + viewport.size[0];
+    let vp_bottom = viewport.position[1] + viewport.size[1];
 
     let window_width = text_size[0] + OVERLAY_PADDING * 2.0;
     let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
@@ -191,3 +195,45 @@ mod tests {
         assert_eq!(parse_rss_from_statm("abc def"), 0.0);
     }
 }
+
+/// Wall-clock values (FPS, memory) are skipped under a fixed step so a reproducible frame stays identical.
+fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+    if world.resource::<FrameClock>().is_fixed() {
+        return;
+    }
+
+    let frame_ms = world
+        .get_resource::<CpuFrameTimings>()
+        .map(|timings| timings.dt_ms)
+        .unwrap_or(0.0);
+    let delta_time = (frame_ms / 1000.0).max(0.001);
+    let gpu_ms = world
+        .get_resource::<GpuPassTimings>()
+        .and_then(|timings| timings.frame_total_ms);
+    let viewport = world.resource::<ViewportInput>();
+    let timeline_state = world.resource::<TimelineState>();
+    let clip_duration = {
+        let clip_library = world.resource::<ClipLibrary>();
+        crate::ecs::systems::timeline_effective_duration(&timeline_state, &clip_library)
+    };
+
+    let mut state = world.resource_mut::<StatusBarState>();
+    draw_status_bar(
+        ui,
+        &mut state,
+        delta_time,
+        frame_ms,
+        gpu_ms,
+        &viewport,
+        &timeline_state,
+        clip_duration,
+    );
+}
+
+crate::ui_window!(
+    "status_bar",
+    Bottom,
+    1,
+    init = init_window_state::<StatusBarState>,
+    build = build_status_bar
+);

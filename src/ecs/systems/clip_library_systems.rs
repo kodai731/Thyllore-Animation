@@ -11,7 +11,7 @@ use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::World;
-use crate::scene::AnimationClipFile;
+use crate::scene::SceneError;
 
 pub fn clip_library_register_and_activate(
     lib: &mut ClipLibrary,
@@ -109,7 +109,7 @@ pub fn clip_library_update_save_metadata(
 pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Path) -> Result<()> {
     let source = lib.source_clips.get(&id).context("Clip not found")?;
 
-    thyllore_exporter_core::systems::ron::export_ron_clip(&source.editable_clip, path)?;
+    crate::scene::save_animation_clip(path, &source.editable_clip)?;
 
     log!(
         "Saved animation clip '{}' to {:?}",
@@ -268,12 +268,11 @@ pub fn clip_library_count_references(
 }
 
 fn deserialize_clip(content: &str) -> Result<EditableAnimationClip> {
-    if let Ok(clip_file) = ron::from_str::<AnimationClipFile>(content) {
-        return Ok(clip_file.clip);
+    match crate::scene::parse_animation_clip(content) {
+        Ok(clip) => Ok(clip),
+        Err(SceneError::Parse(_)) => Ok(ron::from_str::<EditableAnimationClip>(content)?),
+        Err(error) => Err(error.into()),
     }
-
-    let clip = ron::from_str::<EditableAnimationClip>(content)?;
-    Ok(clip)
 }
 
 /// The first clip with bone tracks by id, else the first clip, so a batch run never plays an

@@ -11,61 +11,67 @@ pub struct WaterTorusEffect {
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
     #[ubo("radii.x")]
-    #[persist(ui(min = 0.01, max = 10.0, group = "shape"))]
+    #[persist(curve, debug_range = (0.5, 5.0), ui(min = 0.01, max = 10.0, group = "shape"))]
     pub major_radius: f32,
     #[ubo("radii.y")]
-    #[persist(ui(min = 0.01, max = 5.0, group = "shape"))]
+    #[persist(curve, debug_range = (0.1, 2.0), ui(min = 0.01, max = 5.0, group = "shape"))]
     pub minor_radius: f32,
     #[ubo("absorption.w")]
-    #[persist(ui(min = 1.0, max = 2.5, format = "%.3f", group = "optics"))]
+    #[persist(
+        curve,
+        ui(label = "IOR", min = 1.0, max = 2.5, format = "%.3f", group = "optics")
+    )]
     pub ior: f32,
     #[ubo("absorption.xyz")]
     /// Beer-Lambert absorption per meter; the picker shows the colour transmitted over the reference distance
-    #[persist(ui(kind = Absorption, min = 0.0, max = 10.0, group = "optics"))]
+    #[persist(curve, debug_range = (0.0, 5.0), ui(kind = Absorption, min = 0.0, max = 10.0, group = "optics"))]
     pub absorption: [f32; 3],
     #[ubo("flow.x")]
-    #[persist(ui(primary, min = -5.0, max = 5.0, group = "flow"))]
+    #[persist(curve, debug_range = (-2.0, 2.0), ui(primary, min = -5.0, max = 5.0, group = "flow"))]
     pub flow_longitudinal: f32,
     #[ubo("flow.y")]
-    #[persist(ui(min = -5.0, max = 5.0, group = "flow"))]
+    #[persist(curve, debug_range = (-2.0, 2.0), ui(min = -5.0, max = 5.0, group = "flow"))]
     pub flow_meridional: f32,
-    #[persist(ui(primary, min = 0.0, max = 1.0, format = "%.3f", group = "wave"))]
+    #[persist(curve, debug_range = (0.0, 0.5), ui(primary, min = 0.0, max = 1.0, format = "%.3f", group = "wave"))]
     pub wave_amplitude: f32,
-    #[persist(ui(primary, min = 0.0, max = 50.0, format = "%.1f", group = "wave"))]
+    #[persist(curve, debug_range = (1.0, 20.0), ui(primary, min = 0.0, max = 50.0, format = "%.1f", group = "wave"))]
     pub wave_frequency: f32,
-    #[persist(ui(min = 0.0, max = 10.0, group = "wave"))]
+    #[persist(curve, debug_range = (0.0, 5.0), ui(min = 0.0, max = 10.0, group = "wave"))]
     pub wave_speed: f32,
     #[persist(ui(min = 0.0, max = 1.0, group = "wave"))]
     pub wave_dispersion: f32,
     #[persist(ui(min = 0.0, max = 1.0, group = "wave"))]
     pub wave_lb_blend: f32,
     #[ubo("lighting.x")]
-    #[persist(ui(primary, min = 0.0, max = 20.0, group = "lighting"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 20.0, group = "lighting"))]
     pub light_intensity: f32,
     #[ubo("lighting.y")]
-    #[persist(ui(min = 1.0, max = 1024.0, format = "%.0f", group = "lighting"))]
+    #[persist(
+        curve,
+        ui(min = 1.0, max = 1024.0, format = "%.0f", group = "lighting")
+    )]
     pub highlight_sharpness: f32,
     #[ubo("lighting.z")]
-    #[persist(ui(min = 0.0, max = 2.0, group = "lighting"))]
+    #[persist(curve, ui(min = 0.0, max = 2.0, group = "lighting"))]
     pub sky_brightness: f32,
     #[ubo("lighting.w")]
-    #[persist(ui(min = 0.0, max = 10.0, group = "lighting"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, group = "lighting"))]
     pub scatter_strength: f32,
     #[ubo("scattering.x")]
-    #[persist(ui(min = -0.9, max = 0.9, group = "lighting"))]
+    #[persist(curve, ui(min = -0.9, max = 0.9, group = "lighting"))]
     pub scatter_anisotropy: f32,
     #[ubo("composite.x")]
-    #[persist(ui(primary, min = 0.0, max = 1.0, group = "look"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 1.0, group = "look"))]
     pub reflect_strength: f32,
     #[ubo("composite.y")]
-    #[persist(ui(min = 0.0, max = 1.0, group = "look"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "look"))]
     pub refract_strength: f32,
     #[ubo("radii.z")]
-    #[persist(ui(min = 0.0, max = 2.0, group = "look"))]
+    #[persist(curve, ui(min = 0.0, max = 2.0, group = "look"))]
     pub caustic_strength: f32,
     #[ubo("tint.xyz")]
     /// Scattering tint
-    #[persist(ui(primary, min = 0.0, max = 1.0, group = "look"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 1.0, group = "look"))]
     pub tint: [f32; 3],
     #[ubo("flow.z")]
     #[runtime(ui(min = 0.0, max = 100.0))]

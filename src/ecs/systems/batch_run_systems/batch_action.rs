@@ -3,8 +3,10 @@ use std::rc::Rc;
 
 use anyhow::Result;
 
-use crate::ecs::events::{DebugPrimitiveKind, UIEvent, UIEventQueue};
+use crate::ecs::events::DebugPrimitiveKind;
 use crate::ecs::resource::{BatchRun, DebugViewMode, DebugViewState};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::BatchCapture;
 
@@ -45,7 +47,7 @@ pub fn unit_action_parse<A: BatchAction + Default + 'static>(
 }
 
 /// A `dump_*` action: inside a batch run it inserts the request `T` so the readback waits for the
-/// capture frame; interactively the readback runs at once through `UIEvent::CaptureNow`.
+/// capture frame; interactively the readback runs at once through `CameraEvent::CaptureNow`.
 #[derive(Debug)]
 pub struct CaptureRequest<T: BatchCapture + Default> {
     name: &'static str,
@@ -61,9 +63,7 @@ impl<T: BatchCapture + Default> BatchAction for CaptureRequest<T> {
             world.insert_resource(T::default());
             return;
         }
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::CaptureNow(Rc::new(T::default())));
+        world.send_command(CameraEvent::CaptureNow(Rc::new(T::default())));
     }
 }
 
@@ -114,9 +114,7 @@ impl BatchAction for ResetCamera {
         "reset_camera"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ResetCamera);
+        world.send_command(CameraEvent::ResetCamera);
     }
 }
 
@@ -125,9 +123,7 @@ impl BatchAction for ResetCameraUp {
         "reset_camera_up"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::ResetCameraUp);
+        world.send_command(CameraEvent::ResetCameraUp);
     }
 }
 
@@ -136,9 +132,7 @@ impl BatchAction for CameraToModel {
         "camera_to_model"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::MoveCameraToModel);
+        world.send_command(CameraEvent::MoveCameraToModel);
     }
 }
 
@@ -195,6 +189,31 @@ fn view_mode_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     )
 }
 
+#[derive(Debug)]
+pub struct TimelineTime(pub f32);
+
+impl BatchAction for TimelineTime {
+    fn name(&self) -> &'static str {
+        "timeline_time"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(TimelineEvent::SetTime(self.0));
+    }
+}
+
+fn timeline_time_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let seconds_text = text.strip_prefix("timeline_time=")?.trim();
+    Some(
+        seconds_text
+            .parse::<f32>()
+            .ok()
+            .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+            .map(|seconds| Box::new(TimelineTime(seconds)) as Box<dyn BatchAction>)
+            .ok_or_else(|| anyhow::anyhow!("invalid timeline_time seconds '{seconds_text}'")),
+    )
+}
+
+crate::batch_action!("timeline_time", timeline_time_parse);
 crate::batch_action!("view_mode", view_mode_parse);
 crate::batch_action!("black_background", unit_action_parse::<BlackBackground>);
 
@@ -210,9 +229,7 @@ impl BatchAction for SpawnDebugPrimitive {
         }
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::SpawnDebugPrimitive { kind: self.0 });
+        world.send_command(CameraEvent::SpawnDebugPrimitive { kind: self.0 });
     }
 }
 

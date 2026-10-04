@@ -54,7 +54,7 @@ fn timeline_state_drives_water_time() {
     // Replicate the branch logic here (the function takes FrameContext which needs Vulkan).
     let entity = world.entities_with::<WaterTorusEffect>()[0];
     let timeline_time: f32 = world.get_resource::<TimelineState>().unwrap().current_time;
-    let mut effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
+    let effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
     effect.time = timeline_time * effect.time_scale + effect.time_offset;
 
     let effect = world.get_component::<WaterTorusEffect>(entity).unwrap();
@@ -77,7 +77,7 @@ fn paused_timeline_advances_water_time_by_delta_when_free_run_is_enabled() {
         ..TimelineState::new()
     });
 
-    let mut effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
+    let effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
     resolve_effect_time(
         &mut effect.time,
         effect.time_scale,
@@ -105,7 +105,7 @@ fn playing_timeline_drives_water_time_from_timeline_time() {
         ..TimelineState::new()
     });
 
-    let mut effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
+    let effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
     resolve_effect_time(
         &mut effect.time,
         effect.time_scale,
@@ -373,7 +373,7 @@ fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
 
 #[test]
 fn water_temporal_same_snapshot_twice_weight_0_85() {
-    use crate::ecs::component::{WaterTemporalAccum, WaterTorusEffect};
+    use crate::ecs::component::WaterTemporalAccum;
     use crate::ecs::resource::{WaterHistorySnapshotState, WaterRenderSettings};
     use cgmath::{Matrix4, SquareMatrix};
 
@@ -406,7 +406,7 @@ fn water_temporal_same_snapshot_twice_weight_0_85() {
 
 #[test]
 fn water_temporal_view_change_weight_0() {
-    use crate::ecs::component::{WaterTemporalAccum, WaterTorusEffect};
+    use crate::ecs::component::WaterTemporalAccum;
     use crate::ecs::resource::{WaterHistorySnapshotState, WaterRenderSettings};
     use cgmath::{Matrix4, SquareMatrix};
 

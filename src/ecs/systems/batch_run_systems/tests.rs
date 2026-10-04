@@ -222,7 +222,6 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     assert_eq!(motion_path.center, cgmath::Vector3::new(0.0, 0.0, 0.0));
     assert!((motion_path.radius - 2.0).abs() < 1e-5);
     assert!((motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5);
-    drop(motion_path);
 
     crate::ecs::systems::sync_motion_paths(&mut world);
 

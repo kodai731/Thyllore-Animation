@@ -1,25 +1,21 @@
 use super::{resolve_selected_wind, ui_command::WindUiCommand};
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::WindRenderSettings;
 use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::world::World;
-use crate::hooks::effect_ui_event::EffectUiQueue;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_wind_ui_events(world: &mut World, _assets: &mut AssetStorage) {
-    let commands = match world.get_resource_mut::<EffectUiQueue<WindUiCommand>>() {
-        Some(mut queue) => queue.drain(),
-        None => return,
-    };
-
-    for command in commands {
-        match command {
+impl UiCommand for WindUiCommand {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        match *self {
             WindUiCommand::UpdateEffect { entity, effect } => {
                 apply_effect_update::<WindTornadoEffect>(world, entity, *effect);
             }
             WindUiCommand::ApplyPreset(name) => {
                 let Some(target) = resolve_selected_wind(world) else {
-                    continue;
+                    return;
                 };
                 apply_effect_preset::<WindTornadoEffect>(world, target, &name);
             }

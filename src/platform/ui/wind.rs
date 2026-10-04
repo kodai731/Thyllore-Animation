@@ -10,7 +10,6 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
 use crate::ecs::World;
-use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -73,7 +72,7 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     ) {
         if selected_wind_entity.is_some() {
             ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            send_effect_ui_command(ecs_world, WindUiCommand::ApplyPreset(chosen));
+            ecs_world.send_command(WindUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
     }
@@ -94,13 +93,10 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
         |ui, edited| wind_key_button(ui, ecs_world, edited),
     );
     if !effect_applied_this_frame {
-        send_effect_ui_command(
-            ecs_world,
-            WindUiCommand::UpdateEffect {
-                entity: selected_wind,
-                effect: Box::new(effect_copy),
-            },
-        );
+        ecs_world.send_command(WindUiCommand::UpdateEffect {
+            entity: selected_wind,
+            effect: Box::new(effect_copy),
+        });
     }
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
@@ -160,10 +156,7 @@ fn draw_wind_render_settings(ui: &imgui::Ui, ecs_world: &World) {
         "Animate when paused",
         &mut settings_copy.free_run_when_paused,
     );
-    send_effect_ui_command(
-        ecs_world,
-        WindUiCommand::UpdateRenderSettings(settings_copy),
-    );
+    ecs_world.send_command(WindUiCommand::UpdateRenderSettings(settings_copy));
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

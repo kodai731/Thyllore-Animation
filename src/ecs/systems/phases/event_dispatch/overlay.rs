@@ -1,8 +1,11 @@
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
     FlameEffect, FlameTrail, LightningEffect, WaterTorusEffect, WindTornadoEffect,
 };
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::{UIEvent, UiCommand};
 use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::CoordinateSpace;
+use crate::ecs::resource::TransformGizmoMode;
 use crate::ecs::resource::{
     AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState,
     LightningRenderSettings, MessageLog, OnionSkinningConfig, PhysicalCameraParameters,
@@ -14,61 +17,97 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
-    for event in events {
-        match event {
-            UIEvent::SetBoneGizmoVisible(visible) => {
+#[derive(Clone, Debug)]
+pub enum OverlayEvent {
+    SetBoneGizmoVisible(bool),
+    SetWeightHeatmapEnabled(bool),
+    SetTransformGizmoMode(TransformGizmoMode),
+    SetTransformGizmoSpace(CoordinateSpace),
+    UpdateTransformGizmoState(Box<TransformGizmoState>),
+    UpdateDepthOfField(DepthOfField),
+    UpdatePhysicalCamera(PhysicalCameraParameters),
+    UpdateAutoExposure(AutoExposure),
+    UpdateOnionSkinning(OnionSkinningConfig),
+    SelectEffectInstance { key: &'static str, index: usize },
+    SetGridShowYAxis(bool),
+    ClearMessageLog,
+}
+
+impl UiCommand for OverlayEvent {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        match *self {
+            OverlayEvent::SetBoneGizmoVisible(visible) => {
                 if let Some(mut gizmo) = world.get_resource_mut::<BoneGizmoData>() {
-                    gizmo.visible = *visible;
+                    gizmo.visible = visible;
                 }
             }
-            UIEvent::SetWeightHeatmapEnabled(enabled) => {
-                log!("UIEvent::SetWeightHeatmapEnabled({})", enabled);
+            OverlayEvent::SetWeightHeatmapEnabled(enabled) => {
                 if let Some(mut heatmap) = world.get_resource_mut::<WeightHeatmapState>() {
-                    heatmap.enabled = *enabled;
+                    heatmap.enabled = enabled;
                 } else {
                     log_warn!("WeightHeatmapState resource missing when toggling heatmap");
                 }
             }
-            UIEvent::SetTransformGizmoMode(mode) => {
+            OverlayEvent::SetTransformGizmoMode(mode) => {
                 if let Some(mut state) = world.get_resource_mut::<TransformGizmoState>() {
-                    state.mode = *mode;
+                    state.mode = mode;
                 }
             }
-            UIEvent::SetTransformGizmoSpace(space) => {
+            OverlayEvent::SetTransformGizmoSpace(space) => {
                 if let Some(mut state) = world.get_resource_mut::<TransformGizmoState>() {
-                    state.coordinate_space = *space;
+                    state.coordinate_space = space;
                 }
             }
-            UIEvent::UpdateTransformGizmoState(new_state) => {
+            OverlayEvent::UpdateTransformGizmoState(new_state) => {
                 if let Some(mut state) = world.get_resource_mut::<TransformGizmoState>() {
-                    *state = *new_state.clone();
+                    *state = *new_state;
                 }
             }
-            UIEvent::UpdateDepthOfField(new_dof) => {
+            OverlayEvent::UpdateDepthOfField(new_dof) => {
                 if let Some(mut dof) = world.get_resource_mut::<DepthOfField>() {
-                    *dof = new_dof.clone();
+                    *dof = new_dof;
                 }
             }
-            UIEvent::UpdatePhysicalCamera(new_params) => {
+            OverlayEvent::UpdatePhysicalCamera(new_params) => {
                 if let Some(mut params) = world.get_resource_mut::<PhysicalCameraParameters>() {
-                    *params = new_params.clone();
+                    *params = new_params;
                 }
             }
-            UIEvent::UpdateAutoExposure(new_ae) => {
+            OverlayEvent::UpdateAutoExposure(new_ae) => {
                 if let Some(mut ae) = world.get_resource_mut::<AutoExposure>() {
-                    *ae = new_ae.clone();
+                    *ae = new_ae;
                 }
             }
-            UIEvent::UpdateOnionSkinning(new_config) => {
+            OverlayEvent::UpdateOnionSkinning(new_config) => {
                 if new_config.enabled {
                     auto_select_animator_entity(world);
                 }
                 if let Some(mut config) = world.get_resource_mut::<OnionSkinningConfig>() {
-                    *config = new_config.clone();
+                    *config = new_config;
                 }
             }
+            OverlayEvent::SelectEffectInstance { key, index } => {
+                select_effect_instance(world, key, index);
+            }
+            OverlayEvent::SetGridShowYAxis(show) => {
+                if let Some(mut grid) = world.get_resource_mut::<GridMeshData>() {
+                    grid.show_y_axis_grid = show;
+                }
+            }
+            OverlayEvent::ClearMessageLog => {
+                if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
+                    crate::ecs::systems::message_log_clear_buffer(&mut log);
+                }
+            }
+        }
+    }
+}
+
+pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
+    for event in events {
+        match event {
             UIEvent::UpdateFlameEffect { entity, effect } => {
                 if !world.has_component::<FlameEffect>(*entity) {
                     continue;
@@ -166,9 +205,6 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                     );
                 }
             }
-            UIEvent::SelectEffectInstance { key, index } => {
-                select_effect_instance(world, key, *index);
-            }
             UIEvent::UpdateWaterEffect { entity, effect } => {
                 if !world.has_component::<WaterTorusEffect>(*entity) {
                     continue;
@@ -246,16 +282,6 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             UIEvent::UpdateFlameRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<FlameRenderSettings>() {
                     *settings = new_settings.clone();
-                }
-            }
-            UIEvent::SetGridShowYAxis(show) => {
-                if let Some(mut grid) = world.get_resource_mut::<GridMeshData>() {
-                    grid.show_y_axis_grid = *show;
-                }
-            }
-            UIEvent::ClearMessageLog => {
-                if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
-                    crate::ecs::systems::message_log_clear_buffer(&mut log);
                 }
             }
             _ => {}

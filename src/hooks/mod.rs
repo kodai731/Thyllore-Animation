@@ -1,5 +1,6 @@
 pub mod batch_capture;
 pub mod bootstrap;
+pub mod dispatch_prep;
 pub mod effect;
 pub mod effect_spawn;
 pub mod frame_prep;
@@ -9,3 +10,4 @@ pub mod model_load;
 pub mod pass;
 pub mod scene;
 pub mod scene_resource;
+pub mod ui_window;

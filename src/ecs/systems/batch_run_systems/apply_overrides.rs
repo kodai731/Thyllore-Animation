@@ -1,10 +1,10 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
     GpuTimingsSink, ModelState, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::world::World;
 
 use super::anim_edits::batch_apply_anim_edits;
@@ -69,9 +69,7 @@ fn request_scene_model_load(world: &mut World) {
     if model_path.is_empty() || model_path == "Generated Mesh" {
         return;
     }
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::LoadModel { path: model_path });
+    world.send_command(CameraEvent::LoadModel { path: model_path });
 }
 
 /// Prefers a clip with bone tracks so an empty default clip never shadows the model animation.

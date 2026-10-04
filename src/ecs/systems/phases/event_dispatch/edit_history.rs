@@ -1,15 +1,22 @@
 use crate::animation::editable::{EditableAnimationClip, SourceClip};
+use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory};
 use crate::ecs::world::{Entity, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_edit_history_events(events: &[UIEvent], world: &mut World) {
-    for event in events {
-        match event {
-            UIEvent::Undo => dispatch_undo(world),
-            UIEvent::Redo => dispatch_redo(world),
-            _ => {}
+#[derive(Clone, Debug)]
+pub enum EditHistoryEvent {
+    Undo,
+    Redo,
+}
+
+impl UiCommand for EditHistoryEvent {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        match *self {
+            EditHistoryEvent::Undo => dispatch_undo(world),
+            EditHistoryEvent::Redo => dispatch_redo(world),
         }
     }
 }

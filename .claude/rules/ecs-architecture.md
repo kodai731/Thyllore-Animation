@@ -42,7 +42,7 @@ src/ecs/
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   ├── curve_copilot/   # ML curve suggestion systems
 │   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)
-├── events/              # UIEvent definitions and UIEventQueue
+├── events/              # UiCommand / UiCommandQueue, DialogRequest (and the effect-only UIEvent until #193)
 ├── query/               # Query builder, filters, tuple fetch
 ├── storage/             # Sparse set component storage
 ├── registry/            # Component registry (type info)
@@ -164,7 +164,7 @@ EventDispatch first, then `begin_frame`, the update phases through `run_frame()`
 once the image is presented. The slots are:
 
 ```
-EventDispatch → run_event_dispatch_phase()   # UIEvent → World, command queues; file dialogs; apply commands
+EventDispatch → run_event_dispatch_phase()   # DispatchPrepHooks (worker polls), UI commands → World; dialog requests; apply commands
 First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
 Input         → run_input_phase()            # Input handling, gizmo interaction
 Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
@@ -193,8 +193,8 @@ after).
 - **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
   mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
   sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
-  routes Slate input before `UWorld::Tick`). The file dialogs the engine asks of the platform are the
-  dispatch's return value; what `App` must do is pushed to a command queue and applied by `App` before
+  routes Slate input before `UWorld::Tick`). The file dialogs the engine asks of the platform are
+  `DialogRequest`s that `src/platform/events/file_dialog.rs` drains right after the dispatch; what `App` must do is pushed to a command queue and applied by `App` before
   `begin_frame`; readbacks of the finished image are Last (Bevy `PostUpdate` egui output, Unreal
   `ProcessLocalPlayerSlateOperations` after the world tick)
 - **Commands are queued by stage, not returned**: a dispatcher or system pushes to the `CommandQueue<C>`
@@ -277,7 +277,7 @@ Core Types (src/ecs/component/, src/ecs/resource/)
 
 **Allowed in platform layer** (`src/platform/`):
 - Reading resources for UI display (immutable access)
-- Sending events to `UIEventQueue`
+- Sending UI commands with `World::send_command` and dialog requests with `send_dialog_request`
 - Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase`)
 - Platform-specific I/O (file dialogs, window management, imgui orchestration)
 - Converting file dialog results into commands and pushing them to their `CommandQueue` (applied by `App`,
@@ -285,7 +285,7 @@ Core Types (src/ecs/component/, src/ecs/resource/)
 
 **NOT allowed in platform layer**:
 - Directly calling multiple ECS system functions to process events
-- Match-dispatching `UIEvent` variants to mutate `World`/`AssetStorage`
+- Match-dispatching UI command variants to mutate `World`/`AssetStorage` (that is the command's `apply`)
 - Implementing event handler logic inline
 - Using `resource_mut` or `get_component_mut` for business logic mutations
 
@@ -299,14 +299,27 @@ Domain crates (`crates/thyllore-anim-core`, `thyllore-effect-core`, ...) must be
 
 ## Event System
 
-Events follow a **record-then-dispatch** pattern (similar to Unity DOTS EntityCommandBuffer
-and Flecs deferred events):
+UI input follows a **record-then-apply** pattern (similar to Unity DOTS EntityCommandBuffer and Flecs
+deferred events):
 
-1. **Platform layer** records events into `UIEventQueue` (immutable World access only)
-2. **Event dispatch phase** processes all queued events (mutable World access)
-3. **Structural changes** (entity creation/destruction) happen only during dispatch
+1. **Platform layer** sends commands with `World::send_command(command)` (immutable World access only)
+2. **Event dispatch phase** drains the one `UiCommandQueue` and calls `apply` on each command, in send order
+3. **Structural changes** (entity creation/destruction) happen only during that apply
 
-This prevents mutation during iteration and ensures deterministic ordering.
+A UI command is a per-feature enum that implements `UiCommand` (`src/ecs/events/ui_command.rs`:
+`apply(self: Box<Self>, world, assets, graphics)`), declared in the file that applies it
+(`src/ecs/systems/phases/event_dispatch/<feature>.rs`; a feature behind a cargo feature keeps the whole file under
+`#![cfg(...)]`, see `event_dispatch/ml/`). Adding a UI interaction touches that file (variant + match arm) and the
+sending window, nothing else: the phase never names a feature, there is no registration and no stage. Two commands
+that must apply in order within one frame are sent in that order (or merged into one command); the queue is FIFO.
+File-dialog requests are not commands: the window sends `DialogRequest` (`src/ecs/events/dialog_request.rs`,
+`send_dialog_request`) and `src/platform/events/file_dialog.rs` drains them after the phase. The remaining
+`UIEvent` / `UIEventQueue` (`src/ecs/events/ui_events.rs`) only carries the effect variants until #193 moves them
+onto `UiCommand`; it receives no new variants.
+
+Editor windows are the other half: each file in `src/platform/ui/` registers its window with `ui_window!`
+(`src/hooks/ui_window.rs`), reads `LayoutSnapshot` / `ViewportInput` and its own state resource from `World`, and
+sends commands. When to use a hook and when a command is decided in `hierarchy.md`, "Hook or command?".
 
 ## Bones are NOT Entities
 
@@ -386,7 +399,7 @@ small structural hierarchies can use optimized storage rather than full entity r
 | Organization Unit | Directory | Module | Directory | Free-form | Crate |
 | Phase System | Coordinator fns | DependsOn pipeline | SystemGroup hierarchy | User-defined | Schedule + SystemSet |
 | Global State | Resource | Singleton | Singleton Component | Context Variable | Resource |
-| Events | UIEventQueue | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
+| Events | `UiCommandQueue` (FIFO of `Box<dyn UiCommand>`) | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
 | Deferred Changes | `CommandQueue<C>` per stage | Sync point flush | EntityCommandBuffer | - | Commands |
 
 ### Key Patterns Adopted from Each
@@ -396,7 +409,7 @@ small structural hierarchies can use optimized storage rather than full entity r
 | components/ + systems/ directory split | Flecs, Unity DOTS | `thyllore-anim-core/src/editable/components/` + `systems/` |
 | Phase pipeline with explicit ordering | Flecs, Unity DOTS, Bevy | `phases/` directory with coordinator functions |
 | Resources for global state | All (unanimous) | `ecs/resource/` |
-| Record-then-dispatch events | Unity DOTS (ECB), Flecs (deferred) | `UIEventQueue` → `event_dispatch_phase` |
+| Record-then-dispatch events | Unity DOTS (ECB), Flecs (deferred) | `UiCommandQueue` → `event_dispatch_phase` |
 | Module depends on types only, not logic | Flecs | Platform layer reads resources, sends events only |
 | Pure domain layer (no World dependency) | Bevy (per-crate), Flecs (module independence) | `thyllore-anim-core` / `thyllore-effect-core` have no ECS dependency |
 | Contiguous memory for bulk data | Flecs, Bevy, Unreal | `Vec<Bone>`, `Vec<Keyframe>` for animation data |

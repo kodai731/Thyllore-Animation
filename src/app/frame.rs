@@ -3,7 +3,6 @@ use std::time::Instant;
 use anyhow::Result;
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::CpuFrameTimings;
 use crate::ecs::systems::phases::{run_event_dispatch_phase, run_last_phase};
 
@@ -18,7 +17,7 @@ impl App {
     pub unsafe fn drive_frame(
         &mut self,
         input: FrameInput<'_>,
-        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
+        queue_file_dialog_commands: impl FnOnce(&App),
     ) -> Result<()> {
         self.dispatch_ui_events(queue_file_dialog_commands);
 
@@ -53,16 +52,13 @@ impl App {
         Ok(())
     }
 
-    unsafe fn dispatch_ui_events(
-        &mut self,
-        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
-    ) {
-        let file_dialog_events = run_event_dispatch_phase(
+    unsafe fn dispatch_ui_events(&mut self, queue_file_dialog_commands: impl FnOnce(&App)) {
+        run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
             &self.data.graphics_resources,
         );
-        queue_file_dialog_commands(&file_dialog_events, self);
+        queue_file_dialog_commands(self);
 
         self.apply_app_commands();
     }

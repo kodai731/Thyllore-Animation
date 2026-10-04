@@ -7,9 +7,9 @@ mod field;
 mod frame_prep;
 mod heat_distortion;
 mod history_accumulate;
+mod object_pick;
 mod passes;
 mod paths;
-mod pick;
 mod pipeline;
 mod preset;
 mod render_targets;
@@ -30,9 +30,9 @@ pub use dump::*;
 pub use field::*;
 pub use heat_distortion::*;
 pub use history_accumulate::*;
+pub use object_pick::*;
 pub use passes::*;
 pub use paths::*;
-pub use pick::*;
 pub use pipeline::*;
 pub use preset::*;
 pub use render_targets::*;
@@ -44,5 +44,7 @@ pub use trace::*;
 pub use trail::*;
 pub use ui_command::*;
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

@@ -1,13 +1,14 @@
 use super::passes::compute_lightning_scissor;
+use super::test_support::{lightning_inside_first_burst, orthographic_projection};
 use super::*;
 use crate::ecs::component::{
     EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
-use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
+use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
 use crate::ecs::systems::effect_edit::apply_effect_preset;
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
+use cgmath::{Matrix4, SquareMatrix, Vector3};
 use thyllore_effect_core::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
     LightningShape,
@@ -131,22 +132,6 @@ fn lightning_effect_hook_is_subscribed_after_wind() {
         matches!((wind, lightning), (Some(wind), Some(lightning)) if lightning > wind),
         "hook order {names:?}"
     );
-}
-
-fn lightning_inside_first_burst() -> LightningEffect {
-    let mut effect = LightningEffect::default();
-    effect.time =
-        burst_start_time(&effect, 0) + effect.timing.attack_time + effect.timing.sustain_time * 0.5;
-    effect
-}
-
-fn orthographic_projection(half_size: f32) -> ProjectionData {
-    ProjectionData {
-        view: Matrix4::identity(),
-        proj: cgmath::ortho(-half_size, half_size, -half_size, half_size, -100.0, 100.0),
-        screen_size: Vector2::new(200.0, 200.0),
-        aspect: 1.0,
-    }
 }
 
 #[test]

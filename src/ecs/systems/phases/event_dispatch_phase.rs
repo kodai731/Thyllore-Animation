@@ -13,3 +13,48 @@ pub fn run_event_dispatch_phase(
 
     apply_queued_ui_commands(world, assets, graphics);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::events::{UiCommand, UiCommandQueue};
+
+    #[derive(Debug)]
+    enum ProbeUiCommand {
+        Ping,
+    }
+
+    #[derive(Default)]
+    struct ProbeDispatchCounter {
+        count: usize,
+    }
+
+    impl UiCommand for ProbeUiCommand {
+        fn apply(
+            self: Box<Self>,
+            world: &mut World,
+            _assets: &mut AssetStorage,
+            _graphics: &GraphicsResources,
+        ) {
+            let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
+                return;
+            };
+            match *self {
+                ProbeUiCommand::Ping => counter.count += 1,
+            }
+        }
+    }
+
+    #[test]
+    fn test_probe_ui_command_is_applied_by_the_dispatch_phase() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(UiCommandQueue::default());
+        world.insert_resource(ProbeDispatchCounter::default());
+
+        world.send_command(ProbeUiCommand::Ping);
+        run_event_dispatch_phase(&mut world, &mut assets, &GraphicsResources::default());
+
+        assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);
+    }
+}

@@ -1,17 +1,13 @@
-use crate::asset::AssetStorage;
 use crate::ecs::component::{EntityIcon, WaterTorusEffect};
-use crate::ecs::resource::{HierarchyState, TimelineState};
-use crate::ecs::systems::{resolve_engine_cli_overrides, EngineCliOverrides};
+use crate::ecs::resource::TimelineState;
+use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
 
+use super::test_support::{spawn_default_water, timeline_time_sources};
 use super::*;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
+use crate::ecs::systems::effect_time::resolve_effect_time;
 use crate::ecs::world::{GlobalTransform, Name};
-
-fn spawn_default_water(world: &mut World, name: &str) -> crate::ecs::world::Entity {
-    spawn_water(world, name, WaterTorusEffect::default())
-}
 
 #[test]
 fn spawned_water_carries_the_components_the_editor_queries() {
@@ -64,19 +60,6 @@ fn timeline_state_drives_water_time() {
     let effect = world.get_component::<WaterTorusEffect>(entity).unwrap();
     // time = current_time * time_scale + time_offset = 2.0 * 2.0 + 1.5 = 5.5
     assert!((effect.time - 5.5).abs() < 1e-6);
-}
-
-fn timeline_time_sources(current_time: f32, playing: bool, delta_time: f32) -> EffectTimeSources {
-    EffectTimeSources {
-        batch_fixed_time: None,
-        fixed_step_time: None,
-        timeline: Some(TimelineSample {
-            current_time,
-            playing,
-        }),
-        delta_time,
-        free_run_when_paused: true,
-    }
 }
 
 #[test]

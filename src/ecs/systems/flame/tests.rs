@@ -1,29 +1,19 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{
-    apply_flame_param_value, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
-    FlameEffect, FlameParam, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
-};
+use crate::ecs::component::{AppliedFlameStyle, FlameEffect, FlameParam};
 use crate::ecs::events::UiCommandQueue;
-use crate::ecs::resource::{
-    BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
-    FlameWallProbeCapture, HierarchyState, LightState, ProjectionData, TimelineState,
-};
-use crate::ecs::systems::{resolve_engine_cli_overrides, EngineCliOverrides};
-use crate::ecs::world::{Entity, Transform, World};
-use crate::ecs::FrameContext;
-use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
+use crate::ecs::resource::{BatchRun, ClipLibrary, FlameWallProbeCapture, HierarchyState};
+use crate::ecs::systems::resolve_engine_cli_overrides;
+use crate::ecs::world::{Transform, World};
 
+use super::test_support::{
+    flame_with_keyed_clip, ray_towards_origin, spawn_default_flame, wall_probe_overrides,
+    world_with_flame_at,
+};
 use super::*;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::resource::PickRay;
 use crate::ecs::systems::object_picking_systems::resolve_closest_pick;
 use crate::ecs::world::{GlobalTransform, Name};
-use crate::hooks::pick::PickHooks;
 use cgmath::Vector3;
-
-fn spawn_default_flame(world: &mut World, name: &str) -> Entity {
-    spawn_flame(world, name, FlameEffect::default())
-}
 
 #[test]
 fn spawned_flame_carries_the_components_the_editor_queries() {
@@ -126,22 +116,6 @@ fn resolve_returns_none_without_any_flame() {
     assert_eq!(resolve_selected_flame(&world), None);
 }
 
-fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity {
-    use thyllore_anim_core::editable::{curve_add_keyframe, InterpolationType};
-
-    let entity = spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
-    let clip_id = crate::ecs::systems::find_entity_clip_id(world, entity).expect("flame clip");
-    let mut library = world.resource_mut::<ClipLibrary>();
-    let clip = library.get_mut(clip_id).expect("clip registered");
-    let curve = clip.get_or_add_scalar_curve(FlameParam::Height.property_type());
-    let key = curve_add_keyframe(curve, 1.0, 2.0);
-    curve
-        .get_keyframe_mut(key)
-        .expect("key inserted")
-        .interpolation = InterpolationType::Bezier;
-    entity
-}
-
 #[test]
 fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
     use thyllore_anim_core::editable::InterpolationType;
@@ -225,14 +199,6 @@ fn reloading_scene_entities_replaces_the_flame_and_its_clip() {
     assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);
 }
 
-fn wall_probe_overrides(extra: &[&str]) -> EngineCliOverrides {
-    let mut args: Vec<String> = vec!["bin".to_string()];
-    args.extend(extra.iter().map(|s| s.to_string()));
-    args.push("--batch-debug-action".to_string());
-    args.push("dump_wall_probe".to_string());
-    resolve_engine_cli_overrides(&args).expect("engine overrides parse")
-}
-
 #[test]
 fn a_batch_run_defers_the_wall_probe_dump_to_the_capture_frame() {
     let overrides = wall_probe_overrides(&["--batch-screenshot", "/tmp/out.png"]);
@@ -275,26 +241,6 @@ fn engine_overrides_carry_no_flame_subsystem_flags() {
     assert!(overrides.batch_run.is_some());
     assert!(overrides.batch_play);
     assert!(overrides.debug_actions.is_empty());
-}
-
-const RAY_START_Z: f32 = -10.0;
-
-fn world_with_flame_at(x: f32) -> (World, Entity) {
-    let mut world = World::new();
-    world.insert_resource(PickHooks::collect().expect("pick hooks"));
-    let effect = FlameEffect {
-        position: Vector3::new(x, 0.0, 0.0),
-        ..FlameEffect::default()
-    };
-    let entity = spawn_flame(&mut world, "Flame", effect);
-    (world, entity)
-}
-
-fn ray_towards_origin() -> PickRay {
-    PickRay {
-        origin: Vector3::new(0.0, 0.5, RAY_START_Z),
-        direction: Vector3::new(0.0, 0.0, 1.0),
-    }
 }
 
 #[test]

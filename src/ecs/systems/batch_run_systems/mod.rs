@@ -15,4 +15,6 @@ pub use orbit::*;
 pub use sequence_analyze::*;
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;

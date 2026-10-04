@@ -261,7 +261,9 @@ mod tests {
         world.insert_resource(TimelineState::new());
         world.insert_resource(EditHistory::new(10));
         world.insert_resource(EffectSpawnHooks::collect().expect("spawn hooks"));
-        world.insert_resource(crate::hooks::pick::PickHooks::collect().expect("pick hooks"));
+        world.insert_resource(
+            crate::hooks::object_pick::ObjectPickHooks::collect().expect("pick hooks"),
+        );
         (world, AssetStorage::new())
     }
 

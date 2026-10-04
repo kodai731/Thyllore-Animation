@@ -4,14 +4,16 @@ mod debug_dump;
 mod descriptors;
 mod gpu_primitive;
 mod history_accumulate;
+mod object_pick;
 pub mod passes;
-mod pick;
 mod pipeline;
 mod preset;
 pub mod probe;
 mod record;
 mod render_targets;
 mod spawn;
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;
 mod time;
@@ -23,7 +25,7 @@ pub use cli::*;
 pub use debug_dump::*;
 pub use descriptors::*;
 pub use history_accumulate::*;
-pub use pick::*;
+pub use object_pick::*;
 pub use pipeline::*;
 pub use preset::*;
 pub use probe::*;

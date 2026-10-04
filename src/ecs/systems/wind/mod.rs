@@ -1,8 +1,8 @@
 mod cli;
 mod debug_dump;
 mod descriptors;
+mod object_pick;
 pub mod passes;
-mod pick;
 mod pipeline;
 mod preset;
 mod record;
@@ -17,7 +17,7 @@ mod ui_command;
 pub use cli::*;
 pub use debug_dump::*;
 pub use descriptors::*;
-pub use pick::*;
+pub use object_pick::*;
 pub use preset::*;
 pub use record::*;
 pub use render_targets::*;

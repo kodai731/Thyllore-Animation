@@ -214,37 +214,10 @@ pub(crate) mod test_support {
     use super::ensure_entity_clip;
     use crate::asset::AssetStorage;
     use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
-    use crate::ecs::events::UiCommand;
     use crate::ecs::world::{Entity, World};
     use crate::hooks::effect_spawn::EffectSpawnHook;
     use crate::hooks::scene::spawn_scene_owner;
     use crate::scene::test_support::ProbeOwner;
-
-    #[derive(Debug)]
-    pub enum ProbeUiCommand {
-        Ping,
-    }
-
-    #[derive(Default)]
-    pub struct ProbeDispatchCounter {
-        pub count: usize,
-    }
-
-    impl UiCommand for ProbeUiCommand {
-        fn apply(
-            self: Box<Self>,
-            world: &mut World,
-            _assets: &mut AssetStorage,
-            _graphics: &crate::vulkanr::resource::graphics_resource::GraphicsResources,
-        ) {
-            let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
-                return;
-            };
-            match *self {
-                ProbeUiCommand::Ping => counter.count += 1,
-            }
-        }
-    }
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
@@ -344,27 +317,8 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{
-        probe_property, ProbeDispatchCounter, ProbeUiCommand, PROBE_DOMAIN, PROBE_HEIGHT,
-        PROBE_LEVEL,
-    };
+    use super::test_support::{probe_property, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
     use super::*;
-    use crate::ecs::events::UiCommandQueue;
-    use crate::ecs::systems::phases::event_dispatch_phase::run_event_dispatch_phase;
-    use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
-    #[test]
-    fn test_probe_ui_command_is_applied_by_the_dispatch_phase() {
-        let mut world = World::new();
-        let mut assets = AssetStorage::default();
-        world.insert_resource(UiCommandQueue::default());
-        world.insert_resource(ProbeDispatchCounter::default());
-
-        world.send_command(ProbeUiCommand::Ping);
-        run_event_dispatch_phase(&mut world, &mut assets, &GraphicsResources::default());
-
-        assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);
-    }
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {

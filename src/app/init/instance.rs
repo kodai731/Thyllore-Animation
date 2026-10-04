@@ -337,7 +337,7 @@ impl App {
         data.ecs_world
             .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
         data.ecs_world
-            .insert_resource(crate::hooks::pick::PickHooks::collect()?);
+            .insert_resource(crate::hooks::object_pick::ObjectPickHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::dispatch_prep::DispatchPrepHooks::collect()?);
         let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;

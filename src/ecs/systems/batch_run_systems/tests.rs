@@ -1,5 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;
 use crate::ecs::component::MotionPath;
@@ -15,10 +16,6 @@ use crate::ecs::systems::scalar_clip_systems::test_support::{
 use crate::ecs::world::{Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
 use crate::scene::test_support::ProbeOwner;
-
-fn args(list: &[&str]) -> Vec<String> {
-    list.iter().map(|s| s.to_string()).collect()
-}
 
 #[test]
 fn pick_pixel_is_absent_without_the_flag() {
@@ -600,18 +597,6 @@ fn sequence_analyze_jpg_error() {
     assert!(err_msg.contains("JPG") || err_msg.contains("jpg"));
 }
 
-fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
-    let file = std::fs::File::create(path).unwrap();
-    let writer = std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(writer, width, height);
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().unwrap();
-    let pixels = vec![value; (width * height * 3) as usize];
-    writer.write_image_data(&pixels).unwrap();
-    writer.finish().unwrap();
-}
-
 #[test]
 fn scheduled_actions_parse_frame_and_action() {
     let scheduled = scheduled_actions_resolve_from_args(&args(&[
@@ -682,12 +667,4 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
     assert_eq!(first_frame_commands, vec!["ResetCamera"]);
     assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
     assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
-}
-
-fn drained_command_names(world: &World) -> Vec<String> {
-    world
-        .resource_mut::<UiCommandQueue>()
-        .drain()
-        .map(|command| format!("{:?}", command))
-        .collect()
 }

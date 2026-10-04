@@ -38,7 +38,7 @@ src/ecs/
 ├── systems/             # System functions (behavior/logic), one file per domain
 │   ├── phases/          # Phase coordinators (execution order); event dispatchers are in phases/event_dispatch/
 │   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
-│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, pick, passes, ...)
+│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, object_pick, passes, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   ├── curve_copilot/   # ML curve suggestion systems
 │   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)

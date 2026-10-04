@@ -8,7 +8,7 @@ use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
-use crate::hooks::pick::PickHooks;
+use crate::hooks::object_pick::ObjectPickHooks;
 
 pub fn find_entity_by_object_id(
     world: &World,
@@ -89,11 +89,11 @@ pub(crate) fn resolve_closest_pick(
         return surface_entity;
     };
 
-    let Some(pick_hooks) = world.get_resource::<PickHooks>() else {
+    let Some(object_pick_hooks) = world.get_resource::<ObjectPickHooks>() else {
         return surface_entity;
     };
 
-    let effect_candidate: Option<(Entity, f32)> = pick_hooks
+    let effect_candidate: Option<(Entity, f32)> = object_pick_hooks
         .iter()
         .filter_map(|hook| (hook.find)(world, ray))
         .min_by(|(_, a), (_, b)| a.total_cmp(b));

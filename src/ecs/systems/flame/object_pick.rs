@@ -21,4 +21,4 @@ pub fn find_flame_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f
         .min_by(|(_, a), (_, b)| a.total_cmp(b))
 }
 
-crate::pick_hook!("flame", find_flame_by_pick_ray);
+crate::object_pick_hook!("flame", find_flame_by_pick_ray);

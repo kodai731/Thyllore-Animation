@@ -3,8 +3,9 @@ use imgui::Condition;
 use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
-use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache};
+use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, TimelineState};
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -14,6 +15,7 @@ fn draw_clip_browser_window(
     ui: &imgui::Ui,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
+    timeline_state: &TimelineState,
     world: &World,
     layout: &LayoutSnapshot,
 ) {
@@ -27,15 +29,15 @@ fn draw_clip_browser_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_toolbar(ui, browser_state, world);
+            build_toolbar(ui, timeline_state, world);
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
-            build_clip_list(ui, clip_library, browser_state, world);
+            build_clip_list(ui, clip_library, browser_state, timeline_state, world);
         });
 }
 
-fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World) {
+fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
     if ui.small_button("+ New") {
         world.send_command(ClipBrowserEvent::CreateEmpty);
     }
@@ -54,10 +56,10 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     }
 
     ui.same_line();
-    let has_selection = browser_state.selected_clip_id.is_some();
+    let has_selection = timeline_state.current_clip_id.is_some();
     if has_selection {
         if ui.small_button("Save") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 send_dialog_request(world, DialogRequest::SaveClip(id));
             }
         }
@@ -68,7 +70,7 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     ui.same_line();
     if has_selection {
         if ui.small_button("FBX") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 send_dialog_request(
                     world,
                     DialogRequest::ExportClip {
@@ -88,7 +90,7 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
         .map_or(false, |c| c.has_model());
     if has_selection {
         if ui.small_button("glTF") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 send_dialog_request(
                     world,
                     DialogRequest::ExportClip {
@@ -109,7 +111,7 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     ui.same_line();
     if has_selection {
         if ui.small_button("glTF (anim only)") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 send_dialog_request(
                     world,
                     DialogRequest::ExportClip {
@@ -127,7 +129,7 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     let can_duplicate = has_selection;
     if can_duplicate {
         if ui.small_button("Dup") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 world.send_command(ClipBrowserEvent::Duplicate(id));
             }
         }
@@ -138,7 +140,7 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     ui.same_line();
     if can_duplicate {
         if ui.small_button("Del") {
-            if let Some(id) = browser_state.selected_clip_id {
+            if let Some(id) = timeline_state.current_clip_id {
                 world.send_command(ClipBrowserEvent::Delete(id));
             }
         }
@@ -158,6 +160,7 @@ fn build_clip_list(
     ui: &imgui::Ui,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
+    timeline_state: &TimelineState,
     world: &World,
 ) {
     let clip_names =
@@ -182,7 +185,7 @@ fn build_clip_list(
                     continue;
                 }
 
-                let is_selected = browser_state.selected_clip_id == Some(*id);
+                let is_selected = timeline_state.current_clip_id == Some(*id);
                 let ref_count = reference_counts
                     .iter()
                     .find(|(sid, _)| *sid == *id)
@@ -203,7 +206,7 @@ fn build_clip_list(
                 };
 
                 if ui.selectable_config(&label).selected(is_selected).build() {
-                    browser_state.selected_clip_id = Some(*id);
+                    world.send_command(TimelineEvent::SelectClip(*id));
                 }
 
                 build_clip_drag_source(ui, *id, name);
@@ -236,8 +239,16 @@ fn build_clip_browser_window(
 ) {
     let clip_library = world.resource::<ClipLibrary>();
     let mut browser_state = world.resource_mut::<ClipBrowserState>();
+    let timeline_state = world.resource::<TimelineState>();
     let layout = world.resource::<LayoutSnapshot>();
-    draw_clip_browser_window(ui, &clip_library, &mut browser_state, world, &layout);
+    draw_clip_browser_window(
+        ui,
+        &clip_library,
+        &mut browser_state,
+        &timeline_state,
+        world,
+        &layout,
+    );
 }
 
 crate::ui_window!("clip_browser", Side, 2, build_clip_browser_window);

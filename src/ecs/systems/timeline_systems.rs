@@ -360,6 +360,10 @@ fn timeline_select_clip(
     clip_library: &ClipLibrary,
     clip_id: SourceClipId,
 ) {
+    if timeline_state.current_clip_id == Some(clip_id) {
+        return;
+    }
+
     if let Some(clip) = clip_library.get(clip_id) {
         timeline_state.current_clip_id = Some(clip_id);
         timeline_state.current_time = 0.0;
@@ -1237,6 +1241,50 @@ mod tests {
             clip_drag_preview_times(&ClipDragType::TrimEnd, 1.0, 1.0, 1.0, 3.0, 0.0, 1.0);
         assert!((start - 1.0).abs() < 1e-6);
         assert!((end - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn select_same_clip_keeps_time() {
+        let (mut state, mut library) = setup_test_clip();
+        let clip_id = state.current_clip_id.unwrap();
+        state.current_time = 0.7;
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert!((state.current_time - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn select_clip_does_not_touch_schedule() {
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+
+        let (mut state, mut library) = setup_test_clip();
+        let first_clip_id = state.current_clip_id.unwrap();
+
+        let other_clip_id: SourceClipId = 99;
+        let mut other_clip = EditableAnimationClip::new(other_clip_id, "other".to_string());
+        other_clip.add_track(0, "bone0".to_string());
+        library
+            .source_clips
+            .insert(other_clip_id, SourceClip::new(other_clip_id, other_clip));
+
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, first_clip_id, 1.0);
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(other_clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert_eq!(state.current_clip_id, Some(other_clip_id));
+        assert_eq!(schedule.instances.len(), 1);
+        assert_eq!(schedule.instances[0].source_id, first_clip_id);
     }
 }
 

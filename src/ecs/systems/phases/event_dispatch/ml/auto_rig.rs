@@ -438,7 +438,7 @@ pub(super) fn handle_mesh_server_status(
     }
 }
 
-pub fn poll_mesh_server_status(world: &mut crate::ecs::world::World) {
+fn poll_mesh_server_status(world: &mut crate::ecs::world::World) {
     use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
     use crate::grpc::{GrpcRequest, GrpcThreadHandle};
 
@@ -662,7 +662,7 @@ pub(super) fn handle_rigging_server_status(
     }
 }
 
-pub fn poll_rigging_server_status(world: &mut crate::ecs::world::World) {
+fn poll_rigging_server_status(world: &mut crate::ecs::world::World) {
     use crate::ecs::resource::{AutoRigState, AutoRigStatus};
     use crate::grpc::{GrpcRequest, GrpcThreadHandle};
 
@@ -834,3 +834,10 @@ fn ensure_mesh_server_running(world: &mut crate::ecs::world::World) {
         }
     }
 }
+
+fn poll_server_status(world: &mut World, _: &mut AssetStorage) {
+    poll_mesh_server_status(world);
+    poll_rigging_server_status(world);
+}
+
+crate::dispatch_prep_hook!("auto_rig_servers", poll_server_status);

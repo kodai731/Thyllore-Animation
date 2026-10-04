@@ -164,7 +164,7 @@ EventDispatch first, then `begin_frame`, the update phases through `run_frame()`
 once the image is presented. The slots are:
 
 ```
-EventDispatch → run_event_dispatch_phase()   # UI commands → World, command queues; dialog requests; apply commands
+EventDispatch → run_event_dispatch_phase()   # DispatchPrepHooks (worker polls), UI commands → World; dialog requests; apply commands
 First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
 Input         → run_input_phase()            # Input handling, gizmo interaction
 Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)

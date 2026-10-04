@@ -157,7 +157,11 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`ui_window.rs` holds the `UiWindowHook` contract (name, `UiPanel`, order, `init` that inserts the window's own
+`dispatch_prep.rs` holds the `DispatchPrepHook` contract (name, run taking `(&mut World, &mut AssetStorage)`) and
+the `dispatch_prep_hook!` macro: per-frame work that must reach `World` before the frame's UI commands apply
+(draining a worker's responses, polling a server) is registered from its own file and
+`run_event_dispatch_phase` runs `DispatchPrepHooks` in name order; the phase file carries no `cfg` and names no
+feature. `ui_window.rs` holds the `UiWindowHook` contract (name, `UiPanel`, order, `init` that inserts the window's own
 state resource once, `build` taking `(&imgui::Ui, &World, &AssetStorage, &GraphicsResources)`) and the
 `ui_window!` macro: every editor window registers itself from its file in `src/platform/ui/`, `UiWindows::collect()`
 sorts them by panel, order and name, and `src/platform/events/ui_windows.rs` publishes `LayoutSnapshot` and the
@@ -195,7 +199,7 @@ not by taste:
 
 ```
 Does the thing exist for the whole run, as a fixed set known at link time
-(a window, a pass node, a per-frame step, a scene component type, a CLI flag group)?
+(a window, a pass node, a per-frame step or poll, a scene component type, a CLI flag group)?
   yes → it is a participant: register it with a hook (`inventory`, `*_hook!` / `ui_window!` /
         `scene_owner!`), collect once at startup into a World resource, iterate in a fixed order
         (stage / panel / order / name). The shared runner never names an entry.

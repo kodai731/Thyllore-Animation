@@ -6,7 +6,7 @@ use super::auto_rig::{
     handle_rigging_server_status, ServerReadiness,
 };
 
-pub fn drain_grpc_responses(
+fn drain_grpc_responses(
     world: &mut crate::ecs::world::World,
     assets: &mut crate::asset::AssetStorage,
 ) {
@@ -161,3 +161,5 @@ fn route_grpc_error(world: &mut crate::ecs::world::World, message: &str) {
 
     log_warn!("gRPC error with no active request: {}", message);
 }
+
+crate::dispatch_prep_hook!("grpc_responses", drain_grpc_responses);

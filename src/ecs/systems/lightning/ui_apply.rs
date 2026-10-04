@@ -1,6 +1,7 @@
 use super::ui_command::LightningUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::LightningEffect;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::LightningRenderSettings;
 use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::systems::{
@@ -8,22 +9,17 @@ use crate::ecs::systems::{
     spawn_lightning_waypoint,
 };
 use crate::ecs::world::World;
-use crate::hooks::effect_ui_event::EffectUiQueue;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_lightning_ui_events(world: &mut World, _assets: &mut AssetStorage) {
-    let commands = match world.get_resource_mut::<EffectUiQueue<LightningUiCommand>>() {
-        Some(mut queue) => queue.drain(),
-        None => return,
-    };
-
-    for command in commands {
-        match command {
+impl UiCommand for LightningUiCommand {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        match *self {
             LightningUiCommand::UpdateEffect { entity, effect } => {
                 apply_effect_update::<LightningEffect>(world, entity, *effect);
             }
             LightningUiCommand::ApplyPreset(name) => {
                 let Some(target) = resolve_selected_lightning(world) else {
-                    continue;
+                    return;
                 };
                 apply_effect_preset::<LightningEffect>(world, target, &name);
             }

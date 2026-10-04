@@ -1,11 +1,9 @@
-use super::ui_command::LightningUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LightningEffect, LIGHTNING_DOMAIN};
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings};
 use crate::ecs::systems::effect_edit::EffectPreset;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
-use crate::hooks::effect_ui_event::EffectUiQueue;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_LIGHTNING_NAME: &str = "Lightning";
@@ -85,14 +83,6 @@ fn insert_lightning_default_resources(world: &mut World) {
     if !world.contains_resource::<LightningRenderSettings>() {
         world.insert_resource(LightningRenderSettings::default());
     }
-    if !world.contains_resource::<EffectUiQueue<LightningUiCommand>>() {
-        world.insert_resource(EffectUiQueue::<LightningUiCommand>::default());
-    }
 }
 
 crate::effect_default_resource!("lightning", insert_lightning_default_resources);
-
-crate::ui_event_hook!(
-    LIGHTNING_SPAWN_HOOK.key,
-    super::ui_apply::dispatch_lightning_ui_events
-);

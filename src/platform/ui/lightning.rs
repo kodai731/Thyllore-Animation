@@ -15,7 +15,6 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
-use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -78,7 +77,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     ) {
         if selected_entity.is_some() {
             ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            send_effect_ui_command(ecs_world, LightningUiCommand::ApplyPreset(chosen));
+            ecs_world.send_command(LightningUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
     }
@@ -114,13 +113,10 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     );
 
     if !effect_applied_this_frame {
-        send_effect_ui_command(
-            ecs_world,
-            LightningUiCommand::UpdateEffect {
-                entity: selected,
-                effect: Box::new(effect_copy),
-            },
-        );
+        ecs_world.send_command(LightningUiCommand::UpdateEffect {
+            entity: selected,
+            effect: Box::new(effect_copy),
+        });
     }
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
@@ -154,12 +150,12 @@ fn draw_lightning_target_row(
             ui.text(format!("Target: {name}"));
             ui.same_line();
             if ui.small_button("Clear##lightning_target") {
-                send_effect_ui_command(ecs_world, LightningUiCommand::ClearTarget);
+                ecs_world.send_command(LightningUiCommand::ClearTarget);
             }
         }
         None => {
             if ui.button("Add Target") {
-                send_effect_ui_command(ecs_world, LightningUiCommand::AddTarget);
+                ecs_world.send_command(LightningUiCommand::AddTarget);
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text("Spawn a locator at the end point; move it to aim the bolt");
@@ -179,12 +175,12 @@ fn draw_lightning_path_rows(ui: &imgui::Ui, ecs_world: &World, lightning: Entity
         ui.text(name);
         ui.same_line();
         if ui.small_button(format!("x##waypoint{i}")) {
-            send_effect_ui_command(ecs_world, LightningUiCommand::RemoveWaypoint(i));
+            ecs_world.send_command(LightningUiCommand::RemoveWaypoint(i));
         }
     }
 
     if ui.button("Add Waypoint") {
-        send_effect_ui_command(ecs_world, LightningUiCommand::AddWaypoint);
+        ecs_world.send_command(LightningUiCommand::AddWaypoint);
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -229,10 +225,7 @@ fn draw_lightning_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     {
         settings_copy.reference_step_count = step_count.max(1) as u32;
     }
-    send_effect_ui_command(
-        ecs_world,
-        LightningUiCommand::UpdateRenderSettings(settings_copy),
-    );
+    ecs_world.send_command(LightningUiCommand::UpdateRenderSettings(settings_copy));
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

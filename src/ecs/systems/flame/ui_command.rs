@@ -2,7 +2,7 @@ use crate::ecs::component::FlameEffect;
 use crate::ecs::resource::FlameRenderSettings;
 use crate::ecs::world::Entity;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FlameUiCommand {
     UpdateEffect {
         entity: Entity,

@@ -2,7 +2,7 @@ use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::LightningRenderSettings;
 use crate::ecs::world::Entity;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum LightningUiCommand {
     UpdateEffect {
         entity: Entity,

@@ -1,32 +1,28 @@
 use super::ui_command::FlameUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail};
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
 use crate::ecs::systems::effect_edit::apply_effect_update;
 use crate::ecs::systems::resolve_selected_flame;
 use crate::ecs::world::World;
-use crate::hooks::effect_ui_event::EffectUiQueue;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_flame_ui_events(world: &mut World, _assets: &mut AssetStorage) {
-    let commands = match world.get_resource_mut::<EffectUiQueue<FlameUiCommand>>() {
-        Some(mut queue) => queue.drain(),
-        None => return,
-    };
-
-    for command in commands {
-        match command {
+impl UiCommand for FlameUiCommand {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        match *self {
             FlameUiCommand::UpdateEffect { entity, effect } => {
                 apply_effect_update::<FlameEffect>(world, entity, *effect);
             }
             FlameUiCommand::UpdateBaked(baked) => {
                 let Some(target) = resolve_selected_flame(world) else {
-                    continue;
+                    return;
                 };
                 world.insert_component(target, *baked);
             }
             FlameUiCommand::ApplyPreset(name) => {
                 let Some(target) = resolve_selected_flame(world) else {
-                    continue;
+                    return;
                 };
                 crate::ecs::systems::effect_edit::apply_effect_preset::<FlameEffect>(
                     world, target, &name,
@@ -78,7 +74,7 @@ pub fn dispatch_flame_ui_events(world: &mut World, _assets: &mut AssetStorage) {
             }
             FlameUiCommand::UpdateTrailEnabled(enabled) => {
                 let Some(target) = resolve_selected_flame(world) else {
-                    continue;
+                    return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {
                     trail.state.enabled = enabled;
@@ -97,7 +93,7 @@ pub fn dispatch_flame_ui_events(world: &mut World, _assets: &mut AssetStorage) {
             }
             FlameUiCommand::UpdateTrailFade(fade) => {
                 let Some(target) = resolve_selected_flame(world) else {
-                    continue;
+                    return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {
                     trail.state.fade_seconds = fade;

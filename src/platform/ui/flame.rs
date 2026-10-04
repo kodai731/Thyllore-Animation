@@ -7,7 +7,6 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
-use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -141,7 +140,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-                    send_effect_ui_command(&*ecs_world, FlameUiCommand::ApplyPreset(chosen));
+                    ecs_world.send_command(FlameUiCommand::ApplyPreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }
@@ -249,20 +248,17 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     tilt: flame_ui.texture_fit_groups[3],
                 };
                 if selected_flame_entity.is_some() {
-                    send_effect_ui_command(
-                        &*ecs_world,
-                        FlameUiCommand::ApplyTextureFit {
-                            path: path.clone(),
-                            blend,
-                            groups: [
-                                groups.silhouette,
-                                groups.color,
-                                groups.turbulence,
-                                groups.tilt,
-                            ],
-                            profile: flame_ui.texture_fit_profile,
-                        },
-                    );
+                    ecs_world.send_command(FlameUiCommand::ApplyTextureFit {
+                        path: path.clone(),
+                        blend,
+                        groups: [
+                            groups.silhouette,
+                            groups.color,
+                            groups.turbulence,
+                            groups.tilt,
+                        ],
+                        profile: flame_ui.texture_fit_profile,
+                    });
                     effect_applied_this_frame = true;
                 }
             }
@@ -307,13 +303,10 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             if ui.button("Apply Style") {
                 if let Some(name) = flame_ui.style_scan.get(flame_ui.style_index) {
                     if selected_flame_entity.is_some() {
-                        send_effect_ui_command(
-                            &*ecs_world,
-                            FlameUiCommand::ApplyStyle {
-                                path: format!("{}/{}", FLAMES_STYLE_DIR, name),
-                                groups: flame_ui.style_groups,
-                            },
-                        );
+                        ecs_world.send_command(FlameUiCommand::ApplyStyle {
+                            path: format!("{}/{}", FLAMES_STYLE_DIR, name),
+                            groups: flame_ui.style_groups,
+                        });
                         effect_applied_this_frame = true;
                     }
                 }
@@ -341,7 +334,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             if ui.small_button("Save Style") {
                 let name = flame_ui.style_save_name.trim().to_string();
                 if !name.is_empty() && selected_flame_entity.is_some() {
-                    send_effect_ui_command(&*ecs_world, FlameUiCommand::SaveStyle { name });
+                    ecs_world.send_command(FlameUiCommand::SaveStyle { name });
                 }
             }
             if ui.is_item_hovered() {
@@ -426,18 +419,12 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     let mut trail_enabled = trail_state.0;
                     let mut trail_fade = trail_state.1;
                     if ui.checkbox("Trail", &mut trail_enabled) {
-                        send_effect_ui_command(
-                            &*ecs_world,
-                            FlameUiCommand::UpdateTrailEnabled(trail_enabled),
-                        );
+                        ecs_world.send_command(FlameUiCommand::UpdateTrailEnabled(trail_enabled));
                     }
                     ui.slider_config("Trail Fade", 0.1, 5.0)
                         .build(&mut trail_fade);
                     if (trail_fade - trail_state.1).abs() > 0.01 {
-                        send_effect_ui_command(
-                            &*ecs_world,
-                            FlameUiCommand::UpdateTrailFade(trail_fade),
-                        );
+                        ecs_world.send_command(FlameUiCommand::UpdateTrailFade(trail_fade));
                     }
 
                     // GPU Timings section (read-only)
@@ -453,24 +440,18 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     }
 
                     if !effect_applied_this_frame {
-                        send_effect_ui_command(
-                            &*ecs_world,
-                            FlameUiCommand::UpdateEffect {
-                                entity: selected_flame,
-                                effect: Box::new(effect_copy),
-                            },
-                        );
+                        ecs_world.send_command(FlameUiCommand::UpdateEffect {
+                            entity: selected_flame,
+                            effect: Box::new(effect_copy),
+                        });
                     }
 
                     if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
                         draw_flame_render_settings(ui, ecs_world);
                         if ui.button("Dump Probe") {
-                            send_effect_ui_command(
-                                &*ecs_world,
-                                FlameUiCommand::DumpWallProbe {
-                                    viewport_size: ecs_world.resource::<ViewportInput>().size,
-                                },
-                            );
+                            ecs_world.send_command(FlameUiCommand::DumpWallProbe {
+                                viewport_size: ecs_world.resource::<ViewportInput>().size,
+                            });
                         }
                         if ui.is_item_hovered() {
                             ui.tooltip_text(
@@ -551,10 +532,7 @@ fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
         | FlameShadingMode::DebugDepthClamp => {}
     }
 
-    send_effect_ui_command(
-        &*ecs_world,
-        FlameUiCommand::UpdateRenderSettings(settings_copy),
-    );
+    ecs_world.send_command(FlameUiCommand::UpdateRenderSettings(settings_copy));
 }
 
 /// Canonicalized directory, falling back to the typed text when the path

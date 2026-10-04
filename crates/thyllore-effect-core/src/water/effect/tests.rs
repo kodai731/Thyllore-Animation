@@ -16,11 +16,6 @@ fn test_tables_are_consistent() {
 }
 
 #[test]
-fn test_codes_lie_in_the_water_block() {
-    assert_codes_lie_in_block(&WATER_SCALAR_PARAMS, WATER_SCALAR_CODES);
-}
-
-#[test]
 fn test_ron_struct_syntax_roundtrip() {
     let mut effect = WaterTorusEffect::default();
     effect.major_radius = 2.5;

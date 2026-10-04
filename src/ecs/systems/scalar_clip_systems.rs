@@ -213,35 +213,30 @@ pub(crate) mod test_support {
 
     use super::ensure_entity_clip;
     use crate::asset::AssetStorage;
-    use crate::ecs::component::{ScalarChannel, ScalarChannelDomain, ScalarCodeBlock};
+    use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
     use crate::ecs::world::{Entity, World};
     use crate::hooks::effect_spawn::EffectSpawnHook;
     use crate::hooks::scene::spawn_scene_owner;
     use crate::scene::test_support::ProbeOwner;
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
-    /// dispatch code never depend on a concrete effect; shipped clips never use its codes.
+    /// dispatch code never depend on a concrete effect.
     pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
-        code: 1024,
         display_name: "Level",
         cli_name: "probe_level",
-        scene_name: "ProbeLevel",
         debug_value_range: (0.0, 1.0),
         renamed_from: &[],
     };
 
     pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
-        code: 1025,
         display_name: "Height",
         cli_name: "probe_height",
-        scene_name: "ProbeHeight",
         debug_value_range: (0.5, 4.0),
         renamed_from: &[],
     };
 
     pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
         name: "Probe",
-        code_block: ScalarCodeBlock::new(1024, 256),
         channel_table: || &[PROBE_LEVEL, PROBE_HEIGHT],
         has_component: probe_has_component,
         entities: probe_entities,

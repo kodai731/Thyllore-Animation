@@ -1,8 +1,6 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{
-    ScalarCodeBlock, ScalarParam, UiParam, WATER_SCALAR_CODES, WATER_SCALAR_PARAMS, WATER_UI_PARAMS,
-};
+use thyllore_effect_core::{ScalarParam, UiParam, WATER_SCALAR_PARAMS, WATER_UI_PARAMS};
 
 use super::effect::WaterTorusEffect;
 use crate::ecs::component::{
@@ -16,7 +14,6 @@ impl ScalarDomainSource for WaterScalarSource {
     type Component = WaterTorusEffect;
 
     const NAME: &'static str = "Water";
-    const CODE_BLOCK: ScalarCodeBlock = WATER_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<WaterTorusEffect>] {
         &WATER_SCALAR_PARAMS

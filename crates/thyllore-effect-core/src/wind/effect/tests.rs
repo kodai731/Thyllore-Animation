@@ -16,11 +16,6 @@ fn test_tables_are_consistent() {
 }
 
 #[test]
-fn test_codes_lie_in_the_wind_block() {
-    assert_codes_lie_in_block(&WIND_SCALAR_PARAMS, WIND_SCALAR_CODES);
-}
-
-#[test]
 fn test_ron_struct_syntax_roundtrip() {
     let mut effect = WindTornadoEffect::default();
     effect.column_height = 3.5;

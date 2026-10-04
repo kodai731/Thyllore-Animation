@@ -3,14 +3,13 @@ use std::path::Path;
 
 use thyllore_anim_core::editable::{AnimationClipFile, EditableAnimationClip};
 
-pub fn export_ron_clip(clip: &EditableAnimationClip, output_path: &Path) -> anyhow::Result<()> {
-    let clip_file = AnimationClipFile::new(clip.clone());
+pub fn export_ron_clip(clip_file: &AnimationClipFile, output_path: &Path) -> anyhow::Result<()> {
     let config = ron::ser::PrettyConfig::new()
         .depth_limit(10)
         .separate_tuple_members(true)
         .enumerate_arrays(false);
 
-    let content = ron::ser::to_string_pretty(&clip_file, config)?;
+    let content = ron::ser::to_string_pretty(clip_file, config)?;
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)?;
@@ -27,9 +26,10 @@ mod tests {
     #[test]
     fn test_export_and_reload_ron_clip() {
         let clip = EditableAnimationClip::new(1, "test_clip".to_string());
+        let clip_file = AnimationClipFile::from_clip(&clip, |_| None).unwrap();
         let output_path = std::path::PathBuf::from("/tmp/test_ron_clip_export.ron");
 
-        export_ron_clip(&clip, &output_path).unwrap();
+        export_ron_clip(&clip_file, &output_path).unwrap();
 
         let content = fs::read_to_string(&output_path).unwrap();
         let loaded: AnimationClipFile = ron::from_str(&content).unwrap();

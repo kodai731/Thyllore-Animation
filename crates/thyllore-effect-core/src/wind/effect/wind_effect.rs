@@ -2,10 +2,6 @@ use cgmath::{Matrix4, Quaternion, Vector3};
 
 use crate::wind::ownership::WindParameterOwner;
 
-/// Animation-curve codes this effect owns; every `#[persist(code = N)]` below lies inside it.
-pub const WIND_SCALAR_CODES: thyllore_scene_core::ScalarCodeBlock =
-    thyllore_scene_core::ScalarCodeBlock::new(512, 256);
-
 #[derive(Clone, Debug, PartialEq, crate::UboPack, thyllore_scene_core::SceneFields)]
 #[ubo(target = crate::WindUBO)]
 #[scene(key = "wind_tornado", tag = WindParameterOwner, owner = Frame, tags = WIND_PARAMETER_OWNERSHIP, snapshot = wind_parameter_snapshot, scalars = WIND_SCALAR_PARAMS, ui = WIND_UI_PARAMS, overwrite = overwrite_wind_persisted_fields)]
@@ -21,131 +17,122 @@ pub struct WindTornadoEffect {
     pub position: Vector3<f32>,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
-    #[persist(code = 512, debug_range = (0.5, 10.0), ui(primary, min = 0.1, max = 20.0, group = "shape"))]
+    #[persist(curve, debug_range = (0.5, 10.0), ui(primary, min = 0.1, max = 20.0, group = "shape"))]
     pub column_height: f32,
-    #[persist(code = 513, debug_range = (0.05, 5.0), ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
+    #[persist(curve, debug_range = (0.05, 5.0), ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_base: f32,
-    #[persist(code = 514, debug_range = (0.05, 5.0), ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
+    #[persist(curve, debug_range = (0.05, 5.0), ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_top: f32,
     /// Half width of the wall shell in squared-radius units; the radial thickness is about wall_width_q / (2 R)
-    #[persist(code = 515, debug_range = (0.01, 2.0), ui(min = 0.001, max = 5.0, format = "%.3f", group = "shape"))]
+    #[persist(curve, debug_range = (0.01, 2.0), ui(min = 0.001, max = 5.0, format = "%.3f", group = "shape"))]
     pub wall_width_q: f32,
     /// Fraction of the height over which the density fades to zero at the top
-    #[persist(code = 517, debug_range = (0.05, 1.0), ui(min = 0.01, max = 1.0, group = "shape"))]
+    #[persist(curve, debug_range = (0.05, 1.0), ui(min = 0.01, max = 1.0, group = "shape"))]
     pub top_fade: f32,
     /// Extinction coefficient per meter at unit shell density
-    #[persist(code = 518, debug_range = (0.0, 20.0), ui(primary, min = 0.0, max = 50.0, group = "density"))]
+    #[persist(curve, debug_range = (0.0, 20.0), ui(primary, min = 0.0, max = 50.0, group = "density"))]
     pub density: f32,
-    #[persist(code = 516, ui(min = 0.0, max = 4.0, group = "density"))]
+    #[persist(curve, ui(min = 0.0, max = 4.0, group = "density"))]
     pub wall_strength: f32,
     /// Height fraction of the column at t = 0; the top rises to 1 over rise_duration
-    #[persist(code = 525, ui(min = 0.0, max = 1.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "motion"))]
     pub rise_initial_height: f32,
     /// Seconds of the smoothstep rise from rise_initial_height to the full height
-    #[persist(code = 526, ui(primary, min = 0.1, max = 10.0, group = "motion"))]
+    #[persist(curve, ui(primary, min = 0.1, max = 10.0, group = "motion"))]
     pub rise_duration: f32,
     /// Time in seconds when wall spreading begins
-    #[persist(code = 527, ui(min = 0.0, max = 10.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, group = "motion"))]
     #[ubo("streak2.w")]
     pub spread_start: f32,
     /// Outward drift of the wall in squared-radius units: 2 * spread_rate * (t - spread_start)
-    #[persist(code = 528, ui(min = 0.0, max = 5.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 5.0, group = "motion"))]
     #[ubo("lighting.w")]
     pub spread_rate: f32,
     /// Time in seconds when wall dissipation begins
-    #[persist(code = 529, ui(min = 0.0, max = 10.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, group = "motion"))]
     pub dissipate_start: f32,
     /// Time constant of the wall strength decay; 0 keeps the wall at full strength
-    #[persist(code = 530, ui(min = 0.0, max = 10.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, group = "motion"))]
     pub dissipate_time: f32,
     /// Circulation of the Rankine vortex; used for streak phase computation
-    #[persist(code = 531, ui(primary, min = 0.0, max = 100.0, group = "motion"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 100.0, group = "motion"))]
     #[ubo("lighting.z")]
     pub circulation: f32,
     /// Number of spiral streaks (m in the phase)
-    #[persist(
-        code = 532,
-        ui(min = 1.0, max = 16.0, format = "%.1f", group = "motion")
-    )]
+    #[persist(curve, ui(min = 1.0, max = 16.0, format = "%.1f", group = "motion"))]
     pub streak_order: f32,
     /// Twist of the spiral streaks (kappa in the phase)
-    #[persist(
-        code = 533,
-        ui(min = 0.0, max = 20.0, format = "%.1f", group = "motion")
-    )]
+    #[persist(curve, ui(min = 0.0, max = 20.0, format = "%.1f", group = "motion"))]
     pub streak_twist: f32,
     /// Rise speed of the spiral streaks (omega_z in the phase)
-    #[persist(
-        code = 534,
-        ui(min = 0.0, max = 10.0, format = "%.1f", group = "motion")
-    )]
+    #[persist(curve, ui(min = 0.0, max = 10.0, format = "%.1f", group = "motion"))]
     pub streak_rise_speed: f32,
     /// Amplitude of the streak modulation; 0 disables streaks (identity)
-    #[persist(code = 535, ui(min = 0.0, max = 1.0, group = "motion"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "motion"))]
     pub streak_amplitude: f32,
     /// Amplitude of the volumetric eddy; 0 disables eddies (identity)
-    #[persist(code = 536, ui(primary, min = 0.0, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 1.0, group = "eddy"))]
     pub eddy_amplitude: f32,
     /// Eddy cell size in theta (angular) direction
-    #[persist(code = 537, ui(min = 0.01, max = 2.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.01, max = 2.0, group = "eddy"))]
     pub eddy_cell_theta: f32,
     /// Eddy cell size in height (vertical) direction
-    #[persist(code = 538, ui(min = 0.01, max = 2.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.01, max = 2.0, group = "eddy"))]
     pub eddy_cell_height: f32,
     /// Eddy cell size in radial direction
-    #[persist(code = 539, ui(min = 0.01, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.01, max = 1.0, group = "eddy"))]
     pub eddy_cell_radial: f32,
     /// Shear of the eddy field; 0 is no shear (pure translation)
-    #[persist(code = 540, ui(min = 0.0, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "eddy"))]
     pub eddy_shear: f32,
     /// Width of rotation speed applied to octave and reseed layers. 0 means all octaves have the same speed.
-    #[persist(code = 541, ui(min = 0.0, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "eddy"))]
     #[ubo("streak2.z")]
     pub eddy_speed_spread: f32,
     /// Rise speed of the eddy field (omega_z in the phase)
-    #[persist(code = 542, ui(min = 0.0, max = 10.0, format = "%.1f", group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, format = "%.1f", group = "eddy"))]
     pub eddy_rise_speed: f32,
     /// Period of the eddy reseed (time between resamples)
-    #[persist(code = 543, ui(min = 0.1, max = 10.0, format = "%.1f", group = "eddy"))]
+    #[persist(curve, ui(min = 0.1, max = 10.0, format = "%.1f", group = "eddy"))]
     pub eddy_reseed_period: f32,
     /// Noise floor carved out of the eddy field; density reaches 0 where noise falls below it, 0 keeps the smooth modulation (identity)
-    #[persist(code = 544, ui(min = 0.0, max = 0.95, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 0.95, group = "eddy"))]
     pub eddy_erosion: f32,
     /// Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)
-    #[persist(code = 545, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
     pub puff_count_theta: u32,
     /// Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)
-    #[persist(code = 546, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
     pub puff_count_height: u32,
     /// Radius of each puff clump in world units
-    #[persist(code = 547, ui(min = 0.01, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.01, max = 1.0, group = "eddy"))]
     pub puff_radius: f32,
     /// Fractional jitter of puff radius for organic variation
-    #[persist(code = 548, ui(min = 0.0, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "eddy"))]
     pub puff_radius_jitter: f32,
     /// Radial offset of puff clumps from the wall in q space
-    #[persist(code = 549, ui(min = 0.0, max = 1.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 1.0, group = "eddy"))]
     pub puff_offset_q: f32,
     /// Strength of the puff density contribution relative to the wall
-    #[persist(code = 550, ui(min = 0.0, max = 4.0, group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 4.0, group = "eddy"))]
     #[ubo("puff_params.y")]
     pub puff_strength: f32,
     /// Rise speed of puff clumps along the tornado height
-    #[persist(code = 551, ui(min = 0.0, max = 10.0, format = "%.1f", group = "eddy"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, format = "%.1f", group = "eddy"))]
     pub puff_rise_speed: f32,
     /// Single-scattering albedo of the dust
-    #[persist(code = [519, 520, 521], ui(primary, min = 0.0, max = 1.0, group = "look"))]
+    #[persist(curve, ui(primary, min = 0.0, max = 1.0, group = "look"))]
     #[ubo("albedo.xyz")]
     pub albedo: [f32; 3],
-    #[persist(code = 522, ui(min = 0.0, max = 5.0, group = "look"))]
+    #[persist(curve, ui(min = 0.0, max = 5.0, group = "look"))]
     #[ubo("optics.y")]
     pub ambient_brightness: f32,
     /// Henyey-Greenstein anisotropy of the dust; positive scatters forward
-    #[persist(code = 523, ui(min = -0.95, max = 0.95, group = "look"))]
+    #[persist(curve, ui(min = -0.95, max = 0.95, group = "look"))]
     #[ubo("lighting.x")]
     pub phase_g: f32,
     /// Radiance of the sun used by the single-scattering source term
-    #[persist(code = 524, ui(min = 0.0, max = 10.0, group = "look"))]
+    #[persist(curve, ui(min = 0.0, max = 10.0, group = "look"))]
     #[ubo("lighting.y")]
     pub sun_intensity: f32,
 }

@@ -1,9 +1,6 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{
-    ScalarCodeBlock, ScalarParam, UiParam, LIGHTNING_SCALAR_CODES, LIGHTNING_SCALAR_PARAMS,
-    LIGHTNING_UI_PARAMS,
-};
+use thyllore_effect_core::{ScalarParam, UiParam, LIGHTNING_SCALAR_PARAMS, LIGHTNING_UI_PARAMS};
 
 use super::effect::LightningEffect;
 use crate::ecs::component::{
@@ -17,7 +14,6 @@ impl ScalarDomainSource for LightningScalarSource {
     type Component = LightningEffect;
 
     const NAME: &'static str = "Lightning";
-    const CODE_BLOCK: ScalarCodeBlock = LIGHTNING_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<LightningEffect>] {
         &LIGHTNING_SCALAR_PARAMS

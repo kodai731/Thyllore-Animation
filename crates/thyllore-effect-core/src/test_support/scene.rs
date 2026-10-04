@@ -1,9 +1,7 @@
 use std::fmt::Debug;
 
 use serde::de::DeserializeOwned;
-use thyllore_scene_core::{
-    find_scalar_param, ScalarCodeBlock, ScalarParam, SceneComponent, UiParam,
-};
+use thyllore_scene_core::{find_scalar_param, ScalarParam, SceneComponent, UiParam};
 
 fn assert_unique_names(names: &mut Vec<&str>) {
     names.sort_unstable();
@@ -63,26 +61,6 @@ pub fn assert_tables_are_consistent<C>(
     let ron_value: ron::Value = ron::from_str(&ron_text).expect("ron value");
     let through_value: C = ron_value.into_rust().expect("ron value into component");
     assert_eq!(through_value, C::default());
-}
-
-/// Every animation-curve code lies inside the effect's block and no two scalars share one.
-pub fn assert_codes_lie_in_block<C>(scalars: &[ScalarParam<C>], block: ScalarCodeBlock) {
-    let mut codes: Vec<u16> = scalars.iter().filter_map(|param| param.code).collect();
-    assert!(!codes.is_empty(), "no animatable scalar declares a code");
-    for param in scalars {
-        if let Some(code) = param.code {
-            assert!(
-                block.contains(code),
-                "{} code {code} lies outside {block:?}",
-                param.name
-            );
-        }
-    }
-
-    codes.sort_unstable();
-    let len = codes.len();
-    codes.dedup();
-    assert_eq!(codes.len(), len, "duplicate animation-curve codes");
 }
 
 pub fn groups_in_display_order(ui: &[UiParam]) -> Vec<&'static str> {

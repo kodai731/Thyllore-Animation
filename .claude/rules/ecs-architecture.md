@@ -59,7 +59,7 @@ once in `crates/thyllore-effect-core` via struct field attributes (`#[derive(thy
 proc-macro nested at `crates/thyllore-scene-core/derive/` and re-exported by scene-core, usable by any scene component); `src/ecs/component/`
 only wraps them. The effect struct carries `#[scene(key, tag, tags, snapshot, scalars, ui, overwrite, owner?, group?)]`,
 a sub-struct carries `#[params(tag, owner?, group?)]`, and a field carries one of `#[persist(owner?, as?, with?,
-ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
+curve?, debug_range?, renamed_from?, ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
 fields). The tooltip is the field's `///` doc comment, the label is the title-cased public name, and a `[f32; 3]` with
 `ui(...)` is a `Color` unless `kind = Absorption` / `Offset` says otherwise; no generated JSON is checked in. The scene form is nested by struct; the public parameter
 name is the underscore-joined path (`noise.amplitude` → `noise_amplitude`) and is the one string used by
@@ -241,8 +241,8 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
    `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
    components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
    Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited. For an
-   animatable scalar, give the field `#[persist(code = N)]` with an unused code from the effect's
-   `ScalarCodeBlock` (effect-core); nothing in `src/` changes.
+   animatable scalar, add `curve` to the field's `#[persist(...)]` (effect-core); nothing in `src/`
+   changes and no number is assigned (see `ui.md`).
 
 ## Adding New Domain Features
 

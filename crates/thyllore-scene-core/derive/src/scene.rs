@@ -2,8 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
-    Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitInt, LitStr, Meta, Path, Result,
-    Token, Type,
+    Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Token, Type,
 };
 
 pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
@@ -19,8 +18,7 @@ pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     let name = &input.ident;
 
     let record = expand_record(name, &fields);
-    let scene_prefix: Option<String> = attrs.scene_prefix.as_ref().map(|s| s.value());
-    let scene_fields = expand_scene_fields_impl(name, &attrs.tag, scene_prefix.as_deref(), &fields);
+    let scene_fields = expand_scene_fields_impl(name, &attrs.tag, &fields);
     let component = match &attrs.scene {
         Some(scene) => expand_component_tables(name, &attrs.tag, scene, &fields),
         None => quote!(),
@@ -39,7 +37,6 @@ pub struct StructAttributes {
     pub tag: Path,
     pub owner: Option<Ident>,
     pub group: Option<LitStr>,
-    pub scene_prefix: Option<LitStr>,
     pub scene: Option<SceneNames>,
 }
 
@@ -75,7 +72,6 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
     let mut tag: Option<Path> = None;
     let mut owner: Option<Ident> = None;
     let mut group: Option<LitStr> = None;
-    let mut scene_prefix: Option<LitStr> = None;
     let mut key: Option<LitStr> = None;
     let mut tags: Option<Ident> = None;
     let mut snapshot: Option<Ident> = None;
@@ -90,8 +86,6 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
             owner = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("group") {
             group = Some(meta.value()?.parse()?);
-        } else if meta.path.is_ident("scene_prefix") {
-            scene_prefix = Some(meta.value()?.parse()?);
         } else if is_scene && meta.path.is_ident("key") {
             key = Some(meta.value()?.parse()?);
         } else if is_scene && meta.path.is_ident("tags") {
@@ -130,7 +124,6 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
         tag: tag.ok_or_else(|| Error::new_spanned(attr, "struct attribute requires `tag`"))?,
         owner,
         group,
-        scene_prefix,
         scene,
     })
 }
@@ -153,7 +146,7 @@ pub struct ParamField {
     pub doc: String,
     pub debug_range: Option<(Expr, Expr)>,
     pub renamed_from: Vec<LitStr>,
-    pub codes: Vec<LitInt>,
+    pub curve: bool,
 }
 
 pub enum Conversion {
@@ -272,7 +265,7 @@ pub fn parse_param_field(
     let mut scalars = false;
     let mut debug_range: Option<(Expr, Expr)> = None;
     let mut renamed_from: Vec<LitStr> = Vec::new();
-    let mut codes: Vec<LitInt> = Vec::new();
+    let mut curve = false;
 
     if !matches!(attr.meta, Meta::Path(_)) {
         attr.meta.require_list()?.parse_nested_meta(|meta| {
@@ -301,8 +294,8 @@ pub fn parse_param_field(
                 renamed_from = Punctuated::<LitStr, Token![,]>::parse_terminated(&content)?
                     .into_iter()
                     .collect();
-            } else if meta.path.is_ident("code") {
-                codes = parse_codes(&meta)?;
+            } else if meta.path.is_ident("curve") {
+                curve = true;
             } else {
                 return Err(meta.error("unknown field attribute key"));
             }
@@ -355,25 +348,14 @@ pub fn parse_param_field(
                 ),
             ));
         }
-        if !codes.is_empty() && codes.len() != len {
-            return Err(Error::new_spanned(
-                field,
-                format!("`code` on a [f32; {len}] value lists one code per component"),
-            ));
-        }
-    } else if codes.len() > 1 {
-        return Err(Error::new_spanned(
-            field,
-            "`code = [..]` lists one code per component of a [f32; N] value",
-        ));
     }
     let component_scalars = scalars || (ui.is_some() && matches!(kind, ValueKind::Array(_)));
-    if !codes.is_empty()
+    if curve
         && (kind == ValueKind::Other || (matches!(kind, ValueKind::Array(_)) && !component_scalars))
     {
         return Err(Error::new_spanned(
             field,
-            "`code` needs a scalar value (f32 / u32 / bool) or a [f32; N] value exposed with `scalars` / `ui`",
+            "`curve` needs a scalar value (f32 / u32 / bool) or a [f32; N] value exposed with `scalars` / `ui`",
         ));
     }
 
@@ -394,20 +376,8 @@ pub fn parse_param_field(
         doc: String::new(),
         debug_range,
         renamed_from,
-        codes,
+        curve,
     })
-}
-
-fn parse_codes(meta: &syn::meta::ParseNestedMeta) -> Result<Vec<LitInt>> {
-    let value = meta.value()?;
-    if value.peek(syn::token::Bracket) {
-        let content;
-        syn::bracketed!(content in value);
-        return Ok(Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?
-            .into_iter()
-            .collect());
-    }
-    Ok(vec![value.parse()?])
 }
 
 fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes> {
@@ -604,12 +574,7 @@ fn marker_ident(field: &Ident) -> Ident {
     format_ident!("{camel}FieldPath")
 }
 
-fn expand_scene_fields_impl(
-    name: &Ident,
-    tag: &Path,
-    scene_prefix: Option<&str>,
-    fields: &[FieldSpec],
-) -> TokenStream {
+fn expand_scene_fields_impl(name: &Ident, tag: &Path, fields: &[FieldSpec]) -> TokenStream {
     let mut markers = Vec::new();
     let mut scalars = Vec::new();
     let mut uis = Vec::new();
@@ -635,11 +600,11 @@ fn expand_scene_fields_impl(
                 snapshots.push(quote! {
                     out.push(::thyllore_scene_core::SnapshotValues::snapshot_values(&#read));
                 });
-                scalars.extend(expand_scalars(param, scene_prefix));
+                scalars.extend(expand_scalars(param));
                 uis.extend(expand_ui(param, true));
             }
             FieldSpec::Runtime(param) => {
-                scalars.extend(expand_scalars(param, scene_prefix));
+                scalars.extend(expand_scalars(param));
                 uis.extend(expand_ui(param, false));
             }
             FieldSpec::Nested(nested) => {
@@ -743,7 +708,7 @@ fn expand_scene_fields_impl(
     }
 }
 
-fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenStream> {
+fn expand_scalars(param: &ParamField) -> Vec<TokenStream> {
     let field_name = param.ident.to_string();
     let component = quote!(component);
     let read = read_value(param, &component);
@@ -754,59 +719,45 @@ fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenSt
     };
     let field_renamed_from = &param.renamed_from;
     let all_renamed_from = quote!(&[#(#field_renamed_from),*]);
-    let code_at = |index: usize| match param.codes.get(index) {
-        Some(code) => quote!(Some(#code)),
-        None => quote!(None),
-    };
+    let curve = param.curve;
 
-    let push = |suffix: &str,
-                renamed_from: TokenStream,
-                code: TokenStream,
-                get_body: TokenStream,
-                set_body: TokenStream| {
-        let name = format!("{field_name}{suffix}");
-        let scene_name = match scene_prefix {
-            Some(prefix) => format!("{}{}", prefix, pascal_case(&name)),
-            None => pascal_case(&name),
+    let push =
+        |suffix: &str, renamed_from: TokenStream, get_body: TokenStream, set_body: TokenStream| {
+            let name = format!("{field_name}{suffix}");
+            quote! {
+                out.push(::thyllore_scene_core::ScalarParam {
+                    name: ::thyllore_scene_core::intern_name(prefix, #name),
+                    get: |root: &R| {
+                        let component: &Self = P::get(root);
+                        #get_body
+                    },
+                    set: |root: &mut R, value: f32| {
+                        let component: &mut Self = P::get_mut(root);
+                        #set_body
+                    },
+                    debug_range: #debug_range,
+                    renamed_from: #renamed_from,
+                    curve: #curve,
+                });
+            }
         };
-        quote! {
-            out.push(::thyllore_scene_core::ScalarParam {
-                name: ::thyllore_scene_core::intern_name(prefix, #name),
-                scene_name: #scene_name,
-                get: |root: &R| {
-                    let component: &Self = P::get(root);
-                    #get_body
-                },
-                set: |root: &mut R, value: f32| {
-                    let component: &mut Self = P::get_mut(root);
-                    #set_body
-                },
-                debug_range: #debug_range,
-                renamed_from: #renamed_from,
-                code: #code,
-            });
-        }
-    };
 
     match param.kind {
         ValueKind::F32 => vec![push(
             "",
             all_renamed_from,
-            code_at(0),
             quote!(#read),
             quote!(let stored = value; #write_stored),
         )],
         ValueKind::U32 => vec![push(
             "",
             all_renamed_from,
-            code_at(0),
             quote!(#read as f32),
             quote!(let stored = value.round() as u32; #write_stored),
         )],
         ValueKind::Bool => vec![push(
             "",
             all_renamed_from,
-            code_at(0),
             quote!(u8::from(#read) as f32),
             quote!(let stored = value != 0.0; #write_stored),
         )],
@@ -822,7 +773,6 @@ fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenSt
                 push(
                     suffix,
                     component_renamed_from,
-                    code_at(index),
                     quote!(#read[#index]),
                     quote! {
                         let mut stored = #read;
@@ -1109,19 +1059,6 @@ mod tests {
     }
 
     #[test]
-    fn scene_name_is_the_pascal_cased_field_and_suffix_without_prefix() {
-        let expanded = expand("#[params(tag = Owner, owner = Look)] struct L { #[persist(ui(min = 0.0, max = 1.0))] pub core_color: [f32; 3], #[persist] pub ior: f32 }");
-        assert!(
-            expanded.contains("name : :: thyllore_scene_core :: intern_name (prefix , \"core_color_r\") , scene_name : \"CoreColorR\""),
-            "{expanded}"
-        );
-        assert!(
-            expanded.contains("intern_name (prefix , \"ior\") , scene_name : \"Ior\""),
-            "{expanded}"
-        );
-    }
-
-    #[test]
     fn debug_range_reaches_every_component_and_renamed_from_is_split_per_component() {
         let expanded = expand(&format!(
             "{TOP} struct S {{ #[persist(scalars, debug_range = (0.0, 2.0), renamed_from = [\"OldDirX\", \"OldDirZ\"])] pub dir: [f32; 2], #[persist(renamed_from = [\"Flat\", \"Level\"])] pub plain: f32, #[persist] pub bare: f32 }}"
@@ -1151,31 +1088,23 @@ mod tests {
     }
 
     #[test]
-    fn code_reaches_the_scalar_and_is_split_per_component() {
+    fn curve_reaches_every_component_of_the_scalar() {
         let expanded = expand(&format!(
-            "{TOP} struct S {{ #[persist(scalars, code = [12, 13])] pub dir: [f32; 2], #[persist(code = 7)] pub plain: f32, #[persist] pub bare: f32 }}"
+            "{TOP} struct S {{ #[persist(scalars, curve)] pub dir: [f32; 2], #[persist(curve)] pub plain: f32, #[persist] pub bare: f32 }}"
         ));
-        for code in ["12", "13", "7"] {
-            assert_eq!(
-                expanded.matches(&format!("code : Some ({code})")).count(),
-                1,
-                "{expanded}"
-            );
-        }
-        assert_eq!(expanded.matches("code : None").count(), 1, "{expanded}");
+        assert_eq!(expanded.matches("curve : true").count(), 3, "{expanded}");
+        assert_eq!(expanded.matches("curve : false").count(), 1, "{expanded}");
     }
 
     #[test]
-    fn rejects_code_whose_count_differs_from_the_component_count() {
+    fn rejects_curve_on_a_value_without_scalars() {
         let message = expand_err(&format!(
-            "{TOP} struct S {{ #[persist(scalars, code = [12])] pub dir: [f32; 2] }}"
+            "{TOP} struct S {{ #[persist(curve, as = [f32; 3])] pub p: V3 }}"
         ));
-        assert!(message.contains("one code per component"), "{message}");
-
-        let message = expand_err(&format!(
-            "{TOP} struct S {{ #[persist(code = [1, 2])] pub plain: f32 }}"
-        ));
-        assert!(message.contains("one code per component"), "{message}");
+        assert!(
+            message.contains("`curve` needs a scalar value"),
+            "{message}"
+        );
     }
 
     #[test]
@@ -1278,18 +1207,5 @@ mod tests {
     fn rejects_enum() {
         let input: DeriveInput = syn::parse_str("enum E { A }").expect("valid enum");
         assert!(expand_scene_fields(&input).is_err());
-    }
-
-    #[test]
-    fn scene_prefix_prepends_to_scene_name() {
-        let expanded = expand("#[params(tag = Owner, owner = Frame, group = \"branch\", scene_prefix = \"Branch\")] struct B { #[persist(ui(min = 0.0, max = 5.0))] pub depth: u32, #[persist(ui(min = 0.0, max = 1.0))] pub probability: f32 }");
-        assert!(
-            expanded.contains("scene_name : \"BranchDepth\""),
-            "{expanded}"
-        );
-        assert!(
-            expanded.contains("scene_name : \"BranchProbability\""),
-            "{expanded}"
-        );
     }
 }

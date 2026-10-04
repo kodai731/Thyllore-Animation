@@ -3,10 +3,6 @@ use crate::lightning::{
 };
 use cgmath::{Matrix4, Quaternion, Vector3};
 
-/// Animation-curve codes this effect owns; every `#[persist(code = N)]` below lies inside it.
-pub const LIGHTNING_SCALAR_CODES: thyllore_scene_core::ScalarCodeBlock =
-    thyllore_scene_core::ScalarCodeBlock::new(768, 256);
-
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[scene(key = "lightning", tag = LightningParameterOwner, owner = Frame, tags = LIGHTNING_PARAMETER_OWNERSHIP, snapshot = lightning_parameter_snapshot, scalars = LIGHTNING_SCALAR_PARAMS, ui = LIGHTNING_UI_PARAMS, overwrite = overwrite_lightning_persisted_fields)]
 pub struct LightningEffect {

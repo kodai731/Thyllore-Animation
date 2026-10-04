@@ -1,9 +1,9 @@
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_effect_core::{find_scalar_param, find_ui_param, ScalarParam, UiParam};
-
-use crate::ecs::component::{
-    scalar_channel_domains, ScalarChannel, ScalarChannelDomain, ScalarCodeBlock,
+use thyllore_effect_core::{
+    find_scalar_param, find_ui_param, title_case_snake, ScalarParam, UiParam,
 };
+
+use crate::ecs::component::{scalar_channel_domains, ScalarChannel, ScalarChannelDomain};
 use crate::ecs::storage::Component;
 use crate::ecs::world::{Entity, World};
 
@@ -12,7 +12,6 @@ pub trait ScalarDomainSource: 'static {
     type Component: Component;
 
     const NAME: &'static str;
-    const CODE_BLOCK: ScalarCodeBlock;
 
     fn scalars() -> &'static [ScalarParam<Self::Component>];
     fn ui() -> &'static [UiParam];
@@ -24,7 +23,6 @@ pub const fn effect_scalar_domain<S: ScalarDomainSource>(
 ) -> ScalarChannelDomain {
     ScalarChannelDomain {
         name: S::NAME,
-        code_block: S::CODE_BLOCK,
         channel_table,
         has_component: has_effect_component::<S>,
         entities: effect_entities::<S>,
@@ -33,18 +31,13 @@ pub const fn effect_scalar_domain<S: ScalarDomainSource>(
     }
 }
 
-/// Every scalar carrying `#[persist(code = N)]`, in code order.
+/// Every scalar carrying `#[persist(curve)]`, in declaration order.
 pub fn build_effect_scalar_channels<S: ScalarDomainSource>() -> Vec<ScalarChannel> {
-    let mut channels: Vec<ScalarChannel> = S::scalars()
+    S::scalars()
         .iter()
-        .filter_map(|scalar| {
-            scalar
-                .code
-                .map(|code| build_effect_scalar_channel::<S>(scalar, code))
-        })
-        .collect();
-    channels.sort_by_key(|channel| channel.code);
-    channels
+        .filter(|scalar| scalar.curve)
+        .map(build_effect_scalar_channel::<S>)
+        .collect()
 }
 
 pub fn find_scalar_param_for_property<S: ScalarDomainSource>(
@@ -59,22 +52,19 @@ pub fn find_scalar_param_for_property<S: ScalarDomainSource>(
 
 fn build_effect_scalar_channel<S: ScalarDomainSource>(
     scalar: &'static ScalarParam<S::Component>,
-    code: u16,
 ) -> ScalarChannel {
     let name = scalar.name;
     let display_name = match find_ui_param(S::ui(), name).and_then(|ui| ui.label) {
         Some(label) => label,
-        None => space_pascal_case(scalar.scene_name).leak(),
+        None => title_case_snake(name).leak(),
     };
     let debug_value_range = scalar
         .debug_range
         .unwrap_or_else(|| ui_value_range::<S>(name));
 
     ScalarChannel {
-        code,
         display_name,
         cli_name: scalar.name,
-        scene_name: scalar.scene_name,
         debug_value_range,
         renamed_from: scalar.renamed_from,
     }
@@ -100,17 +90,6 @@ fn ui_value_range<S: ScalarDomainSource>(scalar_name: &str) -> (f32, f32) {
             )
         });
     (ui.min, ui.max)
-}
-
-fn space_pascal_case(name: &str) -> String {
-    let mut spaced = String::with_capacity(name.len() + 4);
-    for (index, character) in name.char_indices() {
-        if index > 0 && character.is_uppercase() {
-            spaced.push(' ');
-        }
-        spaced.push(character);
-    }
-    spaced
 }
 
 fn has_effect_component<S: ScalarDomainSource>(world: &World, entity: Entity) -> bool {

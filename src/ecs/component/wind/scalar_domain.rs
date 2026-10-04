@@ -1,8 +1,6 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{
-    ScalarCodeBlock, ScalarParam, UiParam, WIND_SCALAR_CODES, WIND_SCALAR_PARAMS, WIND_UI_PARAMS,
-};
+use thyllore_effect_core::{ScalarParam, UiParam, WIND_SCALAR_PARAMS, WIND_UI_PARAMS};
 
 use super::effect::WindTornadoEffect;
 use crate::ecs::component::{
@@ -16,7 +14,6 @@ impl ScalarDomainSource for WindScalarSource {
     type Component = WindTornadoEffect;
 
     const NAME: &'static str = "Wind";
-    const CODE_BLOCK: ScalarCodeBlock = WIND_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<WindTornadoEffect>] {
         &WIND_SCALAR_PARAMS

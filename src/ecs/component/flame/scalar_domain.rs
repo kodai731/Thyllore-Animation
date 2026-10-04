@@ -1,8 +1,6 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{
-    ScalarCodeBlock, ScalarParam, UiParam, FLAME_SCALAR_CODES, FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS,
-};
+use thyllore_effect_core::{ScalarParam, UiParam, FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
 
 use super::effect::FlameEffect;
 use crate::ecs::component::{
@@ -16,7 +14,6 @@ impl ScalarDomainSource for FlameScalarSource {
     type Component = FlameEffect;
 
     const NAME: &'static str = "Flame";
-    const CODE_BLOCK: ScalarCodeBlock = FLAME_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<FlameEffect>] {
         &FLAME_SCALAR_PARAMS
@@ -44,25 +41,7 @@ crate::scalar_channel_domain!(FLAME_DOMAIN);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::component::{find_scalar_param_for_property, scalar_channel_for_scene_name};
-
-    #[test]
-    fn test_former_scene_names_resolve_to_their_channels() {
-        for (former_name, cli_name) in [
-            ("WarpAmp", "warp_amp"),
-            ("WarpFreq", "warp_freq"),
-            ("NoiseAmplitude", "noise_amplitude"),
-            ("WindX", "wind_direction_x"),
-            ("WindZ", "wind_direction_y"),
-            ("EdgeLow", "edge_low"),
-            ("EdgeHigh", "edge_high"),
-        ] {
-            let (domain, channel) = scalar_channel_for_scene_name(former_name)
-                .unwrap_or_else(|| panic!("{former_name} resolves to a channel"));
-            assert_eq!(domain.name, FLAME_DOMAIN.name);
-            assert_eq!(channel.cli_name, cli_name);
-        }
-    }
+    use crate::ecs::component::find_scalar_param_for_property;
 
     #[test]
     fn test_every_channel_writes_and_reads_its_own_field() {

@@ -10,7 +10,7 @@ use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::quaternion_to_euler_degrees;
 
-use crate::animation::editable::SourceClipId;
+use crate::animation::editable::{ClipInstanceId, SourceClipId};
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
@@ -220,13 +220,48 @@ pub fn apply_recipe_file(
         );
         return Ok(source_id);
     };
-    clip_schedule_add_instance(schedule, source_id, duration);
+    let instance_id = clip_schedule_add_instance(schedule, source_id, duration);
+    mute_overlapping_instances(schedule, instance_id);
     log!(
         "recipe {}: clip '{clip_name}' (src {source_id}) scheduled",
         path.display()
     );
 
     Ok(source_id)
+}
+
+fn mute_overlapping_instances(schedule: &mut ClipSchedule, keep: ClipInstanceId) {
+    let keep_instance = schedule.instances.iter().find(|i| i.instance_id == keep);
+    let Some(keep_instance) = keep_instance else {
+        return;
+    };
+    let keep_end = keep_instance.end_time();
+    let keep_start = keep_instance.start_time;
+
+    let mut muted_sources: Vec<SourceClipId> = Vec::new();
+
+    for instance in &mut schedule.instances {
+        if instance.instance_id == keep {
+            continue;
+        }
+        if instance.muted {
+            continue;
+        }
+        let inst_end = instance.end_time();
+        if instance.start_time < keep_end && keep_start < inst_end {
+            let source_id = instance.source_id;
+            instance.muted = true;
+            muted_sources.push(source_id);
+        }
+    }
+
+    if !muted_sources.is_empty() {
+        log!(
+            "recipe: muted {} overlapping instance(s) (source ids: {:?})",
+            muted_sources.len(),
+            muted_sources
+        );
+    }
 }
 
 pub fn find_recipe_schedule_owner(world: &World) -> Option<Entity> {
@@ -835,6 +870,51 @@ mod tests {
             schedule.instances.len(),
             1,
             "expected exactly 1 schedule instance"
+        );
+
+        std::fs::remove_file(&copy_path).ok();
+    }
+
+    #[test]
+    fn test_apply_recipe_file_mutes_overlapping_instances() {
+        let (mut world, mut assets) = make_recipe_world(1);
+        let copy_path = copy_wave_recipe_to_temp();
+
+        let entities: Vec<Entity> = world.component_entities::<ClipSchedule>();
+        let schedule_entity = entities[0];
+        {
+            let mut schedule = world
+                .get_component_mut::<ClipSchedule>(schedule_entity)
+                .unwrap();
+            clip_schedule_add_instance(&mut schedule, 99, 5.0);
+        }
+
+        let id = apply_recipe_file(&mut world, &mut assets, &copy_path).unwrap();
+
+        let schedule = world
+            .get_component::<ClipSchedule>(schedule_entity)
+            .unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            2,
+            "expected exactly 2 schedule instances"
+        );
+
+        let overlap_instance = schedule
+            .instances
+            .iter()
+            .find(|i| i.source_id == 99)
+            .expect("source 99 instance not found");
+        assert!(overlap_instance.muted, "source 99 instance should be muted");
+
+        let recipe_instance = schedule
+            .instances
+            .iter()
+            .find(|i| i.source_id == id)
+            .expect("recipe instance not found");
+        assert!(
+            !recipe_instance.muted,
+            "recipe instance should not be muted"
         );
 
         std::fs::remove_file(&copy_path).ok();

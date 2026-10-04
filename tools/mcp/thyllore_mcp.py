@@ -27,6 +27,7 @@ mcp = FastMCP("thyllore", log_level="WARNING")
 
 _BATCH_TIMEOUT_SECONDS = 300
 _WATER_SCRIPT_TIMEOUT_SECONDS = 900
+_RECIPE_CHECK_TIMEOUT_SECONDS = 1800
 
 
 def _repo_root() -> Path:
@@ -88,6 +89,8 @@ def screenshot(
     flame_mode: str = "",
     flame_steps: int = 0,
     camera: str = "",
+    sequence: str = "",
+    scene: str = "",
 ) -> str:
     """Launch Thyllore, render `frames` frames, save a viewport PNG, and exit.
 
@@ -98,18 +101,47 @@ def screenshot(
     `flame_mode` optionally overrides the flame integrator
     (analytic|raymarch|thickness|noise); `flame_steps` > 0 overrides the
     raymarch step count; `camera` = "yaw_deg,pitch_deg,distance" orbits the
-    camera around the origin. Each call pays a full engine startup (seconds)."""
+    camera around the origin. `scene` = "<path>" loads the given scene file
+    before rendering. `sequence` = "<count>,<stride>" renders multiple frames
+    spaced by stride and returns {"ok": true, "paths": [<sorted PNG paths in the sequence dir>]}.
+    Each call pays a full engine startup (seconds)."""
     default_dir = Path(tempfile.gettempdir()) / "thyllore_screenshots"
     default_dir.mkdir(parents=True, exist_ok=True)
-    out = output or str(default_dir / f"screenshot_batch_{int(time.time())}.png")
-    args = ["--batch-screenshot", out, "--batch-frames", str(frames)]
+
+    if sequence:
+        parts = sequence.split(",")
+        if len(parts) != 2:
+            return _error("sequence must be '<count>,<stride>'")
+        try:
+            count, stride = int(parts[0]), int(parts[1])
+        except ValueError:
+            return _error("sequence count and stride must be integers")
+        seq_dir = Path(output) if output else (default_dir / f"sequence_{int(time.time())}")
+        seq_dir.mkdir(parents=True, exist_ok=True)
+        args = ["--batch-screenshot-sequence", f"{seq_dir},{count},{stride}", "--batch-frames", str(frames)]
+    else:
+        out = output or str(default_dir / f"screenshot_batch_{int(time.time())}.png")
+        args = ["--batch-screenshot", out, "--batch-frames", str(frames)]
+
     if flame_mode:
         args += ["--batch-flame-mode", flame_mode]
     if flame_steps > 0:
         args += ["--batch-flame-steps", str(flame_steps)]
     if camera:
         args += ["--batch-camera", camera]
-    return _run_batch(args)
+    if scene:
+        args += ["--batch-scene", scene]
+
+    result = _run_batch(args)
+    if sequence:
+        try:
+            obj = json.loads(result)
+            if obj.get("ok"):
+                paths = sorted(str(p) for p in seq_dir.glob("*.png"))
+                return json.dumps({"ok": True, "paths": paths}, ensure_ascii=False)
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return result
 
 
 def _read_json_file(path: str) -> dict | None:
@@ -174,6 +206,7 @@ def anim_edit(
     screenshot: bool = False,
     camera: str = "",
     flame_mode: str = "",
+    scene: str = "",
 ) -> str:
     """Apply scalar animation edits through the engine's production event path,
     render `frames` frames (batch time advances 1/60s per frame, so keyframed
@@ -192,17 +225,22 @@ def anim_edit(
       path; creates the curve when the clip is empty)
     - `trim_end=<seconds>`: set the entity's clip instance clip_out through the
       real ClipInstanceTrimEnd event (what releasing a right-edge drag sends)
-    - `recipe=<path.json>`: load a recipe file, convert it to a clip, and replace
-      any existing clip with the same name in the library
+    - `recipe=<path.json>`: load a recipe file, bake it after scene model load
+      (AssetEdit stage), place on the selected model's schedule (or the only
+      skinned model), mute the other instances that overlap it — replace any
+      existing clip with the same name in the library
     - `clear`: remove all scalar curves
 
     Returns {"ok": true, "anim": {entities, clips, timeline}} —
     `anim.clips[].scalar_curves` holds every curve's keyframes,
     `anim.entities[].params` the sampled values at the final rendered frame
-    (time ≈ frames/60) with the owning `domain` name. Set `screenshot` to also
-    keep a PNG (path in result). `camera` and `flame_mode` work like in the
-    screenshot tool."""
+    (time ≈ frames/60) with the owning `domain` name. `anim.models[]` lists
+    skinned models on the schedule. Set `screenshot` to also keep a PNG (path in
+    result). `camera` and `flame_mode` work like in the screenshot tool.
+    `scene` = "<path>" loads the given scene file before rendering."""
     args, png_path = _batch_base_args(frames, camera, flame_mode, screenshot)
+    if scene:
+        args += ["--batch-scene", scene]
     specs = [s.strip() for s in edits.split(";") if s.strip()]
     if not specs:
         return _error("edits must contain at least one spec")
@@ -212,15 +250,24 @@ def anim_edit(
 
 
 @mcp.tool()
-def anim_state(frames: int = 2, camera: str = "") -> str:
+def anim_state(frames: int = 2, camera: str = "", include: str = "", scene: str = "") -> str:
     """Read the engine's animation state without editing anything: launch,
     render `frames` frames, and return {"ok": true, "anim": {entities, clips,
     timeline}}. `anim.entities[]` lists each scalar-channel entity (flame, ...)
     with its domain, clip schedule and current param values; `anim.clips[]`
-    lists every clip with duration, bone track count, and scalar curves. Use a
-    small `frames` (default 2) for a fast state peek, or larger to see values
-    mid-animation."""
+    lists every clip with duration, bone track count, and scalar curves.
+    `anim.models[]` lists skinned models on the schedule. When include="tracks",
+    `anim.clips[].bone_tracks[]` is also included with each track's role and
+    curves (rot_x/rot_y/rot_z/pos_x/pos_y/pos_z). Use a small `frames` (default
+    2) for a fast state peek, or larger to see values mid-animation.
+    `scene` = "<path>" loads the given scene file before rendering."""
     args, png_path = _batch_base_args(frames, camera, "", False)
+    if include == "tracks":
+        args.append("--batch-anim-dump-tracks")
+    elif include:
+        return _error(f"include must be empty or 'tracks', got '{include}'")
+    if scene:
+        args += ["--batch-scene", scene]
     return _run_batch_with_dump(args, False, png_path)
 
 
@@ -496,11 +543,11 @@ def _import_engine_harness():
     return dood_wrap, engine_env, engine_path
 
 
-def _run_water_script(command: list[str]) -> str:
+def _run_water_script(command: list[str], timeout: int = _WATER_SCRIPT_TIMEOUT_SECONDS) -> str:
     """Run a tools/water_*.py helper and return its final stdout line (JSON)."""
     try:
         result = subprocess.run(command, capture_output=True, text=True,
-                                cwd=str(_repo_root()), timeout=_WATER_SCRIPT_TIMEOUT_SECONDS)
+                                cwd=str(_repo_root()), timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as failure:
         return _error(str(failure))
     if result.returncode != 0:
@@ -621,6 +668,24 @@ def water_depth_mask(camera: str = "80,10,6,0,0,0", frames: int = 30, dood: bool
         cmd.extend(["--out-dir", out_dir])
     cmd.extend(["--threshold", str(threshold)])
     return _run_water_script(cmd)
+
+
+@mcp.tool()
+def recipe_check(recipe: str = "", dood: bool = True) -> str:
+    """Run the recipe smoke test (tools/recipe_smoke.py) and return its JSON.
+
+    The single source of truth for each recipe's pass/fail is
+    tools/recipe_smoke.py's check_anim_dump / measure_motion. By default runs
+    wave, hands_on_hips_tilt, bow (3 recipes). With `recipe` runs only that
+    path. Returns the script's one-line JSON: {"ok": bool, "results":
+    [{"recipe", "dump", "motion", "ok"}]}."""
+    cmd = ["uv", "run", "--with", "numpy", "--with", "pillow", "python3",
+           "tools/recipe_smoke.py"]
+    if dood:
+        cmd.append("--dood")
+    if recipe:
+        cmd.extend(["--recipe", recipe])
+    return _run_water_script(cmd, timeout=_RECIPE_CHECK_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

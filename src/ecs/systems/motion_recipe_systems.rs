@@ -250,9 +250,73 @@ fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::asset::storage::{AssetStorage, SkeletonAsset};
+    use crate::ecs::component::{AnimationMeta, ClipSchedule};
+    use crate::ecs::resource::{AnimationType, HierarchyState, ModelState};
     use cgmath::{Rad, Rotation3};
     use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
     use thyllore_math_core::euler_degrees_to_quaternion;
+
+    static FIXTURE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn load_mixamo_fixture_skeleton() -> Skeleton {
+        let test_data_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("crates/thyllore-avatar-core/tests/data");
+        let fbx_txt_path = test_data_dir.join("rigs/mixamo.fbx.txt");
+        let counter = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let fbx_path = std::env::temp_dir().join(format!(
+            "motion_recipe_mixamo_{}_{}.fbx",
+            std::process::id(),
+            counter
+        ));
+        std::fs::copy(&fbx_txt_path, &fbx_path).unwrap();
+        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
+            fbx_path.to_str().unwrap(),
+        );
+        std::fs::remove_file(&fbx_path).ok();
+        let (fbx_result, _) = load_result.expect("Failed to load FBX");
+        fbx_result
+            .animation_system
+            .skeletons
+            .first()
+            .expect("No skeleton in loaded model")
+            .clone()
+    }
+
+    fn make_recipe_world(schedule_owner_count: usize) -> (World, AssetStorage) {
+        let mut world = World::new();
+        let temp_dir = std::env::temp_dir();
+        let fake_model_path = temp_dir
+            .join("recipe_test_model.fbx")
+            .to_string_lossy()
+            .to_string();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(HierarchyState::default());
+        world.insert_resource(ModelState {
+            model_path: fake_model_path,
+            ..Default::default()
+        });
+        for _ in 0..schedule_owner_count {
+            world
+                .entity()
+                .with_clip_schedule(ClipSchedule::new())
+                .with_animation_meta(AnimationMeta {
+                    animation_type: AnimationType::Skeletal,
+                    node_animation_scale: 1.0,
+                })
+                .build();
+        }
+        let mut assets = AssetStorage::new();
+        let skeleton = load_mixamo_fixture_skeleton();
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton,
+        });
+        (world, assets)
+    }
 
     fn make_chain_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -373,26 +437,12 @@ mod tests {
     #[test]
     fn test_recipe_to_clip_wave() {
         use std::fs;
-        use std::path::Path;
+
+        let skeleton = load_mixamo_fixture_skeleton();
 
         let test_data_dir =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
-        let fbx_txt_path = test_data_dir.join("rigs/mixamo.fbx.txt");
         let recipe_path = test_data_dir.join("recipes/wave.json");
-
-        let fbx_path = std::env::temp_dir().join("motion_recipe_to_clip_mixamo.fbx");
-        fs::copy(&fbx_txt_path, &fbx_path).unwrap();
-        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
-            fbx_path.to_str().unwrap(),
-        );
-        fs::remove_file(&fbx_path).ok();
-        let (fbx_result, _) = load_result.expect("Failed to load FBX");
-        let skeleton = fbx_result
-            .animation_system
-            .skeletons
-            .first()
-            .expect("No skeleton in loaded model")
-            .clone();
 
         let bones = skeleton_to_bone_inputs(&skeleton);
         let (mapping, _) = infer_mapping(&bones);
@@ -434,6 +484,65 @@ mod tests {
         assert!(
             !hips_track.translation_x.keyframes.is_empty(),
             "Hips translation keys are empty"
+        );
+    }
+
+    #[test]
+    fn test_apply_recipe_file_without_selection_schedules_on_sole_model() {
+        let (mut world, mut assets) = make_recipe_world(1);
+
+        let test_data_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
+        let recipe_path = test_data_dir.join("recipes/wave.json");
+
+        let id = apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
+
+        let entities: Vec<Entity> = world.component_entities::<ClipSchedule>();
+        assert_eq!(entities.len(), 1, "expected exactly 1 ClipSchedule entity");
+
+        let schedule = world.get_component::<ClipSchedule>(entities[0]).unwrap();
+        assert_eq!(schedule.instances.len(), 1, "expected exactly 1 instance");
+        assert_eq!(
+            schedule.instances[0].source_id, id,
+            "instance source_id should match the returned clip id"
+        );
+    }
+
+    #[test]
+    fn test_apply_recipe_file_twice_replaces_clip() {
+        let (mut world, mut assets) = make_recipe_world(1);
+
+        let test_data_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
+        let recipe_path = test_data_dir.join("recipes/wave.json");
+
+        apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
+        apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
+
+        let clip_library = world.resource::<ClipLibrary>();
+        assert_eq!(
+            clip_library.source_clips.len(),
+            1,
+            "expected exactly 1 clip after 2 applies"
+        );
+
+        let entities: Vec<Entity> = world.component_entities::<ClipSchedule>();
+        let schedule = world.get_component::<ClipSchedule>(entities[0]).unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            1,
+            "expected exactly 1 instance after 2 applies"
+        );
+    }
+
+    #[test]
+    fn test_find_recipe_schedule_owner_ambiguous_returns_none() {
+        let (world, _) = make_recipe_world(2);
+
+        let owner = find_recipe_schedule_owner(&world);
+        assert!(
+            owner.is_none(),
+            "expected None with 2 skeletal clip schedules"
         );
     }
 }

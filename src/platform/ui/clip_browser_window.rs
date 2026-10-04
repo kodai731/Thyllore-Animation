@@ -46,6 +46,14 @@ fn build_toolbar(ui: &imgui::Ui, browser_state: &ClipBrowserState, world: &World
     }
 
     ui.same_line();
+    if ui.small_button("Recipe") {
+        send_dialog_request(world, DialogRequest::LoadRecipe);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text("Load a pose recipe JSON and bake it into a clip for the selected model");
+    }
+
+    ui.same_line();
     let has_selection = browser_state.selected_clip_id.is_some();
     if has_selection {
         if ui.small_button("Save") {

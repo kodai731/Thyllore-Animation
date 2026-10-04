@@ -17,6 +17,7 @@ pub(super) fn queue_file_dialog_commands(app: &App) {
     for request in requests {
         match request {
             DialogRequest::LoadClip => queue_command(app, open_clip_load_dialog()),
+            DialogRequest::LoadRecipe => queue_command(app, open_recipe_load_dialog()),
             DialogRequest::SaveClip(source_id) => {
                 queue_command(app, open_clip_save_dialog(app, source_id))
             }
@@ -49,6 +50,14 @@ fn open_clip_load_dialog() -> Option<AssetEditCommand> {
         .pick_file()?;
 
     Some(AssetEditCommand::LoadClipFromFile { path })
+}
+
+fn open_recipe_load_dialog() -> Option<AssetEditCommand> {
+    let path = rfd::FileDialog::new()
+        .add_filter("Pose recipe JSON", &["json"])
+        .pick_file()?;
+
+    Some(AssetEditCommand::LoadRecipeFromFile { path })
 }
 
 fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<OutputCommand> {

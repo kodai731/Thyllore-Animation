@@ -203,8 +203,13 @@ pub fn apply_recipe_file(
             pose_times,
             roles,
             detached: false,
+            pose_rotations: recipe.poses.iter().map(|p| p.rotations.clone()).collect(),
         },
     );
+
+    if let Some(ref mut timeline) = world.get_resource_mut::<TimelineState>() {
+        timeline.current_clip_id = Some(source_id);
+    }
 
     let schedule = find_recipe_schedule_owner(world)
         .and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
@@ -213,9 +218,6 @@ pub fn apply_recipe_file(
             "recipe {}: clip '{clip_name}' registered but no model clip schedule was found",
             path.display()
         );
-        if let Some(ref mut timeline) = world.get_resource_mut::<TimelineState>() {
-            timeline.current_clip_id = Some(source_id);
-        }
         return Ok(source_id);
     };
     clip_schedule_add_instance(schedule, source_id, duration);
@@ -223,10 +225,6 @@ pub fn apply_recipe_file(
         "recipe {}: clip '{clip_name}' (src {source_id}) scheduled",
         path.display()
     );
-
-    if let Some(ref mut timeline) = world.get_resource_mut::<TimelineState>() {
-        timeline.current_clip_id = Some(source_id);
-    }
 
     Ok(source_id)
 }

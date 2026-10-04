@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -17,4 +17,5 @@ pub struct RecipeClipSource {
     pub pose_times: Vec<f32>,
     pub roles: Vec<(BoneId, HumanoidRole)>,
     pub detached: bool,
+    pub pose_rotations: Vec<BTreeMap<HumanoidRole, [f32; 3]>>,
 }

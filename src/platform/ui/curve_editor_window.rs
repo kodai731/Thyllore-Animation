@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
 use imgui::Condition;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+use super::curve_editor_recipe::{format_bone_label, order_bone_ids_by_role};
 
 use crate::animation::editable::{
     curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
@@ -11,9 +14,9 @@ use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
-    ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
-    CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, PoseLibrary, TangentHandleType,
-    TimelineState,
+    AvatarSetupState, ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget,
+    CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, PoseLibrary,
+    RecipeClipSources, TangentHandleType, TimelineState,
 };
 #[cfg(feature = "ml")]
 use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
@@ -117,6 +120,7 @@ fn draw_curve_editor_window(
     suggestion_overlays: &[SuggestionOverlay],
     pose_library: &mut PoseLibrary,
     scalar_domain: Option<&'static ScalarChannelDomain>,
+    bone_roles: &[(BoneId, HumanoidRole)],
 ) {
     if !editor_state.is_open {
         return;
@@ -162,6 +166,7 @@ fn draw_curve_editor_window(
                     clip_library,
                     editor_state,
                     scalar_domain,
+                    bone_roles,
                 );
             });
 
@@ -197,6 +202,36 @@ fn get_current_clip<'a>(
         .and_then(|id| clip_library.get(id))
 }
 
+fn collect_current_clip_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
+    let Some(current_clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        return Vec::new();
+    };
+
+    let recipe_roles = world
+        .get_resource::<RecipeClipSources>()
+        .and_then(|sources| {
+            sources
+                .by_clip
+                .get(&current_clip_id)
+                .map(|source| source.roles.clone())
+        });
+    recipe_roles.unwrap_or_else(|| collect_avatar_setup_bone_roles(world))
+}
+
+fn collect_avatar_setup_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
+    world
+        .get_resource::<AvatarSetupState>()
+        .map(|state| {
+            state
+                .mapping
+                .by_role
+                .iter()
+                .map(|(role, &bone_index)| (bone_index as BoneId, *role))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn build_track_list(
     ui: &imgui::Ui,
     world: &World,
@@ -204,6 +239,7 @@ fn build_track_list(
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
     scalar_domain: Option<&'static ScalarChannelDomain>,
+    bone_roles: &[(BoneId, HumanoidRole)],
 ) {
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
         ui.text("No clip selected");
@@ -230,17 +266,42 @@ fn build_track_list(
         return;
     }
 
-    ui.text("Bones:");
+    let is_detached = timeline_state.current_clip_id.is_some_and(|id| {
+        world
+            .get_resource::<RecipeClipSources>()
+            .is_some_and(|sources| {
+                sources
+                    .by_clip
+                    .get(&id)
+                    .is_some_and(|source| source.detached)
+            })
+    });
+    ui.text(if is_detached {
+        "Bones (detached from recipe):"
+    } else {
+        "Bones:"
+    });
     ui.separator();
 
-    let mut sorted_bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
-    sorted_bone_ids.sort();
+    let bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
+    let sorted_bone_ids = order_bone_ids_by_role(&bone_ids, bone_roles);
 
     for bone_id in sorted_bone_ids {
         if let Some(track) = clip.tracks.get(&bone_id) {
             let is_selected = editor_state.selected_bone_id() == Some(bone_id);
             let is_spring_bone = timeline_state.baked_bone_ids.contains(&bone_id);
-            let label = if is_spring_bone {
+            let role = bone_roles
+                .iter()
+                .find(|(b, _)| *b == bone_id)
+                .map(|(_, r)| *r);
+            let label = if role.is_some() {
+                let role_label = format_bone_label(&track.bone_name, role);
+                if is_spring_bone {
+                    format!("[SB] {}", role_label)
+                } else {
+                    role_label
+                }
+            } else if is_spring_bone {
                 let name = if track.bone_name.len() > 13 {
                     &track.bone_name[..10]
                 } else {
@@ -2522,6 +2583,7 @@ fn build_curve_editor_window(
         })
     };
     let suggestion_overlays = collect_suggestion_overlays(world);
+    let bone_roles = collect_current_clip_bone_roles(world);
 
     let timeline_state = world.resource::<TimelineState>();
     let clip_library = world.resource::<ClipLibrary>();
@@ -2538,6 +2600,7 @@ fn build_curve_editor_window(
         &suggestion_overlays,
         &mut pose_library,
         scalar_domain,
+        &bone_roles,
     );
     curve_editor.needs_focus = false;
 }

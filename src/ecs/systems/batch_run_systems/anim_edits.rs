@@ -201,7 +201,7 @@ pub fn batch_apply_anim_edits(
     }
 }
 
-/// Serialize the animation-facing world state (flames, their scheduled clips,
+/// Serialize the animation-facing world state (effects, their scheduled clips,
 /// every clip's scalar curves, timeline) so agents can inspect edits without a
 /// window. Written once at engine exit; the file is the access surface.
 pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {

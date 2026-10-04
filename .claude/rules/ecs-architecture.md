@@ -38,11 +38,11 @@ src/ecs/
 ├── systems/             # System functions (behavior/logic), one file per domain
 │   ├── phases/          # Phase coordinators (execution order); event dispatchers are in phases/event_dispatch/
 │   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
-│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, pick, passes, ...)
+│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, object_pick, passes, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   ├── curve_copilot/   # ML curve suggestion systems
 │   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)
-├── events/              # UiCommand / UiCommandQueue, DialogRequest (and the effect-only UIEvent until #193)
+├── events/              # UiCommand / UiCommandQueue, DialogRequest
 ├── query/               # Query builder, filters, tuple fetch
 ├── storage/             # Sparse set component storage
 ├── registry/            # Component registry (type info)
@@ -313,9 +313,7 @@ A UI command is a per-feature enum that implements `UiCommand` (`src/ecs/events/
 sending window, nothing else: the phase never names a feature, there is no registration and no stage. Two commands
 that must apply in order within one frame are sent in that order (or merged into one command); the queue is FIFO.
 File-dialog requests are not commands: the window sends `DialogRequest` (`src/ecs/events/dialog_request.rs`,
-`send_dialog_request`) and `src/platform/events/file_dialog.rs` drains them after the phase. The remaining
-`UIEvent` / `UIEventQueue` (`src/ecs/events/ui_events.rs`) only carries the effect variants until #193 moves them
-onto `UiCommand`; it receives no new variants.
+`send_dialog_request`) and `src/platform/events/file_dialog.rs` drains them after the phase.
 
 Editor windows are the other half: each file in `src/platform/ui/` registers its window with `ui_window!`
 (`src/hooks/ui_window.rs`), reads `LayoutSnapshot` / `ViewportInput` and its own state resource from `World`, and

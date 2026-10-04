@@ -1,11 +1,8 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::{apply_queued_ui_commands, UIEvent};
+use crate::ecs::events::apply_queued_ui_commands;
 use crate::ecs::world::World;
-use crate::ecs::UIEventQueue;
 use crate::hooks::dispatch_prep::run_dispatch_prep_hooks;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
-use super::event_dispatch::overlay::dispatch_overlay_events;
 
 pub fn run_event_dispatch_phase(
     world: &mut World,
@@ -14,11 +11,50 @@ pub fn run_event_dispatch_phase(
 ) {
     run_dispatch_prep_hooks(world, assets);
 
-    let effect_events: Vec<UIEvent> = match world.get_resource_mut::<UIEventQueue>() {
-        Some(mut ui_events) => ui_events.drain().collect(),
-        None => Vec::new(),
-    };
-    dispatch_overlay_events(&effect_events, world);
-
     apply_queued_ui_commands(world, assets, graphics);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::events::{UiCommand, UiCommandQueue};
+
+    #[derive(Debug)]
+    enum ProbeUiCommand {
+        Ping,
+    }
+
+    #[derive(Default)]
+    struct ProbeDispatchCounter {
+        count: usize,
+    }
+
+    impl UiCommand for ProbeUiCommand {
+        fn apply(
+            self: Box<Self>,
+            world: &mut World,
+            _assets: &mut AssetStorage,
+            _graphics: &GraphicsResources,
+        ) {
+            let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
+                return;
+            };
+            match *self {
+                ProbeUiCommand::Ping => counter.count += 1,
+            }
+        }
+    }
+
+    #[test]
+    fn test_probe_ui_command_is_applied_by_the_dispatch_phase() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(UiCommandQueue::default());
+        world.insert_resource(ProbeDispatchCounter::default());
+
+        world.send_command(ProbeUiCommand::Ping);
+        run_event_dispatch_phase(&mut world, &mut assets, &GraphicsResources::default());
+
+        assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);
+    }
 }

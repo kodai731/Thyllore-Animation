@@ -168,6 +168,15 @@ pub fn apply_recipe_file(
         _ => load_or_infer_mapping(Path::new(&model_path), &skeleton_to_bone_inputs(skeleton)).0,
     };
     let recipe_json = std::fs::read_to_string(path).context("cannot read recipe")?;
+    let recipe = thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(&recipe_json)?;
+    let pose_times: Vec<f32> = recipe.poses.iter().map(|p| p.time).collect();
+    let mut roles: Vec<(BoneId, HumanoidRole)> = mapping
+        .by_role
+        .iter()
+        .map(|(role, &bone_index)| (bone_index as BoneId, *role))
+        .collect();
+    roles.sort_by_key(|(_, role)| *role);
+
     let clip = recipe_to_clip(&recipe_json, skeleton, &mapping)?;
 
     let clip_name = clip.name.clone();
@@ -183,10 +192,31 @@ pub fn apply_recipe_file(
             .source_to_asset_id
             .remove(&replaced_id);
         remove_clip_instances(world, replaced_id);
+        if let Some(ref mut recipe_sources) =
+            world.get_resource_mut::<crate::ecs::resource::RecipeClipSources>()
+        {
+            recipe_sources.by_clip.remove(&replaced_id);
+        }
     }
 
     let source_id =
         clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), assets, clip);
+
+    if !world.contains_resource::<crate::ecs::resource::RecipeClipSources>() {
+        world.insert_resource(crate::ecs::resource::RecipeClipSources::default());
+    }
+    {
+        let mut recipe_sources = world.resource_mut::<crate::ecs::resource::RecipeClipSources>();
+        recipe_sources.by_clip.insert(
+            source_id,
+            crate::ecs::resource::RecipeClipSource {
+                path: path.to_path_buf(),
+                pose_times,
+                roles,
+                detached: false,
+            },
+        );
+    }
 
     let schedule = find_recipe_schedule_owner(world)
         .and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
@@ -533,6 +563,34 @@ mod tests {
             1,
             "expected exactly 1 instance after 2 applies"
         );
+
+        let recipe_sources = world.resource::<crate::ecs::resource::RecipeClipSources>();
+        assert_eq!(
+            recipe_sources.by_clip.len(),
+            1,
+            "expected exactly 1 entry in RecipeClipSources.by_clip"
+        );
+
+        let source_id = schedule.instances[0].source_id;
+        let clip_source = recipe_sources
+            .by_clip
+            .get(&source_id)
+            .expect("clip source not found");
+        assert!(
+            clip_source.path.ends_with("wave.json"),
+            "path should end with wave.json, got {:?}",
+            clip_source.path
+        );
+        assert_eq!(
+            clip_source.pose_times,
+            [0.0, 0.4, 0.8, 2.8],
+            "pose_times should match recipe poses"
+        );
+        let has_right_lower_arm = clip_source
+            .roles
+            .iter()
+            .any(|(_, role)| *role == HumanoidRole::RightLowerArm);
+        assert!(has_right_lower_arm, "roles should contain RightLowerArm");
     }
 
     #[test]

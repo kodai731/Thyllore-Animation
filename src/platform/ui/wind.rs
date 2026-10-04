@@ -3,8 +3,10 @@ use std::rc::Rc;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::{AppliedWindPreset, WindParam, WindTornadoEffect};
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
 use crate::ecs::World;
@@ -12,31 +14,25 @@ use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
-use super::SceneOverlayState;
 
-fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-pub(super) fn build_wind_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    _overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
         return;
     }
     let _section_id = ui.push_id("wind");
 
     if ui.button("Add Wind") {
-        ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
+        ecs_world.send_command(ScalarCurveEvent::AddEffect(WIND_SPAWN_HOOK.key));
     }
 
     let winds = ecs_world.entities_with::<WindTornadoEffect>();
@@ -56,7 +52,7 @@ pub(super) fn build_wind_section(
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
+            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                 key: WIND_SPAWN_HOOK.key,
                 index: current,
             });
@@ -76,7 +72,7 @@ pub(super) fn build_wind_section(
         applied_preset.as_deref(),
     ) {
         if selected_wind_entity.is_some() {
-            ui_events.send(UIEvent::ClearScalarKeys);
+            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
             send_effect_ui_command(ecs_world, WindUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
@@ -95,7 +91,7 @@ pub(super) fn build_wind_section(
         &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
-        |ui, edited| wind_key_button(ui, ui_events, edited),
+        |ui, edited| wind_key_button(ui, ecs_world, edited),
     );
     if !effect_applied_this_frame {
         send_effect_ui_command(
@@ -107,12 +103,12 @@ pub(super) fn build_wind_section(
         );
     }
     if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
+        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
     if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
         draw_wind_render_settings(ui, ecs_world);
         if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+            ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WindDebugCapture)));
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(

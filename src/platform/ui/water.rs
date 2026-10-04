@@ -3,8 +3,10 @@ use std::rc::Rc;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::{AppliedWaterPreset, WaterParam, WaterTorusEffect};
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::water::WaterUiCommand;
 use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
 use crate::ecs::World;
@@ -12,31 +14,25 @@ use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
-use super::SceneOverlayState;
 
-fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn water_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             WaterParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-pub(super) fn build_water_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    _overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
     if !ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
         return;
     }
     let _section_id = ui.push_id("water");
 
     if ui.button("Add Water") {
-        ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
+        ecs_world.send_command(ScalarCurveEvent::AddEffect(WATER_SPAWN_HOOK.key));
     }
 
     let waters = ecs_world.entities_with::<WaterTorusEffect>();
@@ -56,7 +52,7 @@ pub(super) fn build_water_section(
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
+            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                 key: WATER_SPAWN_HOOK.key,
                 index: current,
             });
@@ -76,7 +72,7 @@ pub(super) fn build_water_section(
         applied_preset.as_deref(),
     ) {
         if selected_water_entity.is_some() {
-            ui_events.send(UIEvent::ClearScalarKeys);
+            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
             send_effect_ui_command(ecs_world, WaterUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
@@ -95,7 +91,7 @@ pub(super) fn build_water_section(
         &thyllore_effect_core::WATER_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
-        |ui, edited| water_key_button(ui, ui_events, edited),
+        |ui, edited| water_key_button(ui, ecs_world, edited),
     );
     if !effect_applied_this_frame {
         send_effect_ui_command(
@@ -107,12 +103,12 @@ pub(super) fn build_water_section(
         );
     }
     if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
+        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
     if ui.collapsing_header("Water Debug", imgui::TreeNodeFlags::empty()) {
-        draw_water_render_settings(ui, ui_events, ecs_world);
+        draw_water_render_settings(ui, ecs_world);
         if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
+            ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WaterDebugCapture)));
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(
@@ -122,7 +118,7 @@ pub(super) fn build_water_section(
     }
 }
 
-fn draw_water_render_settings(ui: &imgui::Ui, _ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn draw_water_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() else {
         return;
     };

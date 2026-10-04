@@ -835,6 +835,7 @@ impl RRAccelerationStructure {
             device.destroy_buffer(table.buffer, None);
             device.free_memory(table.memory, None);
         }
+        self.tlas = RRTLAS::default();
         self.blas_list.clear();
         self.procedural_blas.clear();
     }

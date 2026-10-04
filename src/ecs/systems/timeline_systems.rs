@@ -8,9 +8,10 @@ use crate::animation::editable::{
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, CurveTrackRef, TimelineState};
-use crate::ecs::world::World;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::{Entity, World};
 
 fn ensure_bezier_for_tangent(curve: &mut PropertyCurve, keyframe_id: KeyframeId) {
     if let Some(idx) = curve.keyframes.iter().position(|k| k.id == keyframe_id) {
@@ -34,7 +35,7 @@ fn resolve_curve_mut(
 }
 
 pub fn timeline_process_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &mut TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -42,27 +43,27 @@ pub fn timeline_process_events(
 
     for event in events {
         match event {
-            UIEvent::TimelinePlay => timeline_state.playing = true,
-            UIEvent::TimelinePause => timeline_state.playing = false,
-            UIEvent::TimelineStop => {
+            TimelineEvent::Play => timeline_state.playing = true,
+            TimelineEvent::Pause => timeline_state.playing = false,
+            TimelineEvent::Stop => {
                 timeline_state.playing = false;
                 timeline_state.current_time = 0.0;
             }
-            UIEvent::TimelineSetTime(time) => {
+            TimelineEvent::SetTime(time) => {
                 timeline_state.playing = false;
                 timeline_state.set_time(*time);
             }
-            UIEvent::TimelineSetSpeed(speed) => timeline_state.speed = *speed,
-            UIEvent::TimelineToggleLoop => timeline_state.looping = !timeline_state.looping,
-            UIEvent::TimelineSelectClip(clip_id) => {
+            TimelineEvent::SetSpeed(speed) => timeline_state.speed = *speed,
+            TimelineEvent::ToggleLoop => timeline_state.looping = !timeline_state.looping,
+            TimelineEvent::SelectClip(clip_id) => {
                 timeline_select_clip(timeline_state, clip_library, *clip_id);
             }
-            UIEvent::TimelineToggleTrack(bone_id) => {
+            TimelineEvent::ToggleTrack(bone_id) => {
                 timeline_toggle_track_expanded(timeline_state, *bone_id);
             }
-            UIEvent::TimelineExpandTrack(bone_id) => timeline_state.expand_track(*bone_id),
-            UIEvent::TimelineCollapseTrack(bone_id) => timeline_state.collapse_track(*bone_id),
-            UIEvent::TimelineSelectKeyframe {
+            TimelineEvent::ExpandTrack(bone_id) => timeline_state.expand_track(*bone_id),
+            TimelineEvent::CollapseTrack(bone_id) => timeline_state.collapse_track(*bone_id),
+            TimelineEvent::SelectKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -72,25 +73,25 @@ pub fn timeline_process_events(
                 let selected = SelectedKeyframe::new(*track, *property_type, *keyframe_id);
                 timeline_apply_selection(timeline_state, selected, *modifier);
             }
-            UIEvent::TimelineSetKeyframeSelection {
+            TimelineEvent::SetKeyframeSelection {
                 keyframes,
                 modifier,
             } => {
                 dispatch_set_keyframe_selection(timeline_state, keyframes, *modifier);
             }
-            UIEvent::TimelineSetSnapToFrame(enabled) => {
+            TimelineEvent::SetSnapToFrame(enabled) => {
                 timeline_state.snap_settings.snap_to_frame = *enabled;
             }
-            UIEvent::TimelineSetSnapToKey(enabled) => {
+            TimelineEvent::SetSnapToKey(enabled) => {
                 timeline_state.snap_settings.snap_to_key = *enabled;
             }
-            UIEvent::TimelineSetFrameRate(rate) => {
+            TimelineEvent::SetFrameRate(rate) => {
                 timeline_state.snap_settings.frame_rate = *rate;
             }
-            UIEvent::TimelineZoomIn { max_zoom } => {
+            TimelineEvent::ZoomIn { max_zoom } => {
                 timeline_zoom_in(timeline_state, *max_zoom);
             }
-            UIEvent::TimelineZoomOut { min_zoom } => {
+            TimelineEvent::ZoomOut { min_zoom } => {
                 timeline_zoom_out(timeline_state, *min_zoom);
             }
             _ => {}
@@ -134,7 +135,7 @@ fn dispatch_set_keyframe_selection(
 }
 
 fn dispatch_keyframe_edit_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &mut TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -145,7 +146,7 @@ fn dispatch_keyframe_edit_events(
 
     for event in events {
         match event {
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track,
                 property_type,
                 time,
@@ -177,7 +178,7 @@ fn dispatch_keyframe_edit_events(
                 }
             }
 
-            UIEvent::TimelineMoveSelectedKeyframes { time_delta } => {
+            TimelineEvent::MoveSelectedKeyframes { time_delta } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     for sel in &timeline_state.selected_keyframes {
                         if let Some(curve) = resolve_curve_mut(clip, sel.track, sel.property_type) {
@@ -193,7 +194,7 @@ fn dispatch_keyframe_edit_events(
                 }
             }
 
-            UIEvent::TimelineDeleteSelectedKeyframes => {
+            TimelineEvent::DeleteSelectedKeyframes => {
                 let selected: Vec<_> = timeline_state.selected_keyframes.iter().cloned().collect();
                 if !selected.is_empty() {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
@@ -211,7 +212,7 @@ fn dispatch_keyframe_edit_events(
                 timeline_state.clear_selection();
             }
 
-            UIEvent::TimelineMoveKeyframe {
+            TimelineEvent::MoveKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -228,7 +229,7 @@ fn dispatch_keyframe_edit_events(
                 }
             }
 
-            UIEvent::TimelineDeleteKeyframe {
+            TimelineEvent::DeleteKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -250,7 +251,7 @@ fn dispatch_keyframe_edit_events(
 }
 
 fn dispatch_tangent_edit_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -261,7 +262,7 @@ fn dispatch_tangent_edit_events(
 
     for event in events {
         match event {
-            UIEvent::TimelineSetKeyframeInterpolation {
+            TimelineEvent::SetKeyframeInterpolation {
                 track,
                 property_type,
                 keyframe_id,
@@ -275,7 +276,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetKeyframeTangent {
+            TimelineEvent::SetKeyframeTangent {
                 track,
                 property_type,
                 keyframe_id,
@@ -297,7 +298,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetTangentType {
+            TimelineEvent::SetTangentType {
                 track,
                 property_type,
                 keyframe_id,
@@ -316,7 +317,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetTangentWeightMode {
+            TimelineEvent::SetTangentWeightMode {
                 track,
                 property_type,
                 keyframe_id,
@@ -538,7 +539,7 @@ pub fn timeline_update(
     }
 }
 
-pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
+pub fn process_clip_instance_events(events: &[ClipInstanceEvent], world: &mut World) {
     let mut deselect_after: Option<(
         crate::ecs::world::Entity,
         crate::animation::editable::ClipInstanceId,
@@ -546,18 +547,23 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
 
     for event in events {
         match event {
-            UIEvent::ClipInstanceSelect {
+            ClipInstanceEvent::Add {
+                entity,
+                source_id,
+                start_time,
+            } => add_clip_instance(world, *entity, *source_id, *start_time),
+            ClipInstanceEvent::Select {
                 entity,
                 instance_id,
             } => {
                 dispatch_clip_instance_select(world, *entity, *instance_id);
             }
 
-            UIEvent::ClipInstanceDeselect => {
+            ClipInstanceEvent::Deselect => {
                 world.resource_mut::<TimelineState>().selected_clip_instance = None;
             }
 
-            UIEvent::ClipInstanceMove {
+            ClipInstanceEvent::Move {
                 entity,
                 instance_id,
                 new_start_time,
@@ -567,7 +573,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id,
                 new_clip_in,
@@ -577,7 +583,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id,
                 new_clip_out,
@@ -587,7 +593,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceToggleMute {
+            ClipInstanceEvent::ToggleMute {
                 entity,
                 instance_id,
             } => {
@@ -596,7 +602,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceDelete {
+            ClipInstanceEvent::Delete {
                 entity,
                 instance_id,
             } => {
@@ -609,7 +615,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 deselect_after = Some((*entity, *instance_id));
             }
 
-            UIEvent::ClipInstanceSetWeight {
+            ClipInstanceEvent::SetWeight {
                 entity,
                 instance_id,
                 weight,
@@ -619,7 +625,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceSetBlendMode {
+            ClipInstanceEvent::SetBlendMode {
                 entity,
                 instance_id,
                 blend_mode,
@@ -683,10 +689,10 @@ fn dispatch_clip_instance_select(
     }
 }
 
-fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_clip_group_events(events: &[ClipInstanceEvent], world: &mut World) {
     for event in events {
         match event {
-            UIEvent::ClipGroupCreate { entity, name } => {
+            ClipInstanceEvent::GroupCreate { entity, name } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     super::clip_schedule_systems::clip_schedule_create_group(
                         schedule,
@@ -695,13 +701,13 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupDelete { entity, group_id } => {
+            ClipInstanceEvent::GroupDelete { entity, group_id } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     super::clip_schedule_systems::clip_schedule_remove_group(schedule, *group_id);
                 }
             }
 
-            UIEvent::ClipGroupAddInstance {
+            ClipInstanceEvent::GroupAddInstance {
                 entity,
                 group_id,
                 instance_id,
@@ -715,7 +721,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupRemoveInstance {
+            ClipInstanceEvent::GroupRemoveInstance {
                 entity,
                 group_id,
                 instance_id,
@@ -729,7 +735,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupToggleMute { entity, group_id } => {
+            ClipInstanceEvent::GroupToggleMute { entity, group_id } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     if let Some(group) = schedule.groups.iter_mut().find(|g| g.id == *group_id) {
                         group.muted = !group.muted;
@@ -737,7 +743,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupSetWeight {
+            ClipInstanceEvent::GroupSetWeight {
                 entity,
                 group_id,
                 weight,
@@ -981,7 +987,7 @@ mod tests {
     #[test]
     fn move_selected_keyframes_shifts_time() {
         let (mut state, mut library) = setup_test_clip();
-        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: 0.25 }];
+        let events = vec![TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 }];
 
         let modified = timeline_process_events(&events, &mut state, &mut library);
         assert!(modified);
@@ -1014,7 +1020,7 @@ mod tests {
     #[test]
     fn move_selected_keyframes_clamps_at_zero() {
         let (mut state, mut library) = setup_test_clip();
-        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: -2.0 }];
+        let events = vec![TimelineEvent::MoveSelectedKeyframes { time_delta: -2.0 }];
 
         timeline_process_events(&events, &mut state, &mut library);
 
@@ -1032,7 +1038,7 @@ mod tests {
         let (mut state, mut library) = setup_test_clip();
 
         let new_sel = vec![SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999)];
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: new_sel,
             modifier: SelectionModifier::Replace,
         }];
@@ -1051,7 +1057,7 @@ mod tests {
         let original_count = state.selected_keyframes.len();
 
         let new_sel = vec![SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999)];
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: new_sel,
             modifier: SelectionModifier::Add,
         }];
@@ -1068,7 +1074,7 @@ mod tests {
         // Toggle off an existing keyframe, toggle on a new one
         let existing = state.selected_keyframes.iter().next().unwrap().clone();
         let new_kf = SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999);
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: vec![existing.clone(), new_kf.clone()],
             modifier: SelectionModifier::Toggle,
         }];
@@ -1087,13 +1093,13 @@ mod tests {
         let (mut state, mut library) = setup_test_clip();
 
         let events = vec![
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track: CurveTrackRef::Scalar,
                 property_type: PropertyType::TranslationX,
                 time: 0.5,
                 value: 1.0,
             },
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track: CurveTrackRef::Scalar,
                 property_type: PropertyType::Custom(0),
                 time: 0.5,
@@ -1132,7 +1138,7 @@ mod tests {
         let mut world = World::new();
         let entity = spawn_zero_length_clip_instance(&mut world);
 
-        let events = vec![UIEvent::ClipInstanceTrimEnd {
+        let events = vec![ClipInstanceEvent::TrimEnd {
             entity,
             instance_id: 1,
             new_clip_out: 3.0,
@@ -1150,12 +1156,12 @@ mod tests {
         let entity = spawn_zero_length_clip_instance(&mut world);
 
         let events = vec![
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id: 1,
                 new_clip_in: 0.0,
             },
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id: 1,
                 new_clip_out: -2.0,
@@ -1173,12 +1179,12 @@ mod tests {
         let entity = spawn_zero_length_clip_instance(&mut world);
 
         let events = vec![
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id: 1,
                 new_clip_out: 2.0,
             },
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id: 1,
                 new_clip_in: 5.0,
@@ -1307,4 +1313,22 @@ fn apply_timeline_scene_record(
         timeline.current_clip_id = current_clip_id;
     }
     Ok(())
+}
+
+fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId, start_time: f32) {
+    let duration = world
+        .resource::<ClipLibrary>()
+        .get(source_id)
+        .map(|c| c.duration)
+        .unwrap_or(1.0);
+
+    let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
+        return;
+    };
+    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(
+        schedule, source_id, duration,
+    );
+    if let Some(last) = schedule.instances.last_mut() {
+        last.start_time = start_time;
+    }
 }

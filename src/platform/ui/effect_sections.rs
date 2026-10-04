@@ -1,11 +1,8 @@
 use std::sync::OnceLock;
 
-use crate::ecs::events::UIEventQueue;
 use crate::ecs::World;
 
-use super::SceneOverlayState;
-
-pub type EffectSectionDrawFn = fn(&imgui::Ui, &mut UIEventQueue, &mut SceneOverlayState, &World);
+pub type EffectSectionDrawFn = fn(&imgui::Ui, &World);
 
 pub struct EffectSectionHook {
     pub key: &'static str,

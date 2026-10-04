@@ -1,25 +1,25 @@
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FlameParam;
-use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::FlameUIState;
+use crate::ecs::resource::{FlameUIState, ViewportInput};
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
-use super::SceneOverlayState;
 
-fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
 fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
@@ -87,12 +87,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
     }
 }
 
-pub(super) fn build_flame_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::FlameEffect;
 
     if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
@@ -117,7 +112,7 @@ pub(super) fn build_flame_section(
                 })
                 .collect();
             if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectEffectInstance {
+                ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                     key: FLAME_SPAWN_HOOK.key,
                     index: current,
                 });
@@ -145,7 +140,7 @@ pub(super) fn build_flame_section(
                     // Keyed scalar curves re-stamp their channels every
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
-                    ui_events.send(UIEvent::ClearScalarKeys);
+                    ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
                     send_effect_ui_command(&*ecs_world, FlameUiCommand::ApplyPreset(chosen));
                     effect_applied_this_frame = true;
                 }
@@ -396,7 +391,7 @@ pub(super) fn build_flame_section(
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                        |ui, edited| flame_key_button(ui, ecs_world, edited),
                     );
                     if advanced_open {
                         draw_flame_manual_params(ui, &mut effect_copy);
@@ -406,7 +401,7 @@ pub(super) fn build_flame_section(
                     }
 
                     if ui.button("Clear Flame Keys") {
-                        ui_events.send(UIEvent::ClearScalarKeys);
+                        ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
                     }
                     ui.same_line();
                     if ui.button("Random Keys (Debug)") {
@@ -414,13 +409,13 @@ pub(super) fn build_flame_section(
                             .duration_since(std::time::UNIX_EPOCH)
                             .map(|d| d.as_millis() as u64)
                             .unwrap_or(0);
-                        ui_events.send(UIEvent::InsertScalarDebugKeys { seed });
+                        ecs_world.send_command(ScalarCurveEvent::InsertScalarDebugKeys { seed });
                     }
                     if ui.button("Curves") {
-                        ui_events.send(UIEvent::OpenScalarCurveEditor);
+                        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
                     }
                     if ui.button("Add Flame") {
-                        ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
+                        ecs_world.send_command(ScalarCurveEvent::AddEffect(FLAME_SPAWN_HOOK.key));
                     }
 
                     // Trail checkbox and slider
@@ -473,7 +468,7 @@ pub(super) fn build_flame_section(
                             send_effect_ui_command(
                                 &*ecs_world,
                                 FlameUiCommand::DumpWallProbe {
-                                    viewport_size: overlay_state.viewport.size,
+                                    viewport_size: ecs_world.resource::<ViewportInput>().size,
                                 },
                             );
                         }

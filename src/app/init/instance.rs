@@ -340,6 +340,11 @@ impl App {
             .insert_resource(crate::hooks::effect_ui_event::EffectUiEventDispatchHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::pick::PickHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::dispatch_prep::DispatchPrepHooks::collect()?);
+        let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;
+        ui_windows.init_window_state(&mut data.ecs_world);
+        data.ecs_world.insert_resource(ui_windows);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -1181,7 +1186,10 @@ impl App {
     }
 
     fn register_editor_resources(data: &mut AppData) {
-        Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::events::UiCommandQueue>(data);
+        Self::insert_default_if_missing::<
+            crate::ecs::events::EventQueue<crate::ecs::events::DialogRequest>,
+        >(data);
         Self::insert_default_if_missing::<crate::ecs::resource::EntityRemovalQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);

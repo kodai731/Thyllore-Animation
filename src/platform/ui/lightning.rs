@@ -5,11 +5,13 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::ecs::component::{
     AppliedLightningPreset, LightningEffect, LightningParam, LightningPath, LightningTarget,
 };
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     LightningDebugCapture, LightningDebugView, LightningRenderSettings, LightningShadingMode,
 };
 use crate::ecs::systems::lightning::{resolve_selected_lightning, LightningUiCommand};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
@@ -17,31 +19,25 @@ use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
-use super::SceneOverlayState;
 
-fn lightning_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
         .iter()
         .filter_map(|(name, value)| {
             LightningParam::from_cli_name(name).map(|param| (param.property_type(), *value))
         })
         .collect();
-    send_key_button(ui, ui_events, edited, keys);
+    send_key_button(ui, ecs_world, edited, keys);
 }
 
-pub(super) fn build_lightning_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    _overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     if !ui.collapsing_header("Lightning", imgui::TreeNodeFlags::empty()) {
         return;
     }
     let _section_id = ui.push_id("lightning");
 
     if ui.button("Add Lightning") {
-        ui_events.send(UIEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
+        ecs_world.send_command(ScalarCurveEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
     }
 
     let lightnings = ecs_world.entities_with::<LightningEffect>();
@@ -61,7 +57,7 @@ pub(super) fn build_lightning_section(
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
+            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
                 key: LIGHTNING_SPAWN_HOOK.key,
                 index: current,
             });
@@ -81,7 +77,7 @@ pub(super) fn build_lightning_section(
         applied_preset.as_deref(),
     ) {
         if selected_entity.is_some() {
-            ui_events.send(UIEvent::ClearScalarKeys);
+            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
             send_effect_ui_command(ecs_world, LightningUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
@@ -94,8 +90,8 @@ pub(super) fn build_lightning_section(
         return;
     };
     let mut effect_copy = effect.clone();
-    let target_name = draw_lightning_target_row(ui, ui_events, ecs_world, selected);
-    draw_lightning_path_rows(ui, ui_events, ecs_world, selected);
+    let target_name = draw_lightning_target_row(ui, ecs_world, selected);
+    draw_lightning_path_rows(ui, ecs_world, selected);
 
     if target_name.is_none() {
         draw_params(
@@ -104,7 +100,7 @@ pub(super) fn build_lightning_section(
             &thyllore_effect_core::LIGHTNING_UI_PARAMS,
             &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
-            |ui, edited| lightning_key_button(ui, ui_events, edited),
+            |ui, edited| lightning_key_button(ui, ecs_world, edited),
         );
     }
 
@@ -114,7 +110,7 @@ pub(super) fn build_lightning_section(
         &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
         &["shape_end_offset"],
-        |ui, edited| lightning_key_button(ui, ui_events, edited),
+        |ui, edited| lightning_key_button(ui, ecs_world, edited),
     );
 
     if !effect_applied_this_frame {
@@ -127,14 +123,14 @@ pub(super) fn build_lightning_section(
         );
     }
     if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
+        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
     if !ui.collapsing_header("Lightning Debug", imgui::TreeNodeFlags::empty()) {
         return;
     }
-    draw_lightning_render_settings(ui, ui_events, ecs_world);
+    draw_lightning_render_settings(ui, ecs_world);
     if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::CaptureNow(Rc::new(LightningDebugCapture)));
+        ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(LightningDebugCapture)));
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -147,7 +143,6 @@ pub(super) fn build_lightning_section(
 /// target is linked the end offset follows it, so its slider is hidden.
 fn draw_lightning_target_row(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     ecs_world: &World,
     lightning: Entity,
 ) -> Option<String> {
@@ -174,12 +169,7 @@ fn draw_lightning_target_row(
     target_name
 }
 
-fn draw_lightning_path_rows(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    ecs_world: &World,
-    lightning: Entity,
-) {
+fn draw_lightning_path_rows(ui: &imgui::Ui, ecs_world: &World, lightning: Entity) {
     let waypoints = ecs_world
         .get_component::<LightningPath>(lightning)
         .map(|path| path.waypoints.clone())
@@ -203,11 +193,7 @@ fn draw_lightning_path_rows(
     }
 }
 
-fn draw_lightning_render_settings(
-    ui: &imgui::Ui,
-    _ui_events: &mut UIEventQueue,
-    ecs_world: &World,
-) {
+fn draw_lightning_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let Some(settings) = ecs_world.get_resource::<LightningRenderSettings>() else {
         return;
     };

@@ -157,7 +157,16 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+`dispatch_prep.rs` holds the `DispatchPrepHook` contract (name, run taking `(&mut World, &mut AssetStorage)`) and
+the `dispatch_prep_hook!` macro: per-frame work that must reach `World` before the frame's UI commands apply
+(draining a worker's responses, polling a server) is registered from its own file and
+`run_event_dispatch_phase` runs `DispatchPrepHooks` in name order; the phase file carries no `cfg` and names no
+feature. `ui_window.rs` holds the `UiWindowHook` contract (name, `UiPanel`, order, `init` that inserts the window's own
+state resource once, `build` taking `(&imgui::Ui, &World, &AssetStorage, &GraphicsResources)`) and the
+`ui_window!` macro: every editor window registers itself from its file in `src/platform/ui/`, `UiWindows::collect()`
+sorts them by panel, order and name, and `src/platform/events/ui_windows.rs` publishes `LayoutSnapshot` and the
+viewport image into `World` and runs the list without naming a window. A window reads everything from `World`
+(`LayoutSnapshot`, `ViewportInput`, its own state resource) and never from `App`. `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
 instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
 instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
 registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
@@ -172,8 +181,8 @@ handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks`
 naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, max instances, spawn
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
-`UIEvent::AddEffect(key)` / `SelectEffectInstance { key, index }`, the batch `add_<key>` action sends the
-same event, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+`ScalarCurveEvent::AddEffect(key)` / `OverlayEvent::SelectEffectInstance { key, index }`, the batch `add_<key>`
+action sends the same command, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
 `spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
 its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
@@ -193,6 +202,37 @@ common logic for updating effects and applying presets across all effects (with 
 from `SceneOwner::placement`). Each effect only needs to implement the `EffectPreset` trait in its
 own directory to participate in this shared system. A hook
 file describes a contract only; it never names a concrete effect.
+
+## Hook or command?
+
+Two mechanisms let a feature take part without being named by shared code. Pick by the nature of the thing,
+not by taste:
+
+```
+Does the thing exist for the whole run, as a fixed set known at link time
+(a window, a pass node, a per-frame step or poll, a scene component type, a CLI flag group)?
+  yes → it is a participant: register it with a hook (`inventory`, `*_hook!` / `ui_window!` /
+        `scene_owner!`), collect once at startup into a World resource, iterate in a fixed order
+        (stage / panel / order / name). The shared runner never names an entry.
+  no  → Is it a piece of data produced at some moment that must be applied once, later, in order
+        (a UI interaction, a batch action's request, a dialog result)?
+          yes → it is a message: give it a type that applies itself (`UiCommand`, `BatchAction`,
+                `CommandQueue<C>`), push it into the one World queue for its kind, drain in FIFO.
+                No registration: the sender and the type's `apply` are the whole wiring.
+          no  → it is state: a component or a resource, read by systems.
+```
+
+Consequences of the split:
+
+- A hook has an identity (`name`, panel / stage) and an order; a command has neither, only its position in
+  the queue. Two commands that must apply in order are sent in order or merged into one command; two hooks
+  that must run in order get different stages / orders.
+- A hook may carry `init: fn(&mut World)` to insert the state it owns once (`ui_window!` does); a command
+  never inserts resources, it only mutates what the init of a hook or `src/app/init/` created.
+- `cfg(feature)` / `debug_assertions` live in the file that registers the hook or declares the command type
+  (`#![cfg]` at the top of the file), never in the runner or the queue.
+- Wrong fits to recognise: a queue of "draw me" requests is a window list in disguise (use a hook); a hook
+  whose body only forwards one event is a command in disguise (use the command's `apply`).
 
 ## src/effect/
 
@@ -263,7 +303,7 @@ Concretely:
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
   check. The effect's `cli.rs` hook inserts it for a startup flag; a `dump_*` action is the generic
   `CaptureRequest<T>` registered with `capture_action!("dump_x", T)`, which inserts `T` inside a batch run
-  and sends `UIEvent::CaptureNow(T)` otherwise (the same event a debug window button sends). The
+  and sends `CameraEvent::CaptureNow(T)` otherwise (the same command a debug window button sends). The
   request type implements `BatchCapture` (`src/hooks/batch_capture.rs`: `capture(&self, CaptureContext)`
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
@@ -334,8 +374,12 @@ file. Enum fields are persisted by name through a `String` field (`ToneMapOperat
 
 ## src/platform/
 
-Window, input, imgui orchestration and the UI windows. Reads resources, records `UIEvent`s, calls one
-dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Window, input, imgui orchestration and the UI windows. Reads resources, sends `UiCommand`s
+(`World::send_command`) and `DialogRequest`s, calls one dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Each window in `src/platform/ui/` registers itself with `ui_window!` and keeps its window-local state in a
+resource it inserts through the hook's `init`; `src/platform/events/` never lists windows, states or
+`cfg` branches for them (a window behind a cargo feature or `debug_assertions` puts the `#![cfg]` at the top of
+its own file).
 
 ## src/vulkanr/
 

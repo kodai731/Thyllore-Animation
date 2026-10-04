@@ -1,48 +1,46 @@
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::events::{UIEvent, UIEventQueue};
+#[cfg(feature = "auto-rig")]
+use super::text_to_animation_dialog::TextToAnimationDialogState;
+#[cfg(feature = "auto-rig")]
+use super::text_to_mesh_dialog::TextToMeshDialogState;
+use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
     CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
 };
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+#[cfg(feature = "auto-rig")]
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
-use super::viewport_window::ViewportInfo;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
 
-pub struct SceneOverlayState {
-    pub model: ModelState,
-    pub viewport: ViewportInfo,
-    #[cfg(feature = "auto-rig")]
-    pub open_text_to_mesh_dialog: bool,
-    #[cfg(feature = "auto-rig")]
-    pub open_text_to_animation_dialog: bool,
-}
-
 #[cfg(feature = "auto-rig")]
 use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 
-pub fn build_scene_overlay(
+fn draw_scene_overlay(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
+    model: &mut ModelState,
     ecs_world: &World,
-    viewport_info: &ViewportInfo,
+    viewport: &ViewportInput,
 ) {
-    overlay_state.viewport = viewport_info.clone();
-
-    let pos_x = viewport_info.position[0] + OVERLAY_MARGIN;
-    let pos_y = viewport_info.position[1] + OVERLAY_MARGIN;
+    let pos_x = viewport.position[0] + OVERLAY_MARGIN;
+    let pos_y = viewport.position[1] + OVERLAY_MARGIN;
 
     ui.window("Scene Overlay")
         .position([pos_x, pos_y], Condition::Always)
         .size_constraints(
             [OVERLAY_WIDTH, 0.0],
-            [OVERLAY_WIDTH, viewport_info.size[1] - 2.0 * OVERLAY_MARGIN],
+            [OVERLAY_WIDTH, viewport.size[1] - 2.0 * OVERLAY_MARGIN],
         )
         .always_auto_resize(true)
         .no_decoration()
@@ -51,34 +49,29 @@ pub fn build_scene_overlay(
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            build_model_section(ui, ui_events, overlay_state, ecs_world);
+            build_model_section(ui, model, ecs_world);
             ui.separator();
 
-            build_screenshot_section(ui, ui_events);
+            build_screenshot_section(ui, ecs_world);
             ui.separator();
 
-            build_overlay_section(ui, ui_events, ecs_world);
+            build_overlay_section(ui, ecs_world);
 
-            build_transform_gizmo_section(ui, ui_events, ecs_world);
+            build_transform_gizmo_section(ui, ecs_world);
 
-            build_dof_section(ui, ui_events, ecs_world);
+            build_dof_section(ui, ecs_world);
 
-            build_auto_exposure_section(ui, ui_events, ecs_world);
+            build_auto_exposure_section(ui, ecs_world);
 
-            build_onion_skinning_section(ui, ui_events, ecs_world);
+            build_onion_skinning_section(ui, ecs_world);
 
             for section in crate::platform::ui::effect_sections::collect_effect_sections() {
-                (section.draw)(ui, ui_events, overlay_state, ecs_world);
+                (section.draw)(ui, ecs_world);
             }
         });
 }
 
-fn build_model_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut SceneOverlayState,
-    _ecs_world: &World,
-) {
+fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World) {
     if ui.button("Open FBX") {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
@@ -86,7 +79,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected FBX file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -99,7 +92,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected glTF file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -111,38 +104,38 @@ fn build_model_section(
             for path in paths {
                 let path_str = path.to_string_lossy().to_string();
                 log!("Adding GLB file: {}", path_str);
-                ui_events.send(UIEvent::LoadModelAdditive { path: path_str });
+                ecs_world.send_command(CameraEvent::LoadModelAdditive { path: path_str });
             }
         }
     }
 
     #[cfg(feature = "auto-rig")]
     if ui.button("Generate Mesh") {
-        state.open_text_to_mesh_dialog = true;
+        ecs_world.resource_mut::<TextToMeshDialogState>().open = true;
     }
 
     #[cfg(feature = "auto-rig")]
     {
         ui.same_line();
         if ui.button("Generate Animation") {
-            state.open_text_to_animation_dialog = true;
+            ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
         }
     }
 
     #[cfg(feature = "auto-rig")]
-    build_auto_rig_section(ui, ui_events, _ecs_world);
+    build_auto_rig_section(ui, ecs_world);
 
-    let model_name = if state.model.model_path.is_empty() {
+    let model_name = if model.model_path.is_empty() {
         "None"
     } else {
-        &state.model.model_path
+        &model.model_path
     };
     ui.text_wrapped(format!("Model: {}", model_name));
-    ui.text(format!("Status: {}", state.model.load_status));
+    ui.text(format!("Status: {}", model.load_status));
 }
 
 #[cfg(feature = "auto-rig")]
-fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::GlbSource;
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::world::Parent;
@@ -172,7 +165,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
             });
 
             if has_glb_source && ui.button("Auto Rig") {
-                ui_events.send(UIEvent::AutoRigGenerate {
+                ecs_world.send_command(AutoRigEvent::AutoRigGenerate {
                     num_sample_points: 65536,
                 });
             }
@@ -181,14 +174,14 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
         AutoRigStatus::WaitingForServer => {
             ui.text("Rigging: waiting for server...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
         AutoRigStatus::Rigging => {
             ui.text("Rigging: processing...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -202,11 +195,11 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ));
             }
             if ui.button("Apply Rig") {
-                ui_events.send(UIEvent::AutoRigApply);
+                ecs_world.send_command(AutoRigEvent::AutoRigApply);
             }
             ui.same_line();
             if ui.button("Discard##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -215,21 +208,21 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
             }
             if ui.button("Dismiss##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
     }
 }
 
-fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+fn build_screenshot_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Screenshot") {
-        ui_events.send(UIEvent::TakeScreenshot);
+        ecs_world.send_command(CameraEvent::TakeScreenshot);
     }
 }
 
 pub(super) fn send_key_button(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
     edited: EditedScalars,
     keys: Vec<(PropertyType, f32)>,
 ) {
@@ -239,7 +232,7 @@ pub(super) fn send_key_button(
     ui.same_line();
     if ui.small_button(format!("K##{first_name}")) {
         for (property_type, value) in keys {
-            ui_events.send(UIEvent::InsertScalarKey {
+            ecs_world.send_command(ScalarCurveEvent::InsertScalarKey {
                 property_type,
                 value,
             });
@@ -247,24 +240,24 @@ pub(super) fn send_key_button(
     }
 }
 
-fn build_overlay_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.collapsing_header("Overlay", imgui::TreeNodeFlags::DEFAULT_OPEN) {
         if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
             let mut visible = bone_gizmo.visible;
             if ui.checkbox("Show Bones", &mut visible) {
-                ui_events.send(UIEvent::SetBoneGizmoVisible(visible));
+                ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(visible));
             }
         }
         if let Some(heatmap) = ecs_world.get_resource::<WeightHeatmapState>() {
             let mut enabled = heatmap.enabled;
             if ui.checkbox("Show Weight Heatmap (selected bone)", &mut enabled) {
-                ui_events.send(UIEvent::SetWeightHeatmapEnabled(enabled));
+                ecs_world.send_command(OverlayEvent::SetWeightHeatmapEnabled(enabled));
             }
         }
     }
 }
 
-fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
     let Some(state) = ecs_world.get_resource::<TransformGizmoState>() else {
         return;
     };
@@ -347,11 +340,13 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, e
             .display_format("%.3f")
             .build(&mut state_copy.gizmo_scale);
 
-        ui_events.send(UIEvent::UpdateTransformGizmoState(Box::new(state_copy)));
+        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
+            state_copy,
+        )));
     }
 }
 
-fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
 
     if ui.collapsing_header("Depth of Field", imgui::TreeNodeFlags::empty()) {
@@ -367,7 +362,7 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Max Blur Radius", 1.0, 32.0)
                 .build(&mut dof_copy.max_blur_radius);
 
-            ui_events.send(UIEvent::UpdateDepthOfField(dof_copy));
+            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(dof_copy));
         }
 
         if let Some(params) = ecs_world.get_resource::<PhysicalCameraParameters>() {
@@ -380,12 +375,12 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Focal Length (mm)", 10.0, 200.0)
                 .build(&mut params_copy.focal_length_mm);
 
-            ui_events.send(UIEvent::UpdatePhysicalCamera(params_copy));
+            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(params_copy));
         }
     }
 }
 
-fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
     if ui.collapsing_header("Auto Exposure", imgui::TreeNodeFlags::empty()) {
@@ -413,7 +408,7 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs
             ui.slider_config("High Percent", 0.5, 1.0)
                 .build(&mut ae_copy.high_percent);
 
-            ui_events.send(UIEvent::UpdateAutoExposure(ae_copy));
+            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(ae_copy));
         }
 
         if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
@@ -423,7 +418,7 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs
     }
 }
 
-fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::OnionSkinningConfig;
 
     if ui.collapsing_header("Onion Skinning", imgui::TreeNodeFlags::empty()) {
@@ -458,7 +453,15 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
                 crate::ecs::compute_total_ghost_count(&config_copy)
             ));
 
-            ui_events.send(UIEvent::UpdateOnionSkinning(config_copy));
+            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(config_copy));
         }
     }
 }
+
+fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+    let mut model = world.resource_mut::<ModelState>();
+    let viewport = world.resource::<ViewportInput>().clone();
+    draw_scene_overlay(ui, &mut model, world, &viewport);
+}
+
+crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);

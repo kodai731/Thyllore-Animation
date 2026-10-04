@@ -3,7 +3,7 @@ use crate::ecs::component::{
     apply_flame_param_value, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
     FlameEffect, FlameParam, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
 };
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
     BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
     FlameWallProbeCapture, HierarchyState, LightState, ProjectionData, TimelineState,
@@ -247,14 +247,18 @@ fn a_batch_run_defers_the_wall_probe_dump_to_the_capture_frame() {
 fn without_a_batch_run_the_wall_probe_dump_goes_through_the_event_queue() {
     let overrides = wall_probe_overrides(&[]);
     let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
+    world.insert_resource(UiCommandQueue::default());
     crate::ecs::systems::apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
 
     assert!(world.get_resource::<BatchRun>().is_none());
     assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
 
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+    let commands: Vec<String> = world
+        .resource_mut::<UiCommandQueue>()
+        .drain()
+        .map(|command| format!("{:?}", command))
+        .collect();
+    assert!(commands[0].starts_with("CaptureNow("));
 }
 
 #[test]

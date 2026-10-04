@@ -16,7 +16,8 @@ use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::{
-    clip_drag_preview_times, clip_schedule_assign_lanes, timeline_effective_duration,
+    clip_drag_preview_times, clip_schedule_assign_lanes, find_preview_owner,
+    timeline_effective_duration,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -447,6 +448,11 @@ fn build_clip_tracks_section(
     handle_clip_drag_release(ui, world, interaction, pixels_per_second);
 
     let mut clicked_any_block = false;
+    let solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)> =
+        (state.preview == ClipPreview::Solo && state.current_clip_id.is_some())
+            .then(|| find_preview_owner(world))
+            .flatten()
+            .zip(state.current_clip_id);
     let mut total_track_rows: f32 = 0.0;
 
     for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
@@ -459,11 +465,21 @@ fn build_clip_tracks_section(
         let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
         let draw_list = ui.get_window_draw_list();
 
+        let solo_clip_for_row = solo_preview
+            .filter(|(owner, _)| *owner == entry.entity)
+            .map(|(_, clip_id)| clip_id);
+        let is_solo_owner = solo_clip_for_row.is_some();
+
         let lanes = world
             .get_component::<ClipSchedule>(entry.entity)
             .map(|schedule| clip_schedule_assign_lanes(&schedule.instances))
             .unwrap_or_else(|| vec![0; entry.instances.len()]);
-        let lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
+        let mut lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
+
+        if is_solo_owner {
+            lane_count += 1;
+        }
+
         let track_height = (lane_count as f32) * CLIP_TRACK_HEIGHT;
 
         draw_list
@@ -496,7 +512,12 @@ fn build_clip_tracks_section(
             let block_max = [block_x + block_w, lane_y + CLIP_TRACK_HEIGHT - 2.0];
 
             let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
-            let color = compute_block_color(base_color, inst, interaction, entry.entity);
+            let mut color = compute_block_color(base_color, inst, interaction, entry.entity);
+
+            if is_solo_owner {
+                color[3] *= 0.4;
+            }
+
             let border_color = compute_border_color(inst, state, entry.entity);
 
             draw_clip_block(&draw_list, block_min, block_max, color, border_color, inst);
@@ -532,6 +553,26 @@ fn build_clip_tracks_section(
             }
 
             handle_clip_mute_button(ui, world, entry.entity, inst, inst_idx, entry_idx);
+        }
+
+        if let Some(solo_source_id) = solo_clip_for_row {
+            let solo_lane_y = track_origin[1] + (lane_count as f32 - 1.0) * CLIP_TRACK_HEIGHT;
+
+            if let Some(clip) = clip_library.get(solo_source_id) {
+                let clip_duration = clip.duration;
+                let block_x = track_origin[0];
+                let block_w = (clip_duration * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
+                let block_min = [block_x, solo_lane_y + 2.0];
+                let block_max = [block_x + block_w, solo_lane_y + CLIP_TRACK_HEIGHT - 2.0];
+
+                draw_list
+                    .add_rect(block_min, block_max, [1.0, 1.0, 1.0, 1.0])
+                    .filled(false)
+                    .build();
+
+                let label_pos = [block_min[0] + 4.0, block_min[1] + 2.0];
+                draw_list.add_text(label_pos, [1.0, 1.0, 1.0, 1.0], &clip.name);
+            }
         }
 
         ui.dummy([timeline_width, track_height]);

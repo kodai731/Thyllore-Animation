@@ -167,10 +167,6 @@ pub fn find_preview_owner(world: &World) -> Option<Entity> {
         })
         .collect();
     if candidates.len() != 1 {
-        log_warn!(
-            "preview schedule owner: {} skeletal clip schedules found, expected exactly 1",
-            candidates.len()
-        );
         return None;
     }
     Some(candidates[0])

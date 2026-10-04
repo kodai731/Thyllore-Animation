@@ -26,9 +26,9 @@ use crate::ecs::systems::clip_library_systems::{
     clip_library_register_and_activate, find_clip_schedule_owner,
 };
 use crate::ecs::systems::clip_schedule_systems::{
-    clip_schedule_add_instance, clip_schedule_remove_instance,
+    clip_schedule_add_instance, clip_schedule_remove_instance, find_preview_owner,
 };
-use crate::ecs::world::{Entity, World};
+use crate::ecs::world::World;
 
 pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
     let bones = skeleton
@@ -211,8 +211,8 @@ pub fn apply_recipe_file(
         timeline.current_clip_id = Some(source_id);
     }
 
-    let schedule = find_recipe_schedule_owner(world)
-        .and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
+    let schedule =
+        find_preview_owner(world).and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
     let Some(schedule) = schedule else {
         log_warn!(
             "recipe {}: clip '{clip_name}' registered but no model clip schedule was found",
@@ -262,30 +262,6 @@ fn mute_overlapping_instances(schedule: &mut ClipSchedule, keep: ClipInstanceId)
             muted_sources
         );
     }
-}
-
-pub fn find_recipe_schedule_owner(world: &World) -> Option<Entity> {
-    if let Some(selected) = world.resource::<HierarchyState>().selected_entity {
-        return find_clip_schedule_owner(world, selected);
-    }
-
-    let candidates: Vec<Entity> = world
-        .component_entities::<ClipSchedule>()
-        .into_iter()
-        .filter(|&entity| {
-            world
-                .get_component::<AnimationMeta>(entity)
-                .is_some_and(|meta| meta.animation_type == AnimationType::Skeletal)
-        })
-        .collect();
-    if candidates.len() != 1 {
-        log_warn!(
-            "recipe schedule owner: {} skeletal clip schedules found, expected exactly 1",
-            candidates.len()
-        );
-        return None;
-    }
-    Some(candidates[0])
 }
 
 fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
@@ -404,6 +380,7 @@ mod tests {
     use crate::asset::storage::{AssetStorage, SkeletonAsset};
     use crate::ecs::component::{AnimationMeta, ClipSchedule};
     use crate::ecs::resource::{AnimationType, HierarchyState, ModelState};
+    use crate::ecs::world::Entity;
     use cgmath::{Rad, Rotation3};
     use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
     use thyllore_math_core::euler_degrees_to_quaternion;
@@ -704,17 +681,6 @@ mod tests {
             .iter()
             .any(|(_, role)| *role == HumanoidRole::RightLowerArm);
         assert!(has_right_lower_arm, "roles should contain RightLowerArm");
-    }
-
-    #[test]
-    fn test_find_recipe_schedule_owner_ambiguous_returns_none() {
-        let (world, _) = make_recipe_world(2);
-
-        let owner = find_recipe_schedule_owner(&world);
-        assert!(
-            owner.is_none(),
-            "expected None with 2 skeletal clip schedules"
-        );
     }
 
     fn wave_recipe_fixture_path() -> std::path::PathBuf {

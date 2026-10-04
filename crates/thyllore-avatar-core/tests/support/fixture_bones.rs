@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
 
@@ -18,8 +19,14 @@ pub fn load_fixture_rig(
     let fbx_txt_path = format!("tests/data/rigs/{}.fbx.txt", convention_id);
     let fbx_text = fs::read_to_string(&fbx_txt_path).unwrap();
 
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let mut temp_path = std::env::temp_dir();
-    temp_path.push(format!("mapping_{}.fbx", convention_id));
+    temp_path.push(format!(
+        "mapping_{}_{}_{}.fbx",
+        convention_id,
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
     fs::write(&temp_path, fbx_text.as_bytes()).unwrap();
 
     let fbx_model =

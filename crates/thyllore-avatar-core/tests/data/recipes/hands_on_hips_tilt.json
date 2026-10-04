@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "name": "hands_on_hips_tilt",
+  "prompt": "両手を腰に当てて首を傾ける",
+  "duration_seconds": 2.0,
+  "fps": 30,
+  "loop": false,
+  "poses": [
+    {
+      "time": 0.0,
+      "rotations": {
+        "LeftUpperArm": [0, 0, 0],
+        "RightUpperArm": [0, 0, 0],
+        "LeftLowerArm": [0, 0, 0],
+        "RightLowerArm": [0, 0, 0],
+        "Head": [0, 0, 0]
+      }
+    },
+    {
+      "time": 0.8,
+      "ease": "ease_in_out",
+      "rotations": {
+        "RightUpperArm": [0, 20, -55],
+        "LeftUpperArm": [0, -20, 55],
+        "RightLowerArm": [0, -80, 0],
+        "LeftLowerArm": [0, 80, 0],
+        "Head": [0, 0, 0]
+      }
+    },
+    {
+      "time": 1.4,
+      "ease": "ease_in_out",
+      "rotations": {
+        "Head": [0, 0, -15]
+      }
+    },
+    {
+      "time": 2.0,
+      "rotations": {
+        "RightUpperArm": [0, 20, -55],
+        "LeftUpperArm": [0, -20, 55],
+        "RightLowerArm": [0, -80, 0],
+        "LeftLowerArm": [0, 80, 0],
+        "Head": [0, 0, -15]
+      }
+    }
+  ]
+}

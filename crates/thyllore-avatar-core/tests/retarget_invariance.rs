@@ -110,3 +110,13 @@ fn test_wave_invariance() {
 fn test_mixed_invariance() {
     check_recipe_against_all_conventions("tests/data/recipes/mixed.json");
 }
+
+#[test]
+fn test_hands_on_hips_tilt_invariance() {
+    check_recipe_against_all_conventions("tests/data/recipes/hands_on_hips_tilt.json");
+}
+
+#[test]
+fn test_bow_invariance() {
+    check_recipe_against_all_conventions("tests/data/recipes/bow.json");
+}

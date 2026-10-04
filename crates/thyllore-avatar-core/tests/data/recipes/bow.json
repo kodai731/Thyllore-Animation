@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "bow",
+  "prompt": "お辞儀して戻る",
+  "duration_seconds": 2.0,
+  "fps": 30,
+  "loop": false,
+  "poses": [
+    {
+      "time": 0.0,
+      "rotations": {
+        "Spine": [0, 0, 0],
+        "Chest": [0, 0, 0],
+        "Head": [0, 0, 0]
+      },
+      "hips_translation": [0, 0, 0]
+    },
+    {
+      "time": 1.0,
+      "ease": "ease_in_out",
+      "rotations": {
+        "Spine": [20, 0, 0],
+        "Chest": [20, 0, 0],
+        "Head": [5, 0, 0]
+      },
+      "hips_translation": [0, 0, -0.05]
+    },
+    {
+      "time": 2.0,
+      "ease": "ease_in_out",
+      "rotations": {
+        "Spine": [0, 0, 0],
+        "Chest": [0, 0, 0],
+        "Head": [0, 0, 0]
+      },
+      "hips_translation": [0, 0, 0]
+    }
+  ]
+}

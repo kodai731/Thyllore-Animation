@@ -48,6 +48,10 @@ pub fn apply_engine_overrides(
         });
     }
 
+    if let Some(preview) = overrides.preview {
+        world.resource_mut::<TimelineState>().preview = preview;
+    }
+
     if overrides.batch_play {
         start_batch_playback(world);
     }

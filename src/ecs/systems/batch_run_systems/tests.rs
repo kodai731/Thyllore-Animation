@@ -6,8 +6,8 @@ use crate::ecs::component::MotionPath;
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
     BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, ScheduledBatchAction,
-    ScheduledBatchActions, TimelineState,
+    DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction, ScheduledBatchActions,
+    TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,

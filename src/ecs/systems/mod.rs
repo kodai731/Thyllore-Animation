@@ -49,7 +49,7 @@ pub mod message_log_systems;
 mod morph_track_systems;
 mod morph_weight_systems;
 pub mod motion_path_systems;
-mod motion_recipe_systems;
+pub mod motion_recipe_systems;
 pub mod object_picking_systems;
 mod onion_skinning_systems;
 pub mod panel_layout_systems;

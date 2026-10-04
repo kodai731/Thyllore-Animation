@@ -676,3 +676,33 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
     assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
     assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
 }
+
+#[test]
+fn recipe_edit_is_queued_not_applied() {
+    use crate::ecs::resource::{AssetEditCommand, AssetEditQueue};
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::default());
+    world.insert_resource(AssetEditQueue::default());
+
+    let assets = &mut AssetStorage::new();
+    batch_apply_anim_edits(
+        &mut world,
+        assets,
+        &[BatchAnimEdit::Recipe {
+            path: PathBuf::from("x.json"),
+        }],
+    );
+
+    let commands = world.resource_mut::<AssetEditQueue>().take();
+    assert_eq!(commands.len(), 1);
+    match &commands[0] {
+        AssetEditCommand::LoadRecipeFromFile { path } => {
+            assert_eq!(path, &PathBuf::from("x.json"));
+        }
+        other => panic!("expected LoadRecipeFromFile, got {:?}", other),
+    }
+
+    let clip_library = world.resource::<ClipLibrary>();
+    assert_eq!(clip_library.source_clips.len(), 0);
+}

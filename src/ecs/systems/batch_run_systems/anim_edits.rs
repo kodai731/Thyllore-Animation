@@ -10,7 +10,6 @@ use crate::ecs::component::{
     scalar_cli_names_joined, ClipSchedule,
 };
 use crate::ecs::resource::{ClipLibrary, TimelineState};
-use crate::ecs::systems::motion_recipe_systems::apply_recipe_file;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
@@ -206,9 +205,11 @@ pub fn batch_apply_anim_edits(
                 );
             }
             BatchAnimEdit::Recipe { path } => {
-                if let Err(error) = apply_recipe_file(world, assets, path) {
-                    log_warn!("recipe {}: {error:#}", path.display());
-                }
+                world
+                    .resource_mut::<crate::ecs::resource::AssetEditQueue>()
+                    .push(crate::ecs::resource::AssetEditCommand::LoadRecipeFromFile {
+                        path: path.clone(),
+                    });
             }
             BatchAnimEdit::Clear => {
                 dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);

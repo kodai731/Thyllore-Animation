@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use thyllore_anim_core::editable::{AnimationClipFile, EditableAnimationClip};
+use thyllore_anim_core::editable::AnimationClipFile;
 
 pub fn export_ron_clip(clip_file: &AnimationClipFile, output_path: &Path) -> anyhow::Result<()> {
     let config = ron::ser::PrettyConfig::new()
@@ -22,6 +22,7 @@ pub fn export_ron_clip(clip_file: &AnimationClipFile, output_path: &Path) -> any
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_anim_core::editable::EditableAnimationClip;
 
     #[test]
     fn test_export_and_reload_ron_clip() {

@@ -116,3 +116,72 @@ fn read_effect_local_time<S: ScalarDomainSource>(world: &World, entity: Entity) 
         .get_component::<S::Component>(entity)
         .map(S::local_time)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thyllore_scene_core::SceneFields;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum ProbeOwnerTag {
+        Frame,
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+    #[scene(key = "test_probe_params", tag = ProbeOwnerTag, owner = Frame, tags = PROBE_TAGS, snapshot = probe_snapshot, scalars = PROBE_SCALARS, ui = PROBE_UI, overwrite = overwrite_probe)]
+    pub struct ProbeParams {
+        #[persist(curve, ui(min = 0.0, max = 1.0))]
+        pub level: f32,
+        #[persist(ui(min = 0.0, max = 1.0))]
+        pub gain: f32,
+        #[nested]
+        pub wind: ProbeWind,
+        #[runtime(ui(min = 0.0, max = 10.0))]
+        pub time: f32,
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+    #[params(tag = ProbeOwnerTag, owner = Frame, group = "wind")]
+    pub struct ProbeWind {
+        #[persist(curve, scalars, debug_range = (-1.0, 1.0))]
+        pub direction: [f32; 2],
+        #[persist(curve, ui(label = "Bend", min = 0.0, max = 1.0), renamed_from = ["lean"])]
+        pub bend: f32,
+    }
+
+    struct ProbeSource;
+
+    impl ScalarDomainSource for ProbeSource {
+        type Component = ProbeParams;
+
+        const NAME: &'static str = "ProbeParams";
+
+        fn scalars() -> &'static [ScalarParam<ProbeParams>] {
+            &PROBE_SCALARS
+        }
+
+        fn ui() -> &'static [UiParam] {
+            &PROBE_UI
+        }
+
+        fn local_time(component: &ProbeParams) -> f32 {
+            component.time
+        }
+    }
+
+    #[test]
+    fn test_curve_fields_become_channels_in_declaration_order() {
+        let channels = build_effect_scalar_channels::<ProbeSource>();
+        let names: Vec<&str> = channels.iter().map(|c| c.cli_name).collect();
+        assert_eq!(
+            names,
+            ["level", "wind_direction_x", "wind_direction_y", "wind_bend"]
+        );
+
+        assert_eq!(channels[0].display_name, "Level");
+        assert_eq!(channels[0].debug_value_range, (0.0, 1.0));
+        assert_eq!(channels[1].debug_value_range, (-1.0, 1.0));
+        assert_eq!(channels[3].display_name, "Bend");
+        assert_eq!(channels[3].renamed_from, &["lean"]);
+    }
+}

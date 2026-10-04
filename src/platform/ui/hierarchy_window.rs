@@ -7,10 +7,11 @@ use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::ecs::resource::LayoutSnapshot;
 
-pub fn build_hierarchy_window(
+fn draw_hierarchy_window(
     ui: &imgui::Ui,
     world: &World,
     state: &HierarchyState,
@@ -264,3 +265,16 @@ fn build_bone_entry_recursive(
         }
     }
 }
+
+fn build_hierarchy_window(
+    ui: &imgui::Ui,
+    world: &World,
+    assets: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let hierarchy_state = world.resource::<HierarchyState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_hierarchy_window(ui, world, &hierarchy_state, assets, &layout);
+}
+
+crate::ui_window!("hierarchy", Side, 1, build_hierarchy_window);

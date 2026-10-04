@@ -1,3 +1,6 @@
+#![cfg(debug_assertions)]
+
+use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::CurveSuggestionState;
@@ -9,16 +12,13 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub struct DebugWindowState {
-    pub debug_view_mode: DebugViewMode,
-}
-
-pub fn build_debug_panel_content(ui: &imgui::Ui, state: &mut DebugWindowState, ecs_world: &World) {
+pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
     build_camera_debug_panel(ui, ecs_world);
     ui.separator();
 
-    build_debug_view_mode_panel(ui, state);
+    build_debug_view_mode_panel(ui, ecs_world);
     ui.separator();
 
     build_debug_panel(ui, ecs_world);
@@ -83,7 +83,8 @@ fn build_camera_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
-fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {
+fn build_debug_view_mode_panel(ui: &imgui::Ui, ecs_world: &World) {
+    let mut state = ecs_world.resource_mut::<DebugViewState>();
     ui.text("Debug View Mode:");
     let mut current_mode = state.debug_view_mode.as_int();
 
@@ -396,3 +397,19 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
             .build();
     }
 }
+
+fn build_click_debug_overlay_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    build_click_debug_overlay(ui, world);
+}
+
+crate::ui_window!(
+    "click_debug_overlay",
+    Floating,
+    9,
+    build_click_debug_overlay_window
+);

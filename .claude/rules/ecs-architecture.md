@@ -317,6 +317,10 @@ File-dialog requests are not commands: the window sends `DialogRequest` (`src/ec
 `UIEvent` / `UIEventQueue` (`src/ecs/events/ui_events.rs`) only carries the effect variants until #193 moves them
 onto `UiCommand`; it receives no new variants.
 
+Editor windows are the other half: each file in `src/platform/ui/` registers its window with `ui_window!`
+(`src/hooks/ui_window.rs`), reads `LayoutSnapshot` / `ViewportInput` and its own state resource from `World`, and
+sends commands. When to use a hook and when a command is decided in `hierarchy.md`, "Hook or command?".
+
 ## Bones are NOT Entities
 
 - Bones are data within `Skeleton.bones: Vec<Bone>`

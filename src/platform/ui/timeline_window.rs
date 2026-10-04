@@ -2,6 +2,7 @@ use imgui::Condition;
 
 use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
@@ -9,14 +10,16 @@ use crate::ecs::resource::{
     ClipDragState, ClipDragType, ClipLibrary, CurveEditorState, TimelineInteractionState,
     TimelineState,
 };
+use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::{clip_drag_preview_times, timeline_effective_duration};
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::ecs::resource::LayoutSnapshot;
 
 pub(crate) const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
@@ -32,7 +35,7 @@ const CLIP_BLOCK_COLORS: [[f32; 4]; 4] = [
     [0.7, 0.5, 0.7, 0.9],
 ];
 
-pub fn build_timeline_window(
+fn draw_timeline_window(
     ui: &imgui::Ui,
     world: &World,
     state: &mut TimelineState,
@@ -1159,3 +1162,33 @@ fn open_curve_editor_for_clip(
         curve_editor_state.view_initialized = false;
     }
 }
+
+fn build_timeline_window(
+    ui: &imgui::Ui,
+    world: &World,
+    assets: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let clip_track_snapshot = {
+        let clip_library = world.resource::<ClipLibrary>();
+        query_clip_tracks(world, &clip_library, assets)
+    };
+
+    let mut timeline_state = world.resource_mut::<TimelineState>();
+    let mut interaction = world.resource_mut::<TimelineInteractionState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut curve_editor = world.resource_mut::<CurveEditorState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_timeline_window(
+        ui,
+        world,
+        &mut timeline_state,
+        &mut interaction,
+        &clip_library,
+        &mut curve_editor,
+        &clip_track_snapshot,
+        &layout,
+    );
+}
+
+crate::ui_window!("timeline", Bottom, 0, build_timeline_window);

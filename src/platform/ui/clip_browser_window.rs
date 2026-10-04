@@ -1,14 +1,16 @@
 use imgui::Condition;
 
 use crate::animation::editable::SourceClipId;
+use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache};
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::ecs::resource::LayoutSnapshot;
 
-pub fn build_clip_browser_window(
+fn draw_clip_browser_window(
     ui: &imgui::Ui,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
@@ -217,3 +219,17 @@ fn extract_source_filename(
         .unwrap_or("")
         .to_string()
 }
+
+fn build_clip_browser_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut browser_state = world.resource_mut::<ClipBrowserState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_clip_browser_window(ui, &clip_library, &mut browser_state, world, &layout);
+}
+
+crate::ui_window!("clip_browser", Side, 2, build_clip_browser_window);

@@ -8,6 +8,7 @@ use crate::animation::editable::{
     TangentWeightMode,
 };
 use crate::animation::BoneId;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
@@ -20,6 +21,7 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,
@@ -105,7 +107,7 @@ enum ReleasedButton {
     Middle,
 }
 
-pub fn build_curve_editor_window(
+fn draw_curve_editor_window(
     ui: &imgui::Ui,
     world: &World,
     timeline_state: &TimelineState,
@@ -2498,3 +2500,72 @@ mod tests {
         assert!(result.ends_with("表情差分"));
     }
 }
+
+fn build_curve_editor_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let scalar_domain = {
+        let current = world.resource::<TimelineState>().current_clip_id;
+        current.and_then(|_| {
+            crate::ecs::component::scalar_channel_domains()
+                .iter()
+                .copied()
+                .find(|domain| {
+                    (domain.entities)(world).iter().any(|&entity| {
+                        crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(world, entity)
+                            == current
+                    })
+                })
+        })
+    };
+    let suggestion_overlays = collect_suggestion_overlays(world);
+
+    let timeline_state = world.resource::<TimelineState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut curve_editor = world.resource_mut::<CurveEditorState>();
+    let curve_buffer = world.resource::<CurveEditorBuffer>();
+    let mut pose_library = world.resource_mut::<PoseLibrary>();
+    draw_curve_editor_window(
+        ui,
+        world,
+        &timeline_state,
+        &clip_library,
+        &mut curve_editor,
+        &curve_buffer,
+        &suggestion_overlays,
+        &mut pose_library,
+        scalar_domain,
+    );
+    curve_editor.needs_focus = false;
+}
+
+#[cfg(feature = "ml")]
+fn collect_suggestion_overlays(world: &World) -> Vec<SuggestionOverlay> {
+    world
+        .get_resource::<crate::ecs::resource::CurveSuggestionState>()
+        .map(|state| {
+            state
+                .suggestions
+                .iter()
+                .map(|s| SuggestionOverlay {
+                    property_type: s.property_type,
+                    time: s.predicted_time,
+                    value: s.predicted_value,
+                    tangent_in: s.tangent_in,
+                    tangent_out: s.tangent_out,
+                    confidence: s.confidence,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(not(feature = "ml"))]
+fn collect_suggestion_overlays(_: &World) -> Vec<SuggestionOverlay> {
+    Vec::new()
+}
+
+crate::ui_window!("curve_editor", Floating, 0, build_curve_editor_window);

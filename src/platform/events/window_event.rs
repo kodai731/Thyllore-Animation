@@ -3,7 +3,6 @@ use winit::event::{ElementState, WindowEvent};
 use crate::app::App;
 use crate::ecs::resource::MouseInput;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-use crate::platform::ui::StatusBarState;
 
 pub(crate) fn dispatch_window_event(
     event: &WindowEvent,
@@ -13,11 +12,6 @@ pub(crate) fn dispatch_window_event(
     platform: &mut imgui_winit_support::WinitPlatform,
     window: &winit::window::Window,
     bindings: &[crate::platform::key_bindings::KeyBinding],
-    status_bar_state: &mut StatusBarState,
-    #[cfg(feature = "auto-rig")]
-    text_to_mesh_dialog: &mut crate::platform::ui::TextToMeshDialogState,
-    #[cfg(feature = "auto-rig")]
-    text_to_animation_dialog: &mut crate::platform::ui::TextToAnimationDialogState,
 ) {
     match event {
         WindowEvent::CloseRequested => window_target.exit(),
@@ -61,17 +55,7 @@ pub(crate) fn dispatch_window_event(
         }
 
         WindowEvent::RedrawRequested => {
-            super::frame::handle_redraw_requested(
-                imgui,
-                platform,
-                window,
-                app,
-                status_bar_state,
-                #[cfg(feature = "auto-rig")]
-                text_to_mesh_dialog,
-                #[cfg(feature = "auto-rig")]
-                text_to_animation_dialog,
-            );
+            super::frame::handle_redraw_requested(imgui, platform, window, app);
 
             if app
                 .resource::<crate::ecs::resource::AppExit>()

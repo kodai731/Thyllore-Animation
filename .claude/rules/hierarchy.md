@@ -157,7 +157,12 @@ entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that 
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
-`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+`ui_window.rs` holds the `UiWindowHook` contract (name, `UiPanel`, order, `init` that inserts the window's own
+state resource once, `build` taking `(&imgui::Ui, &World, &AssetStorage, &GraphicsResources)`) and the
+`ui_window!` macro: every editor window registers itself from its file in `src/platform/ui/`, `UiWindows::collect()`
+sorts them by panel, order and name, and `src/platform/events/ui_windows.rs` publishes `LayoutSnapshot` and the
+viewport image into `World` and runs the list without naming a window. A window reads everything from `World`
+(`LayoutSnapshot`, `ViewportInput`, its own state resource) and never from `App`. `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
 instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
 instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
 registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
@@ -182,6 +187,37 @@ record (time advance, bone attachment, trails at `Advance`; history accumulation
 `src/ecs/systems/<effect>/` and `src/ecs/systems/phases/render_prep_phase.rs` runs `FramePrepHooks`
 (a `World` resource collected at app start, sorted by stage then name) without naming an effect. A hook
 file describes a contract only; it never names a concrete effect.
+
+## Hook or command?
+
+Two mechanisms let a feature take part without being named by shared code. Pick by the nature of the thing,
+not by taste:
+
+```
+Does the thing exist for the whole run, as a fixed set known at link time
+(a window, a pass node, a per-frame step, a scene component type, a CLI flag group)?
+  yes → it is a participant: register it with a hook (`inventory`, `*_hook!` / `ui_window!` /
+        `scene_owner!`), collect once at startup into a World resource, iterate in a fixed order
+        (stage / panel / order / name). The shared runner never names an entry.
+  no  → Is it a piece of data produced at some moment that must be applied once, later, in order
+        (a UI interaction, a batch action's request, a dialog result)?
+          yes → it is a message: give it a type that applies itself (`UiCommand`, `BatchAction`,
+                `CommandQueue<C>`), push it into the one World queue for its kind, drain in FIFO.
+                No registration: the sender and the type's `apply` are the whole wiring.
+          no  → it is state: a component or a resource, read by systems.
+```
+
+Consequences of the split:
+
+- A hook has an identity (`name`, panel / stage) and an order; a command has neither, only its position in
+  the queue. Two commands that must apply in order are sent in order or merged into one command; two hooks
+  that must run in order get different stages / orders.
+- A hook may carry `init: fn(&mut World)` to insert the state it owns once (`ui_window!` does); a command
+  never inserts resources, it only mutates what the init of a hook or `src/app/init/` created.
+- `cfg(feature)` / `debug_assertions` live in the file that registers the hook or declares the command type
+  (`#![cfg]` at the top of the file), never in the runner or the queue.
+- Wrong fits to recognise: a queue of "draw me" requests is a window list in disguise (use a hook); a hook
+  whose body only forwards one event is a command in disguise (use the command's `apply`).
 
 ## src/effect/
 
@@ -340,6 +376,10 @@ file. Enum fields are persisted by name through a `String` field (`ToneMapOperat
 
 Window, input, imgui orchestration and the UI windows. Reads resources, sends `UiCommand`s
 (`World::send_command`) and `DialogRequest`s, calls one dispatch entry point. Contains no business logic and no Vulkan commands beyond imgui rendering.
+Each window in `src/platform/ui/` registers itself with `ui_window!` and keeps its window-local state in a
+resource it inserts through the hook's `init`; `src/platform/events/` never lists windows, states or
+`cfg` branches for them (a window behind a cargo feature or `debug_assertions` puts the `#![cfg]` at the top of
+its own file).
 
 ## src/vulkanr/
 

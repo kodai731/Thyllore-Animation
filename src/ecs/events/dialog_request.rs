@@ -1,13 +1,6 @@
 use crate::animation::editable::SourceClipId;
-use crate::ecs::events::EventQueue;
+use crate::ecs::events::{ClipExportFormat, EventQueue};
 use crate::ecs::world::World;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ClipExportFormat {
-    Fbx,
-    Gltf,
-    GltfAnimationOnly,
-}
 
 /// A file dialog the platform opens for the engine; the result comes back as a queued command.
 #[derive(Clone, Debug, PartialEq, Eq)]

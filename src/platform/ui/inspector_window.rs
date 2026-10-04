@@ -11,10 +11,10 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
 use super::constraint_inspector::build_constraint_section;
-use super::layout_snapshot::LayoutSnapshot;
 use super::spring_bone_inspector::build_spring_bone_section;
+use crate::ecs::resource::LayoutSnapshot;
 
-pub fn build_inspector_window(
+fn draw_inspector_window(
     ui: &imgui::Ui,
     world: &World,
     state: &HierarchyState,
@@ -189,3 +189,16 @@ fn build_visible_section(ui: &imgui::Ui, world: &World, data: &crate::ecs::syste
         }
     }
 }
+
+fn build_inspector_window(
+    ui: &imgui::Ui,
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) {
+    let hierarchy_state = world.resource::<HierarchyState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_inspector_window(ui, world, &hierarchy_state, assets, graphics, &layout);
+}
+
+crate::ui_window!("inspector", Side, 3, build_inspector_window);

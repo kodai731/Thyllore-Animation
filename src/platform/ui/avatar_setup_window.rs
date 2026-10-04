@@ -4,16 +4,18 @@ use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
+use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
 const NO_TEXTURE_LABEL: &str = "(from model)";
 
-pub fn build_avatar_setup_window(
+fn draw_avatar_setup_window(
     ui: &imgui::Ui,
     world: &World,
     state: &mut AvatarSetupState,
@@ -268,3 +270,16 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
         });
     }
 }
+
+fn build_avatar_setup_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let mut avatar_setup = world.resource_mut::<AvatarSetupState>();
+    let material_textures = world.resource::<MaterialTextureState>();
+    draw_avatar_setup_window(ui, world, &mut avatar_setup, &material_textures);
+}
+
+crate::ui_window!("avatar_setup", Floating, 1, build_avatar_setup_window);

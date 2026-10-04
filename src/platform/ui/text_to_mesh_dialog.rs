@@ -1,7 +1,12 @@
+#![cfg(feature = "auto-rig")]
+
+use crate::asset::AssetStorage;
 use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
+use crate::hooks::ui_window::init_window_state;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToMeshDialogState {
     pub open: bool,
@@ -35,11 +40,7 @@ impl Default for TextToMeshDialogState {
     }
 }
 
-pub fn build_text_to_mesh_dialog(
-    ui: &imgui::Ui,
-    dialog: &mut TextToMeshDialogState,
-    world: &World,
-) {
+fn draw_text_to_mesh_dialog(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState, world: &World) {
     if !dialog.open {
         return;
     }
@@ -328,3 +329,21 @@ fn build_result_section(
         world.send_command(AutoRigEvent::TextToMeshCancel);
     }
 }
+
+fn build_text_to_mesh_dialog(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let mut dialog = world.resource_mut::<TextToMeshDialogState>();
+    draw_text_to_mesh_dialog(ui, &mut dialog, world);
+}
+
+crate::ui_window!(
+    "text_to_mesh_dialog",
+    Floating,
+    2,
+    init = init_window_state::<TextToMeshDialogState>,
+    build = build_text_to_mesh_dialog
+);

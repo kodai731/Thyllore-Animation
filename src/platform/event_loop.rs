@@ -4,9 +4,6 @@ use winit::event::Event;
 
 use super::events::dispatch_window_event;
 use super::key_bindings::default_bindings;
-use super::ui::StatusBarState;
-#[cfg(feature = "auto-rig")]
-use super::ui::{TextToAnimationDialogState, TextToMeshDialogState};
 use crate::app::App;
 use crate::platform::System;
 
@@ -20,11 +17,6 @@ impl System {
         } = self;
         let mut last_frame = Instant::now();
         let bindings = default_bindings();
-        let mut status_bar_state = StatusBarState::default();
-        #[cfg(feature = "auto-rig")]
-        let mut text_to_mesh_dialog_state = TextToMeshDialogState::default();
-        #[cfg(feature = "auto-rig")]
-        let mut text_to_animation_dialog_state = TextToAnimationDialogState::default();
 
         event_loop
             .run(move |event, window_target| match event {
@@ -54,11 +46,6 @@ impl System {
                         &mut platform,
                         &window,
                         &bindings,
-                        &mut status_bar_state,
-                        #[cfg(feature = "auto-rig")]
-                        &mut text_to_mesh_dialog_state,
-                        #[cfg(feature = "auto-rig")]
-                        &mut text_to_animation_dialog_state,
                     );
                 }
 

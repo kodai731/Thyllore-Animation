@@ -1,6 +1,11 @@
+#![cfg(feature = "auto-rig")]
+
+use crate::asset::AssetStorage;
 use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
+use crate::hooks::ui_window::init_window_state;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToAnimationDialogState {
     pub open: bool,
@@ -18,7 +23,7 @@ impl Default for TextToAnimationDialogState {
     }
 }
 
-pub fn build_text_to_animation_dialog(
+fn draw_text_to_animation_dialog(
     ui: &imgui::Ui,
     dialog: &mut TextToAnimationDialogState,
     world: &World,
@@ -169,3 +174,21 @@ fn build_status_section(ui: &imgui::Ui, snapshot: &StateSnapshot) {
         ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Error: {}", err));
     }
 }
+
+fn build_text_to_animation_dialog(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let mut dialog = world.resource_mut::<TextToAnimationDialogState>();
+    draw_text_to_animation_dialog(ui, &mut dialog, world);
+}
+
+crate::ui_window!(
+    "text_to_animation_dialog",
+    Floating,
+    3,
+    init = init_window_state::<TextToAnimationDialogState>,
+    build = build_text_to_animation_dialog
+);

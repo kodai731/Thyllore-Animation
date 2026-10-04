@@ -4,18 +4,20 @@ use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
-    ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
+    ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, CurveEditorState, TimelineInteractionState,
-    TimelineState,
+    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorState,
+    TimelineInteractionState, TimelineState,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
-use crate::ecs::systems::{clip_drag_preview_times, timeline_effective_duration};
+use crate::ecs::systems::{
+    clip_drag_preview_times, clip_schedule_assign_lanes, timeline_effective_duration,
+};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -98,6 +100,15 @@ fn build_transport_controls(
     let mut looping = state.looping;
     if ui.checkbox("Loop", &mut looping) {
         world.send_command(TimelineEvent::ToggleLoop);
+    }
+
+    ui.same_line();
+    if ui.radio_button_bool("Solo", state.preview == ClipPreview::Solo) {
+        world.send_command(TimelineEvent::SetPreview(ClipPreview::Solo));
+    }
+    ui.same_line();
+    if ui.radio_button_bool("Mix", state.preview == ClipPreview::Mix) {
+        world.send_command(TimelineEvent::SetPreview(ClipPreview::Mix));
     }
 
     ui.same_line();
@@ -436,6 +447,7 @@ fn build_clip_tracks_section(
     handle_clip_drag_release(ui, world, interaction, pixels_per_second);
 
     let mut clicked_any_block = false;
+    let mut total_track_rows: f32 = 0.0;
 
     for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
         build_group_headers(ui, world, entry);
@@ -447,12 +459,19 @@ fn build_clip_tracks_section(
         let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
         let draw_list = ui.get_window_draw_list();
 
+        let lanes = world
+            .get_component::<ClipSchedule>(entry.entity)
+            .map(|schedule| clip_schedule_assign_lanes(&schedule.instances))
+            .unwrap_or_else(|| vec![0; entry.instances.len()]);
+        let lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
+        let track_height = (lane_count as f32) * CLIP_TRACK_HEIGHT;
+
         draw_list
             .add_rect(
                 track_origin,
                 [
                     track_origin[0] + timeline_width,
-                    track_origin[1] + CLIP_TRACK_HEIGHT,
+                    track_origin[1] + track_height,
                 ],
                 [0.15, 0.15, 0.2, 1.0],
             )
@@ -460,6 +479,9 @@ fn build_clip_tracks_section(
             .build();
 
         for (inst_idx, inst) in entry.instances.iter().enumerate() {
+            let lane = lanes[inst_idx];
+            let lane_y = track_origin[1] + (lane as f32) * CLIP_TRACK_HEIGHT;
+
             let (draw_start, draw_end) = clip_block_display_times(
                 interaction,
                 entry.entity,
@@ -470,8 +492,8 @@ fn build_clip_tracks_section(
             );
             let block_x = track_origin[0] + draw_start * pixels_per_second;
             let block_w = ((draw_end - draw_start) * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
-            let block_min = [block_x, track_origin[1] + 2.0];
-            let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
+            let block_min = [block_x, lane_y + 2.0];
+            let block_max = [block_x + block_w, lane_y + CLIP_TRACK_HEIGHT - 2.0];
 
             let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
             let color = compute_block_color(base_color, inst, interaction, entry.entity);
@@ -512,7 +534,8 @@ fn build_clip_tracks_section(
             handle_clip_mute_button(ui, world, entry.entity, inst, inst_idx, entry_idx);
         }
 
-        ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
+        ui.dummy([timeline_width, track_height]);
+        total_track_rows += track_height;
 
         if let Some(target) = ui.drag_drop_target() {
             let accepted = target
@@ -534,8 +557,8 @@ fn build_clip_tracks_section(
 
     if mouse_clicked && !clicked_any_block {
         let section_start_y = ui.cursor_screen_pos()[1]
-            - (snapshot.entries.len() as f32
-                * (CLIP_TRACK_HEIGHT + ui.text_line_height_with_spacing()));
+            - (total_track_rows
+                + snapshot.entries.len() as f32 * ui.text_line_height_with_spacing());
 
         if mouse_pos[1] >= section_start_y {
             world.send_command(ClipInstanceEvent::Deselect);

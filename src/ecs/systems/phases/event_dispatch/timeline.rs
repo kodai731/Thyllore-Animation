@@ -9,6 +9,7 @@ use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
+use crate::ecs::resource::ClipPreview;
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::CurveTrackRef;
 use crate::ecs::resource::SelectedKeyframe;
@@ -114,6 +115,7 @@ pub enum TimelineEvent {
     ZoomOut {
         min_zoom: f32,
     },
+    SetPreview(ClipPreview),
 }
 
 impl UiCommand for TimelineEvent {

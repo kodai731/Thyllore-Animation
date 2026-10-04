@@ -94,6 +94,9 @@ pub fn timeline_process_events(
             TimelineEvent::ZoomOut { min_zoom } => {
                 timeline_zoom_out(timeline_state, *min_zoom);
             }
+            TimelineEvent::SetPreview(preview) => {
+                timeline_state.preview = *preview;
+            }
             _ => {}
         }
     }

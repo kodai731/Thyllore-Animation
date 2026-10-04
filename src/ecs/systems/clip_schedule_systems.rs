@@ -48,6 +48,33 @@ pub fn clip_schedule_active_instances(schedule: &ClipSchedule, time: f32) -> Vec
         .collect()
 }
 
+pub fn clip_schedule_assign_lanes(instances: &[ClipInstance]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..instances.len()).collect();
+    order.sort_by(|&a, &b| instances[a].start_time.total_cmp(&instances[b].start_time));
+
+    let mut lane_end_times: Vec<f32> = Vec::new();
+    let mut lanes = vec![0; instances.len()];
+
+    for index in order {
+        let instance = &instances[index];
+        let free_lane = lane_end_times
+            .iter()
+            .position(|&lane_end| lane_end <= instance.start_time);
+
+        let lane = match free_lane {
+            Some(lane) => lane,
+            None => {
+                lane_end_times.push(0.0);
+                lane_end_times.len() - 1
+            }
+        };
+        lane_end_times[lane] = instance.end_time();
+        lanes[index] = lane;
+    }
+
+    lanes
+}
+
 pub fn clip_schedule_create_group(schedule: &mut ClipSchedule, name: String) -> ClipGroupId {
     let id = schedule.next_group_id;
     schedule.next_group_id += 1;
@@ -183,6 +210,29 @@ mod switch_source_tests {
         assert_eq!(inst.source_id, 7);
         assert!((inst.clip_in - 0.0).abs() < 1e-6);
         assert!((inst.clip_out - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lane_assignment_stacks_overlapping_instances() {
+        let overlapping = [
+            instance_spanning(0, 0.0, 3.0),
+            instance_spanning(1, 1.0, 4.0),
+            instance_spanning(2, 2.0, 5.0),
+        ];
+        let lanes = clip_schedule_assign_lanes(&overlapping);
+        assert_eq!(lanes, vec![0, 1, 2]);
+
+        let disjoint = [
+            instance_spanning(3, 2.0, 3.0),
+            instance_spanning(4, 0.0, 2.0),
+        ];
+        assert_eq!(clip_schedule_assign_lanes(&disjoint), vec![0, 0]);
+    }
+
+    fn instance_spanning(id: ClipInstanceId, start_time: f32, end_time: f32) -> ClipInstance {
+        let mut instance = ClipInstance::new(id, 0, end_time - start_time);
+        instance.start_time = start_time;
+        instance
     }
 }
 

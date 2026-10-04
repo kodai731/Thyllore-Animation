@@ -214,12 +214,13 @@ pub(crate) mod test_support {
     use super::ensure_entity_clip;
     use crate::asset::AssetStorage;
     use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
+    use crate::ecs::events::UiCommand;
     use crate::ecs::world::{Entity, World};
     use crate::hooks::effect_spawn::EffectSpawnHook;
-    use crate::hooks::effect_ui_event::EffectUiQueue;
     use crate::hooks::scene::spawn_scene_owner;
     use crate::scene::test_support::ProbeOwner;
 
+    #[derive(Debug)]
     pub enum ProbeUiCommand {
         Ping,
     }
@@ -229,34 +230,21 @@ pub(crate) mod test_support {
         pub count: usize,
     }
 
-    fn insert_probe_default_resources(world: &mut World) {
-        if !world.contains_resource::<EffectUiQueue<ProbeUiCommand>>() {
-            world.insert_resource(EffectUiQueue::<ProbeUiCommand>::default());
-        }
-        if !world.contains_resource::<ProbeDispatchCounter>() {
-            world.insert_resource(ProbeDispatchCounter::default());
-        }
-    }
-
-    crate::effect_default_resource!("probe", insert_probe_default_resources);
-
-    fn dispatch_probe_ui_events(world: &mut World, _assets: &mut AssetStorage) {
-        let commands = match world.get_resource_mut::<EffectUiQueue<ProbeUiCommand>>() {
-            Some(mut queue) => queue.drain(),
-            None => return,
-        };
-
-        let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
-            return;
-        };
-        for command in commands {
-            match command {
+    impl UiCommand for ProbeUiCommand {
+        fn apply(
+            self: Box<Self>,
+            world: &mut World,
+            _assets: &mut AssetStorage,
+            _graphics: &crate::vulkanr::resource::graphics_resource::GraphicsResources,
+        ) {
+            let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
+                return;
+            };
+            match *self {
                 ProbeUiCommand::Ping => counter.count += 1,
             }
         }
     }
-
-    crate::ui_event_hook!(PROBE_SPAWN_HOOK.key, dispatch_probe_ui_events);
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
@@ -361,21 +349,18 @@ mod tests {
         PROBE_LEVEL,
     };
     use super::*;
+    use crate::ecs::events::UiCommandQueue;
     use crate::ecs::systems::phases::event_dispatch_phase::run_event_dispatch_phase;
-    use crate::hooks::effect_defaults::apply_effect_default_resources;
-    use crate::hooks::effect_ui_event::{send_effect_ui_command, EffectUiEventDispatchHooks};
     use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
     #[test]
-    fn test_probe_ui_command_reaches_its_dispatch_hook() {
+    fn test_probe_ui_command_is_applied_by_the_dispatch_phase() {
         let mut world = World::new();
         let mut assets = AssetStorage::default();
-        apply_effect_default_resources(&mut world);
-        world.insert_resource(
-            EffectUiEventDispatchHooks::collect().expect("dispatch hooks collected"),
-        );
+        world.insert_resource(UiCommandQueue::default());
+        world.insert_resource(ProbeDispatchCounter::default());
 
-        send_effect_ui_command(&world, ProbeUiCommand::Ping);
+        world.send_command(ProbeUiCommand::Ping);
         run_event_dispatch_phase(&mut world, &mut assets, &GraphicsResources::default());
 
         assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);

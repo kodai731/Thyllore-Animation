@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-use super::clip::EditableAnimationClip;
+use crate::BoneId;
+
+use super::clip::{ClipSpace, EditableAnimationClip};
 use super::curve::{PropertyCurve, PropertyType};
 use super::keyframe::{CurveId, EditableKeyframe, KeyframeId};
+use super::track::BoneTrack;
 
-pub const ANIMATION_FORMAT_VERSION: u32 = 1;
+pub const ANIMATION_FORMAT_VERSION: u32 = 2;
 
 /// On-disk clip. Scalar curves are keyed by channel name because `PropertyType::Custom`
 /// codes are process-local; the application resolves names when it saves and loads.
@@ -24,10 +29,19 @@ pub struct NamedScalarCurve {
     pub next_keyframe_id: KeyframeId,
 }
 
+#[derive(Debug, Clone)]
+pub struct RoleSlot {
+    pub index: BoneId,
+    pub allows_translation: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipFileError {
     UnnamedScalarCurve(PropertyType),
     UnknownScalarChannel(String),
+    UnknownRole(String),
+    RoleTranslationNotAllowed(String),
+    RoleScaleNotAllowed(String),
 }
 
 impl std::fmt::Display for ClipFileError {
@@ -38,6 +52,15 @@ impl std::fmt::Display for ClipFileError {
             }
             ClipFileError::UnknownScalarChannel(channel) => {
                 write!(f, "unknown scalar channel {channel}")
+            }
+            ClipFileError::UnknownRole(role) => {
+                write!(f, "unknown role {role}")
+            }
+            ClipFileError::RoleTranslationNotAllowed(role) => {
+                write!(f, "translation not allowed for role {role}")
+            }
+            ClipFileError::RoleScaleNotAllowed(role) => {
+                write!(f, "scale not allowed for role {role}")
             }
         }
     }
@@ -75,11 +98,44 @@ impl AnimationClipFile {
         })
     }
 
+    fn resolve_role_tracks(
+        tracks: HashMap<BoneId, BoneTrack>,
+        role_slot: impl Fn(&str) -> Option<RoleSlot>,
+    ) -> Result<HashMap<BoneId, BoneTrack>, ClipFileError> {
+        let mut new_tracks = HashMap::new();
+        for (_old_key, mut track) in tracks.into_iter() {
+            let slot = role_slot(&track.bone_name)
+                .ok_or_else(|| ClipFileError::UnknownRole(track.bone_name.clone()))?;
+
+            if !slot.allows_translation
+                && (!track.translation_x.is_empty()
+                    || !track.translation_y.is_empty()
+                    || !track.translation_z.is_empty())
+            {
+                return Err(ClipFileError::RoleTranslationNotAllowed(track.bone_name));
+            }
+
+            if !track.scale_x.is_empty() || !track.scale_y.is_empty() || !track.scale_z.is_empty() {
+                return Err(ClipFileError::RoleScaleNotAllowed(track.bone_name));
+            }
+
+            track.bone_id = slot.index;
+            new_tracks.insert(slot.index, track);
+        }
+        Ok(new_tracks)
+    }
+
     pub fn into_clip(
         self,
         property_type: impl Fn(&str) -> Option<PropertyType>,
+        role_slot: impl Fn(&str) -> Option<RoleSlot>,
     ) -> Result<EditableAnimationClip, ClipFileError> {
         let mut clip = self.clip;
+
+        if clip.space == ClipSpace::HumanoidRole {
+            clip.tracks = Self::resolve_role_tracks(clip.tracks, role_slot)?;
+        }
+
         clip.scalar_curves = self
             .scalar_curves
             .into_iter()
@@ -122,7 +178,10 @@ mod tests {
         assert!(!text.contains("Custom"), "{text}");
         let parsed: AnimationClipFile = ron::from_str(&text).expect("parse");
         let loaded = parsed
-            .into_clip(|name| (name == "probe_level").then_some(PropertyType::Custom(9)))
+            .into_clip(
+                |name| (name == "probe_level").then_some(PropertyType::Custom(9)),
+                |_| None,
+            )
             .expect("resolved");
 
         let curve = loaded
@@ -147,8 +206,82 @@ mod tests {
         let file =
             AnimationClipFile::from_clip(&clip, |_| Some("gone".to_string())).expect("named");
         assert_eq!(
-            file.into_clip(|_| None).err(),
+            file.into_clip(|_| None, |_| None).err(),
             Some(ClipFileError::UnknownScalarChannel("gone".to_string()))
         );
+    }
+
+    #[test]
+    fn clip_file_v1_loads_as_bone_space() {
+        let text = r#"(version: 1, clip: (id: 1, name: "v1", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [])"#;
+        let file: AnimationClipFile = ron::from_str(text).expect("parse v1 format");
+        assert_eq!(file.clip.space, ClipSpace::Bone);
+    }
+
+    #[test]
+    fn role_clip_rejects_non_hips_translation() {
+        use crate::editable::components::curve::PropertyType;
+
+        let mut clip = EditableAnimationClip::new(1, "role".to_string());
+        clip.space = ClipSpace::HumanoidRole;
+        let track = clip.add_track(0, "spine".to_string());
+        curve_add_keyframe(track.get_curve_mut(PropertyType::TranslationX), 0.0, 1.0);
+
+        let file = AnimationClipFile::from_clip(&clip, |_| None).expect("named");
+        let result = file.into_clip(
+            |_| None,
+            |name| {
+                if name == "spine" {
+                    Some(RoleSlot {
+                        index: 5,
+                        allows_translation: false,
+                    })
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(
+            result.err(),
+            Some(ClipFileError::RoleTranslationNotAllowed(
+                "spine".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn role_clip_round_trip() {
+        use crate::editable::components::curve::PropertyType;
+
+        let mut clip = EditableAnimationClip::new(1, "role".to_string());
+        clip.space = ClipSpace::HumanoidRole;
+        let track = clip.add_track(0, "hips".to_string());
+        curve_add_keyframe(track.get_curve_mut(PropertyType::RotationX), 0.5, 0.3);
+
+        let file = AnimationClipFile::from_clip(&clip, |_| None).expect("named");
+        let text = ron::to_string(&file).expect("serialize");
+        let parsed: AnimationClipFile = ron::from_str(&text).expect("parse");
+
+        let loaded = parsed
+            .into_clip(
+                |_| None,
+                |name| {
+                    if name == "hips" {
+                        Some(RoleSlot {
+                            index: 10,
+                            allows_translation: true,
+                        })
+                    } else {
+                        None
+                    }
+                },
+            )
+            .expect("resolved");
+
+        let restored = loaded.get_track(10).expect("track at role index");
+        assert_eq!(restored.bone_name, "hips");
+        assert_eq!(restored.rotation_x.keyframes.len(), 1);
+        assert!((restored.rotation_x.keyframes[0].time - 0.5).abs() < 1e-6);
+        assert!((restored.rotation_x.keyframes[0].value - 0.3).abs() < 1e-6);
     }
 }

@@ -40,7 +40,7 @@ pub fn parse_animation_clip(content: &str) -> SceneResult<EditableAnimationClip>
     }
 
     clip_file
-        .into_clip(scalar_channel_property)
+        .into_clip(scalar_channel_property, |_| None)
         .map_err(SceneError::ClipFile)
 }
 
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_unknown_channel_names_are_rejected() {
-        let text = r#"(version: 1, clip: (id: 1, name: "x", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [(channel: "no_such_channel", id: 1, keyframes: [], next_keyframe_id: 1)])"#;
+        let text = r#"(version: 2, clip: (id: 1, name: "x", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [(channel: "no_such_channel", id: 1, keyframes: [], next_keyframe_id: 1)])"#;
         assert!(matches!(
             parse_animation_clip(text),
             Err(SceneError::ClipFile(_))

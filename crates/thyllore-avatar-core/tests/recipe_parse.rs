@@ -4,7 +4,7 @@ use thyllore_avatar_core::motion::systems::recipe_io::parse_recipe;
 
 fn recipe_path(name: &str) -> String {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data/recipes")
+        .join("../../assets/recipies")
         .join(name);
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("failed to read {}: {}", p.display(), e))
 }

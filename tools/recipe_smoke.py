@@ -1,7 +1,7 @@
 """Smoke test: bake each motion recipe and verify the output has real movement.
 
 For each recipe (default: wave.json, hands_on_hips_tilt.json, bow.json from
-crates/thyllore-avatar-core/tests/data/recipes/) this script:
+assets/recipies/) this script:
   1. Creates a fresh output directory target/recipe_smoke/<recipe name>/
   2. Copies the test rig (mixamo.fbx.txt -> mixamo.fbx) into it
   3. Writes a scene.ron pointing at that rig
@@ -30,7 +30,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine_harness import dood_wrap, engine_env, engine_path, repo_root
 
-RECIPES_DIR = "crates/thyllore-avatar-core/tests/data/recipes"
+RECIPES_DIR = "assets/recipies"
 RIG_SRC = "crates/thyllore-avatar-core/tests/data/rigs/mixamo.fbx.txt"
 DEFAULT_RECIPES = ["wave.json", "hands_on_hips_tilt.json", "bow.json"]
 

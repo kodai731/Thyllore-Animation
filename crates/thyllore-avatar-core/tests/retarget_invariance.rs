@@ -103,20 +103,20 @@ fn check_one(
 
 #[test]
 fn test_wave_invariance() {
-    check_recipe_against_all_conventions("tests/data/recipes/wave.json");
+    check_recipe_against_all_conventions("../../assets/recipies/wave.json");
 }
 
 #[test]
 fn test_mixed_invariance() {
-    check_recipe_against_all_conventions("tests/data/recipes/mixed.json");
+    check_recipe_against_all_conventions("../../assets/recipies/mixed.json");
 }
 
 #[test]
 fn test_hands_on_hips_tilt_invariance() {
-    check_recipe_against_all_conventions("tests/data/recipes/hands_on_hips_tilt.json");
+    check_recipe_against_all_conventions("../../assets/recipies/hands_on_hips_tilt.json");
 }
 
 #[test]
 fn test_bow_invariance() {
-    check_recipe_against_all_conventions("tests/data/recipes/bow.json");
+    check_recipe_against_all_conventions("../../assets/recipies/bow.json");
 }

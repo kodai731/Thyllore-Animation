@@ -589,9 +589,7 @@ mod tests {
 
         let skeleton = load_mixamo_fixture_skeleton();
 
-        let test_data_dir =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
-        let recipe_path = test_data_dir.join("recipes/wave.json");
+        let recipe_path = wave_recipe_fixture_path();
 
         let bones = skeleton_to_bone_inputs(&skeleton);
         let (mapping, _) = infer_mapping(&bones);
@@ -640,9 +638,7 @@ mod tests {
     fn test_apply_recipe_file_without_selection_schedules_on_sole_model() {
         let (mut world, mut assets) = make_recipe_world(1);
 
-        let test_data_dir =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
-        let recipe_path = test_data_dir.join("recipes/wave.json");
+        let recipe_path = wave_recipe_fixture_path();
 
         let id = apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
 
@@ -661,9 +657,7 @@ mod tests {
     fn test_apply_recipe_file_twice_replaces_clip() {
         let (mut world, mut assets) = make_recipe_world(1);
 
-        let test_data_dir =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-avatar-core/tests/data");
-        let recipe_path = test_data_dir.join("recipes/wave.json");
+        let recipe_path = wave_recipe_fixture_path();
 
         apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
         apply_recipe_file(&mut world, &mut assets, &recipe_path).unwrap();
@@ -723,9 +717,12 @@ mod tests {
         );
     }
 
+    fn wave_recipe_fixture_path() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/recipies/wave.json")
+    }
+
     fn copy_wave_recipe_to_temp() -> std::path::PathBuf {
-        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("crates/thyllore-avatar-core/tests/data/recipes/wave.json");
+        let fixture_path = wave_recipe_fixture_path();
         let counter = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let copy_path = std::env::temp_dir().join(format!(
             "motion_recipe_wave_{}_{}.json",

@@ -7,7 +7,7 @@ use thyllore_avatar_core::motion::systems::recipe_curves::{
 use thyllore_avatar_core::motion::systems::recipe_io::parse_recipe;
 
 fn load_wave() -> thyllore_avatar_core::motion::components::pose_recipe::PoseRecipe {
-    let json = fs::read_to_string("tests/data/recipes/wave.json").unwrap();
+    let json = fs::read_to_string("../../assets/recipies/wave.json").unwrap();
     parse_recipe(&json).unwrap()
 }
 

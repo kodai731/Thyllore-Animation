@@ -44,7 +44,9 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
 
 pub fn finish_run(app: &App, overrides: &EngineCliOverrides, is_batch_mode: bool) {
     if let Some(ref dump_path) = overrides.anim_dump_path {
-        if let Err(e) = batch_anim_dump_write(&app.data.ecs_world, dump_path) {
+        if let Err(e) =
+            batch_anim_dump_write(&app.data.ecs_world, dump_path, overrides.anim_dump_tracks)
+        {
             println!(
                 "{}",
                 serde_json::json!({"ok": false, "error": format!("anim dump failed: {e}")})

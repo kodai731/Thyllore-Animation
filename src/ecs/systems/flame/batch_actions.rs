@@ -342,7 +342,7 @@ mod tests {
             "preview must not commit the trim"
         );
 
-        let dump = batch_anim_dump_json(&world);
+        let dump = batch_anim_dump_json(&world, false);
         assert!(
             (dump["timeline"]["drag_preview"]["end_time"]
                 .as_f64()

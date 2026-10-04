@@ -19,6 +19,7 @@ const BATCH_PICK_FLAG: &str = "--batch-pick";
 const BATCH_SCENE_FLAG: &str = "--batch-scene";
 const BATCH_PLAY_FLAG: &str = "--batch-play";
 const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
+const BATCH_ANIM_DUMP_TRACKS_FLAG: &str = "--batch-anim-dump-tracks";
 pub(super) const BATCH_ANIM_EDIT_FLAG: &str = "--batch-anim-edit";
 pub(super) const BATCH_DEBUG_ACTION_FLAG: &str = "--batch-debug-action";
 pub(super) const BATCH_DEBUG_ACTION_AT_FLAG: &str = "--batch-debug-action-at";
@@ -37,6 +38,7 @@ pub struct EngineCliOverrides {
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
     pub anim_dump_path: Option<String>,
+    pub anim_dump_tracks: bool,
     pub debug_actions: Vec<Box<dyn BatchAction>>,
     pub scheduled_actions: Vec<ScheduledBatchAction>,
 }
@@ -52,6 +54,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
         anim_dump_path: flag_value_resolve_from_args(args, BATCH_ANIM_DUMP_FLAG)?,
+        anim_dump_tracks: args.iter().any(|a| a == BATCH_ANIM_DUMP_TRACKS_FLAG),
         debug_actions: debug_actions_resolve_from_args(args)?,
         scheduled_actions: scheduled_actions_resolve_from_args(args)?,
     })

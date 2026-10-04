@@ -386,7 +386,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         "key edit must restore timeline time"
     );
 
-    let dump = batch_anim_dump_json(&world);
+    let dump = batch_anim_dump_json(&world, false);
     let entities = dump["entities"].as_array().unwrap();
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0]["domain"], PROBE_DOMAIN.name);
@@ -705,4 +705,49 @@ fn recipe_edit_is_queued_not_applied() {
 
     let clip_library = world.resource::<ClipLibrary>();
     assert_eq!(clip_library.source_clips.len(), 0);
+}
+
+#[test]
+fn dump_includes_bone_tracks_when_requested() {
+    use crate::ecs::resource::{RecipeClipSource, RecipeClipSources};
+    use crate::ecs::systems::clip_library_register_and_activate;
+    use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(RecipeClipSources::default());
+
+    let mut clip = EditableAnimationClip::new(0, "t".into());
+    let track = clip.add_track(2, "mixamorig:RightArm".into());
+    curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
+    curve_add_keyframe(&mut track.rotation_z, 1.0, 45.0);
+
+    let mut assets = AssetStorage::new();
+    let clip_id = clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        &mut assets,
+        clip,
+    );
+    world.resource_mut::<RecipeClipSources>().by_clip.insert(
+        clip_id,
+        RecipeClipSource {
+            path: PathBuf::from("t.recipe.json"),
+            pose_times: vec![],
+            roles: vec![(2, HumanoidRole::RightUpperArm)],
+            detached: false,
+            pose_rotations: vec![],
+        },
+    );
+
+    let dump = batch_anim_dump_json(&world, true);
+    let bone_track = &dump["clips"][0]["bone_tracks"][0];
+    assert_eq!(bone_track["role"], "RightUpperArm");
+    assert_eq!(
+        bone_track["curves"]["rot_z"].as_array().map(Vec::len),
+        Some(2)
+    );
+
+    let dump = batch_anim_dump_json(&world, false);
+    assert!(dump["clips"][0].get("bone_tracks").is_none());
 }

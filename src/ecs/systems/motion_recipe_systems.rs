@@ -14,7 +14,10 @@ use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
-use crate::ecs::resource::{AnimationType, AvatarSetupState, ClipLibrary, HierarchyState};
+use crate::ecs::resource::{
+    AnimationType, AvatarSetupState, ClipLibrary, HierarchyState, RecipeClipSource,
+    RecipeClipSources,
+};
 use crate::ecs::systems::avatar_setup_systems::{
     compute_bone_global_transform, find_first_skeleton, find_model_path, load_or_infer_mapping,
     skeleton_to_bone_inputs,
@@ -192,9 +195,7 @@ pub fn apply_recipe_file(
             .source_to_asset_id
             .remove(&replaced_id);
         remove_clip_instances(world, replaced_id);
-        if let Some(ref mut recipe_sources) =
-            world.get_resource_mut::<crate::ecs::resource::RecipeClipSources>()
-        {
+        if let Some(ref mut recipe_sources) = world.get_resource_mut::<RecipeClipSources>() {
             recipe_sources.by_clip.remove(&replaced_id);
         }
     }
@@ -202,21 +203,16 @@ pub fn apply_recipe_file(
     let source_id =
         clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), assets, clip);
 
-    if !world.contains_resource::<crate::ecs::resource::RecipeClipSources>() {
-        world.insert_resource(crate::ecs::resource::RecipeClipSources::default());
-    }
-    {
-        let mut recipe_sources = world.resource_mut::<crate::ecs::resource::RecipeClipSources>();
-        recipe_sources.by_clip.insert(
-            source_id,
-            crate::ecs::resource::RecipeClipSource {
-                path: path.to_path_buf(),
-                pose_times,
-                roles,
-                detached: false,
-            },
-        );
-    }
+    register_recipe_source(
+        world,
+        source_id,
+        RecipeClipSource {
+            path: path.to_path_buf(),
+            pose_times,
+            roles,
+            detached: false,
+        },
+    );
 
     let schedule = find_recipe_schedule_owner(world)
         .and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
@@ -275,6 +271,94 @@ fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
             clip_schedule_remove_instance(schedule, instance_id);
         }
     }
+}
+
+fn register_recipe_source(world: &mut World, source_id: SourceClipId, source: RecipeClipSource) {
+    if !world.contains_resource::<RecipeClipSources>() {
+        world.insert_resource(RecipeClipSources::default());
+    }
+    let mut recipe_sources = world.resource_mut::<RecipeClipSources>();
+    recipe_sources.by_clip.insert(source_id, source);
+}
+
+pub fn set_recipe_pose_rotation(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    clip: SourceClipId,
+    role: HumanoidRole,
+    pose_index: usize,
+    euler: [f32; 3],
+) -> anyhow::Result<SourceClipId> {
+    let path = find_recipe_path(world, clip)?;
+    let recipe_json = std::fs::read_to_string(&path).context("cannot read recipe")?;
+    let mut recipe = thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(&recipe_json)?;
+    let pose_count = recipe.poses.len();
+    let pose = recipe
+        .poses
+        .get_mut(pose_index)
+        .with_context(|| format!("pose index {pose_index} out of range ({pose_count} poses)"))?;
+    pose.rotations.insert(role, euler);
+
+    let edited_json = serde_json::to_string_pretty(&recipe)?;
+    std::fs::write(&path, edited_json).context("cannot write recipe")?;
+
+    apply_recipe_file(world, assets, &path)
+}
+
+fn find_recipe_path(world: &World, clip: SourceClipId) -> anyhow::Result<std::path::PathBuf> {
+    let recipe_sources = world
+        .get_resource::<RecipeClipSources>()
+        .context("no recipe clips registered")?;
+    let source = recipe_sources
+        .by_clip
+        .get(&clip)
+        .with_context(|| format!("clip {clip} has no recipe source"))?;
+    if source.detached {
+        anyhow::bail!("clip {clip} is detached from its recipe");
+    }
+    Ok(source.path.clone())
+}
+
+pub fn detach_recipe_clip(world: &mut World, clip: SourceClipId) {
+    let Some(mut recipe_sources) = world.get_resource_mut::<RecipeClipSources>() else {
+        return;
+    };
+    let Some(source) = recipe_sources.by_clip.get_mut(&clip) else {
+        return;
+    };
+    if source.detached {
+        return;
+    }
+    source.detached = true;
+    drop(recipe_sources);
+
+    if let Some(editable_clip) = world.resource_mut::<ClipLibrary>().get_mut(clip) {
+        editable_clip.name.push_str(" (edited)");
+    }
+}
+
+pub fn rebake_recipe_clip(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    clip: SourceClipId,
+) -> anyhow::Result<SourceClipId> {
+    let path = world
+        .get_resource::<RecipeClipSources>()
+        .and_then(|recipe_sources| recipe_sources.by_clip.get(&clip).map(|s| s.path.clone()))
+        .with_context(|| format!("clip {clip} has no recipe source"))?;
+
+    world.resource_mut::<ClipLibrary>().remove(clip);
+    world
+        .resource_mut::<ClipLibrary>()
+        .source_to_asset_id
+        .remove(&clip);
+    remove_clip_instances(world, clip);
+    world
+        .resource_mut::<RecipeClipSources>()
+        .by_clip
+        .remove(&clip);
+
+    apply_recipe_file(world, assets, &path)
 }
 
 #[cfg(test)]
@@ -564,7 +648,7 @@ mod tests {
             "expected exactly 1 instance after 2 applies"
         );
 
-        let recipe_sources = world.resource::<crate::ecs::resource::RecipeClipSources>();
+        let recipe_sources = world.resource::<RecipeClipSources>();
         assert_eq!(
             recipe_sources.by_clip.len(),
             1,
@@ -602,5 +686,151 @@ mod tests {
             owner.is_none(),
             "expected None with 2 skeletal clip schedules"
         );
+    }
+
+    fn copy_wave_recipe_to_temp() -> std::path::PathBuf {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("crates/thyllore-avatar-core/tests/data/recipes/wave.json");
+        let counter = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let copy_path = std::env::temp_dir().join(format!(
+            "motion_recipe_wave_{}_{}.json",
+            std::process::id(),
+            counter
+        ));
+        std::fs::copy(&fixture_path, &copy_path).unwrap();
+        copy_path
+    }
+
+    fn find_recipe_role_bone(world: &World, clip: SourceClipId, role: HumanoidRole) -> BoneId {
+        world.resource::<RecipeClipSources>().by_clip[&clip]
+            .roles
+            .iter()
+            .find(|(_, candidate)| *candidate == role)
+            .map(|(bone, _)| *bone)
+            .expect("role not found in recipe roles")
+    }
+
+    fn sample_rotation_near(
+        world: &World,
+        clip: SourceClipId,
+        bone: BoneId,
+        time: f32,
+    ) -> [f32; 3] {
+        let clip_library = world.resource::<ClipLibrary>();
+        let track = clip_library
+            .get(clip)
+            .and_then(|editable_clip| editable_clip.get_track(bone))
+            .expect("track not found");
+        let value_near =
+            |curve: &thyllore_anim_core::editable::components::curve::PropertyCurve| {
+                curve
+                    .keyframes
+                    .iter()
+                    .min_by(|a, b| (a.time - time).abs().total_cmp(&(b.time - time).abs()))
+                    .expect("curve has no keyframes")
+                    .value
+            };
+        [
+            value_near(&track.rotation_x),
+            value_near(&track.rotation_y),
+            value_near(&track.rotation_z),
+        ]
+    }
+
+    #[test]
+    fn test_set_pose_rotation_rewrites_recipe_and_rebakes() {
+        let (mut world, mut assets) = make_recipe_world(1);
+        let copy_path = copy_wave_recipe_to_temp();
+
+        let id = apply_recipe_file(&mut world, &mut assets, &copy_path).unwrap();
+        let right_lower_arm_bone = find_recipe_role_bone(&world, id, HumanoidRole::RightLowerArm);
+        let old_rotation = sample_rotation_near(&world, id, right_lower_arm_bone, 0.4);
+
+        let new_id = set_recipe_pose_rotation(
+            &mut world,
+            &mut assets,
+            id,
+            HumanoidRole::RightLowerArm,
+            1,
+            [0.0, 0.0, 45.0],
+        )
+        .unwrap();
+
+        let recipe_json = std::fs::read_to_string(&copy_path).unwrap();
+        let recipe =
+            thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(&recipe_json).unwrap();
+        assert_eq!(
+            recipe.poses[1].rotations.get(&HumanoidRole::RightLowerArm),
+            Some(&[0.0, 0.0, 45.0])
+        );
+
+        let new_rotation = sample_rotation_near(&world, new_id, right_lower_arm_bone, 0.4);
+        assert!(
+            old_rotation
+                .iter()
+                .zip(new_rotation.iter())
+                .any(|(old, new)| (old - new).abs() > 1e-3),
+            "rotation near t=0.4 should change: before {old_rotation:?}, after {new_rotation:?}"
+        );
+
+        std::fs::remove_file(&copy_path).ok();
+    }
+
+    #[test]
+    fn test_detach_recipe_clip_marks_and_renames() {
+        let (mut world, mut assets) = make_recipe_world(1);
+        let copy_path = copy_wave_recipe_to_temp();
+        let id = apply_recipe_file(&mut world, &mut assets, &copy_path).unwrap();
+
+        detach_recipe_clip(&mut world, id);
+        detach_recipe_clip(&mut world, id);
+
+        assert!(world.resource::<RecipeClipSources>().by_clip[&id].detached);
+        let clip_library = world.resource::<ClipLibrary>();
+        let name = &clip_library.get(id).expect("clip not found").name;
+        assert_eq!(name, "wave_right_hand (edited)");
+
+        std::fs::remove_file(&copy_path).ok();
+    }
+
+    #[test]
+    fn test_rebake_recipe_clip_restores_recipe_clip() {
+        let (mut world, mut assets) = make_recipe_world(1);
+        let copy_path = copy_wave_recipe_to_temp();
+        let id = apply_recipe_file(&mut world, &mut assets, &copy_path).unwrap();
+        detach_recipe_clip(&mut world, id);
+
+        let new_id = rebake_recipe_clip(&mut world, &mut assets, id).unwrap();
+
+        let clip_library = world.resource::<ClipLibrary>();
+        assert_eq!(
+            clip_library.source_clips.len(),
+            1,
+            "expected exactly 1 clip"
+        );
+        let name = &clip_library.get(new_id).expect("new clip not found").name;
+        assert_eq!(name, "wave_right_hand");
+
+        let recipe_sources = world.resource::<RecipeClipSources>();
+        assert_eq!(
+            recipe_sources.by_clip.len(),
+            1,
+            "expected exactly 1 source entry"
+        );
+        let source = recipe_sources
+            .by_clip
+            .get(&new_id)
+            .expect("source not found");
+        assert!(!source.detached, "detached should be false after rebake");
+
+        let entities: Vec<Entity> = world.component_entities::<ClipSchedule>();
+        let schedule = world.get_component::<ClipSchedule>(entities[0]).unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            1,
+            "expected exactly 1 schedule instance"
+        );
+
+        std::fs::remove_file(&copy_path).ok();
     }
 }

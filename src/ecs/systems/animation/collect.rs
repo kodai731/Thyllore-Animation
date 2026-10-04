@@ -1,8 +1,11 @@
+use crate::animation::editable::{BlendMode, EaseType, SourceClipId};
 use crate::animation::SkeletonId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::compute_local_time;
-use crate::ecs::resource::{ClipLibrary, SpringBoneMode, SpringBoneState};
+use crate::ecs::resource::{
+    ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
+};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -23,6 +26,15 @@ pub(crate) fn collect_animated_entities(
         && world
             .get_resource::<SpringBoneState>()
             .map_or(false, |s| s.frame_count < 3);
+
+    let solo_clip_id = world
+        .get_resource::<TimelineState>()
+        .filter(|timeline| timeline.preview == ClipPreview::Solo)
+        .and_then(|timeline| timeline.current_clip_id);
+    let solo_preview = solo_clip_id.and_then(|clip_id| {
+        crate::ecs::systems::clip_schedule_systems::find_preview_owner(world)
+            .map(|owner| (owner, clip_id))
+    });
 
     for (parent_entity, animator) in world.iter_components::<Animator>() {
         let Some(schedule) = world.get_component::<ClipSchedule>(parent_entity) else {
@@ -49,7 +61,14 @@ pub(crate) fn collect_animated_entities(
             );
         }
 
-        let active_instances = build_active_instances(schedule, clip_library, animator);
+        let active_instances = match solo_preview {
+            Some((owner, clip_id)) if owner == parent_entity => {
+                build_solo_instance(clip_id, clip_library, animator)
+                    .into_iter()
+                    .collect()
+            }
+            _ => build_active_instances(schedule, clip_library, animator),
+        };
 
         if should_log && active_instances.is_empty() {
             log!(
@@ -165,7 +184,7 @@ pub(crate) fn build_active_instances(
             Some(ActiveInstanceInfo {
                 source_id: inst.source_id,
                 asset_id,
-                instance_id: inst.instance_id,
+                instance_id: Some(inst.instance_id),
                 local_time,
                 weight,
                 blend_mode: inst.blend_mode,
@@ -183,4 +202,135 @@ pub(crate) fn build_active_instances(
     });
 
     instances
+}
+
+pub(crate) fn build_solo_instance(
+    clip_id: SourceClipId,
+    clip_library: &ClipLibrary,
+    animator: &Animator,
+) -> Option<ActiveInstanceInfo> {
+    let asset_id = clip_library.get_asset_id_for_source(clip_id)?;
+    let duration = clip_library.get(clip_id)?.duration;
+
+    let local_time = compute_local_time(
+        animator.time,
+        0.0,
+        0.0,
+        duration,
+        1.0,
+        1.0,
+        animator.looping,
+    );
+
+    Some(ActiveInstanceInfo {
+        source_id: clip_id,
+        asset_id,
+        instance_id: None,
+        local_time,
+        weight: 1.0,
+        blend_mode: BlendMode::Override,
+        ease_out: EaseType::Linear,
+        start_time: 0.0,
+        end_time: duration,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::{EditableAnimationClip, SourceClip};
+    use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+
+    fn register_clip(clip_library: &mut ClipLibrary, clip_id: SourceClipId, duration: f32) {
+        let mut clip = EditableAnimationClip::new(clip_id, format!("clip_{clip_id}"));
+        clip.duration = duration;
+        clip_library
+            .source_clips
+            .insert(clip_id, SourceClip::new(clip_id, clip));
+        clip_library
+            .source_to_asset_id
+            .insert(clip_id, clip_id + 100);
+    }
+
+    fn animator_at(time: f32) -> Animator {
+        Animator {
+            time,
+            ..Animator::new()
+        }
+    }
+
+    fn collect_solo(
+        clip_id: SourceClipId,
+        clip_library: &ClipLibrary,
+        animator: &Animator,
+    ) -> Vec<ActiveInstanceInfo> {
+        build_solo_instance(clip_id, clip_library, animator)
+            .into_iter()
+            .collect()
+    }
+
+    #[test]
+    fn solo_preview_plays_current_clip_without_instances() {
+        let mut clip_library = ClipLibrary::new();
+        register_clip(&mut clip_library, 1, 2.0);
+        let schedule = ClipSchedule::new();
+        let animator = animator_at(0.5);
+
+        assert!(build_active_instances(&schedule, &clip_library, &animator).is_empty());
+
+        let instances = collect_solo(1, &clip_library, &animator);
+
+        assert_eq!(instances.len(), 1);
+        let solo = &instances[0];
+        assert_eq!(solo.source_id, 1);
+        assert_eq!(solo.asset_id, 101);
+        assert_eq!(solo.instance_id, None);
+        assert_eq!(solo.weight, 1.0);
+        assert_eq!(solo.blend_mode, BlendMode::Override);
+        assert_eq!(solo.start_time, 0.0);
+        assert_eq!(solo.end_time, 2.0);
+        assert!((solo.local_time - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn solo_preview_ignores_schedule() {
+        let mut clip_library = ClipLibrary::new();
+        register_clip(&mut clip_library, 1, 2.0);
+        register_clip(&mut clip_library, 2, 2.0);
+        register_clip(&mut clip_library, 3, 2.0);
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        clip_schedule_add_instance(&mut schedule, 2, 2.0);
+        schedule.instances[1].muted = true;
+        let muted_before: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
+        let animator = animator_at(0.5);
+
+        let instances = collect_solo(3, &clip_library, &animator);
+
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].source_id, 3);
+        assert_eq!(instances[0].weight, 1.0);
+        let muted_after: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
+        assert_eq!(muted_after, muted_before);
+    }
+
+    #[test]
+    fn mix_respects_mute_and_weight() {
+        let mut clip_library = ClipLibrary::new();
+        register_clip(&mut clip_library, 1, 2.0);
+        register_clip(&mut clip_library, 2, 2.0);
+        let mut schedule = ClipSchedule::new();
+        let audible_id = clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        clip_schedule_add_instance(&mut schedule, 2, 2.0);
+        schedule.instances[0].weight = 0.4;
+        schedule.instances[1].muted = true;
+        let animator = animator_at(0.5);
+
+        let instances = build_active_instances(&schedule, &clip_library, &animator);
+
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].source_id, 1);
+        assert_eq!(instances[0].instance_id, Some(audible_id));
+        assert!((instances[0].weight - 0.4).abs() < 1e-6);
+    }
 }

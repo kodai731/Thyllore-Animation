@@ -1,3 +1,6 @@
+use std::path::Path;
+
+use anyhow::Context;
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
@@ -7,10 +10,22 @@ use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::quaternion_to_euler_degrees;
 
+use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, Skeleton};
+use crate::asset::AssetStorage;
+use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::resource::{AnimationType, AvatarSetupState, ClipLibrary, HierarchyState};
 use crate::ecs::systems::avatar_setup_systems::{
-    compute_bone_global_transform, skeleton_to_bone_inputs,
+    compute_bone_global_transform, find_first_skeleton, find_model_path, load_or_infer_mapping,
+    skeleton_to_bone_inputs,
 };
+use crate::ecs::systems::clip_library_systems::{
+    clip_library_register_and_activate, find_clip_schedule_owner,
+};
+use crate::ecs::systems::clip_schedule_systems::{
+    clip_schedule_add_instance, clip_schedule_remove_instance,
+};
+use crate::ecs::world::{Entity, World};
 
 pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
     let bones = skeleton
@@ -139,6 +154,97 @@ pub fn baked_motion_to_clip(
     }
 
     clip
+}
+
+pub fn apply_recipe_file(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    path: &Path,
+) -> anyhow::Result<SourceClipId> {
+    let skeleton = find_first_skeleton(assets).context("no skeleton loaded")?;
+    let model_path = find_model_path(world).context("no model loaded")?;
+    let mapping = match world.get_resource::<AvatarSetupState>() {
+        Some(state) if state.source_model_path == model_path => state.mapping.clone(),
+        _ => load_or_infer_mapping(Path::new(&model_path), &skeleton_to_bone_inputs(skeleton)).0,
+    };
+    let recipe_json = std::fs::read_to_string(path).context("cannot read recipe")?;
+    let clip = recipe_to_clip(&recipe_json, skeleton, &mapping)?;
+
+    let clip_name = clip.name.clone();
+    let duration = clip.duration;
+
+    let replaced_id = world
+        .resource::<ClipLibrary>()
+        .find_source_by_name(&clip_name);
+    if let Some(replaced_id) = replaced_id {
+        world.resource_mut::<ClipLibrary>().remove(replaced_id);
+        world
+            .resource_mut::<ClipLibrary>()
+            .source_to_asset_id
+            .remove(&replaced_id);
+        remove_clip_instances(world, replaced_id);
+    }
+
+    let source_id =
+        clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), assets, clip);
+
+    let schedule = find_recipe_schedule_owner(world)
+        .and_then(|owner| world.get_component_mut::<ClipSchedule>(owner));
+    let Some(schedule) = schedule else {
+        log_warn!(
+            "recipe {}: clip '{clip_name}' registered but no model clip schedule was found",
+            path.display()
+        );
+        return Ok(source_id);
+    };
+    clip_schedule_add_instance(schedule, source_id, duration);
+    log!(
+        "recipe {}: clip '{clip_name}' (src {source_id}) scheduled",
+        path.display()
+    );
+
+    Ok(source_id)
+}
+
+pub fn find_recipe_schedule_owner(world: &World) -> Option<Entity> {
+    if let Some(selected) = world.resource::<HierarchyState>().selected_entity {
+        return find_clip_schedule_owner(world, selected);
+    }
+
+    let candidates: Vec<Entity> = world
+        .component_entities::<ClipSchedule>()
+        .into_iter()
+        .filter(|&entity| {
+            world
+                .get_component::<AnimationMeta>(entity)
+                .is_some_and(|meta| meta.animation_type == AnimationType::Skeletal)
+        })
+        .collect();
+    if candidates.len() != 1 {
+        log_warn!(
+            "recipe schedule owner: {} skeletal clip schedules found, expected exactly 1",
+            candidates.len()
+        );
+        return None;
+    }
+    Some(candidates[0])
+}
+
+fn remove_clip_instances(world: &mut World, source_id: SourceClipId) {
+    for entity in world.component_entities::<ClipSchedule>() {
+        let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
+            continue;
+        };
+        let instance_ids: Vec<_> = schedule
+            .instances
+            .iter()
+            .filter(|instance| instance.source_id == source_id)
+            .map(|instance| instance.instance_id)
+            .collect();
+        for instance_id in instance_ids {
+            clip_schedule_remove_instance(schedule, instance_id);
+        }
+    }
 }
 
 #[cfg(test)]

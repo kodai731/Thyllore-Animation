@@ -1,4 +1,4 @@
-use crate::ecs::resource::PanelLayout;
+use super::PanelLayout;
 
 #[derive(Clone, Debug)]
 pub struct LayoutSnapshot {

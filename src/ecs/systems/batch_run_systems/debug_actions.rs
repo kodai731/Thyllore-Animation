@@ -82,7 +82,7 @@ fn registered_action_names() -> String {
 
 /// Execute debug-window actions headlessly: view-mode radios write the same
 /// `DebugViewState` resource the imgui panel edits, buttons enqueue the same
-/// `UIEvent`s so they run through the normal dispatch on the first frame.
+/// UI commands so they run through the normal dispatch on the first frame.
 pub fn batch_apply_debug_actions(world: &mut World, actions: &[&dyn BatchAction]) {
     for action in actions {
         action.apply(world);

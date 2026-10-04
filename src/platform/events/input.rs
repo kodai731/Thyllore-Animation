@@ -4,7 +4,6 @@ use crate::app::App;
 use crate::platform::key_bindings::{dispatch_keyboard_shortcut, ModifierKeys};
 
 use crate::ecs::resource::{CameraFlyInput, KeyboardModifiers, MouseInput};
-use crate::ecs::UIEventQueue;
 
 pub(crate) fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     let io = ui.io();
@@ -59,13 +58,12 @@ pub(crate) fn dispatch_keyboard_input(
 
     let camera_fly_active = app.data.ecs_world.resource::<MouseInput>().right_pressed;
 
-    if let Some(ui_event) = dispatch_keyboard_shortcut(
+    if let Some(send) = dispatch_keyboard_shortcut(
         &event.logical_key,
         modifiers,
         imgui.io().want_capture_keyboard || camera_fly_active,
         bindings,
     ) {
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-        ui_events.send(ui_event);
+        send(&app.data.ecs_world);
     }
 }

@@ -1,22 +1,21 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{FlameEffect, MotionPath};
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::component::MotionPath;
+use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, ScheduledBatchAction,
-    ScheduledBatchActions, TimelineState,
+    BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
+    DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction, ScheduledBatchActions,
+    TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
-
-fn args(list: &[&str]) -> Vec<String> {
-    list.iter().map(|s| s.to_string()).collect()
-}
+use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::scene::test_support::ProbeOwner;
 
 #[test]
 fn pick_pixel_is_absent_without_the_flag() {
@@ -174,25 +173,7 @@ fn resolve_rejects_invalid_camera_pose() {
 }
 
 #[test]
-fn engine_overrides_carry_no_subsystem_flags() {
-    let overrides = resolve_engine_cli_overrides(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "/tmp/out.png",
-        "--batch-flame-mode",
-        "raymarch",
-        "--batch-water-probe",
-        "/tmp/probe.json",
-        "--batch-play",
-    ]))
-    .unwrap();
-    assert!(overrides.batch_run.is_some());
-    assert!(overrides.batch_play);
-    assert!(overrides.debug_actions.is_empty());
-}
-
-#[test]
-fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_actions() {
+fn apply_engine_overrides_inserts_the_batch_run_and_applies_registered_actions() {
     let overrides = resolve_engine_cli_overrides(&args(&[
         "bin",
         "--batch-screenshot",
@@ -200,41 +181,34 @@ fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_a
         "--batch-frames",
         "7",
         "--batch-debug-action",
-        "dump_wall_probe",
+        "black_background",
     ]))
     .unwrap();
     let mut world = World::new();
+    world.insert_resource(DebugViewState::default());
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
 
     assert_eq!(world.resource::<BatchRun>().capture.first_frame, 7);
-    assert!(world.contains_resource::<FlameWallProbeCapture>());
-}
-
-#[test]
-fn apply_engine_overrides_without_a_batch_run_captures_through_the_event_queue() {
-    let overrides =
-        resolve_engine_cli_overrides(&args(&["bin", "--batch-debug-action", "dump_wall_probe"]))
-            .unwrap();
-    let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
-    apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
-    assert!(world.get_resource::<BatchRun>().is_none());
-    assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
-
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+    assert!(world.resource::<DebugViewState>().black_background);
 }
 
 #[test]
 fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
+    world.insert_resource(EffectSpawnHooks::collect().expect("unique effect keys"));
     let e = world.spawn();
-    world.insert_component(e, FlameEffect::default());
+    world.insert_component(
+        e,
+        ProbeOwner {
+            position: [0.0, 0.0, 0.0],
+            level: 0.5,
+        },
+    );
     world.insert_resource(FrameClock {
         frame: 1,
         ..FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS)
     });
-    world.insert_resource(BatchFlameOrbit {
+    world.insert_resource(BatchEffectOrbit {
         radius: 2.0,
         period_seconds: 4.0,
         initial: None,
@@ -248,7 +222,6 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     assert_eq!(motion_path.center, cgmath::Vector3::new(0.0, 0.0, 0.0));
     assert!((motion_path.radius - 2.0).abs() < 1e-5);
     assert!((motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5);
-    drop(motion_path);
 
     crate::ecs::systems::sync_motion_paths(&mut world);
 
@@ -438,7 +411,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
 fn debug_actions_apply_sets_view_mode_and_queues_events() {
     let mut world = World::new();
     world.insert_resource(DebugViewState::default());
-    world.insert_resource(UIEventQueue::new());
+    world.insert_resource(UiCommandQueue::default());
     batch_apply_debug_actions(
         &mut world,
         &[
@@ -450,8 +423,7 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
         world.resource::<DebugViewState>().debug_view_mode,
         DebugViewMode::Normal
     );
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::ResetCamera));
+    assert_eq!(drained_command_names(&world), vec!["ResetCamera"]);
 }
 
 #[test]
@@ -624,18 +596,6 @@ fn sequence_analyze_jpg_error() {
     assert!(err_msg.contains("JPG") || err_msg.contains("jpg"));
 }
 
-fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
-    let file = std::fs::File::create(path).unwrap();
-    let writer = std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(writer, width, height);
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().unwrap();
-    let pixels = vec![value; (width * height * 3) as usize];
-    writer.write_image_data(&pixels).unwrap();
-    writer.finish().unwrap();
-}
-
 #[test]
 fn scheduled_actions_parse_frame_and_action() {
     let scheduled = scheduled_actions_resolve_from_args(&args(&[
@@ -679,7 +639,7 @@ fn scheduled_actions_reject_malformed_specs() {
 #[test]
 fn scheduled_actions_apply_once_their_frame_is_reached() {
     let mut world = World::new();
-    world.insert_resource(UIEventQueue::default());
+    world.insert_resource(UiCommandQueue::default());
     world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
     world.insert_resource(ScheduledBatchActions {
         pending: vec![
@@ -696,14 +656,14 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
 
     world.resource_mut::<FrameClock>().frame = 1;
     batch_apply_scheduled_actions(&mut world);
-    let first_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    let first_frame_commands = drained_command_names(&world);
 
     world.resource_mut::<FrameClock>().frame = 2;
     batch_apply_scheduled_actions(&mut world);
     batch_apply_scheduled_actions(&mut world);
-    let second_frame_events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    let second_frame_commands = drained_command_names(&world);
 
-    assert!(matches!(first_frame_events[..], [UIEvent::ResetCamera]));
-    assert!(matches!(second_frame_events[..], [UIEvent::TimelineSetTime(time)] if time == 0.5));
+    assert_eq!(first_frame_commands, vec!["ResetCamera"]);
+    assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
     assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
 }

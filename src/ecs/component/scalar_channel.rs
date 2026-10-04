@@ -102,6 +102,13 @@ impl ScalarChannelDomain {
             .map(|index| self.property_type_at(index))
     }
 
+    pub fn property_type_for_cli_name(&self, name: &str) -> Option<PropertyType> {
+        self.channels()
+            .iter()
+            .position(|c| c.cli_name == name)
+            .map(|index| self.property_type_at(index))
+    }
+
     pub fn channel_index(&self, property_type: PropertyType) -> Option<usize> {
         let PropertyType::Custom(code) = property_type else {
             return None;

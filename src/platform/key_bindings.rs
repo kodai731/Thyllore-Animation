@@ -1,6 +1,9 @@
 use winit::keyboard::Key;
 
-use crate::ecs::events::UIEvent;
+use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
+use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::World;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ModifierKeys {
@@ -31,7 +34,7 @@ impl ModifierKeys {
 pub struct KeyBinding {
     pub key: &'static str,
     pub modifiers: ModifierKeys,
-    pub make_event: fn() -> UIEvent,
+    pub send: fn(&World),
 }
 
 impl KeyBinding {
@@ -53,22 +56,22 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding {
             key: "z",
             modifiers: ModifierKeys::ctrl(),
-            make_event: || UIEvent::Undo,
+            send: |world| world.send_command(EditHistoryEvent::Undo),
         },
         KeyBinding {
             key: "y",
             modifiers: ModifierKeys::ctrl(),
-            make_event: || UIEvent::Redo,
+            send: |world| world.send_command(EditHistoryEvent::Redo),
         },
         KeyBinding {
             key: "s",
             modifiers: ModifierKeys::ctrl(),
-            make_event: || UIEvent::SaveScene,
+            send: |world| world.send_command(SceneEvent::SaveScene),
         },
         KeyBinding {
             key: "s",
             modifiers: ModifierKeys::none(),
-            make_event: || UIEvent::BoneSetKey,
+            send: |world| world.send_command(TimelineEvent::BoneSetKey),
         },
     ]
 }
@@ -78,7 +81,7 @@ pub fn dispatch_keyboard_shortcut(
     modifiers: ModifierKeys,
     imgui_wants_keyboard: bool,
     bindings: &[KeyBinding],
-) -> Option<UIEvent> {
+) -> Option<fn(&World)> {
     for binding in bindings {
         if !binding.matches(key, modifiers) {
             continue;
@@ -88,7 +91,7 @@ pub fn dispatch_keyboard_shortcut(
             continue;
         }
 
-        return Some((binding.make_event)());
+        return Some(binding.send);
     }
 
     None
@@ -97,49 +100,77 @@ pub fn dispatch_keyboard_shortcut(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::events::UiCommandQueue;
+
+    fn sent_command_names(
+        key: &str,
+        modifiers: ModifierKeys,
+        imgui_wants_keyboard: bool,
+    ) -> Vec<String> {
+        let bindings = default_bindings();
+        let world = world_with_queues();
+        if let Some(send) = dispatch_keyboard_shortcut(
+            &Key::Character(key.into()),
+            modifiers,
+            imgui_wants_keyboard,
+            &bindings,
+        ) {
+            send(&world);
+        }
+
+        let names = world
+            .resource_mut::<UiCommandQueue>()
+            .drain()
+            .map(|command| format!("{:?}", command))
+            .collect();
+        names
+    }
+
+    fn world_with_queues() -> World {
+        let mut world = World::new();
+        world.insert_resource(UiCommandQueue::default());
+        world
+    }
 
     #[test]
     fn test_ctrl_s_matches_save_scene() {
-        let bindings = default_bindings();
-        let key = Key::Character("s".into());
-
-        let result = dispatch_keyboard_shortcut(&key, ModifierKeys::ctrl(), false, &bindings);
-        assert!(matches!(result, Some(UIEvent::SaveScene)));
+        assert_eq!(
+            sent_command_names("s", ModifierKeys::ctrl(), false),
+            vec!["SaveScene"]
+        );
     }
 
     #[test]
     fn test_plain_s_matches_bone_set_key() {
-        let bindings = default_bindings();
-        let key = Key::Character("s".into());
-
-        let result = dispatch_keyboard_shortcut(&key, ModifierKeys::none(), false, &bindings);
-        assert!(matches!(result, Some(UIEvent::BoneSetKey)));
+        assert_eq!(
+            sent_command_names("s", ModifierKeys::none(), false),
+            vec!["BoneSetKey"]
+        );
     }
 
     #[test]
     fn test_plain_s_blocked_when_imgui_wants_keyboard() {
-        let bindings = default_bindings();
-        let key = Key::Character("s".into());
-
-        let result = dispatch_keyboard_shortcut(&key, ModifierKeys::none(), true, &bindings);
-        assert!(result.is_none());
+        assert!(sent_command_names("s", ModifierKeys::none(), true).is_empty());
     }
 
     #[test]
     fn test_ctrl_s_fires_even_when_imgui_wants_keyboard() {
-        let bindings = default_bindings();
-        let key = Key::Character("s".into());
-
-        let result = dispatch_keyboard_shortcut(&key, ModifierKeys::ctrl(), true, &bindings);
-        assert!(matches!(result, Some(UIEvent::SaveScene)));
+        assert_eq!(
+            sent_command_names("s", ModifierKeys::ctrl(), true),
+            vec!["SaveScene"]
+        );
     }
 
     #[test]
     fn test_unbound_key_returns_none() {
-        let bindings = default_bindings();
-        let key = Key::Character("z".into());
+        assert!(sent_command_names("z", ModifierKeys::none(), false).is_empty());
+    }
 
-        let result = dispatch_keyboard_shortcut(&key, ModifierKeys::none(), false, &bindings);
-        assert!(result.is_none());
+    #[test]
+    fn test_ctrl_z_matches_undo() {
+        assert_eq!(
+            sent_command_names("z", ModifierKeys::ctrl(), false),
+            vec!["Undo"]
+        );
     }
 }

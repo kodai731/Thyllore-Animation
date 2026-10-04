@@ -9,8 +9,9 @@ use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
     scalar_cli_names_joined, ClipSchedule,
 };
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
 
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
@@ -136,7 +137,7 @@ pub fn batch_apply_anim_edits(
         match edit {
             BatchAnimEdit::DebugKeys { seed } => {
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarDebugKeys { seed: *seed }],
+                    &[ScalarCurveEvent::InsertScalarDebugKeys { seed: *seed }],
                     world,
                     assets,
                 );
@@ -153,7 +154,7 @@ pub fn batch_apply_anim_edits(
                     previous
                 };
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarKey {
+                    &[ScalarCurveEvent::InsertScalarKey {
                         property_type: *property_type,
                         value: *value,
                     }],
@@ -164,7 +165,7 @@ pub fn batch_apply_anim_edits(
             }
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
                 dispatch_scalar_clip_events(
-                    &[UIEvent::InsertScalarKeyAtPlayhead {
+                    &[ScalarCurveEvent::InsertScalarKeyAtPlayhead {
                         property_type: *property_type,
                     }],
                     world,
@@ -185,7 +186,7 @@ pub fn batch_apply_anim_edits(
                     continue;
                 };
                 crate::ecs::systems::timeline_systems::process_clip_instance_events(
-                    &[UIEvent::ClipInstanceTrimEnd {
+                    &[ClipInstanceEvent::TrimEnd {
                         entity,
                         instance_id,
                         new_clip_out: *seconds,
@@ -194,13 +195,13 @@ pub fn batch_apply_anim_edits(
                 );
             }
             BatchAnimEdit::Clear => {
-                dispatch_scalar_clip_events(&[UIEvent::ClearScalarKeys], world, assets);
+                dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);
             }
         }
     }
 }
 
-/// Serialize the animation-facing world state (flames, their scheduled clips,
+/// Serialize the animation-facing world state (effects, their scheduled clips,
 /// every clip's scalar curves, timeline) so agents can inspect edits without a
 /// window. Written once at engine exit; the file is the access surface.
 pub fn batch_anim_dump_json(world: &World) -> serde_json::Value {

@@ -13,7 +13,7 @@ pub mod wind;
 pub use thyllore_texture_fit_core as flame_fit;
 
 pub use thyllore_scene_core::{
-    find_scalar_param, find_ui_param, ScalarParam, SceneComponent, UiParam,
+    find_scalar_param, find_ui_param, ScalarCodeBlock, ScalarParam, SceneComponent, UiParam,
 };
 
 pub use debug::flame_wall_probe::{

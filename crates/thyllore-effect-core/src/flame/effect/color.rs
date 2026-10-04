@@ -13,10 +13,10 @@ pub struct FlameColor {
     #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub tip: [f32; 3],
     /// Blackbody temperature at the base in kelvin
-    #[persist(debug_range = (800.0, 3000.0), ui(label = "Temp Base K", min = 1000.0, max = 6500.0, format = "%.0f"))]
+    #[persist(code = 4, debug_range = (800.0, 3000.0), ui(label = "Temp Base K", min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_base_k: f32,
     /// Blackbody temperature at the tip in kelvin
-    #[persist(debug_range = (800.0, 3000.0), ui(label = "Temp Tip K", min = 1000.0, max = 6500.0, format = "%.0f"))]
+    #[persist(code = 5, debug_range = (800.0, 3000.0), ui(label = "Temp Tip K", min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_tip_k: f32,
     /// Derive the base/tip colors from the blackbody temperatures
     #[persist(ui(min = 0.0, max = 1.0, format = "%.0f"))]

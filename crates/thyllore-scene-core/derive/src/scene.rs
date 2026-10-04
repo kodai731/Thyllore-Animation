@@ -2,7 +2,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
-    Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Token, Type,
+    Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitInt, LitStr, Meta, Path, Result,
+    Token, Type,
 };
 
 pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
@@ -152,6 +153,7 @@ pub struct ParamField {
     pub doc: String,
     pub debug_range: Option<(Expr, Expr)>,
     pub renamed_from: Vec<LitStr>,
+    pub codes: Vec<LitInt>,
 }
 
 pub enum Conversion {
@@ -270,6 +272,7 @@ pub fn parse_param_field(
     let mut scalars = false;
     let mut debug_range: Option<(Expr, Expr)> = None;
     let mut renamed_from: Vec<LitStr> = Vec::new();
+    let mut codes: Vec<LitInt> = Vec::new();
 
     if !matches!(attr.meta, Meta::Path(_)) {
         attr.meta.require_list()?.parse_nested_meta(|meta| {
@@ -298,6 +301,8 @@ pub fn parse_param_field(
                 renamed_from = Punctuated::<LitStr, Token![,]>::parse_terminated(&content)?
                     .into_iter()
                     .collect();
+            } else if meta.path.is_ident("code") {
+                codes = parse_codes(&meta)?;
             } else {
                 return Err(meta.error("unknown field attribute key"));
             }
@@ -350,8 +355,27 @@ pub fn parse_param_field(
                 ),
             ));
         }
+        if !codes.is_empty() && codes.len() != len {
+            return Err(Error::new_spanned(
+                field,
+                format!("`code` on a [f32; {len}] value lists one code per component"),
+            ));
+        }
+    } else if codes.len() > 1 {
+        return Err(Error::new_spanned(
+            field,
+            "`code = [..]` lists one code per component of a [f32; N] value",
+        ));
     }
     let component_scalars = scalars || (ui.is_some() && matches!(kind, ValueKind::Array(_)));
+    if !codes.is_empty()
+        && (kind == ValueKind::Other || (matches!(kind, ValueKind::Array(_)) && !component_scalars))
+    {
+        return Err(Error::new_spanned(
+            field,
+            "`code` needs a scalar value (f32 / u32 / bool) or a [f32; N] value exposed with `scalars` / `ui`",
+        ));
+    }
 
     Ok(ParamField {
         ident: field.ident.clone().expect("named"),
@@ -370,7 +394,20 @@ pub fn parse_param_field(
         doc: String::new(),
         debug_range,
         renamed_from,
+        codes,
     })
+}
+
+fn parse_codes(meta: &syn::meta::ParseNestedMeta) -> Result<Vec<LitInt>> {
+    let value = meta.value()?;
+    if value.peek(syn::token::Bracket) {
+        let content;
+        syn::bracketed!(content in value);
+        return Ok(Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?
+            .into_iter()
+            .collect());
+    }
+    Ok(vec![value.parse()?])
 }
 
 fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes> {
@@ -717,48 +754,59 @@ fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenSt
     };
     let field_renamed_from = &param.renamed_from;
     let all_renamed_from = quote!(&[#(#field_renamed_from),*]);
+    let code_at = |index: usize| match param.codes.get(index) {
+        Some(code) => quote!(Some(#code)),
+        None => quote!(None),
+    };
 
-    let push =
-        |suffix: &str, renamed_from: TokenStream, get_body: TokenStream, set_body: TokenStream| {
-            let name = format!("{field_name}{suffix}");
-            let scene_name = match scene_prefix {
-                Some(prefix) => format!("{}{}", prefix, pascal_case(&name)),
-                None => pascal_case(&name),
-            };
-            quote! {
-                out.push(::thyllore_scene_core::ScalarParam {
-                    name: ::thyllore_scene_core::intern_name(prefix, #name),
-                    scene_name: #scene_name,
-                    get: |root: &R| {
-                        let component: &Self = P::get(root);
-                        #get_body
-                    },
-                    set: |root: &mut R, value: f32| {
-                        let component: &mut Self = P::get_mut(root);
-                        #set_body
-                    },
-                    debug_range: #debug_range,
-                    renamed_from: #renamed_from,
-                });
-            }
+    let push = |suffix: &str,
+                renamed_from: TokenStream,
+                code: TokenStream,
+                get_body: TokenStream,
+                set_body: TokenStream| {
+        let name = format!("{field_name}{suffix}");
+        let scene_name = match scene_prefix {
+            Some(prefix) => format!("{}{}", prefix, pascal_case(&name)),
+            None => pascal_case(&name),
         };
+        quote! {
+            out.push(::thyllore_scene_core::ScalarParam {
+                name: ::thyllore_scene_core::intern_name(prefix, #name),
+                scene_name: #scene_name,
+                get: |root: &R| {
+                    let component: &Self = P::get(root);
+                    #get_body
+                },
+                set: |root: &mut R, value: f32| {
+                    let component: &mut Self = P::get_mut(root);
+                    #set_body
+                },
+                debug_range: #debug_range,
+                renamed_from: #renamed_from,
+                code: #code,
+            });
+        }
+    };
 
     match param.kind {
         ValueKind::F32 => vec![push(
             "",
             all_renamed_from,
+            code_at(0),
             quote!(#read),
             quote!(let stored = value; #write_stored),
         )],
         ValueKind::U32 => vec![push(
             "",
             all_renamed_from,
+            code_at(0),
             quote!(#read as f32),
             quote!(let stored = value.round() as u32; #write_stored),
         )],
         ValueKind::Bool => vec![push(
             "",
             all_renamed_from,
+            code_at(0),
             quote!(u8::from(#read) as f32),
             quote!(let stored = value != 0.0; #write_stored),
         )],
@@ -774,6 +822,7 @@ fn expand_scalars(param: &ParamField, scene_prefix: Option<&str>) -> Vec<TokenSt
                 push(
                     suffix,
                     component_renamed_from,
+                    code_at(index),
                     quote!(#read[#index]),
                     quote! {
                         let mut stored = #read;
@@ -1099,6 +1148,34 @@ mod tests {
             1,
             "{expanded}"
         );
+    }
+
+    #[test]
+    fn code_reaches_the_scalar_and_is_split_per_component() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(scalars, code = [12, 13])] pub dir: [f32; 2], #[persist(code = 7)] pub plain: f32, #[persist] pub bare: f32 }}"
+        ));
+        for code in ["12", "13", "7"] {
+            assert_eq!(
+                expanded.matches(&format!("code : Some ({code})")).count(),
+                1,
+                "{expanded}"
+            );
+        }
+        assert_eq!(expanded.matches("code : None").count(), 1, "{expanded}");
+    }
+
+    #[test]
+    fn rejects_code_whose_count_differs_from_the_component_count() {
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(scalars, code = [12])] pub dir: [f32; 2] }}"
+        ));
+        assert!(message.contains("one code per component"), "{message}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(code = [1, 2])] pub plain: f32 }}"
+        ));
+        assert!(message.contains("one code per component"), "{message}");
     }
 
     #[test]

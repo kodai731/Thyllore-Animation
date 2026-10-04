@@ -4,26 +4,26 @@ use crate::lightning::LightningParameterOwner;
 #[params(tag = LightningParameterOwner, owner = Frame, group = "look")]
 pub struct LightningLook {
     /// Radiance of the saturated channel core
-    #[persist(ui(primary, min = 0.0, max = 200.0, format = "%.1f"))]
+    #[persist(code = 788, ui(primary, min = 0.0, max = 200.0, format = "%.1f"))]
     pub core_intensity: f32,
-    #[persist(ui(min = 0.0, max = 1.0))]
+    #[persist(code = [789, 790, 791], ui(min = 0.0, max = 1.0))]
     pub core_color: [f32; 3],
     /// Radius of the rim sheath as a multiple of the core radius
-    #[persist(ui(min = 1.0, max = 20.0))]
+    #[persist(code = 792, ui(min = 1.0, max = 20.0))]
     pub rim_ratio: f32,
-    #[persist(ui(min = 0.0, max = 100.0))]
+    #[persist(code = 793, ui(min = 0.0, max = 100.0))]
     pub rim_intensity: f32,
-    #[persist(ui(primary, min = 0.0, max = 1.0))]
+    #[persist(code = [794, 795, 796], ui(primary, min = 0.0, max = 1.0))]
     pub rim_color: [f32; 3],
     /// Radius of the beam the arcs wrap around; 0 keeps a bare channel
-    #[persist(ui(min = 0.0, max = 10.0))]
+    #[persist(code = 797, ui(min = 0.0, max = 10.0))]
     pub beam_radius: f32,
-    #[persist(ui(min = 0.0, max = 64.0, format = "%.0f"))]
+    #[persist(code = 798, ui(min = 0.0, max = 64.0, format = "%.0f"))]
     pub beam_arc_count: u32,
     /// Radiance of the ambient flash emitted while a stroke is alive; 0 disables it
-    #[persist(ui(min = 0.0, max = 10.0))]
+    #[persist(code = 799, ui(min = 0.0, max = 10.0))]
     pub flash_gain: f32,
-    #[persist(ui(min = 0.0, max = 100.0))]
+    #[persist(code = 800, ui(min = 0.0, max = 100.0))]
     pub flash_radius: f32,
 }
 

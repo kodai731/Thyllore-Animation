@@ -241,7 +241,8 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
    `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
    components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
    Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited. For an
-   animatable scalar, add its name to the end of `<effect>/scalar_domain.rs` `CHANNEL_ORDER`.
+   animatable scalar, give the field `#[persist(code = N)]` with an unused code from the effect's
+   `ScalarCodeBlock` (effect-core); nothing in `src/` changes.
 
 ## Adding New Domain Features
 

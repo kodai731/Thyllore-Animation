@@ -4,11 +4,11 @@ use crate::flame::*;
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameEdge {
-    #[persist(debug_range = (0.0, 0.4), renamed_from = ["EdgeLow"])]
+    #[persist(code = 14, debug_range = (0.0, 0.4), renamed_from = ["EdgeLow"])]
     pub low: f32,
-    #[persist(debug_range = (0.6, 1.0), renamed_from = ["EdgeHigh"])]
+    #[persist(code = 15, debug_range = (0.6, 1.0), renamed_from = ["EdgeHigh"])]
     pub high: f32,
-    #[persist(debug_range = (0.0, 4.0))]
+    #[persist(code = 10, debug_range = (0.0, 4.0))]
     pub white_boost: f32,
     #[persist(owner = Shape)]
     pub radius_tip_ratio: f32,

@@ -1,6 +1,8 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
+use thyllore_effect_core::{
+    ScalarCodeBlock, ScalarParam, UiParam, FLAME_SCALAR_CODES, FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS,
+};
 
 use super::effect::FlameEffect;
 use crate::ecs::component::{
@@ -14,24 +16,7 @@ impl ScalarDomainSource for FlameScalarSource {
     type Component = FlameEffect;
 
     const NAME: &'static str = "Flame";
-    const CHANNEL_ORDER: &'static [&'static str] = &[
-        "height",
-        "radius",
-        "intensity",
-        "sigma_t",
-        "color_temperature_base_k",
-        "color_temperature_tip_k",
-        "warp_amp",
-        "warp_freq",
-        "warp_rise_speed",
-        "noise_amplitude",
-        "edge_white_boost",
-        "wind_bend_amount",
-        "wind_direction_x",
-        "wind_direction_y",
-        "edge_low",
-        "edge_high",
-    ];
+    const CODE_BLOCK: ScalarCodeBlock = FLAME_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<FlameEffect>] {
         &FLAME_SCALAR_PARAMS

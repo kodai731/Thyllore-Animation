@@ -16,6 +16,11 @@ fn test_tables_are_consistent() {
 }
 
 #[test]
+fn test_codes_lie_in_the_lightning_block() {
+    assert_codes_lie_in_block(&LIGHTNING_SCALAR_PARAMS, LIGHTNING_SCALAR_CODES);
+}
+
+#[test]
 fn test_ron_roundtrip_keeps_the_source_enum() {
     let mut effect = LightningEffect::default();
     effect.shape.source = LightningSource::Shell { radius: 2.5 };

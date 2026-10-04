@@ -323,14 +323,17 @@ Concretely:
   lives in its directory, not in `src/ecs/systems/*.rs`.
 - Animatable scalar fields reach the curve editor, timeline, batch CLI and scene files through
   `ScalarDomainSource` (`src/ecs/component/effect_scalar_domain.rs`): each effect writes
-  `scalar_channel_domain!(MY_DOMAIN)` next to its static domain, `scalar_channel_domains.ron` takes
-  code blocks (not the enum), and `scalar_channel_domains()` collects them at link time — no hand-written
-  `Custom` code, code is the block's `first_code` + position via `ScalarChannelDomain::property_type_at`,
-  so new channels are appended to the end and existing ones are never reordered or removed; each effect
-  builds its domain from one `scalar_domain.rs` (`src/ecs/component/<effect>/scalar_domain.rs`) implementing
-  `ScalarDomainSource`, where the engine-side fact is the code-sorted `CHANNEL_ORDER` (scalar names in code
-  order, append-only), scene_name / display name / debug range / get / set are derived from effect-core
-  derive macros (`#[persist(debug_range = (lo, hi), renamed_from = [..], ui(label = ..))]`, struct's
+  `scalar_channel_domain!(MY_DOMAIN)` next to its static domain and `scalar_channel_domains()` collects
+  them at link time. The persisted `PropertyType::Custom` code of a channel is declared on the field in
+  effect-core (`#[persist(code = N)]`, `code = [a, b, c]` per component of a `[f32; N]`), inside the
+  `ScalarCodeBlock` the effect declares next to its root struct (`FLAME_SCALAR_CODES`, ...); a field
+  without `code` is not animatable. Codes are stored in clip files, so they are never reused or moved,
+  and the shared layer never lists effects or their code ranges (no table in `src/`): the registry tests
+  only check that every code lies in its block and that blocks of different domains are disjoint. Each
+  effect builds its domain from one `scalar_domain.rs` (`src/ecs/component/<effect>/scalar_domain.rs`)
+  implementing `ScalarDomainSource` (name, code block, tables, local time); scene_name / display name /
+  debug range / get / set come from the effect-core derive macros
+  (`#[persist(debug_range = (lo, hi), renamed_from = [..], ui(label = ..))]`, struct's
   `#[params(scene_prefix = "..")]`), old scene names are accepted only at load time via `renamed_from`,
   and all channel facts are fixed by the golden test in
   `src/ecs/component/scalar_channel_table.golden.txt`. Tests of the shared clip, timeline, dispatch and

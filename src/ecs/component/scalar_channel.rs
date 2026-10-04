@@ -1,58 +1,16 @@
 use std::sync::OnceLock;
 
-use serde::Deserialize;
 use thyllore_anim_core::editable::PropertyType;
+pub use thyllore_scene_core::ScalarCodeBlock;
 
 use crate::ecs::world::{Entity, World};
 
-const SCALAR_CODE_BLOCKS_RON: &str = include_str!("scalar_channel_domains.ron");
-
-/// The `PropertyType::Custom` code block a domain may allocate its channels from.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct ScalarCodeBlock {
-    pub name: String,
-    pub first_code: u16,
-    pub code_count: u16,
-}
-
-impl ScalarCodeBlock {
-    pub fn contains(&self, code: u16) -> bool {
-        (self.first_code..self.first_code + self.code_count).contains(&code)
-    }
-
-    pub fn end_code(&self) -> u16 {
-        self.first_code + self.code_count
-    }
-}
-
-pub fn scalar_code_blocks() -> &'static [ScalarCodeBlock] {
-    static BLOCKS: OnceLock<Vec<ScalarCodeBlock>> = OnceLock::new();
-    BLOCKS.get_or_init(|| {
-        ron::from_str(SCALAR_CODE_BLOCKS_RON)
-            .expect("scalar_channel_domains.ron is a list of code blocks")
-    })
-}
-
-pub fn scalar_code_block_for_domain(domain_name: &str) -> Option<&'static ScalarCodeBlock> {
-    scalar_code_blocks()
-        .iter()
-        .find(|block| block.name == domain_name)
-}
-
-/// First code after every allocated block, where the next domain's block starts.
-pub fn next_free_scalar_code() -> u16 {
-    scalar_code_blocks()
-        .iter()
-        .map(ScalarCodeBlock::end_code)
-        .max()
-        .unwrap_or(0)
-}
-
-/// One animatable scalar channel exposed by a component domain. Its
-/// `PropertyType::Custom` code is not stored here: the owning domain derives it
-/// from the channel's position in its table (`ScalarChannelDomain::property_type_at`).
+/// One animatable scalar channel exposed by a component domain.
 #[derive(Clone, Copy, Debug)]
 pub struct ScalarChannel {
+    /// `PropertyType::Custom` code persisted in clip files; declared by the owning component type
+    /// and never reused or moved.
+    pub code: u16,
     pub display_name: &'static str,
     /// Stable snake_case identifier used by batch CLI flags and anim dumps.
     /// Unique across every registered domain.
@@ -70,12 +28,12 @@ pub struct ScalarChannel {
 /// Applying sampled curve values back to the component stays inside the
 /// domain's own system.
 ///
-/// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it:
-/// the channel at `channels()[i]` owns code `first_code + i`. Codes are persisted in clip files,
-/// so channels are only ever appended to the table, never reordered or removed.
+/// Every channel code lies inside the domain's `code_block`, and blocks never overlap across
+/// domains; both are checked by the registry tests.
 pub struct ScalarChannelDomain {
     /// Display name of the domain (also the name of the clip it creates).
     pub name: &'static str,
+    pub code_block: ScalarCodeBlock,
     pub channel_table: fn() -> &'static [ScalarChannel],
     pub has_component: fn(&World, Entity) -> bool,
     pub entities: fn(&World) -> Vec<Entity>,
@@ -92,35 +50,25 @@ impl ScalarChannelDomain {
     }
 
     pub fn property_type_at(&self, channel_index: usize) -> PropertyType {
-        PropertyType::Custom(self.first_code() + channel_index as u16)
+        PropertyType::Custom(self.channels()[channel_index].code)
     }
 
     pub fn property_type_of(&self, channel: &ScalarChannel) -> Option<PropertyType> {
-        self.channels()
-            .iter()
-            .position(|c| c.cli_name == channel.cli_name)
-            .map(|index| self.property_type_at(index))
+        self.property_type_for_cli_name(channel.cli_name)
     }
 
     pub fn property_type_for_cli_name(&self, name: &str) -> Option<PropertyType> {
         self.channels()
             .iter()
-            .position(|c| c.cli_name == name)
-            .map(|index| self.property_type_at(index))
+            .find(|c| c.cli_name == name)
+            .map(|c| PropertyType::Custom(c.code))
     }
 
     pub fn channel_index(&self, property_type: PropertyType) -> Option<usize> {
         let PropertyType::Custom(code) = property_type else {
             return None;
         };
-        let index = code.checked_sub(self.first_code())? as usize;
-        (index < self.channels().len()).then_some(index)
-    }
-
-    fn first_code(&self) -> u16 {
-        scalar_code_block_for_domain(self.name)
-            .unwrap_or_else(|| panic!("no code block configured for domain {}", self.name))
-            .first_code
+        self.channels().iter().position(|c| c.code == code)
     }
 }
 
@@ -241,49 +189,38 @@ mod tests {
     }
 
     #[test]
-    fn test_every_domain_stays_inside_its_configured_code_block() {
+    fn test_every_domain_stays_inside_its_declared_code_block() {
         for domain in scalar_channel_domains() {
-            let block = scalar_code_block_for_domain(domain.name)
-                .unwrap_or_else(|| panic!("no code block configured for domain {}", domain.name));
             assert!(
-                domain.channels().len() <= block.code_count as usize,
-                "{} has {} channels but its block holds {}",
-                domain.name,
-                domain.channels().len(),
-                block.code_count
+                domain.code_block.code_count > 0,
+                "empty block {}",
+                domain.name
             );
-            for index in 0..domain.channels().len() {
-                let PropertyType::Custom(code) = domain.property_type_at(index) else {
-                    panic!("scalar channels are Custom properties");
-                };
+            for channel in domain.channels() {
                 assert!(
-                    block.contains(code),
-                    "{} channel {index} code {code}",
-                    domain.name
+                    domain.code_block.contains(channel.code),
+                    "{} channel {} code {} lies outside its block",
+                    domain.name,
+                    channel.cli_name,
+                    channel.code
                 );
             }
         }
     }
 
     #[test]
-    fn test_configured_code_blocks_are_disjoint() {
-        let blocks = scalar_code_blocks();
-        for (index, block) in blocks.iter().enumerate() {
-            assert!(block.code_count > 0, "empty block {}", block.name);
-            for other in &blocks[index + 1..] {
-                let overlaps =
-                    block.first_code < other.end_code() && other.first_code < block.end_code();
+    fn test_declared_code_blocks_are_disjoint() {
+        let domains = scalar_channel_domains();
+        for (index, domain) in domains.iter().enumerate() {
+            for other in &domains[index + 1..] {
                 assert!(
-                    !overlaps,
+                    !domain.code_block.overlaps(&other.code_block),
                     "blocks {} and {} overlap",
-                    block.name, other.name
+                    domain.name,
+                    other.name
                 );
             }
         }
-        assert_eq!(
-            next_free_scalar_code(),
-            blocks.iter().map(ScalarCodeBlock::end_code).max().unwrap()
-        );
     }
 
     #[test]

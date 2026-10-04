@@ -15,6 +15,38 @@ pub struct ScalarParam<C: 'static> {
     pub set: fn(&mut C, f32),
     pub debug_range: Option<(f32, f32)>,
     pub renamed_from: &'static [&'static str],
+    /// Persistent animation-curve code (`#[persist(code = N)]`); `None` keeps the parameter off
+    /// the curve editor. Codes are stored in clip files and are never reused or moved.
+    pub code: Option<u16>,
+}
+
+/// The range of animation-curve codes one component type owns; every `code` of its scalar
+/// parameters lies inside it and no two component types share a block.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScalarCodeBlock {
+    pub first_code: u16,
+    pub code_count: u16,
+}
+
+impl ScalarCodeBlock {
+    pub const fn new(first_code: u16, code_count: u16) -> Self {
+        Self {
+            first_code,
+            code_count,
+        }
+    }
+
+    pub fn contains(&self, code: u16) -> bool {
+        (self.first_code..self.end_code()).contains(&code)
+    }
+
+    pub fn end_code(&self) -> u16 {
+        self.first_code + self.code_count
+    }
+
+    pub fn overlaps(&self, other: &Self) -> bool {
+        self.first_code < other.end_code() && other.first_code < self.end_code()
+    }
 }
 
 pub fn find_scalar_param<'a, C>(
@@ -485,6 +517,7 @@ macro_rules! declare_scene_format {
                 },
                 debug_range: None,
                 renamed_from: &[],
+                code: None,
             },
         ])
     };
@@ -512,6 +545,7 @@ macro_rules! declare_scene_format {
                 },
                 debug_range: None,
                 renamed_from: &[],
+                code: None,
             },
         ])
     };
@@ -539,6 +573,7 @@ macro_rules! declare_scene_format {
                 },
                 debug_range: None,
                 renamed_from: &[],
+                code: None,
             },
         ])
     };
@@ -573,6 +608,7 @@ macro_rules! declare_scene_format {
             set: $crate::set_rgb_channel::<$component, Field, $channel>,
             debug_range: None,
             renamed_from: &[],
+            code: None,
         }
     }};
 }

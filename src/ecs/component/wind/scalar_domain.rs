@@ -1,6 +1,8 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, WIND_SCALAR_PARAMS, WIND_UI_PARAMS};
+use thyllore_effect_core::{
+    ScalarCodeBlock, ScalarParam, UiParam, WIND_SCALAR_CODES, WIND_SCALAR_PARAMS, WIND_UI_PARAMS,
+};
 
 use super::effect::WindTornadoEffect;
 use crate::ecs::component::{
@@ -14,48 +16,7 @@ impl ScalarDomainSource for WindScalarSource {
     type Component = WindTornadoEffect;
 
     const NAME: &'static str = "Wind";
-    const CHANNEL_ORDER: &'static [&'static str] = &[
-        "column_height",
-        "wall_radius_base",
-        "wall_radius_top",
-        "wall_width_q",
-        "wall_strength",
-        "top_fade",
-        "density",
-        "albedo_r",
-        "albedo_g",
-        "albedo_b",
-        "ambient_brightness",
-        "phase_g",
-        "sun_intensity",
-        "rise_initial_height",
-        "rise_duration",
-        "spread_start",
-        "spread_rate",
-        "dissipate_start",
-        "dissipate_time",
-        "circulation",
-        "streak_order",
-        "streak_twist",
-        "streak_rise_speed",
-        "streak_amplitude",
-        "eddy_amplitude",
-        "eddy_cell_theta",
-        "eddy_cell_height",
-        "eddy_cell_radial",
-        "eddy_shear",
-        "eddy_speed_spread",
-        "eddy_rise_speed",
-        "eddy_reseed_period",
-        "eddy_erosion",
-        "puff_count_theta",
-        "puff_count_height",
-        "puff_radius",
-        "puff_radius_jitter",
-        "puff_offset_q",
-        "puff_strength",
-        "puff_rise_speed",
-    ];
+    const CODE_BLOCK: ScalarCodeBlock = WIND_SCALAR_CODES;
 
     fn scalars() -> &'static [ScalarParam<WindTornadoEffect>] {
         &WIND_SCALAR_PARAMS

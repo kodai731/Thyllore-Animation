@@ -1,7 +1,9 @@
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{find_scalar_param, find_ui_param, ScalarParam, UiParam};
 
-use crate::ecs::component::{scalar_channel_domains, ScalarChannel, ScalarChannelDomain};
+use crate::ecs::component::{
+    scalar_channel_domains, ScalarChannel, ScalarChannelDomain, ScalarCodeBlock,
+};
 use crate::ecs::storage::Component;
 use crate::ecs::world::{Entity, World};
 
@@ -10,8 +12,7 @@ pub trait ScalarDomainSource: 'static {
     type Component: Component;
 
     const NAME: &'static str;
-    /// Scalar names in persisted code order; only ever appended to.
-    const CHANNEL_ORDER: &'static [&'static str];
+    const CODE_BLOCK: ScalarCodeBlock;
 
     fn scalars() -> &'static [ScalarParam<Self::Component>];
     fn ui() -> &'static [UiParam];
@@ -23,6 +24,7 @@ pub const fn effect_scalar_domain<S: ScalarDomainSource>(
 ) -> ScalarChannelDomain {
     ScalarChannelDomain {
         name: S::NAME,
+        code_block: S::CODE_BLOCK,
         channel_table,
         has_component: has_effect_component::<S>,
         entities: effect_entities::<S>,
@@ -31,11 +33,18 @@ pub const fn effect_scalar_domain<S: ScalarDomainSource>(
     }
 }
 
+/// Every scalar carrying `#[persist(code = N)]`, in code order.
 pub fn build_effect_scalar_channels<S: ScalarDomainSource>() -> Vec<ScalarChannel> {
-    S::CHANNEL_ORDER
+    let mut channels: Vec<ScalarChannel> = S::scalars()
         .iter()
-        .map(|name| build_effect_scalar_channel::<S>(name))
-        .collect()
+        .filter_map(|scalar| {
+            scalar
+                .code
+                .map(|code| build_effect_scalar_channel::<S>(scalar, code))
+        })
+        .collect();
+    channels.sort_by_key(|channel| channel.code);
+    channels
 }
 
 pub fn find_scalar_param_for_property<S: ScalarDomainSource>(
@@ -45,11 +54,14 @@ pub fn find_scalar_param_for_property<S: ScalarDomainSource>(
         .iter()
         .find(|domain| domain.name == S::NAME)?;
     let index = domain.channel_index(property_type)?;
-    Some(find_source_scalar::<S>(S::CHANNEL_ORDER[index]))
+    Some(find_source_scalar::<S>(domain.channels()[index].cli_name))
 }
 
-fn build_effect_scalar_channel<S: ScalarDomainSource>(name: &str) -> ScalarChannel {
-    let scalar = find_source_scalar::<S>(name);
+fn build_effect_scalar_channel<S: ScalarDomainSource>(
+    scalar: &'static ScalarParam<S::Component>,
+    code: u16,
+) -> ScalarChannel {
+    let name = scalar.name;
     let display_name = match find_ui_param(S::ui(), name).and_then(|ui| ui.label) {
         Some(label) => label,
         None => space_pascal_case(scalar.scene_name).leak(),
@@ -59,6 +71,7 @@ fn build_effect_scalar_channel<S: ScalarDomainSource>(name: &str) -> ScalarChann
         .unwrap_or_else(|| ui_value_range::<S>(name));
 
     ScalarChannel {
+        code,
         display_name,
         cli_name: scalar.name,
         scene_name: scalar.scene_name,

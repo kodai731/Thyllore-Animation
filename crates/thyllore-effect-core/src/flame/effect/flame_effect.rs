@@ -1,6 +1,10 @@
 use crate::flame::*;
 use cgmath::{Matrix4, Quaternion, Vector3};
 
+/// Animation-curve codes this effect owns; every `#[persist(code = N)]` below lies inside it.
+pub const FLAME_SCALAR_CODES: thyllore_scene_core::ScalarCodeBlock =
+    thyllore_scene_core::ScalarCodeBlock::new(0, 256);
+
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[scene(key = "flame", tag = ParameterOwner, owner = Frame, tags = PARAMETER_OWNERSHIP, snapshot = flame_parameter_snapshot, scalars = FLAME_SCALAR_PARAMS, ui = FLAME_UI_PARAMS, overwrite = overwrite_persisted_fields)]
 pub struct FlameEffect {
@@ -8,13 +12,13 @@ pub struct FlameEffect {
     pub position: Vector3<f32>,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
-    #[persist(debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
+    #[persist(code = 0, debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
-    #[persist(debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
+    #[persist(code = 1, debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub radius: f32,
-    #[persist(owner = Style, debug_range = (0.5, 5.0))]
+    #[persist(code = 3, owner = Style, debug_range = (0.5, 5.0))]
     pub sigma_t: f32,
-    #[persist(owner = Style, debug_range = (0.5, 5.0), ui(primary, min = 0.0, max = 10.0, group = "body"))]
+    #[persist(code = 2, owner = Style, debug_range = (0.5, 5.0), ui(primary, min = 0.0, max = 10.0, group = "body"))]
     pub intensity: f32,
     #[nested]
     pub color: FlameColor,

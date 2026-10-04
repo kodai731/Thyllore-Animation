@@ -16,6 +16,11 @@ fn test_tables_are_consistent() {
 }
 
 #[test]
+fn test_codes_lie_in_the_flame_block() {
+    assert_codes_lie_in_block(&FLAME_SCALAR_PARAMS, FLAME_SCALAR_CODES);
+}
+
+#[test]
 fn test_ron_struct_syntax_roundtrip() {
     let mut effect = FlameEffect::default();
     effect.height = 3.25;

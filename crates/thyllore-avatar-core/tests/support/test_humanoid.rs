@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{InnerSpace, Quaternion, Vector3};
+use cgmath::{InnerSpace, One, Quaternion, Vector3};
 
 use super::fbx_ascii::{cube_vertices, stick_polygon_indices, RigMesh};
 use super::rig_convention::rig_convention;
@@ -130,7 +130,7 @@ pub fn test_humanoid_nodes(bones: &[StickBone]) -> Vec<RigNode> {
             parent: bone.parent,
             role: Some(bone.role.unity_name()),
             world_position: Vector3::new(bone.position[0], bone.position[1], bone.position[2]),
-            world_rotation: Quaternion::new(0.0, 0.0, 0.0, 1.0),
+            world_rotation: Quaternion::one(),
         })
         .collect()
 }

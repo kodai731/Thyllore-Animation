@@ -234,3 +234,21 @@ fn test_humanoid_maps_every_role() {
         thyllore_avatar_core::humanoid::components::rest_pose::RestPose::TPose
     );
 }
+
+#[test]
+fn test_humanoid_rest_rotations_are_identity() {
+    let (bones, skeleton) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
+
+    for (i, bone) in skeleton.bones.iter().enumerate() {
+        let q = bone.world_rotation;
+        let diff_pos = (q.s - 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
+        let diff_neg = (q.s + 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
+        assert!(
+            diff_pos < 1e-5 || diff_neg < 1e-5,
+            "bone '{}' (index {}) world_rotation {:?} is not identity",
+            bones[i].name,
+            i,
+            q
+        );
+    }
+}

@@ -3,6 +3,7 @@
 [[role]]
 part = "Hips"
 required = true
+translation = true
 patterns = [["hips"], ["hip"], ["pelvis"]]
 
 [[role]]

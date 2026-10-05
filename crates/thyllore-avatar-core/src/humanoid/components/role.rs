@@ -40,4 +40,38 @@ mod tests {
             assert!(HumanoidRole::ALL.contains(role));
         }
     }
+
+    #[test]
+    fn test_allows_translation_only_hips() {
+        assert!(HumanoidRole::Hips.allows_translation());
+        for role in HumanoidRole::ALL
+            .iter()
+            .filter(|r| **r != HumanoidRole::Hips)
+        {
+            assert!(
+                !role.allows_translation(),
+                "{role:?} should not allow translation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_from_unity_name_roundtrip() {
+        for role in HumanoidRole::ALL {
+            assert_eq!(
+                HumanoidRole::from_unity_name(role.unity_name()),
+                Some(role),
+                "from_unity_name({:?}) should return Some({role:?})",
+                role.unity_name()
+            );
+        }
+    }
+
+    #[test]
+    fn test_index_matches_all_position() {
+        for (i, &role) in HumanoidRole::ALL.iter().enumerate() {
+            assert_eq!(role.index(), i, "{role:?}.index() should be {i}");
+            assert_eq!(HumanoidRole::ALL[role.index()], role);
+        }
+    }
 }

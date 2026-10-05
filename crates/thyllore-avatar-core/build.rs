@@ -25,6 +25,8 @@ struct PartDefinition {
     paired: bool,
     #[serde(default)]
     required: bool,
+    #[serde(default)]
+    translation: bool,
     patterns: Vec<Vec<String>>,
 }
 
@@ -186,6 +188,17 @@ fn generate_rig_rust(rig: &RigDefinition) -> String {
         &roles,
         pattern_table,
     );
+    write_role_method(
+        &mut out,
+        "allows_translation(self) -> bool",
+        &roles,
+        |role| role.part.translation.to_string(),
+    );
+    write_role_method(&mut out, "index(self) -> usize", &roles, |role| {
+        let idx = all_names.iter().position(|n| *n == role.name).unwrap();
+        idx.to_string()
+    });
+    write_from_unity_name(&mut out, &roles);
     out.push_str("}\n\n");
 
     let _ = writeln!(
@@ -262,4 +275,20 @@ fn pattern_table(role: &Role) -> String {
         .map(|pattern| format!("&{pattern:?}"))
         .collect();
     format!("&[{}]", patterns.join(", "))
+}
+
+fn write_from_unity_name(out: &mut String, roles: &[Role]) {
+    let _ = writeln!(
+        out,
+        "    pub fn from_unity_name(name: &str) -> Option<HumanoidRole> {{\n        match name {{"
+    );
+    for role in roles {
+        let _ = writeln!(
+            out,
+            "            {:?} => Some(Self::{name}),",
+            role.name,
+            name = role.name
+        );
+    }
+    out.push_str("            _ => None,\n        }\n    }\n\n");
 }

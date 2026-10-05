@@ -729,6 +729,31 @@ fn anim_edit_parses_role_clip_specs() {
 }
 
 #[test]
+fn copilot_extend_parses_role_axis_time_frames() {
+    use super::anim_edits::{anim_edit_parse_spec, RoleAxis};
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
+    match edit {
+        BatchAnimEdit::CopilotExtend {
+            role,
+            axis,
+            time,
+            frames,
+        } => {
+            assert_eq!(role, HumanoidRole::Hips);
+            assert_eq!(axis, RoleAxis::RotationY);
+            assert_eq!(time, 1.5);
+            assert_eq!(frames, 30);
+        }
+        other => panic!("expected CopilotExtend, got {:?}", other),
+    }
+
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.tx@1.0,30").is_err());
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.x@1.0").is_err());
+}
+
+#[test]
 fn template_then_save_round_trips_a_role_clip() {
     use crate::ecs::systems::role_clip_systems::new_role_clip;
     use tempfile::tempdir;

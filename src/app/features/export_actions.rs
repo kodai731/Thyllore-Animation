@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::animation::editable::EditableAnimationClip;
 use crate::animation::Skeleton;
 use crate::app::App;
-use crate::ecs::resource::{ClipLibrary, FbxModelCache, GltfModelCache};
+use crate::ecs::resource::{BakedRoleClips, ClipLibrary, FbxModelCache, GltfModelCache};
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -91,13 +91,11 @@ pub(crate) fn export_model_gltf(app: &App, path: &Path) {
     }
 }
 
-fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
-    let clip = app
-        .data
-        .ecs_world
-        .resource::<ClipLibrary>()
-        .get(source_id)
-        .cloned()?;
+pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
+    let library = app.data.ecs_world.resource::<ClipLibrary>();
+    let clip = library.get(source_id).cloned()?;
+    drop(library);
+
     let skeleton = app
         .data
         .ecs_assets
@@ -105,6 +103,14 @@ fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationCli
         .values()
         .next()
         .map(|sa| sa.skeleton.clone())?;
+
+    if clip.space == crate::animation::editable::ClipSpace::HumanoidRole {
+        let owner =
+            crate::ecs::systems::clip_schedule_systems::find_preview_owner(&app.data.ecs_world)?;
+        let baked = app.data.ecs_world.get_resource::<BakedRoleClips>()?;
+        let entry = baked.by_key.get(&(source_id, owner))?;
+        return Some((entry.clip.clone(), skeleton));
+    }
 
     Some((clip, skeleton))
 }

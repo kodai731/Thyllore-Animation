@@ -4,6 +4,7 @@ use crate::app::config::AppConfig;
 use crate::app::App;
 use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::{
+    animation_debug_dump::{build_animation_debug_dump, resolve_animation_debug_target},
     apply_engine_overrides, batch_anim_dump_write, batch_run_report, EngineCliOverrides,
 };
 use crate::vulkanr::context::{CommandState, RenderTargets};
@@ -52,6 +53,45 @@ pub fn finish_run(app: &App, overrides: &EngineCliOverrides, is_batch_mode: bool
                 serde_json::json!({"ok": false, "error": format!("anim dump failed: {e}")})
             );
             std::process::exit(1);
+        }
+    }
+
+    if let Some(ref debug_dump) = overrides.anim_debug_dump {
+        let target = resolve_animation_debug_target(&app.data.ecs_world, &app.data.ecs_assets);
+        let target = match target {
+            Some(t) => t,
+            None => {
+                println!(
+                    "{}",
+                    serde_json::json!({"ok": false, "error": "animation debug target not found (no clip/skeleton/rig)"})
+                );
+                std::process::exit(1);
+            }
+        };
+        let dump = build_animation_debug_dump(&target, &debug_dump.times, true);
+        let json = serde_json::to_string_pretty(&dump).expect("json serialize");
+        if let Err(e) = std::fs::write(&debug_dump.path, json) {
+            println!(
+                "{}",
+                serde_json::json!({"ok": false, "error": format!("anim debug dump write failed: {e}")})
+            );
+            std::process::exit(1);
+        }
+    }
+
+    if let Some(ref fbx_path) = overrides.export_fbx_path {
+        let timeline_state = app
+            .data
+            .ecs_world
+            .resource::<crate::ecs::resource::TimelineState>();
+        let clip_id = timeline_state.current_clip_id;
+        drop(timeline_state);
+        if let Some(source_id) = clip_id {
+            crate::app::features::export_actions::export_clip_fbx(
+                app,
+                source_id,
+                std::path::Path::new(fbx_path),
+            );
         }
     }
 

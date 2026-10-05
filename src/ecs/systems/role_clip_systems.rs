@@ -173,6 +173,31 @@ pub fn resolve_model_rig(
     Some((skeleton, mapping))
 }
 
+pub fn unresolved_clip_roles(
+    clip: &EditableAnimationClip,
+    mapping: Option<&HumanoidMapping>,
+) -> Vec<HumanoidRole> {
+    let mut seen = HashSet::new();
+    let mut roles = Vec::new();
+    for bone_id in clip.tracks.keys() {
+        let idx = *bone_id as usize;
+        if idx >= HumanoidRole::ALL.len() {
+            continue;
+        }
+        let role = HumanoidRole::ALL[idx];
+        if !seen.insert(role) {
+            continue;
+        }
+        if let Some(m) = mapping {
+            if m.by_role.contains_key(&role) {
+                continue;
+            }
+        }
+        roles.push(role);
+    }
+    roles
+}
+
 fn is_role_clip(clip_library: &ClipLibrary, source_id: SourceClipId) -> bool {
     clip_library
         .get(source_id)
@@ -547,5 +572,53 @@ mod tests {
 
         refresh_baked_role_clips(&mut world, &mut assets);
         assert_eq!(assets.animation_clips.len(), asset_count);
+    }
+
+    #[test]
+    fn unresolved_clip_roles_without_mapping_lists_every_role() {
+        let mut clip = EditableAnimationClip::new(0, "test".to_string());
+        clip.space = ClipSpace::HumanoidRole;
+
+        let hips_idx = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Hips)
+            .unwrap();
+        let spine_idx = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Spine)
+            .unwrap();
+
+        clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        clip.add_track(spine_idx as BoneId, "Spine".to_string());
+
+        let roles = unresolved_clip_roles(&clip, None);
+        assert_eq!(roles.len(), 2);
+        assert!(roles.contains(&HumanoidRole::Hips));
+        assert!(roles.contains(&HumanoidRole::Spine));
+    }
+
+    #[test]
+    fn unresolved_clip_roles_lists_unmapped_roles() {
+        let mut clip = EditableAnimationClip::new(0, "test".to_string());
+        clip.space = ClipSpace::HumanoidRole;
+
+        let hips_idx = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Hips)
+            .unwrap();
+        let spine_idx = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Spine)
+            .unwrap();
+
+        clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        clip.add_track(spine_idx as BoneId, "Spine".to_string());
+
+        let mut mapping = HumanoidMapping::default();
+        mapping.by_role.insert(HumanoidRole::Hips, 0);
+
+        let roles = unresolved_clip_roles(&clip, Some(&mapping));
+        assert_eq!(roles.len(), 1);
+        assert_eq!(roles[0], HumanoidRole::Spine);
     }
 }

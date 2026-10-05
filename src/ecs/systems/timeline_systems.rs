@@ -1289,6 +1289,55 @@ mod tests {
         assert_eq!(schedule.instances.len(), 1);
         assert_eq!(schedule.instances[0].source_id, first_clip_id);
     }
+
+    #[test]
+    fn role_clip_schedule_rejects_without_mapping() {
+        use crate::animation::editable::{ClipSpace, SourceClip};
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+
+        let mut world = World::new();
+        let mut library = ClipLibrary::default();
+
+        let role_clip_id: SourceClipId = 1;
+        let mut role_clip = EditableAnimationClip::new(role_clip_id, "role".to_string());
+        role_clip.space = ClipSpace::HumanoidRole;
+        let hips_idx = thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
+            .iter()
+            .position(|r| {
+                *r == thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips
+            })
+            .unwrap();
+        role_clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        library
+            .source_clips
+            .insert(role_clip_id, SourceClip::new(role_clip_id, role_clip));
+
+        world.insert_resource(library);
+        let entity = world.spawn();
+        world.insert_component(entity, ClipSchedule::default());
+
+        let initial_count = {
+            let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
+            schedule.instances.len()
+        };
+
+        process_clip_instance_events(
+            &[ClipInstanceEvent::Add {
+                entity,
+                source_id: role_clip_id,
+                start_time: 0.0,
+            }],
+            &mut world,
+        );
+
+        let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            initial_count,
+            "role clip should not be added without a humanoid mapping"
+        );
+    }
 }
 
 /// Persisted timeline state; the active clip is named because clip ids are not stable on disk.
@@ -1367,11 +1416,45 @@ fn apply_timeline_scene_record(
 }
 
 fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId, start_time: f32) {
-    let duration = world
-        .resource::<ClipLibrary>()
-        .get(source_id)
-        .map(|c| c.duration)
-        .unwrap_or(1.0);
+    let duration;
+    {
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id);
+
+        if let Some(clip) = clip {
+            use crate::animation::editable::ClipSpace;
+            if clip.space == ClipSpace::HumanoidRole {
+                let model_path: Option<String> = world
+                    .get_resource::<crate::ecs::resource::ModelState>()
+                    .map(|m| m.model_path.clone());
+                let avatar_state = world.get_resource::<crate::ecs::resource::AvatarSetupState>();
+                let mapping: Option<
+                    &thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping,
+                > = if let (Some(ref model_path), Some(state)) = (&model_path, &avatar_state) {
+                    if state.source_model_path == **model_path {
+                        Some(&state.mapping)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let unresolved =
+                    crate::ecs::systems::role_clip_systems::unresolved_clip_roles(clip, mapping);
+                if !unresolved.is_empty() {
+                    log_warn!(
+                        "role clip '{}' needs a humanoid mapping; unresolved roles: {:?}",
+                        clip.name,
+                        unresolved
+                    );
+                    return;
+                }
+            }
+        }
+
+        duration = library.get(source_id).map(|c| c.duration).unwrap_or(1.0);
+    }
 
     let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
         return;

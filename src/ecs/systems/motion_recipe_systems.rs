@@ -10,11 +10,7 @@ use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::resource::{
-    AnimationType, AvatarSetupState, ClipLibrary, HierarchyState, RecipeClipSource,
-    RecipeClipSources, TimelineState,
-};
-use crate::ecs::systems::avatar_setup_systems::{
-    find_first_skeleton, find_model_path, load_or_infer_mapping, skeleton_to_bone_inputs,
+    AnimationType, ClipLibrary, HierarchyState, RecipeClipSource, RecipeClipSources, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::{
     clip_library_register_and_activate, find_clip_schedule_owner,
@@ -22,7 +18,9 @@ use crate::ecs::systems::clip_library_systems::{
 use crate::ecs::systems::clip_schedule_systems::{
     clip_schedule_add_instance, clip_schedule_remove_instance, find_preview_owner,
 };
-use crate::ecs::systems::role_clip_systems::{baked_motion_to_clip, build_role_retarget_context};
+use crate::ecs::systems::role_clip_systems::{
+    baked_motion_to_clip, build_role_retarget_context, resolve_model_rig,
+};
 use crate::ecs::world::World;
 
 pub fn recipe_to_clip(
@@ -55,12 +53,8 @@ pub fn apply_recipe_file(
     assets: &mut AssetStorage,
     path: &Path,
 ) -> anyhow::Result<SourceClipId> {
-    let skeleton = find_first_skeleton(assets).context("no skeleton loaded")?;
-    let model_path = find_model_path(world).context("no model loaded")?;
-    let mapping = match world.get_resource::<AvatarSetupState>() {
-        Some(state) if state.source_model_path == model_path => state.mapping.clone(),
-        _ => load_or_infer_mapping(Path::new(&model_path), &skeleton_to_bone_inputs(skeleton)).0,
-    };
+    let (skeleton, mapping) =
+        resolve_model_rig(world, assets).context("no skeleton or model loaded")?;
     let recipe_json = std::fs::read_to_string(path).context("cannot read recipe")?;
     let recipe = thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(&recipe_json)?;
     let pose_times: Vec<f32> = recipe.poses.iter().map(|p| p.time).collect();
@@ -71,7 +65,7 @@ pub fn apply_recipe_file(
         .collect();
     roles.sort_by_key(|(_, role)| *role);
 
-    let clip = recipe_to_clip(&recipe_json, skeleton, &mapping)?;
+    let clip = recipe_to_clip(&recipe_json, &skeleton, &mapping)?;
 
     let clip_name = clip.name.clone();
     let duration = clip.duration;
@@ -271,6 +265,7 @@ mod tests {
     use crate::asset::storage::{AssetStorage, SkeletonAsset};
     use crate::ecs::component::{AnimationMeta, ClipSchedule};
     use crate::ecs::resource::{AnimationType, HierarchyState, ModelState};
+    use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
     use crate::ecs::systems::role_clip_systems::load_mixamo_fixture_skeleton;
     use crate::ecs::world::Entity;
     use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;

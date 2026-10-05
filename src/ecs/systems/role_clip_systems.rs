@@ -1,5 +1,9 @@
+use std::collections::HashSet;
+use std::path::Path;
+
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+use thyllore_anim_core::editable::components::clip::{ClipSpace, EditableAnimationClip};
+use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -8,10 +12,20 @@ use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::quaternion_to_euler_degrees;
 
+use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, Skeleton};
-use crate::ecs::systems::avatar_setup_systems::{
-    compute_bone_global_transform, skeleton_to_bone_inputs,
+use crate::asset::{AnimationClipAsset, AssetStorage};
+use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::resource::{
+    AnimationType, AvatarSetupState, BakedRoleClip, BakedRoleClips, ClipLibrary, ClipPreview,
+    TimelineState,
 };
+use crate::ecs::systems::avatar_setup_systems::{
+    compute_bone_global_transform, find_first_skeleton, find_model_path, load_or_infer_mapping,
+    skeleton_to_bone_inputs,
+};
+use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
+use crate::ecs::world::{Entity, World};
 
 pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
     let bones = skeleton
@@ -144,6 +158,129 @@ pub fn bake_role_clip_to_bone_clip(
         hips_bone,
         &role_clip.name,
     ))
+}
+
+pub fn resolve_model_rig(
+    world: &World,
+    assets: &AssetStorage,
+) -> Option<(Skeleton, HumanoidMapping)> {
+    let skeleton = find_first_skeleton(assets)?.clone();
+    let model_path = find_model_path(world)?;
+    let mapping = match world.get_resource::<AvatarSetupState>() {
+        Some(state) if state.source_model_path == model_path => state.mapping.clone(),
+        _ => load_or_infer_mapping(Path::new(&model_path), &skeleton_to_bone_inputs(&skeleton)).0,
+    };
+    Some((skeleton, mapping))
+}
+
+fn is_role_clip(clip_library: &ClipLibrary, source_id: SourceClipId) -> bool {
+    clip_library
+        .get(source_id)
+        .is_some_and(|clip| clip.space == ClipSpace::HumanoidRole)
+}
+
+fn collect_needed_role_clip_keys(world: &World) -> HashSet<(SourceClipId, Entity)> {
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut needed = HashSet::new();
+
+    for (entity, schedule) in world.iter_components::<ClipSchedule>() {
+        let is_skeletal = world
+            .get_component::<AnimationMeta>(entity)
+            .is_some_and(|meta| meta.animation_type == AnimationType::Skeletal);
+        if !is_skeletal {
+            continue;
+        }
+        for instance in &schedule.instances {
+            if is_role_clip(&clip_library, instance.source_id) {
+                needed.insert((instance.source_id, entity));
+            }
+        }
+    }
+
+    let timeline = world.resource::<TimelineState>();
+    if timeline.preview == ClipPreview::Solo {
+        if let Some(current_clip_id) = timeline.current_clip_id {
+            if is_role_clip(&clip_library, current_clip_id) {
+                if let Some(preview_owner) = find_preview_owner(world) {
+                    needed.insert((current_clip_id, preview_owner));
+                }
+            }
+        }
+    }
+
+    needed
+}
+
+fn collect_keys_to_bake(world: &World, fps: u32) -> Vec<(SourceClipId, Entity)> {
+    let baked_role_clips = world.resource::<BakedRoleClips>();
+    collect_needed_role_clip_keys(world)
+        .into_iter()
+        .filter(|key| !baked_role_clips.failed.contains(key))
+        .filter(|key| {
+            baked_role_clips
+                .by_key
+                .get(key)
+                .is_none_or(|baked| baked.fps != fps)
+        })
+        .collect()
+}
+
+pub fn refresh_baked_role_clips(world: &mut World, assets: &mut AssetStorage) {
+    let fps = world
+        .resource::<TimelineState>()
+        .snap_settings
+        .frame_rate
+        .round() as u32;
+    let keys_to_bake = collect_keys_to_bake(world, fps);
+    if keys_to_bake.is_empty() {
+        return;
+    }
+
+    let rig = resolve_model_rig(world, assets);
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut baked_role_clips = world.resource_mut::<BakedRoleClips>();
+
+    for key in keys_to_bake {
+        let (source_id, entity) = key;
+        let Some(role_clip) = clip_library.get(source_id) else {
+            continue;
+        };
+        let baked = match &rig {
+            Some((skeleton, mapping)) => {
+                bake_role_clip_to_bone_clip(role_clip, skeleton, mapping, fps)
+            }
+            None => Err(anyhow::anyhow!("no model rig to bake onto")),
+        };
+
+        match baked {
+            Ok(clip) => {
+                let asset_id = assets.add_animation_clip(AnimationClipAsset {
+                    id: 0,
+                    clip: clip_to_animation(&clip),
+                });
+                let replaced = baked_role_clips.by_key.insert(
+                    key,
+                    BakedRoleClip {
+                        fps,
+                        asset_id,
+                        clip,
+                    },
+                );
+                if let Some(replaced) = replaced {
+                    assets.animation_clips.remove(&replaced.asset_id);
+                }
+            }
+            Err(error) => {
+                log_warn!(
+                    "bake role clip {} for entity {} failed: {}",
+                    source_id,
+                    entity,
+                    error
+                );
+                baked_role_clips.failed.insert(key);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -335,5 +472,80 @@ mod tests {
             "expected 61 keys (2.0 * 30 + 1), got {}",
             baked_track.rotation_x.keyframes.len()
         );
+    }
+
+    #[test]
+    fn refresh_bakes_a_scheduled_role_clip_once() {
+        use crate::asset::SkeletonAsset;
+        use crate::ecs::resource::ModelState;
+        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+
+        let skeleton = load_mixamo_fixture_skeleton();
+        let (mapping, _) = infer_mapping(&skeleton_to_bone_inputs(&skeleton));
+        let mut assets = AssetStorage::new();
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton,
+        });
+
+        let model_path = std::env::temp_dir()
+            .join("role_clip_refresh_test_model.fbx")
+            .to_string_lossy()
+            .to_string();
+        let mut world = World::new();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+        world.insert_resource(BakedRoleClips::default());
+        world.insert_resource(ModelState {
+            model_path: model_path.clone(),
+            ..Default::default()
+        });
+        world.insert_resource(AvatarSetupState {
+            source_model_path: model_path,
+            mapping,
+            ..Default::default()
+        });
+        let entity = world
+            .entity()
+            .with_clip_schedule(ClipSchedule::new())
+            .with_animation_meta(AnimationMeta {
+                animation_type: AnimationType::Skeletal,
+                node_animation_scale: 1.0,
+            })
+            .build();
+
+        let mut role_clip = EditableAnimationClip::new(0, "test_role".to_string());
+        role_clip.space = ClipSpace::HumanoidRole;
+        let hips_role_index = HumanoidRole::ALL
+            .iter()
+            .position(|role| *role == HumanoidRole::Hips)
+            .unwrap();
+        let track = role_clip.add_track(hips_role_index as BoneId, "Hips".to_string());
+        curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
+        curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);
+        role_clip.duration = 1.0;
+        let source_id = clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            &mut assets,
+            role_clip,
+        );
+        if let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) {
+            clip_schedule_add_instance(schedule, source_id, 1.0);
+        }
+
+        refresh_baked_role_clips(&mut world, &mut assets);
+        let asset_id = world
+            .resource::<BakedRoleClips>()
+            .by_key
+            .get(&(source_id, entity))
+            .expect("scheduled role clip was not baked")
+            .asset_id;
+        assert!(assets.animation_clips.contains_key(&asset_id));
+        let asset_count = assets.animation_clips.len();
+
+        refresh_baked_role_clips(&mut world, &mut assets);
+        assert_eq!(assets.animation_clips.len(), asset_count);
     }
 }

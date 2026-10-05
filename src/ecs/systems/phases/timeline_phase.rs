@@ -13,6 +13,7 @@ use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
 use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
+use crate::ecs::systems::role_clip_systems::refresh_baked_role_clips;
 use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
@@ -58,6 +59,7 @@ fn update_timeline(ctx: &mut FrameContext) {
     sync_timeline_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
+    refresh_baked_role_clips(ctx.world, ctx.assets);
 }
 
 fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {

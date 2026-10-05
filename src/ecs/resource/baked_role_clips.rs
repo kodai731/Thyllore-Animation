@@ -6,6 +6,7 @@ use crate::asset::AssetId;
 #[derive(Default)]
 pub struct BakedRoleClips {
     pub by_key: HashMap<(SourceClipId, crate::ecs::world::Entity), BakedRoleClip>,
+    pub failed: HashSet<(SourceClipId, crate::ecs::world::Entity)>,
 }
 
 pub struct BakedRoleClip {
@@ -16,6 +17,7 @@ pub struct BakedRoleClip {
 
 impl BakedRoleClips {
     pub fn invalidate_source(&mut self, source_id: SourceClipId) -> Vec<AssetId> {
+        self.failed.retain(|(sid, _)| *sid != source_id);
         let keys_to_remove: Vec<_> = self
             .by_key
             .keys()
@@ -32,6 +34,7 @@ impl BakedRoleClips {
     }
 
     pub fn invalidate_entity(&mut self, entity: crate::ecs::world::Entity) -> Vec<AssetId> {
+        self.failed.retain(|(_, e)| *e != entity);
         let keys_to_remove: Vec<_> = self
             .by_key
             .keys()

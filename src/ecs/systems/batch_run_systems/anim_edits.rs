@@ -32,6 +32,12 @@ pub enum BatchAnimEdit {
         time: f32,
         value: f32,
     },
+    RoleKey {
+        role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
+        axis: RoleAxis,
+        time: f32,
+        value: f32,
+    },
     KeyAtPlayhead {
         property_type: PropertyType,
     },
@@ -53,8 +59,18 @@ pub enum BatchAnimEdit {
     Clear,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RoleAxis {
+    RotationX,
+    RotationY,
+    RotationZ,
+    TranslationX,
+    TranslationY,
+    TranslationZ,
+}
+
 /// Parse repeated `--batch-anim-edit <spec>` flags. Specs:
-/// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `clear`.
+/// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
 pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchAnimEdit>> {
     let mut edits = Vec::new();
     for i in 0..args.len() {
@@ -62,7 +78,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -103,7 +119,6 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         let (time_str, value_str) = rest.split_once('=').ok_or_else(|| {
             anyhow::anyhow!("key spec must be key=<param>@<time>=<value>, got '{spec}'")
         })?;
-        let property_type = scalar_property_for_cli_name(param_str)?;
         let time: f32 = time_str
             .trim()
             .parse()
@@ -115,6 +130,19 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         if !time.is_finite() || time < 0.0 || !value.is_finite() {
             bail!("key time must be >= 0 and value finite: '{spec}'");
         }
+        if let Some(dot) = param_str.find('.') {
+            let role_name = &param_str[..dot];
+            let axis_str = &param_str[dot + 1..];
+            let role = parse_humanoid_role(role_name)?;
+            let axis = parse_role_axis(axis_str, role)?;
+            return Ok(BatchAnimEdit::RoleKey {
+                role,
+                axis,
+                time,
+                value,
+            });
+        }
+        let property_type = scalar_property_for_cli_name(param_str)?;
         return Ok(BatchAnimEdit::Key {
             property_type,
             time,
@@ -165,6 +193,47 @@ fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
     domain
         .property_type_of(channel)
         .ok_or_else(|| anyhow::anyhow!("scalar channel '{name}' is not in its domain table"))
+}
+
+fn parse_humanoid_role(
+    name: &str,
+) -> Result<thyllore_avatar_core::humanoid::components::role::HumanoidRole> {
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    HumanoidRole::ALL
+        .iter()
+        .find(|r| r.unity_name() == name)
+        .copied()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown role '{}'. Valid roles: {}",
+                name,
+                HumanoidRole::ALL
+                    .iter()
+                    .map(|r| r.unity_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
+}
+
+fn parse_role_axis(
+    axis_str: &str,
+    role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
+) -> Result<RoleAxis> {
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    match axis_str {
+        "x" => Ok(RoleAxis::RotationX),
+        "y" => Ok(RoleAxis::RotationY),
+        "z" => Ok(RoleAxis::RotationZ),
+        "tx" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationX),
+        "ty" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationY),
+        "tz" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationZ),
+        other => Err(anyhow::anyhow!(
+            "invalid axis '{}' for role '{}'. Valid axes: x, y, z (tx, ty, tz only for Hips)",
+            other,
+            role.unity_name()
+        )),
+    }
 }
 
 fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str) {
@@ -234,6 +303,50 @@ pub fn batch_apply_anim_edits(
                     assets,
                 );
                 world.resource_mut::<TimelineState>().current_time = previous_time;
+            }
+            BatchAnimEdit::RoleKey {
+                role,
+                axis,
+                time,
+                value,
+            } => {
+                let clip_id = match world.resource::<TimelineState>().current_clip_id {
+                    Some(id) => id,
+                    None => continue,
+                };
+                let mut lib = world.resource_mut::<ClipLibrary>();
+                let clip = match lib.get_mut(clip_id) {
+                    Some(c) => c,
+                    None => continue,
+                };
+                if clip.space != thyllore_anim_core::editable::ClipSpace::HumanoidRole {
+                    log_warn!(
+                        "key edit: current clip is not a role clip (space={:?}), skipping",
+                        clip.space
+                    );
+                    continue;
+                }
+                let role_index =
+                    thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
+                        .iter()
+                        .position(|r| *r == *role)
+                        .unwrap();
+                let bone_id: BoneId = role_index as u32;
+                let track = clip.add_track(bone_id, role.unity_name().to_string());
+                let curve = match axis {
+                    RoleAxis::RotationX => &mut track.rotation_x,
+                    RoleAxis::RotationY => &mut track.rotation_y,
+                    RoleAxis::RotationZ => &mut track.rotation_z,
+                    RoleAxis::TranslationX => &mut track.translation_x,
+                    RoleAxis::TranslationY => &mut track.translation_y,
+                    RoleAxis::TranslationZ => &mut track.translation_z,
+                };
+                use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+                curve_add_keyframe(curve, *time, *value);
+                if *time > clip.duration {
+                    clip.duration = *time;
+                }
+                lib.mark_dirty(clip_id);
             }
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
                 dispatch_scalar_clip_events(

@@ -872,3 +872,117 @@ fn template_replaces_a_same_named_bone_clip_with_a_playable_asset() {
         assert!(assets.animation_clips.contains_key(&asset_id));
     }
 }
+
+#[test]
+fn key_edit_addresses_role_curve() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_role_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert_eq!(
+        clip.space,
+        thyllore_anim_core::editable::ClipSpace::HumanoidRole
+    );
+
+    let head_idx = HumanoidRole::ALL
+        .iter()
+        .position(|r| *r == HumanoidRole::Head)
+        .unwrap();
+    let track = clip.get_track(head_idx as u32).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 0.5).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
+
+    let lib = world.resource::<ClipLibrary>();
+    assert!(lib.dirty_sources.contains(&clip_id));
+}
+
+#[test]
+fn key_edit_rejects_role_on_bone_clip() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(1, "bone".to_string());
+    let id = crate::ecs::systems::clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        &mut assets,
+        clip,
+    );
+    world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(id).unwrap();
+    assert_eq!(clip.tracks.len(), 0);
+}
+
+#[test]
+fn role_key_rejects_translation_on_non_hips() {
+    use super::anim_edits::anim_edit_parse_spec;
+
+    let result = anim_edit_parse_spec("key=Head.tx@0=1");
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("tx"));
+}
+
+#[test]
+fn role_key_extends_duration() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_role_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Hips.ty@3=0.1").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert!((clip.duration - 3.0).abs() < f32::EPSILON);
+}

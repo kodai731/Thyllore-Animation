@@ -1,4 +1,4 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
+use crate::animation::editable::{ClipSpace, EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
@@ -87,8 +87,10 @@ fn register_clips_to_library(
         .map(|c| c.duration)
         .unwrap_or(0.0);
     let mut timeline_state = world.resource_mut::<TimelineState>();
-    timeline_state.current_clip_id = Some(editable_id);
-    timeline_apply_fit_zoom(&mut timeline_state, clip_duration);
+    if !keeps_selected_role_clip(world) {
+        timeline_state.current_clip_id = Some(editable_id);
+        timeline_apply_fit_zoom(&mut timeline_state, clip_duration);
+    }
     log!("Set timeline current_clip_id to {}", editable_id);
 
     Some(editable_id)
@@ -102,7 +104,9 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
         clip_library_register_and_activate(&mut clip_library, assets, editable)
     };
 
-    world.resource_mut::<TimelineState>().current_clip_id = Some(source_id);
+    if !keeps_selected_role_clip(world) {
+        world.resource_mut::<TimelineState>().current_clip_id = Some(source_id);
+    }
 
     log!(
         "Auto-created empty animation clip 'New Animation' (source_id={}, duration={}s) for model with no animations",
@@ -160,4 +164,74 @@ pub fn build_initial_clip_schedule(
 
     clip_schedule_add_instance(&mut schedule, source_id, duration);
     schedule
+}
+
+pub fn keeps_selected_role_clip(world: &World) -> bool {
+    let timeline = match world.get_resource::<TimelineState>() {
+        Some(t) => t,
+        None => return false,
+    };
+    let Some(current_id) = timeline.current_clip_id else {
+        return false;
+    };
+    let library = match world.get_resource::<ClipLibrary>() {
+        Some(l) => l,
+        None => return false,
+    };
+    let Some(clip) = library.get(current_id) else {
+        return false;
+    };
+    clip.space == ClipSpace::HumanoidRole
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_load_keeps_a_selected_role_clip() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
+        role_clip.space = ClipSpace::HumanoidRole;
+        let role_source_id = {
+            let mut clip_library = world.resource_mut::<ClipLibrary>();
+            clip_library_register_and_activate(&mut clip_library, &mut assets, role_clip)
+        };
+
+        world.resource_mut::<TimelineState>().current_clip_id = Some(role_source_id);
+
+        register_empty_editable_clip(&mut world, &mut assets);
+
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(role_source_id)
+        );
+    }
+
+    #[test]
+    fn model_load_replaces_a_selected_bone_clip() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        let bone_clip = EditableAnimationClip::new(0, "bone".to_string());
+        let bone_source_id = {
+            let mut clip_library = world.resource_mut::<ClipLibrary>();
+            clip_library_register_and_activate(&mut clip_library, &mut assets, bone_clip)
+        };
+
+        world.resource_mut::<TimelineState>().current_clip_id = Some(bone_source_id);
+
+        register_empty_editable_clip(&mut world, &mut assets);
+
+        assert_ne!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(bone_source_id)
+        );
+    }
 }

@@ -5,15 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use support::fixture_bones::load_rig_from_fbx_text;
-use support::test_humanoid::{
-    build_stick_mesh, test_humanoid_bones, write_test_humanoid_fbx, StickTip,
-};
+use support::test_humanoid::{build_stick_mesh, skeleton, write_test_humanoid_fbx, CanonicalTip};
 use thyllore_avatar_core::expression::components::side::Side;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 #[test]
 fn test_humanoid_covers_every_role_once() {
-    let bones = test_humanoid_bones();
+    let bones = skeleton();
 
     assert_eq!(bones.len(), 55, "expected 55 bones, got {}", bones.len());
 
@@ -41,7 +39,7 @@ fn test_humanoid_covers_every_role_once() {
 
 #[test]
 fn test_humanoid_parents_precede_children() {
-    let bones = test_humanoid_bones();
+    let bones = skeleton();
 
     for (i, bone) in bones.iter().enumerate() {
         if let Some(parent) = bone.parent {
@@ -59,7 +57,7 @@ fn test_humanoid_parents_precede_children() {
 
 #[test]
 fn test_humanoid_right_side_mirrors_left() {
-    let bones = test_humanoid_bones();
+    let bones = skeleton();
 
     let role_to_idx: BTreeMap<HumanoidRole, usize> =
         bones.iter().enumerate().map(|(i, b)| (b.role, i)).collect();
@@ -101,7 +99,7 @@ fn test_humanoid_right_side_mirrors_left() {
         );
 
         match (&left.tip, &right.tip) {
-            (StickTip::Child(lr), StickTip::Child(rr)) => {
+            (CanonicalTip::Child(lr), CanonicalTip::Child(rr)) => {
                 let expected_right = lr.mirrored();
                 assert_eq!(
                     *rr, expected_right,
@@ -109,7 +107,7 @@ fn test_humanoid_right_side_mirrors_left() {
                     left_role, right_role, lr, rr,
                 );
             }
-            (StickTip::Leaf(lo), StickTip::Leaf(ro)) => {
+            (CanonicalTip::Leaf(lo), CanonicalTip::Leaf(ro)) => {
                 assert!(
                     (lo[0] + ro[0]).abs() < 1e-9,
                     "leaf x mirror failed for {:?}/{:?}",
@@ -139,7 +137,7 @@ fn test_humanoid_right_side_mirrors_left() {
 
 #[test]
 fn test_humanoid_mesh_binds_every_vertex_once() {
-    let bones = test_humanoid_bones();
+    let bones = skeleton();
     let mesh = build_stick_mesh(&bones);
 
     let total_vertices = mesh.vertices.len();

@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use thyllore_anim_core::editable::{
-    EditableAnimationClip, PropertyCurve, PropertyType, SourceClipId,
-};
+use thyllore_anim_core::editable::{ClipSpace, EditableAnimationClip, PropertyCurve, PropertyType};
 use thyllore_anim_core::BoneId;
 
 use crate::asset::AssetStorage;
@@ -14,7 +12,7 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, AvatarSetupState, BakedRoleClips, ClipLibrary, RecipeClipSources, TimelineState,
+    AnimationType, AvatarSetupState, BakedRoleClips, ClipLibrary, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
@@ -43,9 +41,6 @@ pub enum BatchAnimEdit {
     },
     TrimEnd {
         seconds: f32,
-    },
-    Recipe {
-        path: PathBuf,
     },
     NewRoleClip {
         name: String,
@@ -78,7 +73,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_role_clip=<name> | template=<path> | save=<path> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -149,13 +144,6 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             value,
         });
     }
-    if let Some(path_str) = spec.strip_prefix("recipe=") {
-        let path = PathBuf::from(path_str.trim());
-        if path.as_os_str().is_empty() {
-            bail!("recipe path must not be empty: '{spec}'");
-        }
-        return Ok(BatchAnimEdit::Recipe { path });
-    }
     if let Some(name) = spec.strip_prefix("new_role_clip=") {
         let name = name.trim();
         if name.is_empty() {
@@ -179,7 +167,7 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         }
         return Ok(BatchAnimEdit::Save { path });
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear")
+    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_role_clip=<name> | template=<path> | save=<path> | clear")
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
@@ -383,13 +371,6 @@ pub fn batch_apply_anim_edits(
                     world,
                 );
             }
-            BatchAnimEdit::Recipe { path } => {
-                world
-                    .resource_mut::<crate::ecs::resource::AssetEditQueue>()
-                    .push(crate::ecs::resource::AssetEditCommand::LoadRecipeFromFile {
-                        path: path.clone(),
-                    });
-            }
             BatchAnimEdit::NewRoleClip { name } => {
                 let clip = crate::ecs::systems::role_clip_systems::new_role_clip(name);
                 let id = crate::ecs::systems::clip_library_register_and_activate(
@@ -459,7 +440,18 @@ fn schedule_instances_json(world: &World, entity: Entity) -> Vec<serde_json::Val
         .unwrap_or_default()
 }
 
-fn collect_role_names_by_bone(world: &World, clip_id: SourceClipId) -> HashMap<BoneId, String> {
+fn collect_role_names_by_bone(
+    world: &World,
+    clip: &EditableAnimationClip,
+) -> HashMap<BoneId, String> {
+    if clip.space == ClipSpace::HumanoidRole {
+        return thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
+            .iter()
+            .enumerate()
+            .map(|(bone_id, role)| (bone_id as BoneId, format!("{role:?}")))
+            .collect();
+    }
+
     let mut role_names: HashMap<BoneId, String> = HashMap::new();
 
     if let Some(setup) = world.get_resource::<AvatarSetupState>() {
@@ -468,19 +460,11 @@ fn collect_role_names_by_bone(world: &World, clip_id: SourceClipId) -> HashMap<B
         }
     }
 
-    if let Some(sources) = world.get_resource::<RecipeClipSources>() {
-        if let Some(source) = sources.by_clip.get(&clip_id) {
-            for (bone_id, role) in &source.roles {
-                role_names.insert(*bone_id, format!("{role:?}"));
-            }
-        }
-    }
-
     role_names
 }
 
 fn bone_tracks_json(world: &World, clip: &EditableAnimationClip) -> Vec<serde_json::Value> {
-    let role_names = collect_role_names_by_bone(world, clip.id);
+    let role_names = collect_role_names_by_bone(world, clip);
 
     let mut tracks: Vec<_> = clip.tracks.values().collect();
     tracks.sort_unstable_by_key(|track| track.bone_id);

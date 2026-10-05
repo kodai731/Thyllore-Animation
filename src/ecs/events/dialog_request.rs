@@ -6,7 +6,6 @@ use crate::ecs::world::World;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DialogRequest {
     LoadClip,
-    LoadRecipe,
     SaveClip(SourceClipId),
     ExportClip {
         source_id: SourceClipId,

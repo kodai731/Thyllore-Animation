@@ -107,16 +107,6 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             }
         }
 
-        AssetEditCommand::LoadRecipeFromFile { path } => {
-            if let Err(e) = crate::ecs::systems::motion_recipe_systems::apply_recipe_file(
-                &mut app.data.ecs_world,
-                &mut app.data.ecs_assets,
-                &path,
-            ) {
-                msg_error!("Failed to load recipe {}: {:#}", path.display(), e);
-            }
-        }
-
         AssetEditCommand::AssignMaterialTexture { material, path } => {
             crate::ecs::systems::set_material_texture(
                 &mut app.data.ecs_world,

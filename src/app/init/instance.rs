@@ -1212,7 +1212,6 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FrameClock>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AppExit>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::RecipeClipSources>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::BakedRoleClips>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {

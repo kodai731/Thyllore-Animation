@@ -273,8 +273,6 @@ fn anim_edit_specs_parse_all_forms() {
         "key=probe_level@1.5=2.25",
         "--batch-anim-edit",
         "clear",
-        "--batch-anim-edit",
-        "recipe=tests/x.json",
     ]))
     .unwrap();
     assert_eq!(edits[0], BatchAnimEdit::DebugKeys { seed: 42 });
@@ -287,12 +285,6 @@ fn anim_edit_specs_parse_all_forms() {
         }
     );
     assert_eq!(edits[2], BatchAnimEdit::Clear);
-    assert_eq!(
-        edits[3],
-        BatchAnimEdit::Recipe {
-            path: PathBuf::from("tests/x.json")
-        }
-    );
 }
 
 #[test]
@@ -302,7 +294,6 @@ fn anim_edit_invalid_specs_are_err() {
         "key=height@1.5",
         "key=no_such_param@1.0=2.0",
         "key=height@-1.0=2.0",
-        "recipe=",
         "bogus",
     ] {
         assert!(
@@ -678,67 +669,29 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
 }
 
 #[test]
-fn recipe_edit_is_queued_not_applied() {
-    use crate::ecs::resource::{AssetEditCommand, AssetEditQueue};
-
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::default());
-    world.insert_resource(AssetEditQueue::default());
-
-    let assets = &mut AssetStorage::new();
-    batch_apply_anim_edits(
-        &mut world,
-        assets,
-        &[BatchAnimEdit::Recipe {
-            path: PathBuf::from("x.json"),
-        }],
-    );
-
-    let commands = world.resource_mut::<AssetEditQueue>().take();
-    assert_eq!(commands.len(), 1);
-    match &commands[0] {
-        AssetEditCommand::LoadRecipeFromFile { path } => {
-            assert_eq!(path, &PathBuf::from("x.json"));
-        }
-        other => panic!("expected LoadRecipeFromFile, got {:?}", other),
-    }
-
-    let clip_library = world.resource::<ClipLibrary>();
-    assert_eq!(clip_library.source_clips.len(), 0);
-}
-
-#[test]
 fn dump_includes_bone_tracks_when_requested() {
-    use crate::ecs::resource::{RecipeClipSource, RecipeClipSources};
     use crate::ecs::systems::clip_library_register_and_activate;
-    use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
+    use thyllore_anim_core::editable::{curve_add_keyframe, ClipSpace, EditableAnimationClip};
     use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());
-    world.insert_resource(RecipeClipSources::default());
 
+    let right_upper_arm_idx = HumanoidRole::ALL
+        .iter()
+        .position(|r| *r == HumanoidRole::RightUpperArm)
+        .unwrap();
     let mut clip = EditableAnimationClip::new(0, "t".into());
-    let track = clip.add_track(2, "mixamorig:RightArm".into());
+    clip.space = ClipSpace::HumanoidRole;
+    let track = clip.add_track(
+        right_upper_arm_idx as thyllore_anim_core::BoneId,
+        HumanoidRole::RightUpperArm.unity_name().into(),
+    );
     curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
     curve_add_keyframe(&mut track.rotation_z, 1.0, 45.0);
 
     let mut assets = AssetStorage::new();
-    let clip_id = clip_library_register_and_activate(
-        &mut world.resource_mut::<ClipLibrary>(),
-        &mut assets,
-        clip,
-    );
-    world.resource_mut::<RecipeClipSources>().by_clip.insert(
-        clip_id,
-        RecipeClipSource {
-            path: PathBuf::from("t.recipe.json"),
-            pose_times: vec![],
-            roles: vec![(2, HumanoidRole::RightUpperArm)],
-            detached: false,
-            pose_rotations: vec![],
-        },
-    );
+    clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), &mut assets, clip);
 
     let dump = batch_anim_dump_json(&world, true);
     let bone_track = &dump["clips"][0]["bone_tracks"][0];

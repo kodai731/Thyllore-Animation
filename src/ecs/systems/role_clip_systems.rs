@@ -335,7 +335,7 @@ pub(crate) fn load_mixamo_fixture_skeleton() -> Skeleton {
     let fbx_txt_path = test_data_dir.join("rigs/mixamo.fbx.txt");
     let counter = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let fbx_path = std::env::temp_dir().join(format!(
-        "motion_recipe_mixamo_{}_{}.fbx",
+        "role_clip_mixamo_{}_{}.fbx",
         std::process::id(),
         counter
     ));

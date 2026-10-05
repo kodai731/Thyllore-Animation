@@ -59,7 +59,6 @@ pub enum SceneLoadCommand {
 #[derive(Clone, Debug)]
 pub enum AssetEditCommand {
     LoadClipFromFile { path: PathBuf },
-    LoadRecipeFromFile { path: PathBuf },
     AssignMaterialTexture { material: String, path: PathBuf },
 }
 

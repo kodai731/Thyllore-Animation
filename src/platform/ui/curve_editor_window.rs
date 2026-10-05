@@ -3,9 +3,7 @@ use std::collections::HashSet;
 use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-use super::curve_editor_recipe::{
-    build_recipe_section, format_bone_label, is_pose_key_time, order_bone_ids_by_role,
-};
+use super::curve_editor_bone_label::{format_bone_label, order_bone_ids_by_role};
 
 use crate::animation::editable::{
     curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
@@ -18,7 +16,7 @@ use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
     AvatarSetupState, ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget,
     CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, PoseLibrary,
-    RecipeClipSource, RecipeClipSources, TangentHandleType, TimelineState,
+    TangentHandleType, TimelineState,
 };
 #[cfg(feature = "ml")]
 use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
@@ -123,7 +121,6 @@ fn draw_curve_editor_window(
     pose_library: &mut PoseLibrary,
     scalar_domain: Option<&'static ScalarChannelDomain>,
     bone_roles: &[(BoneId, HumanoidRole)],
-    recipe_source: Option<&RecipeClipSource>,
 ) {
     if !editor_state.is_open {
         return;
@@ -170,7 +167,6 @@ fn draw_curve_editor_window(
                     editor_state,
                     scalar_domain,
                     bone_roles,
-                    recipe_source,
                 );
             });
 
@@ -190,7 +186,6 @@ fn draw_curve_editor_window(
                     curve_buffer,
                     suggestion_overlays,
                     pose_library,
-                    recipe_source,
                 );
             });
     });
@@ -208,19 +203,23 @@ fn get_current_clip<'a>(
 }
 
 fn collect_current_clip_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
-    let Some(current_clip_id) = world.resource::<TimelineState>().current_clip_id else {
+    let timeline_state = world.resource::<TimelineState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    let Some(current_clip_id) = timeline_state.current_clip_id else {
+        return Vec::new();
+    };
+    let Some(clip) = clip_library.get(current_clip_id) else {
         return Vec::new();
     };
 
-    let recipe_roles = world
-        .get_resource::<RecipeClipSources>()
-        .and_then(|sources| {
-            sources
-                .by_clip
-                .get(&current_clip_id)
-                .map(|source| source.roles.clone())
-        });
-    recipe_roles.unwrap_or_else(|| collect_avatar_setup_bone_roles(world))
+    if clip.space == crate::animation::editable::ClipSpace::HumanoidRole {
+        clip.tracks
+            .keys()
+            .map(|bone_id| (*bone_id, HumanoidRole::ALL[*bone_id as usize]))
+            .collect()
+    } else {
+        collect_avatar_setup_bone_roles(world)
+    }
 }
 
 fn collect_avatar_setup_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
@@ -245,7 +244,6 @@ fn build_track_list(
     editor_state: &mut CurveEditorState,
     scalar_domain: Option<&'static ScalarChannelDomain>,
     bone_roles: &[(BoneId, HumanoidRole)],
-    recipe_source: Option<&RecipeClipSource>,
 ) {
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
         ui.text("No clip selected");
@@ -272,21 +270,7 @@ fn build_track_list(
         return;
     }
 
-    let is_detached = timeline_state.current_clip_id.is_some_and(|id| {
-        world
-            .get_resource::<RecipeClipSources>()
-            .is_some_and(|sources| {
-                sources
-                    .by_clip
-                    .get(&id)
-                    .is_some_and(|source| source.detached)
-            })
-    });
-    ui.text(if is_detached {
-        "Bones (detached from recipe):"
-    } else {
-        "Bones:"
-    });
+    ui.text("Bones:");
     ui.separator();
 
     let bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
@@ -329,17 +313,6 @@ fn build_track_list(
                 build_curve_selector_inline(ui, track, editor_state);
             }
         }
-    }
-
-    if let (Some(source), Some(clip_id)) = (recipe_source, timeline_state.current_clip_id) {
-        let selected_bone = editor_state.selected_bone_id();
-        let role = selected_bone.and_then(|bone_id| {
-            bone_roles
-                .iter()
-                .find(|(role_bone_id, _)| *role_bone_id == bone_id)
-                .map(|(_, role)| *role)
-        });
-        build_recipe_section(ui, world, editor_state, clip_id, source, role);
     }
 
     if !clip.morph_tracks.is_empty() {
@@ -470,7 +443,6 @@ fn build_curve_view(
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
     pose_library: &mut PoseLibrary,
-    recipe_source: Option<&RecipeClipSource>,
 ) {
     build_curve_toolbar(ui, world, curve_buffer, pose_library, clip_library);
     ui.separator();
@@ -545,7 +517,6 @@ fn build_curve_view(
         suggestion_overlays,
         track_ref,
         pose_library,
-        recipe_source,
     );
 
     let total_width = Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
@@ -688,7 +659,6 @@ fn draw_curve_area(
     suggestion_overlays: &[SuggestionOverlay],
     track_ref: CurveTrackRef,
     pose_library: &PoseLibrary,
-    recipe_source: Option<&RecipeClipSource>,
 ) {
     let draw_list = ui.get_window_draw_list();
 
@@ -734,7 +704,6 @@ fn draw_curve_area(
                 suggestion_overlays,
                 track_ref,
                 pose_library,
-                recipe_source,
             );
         },
     );
@@ -753,20 +722,12 @@ fn draw_clipped_curve_content(
     suggestion_overlays: &[SuggestionOverlay],
     track_ref: CurveTrackRef,
     pose_library: &PoseLibrary,
-    recipe_source: Option<&RecipeClipSource>,
 ) {
     draw_grid(draw_list, curve_area_width, curve_area_height, vt);
 
     let sample_count = calculate_sample_count(curve_area_width);
-    let handle_times: Option<&[f32]> = if track_ref.bone_id().is_some() {
-        recipe_source
-            .filter(|source| !source.detached)
-            .map(|source| source.pose_times.as_slice())
-    } else {
-        None
-    };
     for (curve, color, _name) in curves_to_draw {
-        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, vt, handle_times);
+        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, vt, None);
     }
 
     if !editor_state.selected_keyframes.is_empty() {
@@ -785,12 +746,6 @@ fn draw_clipped_curve_content(
     }
 
     draw_pose_markers(draw_list, vt, curve_area_height, pose_library);
-
-    if let Some(source) = recipe_source {
-        if !source.detached {
-            draw_recipe_pose_markers(draw_list, vt, curve_area_height, &source.pose_times);
-        }
-    }
 
     let playhead_x = vt.time_to_x(timeline_state.current_time);
     draw_list
@@ -1668,25 +1623,6 @@ fn draw_pose_markers(
     }
 }
 
-fn draw_recipe_pose_markers(
-    draw_list: &imgui::DrawListMut,
-    vt: &ViewTransform,
-    curve_area_height: f32,
-    pose_times: &[f32],
-) {
-    let color = [0.3, 0.85, 1.0, 0.6];
-    let top = vt.curve_origin[1];
-    let bottom = top + curve_area_height;
-
-    for &time in pose_times {
-        let x = vt.time_to_x(time);
-        draw_list
-            .add_line([x, top], [x, bottom], color)
-            .thickness(1.5)
-            .build();
-    }
-}
-
 fn draw_grid(draw_list: &imgui::DrawListMut, width: f32, height: f32, vt: &ViewTransform) {
     let grid_color = [0.25, 0.25, 0.28, 1.0];
 
@@ -1831,11 +1767,6 @@ fn draw_curve_with_keyframes(
     }
 
     for kf in &curve.keyframes {
-        if let Some(times) = handle_times {
-            if !is_pose_key_time(kf.time, times) {
-                continue;
-            }
-        }
         let x = vt.time_to_x(kf.time);
         let y = vt.value_to_y(kf.value);
 
@@ -2645,15 +2576,6 @@ fn build_curve_editor_window(
     let suggestion_overlays = collect_suggestion_overlays(world);
     let bone_roles = collect_current_clip_bone_roles(world);
 
-    let recipe_source: Option<RecipeClipSource> = {
-        let current = world.resource::<TimelineState>().current_clip_id;
-        current.and_then(|id| {
-            world
-                .get_resource::<RecipeClipSources>()
-                .and_then(|sources| sources.by_clip.get(&id).cloned())
-        })
-    };
-
     let timeline_state = world.resource::<TimelineState>();
     let clip_library = world.resource::<ClipLibrary>();
     let mut curve_editor = world.resource_mut::<CurveEditorState>();
@@ -2670,7 +2592,6 @@ fn build_curve_editor_window(
         &mut pose_library,
         scalar_domain,
         &bone_roles,
-        recipe_source.as_ref(),
     );
     curve_editor.needs_focus = false;
 }

@@ -73,7 +73,6 @@ pub struct CurveEditorState {
     pub context_menu_click_time: f32,
     pub context_menu_click_value: f32,
     pub needs_focus: bool,
-    pub recipe_edit: Option<(usize, [f32; 3])>,
 }
 
 impl CurveEditorState {
@@ -136,7 +135,6 @@ impl Default for CurveEditorState {
             context_menu_click_time: 0.0,
             context_menu_click_value: 0.0,
             needs_focus: false,
-            recipe_edit: None,
         }
     }
 }

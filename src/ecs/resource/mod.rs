@@ -12,6 +12,7 @@ mod auto_exposure;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_state;
 mod avatar_setup;
+mod baked_role_clips;
 mod batch;
 mod blend_shape_inspector;
 mod bloom;
@@ -99,6 +100,7 @@ pub use auto_exposure::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_state::*;
 pub use avatar_setup::*;
+pub use baked_role_clips::*;
 pub use batch::*;
 pub use blend_shape_inspector::*;
 pub use bloom::*;

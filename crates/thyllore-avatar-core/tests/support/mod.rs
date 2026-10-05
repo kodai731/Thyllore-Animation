@@ -8,5 +8,6 @@ pub mod rig_convention;
 pub mod rig_names;
 pub mod rig_nodes;
 pub mod rig_positions;
+pub mod role_clips;
 
 pub use canonical_rig::{canonical_bones, CanonicalBone};

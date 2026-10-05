@@ -1,22 +1,15 @@
 use cgmath::{InnerSpace, Vector3};
+use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
 mod support;
 
-fn check_recipe_against_all_conventions(recipe_path: &str) {
-    let json = std::fs::read_to_string(recipe_path).unwrap();
-    let recipe = thyllore_avatar_core::motion::systems::recipe_io::parse_recipe(&json).unwrap();
-    let curves = thyllore_avatar_core::motion::systems::recipe_curves::build_recipe_curves(&recipe);
-
+fn check_clip_against_all_conventions(clip: &EditableAnimationClip) {
     for convention_id in support::rig_names::CONVENTIONS.iter().copied() {
-        check_one(convention_id, &curves, recipe_path);
+        check_one(convention_id, clip);
     }
 }
 
-fn check_one(
-    convention_id: &str,
-    curves: &thyllore_avatar_core::motion::components::recipe_curves::RecipeCurves,
-    recipe_path: &str,
-) {
+fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
     let (bones, skeleton) = support::fixture_bones::load_fixture_rig(convention_id);
 
     let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
@@ -39,11 +32,11 @@ fn check_one(
     let hips_bind = skeleton.bones[hips_idx].world_position;
     let hips_height = ctx.hips_height;
 
-    let total_frames = (curves.duration_seconds * curves.fps as f32) as usize;
+    let total_frames = (clip.duration * 30.0) as usize;
     for frame_idx in 0..=total_frames {
-        let time = frame_idx as f32 / curves.fps as f32;
+        let time = frame_idx as f32 / 30.0;
         let sampled =
-            thyllore_avatar_core::motion::systems::recipe_curves::sample_recipe_pose(curves, time);
+            thyllore_avatar_core::motion::systems::role_clip_sampler::sample_role_clip(clip, time);
 
         let retargeted =
             thyllore_avatar_core::motion::systems::retarget_pose::retarget_pose(&ctx, &sampled);
@@ -83,8 +76,7 @@ fn check_one(
             let err = diff.magnitude();
             assert!(
                 err < 1e-3,
-                "{}: convention {} frame {} time {:.2} role {:?} error {:.6} (got [{:.4},{:.4},{:.4}], expected [{:.4},{:.4},{:.4}])",
-                recipe_path,
+                "convention {} frame {} time {:.2} role {:?} error {:.6} (got [{:.4},{:.4},{:.4}], expected [{:.4},{:.4},{:.4}])",
                 convention_id,
                 frame_idx,
                 time,
@@ -103,20 +95,20 @@ fn check_one(
 
 #[test]
 fn test_wave_invariance() {
-    check_recipe_against_all_conventions("../../assets/recipies/wave.json");
+    check_clip_against_all_conventions(&support::role_clips::wave());
 }
 
 #[test]
 fn test_mixed_invariance() {
-    check_recipe_against_all_conventions("../../assets/recipies/mixed.json");
+    check_clip_against_all_conventions(&support::role_clips::mixed());
 }
 
 #[test]
 fn test_hands_on_hips_tilt_invariance() {
-    check_recipe_against_all_conventions("../../assets/recipies/hands_on_hips_tilt.json");
+    check_clip_against_all_conventions(&support::role_clips::hands_on_hips_tilt());
 }
 
 #[test]
 fn test_bow_invariance() {
-    check_recipe_against_all_conventions("../../assets/recipies/bow.json");
+    check_clip_against_all_conventions(&support::role_clips::bow());
 }

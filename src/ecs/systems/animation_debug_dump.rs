@@ -92,23 +92,41 @@ pub struct ChannelDump {
 }
 
 pub fn dump_animation_debug(world: &World, assets: &AssetStorage) -> anyhow::Result<()> {
-    let target = resolve_animation_debug_target(world, assets)
-        .ok_or_else(|| anyhow::anyhow!("No animation debug target"))?;
-
     let timeline_state = world.resource::<TimelineState>();
     let current_time = timeline_state.current_time;
     let looping = timeline_state.looping;
     drop(timeline_state);
 
-    let dump = build_animation_debug_dump(&target, &[current_time], looping);
-
     let now = chrono::Local::now();
-    let filename = format!("log/animation_debug_{}.json", now.format("%Y%m%d_%H%M%S"));
-    std::fs::create_dir_all("log")?;
-    let json = serde_json::to_string_pretty(&dump)?;
-    std::fs::write(&filename, &json)?;
+    let path = std::path::PathBuf::from(format!(
+        "log/animation_debug_{}.json",
+        now.format("%Y%m%d_%H%M%S")
+    ));
+    write_animation_debug_dump(world, assets, &path, &[current_time], looping)?;
 
-    log!("Animation debug dumped to {}", filename);
+    log!("Animation debug dumped to {}", path.display());
+    Ok(())
+}
+
+pub fn write_animation_debug_dump(
+    world: &World,
+    assets: &AssetStorage,
+    path: &std::path::Path,
+    times: &[f32],
+    looping: bool,
+) -> anyhow::Result<()> {
+    let target = resolve_animation_debug_target(world, assets).ok_or_else(|| {
+        anyhow::anyhow!("animation debug target not found (no clip/skeleton/rig)")
+    })?;
+
+    let dump = build_animation_debug_dump(&target, times, looping);
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(&dump)?;
+    std::fs::write(path, &json)?;
+
     Ok(())
 }
 

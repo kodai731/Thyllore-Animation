@@ -37,6 +37,18 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     }
 }
 
+pub(crate) fn export_current_clip_fbx(app: &App, path: &Path) {
+    let timeline_state = app
+        .data
+        .ecs_world
+        .resource::<crate::ecs::resource::TimelineState>();
+    let clip_id = timeline_state.current_clip_id;
+    drop(timeline_state);
+    if let Some(source_id) = clip_id {
+        export_clip_fbx(app, source_id, path);
+    }
+}
+
 pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
         return;

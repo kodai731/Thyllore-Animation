@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use support::fixture_bones::load_rig_from_fbx_text;
 use support::test_humanoid::{build_stick_mesh, skeleton, write_test_humanoid_fbx, CanonicalTip};
 use thyllore_avatar_core::expression::components::side::Side;
+use thyllore_avatar_core::humanoid::canonical::fixtures::{extra_bones, ExtraParent};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 #[test]
@@ -249,5 +250,46 @@ fn test_humanoid_rest_rotations_are_identity() {
             i,
             q
         );
+    }
+}
+
+#[test]
+fn extra_bones_have_unique_names_without_dots() {
+    let bones = extra_bones();
+
+    assert_eq!(
+        bones.len(),
+        39,
+        "expected 39 extra bones, got {}",
+        bones.len()
+    );
+
+    let names: Vec<_> = bones.iter().map(|b| b.name.as_str()).collect();
+    let unique: BTreeSet<_> = names.iter().copied().collect();
+    assert_eq!(unique.len(), names.len(), "duplicate names found");
+
+    for name in &names {
+        assert!(!name.contains('.'), "bone name '{}' contains a dot", name);
+    }
+
+    for role in HumanoidRole::ALL {
+        let unity_name = role.unity_name();
+        assert!(
+            !names.contains(&unity_name),
+            "extra bone name '{}' matches HumanoidRole {:?} unity_name",
+            unity_name,
+            role
+        );
+    }
+
+    for (i, bone) in bones.iter().enumerate() {
+        if let ExtraParent::Row(parent_row) = bone.parent {
+            assert!(
+                parent_row < i,
+                "bone at index {} has Row({}) parent which is not before it",
+                i,
+                parent_row
+            );
+        }
     }
 }

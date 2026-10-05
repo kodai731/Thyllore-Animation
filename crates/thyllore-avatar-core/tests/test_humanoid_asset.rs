@@ -5,9 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use support::fixture_bones::load_rig_from_fbx_text;
-use support::test_humanoid::{build_stick_mesh, skeleton, write_test_humanoid_fbx, CanonicalTip};
+use support::test_humanoid::{
+    build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, CanonicalTip,
+};
 use thyllore_avatar_core::expression::components::side::Side;
-use thyllore_avatar_core::humanoid::canonical::fixtures::{extra_bones, ExtraParent};
+use thyllore_avatar_core::humanoid::canonical::fixtures::ExtraParent;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 #[test]
@@ -139,7 +141,8 @@ fn test_humanoid_right_side_mirrors_left() {
 #[test]
 fn test_humanoid_mesh_binds_every_vertex_once() {
     let bones = skeleton();
-    let mesh = build_stick_mesh(&bones);
+    let extras = extra_bones();
+    let mesh = build_stick_mesh(&bones, &extras);
 
     let total_vertices = mesh.vertices.len();
     let mut counts = vec![0u32; total_vertices];
@@ -160,7 +163,7 @@ fn test_humanoid_mesh_binds_every_vertex_once() {
 }
 
 #[test]
-fn test_humanoid_fbx_has_white_material_and_a_cluster_per_role() {
+fn test_humanoid_fbx_has_white_and_cloth_materials_and_a_cluster_per_bone() {
     let fbx = write_test_humanoid_fbx();
 
     assert!(
@@ -168,10 +171,15 @@ fn test_humanoid_fbx_has_white_material_and_a_cluster_per_role() {
         "FBX should contain Material::White"
     );
 
+    assert!(
+        fbx.contains("Material::Cloth"),
+        "FBX should contain Material::Cloth"
+    );
+
     let cluster_count = fbx.matches("\"Cluster\" {").count();
     assert_eq!(
-        cluster_count, 55,
-        "expected 55 Cluster entries, got {}",
+        cluster_count, 94,
+        "expected 94 Cluster entries (55 role + 39 extra), got {}",
         cluster_count
     );
 }
@@ -240,6 +248,9 @@ fn test_humanoid_rest_rotations_are_identity() {
     let (bones, skeleton) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
 
     for (i, bone) in skeleton.bones.iter().enumerate() {
+        if HumanoidRole::from_unity_name(&bones[i].name).is_none() {
+            continue;
+        }
         let q = bone.world_rotation;
         let diff_pos = (q.s - 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
         let diff_neg = (q.s + 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();

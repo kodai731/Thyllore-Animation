@@ -986,3 +986,48 @@ fn role_key_extends_duration() {
     let clip = lib.get(clip_id).unwrap();
     assert!((clip.duration - 3.0).abs() < f32::EPSILON);
 }
+
+#[test]
+fn role_key_keeps_earlier_keys_on_the_same_curve() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_role_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@0=0").unwrap()],
+    );
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@1=-90").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let left_upper_arm_idx = HumanoidRole::ALL
+        .iter()
+        .position(|r| *r == HumanoidRole::LeftUpperArm)
+        .unwrap();
+    let track = clip.get_track(left_upper_arm_idx as u32).unwrap();
+    assert_eq!(track.rotation_z.keyframes.len(), 2);
+    assert!((track.rotation_z.keyframes[0].time - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[0].value - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].time - 1.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].value - (-90.0)).abs() < f32::EPSILON);
+}

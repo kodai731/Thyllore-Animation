@@ -332,7 +332,11 @@ pub fn batch_apply_anim_edits(
                         .position(|r| *r == *role)
                         .unwrap();
                 let bone_id: BoneId = role_index as u32;
-                let track = clip.add_track(bone_id, role.unity_name().to_string());
+                let track = if let Some(t) = clip.get_track_mut(bone_id) {
+                    t
+                } else {
+                    clip.add_track(bone_id, role.unity_name().to_string())
+                };
                 let curve = match axis {
                     RoleAxis::RotationX => &mut track.rotation_x,
                     RoleAxis::RotationY => &mut track.rotation_y,

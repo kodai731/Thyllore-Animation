@@ -164,11 +164,9 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::DumpAnimationDebug => {
-            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
                 &app.data.ecs_world,
                 &app.data.ecs_assets,
-                &*clip_library,
             ) {
                 log_warn!("Animation debug dump failed: {:?}", e);
             }

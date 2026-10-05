@@ -1,3 +1,4 @@
+#![cfg(test)]
 use std::collections::HashMap;
 
 use cgmath::{InnerSpace, One, Quaternion, Vector3};

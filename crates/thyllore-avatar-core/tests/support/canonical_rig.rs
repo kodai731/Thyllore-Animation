@@ -1,3 +1,4 @@
+#![cfg(test)]
 #[derive(Clone, Copy, Debug)]
 pub struct CanonicalBone {
     pub role: &'static str,

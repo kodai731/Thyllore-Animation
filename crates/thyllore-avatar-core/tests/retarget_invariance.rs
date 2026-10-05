@@ -1,3 +1,4 @@
+#![cfg(test)]
 use cgmath::{InnerSpace, Vector3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 

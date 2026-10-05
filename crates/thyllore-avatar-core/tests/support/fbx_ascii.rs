@@ -1,3 +1,4 @@
+#![cfg(test)]
 use std::fmt::Write;
 
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};

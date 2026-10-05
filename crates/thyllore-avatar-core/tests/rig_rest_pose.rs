@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod support;
 
 use support::fixture_bones::load_fixture_bones;

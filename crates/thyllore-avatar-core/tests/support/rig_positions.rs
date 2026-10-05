@@ -1,3 +1,4 @@
+#![cfg(test)]
 use cgmath::{InnerSpace, Matrix3, Quaternion, Rad, Rotation3, SquareMatrix, Vector3};
 
 use super::rig_convention::RigConvention;

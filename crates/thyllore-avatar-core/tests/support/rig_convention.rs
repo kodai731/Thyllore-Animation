@@ -1,3 +1,4 @@
+#![cfg(test)]
 #[derive(Clone, Copy, Debug)]
 pub enum BoneAxisRule {
     Along([f64; 3]),

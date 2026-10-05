@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod support;
 
 use support::rig_convention::{rig_convention, BoneAxisRule, ContainerNode};

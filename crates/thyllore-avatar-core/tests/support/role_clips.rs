@@ -1,3 +1,4 @@
+#![cfg(test)]
 use thyllore_anim_core::editable::components::clip::{ClipSpace, EditableAnimationClip};
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 

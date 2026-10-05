@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod support;
 
 use std::collections::{BTreeMap, BTreeSet};

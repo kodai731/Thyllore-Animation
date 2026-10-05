@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod support;
 
 use support::canonical_bones;

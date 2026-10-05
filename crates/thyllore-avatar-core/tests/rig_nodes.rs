@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod support;
 
 use cgmath::{InnerSpace, Quaternion, Vector3};

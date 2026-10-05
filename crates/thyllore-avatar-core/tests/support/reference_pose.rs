@@ -1,3 +1,4 @@
+#![cfg(test)]
 use cgmath::{Matrix3, One, Rad, Vector3};
 
 use super::canonical_bones;

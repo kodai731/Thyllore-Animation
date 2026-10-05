@@ -1,3 +1,4 @@
+#![cfg(test)]
 pub const CONVENTIONS: [&str; 8] = [
     "blender",
     "maya",

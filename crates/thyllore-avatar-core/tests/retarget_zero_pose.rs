@@ -1,3 +1,4 @@
+#![cfg(test)]
 use std::collections::BTreeMap;
 
 use cgmath::{InnerSpace, Vector3};

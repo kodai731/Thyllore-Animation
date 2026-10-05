@@ -1,3 +1,4 @@
+#![cfg(test)]
 use cgmath::{InnerSpace, Matrix, Quaternion, Rad, Rotation3, Vector3};
 
 use super::canonical_bones;

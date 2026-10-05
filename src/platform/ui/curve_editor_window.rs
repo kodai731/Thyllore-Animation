@@ -236,6 +236,10 @@ fn collect_avatar_setup_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)>
         .unwrap_or_default()
 }
 
+fn is_role_space_clip(clip: Option<&EditableAnimationClip>) -> bool {
+    clip.is_some_and(|c| c.space == crate::animation::editable::ClipSpace::HumanoidRole)
+}
+
 fn build_track_list(
     ui: &imgui::Ui,
     world: &World,
@@ -270,7 +274,11 @@ fn build_track_list(
         return;
     }
 
-    ui.text("Bones:");
+    if is_role_space_clip(Some(clip)) {
+        ui.text_disabled("Role space (character axes, deg)");
+    } else {
+        ui.text("Bones:");
+    }
     ui.separator();
 
     let bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
@@ -2530,6 +2538,7 @@ fn build_curve_toolbar(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::editable::ClipSpace;
 
     #[test]
     fn test_format_morph_track_name_short() {
@@ -2550,6 +2559,19 @@ mod tests {
         assert_eq!(result.chars().count(), 20);
         assert!(result.starts_with("..."));
         assert!(result.ends_with("表情差分"));
+    }
+
+    #[test]
+    fn role_space_label_only_for_role_clips() {
+        let mut bone_clip = EditableAnimationClip::new(0, "bone".to_string());
+        bone_clip.space = ClipSpace::Bone;
+
+        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
+        role_clip.space = ClipSpace::HumanoidRole;
+
+        assert!(!is_role_space_clip(Some(&bone_clip)));
+        assert!(is_role_space_clip(Some(&role_clip)));
+        assert!(!is_role_space_clip(None));
     }
 }
 

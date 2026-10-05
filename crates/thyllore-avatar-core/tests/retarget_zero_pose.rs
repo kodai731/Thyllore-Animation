@@ -22,7 +22,7 @@ fn check_with_world(convention_id: &str) {
     )
     .unwrap();
 
-    let pose = thyllore_avatar_core::motion::components::recipe_curves::SampledPose {
+    let pose = thyllore_avatar_core::motion::components::sampled_pose::SampledPose {
         rotations: BTreeMap::new(),
         hips_translation: [0.0, 0.0, 0.0],
         morph: BTreeMap::new(),

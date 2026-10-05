@@ -17,7 +17,7 @@ pub fn canonical_hips_height() -> f32 {
 }
 
 pub fn reference_world_positions(
-    sampled: &thyllore_avatar_core::motion::components::recipe_curves::SampledPose,
+    sampled: &thyllore_avatar_core::motion::components::sampled_pose::SampledPose,
 ) -> Vec<(
     thyllore_avatar_core::humanoid::components::role::HumanoidRole,
     [f32; 3],

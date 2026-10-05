@@ -4,19 +4,11 @@ use cgmath::{InnerSpace, One, Quaternion};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
 use crate::motion::components::baked_motion::BakedMotion;
-use crate::motion::components::recipe_curves::RecipeCurves;
 use crate::motion::components::retarget_context::RetargetContext;
 use crate::motion::components::sampled_pose::SampledPose;
 
-use super::recipe_curves::sample_recipe_pose;
 use super::retarget_pose::retarget_pose;
 use super::role_clip_sampler::sample_role_clip;
-
-pub fn bake_recipe_motion(ctx: &RetargetContext, curves: &RecipeCurves) -> BakedMotion {
-    bake_sampled_motion(ctx, curves.fps, curves.duration_seconds, |time| {
-        sample_recipe_pose(curves, time)
-    })
-}
 
 pub fn bake_role_clip(
     ctx: &RetargetContext,
@@ -80,20 +72,15 @@ fn bake_sampled_motion(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
-    use cgmath::{InnerSpace, One, Quaternion, Vector3};
+    use cgmath::Vector3;
 
     use crate::humanoid::components::character_frame::CharacterFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
     use crate::humanoid::components::rest_pose::RestPose;
     use crate::humanoid::components::role::HumanoidRole;
-    use crate::motion::components::pose_recipe::{PoseRecipe, RecipePose};
-    use crate::motion::components::recipe_curves::RecipeCurves;
     use crate::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 
     use super::*;
-    use crate::motion::systems::recipe_curves::build_recipe_curves;
     use crate::motion::systems::retarget_pose::build_retarget_context;
 
     const HIPS: usize = 0;
@@ -166,20 +153,20 @@ mod tests {
         build_retarget_context(skeleton, &mapping, &frame, RestPose::TPose).unwrap()
     }
 
-    fn make_recipe(duration: f32, fps: u32, poses: Vec<RecipePose>) -> RecipeCurves {
-        let recipe = PoseRecipe {
-            version: 1,
-            name: "test".to_string(),
-            prompt: String::new(),
-            duration_seconds: duration,
-            fps,
-            is_loop: false,
-            poses,
-            cycle: None,
-            hand_presets: BTreeMap::new(),
-            copilot: Default::default(),
-        };
-        build_recipe_curves(&recipe)
+    fn make_empty_clip(duration: f32) -> EditableAnimationClip {
+        let mut clip = EditableAnimationClip::new(1, "test".to_string());
+        clip.duration = duration;
+        clip
+    }
+
+    fn sample_spine_twist(time: f32) -> SampledPose {
+        let mut rotations = BTreeMap::new();
+        rotations.insert(HumanoidRole::Spine, [0.0, 0.0, 350.0 * time]);
+        SampledPose {
+            rotations,
+            hips_translation: [0.0, 0.0, 0.0],
+            morph: BTreeMap::new(),
+        }
     }
 
     #[test]
@@ -187,28 +174,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let curves = make_recipe(
-            1.0,
-            30,
-            vec![
-                RecipePose {
-                    time: 0.0,
-                    ease: Default::default(),
-                    rotations: BTreeMap::new(),
-                    hips_translation: None,
-                    morph: BTreeMap::new(),
-                },
-                RecipePose {
-                    time: 1.0,
-                    ease: Default::default(),
-                    rotations: BTreeMap::new(),
-                    hips_translation: None,
-                    morph: BTreeMap::new(),
-                },
-            ],
-        );
-
-        let baked = bake_recipe_motion(&ctx, &curves);
+        let baked = bake_role_clip(&ctx, &make_empty_clip(1.0), 30);
 
         let expected_count = (1.0f32 * 30.0f32).round() as usize + 1;
         assert_eq!(baked.frame_times.len(), expected_count);
@@ -222,10 +188,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let mut clip = EditableAnimationClip::new(1, "test".to_string());
-        clip.duration = 2.0;
-
-        let baked = bake_role_clip(&ctx, &clip, 30);
+        let baked = bake_role_clip(&ctx, &make_empty_clip(2.0), 30);
 
         assert_eq!(baked.frame_times.len(), 61);
     }
@@ -235,28 +198,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let curves = make_recipe(
-            1.0,
-            30,
-            vec![
-                RecipePose {
-                    time: 0.0,
-                    ease: Default::default(),
-                    rotations: BTreeMap::new(),
-                    hips_translation: None,
-                    morph: BTreeMap::new(),
-                },
-                RecipePose {
-                    time: 1.0,
-                    ease: Default::default(),
-                    rotations: BTreeMap::new(),
-                    hips_translation: None,
-                    morph: BTreeMap::new(),
-                },
-            ],
-        );
-
-        let baked = bake_recipe_motion(&ctx, &curves);
+        let baked = bake_role_clip(&ctx, &make_empty_clip(1.0), 30);
 
         for (_bone_idx, curve) in &baked.bone_rotations {
             for i in 1..curve.len() {
@@ -276,29 +218,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let mut rotations = BTreeMap::new();
-        rotations.insert(HumanoidRole::Spine, [0.0, 0.0, 0.0]);
-        let pose_start = RecipePose {
-            time: 0.0,
-            ease: Default::default(),
-            rotations: rotations.clone(),
-            hips_translation: None,
-            morph: BTreeMap::new(),
-        };
-
-        let mut rotations_end = BTreeMap::new();
-        rotations_end.insert(HumanoidRole::Spine, [0.0, 0.0, 350.0]);
-        let pose_end = RecipePose {
-            time: 1.0,
-            ease: Default::default(),
-            rotations: rotations_end,
-            hips_translation: None,
-            morph: BTreeMap::new(),
-        };
-
-        let curves = make_recipe(1.0, 30, vec![pose_start, pose_end]);
-
-        let baked = bake_recipe_motion(&ctx, &curves);
+        let baked = bake_sampled_motion(&ctx, 30, 1.0, sample_spine_twist);
 
         let spine_curve = baked.bone_rotations.get(&SPINE).unwrap();
         for i in 1..spine_curve.len() {

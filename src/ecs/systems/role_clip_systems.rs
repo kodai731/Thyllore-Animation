@@ -189,7 +189,6 @@ pub fn unresolved_clip_roles(
     mapping: Option<&HumanoidMapping>,
 ) -> Vec<HumanoidRole> {
     let mut seen = HashSet::new();
-    let mut roles = Vec::new();
     for (bone_id, track) in &clip.tracks {
         if !track.has_rotation_keyframes() && !track.has_translation_keyframes() {
             continue;
@@ -204,11 +203,16 @@ pub fn unresolved_clip_roles(
         }
         if let Some(m) = mapping {
             if m.by_role.contains_key(&role) {
+                seen.remove(&role);
                 continue;
             }
         }
-        roles.push(role);
     }
+    let roles: Vec<HumanoidRole> = HumanoidRole::ALL
+        .iter()
+        .filter(|r| seen.contains(r))
+        .copied()
+        .collect();
     roles
 }
 

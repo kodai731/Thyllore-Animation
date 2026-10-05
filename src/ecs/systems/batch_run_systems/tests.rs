@@ -751,3 +751,124 @@ fn dump_includes_bone_tracks_when_requested() {
     let dump = batch_anim_dump_json(&world, false);
     assert!(dump["clips"][0].get("bone_tracks").is_none());
 }
+
+#[test]
+fn anim_edit_parses_role_clip_specs() {
+    use super::anim_edits::anim_edit_parse_spec;
+
+    let edit = anim_edit_parse_spec("new_role_clip=walk").unwrap();
+    match edit {
+        BatchAnimEdit::NewRoleClip { name } => assert_eq!(name, "walk"),
+        other => panic!("expected NewRoleClip, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("template=/tmp/a.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Template { path } => assert_eq!(path.to_str().unwrap(), "/tmp/a.anim.json"),
+        other => panic!("expected Template, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("save=/tmp/b.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Save { path } => assert_eq!(path.to_str().unwrap(), "/tmp/b.anim.json"),
+        other => panic!("expected Save, got {:?}", other),
+    }
+}
+
+#[test]
+fn template_then_save_round_trips_a_role_clip() {
+    use crate::ecs::systems::role_clip_systems::new_role_clip;
+    use tempfile::tempdir;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+
+    let template_path = tmp.path().join("template.anim.json");
+    let save_path = tmp.path().join("saved.anim.json");
+
+    let clip = new_role_clip("walk");
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    let current_id = world.resource::<TimelineState>().current_clip_id;
+    assert!(current_id.is_some());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Save {
+            path: save_path.clone(),
+        }],
+    );
+
+    let loaded_template = crate::scene::load_animation_clip(&template_path).unwrap();
+    let loaded_saved = crate::scene::load_animation_clip(&save_path).unwrap();
+
+    assert_eq!(loaded_template.tracks.len(), loaded_saved.tracks.len());
+    assert_eq!(loaded_template.space, loaded_saved.space);
+}
+
+#[test]
+fn template_replaces_a_same_named_bone_clip_with_a_playable_asset() {
+    use tempfile::tempdir;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+
+    let template_path = tmp.path().join("template.anim.json");
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(99, "walk".to_string());
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        assert_eq!(lib.source_clips.len(), 1);
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+}

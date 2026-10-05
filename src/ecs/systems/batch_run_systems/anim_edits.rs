@@ -14,7 +14,7 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, AvatarSetupState, ClipLibrary, RecipeClipSources, TimelineState,
+    AnimationType, AvatarSetupState, BakedRoleClips, ClipLibrary, RecipeClipSources, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
@@ -41,6 +41,15 @@ pub enum BatchAnimEdit {
     Recipe {
         path: PathBuf,
     },
+    NewRoleClip {
+        name: String,
+    },
+    Template {
+        path: PathBuf,
+    },
+    Save {
+        path: PathBuf,
+    },
     Clear,
 }
 
@@ -53,7 +62,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -119,7 +128,30 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         }
         return Ok(BatchAnimEdit::Recipe { path });
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | clear")
+    if let Some(name) = spec.strip_prefix("new_role_clip=") {
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("new_role_clip name must not be empty: '{spec}'");
+        }
+        return Ok(BatchAnimEdit::NewRoleClip {
+            name: name.to_string(),
+        });
+    }
+    if let Some(path_str) = spec.strip_prefix("template=") {
+        let path = PathBuf::from(path_str.trim());
+        if path.as_os_str().is_empty() {
+            bail!("template path must not be empty: '{spec}'");
+        }
+        return Ok(BatchAnimEdit::Template { path });
+    }
+    if let Some(path_str) = spec.strip_prefix("save=") {
+        let path = PathBuf::from(path_str.trim());
+        if path.as_os_str().is_empty() {
+            bail!("save path must not be empty: '{spec}'");
+        }
+        return Ok(BatchAnimEdit::Save { path });
+    }
+    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | recipe=<path.json> | new_role_clip=<name> | template=<path> | save=<path> | clear")
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
@@ -133,6 +165,30 @@ fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
     domain
         .property_type_of(channel)
         .ok_or_else(|| anyhow::anyhow!("scalar channel '{name}' is not in its domain table"))
+}
+
+fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str) {
+    let source_id = match world.resource::<ClipLibrary>().find_source_by_name(name) {
+        Some(id) => id,
+        None => return,
+    };
+    world
+        .resource_mut::<ClipLibrary>()
+        .source_clips
+        .remove(&source_id);
+    if let Some(asset_id) = world
+        .resource_mut::<ClipLibrary>()
+        .source_to_asset_id
+        .remove(&source_id)
+    {
+        assets.animation_clips.remove(&asset_id);
+    }
+    if let Some(mut baked) = world.get_resource_mut::<BakedRoleClips>() {
+        let invalidated = baked.invalidate_source(source_id);
+        for asset_id in invalidated {
+            assets.animation_clips.remove(&asset_id);
+        }
+    }
 }
 
 /// Apply anim edits through the production scalar-clip event dispatcher, so batch
@@ -216,6 +272,46 @@ pub fn batch_apply_anim_edits(
                     .push(crate::ecs::resource::AssetEditCommand::LoadRecipeFromFile {
                         path: path.clone(),
                     });
+            }
+            BatchAnimEdit::NewRoleClip { name } => {
+                let clip = crate::ecs::systems::role_clip_systems::new_role_clip(name);
+                let id = crate::ecs::systems::clip_library_register_and_activate(
+                    &mut world.resource_mut::<ClipLibrary>(),
+                    assets,
+                    clip,
+                );
+                world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+            }
+            BatchAnimEdit::Template { path } => {
+                let loaded = match crate::scene::load_animation_clip(path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        log_warn!("template {} failed: {}", path.display(), e);
+                        continue;
+                    }
+                };
+                remove_clip_by_name(world, assets, &loaded.name);
+                let id = crate::ecs::systems::clip_library_register_and_activate(
+                    &mut world.resource_mut::<ClipLibrary>(),
+                    assets,
+                    loaded,
+                );
+                world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+            }
+            BatchAnimEdit::Save { path } => {
+                let current_clip_id = world.resource::<TimelineState>().current_clip_id;
+                let Some(clip_id) = current_clip_id else {
+                    log_warn!("save {}: no current clip", path.display());
+                    continue;
+                };
+                let lib = world.resource::<ClipLibrary>();
+                let Some(clip) = lib.get(clip_id) else {
+                    log_warn!("save {}: clip id {} not found", path.display(), clip_id);
+                    continue;
+                };
+                if let Err(e) = crate::scene::save_animation_clip(path, clip) {
+                    log_warn!("save {} failed: {}", path.display(), e);
+                }
             }
             BatchAnimEdit::Clear => {
                 dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);

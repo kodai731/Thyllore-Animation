@@ -29,21 +29,16 @@ fn cluster_id(ci: usize) -> i32 {
     CLUSTER_BASE + ci as i32
 }
 
+pub struct RigMesh {
+    pub vertices: Vec<[f64; 3]>,
+    pub polygon_vertex_index: Vec<i32>,
+    pub cluster_vertex_indices: Vec<Vec<i32>>,
+}
+
 pub fn write_rig_fbx(convention: &RigConvention) -> String {
     let nodes = build_rig_nodes(convention);
-    let mut out = String::new();
-
-    out.push_str("; FBX 7.4.0 project file\n");
-
-    fbx_header(&mut out, convention);
-
-    definitions(&mut out);
-
-    objects(&mut out, convention, &nodes);
-
-    connections(&mut out, convention, &nodes);
-
-    out
+    let mesh = build_box_mesh(convention, &nodes);
+    write_rig_fbx_with_mesh(convention, &nodes, &mesh)
 }
 
 fn fbx_header(out: &mut String, convention: &RigConvention) {
@@ -89,7 +84,103 @@ fn definitions(out: &mut String) {
     out.push_str("}\n");
 }
 
-fn objects(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) {
+fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) -> RigMesh {
+    let bones = super::canonical_bones();
+    let positions = super::rig_positions::file_positions(convention);
+    let mut vertices: Vec<[f64; 3]> = Vec::new();
+    let mut polygon_vertex_index: Vec<i32> = Vec::new();
+    let mut cluster_vertex_indices: Vec<Vec<i32>> = Vec::new();
+    let mut vertex_offset = 0;
+
+    for (bi, _bone) in bones.iter().enumerate() {
+        let child_idx = super::rig_nodes::first_child_bone_index(&bones, bi);
+        let dir = super::rig_nodes::bone_direction(&positions, bi, child_idx);
+        let len = match child_idx {
+            Some(ci) => {
+                let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+                let c: Vector3<f64> = [positions[ci][0], positions[ci][1], positions[ci][2]].into();
+                (c - p).magnitude()
+            }
+            None => 0.1 * convention.body_scale / (convention.unit_scale_factor / 100.0),
+        };
+        let half = 0.02 * convention.body_scale / (convention.unit_scale_factor / 100.0);
+
+        let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+        let verts = cube_vertices(p, dir, len, half);
+        for v in &verts {
+            vertices.push(*v);
+        }
+
+        let base = vertex_offset as i32;
+        polygon_vertex_index.extend_from_slice(&[
+            base,
+            base + 1,
+            base + 3,
+            -(base + 2 + 1),
+            base + 4,
+            base + 5,
+            base + 7,
+            -(base + 6 + 1),
+            base,
+            base + 4,
+            base + 5,
+            -(base + 1 + 1),
+            base + 1,
+            base + 2,
+            base + 6,
+            -(base + 5 + 1),
+            base + 2,
+            base + 3,
+            base + 7,
+            -(base + 6 + 1),
+            base + 3,
+            base + 0,
+            base + 4,
+            -(base + 7 + 1),
+        ]);
+        vertex_offset += 8;
+    }
+
+    let role_count = nodes.iter().filter(|n| n.role.is_some()).count();
+    for ci in 0..role_count {
+        let start = ci * 8;
+        let end = (ci + 1) * 8;
+        cluster_vertex_indices.push((start as i32..end as i32).collect());
+    }
+
+    RigMesh {
+        vertices,
+        polygon_vertex_index,
+        cluster_vertex_indices,
+    }
+}
+
+pub fn write_rig_fbx_with_mesh(
+    convention: &RigConvention,
+    nodes: &[super::rig_nodes::RigNode],
+    mesh: &RigMesh,
+) -> String {
+    let mut out = String::new();
+
+    out.push_str("; FBX 7.4.0 project file\n");
+
+    fbx_header(&mut out, convention);
+
+    definitions(&mut out);
+
+    objects(&mut out, convention, nodes, mesh);
+
+    connections(&mut out, convention, nodes);
+
+    out
+}
+
+fn objects(
+    out: &mut String,
+    convention: &RigConvention,
+    nodes: &[super::rig_nodes::RigNode],
+    mesh: &RigMesh,
+) {
     out.push_str("Objects:  {\n");
 
     for (i, node) in nodes.iter().enumerate() {
@@ -156,7 +247,7 @@ fn objects(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nod
         }
     }
 
-    write_mesh_and_skin(out, convention, nodes);
+    write_mesh_and_skin(out, convention, nodes, mesh);
 
     out.push_str("}\n");
 }
@@ -216,6 +307,7 @@ fn write_mesh_and_skin(
     out: &mut String,
     convention: &RigConvention,
     nodes: &[super::rig_nodes::RigNode],
+    mesh: &RigMesh,
 ) {
     write!(
         out,
@@ -229,64 +321,7 @@ fn write_mesh_and_skin(
     out.push_str("    }\n");
     out.push_str("  }\n");
 
-    let bones = super::canonical_bones();
-    let positions = super::rig_positions::file_positions(convention);
-    let mut all_vertices: Vec<f64> = Vec::new();
-    let mut polygon_vertex_index: Vec<i32> = Vec::new();
-    let mut vertex_offset = 0;
-
-    for (bi, _bone) in bones.iter().enumerate() {
-        let child_idx = super::rig_nodes::first_child_bone_index(&bones, bi);
-        let dir = super::rig_nodes::bone_direction(&positions, bi, child_idx);
-        let len = match child_idx {
-            Some(ci) => {
-                let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
-                let c: Vector3<f64> = [positions[ci][0], positions[ci][1], positions[ci][2]].into();
-                (c - p).magnitude()
-            }
-            None => 0.1 * convention.body_scale / (convention.unit_scale_factor / 100.0),
-        };
-        let half = 0.02 * convention.body_scale / (convention.unit_scale_factor / 100.0);
-
-        let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
-        let verts = cube_vertices(p, dir, len, half);
-        for v in &verts {
-            all_vertices.push(v[0]);
-            all_vertices.push(v[1]);
-            all_vertices.push(v[2]);
-        }
-
-        let base = vertex_offset as i32;
-        polygon_vertex_index.extend_from_slice(&[
-            base,
-            base + 1,
-            base + 3,
-            -(base + 2 + 1),
-            base + 4,
-            base + 5,
-            base + 7,
-            -(base + 6 + 1),
-            base,
-            base + 4,
-            base + 5,
-            -(base + 1 + 1),
-            base + 1,
-            base + 2,
-            base + 6,
-            -(base + 5 + 1),
-            base + 2,
-            base + 3,
-            base + 7,
-            -(base + 6 + 1),
-            base + 3,
-            base + 0,
-            base + 4,
-            -(base + 7 + 1),
-        ]);
-        vertex_offset += 8;
-    }
-
-    let vert_count = all_vertices.len() / 3;
+    let vert_count = mesh.vertices.len();
     write!(
         out,
         "  Geometry: {}, \"Geometry::Body\", \"Mesh\" {{\n",
@@ -296,18 +331,18 @@ fn write_mesh_and_skin(
     out.push_str("    Vertices: *");
     write!(out, "{}", 3 * vert_count).unwrap();
     out.push_str(" { a: ");
-    for (i, v) in all_vertices.iter().enumerate() {
+    for (i, v) in mesh.vertices.iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
-        write!(out, "{}", fmt(*v)).unwrap();
+        write!(out, "{},{},{}", fmt(v[0]), fmt(v[1]), fmt(v[2])).unwrap();
     }
     out.push_str(" }\n");
 
     out.push_str("    PolygonVertexIndex: *");
-    write!(out, "{}", polygon_vertex_index.len()).unwrap();
+    write!(out, "{}", mesh.polygon_vertex_index.len()).unwrap();
     out.push_str(" { a: ");
-    for (i, v) in polygon_vertex_index.iter().enumerate() {
+    for (i, v) in mesh.polygon_vertex_index.iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
@@ -317,7 +352,7 @@ fn write_mesh_and_skin(
 
     out.push_str("  }\n");
 
-    write_skin_and_clusters(out, nodes);
+    write_skin_and_clusters(out, nodes, mesh);
 
     write_bind_pose(out, nodes);
 }
@@ -514,7 +549,7 @@ fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
     out.push_str("  }\n");
 }
 
-fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
+fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode], mesh: &RigMesh) {
     write!(
         out,
         "  Deformer: {}, \"Deformer::Skin\", \"Skin\" {{\n",
@@ -541,10 +576,8 @@ fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]
         .unwrap();
         out.push_str("    Version: 100\n");
 
-        let start = ci * 8;
-        let end = (ci + 1) * 8;
-        let indices: Vec<i32> = (start as i32..end as i32).collect();
-        out.push_str("    Indexes: *8 { a: ");
+        let indices = &mesh.cluster_vertex_indices[ci];
+        write!(out, "    Indexes: *{} {{ a: ", indices.len()).unwrap();
         for (i, v) in indices.iter().enumerate() {
             if i > 0 {
                 out.push(',');
@@ -553,8 +586,8 @@ fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]
         }
         out.push_str(" }\n");
 
-        out.push_str("    Weights: *8 { a: ");
-        for i in 0..8 {
+        write!(out, "    Weights: *{} {{ a: ", indices.len()).unwrap();
+        for i in 0..indices.len() {
             if i > 0 {
                 out.push(',');
             }

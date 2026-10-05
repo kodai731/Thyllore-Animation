@@ -1303,12 +1303,7 @@ mod tests {
         let role_clip_id: SourceClipId = 1;
         let mut role_clip = EditableAnimationClip::new(role_clip_id, "role".to_string());
         role_clip.space = ClipSpace::HumanoidRole;
-        let hips_idx = thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
-            .iter()
-            .position(|r| {
-                *r == thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips
-            })
-            .unwrap();
+        let hips_idx = thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips.index();
         let track = role_clip.add_track(hips_idx as BoneId, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
         library

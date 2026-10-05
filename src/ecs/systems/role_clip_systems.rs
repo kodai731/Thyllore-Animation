@@ -488,11 +488,7 @@ mod tests {
         let mut role_clip = EditableAnimationClip::new(0, "test_role".to_string());
         role_clip.space = ClipSpace::HumanoidRole;
 
-        let right_lower_arm_role_index = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::RightLowerArm)
-            .unwrap();
-        let fake_bone_id: BoneId = right_lower_arm_role_index as BoneId;
+        let fake_bone_id: BoneId = HumanoidRole::RightLowerArm.index() as BoneId;
 
         let track = role_clip.add_track(fake_bone_id, "RightLowerArm".to_string());
         curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
@@ -561,10 +557,7 @@ mod tests {
 
         let mut role_clip = EditableAnimationClip::new(0, "test_role".to_string());
         role_clip.space = ClipSpace::HumanoidRole;
-        let hips_role_index = HumanoidRole::ALL
-            .iter()
-            .position(|role| *role == HumanoidRole::Hips)
-            .unwrap();
+        let hips_role_index = HumanoidRole::Hips.index();
         let track = role_clip.add_track(hips_role_index as BoneId, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);
@@ -597,14 +590,8 @@ mod tests {
         let mut clip = EditableAnimationClip::new(0, "test".to_string());
         clip.space = ClipSpace::HumanoidRole;
 
-        let hips_idx = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Hips)
-            .unwrap();
-        let spine_idx = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Spine)
-            .unwrap();
+        let hips_idx = HumanoidRole::Hips.index();
+        let spine_idx = HumanoidRole::Spine.index();
 
         let hips_track = clip.add_track(hips_idx as BoneId, "Hips".to_string());
         curve_add_keyframe(&mut hips_track.rotation_x, 0.0, 0.0);
@@ -622,14 +609,8 @@ mod tests {
         let mut clip = EditableAnimationClip::new(0, "test".to_string());
         clip.space = ClipSpace::HumanoidRole;
 
-        let hips_idx = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Hips)
-            .unwrap();
-        let spine_idx = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Spine)
-            .unwrap();
+        let hips_idx = HumanoidRole::Hips.index();
+        let spine_idx = HumanoidRole::Spine.index();
 
         let hips_track = clip.add_track(hips_idx as BoneId, "Hips".to_string());
         curve_add_keyframe(&mut hips_track.rotation_x, 0.0, 0.0);

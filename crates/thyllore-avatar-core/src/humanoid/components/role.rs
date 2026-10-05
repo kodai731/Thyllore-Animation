@@ -74,4 +74,37 @@ mod tests {
             assert_eq!(HumanoidRole::ALL[role.index()], role);
         }
     }
+
+    #[test]
+    fn test_mirrored_is_involution() {
+        for &role in HumanoidRole::ALL.iter() {
+            assert_eq!(
+                role.mirrored().mirrored(),
+                role,
+                "{role:?}.mirrored().mirrored() != {role:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_mirrored_flips_side() {
+        for &role in HumanoidRole::ALL.iter() {
+            let side = match role.side() {
+                Some(s) => s,
+                None => continue,
+            };
+            let expected_opposite = if side == Side::Left {
+                Side::Right
+            } else {
+                Side::Left
+            };
+            assert_eq!(
+                role.mirrored().side(),
+                Some(expected_opposite),
+                "{role:?}.mirrored().side() should be {:?}, got {:?}",
+                expected_opposite,
+                role.mirrored().side()
+            );
+        }
+    }
 }

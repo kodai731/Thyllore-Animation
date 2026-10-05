@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use support::fixture_bones::load_rig_from_fbx_text;
 use support::test_humanoid::{
-    build_stick_mesh, mirrored_role, test_humanoid_bones, write_test_humanoid_fbx, StickTip,
+    build_stick_mesh, test_humanoid_bones, write_test_humanoid_fbx, StickTip,
 };
 use thyllore_avatar_core::expression::components::side::Side;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -69,7 +69,7 @@ fn test_humanoid_right_side_mirrors_left() {
             continue;
         }
         let left_role = bone.role;
-        let right_role = mirrored_role(left_role);
+        let right_role = left_role.mirrored();
         let left_idx = *role_to_idx.get(&left_role).unwrap();
         let right_idx = *role_to_idx.get(&right_role).unwrap();
         let left = &bones[left_idx];
@@ -102,7 +102,7 @@ fn test_humanoid_right_side_mirrors_left() {
 
         match (&left.tip, &right.tip) {
             (StickTip::Child(lr), StickTip::Child(rr)) => {
-                let expected_right = mirrored_role(*lr);
+                let expected_right = lr.mirrored();
                 assert_eq!(
                     *rr, expected_right,
                     "child tip mirror failed for {:?}/{:?}: left child={:?}, right child={:?}",

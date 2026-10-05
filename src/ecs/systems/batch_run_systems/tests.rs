@@ -677,10 +677,7 @@ fn dump_includes_bone_tracks_when_requested() {
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());
 
-    let right_upper_arm_idx = HumanoidRole::ALL
-        .iter()
-        .position(|r| *r == HumanoidRole::RightUpperArm)
-        .unwrap();
+    let right_upper_arm_idx = HumanoidRole::RightUpperArm.index();
     let mut clip = EditableAnimationClip::new(0, "t".into());
     clip.space = ClipSpace::HumanoidRole;
     let track = clip.add_track(
@@ -883,10 +880,7 @@ fn key_edit_addresses_role_curve() {
         thyllore_anim_core::editable::ClipSpace::HumanoidRole
     );
 
-    let head_idx = HumanoidRole::ALL
-        .iter()
-        .position(|r| *r == HumanoidRole::Head)
-        .unwrap();
+    let head_idx = HumanoidRole::Head.index();
     let track = clip.get_track(head_idx as u32).unwrap();
     assert_eq!(track.rotation_x.keyframes.len(), 1);
     let kf = &track.rotation_x.keyframes[0];
@@ -998,10 +992,7 @@ fn role_key_keeps_earlier_keys_on_the_same_curve() {
 
     let lib = world.resource::<ClipLibrary>();
     let clip = lib.get(clip_id).unwrap();
-    let left_upper_arm_idx = HumanoidRole::ALL
-        .iter()
-        .position(|r| *r == HumanoidRole::LeftUpperArm)
-        .unwrap();
+    let left_upper_arm_idx = HumanoidRole::LeftUpperArm.index();
     let track = clip.get_track(left_upper_arm_idx as u32).unwrap();
     assert_eq!(track.rotation_z.keyframes.len(), 2);
     assert!((track.rotation_z.keyframes[0].time - 0.0).abs() < f32::EPSILON);

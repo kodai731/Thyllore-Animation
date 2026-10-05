@@ -23,26 +23,9 @@ pub enum StickTip {
     Leaf([f64; 3]),
 }
 
-#[allow(dead_code)]
-pub fn mirrored_role(role: HumanoidRole) -> HumanoidRole {
-    let name = role.unity_name();
-    let swapped = if let (Some(rest), side) = (name.strip_prefix("Left"), "Right") {
-        format!("{}{}", side, rest)
-    } else if let (Some(rest), side) = (name.strip_prefix("Right"), "Left") {
-        format!("{}{}", side, rest)
-    } else {
-        return role;
-    };
-    HumanoidRole::ALL
-        .iter()
-        .copied()
-        .find(|r| r.unity_name() == swapped)
-        .unwrap_or(role)
-}
-
 fn mirror_tip(tip: &StickTip) -> StickTip {
     match tip {
-        StickTip::Child(role) => StickTip::Child(mirrored_role(*role)),
+        StickTip::Child(role) => StickTip::Child(role.mirrored()),
         StickTip::Leaf(offset) => StickTip::Leaf([-offset[0], offset[1], offset[2]]),
     }
 }
@@ -102,11 +85,11 @@ pub fn test_humanoid_bones() -> Vec<StickBone> {
         if role.side() != Some(Side::Left) {
             continue;
         }
-        let new_role = mirrored_role(*role);
+        let new_role = role.mirrored();
         let new_pos: [f64; 3] = [-position[0], position[1], position[2]];
         let new_tip = mirror_tip(tip);
         let new_parent = parent_role.map(|pr| {
-            let mirrored_parent_role = mirrored_role(pr);
+            let mirrored_parent_role = pr.mirrored();
             *role_to_idx.get(&mirrored_parent_role).unwrap()
         });
         let idx = bones.len();

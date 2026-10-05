@@ -231,37 +231,29 @@ fn parse_humanoid_role(
     name: &str,
 ) -> Result<thyllore_avatar_core::humanoid::components::role::HumanoidRole> {
     use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-    HumanoidRole::ALL
-        .iter()
-        .find(|r| r.unity_name() == name)
-        .copied()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "unknown role '{}'. Valid roles: {}",
-                name,
-                HumanoidRole::ALL
-                    .iter()
-                    .map(|r| r.unity_name())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })
+    HumanoidRole::from_unity_name(name).ok_or_else(|| {
+        let valid_roles: Vec<&str> = HumanoidRole::ALL.iter().map(|r| r.unity_name()).collect();
+        anyhow::anyhow!(
+            "unknown role '{}'. Valid roles: {}",
+            name,
+            valid_roles.join(", ")
+        )
+    })
 }
 
 fn parse_role_axis(
     axis_str: &str,
     role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
 ) -> Result<RoleAxis> {
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
     match axis_str {
         "x" => Ok(RoleAxis::RotationX),
         "y" => Ok(RoleAxis::RotationY),
         "z" => Ok(RoleAxis::RotationZ),
-        "tx" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationX),
-        "ty" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationY),
-        "tz" if role == HumanoidRole::Hips => Ok(RoleAxis::TranslationZ),
+        "tx" if role.allows_translation() => Ok(RoleAxis::TranslationX),
+        "ty" if role.allows_translation() => Ok(RoleAxis::TranslationY),
+        "tz" if role.allows_translation() => Ok(RoleAxis::TranslationZ),
         other => Err(anyhow::anyhow!(
-            "invalid axis '{}' for role '{}'. Valid axes: x, y, z (tx, ty, tz only for Hips)",
+            "invalid axis '{}' for role '{}'. Valid axes: x, y, z (tx, ty, tz only for translation-allowed roles)",
             other,
             role.unity_name()
         )),
@@ -358,12 +350,7 @@ pub fn batch_apply_anim_edits(
                     );
                     continue;
                 }
-                let role_index =
-                    thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
-                        .iter()
-                        .position(|r| *r == *role)
-                        .unwrap();
-                let bone_id: BoneId = role_index as u32;
+                let bone_id: BoneId = role.index() as u32;
                 let track = if let Some(t) = clip.get_track_mut(bone_id) {
                     t
                 } else {
@@ -493,12 +480,7 @@ pub fn batch_apply_anim_edits(
                             continue;
                         }
                     };
-                    let role_index =
-                        thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
-                            .iter()
-                            .position(|r| *r == *role)
-                            .unwrap();
-                    let bone_id: BoneId = role_index as u32;
+                    let bone_id: BoneId = role.index() as u32;
                     let track = if let Some(t) = clip.get_track_mut(bone_id) {
                         t
                     } else {
@@ -567,19 +549,19 @@ fn collect_role_names_by_bone(
     world: &World,
     clip: &EditableAnimationClip,
 ) -> HashMap<BoneId, String> {
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
     if clip.space == ClipSpace::HumanoidRole {
-        return thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
-            .iter()
-            .enumerate()
-            .map(|(bone_id, role)| (bone_id as BoneId, format!("{role:?}")))
-            .collect();
+        let role_space_names =
+            HumanoidRole::ALL.map(|role| (role.index() as BoneId, role.unity_name().to_string()));
+        return role_space_names.into_iter().collect();
     }
 
     let mut role_names: HashMap<BoneId, String> = HashMap::new();
 
     if let Some(setup) = world.get_resource::<AvatarSetupState>() {
         for (role, &bone_index) in &setup.mapping.by_role {
-            role_names.insert(bone_index as BoneId, format!("{role:?}"));
+            role_names.insert(bone_index as BoneId, role.unity_name().to_string());
         }
     }
 

@@ -199,6 +199,14 @@ fn generate_rig_rust(rig: &RigDefinition) -> String {
         idx.to_string()
     });
     write_from_unity_name(&mut out, &roles);
+    write_role_method(&mut out, "mirrored(self) -> HumanoidRole", &roles, |role| {
+        if let Some(side) = role.side {
+            let opposite_side = SIDES.iter().find(|s| **s != side).unwrap();
+            format!("Self::{}{}", opposite_side, role.part.part)
+        } else {
+            format!("Self::{}", role.name)
+        }
+    });
     out.push_str("}\n\n");
 
     let _ = writeln!(

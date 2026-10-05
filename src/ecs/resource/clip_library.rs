@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+use crate::animation::editable::{ClipSpace, EditableAnimationClip, SourceClip, SourceClipId};
 use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
 
@@ -34,6 +34,20 @@ impl ClipLibrary {
         self.source_clips.clear();
         self.dirty_sources.clear();
         self.source_to_asset_id.clear();
+    }
+
+    pub fn clear_model_clips(&mut self) {
+        self.animation.clear();
+        let role_ids: HashSet<SourceClipId> = self
+            .source_clips
+            .iter()
+            .filter(|(_, s)| s.editable_clip.space == ClipSpace::HumanoidRole)
+            .map(|(id, _)| *id)
+            .collect();
+        self.source_clips.retain(|id, _| role_ids.contains(id));
+        self.dirty_sources.retain(|id| role_ids.contains(id));
+        self.source_to_asset_id
+            .retain(|id, _| role_ids.contains(id));
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {

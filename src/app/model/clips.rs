@@ -86,8 +86,9 @@ fn register_clips_to_library(
         .get(editable_id)
         .map(|c| c.duration)
         .unwrap_or(0.0);
+    let keeps_role = keeps_selected_role_clip(world);
     let mut timeline_state = world.resource_mut::<TimelineState>();
-    if !keeps_selected_role_clip(world) {
+    if !keeps_role {
         timeline_state.current_clip_id = Some(editable_id);
         timeline_apply_fit_zoom(&mut timeline_state, clip_duration);
     }
@@ -187,6 +188,7 @@ pub fn keeps_selected_role_clip(world: &World) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::Skeleton;
 
     #[test]
     fn model_load_keeps_a_selected_role_clip() {
@@ -205,6 +207,37 @@ mod tests {
         world.resource_mut::<TimelineState>().current_clip_id = Some(role_source_id);
 
         register_empty_editable_clip(&mut world, &mut assets);
+
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(role_source_id)
+        );
+    }
+
+    #[test]
+    fn model_load_with_clips_keeps_a_selected_role_clip() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton: Skeleton::default(),
+        });
+
+        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
+        role_clip.space = ClipSpace::HumanoidRole;
+        let role_source_id = {
+            let mut clip_library = world.resource_mut::<ClipLibrary>();
+            clip_library_register_and_activate(&mut clip_library, &mut assets, role_clip)
+        };
+
+        world.resource_mut::<TimelineState>().current_clip_id = Some(role_source_id);
+
+        let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
+        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
 
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,

@@ -16,6 +16,7 @@ const GEOMETRY_ID: i32 = 20001;
 const SKIN_ID: i32 = 20002;
 const CLUSTER_BASE: i32 = 21000;
 const BIND_POSE_ID: i32 = 30000;
+const MATERIAL_ID: i32 = 40000;
 
 fn bone_model_id(i: usize) -> i32 {
     BONE_MODEL_BASE + i as i32
@@ -33,6 +34,7 @@ pub struct RigMesh {
     pub vertices: Vec<[f64; 3]>,
     pub polygon_vertex_index: Vec<i32>,
     pub cluster_vertex_indices: Vec<Vec<i32>>,
+    pub diffuse_color: Option<[f64; 3]>,
 }
 
 pub fn write_rig_fbx(convention: &RigConvention) -> String {
@@ -71,9 +73,10 @@ fn fbx_header(out: &mut String, convention: &RigConvention) {
     out.push_str("}\n");
 }
 
-fn definitions(out: &mut String) {
+fn definitions(out: &mut String, mesh: &RigMesh) {
+    let count = if mesh.diffuse_color.is_some() { 7 } else { 6 };
     out.push_str("Definitions:  {\n");
-    out.push_str("  Count: 6\n");
+    write!(out, "  Count: {}\n", count).unwrap();
     out.push_str("  Version: 100\n");
     out.push_str("  ObjectType: \"GlobalSettings\"\n");
     out.push_str("  ObjectType: \"Model\"\n");
@@ -81,10 +84,13 @@ fn definitions(out: &mut String) {
     out.push_str("  ObjectType: \"Geometry\"\n");
     out.push_str("  ObjectType: \"Deformer\"\n");
     out.push_str("  ObjectType: \"Pose\"\n");
+    if mesh.diffuse_color.is_some() {
+        out.push_str("  ObjectType: \"Material\"\n");
+    }
     out.push_str("}\n");
 }
 
-fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) -> RigMesh {
+pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) -> RigMesh {
     let bones = super::canonical_bones();
     let positions = super::rig_positions::file_positions(convention);
     let mut vertices: Vec<[f64; 3]> = Vec::new();
@@ -152,6 +158,7 @@ fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::RigNode
         vertices,
         polygon_vertex_index,
         cluster_vertex_indices,
+        diffuse_color: None,
     }
 }
 
@@ -166,11 +173,11 @@ pub fn write_rig_fbx_with_mesh(
 
     fbx_header(&mut out, convention);
 
-    definitions(&mut out);
+    definitions(&mut out, mesh);
 
     objects(&mut out, convention, nodes, mesh);
 
-    connections(&mut out, convention, nodes);
+    connections(&mut out, convention, nodes, mesh);
 
     out
 }
@@ -247,12 +254,39 @@ fn objects(
         }
     }
 
+    if let Some(color) = mesh.diffuse_color {
+        write!(
+            out,
+            "  Material: {}, \"Material::White\", \"\" {{\n",
+            MATERIAL_ID
+        )
+        .unwrap();
+        out.push_str("    Version: 102\n");
+        out.push_str("    ShadingModel: \"lambert\"\n");
+        out.push_str("    Properties70:  {\n");
+        write!(
+            out,
+            "      P: \"DiffuseColor\", \"Color\", \"\", \"A\",{},{},{}\n",
+            fmt(color[0]),
+            fmt(color[1]),
+            fmt(color[2])
+        )
+        .unwrap();
+        out.push_str("    }\n");
+        out.push_str("  }\n");
+    }
+
     write_mesh_and_skin(out, convention, nodes, mesh);
 
     out.push_str("}\n");
 }
 
-fn connections(out: &mut String, convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) {
+fn connections(
+    out: &mut String,
+    convention: &RigConvention,
+    nodes: &[super::rig_nodes::RigNode],
+    mesh: &RigMesh,
+) {
     out.push_str("Connections:  {\n");
 
     for (i, node) in nodes.iter().enumerate() {
@@ -300,12 +334,16 @@ fn connections(out: &mut String, convention: &RigConvention, nodes: &[super::rig
         write!(out, "  C: \"OO\",{},{}\n", bone_model_id, cluster_id).unwrap();
     }
 
+    if mesh.diffuse_color.is_some() {
+        write!(out, "  C: \"OO\",{},{}\n", MATERIAL_ID, MESH_MODEL_ID).unwrap();
+    }
+
     out.push_str("}\n");
 }
 
 fn write_mesh_and_skin(
     out: &mut String,
-    convention: &RigConvention,
+    _convention: &RigConvention,
     nodes: &[super::rig_nodes::RigNode],
     mesh: &RigMesh,
 ) {
@@ -349,6 +387,22 @@ fn write_mesh_and_skin(
         write!(out, "{}", v).unwrap();
     }
     out.push_str(" }\n");
+
+    if mesh.diffuse_color.is_some() {
+        out.push_str("    LayerElementMaterial: 0 {\n");
+        out.push_str("      Version: 101\n");
+        out.push_str("      MappingInformationType: \"AllSame\"\n");
+        out.push_str("      ReferenceInformationType: \"IndexToDirect\"\n");
+        out.push_str("      Materials: *1 { a: 0 }\n");
+        out.push_str("    }\n");
+        out.push_str("    Layer: 0 {\n");
+        out.push_str("      Version: 100\n");
+        out.push_str("      LayerElement:  {\n");
+        out.push_str("        Type: \"LayerElementMaterial\"\n");
+        out.push_str("        TypedIndex: 0\n");
+        out.push_str("      }\n");
+        out.push_str("    }\n");
+    }
 
     out.push_str("  }\n");
 

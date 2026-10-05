@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use support::fbx_ascii::write_rig_fbx;
+use support::fbx_ascii::{build_box_mesh, write_rig_fbx};
 use support::rig_convention::rig_convention;
 use support::rig_names::CONVENTIONS;
 
@@ -44,4 +44,25 @@ fn rig_fixtures_match_generator() {
              Hint: run `cargo test -p thyllore-avatar-core --test generate_rig_fixtures -- --ignored` to regenerate",
         );
     }
+}
+
+#[test]
+fn rig_fbx_with_material_declares_white_material() {
+    let convention = rig_convention("vrm_normalized");
+    let nodes = support::rig_nodes::build_rig_nodes(&convention);
+    let mut mesh = build_box_mesh(&convention, &nodes);
+    mesh.diffuse_color = Some([1.0, 1.0, 1.0]);
+    let content = support::fbx_ascii::write_rig_fbx_with_mesh(&convention, &nodes, &mesh);
+    assert!(
+        content.contains("Material::White"),
+        "FBX should contain Material::White"
+    );
+    assert!(
+        content.contains("DiffuseColor"),
+        "FBX should contain DiffuseColor"
+    );
+    assert!(
+        content.contains("LayerElementMaterial"),
+        "FBX should contain LayerElementMaterial"
+    );
 }

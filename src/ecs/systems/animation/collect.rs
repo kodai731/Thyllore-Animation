@@ -4,12 +4,24 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::compute_local_time;
 use crate::ecs::resource::{
-    ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
+    BakedRoleClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
 };
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
+
+fn resolve_playable_asset(
+    source_id: SourceClipId,
+    entity: Entity,
+    clip_library: &ClipLibrary,
+    baked: &BakedRoleClips,
+) -> Option<crate::asset::AssetId> {
+    if let Some(baked_entry) = baked.by_key.get(&(source_id, entity)) {
+        return Some(baked_entry.asset_id);
+    }
+    clip_library.get_asset_id_for_source(source_id)
+}
 
 pub(crate) fn collect_animated_entities(
     world: &World,
@@ -35,6 +47,10 @@ pub(crate) fn collect_animated_entities(
         crate::ecs::systems::clip_schedule_systems::find_preview_owner(world)
             .map(|owner| (owner, clip_id))
     });
+
+    let empty_baked = BakedRoleClips::default();
+    let baked_ref = world.get_resource::<BakedRoleClips>();
+    let baked: &BakedRoleClips = baked_ref.as_deref().unwrap_or(&empty_baked);
 
     for (parent_entity, animator) in world.iter_components::<Animator>() {
         let Some(schedule) = world.get_component::<ClipSchedule>(parent_entity) else {
@@ -63,11 +79,11 @@ pub(crate) fn collect_animated_entities(
 
         let active_instances = match solo_preview {
             Some((owner, clip_id)) if owner == parent_entity => {
-                build_solo_instance(clip_id, clip_library, animator)
+                build_solo_instance(clip_id, parent_entity, clip_library, baked, animator)
                     .into_iter()
                     .collect()
             }
-            _ => build_active_instances(schedule, clip_library, animator),
+            _ => build_active_instances(schedule, parent_entity, clip_library, baked, animator),
         };
 
         if should_log && active_instances.is_empty() {
@@ -153,7 +169,9 @@ fn resolve_skeleton_id(
 
 pub(crate) fn build_active_instances(
     schedule: &ClipSchedule,
+    entity: Entity,
     clip_library: &ClipLibrary,
+    baked: &BakedRoleClips,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
     let active = crate::ecs::systems::clip_schedule_systems::clip_schedule_active_instances(
@@ -164,7 +182,7 @@ pub(crate) fn build_active_instances(
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
         .filter_map(|inst| {
-            let asset_id = clip_library.get_asset_id_for_source(inst.source_id)?;
+            let asset_id = resolve_playable_asset(inst.source_id, entity, clip_library, baked)?;
 
             let local_time = compute_local_time(
                 animator.time,
@@ -206,10 +224,12 @@ pub(crate) fn build_active_instances(
 
 pub(crate) fn build_solo_instance(
     clip_id: SourceClipId,
+    entity: Entity,
     clip_library: &ClipLibrary,
+    baked: &BakedRoleClips,
     animator: &Animator,
 ) -> Option<ActiveInstanceInfo> {
-    let asset_id = clip_library.get_asset_id_for_source(clip_id)?;
+    let asset_id = resolve_playable_asset(clip_id, entity, clip_library, baked)?;
     let duration = clip_library.get(clip_id)?.duration;
 
     let local_time = compute_local_time(
@@ -261,10 +281,12 @@ mod tests {
 
     fn collect_solo(
         clip_id: SourceClipId,
+        entity: Entity,
         clip_library: &ClipLibrary,
+        baked: &BakedRoleClips,
         animator: &Animator,
     ) -> Vec<ActiveInstanceInfo> {
-        build_solo_instance(clip_id, clip_library, animator)
+        build_solo_instance(clip_id, entity, clip_library, baked, animator)
             .into_iter()
             .collect()
     }
@@ -275,10 +297,14 @@ mod tests {
         register_clip(&mut clip_library, 1, 2.0);
         let schedule = ClipSchedule::new();
         let animator = animator_at(0.5);
+        let baked = BakedRoleClips::default();
+        let entity: Entity = 0;
 
-        assert!(build_active_instances(&schedule, &clip_library, &animator).is_empty());
+        assert!(
+            build_active_instances(&schedule, entity, &clip_library, &baked, &animator).is_empty()
+        );
 
-        let instances = collect_solo(1, &clip_library, &animator);
+        let instances = collect_solo(1, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
         let solo = &instances[0];
@@ -304,8 +330,10 @@ mod tests {
         schedule.instances[1].muted = true;
         let muted_before: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
         let animator = animator_at(0.5);
+        let baked = BakedRoleClips::default();
+        let entity: Entity = 0;
 
-        let instances = collect_solo(3, &clip_library, &animator);
+        let instances = collect_solo(3, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
         assert_eq!(instances[0].source_id, 3);
@@ -325,12 +353,67 @@ mod tests {
         schedule.instances[0].weight = 0.4;
         schedule.instances[1].muted = true;
         let animator = animator_at(0.5);
+        let baked = BakedRoleClips::default();
+        let entity: Entity = 0;
 
-        let instances = build_active_instances(&schedule, &clip_library, &animator);
+        let instances = build_active_instances(&schedule, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
         assert_eq!(instances[0].source_id, 1);
         assert_eq!(instances[0].instance_id, Some(audible_id));
         assert!((instances[0].weight - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn role_clip_instance_plays_the_baked_asset() {
+        let mut clip_library = ClipLibrary::new();
+        let mut clip = EditableAnimationClip::new(1, "role".to_string());
+        clip.duration = 2.0;
+        clip_library
+            .source_clips
+            .insert(1, SourceClip::new(1, clip));
+
+        let baked = {
+            let mut baked = BakedRoleClips::default();
+            baked.by_key.insert(
+                (1, 42),
+                crate::ecs::resource::BakedRoleClip {
+                    fps: 30,
+                    asset_id: 999,
+                    clip: EditableAnimationClip::new(1, "baked".to_string()),
+                },
+            );
+            baked
+        };
+
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        let animator = animator_at(0.5);
+
+        let instances = build_active_instances(&schedule, 42, &clip_library, &baked, &animator);
+
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].source_id, 1);
+        assert_eq!(instances[0].asset_id, 999);
+    }
+
+    #[test]
+    fn role_clip_without_bake_is_skipped() {
+        let mut clip_library = ClipLibrary::new();
+        let mut clip = EditableAnimationClip::new(1, "role".to_string());
+        clip.duration = 2.0;
+        clip_library
+            .source_clips
+            .insert(1, SourceClip::new(1, clip));
+
+        let baked = BakedRoleClips::default();
+
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        let animator = animator_at(0.5);
+
+        let instances = build_active_instances(&schedule, 42, &clip_library, &baked, &animator);
+
+        assert!(instances.is_empty());
     }
 }

@@ -2,11 +2,12 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
+use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::mapping_io::{
-    humanoid_mapping_path, load_mapping, save_mapping,
+    humanoid_mapping_path, load_or_infer_rig, save_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::name_match::{
     collect_unresolved_roles, infer_mapping,
@@ -169,20 +170,20 @@ pub(crate) fn load_or_infer_mapping(
     model_path: &Path,
     bones: &[BoneInput],
 ) -> (HumanoidMapping, Vec<String>) {
-    let mapping_path = humanoid_mapping_path(model_path);
-    if mapping_path.exists() {
-        match load_mapping(&mapping_path, bones) {
-            Ok(loaded) => return loaded,
-            Err(error) => log_warn!(
-                "Failed to load humanoid mapping {}: {}",
-                mapping_path.display(),
+    match load_or_infer_rig(model_path, bones) {
+        Ok((AvatarRig::Confirmed(m), missing)) => (m, missing),
+        Ok((AvatarRig::Inferred(m), _)) => (m, Vec::new()),
+        Ok((AvatarRig::NotHumanoid, _)) => (HumanoidMapping::default(), Vec::new()),
+        Err(error) => {
+            log_warn!(
+                "Failed to load or infer humanoid mapping {}: {}",
+                model_path.display(),
                 error
-            ),
+            );
+            let (mapping, _) = infer_mapping(bones);
+            (mapping, Vec::new())
         }
     }
-
-    let (mapping, _) = infer_mapping(bones);
-    (mapping, Vec::new())
 }
 
 fn refresh_avatar_validation(state: &mut AvatarSetupState) {

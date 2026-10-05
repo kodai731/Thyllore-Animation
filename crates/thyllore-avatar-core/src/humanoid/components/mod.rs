@@ -1,3 +1,4 @@
+pub mod avatar_rig;
 pub mod character_frame;
 pub mod mapping;
 pub mod mapping_issues;

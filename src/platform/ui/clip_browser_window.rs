@@ -43,6 +43,11 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
     }
 
     ui.same_line();
+    if ui.small_button("+ Role") {
+        world.send_command(ClipBrowserEvent::CreateEmptyRole);
+    }
+
+    ui.same_line();
     if ui.small_button("Load") {
         send_dialog_request(world, DialogRequest::LoadClip);
     }

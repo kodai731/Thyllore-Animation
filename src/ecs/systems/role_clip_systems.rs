@@ -173,13 +173,27 @@ pub fn resolve_model_rig(
     Some((skeleton, mapping))
 }
 
+pub fn new_role_clip(name: &str) -> EditableAnimationClip {
+    let mut clip = EditableAnimationClip::new(0, name.to_string());
+    clip.space = ClipSpace::HumanoidRole;
+    clip.duration = 2.0;
+    clip.min_duration = 2.0;
+    for (bone_id, role) in HumanoidRole::ALL.iter().enumerate() {
+        clip.add_track(bone_id as BoneId, role.unity_name().to_string());
+    }
+    clip
+}
+
 pub fn unresolved_clip_roles(
     clip: &EditableAnimationClip,
     mapping: Option<&HumanoidMapping>,
 ) -> Vec<HumanoidRole> {
     let mut seen = HashSet::new();
     let mut roles = Vec::new();
-    for bone_id in clip.tracks.keys() {
+    for (bone_id, track) in &clip.tracks {
+        if !track.has_rotation_keyframes() && !track.has_translation_keyframes() {
+            continue;
+        }
         let idx = *bone_id as usize;
         if idx >= HumanoidRole::ALL.len() {
             continue;
@@ -588,8 +602,10 @@ mod tests {
             .position(|r| *r == HumanoidRole::Spine)
             .unwrap();
 
-        clip.add_track(hips_idx as BoneId, "Hips".to_string());
-        clip.add_track(spine_idx as BoneId, "Spine".to_string());
+        let hips_track = clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        curve_add_keyframe(&mut hips_track.rotation_x, 0.0, 0.0);
+        let spine_track = clip.add_track(spine_idx as BoneId, "Spine".to_string());
+        curve_add_keyframe(&mut spine_track.rotation_x, 0.0, 0.0);
 
         let roles = unresolved_clip_roles(&clip, None);
         assert_eq!(roles.len(), 2);
@@ -611,8 +627,10 @@ mod tests {
             .position(|r| *r == HumanoidRole::Spine)
             .unwrap();
 
-        clip.add_track(hips_idx as BoneId, "Hips".to_string());
-        clip.add_track(spine_idx as BoneId, "Spine".to_string());
+        let hips_track = clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        curve_add_keyframe(&mut hips_track.rotation_x, 0.0, 0.0);
+        let spine_track = clip.add_track(spine_idx as BoneId, "Spine".to_string());
+        curve_add_keyframe(&mut spine_track.rotation_x, 0.0, 0.0);
 
         let mut mapping = HumanoidMapping::default();
         mapping.by_role.insert(HumanoidRole::Hips, 0);
@@ -620,5 +638,27 @@ mod tests {
         let roles = unresolved_clip_roles(&clip, Some(&mapping));
         assert_eq!(roles.len(), 1);
         assert_eq!(roles[0], HumanoidRole::Spine);
+    }
+
+    #[test]
+    fn new_role_clip_has_an_empty_track_per_role() {
+        let clip = new_role_clip("test");
+        assert_eq!(clip.space, ClipSpace::HumanoidRole);
+        assert!((clip.duration - 2.0).abs() < f32::EPSILON);
+        assert!((clip.min_duration - 2.0).abs() < f32::EPSILON);
+        assert_eq!(clip.tracks.len(), HumanoidRole::ALL.len());
+        for (bone_id, track) in &clip.tracks {
+            let idx = *bone_id as usize;
+            assert_eq!(track.bone_name, HumanoidRole::ALL[idx].unity_name());
+            assert!(!track.has_rotation_keyframes());
+            assert!(!track.has_translation_keyframes());
+        }
+    }
+
+    #[test]
+    fn unresolved_clip_roles_ignores_unkeyed_tracks() {
+        let clip = new_role_clip("test");
+        let roles = unresolved_clip_roles(&clip, None);
+        assert!(roles.is_empty());
     }
 }

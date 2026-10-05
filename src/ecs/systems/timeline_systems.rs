@@ -1295,6 +1295,7 @@ mod tests {
         use crate::animation::editable::{ClipSpace, SourceClip};
         use crate::ecs::component::ClipSchedule;
         use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+        use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 
         let mut world = World::new();
         let mut library = ClipLibrary::default();
@@ -1308,7 +1309,8 @@ mod tests {
                 *r == thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips
             })
             .unwrap();
-        role_clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        let track = role_clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
         library
             .source_clips
             .insert(role_clip_id, SourceClip::new(role_clip_id, role_clip));

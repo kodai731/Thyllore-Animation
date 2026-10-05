@@ -2,13 +2,14 @@ use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{ClipLibrary, EditHistory};
+use crate::ecs::resource::{ClipLibrary, EditHistory, TimelineState};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ClipBrowserEvent {
     CreateEmpty,
+    CreateEmptyRole,
     Duplicate(SourceClipId),
     Delete(SourceClipId),
     ResampleSelectedModelAnimations { fps: f32 },
@@ -47,6 +48,26 @@ fn dispatch_clip_browser_events(
                     record_clip_added(world, id, source);
                 }
                 log!("Created empty clip (id={})", id);
+            }
+
+            ClipBrowserEvent::CreateEmptyRole => {
+                let mut clip_library = world.resource_mut::<ClipLibrary>();
+                let editable = crate::ecs::systems::role_clip_systems::new_role_clip("New Role Clip");
+                let id =
+                    crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+                        &mut clip_library,
+                        assets,
+                        editable,
+                    );
+
+                let source = clip_library.source_clips.get(&id).cloned();
+                drop(clip_library);
+
+                if let Some(source) = source {
+                    record_clip_added(world, id, source);
+                }
+                world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+                log!("Created empty role clip (id={})", id);
             }
 
             ClipBrowserEvent::Duplicate(source_id) => {

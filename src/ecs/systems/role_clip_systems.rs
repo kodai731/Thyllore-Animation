@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
+use cgmath::{InnerSpace, Matrix4, Quaternion, Vector3};
 use thyllore_anim_core::editable::components::clip::{ClipSpace, EditableAnimationClip};
 use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
@@ -10,7 +10,7 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
 use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
-use thyllore_math_core::quaternion_to_euler_degrees;
+use thyllore_math_core::{continuous_euler, decompose, quaternion_to_euler_degrees};
 
 use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, Skeleton};
@@ -37,34 +37,11 @@ pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
             RetargetBone {
                 parent: bone.parent_id.map(|id| id as usize),
                 world_position: world_matrix.w.truncate(),
-                world_rotation: extract_rotation(&world_matrix),
+                world_rotation: decompose(&world_matrix).1,
             }
         })
         .collect();
     RetargetSkeleton { bones }
-}
-
-fn extract_rotation(matrix: &Matrix4<f32>) -> Quaternion<f32> {
-    Quaternion::from(Matrix3::from_cols(
-        matrix.x.truncate().normalize(),
-        matrix.y.truncate().normalize(),
-        matrix.z.truncate().normalize(),
-    ))
-}
-
-fn unwrap_degrees(angle: f32, previous: f32) -> f32 {
-    previous + (angle - previous + 180.0).rem_euclid(360.0) - 180.0
-}
-
-fn continuous_euler(euler: Vector3<f32>, prev: Option<Vector3<f32>>) -> Vector3<f32> {
-    match prev {
-        None => euler,
-        Some(p) => Vector3::new(
-            unwrap_degrees(euler.x, p.x),
-            unwrap_degrees(euler.y, p.y),
-            unwrap_degrees(euler.z, p.z),
-        ),
-    }
 }
 
 pub fn baked_motion_to_clip(
@@ -93,7 +70,8 @@ pub fn baked_motion_to_clip(
             let bind_translation = hips.local_transform.w.truncate();
             let parent_world_rotation_inv = match hips.parent_id {
                 Some(parent_id) => {
-                    extract_rotation(&compute_bone_global_transform(skeleton, parent_id as usize))
+                    decompose(&compute_bone_global_transform(skeleton, parent_id as usize))
+                        .1
                         .conjugate()
                 }
                 None => Quaternion::new(1.0, 0.0, 0.0, 0.0),
@@ -416,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn test_continuous_euler_z_170_to_190() {
+    fn test_baked_motion_to_clip_keeps_euler_continuous() {
         let skeleton = make_chain_skeleton(1);
         let q1 = Quaternion::from_angle_z(Rad(170.0_f32.to_radians()));
         let q2 = Quaternion::from_angle_z(Rad(190.0_f32.to_radians()));

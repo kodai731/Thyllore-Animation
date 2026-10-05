@@ -118,32 +118,7 @@ pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::Rig
         }
 
         let base = vertex_offset as i32;
-        polygon_vertex_index.extend_from_slice(&[
-            base,
-            base + 1,
-            base + 3,
-            -(base + 2 + 1),
-            base + 4,
-            base + 5,
-            base + 7,
-            -(base + 6 + 1),
-            base,
-            base + 4,
-            base + 5,
-            -(base + 1 + 1),
-            base + 1,
-            base + 2,
-            base + 6,
-            -(base + 5 + 1),
-            base + 2,
-            base + 3,
-            base + 7,
-            -(base + 6 + 1),
-            base + 3,
-            base + 0,
-            base + 4,
-            -(base + 7 + 1),
-        ]);
+        polygon_vertex_index.extend_from_slice(&stick_polygon_indices(base));
         vertex_offset += 8;
     }
 
@@ -486,7 +461,12 @@ fn matrix4_flat(m: &Matrix4<f64>) -> Vec<f64> {
     flat
 }
 
-fn cube_vertices(center: Vector3<f64>, dir: Vector3<f64>, length: f64, half: f64) -> [[f64; 3]; 8] {
+pub fn cube_vertices(
+    center: Vector3<f64>,
+    dir: Vector3<f64>,
+    length: f64,
+    half: f64,
+) -> [[f64; 3]; 8] {
     let axis = perpendicular_to(dir);
     let perp = dir.cross(axis).normalize();
 
@@ -549,6 +529,35 @@ fn perpendicular_to(v: Vector3<f64>) -> Vector3<f64> {
     } else {
         Vector3::new(0.0, 0.0, 1.0).cross(v).normalize()
     }
+}
+
+pub fn stick_polygon_indices(base: i32) -> [i32; 24] {
+    [
+        base,
+        base + 1,
+        base + 3,
+        -(base + 2 + 1),
+        base + 4,
+        base + 5,
+        base + 7,
+        -(base + 6 + 1),
+        base,
+        base + 4,
+        base + 5,
+        -(base + 1 + 1),
+        base + 1,
+        base + 2,
+        base + 6,
+        -(base + 5 + 1),
+        base + 2,
+        base + 3,
+        base + 7,
+        -(base + 6 + 1),
+        base + 3,
+        base + 0,
+        base + 4,
+        -(base + 7 + 1),
+    ]
 }
 
 fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {

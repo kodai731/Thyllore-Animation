@@ -2,7 +2,9 @@ mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use support::test_humanoid::{mirrored_role, test_humanoid_bones, StickTip};
+use support::test_humanoid::{
+    build_stick_mesh, mirrored_role, test_humanoid_bones, write_test_humanoid_fbx, StickTip,
+};
 use thyllore_avatar_core::expression::components::side::Side;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
@@ -130,4 +132,44 @@ fn test_humanoid_right_side_mirrors_left() {
             ),
         }
     }
+}
+
+#[test]
+fn test_humanoid_mesh_binds_every_vertex_once() {
+    let bones = test_humanoid_bones();
+    let mesh = build_stick_mesh(&bones);
+
+    let total_vertices = mesh.vertices.len();
+    let mut counts = vec![0u32; total_vertices];
+
+    for cluster in &mesh.cluster_vertex_indices {
+        for &vi in cluster {
+            counts[vi as usize] += 1;
+        }
+    }
+
+    for (vi, count) in counts.iter().enumerate() {
+        assert_eq!(
+            *count, 1,
+            "vertex {} is in {} clusters (expected exactly 1)",
+            vi, count
+        );
+    }
+}
+
+#[test]
+fn test_humanoid_fbx_has_white_material_and_a_cluster_per_role() {
+    let fbx = write_test_humanoid_fbx();
+
+    assert!(
+        fbx.contains("Material::White"),
+        "FBX should contain Material::White"
+    );
+
+    let cluster_count = fbx.matches("\"Cluster\" {").count();
+    assert_eq!(
+        cluster_count, 55,
+        "expected 55 Cluster entries, got {}",
+        cluster_count
+    );
 }

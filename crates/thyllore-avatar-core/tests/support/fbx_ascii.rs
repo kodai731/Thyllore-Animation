@@ -35,7 +35,14 @@ pub struct RigMesh {
     pub vertices: Vec<[f64; 3]>,
     pub polygon_vertex_index: Vec<i32>,
     pub cluster_vertex_indices: Vec<Vec<i32>>,
+    pub cluster_nodes: Vec<usize>,
     pub diffuse_color: Option<[f64; 3]>,
+    pub cloth: Option<ClothMaterial>,
+}
+
+pub struct ClothMaterial {
+    pub color: [f64; 3],
+    pub first_polygon: usize,
 }
 
 pub fn write_rig_fbx(convention: &RigConvention) -> String {
@@ -75,7 +82,8 @@ fn fbx_header(out: &mut String, convention: &RigConvention) {
 }
 
 fn definitions(out: &mut String, mesh: &RigMesh) {
-    let count = if mesh.diffuse_color.is_some() { 7 } else { 6 };
+    let has_materials = mesh.diffuse_color.is_some() || mesh.cloth.is_some();
+    let count = if has_materials { 7 } else { 6 };
     out.push_str("Definitions:  {\n");
     write!(out, "  Count: {}\n", count).unwrap();
     out.push_str("  Version: 100\n");
@@ -85,7 +93,7 @@ fn definitions(out: &mut String, mesh: &RigMesh) {
     out.push_str("  ObjectType: \"Geometry\"\n");
     out.push_str("  ObjectType: \"Deformer\"\n");
     out.push_str("  ObjectType: \"Pose\"\n");
-    if mesh.diffuse_color.is_some() {
+    if has_materials {
         out.push_str("  ObjectType: \"Material\"\n");
     }
     out.push_str("}\n");
@@ -123,18 +131,27 @@ pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::Rig
         vertex_offset += 8;
     }
 
-    let role_count = nodes.iter().filter(|n| n.role.is_some()).count();
-    for ci in 0..role_count {
+    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.role.is_some())
+        .collect();
+
+    for (ci, (_node_idx, _)) in role_nodes.iter().enumerate() {
         let start = ci * 8;
         let end = (ci + 1) * 8;
         cluster_vertex_indices.push((start as i32..end as i32).collect());
     }
 
+    let cluster_nodes: Vec<usize> = role_nodes.iter().map(|(idx, _)| *idx).collect();
+
     RigMesh {
         vertices,
         polygon_vertex_index,
         cluster_vertex_indices,
+        cluster_nodes,
         diffuse_color: None,
+        cloth: None,
     }
 }
 
@@ -252,6 +269,28 @@ fn objects(
         out.push_str("  }\n");
     }
 
+    if let Some(cloth) = &mesh.cloth {
+        write!(
+            out,
+            "  Material: {}, \"Material::Cloth\", \"\" {{\n",
+            MATERIAL_ID + 1
+        )
+        .unwrap();
+        out.push_str("    Version: 102\n");
+        out.push_str("    ShadingModel: \"lambert\"\n");
+        out.push_str("    Properties70:  {\n");
+        write!(
+            out,
+            "      P: \"DiffuseColor\", \"Color\", \"\", \"A\",{},{},{}\n",
+            fmt(cloth.color[0]),
+            fmt(cloth.color[1]),
+            fmt(cloth.color[2])
+        )
+        .unwrap();
+        out.push_str("    }\n");
+        out.push_str("  }\n");
+    }
+
     write_mesh_and_skin(out, convention, nodes, mesh);
 
     out.push_str("}\n");
@@ -297,21 +336,19 @@ fn connections(
     write!(out, "  C: \"OO\",{},{}\n", GEOMETRY_ID, MESH_MODEL_ID).unwrap();
     write!(out, "  C: \"OO\",{},{}\n", SKIN_ID, GEOMETRY_ID).unwrap();
 
-    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.role.is_some())
-        .collect();
-
-    for (ci, (bone_node_idx, _)) in role_nodes.iter().enumerate() {
+    for (ci, &bone_node_idx) in mesh.cluster_nodes.iter().enumerate() {
         let cluster_id = cluster_id(ci);
-        let bone_model_id = bone_model_id(*bone_node_idx);
+        let bone_model_id = bone_model_id(bone_node_idx);
         write!(out, "  C: \"OO\",{},{}\n", cluster_id, SKIN_ID).unwrap();
         write!(out, "  C: \"OO\",{},{}\n", bone_model_id, cluster_id).unwrap();
     }
 
     if mesh.diffuse_color.is_some() {
         write!(out, "  C: \"OO\",{},{}\n", MATERIAL_ID, MESH_MODEL_ID).unwrap();
+    }
+
+    if mesh.cloth.is_some() {
+        write!(out, "  C: \"OO\",{},{}\n", MATERIAL_ID + 1, MESH_MODEL_ID).unwrap();
     }
 
     out.push_str("}\n");
@@ -367,9 +404,29 @@ fn write_mesh_and_skin(
     if mesh.diffuse_color.is_some() {
         out.push_str("    LayerElementMaterial: 0 {\n");
         out.push_str("      Version: 101\n");
-        out.push_str("      MappingInformationType: \"AllSame\"\n");
-        out.push_str("      ReferenceInformationType: \"IndexToDirect\"\n");
-        out.push_str("      Materials: *1 { a: 0 }\n");
+        if let Some(cloth) = &mesh.cloth {
+            let mut polygon_count = 0;
+            for &v in &mesh.polygon_vertex_index {
+                if v < 0 {
+                    polygon_count += 1;
+                }
+            }
+            out.push_str("      MappingInformationType: \"ByPolygon\"\n");
+            out.push_str("      ReferenceInformationType: \"IndexToDirect\"\n");
+            write!(out, "      Materials: *{} {{ a: ", polygon_count).unwrap();
+            for pi in 0..polygon_count {
+                if pi > 0 {
+                    out.push(',');
+                }
+                let mat_idx = if pi < cloth.first_polygon { 0 } else { 1 };
+                write!(out, "{}", mat_idx).unwrap();
+            }
+            out.push_str(" }\n");
+        } else {
+            out.push_str("      MappingInformationType: \"AllSame\"\n");
+            out.push_str("      ReferenceInformationType: \"IndexToDirect\"\n");
+            out.push_str("      Materials: *1 { a: 0 }\n");
+        }
         out.push_str("    }\n");
         out.push_str("    Layer: 0 {\n");
         out.push_str("      Version: 100\n");
@@ -384,7 +441,7 @@ fn write_mesh_and_skin(
 
     write_skin_and_clusters(out, nodes, mesh);
 
-    write_bind_pose(out, nodes);
+    write_bind_pose(out, nodes, mesh);
 }
 
 fn world_matrix(node: &super::rig_nodes::RigNode) -> Matrix4<f64> {
@@ -561,13 +618,8 @@ pub fn stick_polygon_indices(base: i32) -> [i32; 24] {
     ]
 }
 
-fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
-    let bone_count = nodes.iter().filter(|n| n.role.is_some()).count();
-    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.role.is_some())
-        .collect();
+fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode], mesh: &RigMesh) {
+    let bone_count = mesh.cluster_nodes.len();
 
     let pose_node_count = bone_count + 1;
     write!(
@@ -594,11 +646,12 @@ fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode]) {
     out.push_str(" }\n");
     out.push_str("    }\n");
 
-    for (_bone_node_idx, bone_node) in &role_nodes {
+    for &bone_node_idx in &mesh.cluster_nodes {
+        let bone_node = &nodes[bone_node_idx];
         let world_mat = world_matrix(bone_node);
         let flat: Vec<f64> = matrix4_flat(&world_mat);
         out.push_str("    PoseNode: {\n");
-        write!(out, "      Node: {}\n", bone_model_id(*_bone_node_idx)).unwrap();
+        write!(out, "      Node: {}\n", bone_model_id(bone_node_idx)).unwrap();
         out.push_str("      Matrix: *16 { a: ");
         for (i, v) in flat.iter().enumerate() {
             if i > 0 {
@@ -623,13 +676,8 @@ fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]
     out.push_str("    Version: 101\n");
     out.push_str("  }\n");
 
-    let role_nodes: Vec<(usize, &super::rig_nodes::RigNode)> = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.role.is_some())
-        .collect();
-
-    for (ci, (_bone_node_idx, bone_node)) in role_nodes.iter().enumerate() {
+    for (ci, &bone_node_idx) in mesh.cluster_nodes.iter().enumerate() {
+        let bone_node = &nodes[bone_node_idx];
         let cluster_id = cluster_id(ci);
         let bone_name = &bone_node.name;
         write!(

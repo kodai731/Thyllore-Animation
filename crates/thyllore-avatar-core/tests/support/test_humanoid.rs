@@ -85,11 +85,15 @@ pub fn build_stick_mesh(bones: &[CanonicalBone]) -> RigMesh {
         }
     }
 
+    let cluster_nodes: Vec<usize> = (0..bones.len()).collect();
+
     RigMesh {
         vertices,
         polygon_vertex_index,
         cluster_vertex_indices,
+        cluster_nodes,
         diffuse_color: Some([1.0, 1.0, 1.0]),
+        cloth: None,
     }
 }
 

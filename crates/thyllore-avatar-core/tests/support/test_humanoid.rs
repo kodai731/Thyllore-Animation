@@ -155,3 +155,39 @@ pub fn write_test_humanoid_fbx() -> String {
     let mesh = build_stick_mesh(&bones, &extras);
     super::fbx_ascii::write_rig_fbx_with_mesh(&rig_convention("vrm_normalized"), &nodes, &mesh)
 }
+
+pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()> {
+    use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+
+    let bones = skeleton();
+    let extras = extra_bones();
+    let nodes = test_humanoid_nodes(&bones, &extras);
+
+    let bone_inputs: Vec<BoneInput> = nodes
+        .iter()
+        .map(|node| BoneInput {
+            name: node.name.clone(),
+            parent: node.parent,
+            rest_position: [
+                node.world_position.x as f32,
+                node.world_position.y as f32,
+                node.world_position.z as f32,
+            ],
+        })
+        .collect();
+
+    let mapping = thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping {
+        by_role: bones
+            .iter()
+            .enumerate()
+            .map(|(i, bone)| (bone.role, i))
+            .collect(),
+    };
+
+    thyllore_avatar_core::humanoid::systems::mapping_io::save_mapping(
+        path,
+        &mapping,
+        &bone_inputs,
+    )?;
+    Ok(())
+}

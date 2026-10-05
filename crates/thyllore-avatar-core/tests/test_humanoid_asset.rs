@@ -6,11 +6,13 @@ use std::path::PathBuf;
 
 use support::fixture_bones::load_rig_from_fbx_text;
 use support::test_humanoid::{
-    build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, CanonicalTip,
+    build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, write_test_humanoid_sidecar,
+    CanonicalTip,
 };
 use thyllore_avatar_core::expression::components::side::Side;
 use thyllore_avatar_core::humanoid::canonical::fixtures::ExtraParent;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
 
 #[test]
 fn test_humanoid_covers_every_role_once() {
@@ -200,6 +202,8 @@ fn generate_test_humanoid() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let fbx = write_test_humanoid_fbx();
     std::fs::write(&path, fbx).unwrap();
+    let sidecar_path = humanoid_mapping_path(&path);
+    write_test_humanoid_sidecar(&sidecar_path).unwrap();
 }
 
 #[test]
@@ -216,6 +220,23 @@ fn test_humanoid_matches_generator() {
     assert_eq!(
         recorded, generated,
         "asset file differs from generator output"
+    );
+
+    let sidecar_path = humanoid_mapping_path(&path);
+    let recorded_sidecar = match std::fs::read_to_string(&sidecar_path) {
+        Ok(s) => s,
+        Err(e) => panic!(
+            "sidecar not found at {:?}: {}\n\ngenerate it with:\ncargo test -p thyllore-avatar-core --test test_humanoid_asset generate_test_humanoid -- --ignored",
+            sidecar_path, e
+        ),
+    };
+    let temp_dir = tempfile::tempdir().unwrap();
+    let generated_sidecar_path = temp_dir.path().join("test_humanoid.humanoid.ron");
+    write_test_humanoid_sidecar(&generated_sidecar_path).unwrap();
+    let generated_sidecar = std::fs::read_to_string(&generated_sidecar_path).unwrap();
+    assert_eq!(
+        recorded_sidecar, generated_sidecar,
+        "sidecar file differs from generator output"
     );
 }
 
@@ -302,5 +323,80 @@ fn extra_bones_have_unique_names_without_dots() {
                 parent_row
             );
         }
+    }
+}
+
+#[test]
+fn test_humanoid_infers_only_roles() {
+    let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
+    let (mapping, unresolved) =
+        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+
+    assert!(unresolved.is_empty(), "unresolved roles: {:?}", unresolved);
+
+    for role in HumanoidRole::ALL {
+        let unity_name = role.unity_name();
+        let index = *mapping
+            .by_role
+            .get(&role)
+            .unwrap_or_else(|| panic!("role {:?} not mapped", role));
+        let bone_name = &bones[index].name;
+        assert_eq!(
+            bone_name, unity_name,
+            "role {:?} (expected '{}') mapped to bone '{}' at index {}",
+            role, unity_name, bone_name, index
+        );
+    }
+
+    let extras = extra_bones();
+    let extra_names: BTreeSet<_> = extras.iter().map(|b| b.name.as_str()).collect();
+    for (role, index) in &mapping.by_role {
+        let bone_name = &bones[*index].name;
+        assert!(
+            !extra_names.contains(bone_name.as_str()),
+            "role {:?} mapped to extra bone '{}' at index {}",
+            role,
+            bone_name,
+            index
+        );
+    }
+}
+
+#[test]
+fn test_humanoid_sidecar_loads_as_confirmed_identity() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let model_path = temp_dir.path().join("test_humanoid.fbx");
+    let sidecar_path = humanoid_mapping_path(&model_path);
+
+    std::fs::write(&model_path, write_test_humanoid_fbx()).unwrap();
+    write_test_humanoid_sidecar(&sidecar_path).unwrap();
+
+    let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
+
+    let (rig, missing) =
+        thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig(&model_path, &bones)
+            .unwrap();
+    assert!(missing.is_empty(), "missing bones: {:?}", missing);
+
+    match rig {
+        thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig::Confirmed(mapping) => {
+            for role in HumanoidRole::ALL {
+                let unity_name = role.unity_name();
+                let index = *mapping
+                    .by_role
+                    .get(&role)
+                    .unwrap_or_else(|| panic!("role {:?} not mapped", role));
+                let bone_name = &bones[index].name;
+                assert!(
+                    bone_name == unity_name,
+                    "role {:?} (expected '{}') mapped to bone '{}' at index {}",
+                    role,
+                    unity_name,
+                    bone_name,
+                    index
+                );
+            }
+        }
+        other => panic!("expected Confirmed, got {:?}", other),
     }
 }

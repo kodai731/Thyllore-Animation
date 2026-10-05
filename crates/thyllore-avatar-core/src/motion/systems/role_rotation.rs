@@ -2,10 +2,7 @@ use cgmath::{Deg, Matrix, Matrix3, Quaternion, Vector3};
 
 use crate::humanoid::components::character_frame::CharacterFrame;
 
-pub fn recipe_rotation_to_engine(
-    frame: &CharacterFrame,
-    euler_degrees: [f32; 3],
-) -> Quaternion<f32> {
+pub fn role_rotation_to_engine(frame: &CharacterFrame, euler_degrees: [f32; 3]) -> Quaternion<f32> {
     let [x_degrees, y_degrees, z_degrees] = euler_degrees;
     let unity_rotation = Matrix3::from_angle_y(Deg(y_degrees))
         * Matrix3::from_angle_x(Deg(x_degrees))
@@ -71,7 +68,7 @@ mod tests {
     #[test]
     fn test_right_upper_arm_z_plus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, 0.0, 90.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, 0.0, 90.0]);
             let right = Vector3::new(frame.right[0], frame.right[1], frame.right[2]);
             let up = Vector3::new(frame.up[0], frame.up[1], frame.up[2]);
             let rotated_right = apply_quaternion(q, right);
@@ -82,7 +79,7 @@ mod tests {
     #[test]
     fn test_left_upper_arm_z_minus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, 0.0, -90.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, 0.0, -90.0]);
             let right = Vector3::new(frame.right[0], frame.right[1], frame.right[2]);
             let up = Vector3::new(frame.up[0], frame.up[1], frame.up[2]);
             let neg_right = -right;
@@ -94,7 +91,7 @@ mod tests {
     #[test]
     fn test_right_upper_arm_y_minus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, -90.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, -90.0, 0.0]);
             let right = Vector3::new(frame.right[0], frame.right[1], frame.right[2]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let rotated_right = apply_quaternion(q, right);
@@ -105,7 +102,7 @@ mod tests {
     #[test]
     fn test_left_upper_arm_y_plus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, 90.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, 90.0, 0.0]);
             let right = Vector3::new(frame.right[0], frame.right[1], frame.right[2]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let neg_right = -right;
@@ -117,7 +114,7 @@ mod tests {
     #[test]
     fn test_head_x_plus_30() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [30.0, 0.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [30.0, 0.0, 0.0]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let up = Vector3::new(frame.up[0], frame.up[1], frame.up[2]);
             let rotated_forward = apply_quaternion(q, forward);
@@ -128,7 +125,7 @@ mod tests {
     #[test]
     fn test_head_y_plus_30() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, 30.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, 30.0, 0.0]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let right = Vector3::new(frame.right[0], frame.right[1], frame.right[2]);
             let rotated_forward = apply_quaternion(q, forward);
@@ -139,7 +136,7 @@ mod tests {
     #[test]
     fn test_right_upper_leg_x_minus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [-90.0, 0.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [-90.0, 0.0, 0.0]);
             let up = Vector3::new(frame.up[0], frame.up[1], frame.up[2]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let neg_up = -up;
@@ -151,7 +148,7 @@ mod tests {
     #[test]
     fn test_right_lower_leg_x_plus_90() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [90.0, 0.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [90.0, 0.0, 0.0]);
             let up = Vector3::new(frame.up[0], frame.up[1], frame.up[2]);
             let forward = Vector3::new(frame.forward[0], frame.forward[1], frame.forward[2]);
             let neg_up = -up;
@@ -163,7 +160,7 @@ mod tests {
     #[test]
     fn test_identity() {
         for frame in [CANONICAL, rotated_frame()] {
-            let q = recipe_rotation_to_engine(&frame, [0.0, 0.0, 0.0]);
+            let q = role_rotation_to_engine(&frame, [0.0, 0.0, 0.0]);
             let diff = q.v.dot(q.v);
             assert!(q.s.abs() > 1.0 - 1e-6 && diff < 1e-6);
         }

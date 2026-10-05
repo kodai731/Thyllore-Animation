@@ -5,7 +5,7 @@ use thyllore_anim_core::editable::systems::curve_ops::curve_sample;
 use thyllore_anim_core::editable::systems::morph_sample::sample_morph_tracks;
 
 use crate::humanoid::components::role::HumanoidRole;
-use crate::motion::components::recipe_curves::SampledPose;
+use crate::motion::components::sampled_pose::SampledPose;
 
 pub fn sample_role_clip(clip: &EditableAnimationClip, time: f32) -> SampledPose {
     let mut rotations: BTreeMap<HumanoidRole, [f32; 3]> = BTreeMap::new();

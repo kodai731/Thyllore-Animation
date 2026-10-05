@@ -6,11 +6,11 @@ use crate::humanoid::components::character_frame::CharacterFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::rest_pose::RestPose;
 use crate::humanoid::components::role::HumanoidRole;
-use crate::motion::components::recipe_curves::SampledPose;
 use crate::motion::components::retarget_context::{RetargetContext, RetargetedPose};
 use crate::motion::components::retarget_skeleton::RetargetSkeleton;
+use crate::motion::components::sampled_pose::SampledPose;
 
-use super::recipe_rotation::recipe_rotation_to_engine;
+use super::role_rotation::role_rotation_to_engine;
 use super::tpose_basis::compute_tpose_world_rotations;
 
 pub fn build_retarget_context(
@@ -47,7 +47,7 @@ pub fn retarget_pose(ctx: &RetargetContext, pose: &SampledPose) -> RetargetedPos
 
     for (&role, &bone_idx) in &ctx.mapping.by_role {
         let euler = pose.rotations.get(&role).copied().unwrap_or([0.0; 3]);
-        let r_i = recipe_rotation_to_engine(&ctx.frame, euler);
+        let r_i = role_rotation_to_engine(&ctx.frame, euler);
 
         let parent_rot = match ctx.skeleton.bones[bone_idx].parent {
             Some(parent_idx) => ctx.tpose_world[parent_idx],
@@ -148,8 +148,8 @@ mod tests {
     use crate::humanoid::components::mapping::HumanoidMapping;
     use crate::humanoid::components::rest_pose::RestPose;
     use crate::humanoid::components::role::HumanoidRole;
-    use crate::motion::components::recipe_curves::SampledPose;
     use crate::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
+    use crate::motion::components::sampled_pose::SampledPose;
 
     use super::*;
 

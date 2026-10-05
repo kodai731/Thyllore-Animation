@@ -1,17 +1,38 @@
 use std::collections::BTreeMap;
 
 use cgmath::{InnerSpace, One, Quaternion};
+use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
 use crate::motion::components::baked_motion::BakedMotion;
 use crate::motion::components::recipe_curves::RecipeCurves;
 use crate::motion::components::retarget_context::RetargetContext;
+use crate::motion::components::sampled_pose::SampledPose;
 
 use super::recipe_curves::sample_recipe_pose;
 use super::retarget_pose::retarget_pose;
+use super::role_clip_sampler::sample_role_clip;
 
 pub fn bake_recipe_motion(ctx: &RetargetContext, curves: &RecipeCurves) -> BakedMotion {
-    let fps = curves.fps as i32;
-    let frame_count = (curves.duration_seconds * fps as f32).round() as usize + 1;
+    bake_sampled_motion(ctx, curves.fps, curves.duration_seconds, |time| {
+        sample_recipe_pose(curves, time)
+    })
+}
+
+pub fn bake_role_clip(
+    ctx: &RetargetContext,
+    clip: &EditableAnimationClip,
+    fps: u32,
+) -> BakedMotion {
+    bake_sampled_motion(ctx, fps, clip.duration, |time| sample_role_clip(clip, time))
+}
+
+fn bake_sampled_motion(
+    ctx: &RetargetContext,
+    fps: u32,
+    duration: f32,
+    sample: impl Fn(f32) -> SampledPose,
+) -> BakedMotion {
+    let frame_count = (duration * fps as f32).round() as usize + 1;
 
     let mut frame_times = Vec::with_capacity(frame_count);
     let mut bone_rotations: BTreeMap<usize, Vec<Quaternion<f32>>> = BTreeMap::new();
@@ -22,7 +43,7 @@ pub fn bake_recipe_motion(ctx: &RetargetContext, curves: &RecipeCurves) -> Baked
         let time = k as f32 / fps as f32;
         frame_times.push(time);
 
-        let sampled = sample_recipe_pose(curves, time);
+        let sampled = sample(time);
         let retargeted = retarget_pose(ctx, &sampled);
 
         for (&bone_idx, &rotation) in &retargeted.local_rotations {
@@ -49,7 +70,7 @@ pub fn bake_recipe_motion(ctx: &RetargetContext, curves: &RecipeCurves) -> Baked
     }
 
     BakedMotion {
-        fps: curves.fps,
+        fps,
         frame_times,
         bone_rotations,
         hips_offsets,
@@ -194,6 +215,19 @@ mod tests {
         assert_eq!(baked.hips_offsets.len(), expected_count);
         assert!((baked.frame_times[0] - 0.0).abs() < 1e-6);
         assert!((baked.frame_times[baked.frame_times.len() - 1] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bake_role_clip_frame_count_follows_duration_and_fps() {
+        let skeleton = build_skeleton();
+        let ctx = build_ctx(&skeleton);
+
+        let mut clip = EditableAnimationClip::new(1, "test".to_string());
+        clip.duration = 2.0;
+
+        let baked = bake_role_clip(&ctx, &clip, 30);
+
+        assert_eq!(baked.frame_times.len(), 61);
     }
 
     #[test]

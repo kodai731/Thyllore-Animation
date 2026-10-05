@@ -16,14 +16,23 @@ pub fn load_fixture_rig(
     Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
     thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
 ) {
-    let fbx_txt_path = format!("tests/data/rigs/{}.fbx.txt", convention_id);
-    let fbx_text = fs::read_to_string(&fbx_txt_path).unwrap();
+    let fbx_text =
+        fs::read_to_string(format!("tests/data/rigs/{}.fbx.txt", convention_id)).unwrap();
+    load_rig_from_fbx_text(convention_id, &fbx_text)
+}
 
+pub fn load_rig_from_fbx_text(
+    label: &str,
+    fbx_text: &str,
+) -> (
+    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
+    thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
+) {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let mut temp_path = std::env::temp_dir();
     temp_path.push(format!(
         "mapping_{}_{}_{}.fbx",
-        convention_id,
+        label,
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));

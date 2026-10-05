@@ -1,7 +1,9 @@
 mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
+use support::fixture_bones::load_rig_from_fbx_text;
 use support::test_humanoid::{
     build_stick_mesh, mirrored_role, test_humanoid_bones, write_test_humanoid_fbx, StickTip,
 };
@@ -171,5 +173,64 @@ fn test_humanoid_fbx_has_white_material_and_a_cluster_per_role() {
         cluster_count, 55,
         "expected 55 Cluster entries, got {}",
         cluster_count
+    );
+}
+
+fn asset_path() -> PathBuf {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_path_buf();
+    root.join("assets/models/test_humanoid/test_humanoid.fbx")
+}
+
+#[test]
+#[ignore]
+fn generate_test_humanoid() {
+    let path = asset_path();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let fbx = write_test_humanoid_fbx();
+    std::fs::write(&path, fbx).unwrap();
+}
+
+#[test]
+fn test_humanoid_matches_generator() {
+    let path = asset_path();
+    let recorded = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => panic!(
+            "asset not found at {:?}: {}\n\ngenerate it with:\ncargo test -p thyllore-avatar-core --test test_humanoid_asset generate_test_humanoid -- --ignored",
+            path, e
+        ),
+    };
+    let generated = write_test_humanoid_fbx();
+    assert_eq!(
+        recorded, generated,
+        "asset file differs from generator output"
+    );
+}
+
+#[test]
+fn test_humanoid_maps_every_role() {
+    let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
+    let (mapping, unresolved) =
+        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+
+    let found: BTreeSet<HumanoidRole> = mapping.by_role.keys().copied().collect();
+    let all: BTreeSet<HumanoidRole> = HumanoidRole::ALL.iter().copied().collect();
+    let missing: Vec<_> = all.difference(&found).collect();
+    assert!(
+        missing.is_empty(),
+        "not all roles mapped; missing={:?}",
+        missing
+    );
+    assert!(unresolved.is_empty(), "unresolved roles: {:?}", unresolved);
+
+    let rest_pose =
+        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
+    assert_eq!(
+        rest_pose,
+        thyllore_avatar_core::humanoid::components::rest_pose::RestPose::TPose
     );
 }

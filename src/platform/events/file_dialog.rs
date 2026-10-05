@@ -43,10 +43,26 @@ fn queue_command<C: 'static>(app: &App, command: Option<C>) {
     }
 }
 
+/// GTK dialogs hide dot-directories, so a worktree under `.worktrees/` cannot
+/// be browsed into; starting from the absolute templates directory sidesteps it.
+fn clip_templates_dir() -> Option<PathBuf> {
+    let dir = std::env::current_dir()
+        .ok()?
+        .join("assets")
+        .join("templates");
+    dir.is_dir().then_some(dir)
+}
+
+fn clip_dialog() -> rfd::FileDialog {
+    let dialog = rfd::FileDialog::new().add_filter("Animation RON", &["anim.ron", "ron"]);
+    match clip_templates_dir() {
+        Some(dir) => dialog.set_directory(dir),
+        None => dialog,
+    }
+}
+
 fn open_clip_load_dialog() -> Option<AssetEditCommand> {
-    let path = rfd::FileDialog::new()
-        .add_filter("Animation RON", &["anim.ron", "ron"])
-        .pick_file()?;
+    let path = clip_dialog().pick_file()?;
 
     Some(AssetEditCommand::LoadClipFromFile { path })
 }
@@ -54,8 +70,7 @@ fn open_clip_load_dialog() -> Option<AssetEditCommand> {
 fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<OutputCommand> {
     let current_name = clip_name(app, source_id).unwrap_or_else(|| "clip".to_string());
 
-    let path = rfd::FileDialog::new()
-        .add_filter("Animation RON", &["anim.ron", "ron"])
+    let path = clip_dialog()
         .set_file_name(format!("{}.anim.ron", current_name))
         .save_file()?;
 

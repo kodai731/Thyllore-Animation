@@ -6,9 +6,9 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use super::curve_editor_bone_label::{format_bone_label, order_bone_ids_by_role};
 
 use crate::animation::editable::{
-    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
-    EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
-    TangentWeightMode,
+    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, ClipSpace,
+    EditableAnimationClip, EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve,
+    PropertyType, TangentType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
@@ -212,10 +212,13 @@ fn collect_current_clip_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)>
         return Vec::new();
     };
 
-    if clip.space == crate::animation::editable::ClipSpace::HumanoidRole {
+    if clip.space == ClipSpace::HumanoidRole {
         clip.tracks
             .keys()
-            .map(|bone_id| (*bone_id, HumanoidRole::ALL[*bone_id as usize]))
+            .filter_map(|bone_id| {
+                let role = HumanoidRole::ALL.get(*bone_id as usize)?;
+                Some((*bone_id, *role))
+            })
             .collect()
     } else {
         collect_avatar_setup_bone_roles(world)
@@ -237,7 +240,7 @@ fn collect_avatar_setup_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)>
 }
 
 fn is_role_space_clip(clip: Option<&EditableAnimationClip>) -> bool {
-    clip.is_some_and(|c| c.space == crate::animation::editable::ClipSpace::HumanoidRole)
+    clip.is_some_and(|c| c.space == ClipSpace::HumanoidRole)
 }
 
 fn build_track_list(
@@ -318,7 +321,7 @@ fn build_track_list(
             }
 
             if is_selected {
-                build_curve_selector_inline(ui, track, editor_state);
+                build_curve_selector_inline(ui, clip, bone_id, editor_state);
             }
         }
     }
@@ -403,16 +406,44 @@ fn build_scalar_curve_selector_inline(
     ui.spacing();
 }
 
+/// A bone clip lists only the curves that already hold keys. A role clip lists
+/// every curve a key may legally be added to, so a freshly created clip offers
+/// its rotation axes before any key exists.
+fn is_curve_listed(
+    clip: &EditableAnimationClip,
+    bone_id: BoneId,
+    property_type: PropertyType,
+) -> bool {
+    match clip.space {
+        ClipSpace::Bone => clip
+            .tracks
+            .get(&bone_id)
+            .is_some_and(|track| !track.get_curve(property_type).is_empty()),
+        ClipSpace::HumanoidRole => is_role_curve_allowed(bone_id, property_type),
+    }
+}
+
+fn is_role_curve_allowed(bone_id: BoneId, property_type: PropertyType) -> bool {
+    let role = HumanoidRole::ALL.get(bone_id as usize).copied();
+    match property_type {
+        PropertyType::RotationX | PropertyType::RotationY | PropertyType::RotationZ => true,
+        PropertyType::TranslationX | PropertyType::TranslationY | PropertyType::TranslationZ => {
+            role.is_some_and(HumanoidRole::allows_translation)
+        }
+        _ => false,
+    }
+}
+
 fn build_curve_selector_inline(
     ui: &imgui::Ui,
-    track: &crate::animation::editable::BoneTrack,
+    clip: &EditableAnimationClip,
+    bone_id: BoneId,
     editor_state: &mut CurveEditorState,
 ) {
     ui.indent();
 
     for (prop_type, color, name) in ALL_PROPERTY_TYPES {
-        let curve = track.get_curve(*prop_type);
-        if curve.is_empty() {
+        if !is_curve_listed(clip, bone_id, *prop_type) {
             continue;
         }
 
@@ -430,7 +461,9 @@ fn build_curve_selector_inline(
 
     if ui.small_button("All") {
         for (prop_type, _, _) in ALL_PROPERTY_TYPES {
-            editor_state.visible_curves.insert(*prop_type);
+            if is_curve_listed(clip, bone_id, *prop_type) {
+                editor_state.visible_curves.insert(*prop_type);
+            }
         }
     }
     ui.same_line();
@@ -984,7 +1017,8 @@ fn build_curve_editor_context_menu(
 /// The scalar target only accepts registered channels: the visible set can
 /// still hold bone property types from a previous bone target, and letting one
 /// through would create a curve no channel answers to (grey "Custom", never
-/// sampled). Lowest code wins so the choice is deterministic.
+/// sampled). Lowest code wins so the choice is deterministic; the bone target
+/// picks by declaration order for the same reason.
 fn add_key_target_property(
     editor_state: &CurveEditorState,
     track_ref: CurveTrackRef,
@@ -999,7 +1033,10 @@ fn add_key_target_property(
                 PropertyType::Custom(code) => *code,
                 _ => u16::MAX,
             }),
-        CurveTrackRef::Bone(_) => editor_state.visible_curves.iter().copied().next(),
+        CurveTrackRef::Bone(_) => ALL_PROPERTY_TYPES
+            .iter()
+            .map(|(property_type, _, _)| *property_type)
+            .find(|property_type| editor_state.visible_curves.contains(property_type)),
         CurveTrackRef::Morph(_) => Some(PropertyType::MorphWeight),
     }
 }
@@ -2538,7 +2575,6 @@ fn build_curve_toolbar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::ClipSpace;
 
     #[test]
     fn test_format_morph_track_name_short() {
@@ -2572,6 +2608,34 @@ mod tests {
         assert!(!is_role_space_clip(Some(&bone_clip)));
         assert!(is_role_space_clip(Some(&role_clip)));
         assert!(!is_role_space_clip(None));
+    }
+
+    #[test]
+    fn role_clip_lists_rotation_curves_before_any_key_exists() {
+        let clip = crate::ecs::systems::role_clip_systems::new_role_clip("empty");
+        let hips = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Hips)
+            .unwrap() as BoneId;
+        let head = HumanoidRole::ALL
+            .iter()
+            .position(|r| *r == HumanoidRole::Head)
+            .unwrap() as BoneId;
+
+        assert!(is_curve_listed(&clip, head, PropertyType::RotationZ));
+        assert!(!is_curve_listed(&clip, head, PropertyType::TranslationY));
+        assert!(is_curve_listed(&clip, hips, PropertyType::TranslationY));
+        assert!(!is_curve_listed(&clip, hips, PropertyType::ScaleX));
+    }
+
+    #[test]
+    fn bone_clip_lists_only_keyed_curves() {
+        let mut clip = EditableAnimationClip::new(0, "bone".to_string());
+        let track = clip.add_track(0, "Spine".to_string());
+        crate::animation::editable::curve_add_keyframe(&mut track.rotation_x, 0.0, 1.0);
+
+        assert!(is_curve_listed(&clip, 0, PropertyType::RotationX));
+        assert!(!is_curve_listed(&clip, 0, PropertyType::RotationY));
     }
 }
 

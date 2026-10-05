@@ -143,7 +143,8 @@ pub fn clip_library_load_from_file(
     let mut clip = deserialize_clip(&content)
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
-    if let Some(name_to_id) = bone_name_to_id {
+    let remap_to_model_bones = clip.space == ClipSpace::Bone;
+    if let (true, Some(name_to_id)) = (remap_to_model_bones, bone_name_to_id) {
         let needs_remap = clip.tracks.values().any(|track| {
             name_to_id
                 .get(&track.bone_name)
@@ -308,6 +309,27 @@ pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn loading_a_role_clip_keeps_role_indices_when_a_model_is_loaded() {
+        let role_clip = crate::ecs::systems::role_clip_systems::new_role_clip("bow");
+        let path =
+            std::env::temp_dir().join(format!("role_clip_load_{}.anim.ron", std::process::id()));
+        crate::scene::save_animation_clip(&path, &role_clip).unwrap();
+
+        let mut model_bones = HashMap::new();
+        model_bones.insert("Head".to_string(), 181 as BoneId);
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let id =
+            clip_library_load_from_file(&mut lib, &mut assets, &path, Some(&model_bones)).unwrap();
+        fs::remove_file(&path).ok();
+
+        let loaded = lib.get(id).unwrap();
+        assert_eq!(loaded.tracks.len(), role_clip.tracks.len());
+        assert!(loaded.tracks.keys().all(|bone_id| (*bone_id as usize)
+            < thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL.len()));
+    }
 
     #[test]
     fn role_clip_registers_without_a_playable_asset() {

@@ -92,6 +92,13 @@ Commands:
       Writes ../muscles.json relative to the project root.
       UNITY_LICENSE_DIR overrides the license directory (default
       ~/.config/unity3d/Unity/licenses).
+  live-dump [--tracks] [--pose TIME...] [--clip NAME] [--out FILE]
+      Ask the running engine (launched from this directory) for its clips,
+      timeline and curve editor state, or for sampled poses, and print the
+      JSON (tools/live_dump.py). One request per connection on the Unix
+      socket log/live_dump/engine.sock; the engine applies it as a UI
+      command on its main thread, nothing is polled.
+        ./run.sh live-dump --tracks --clip "New Clip"
   help
       Show this help.
 EOF
@@ -156,6 +163,9 @@ case "$command" in
         ;;
     unity-muscle)
         exec bash "$REPO_ROOT/unity/muscle/run.sh" "$@"
+        ;;
+    live-dump)
+        exec python3 "$REPO_ROOT/tools/live_dump.py" "$@"
         ;;
     help|-h|--help)
         usage

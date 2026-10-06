@@ -6,7 +6,9 @@ use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 
 pub(crate) fn dispatch_window_event(
     event: &WindowEvent,
-    window_target: &winit::event_loop::EventLoopWindowTarget<()>,
+    window_target: &winit::event_loop::EventLoopWindowTarget<
+        crate::hooks::external_command::ExternalCommand,
+    >,
     app: &mut App,
     imgui: &mut imgui::Context,
     platform: &mut imgui_winit_support::WinitPlatform,

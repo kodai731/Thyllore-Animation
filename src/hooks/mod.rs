@@ -5,6 +5,7 @@ pub mod dropped_file;
 pub mod effect;
 pub mod effect_defaults;
 pub mod effect_spawn;
+pub mod external_command;
 pub mod frame_prep;
 pub mod gpu_primitive;
 pub mod gpu_resource;

@@ -45,6 +45,7 @@ mod inference_actor_systems;
 mod inspector_systems;
 mod keyframe_clipboard_systems;
 pub mod lightning;
+pub mod live_dump;
 mod locator_systems;
 mod material_texture_systems;
 pub mod mesh_systems;

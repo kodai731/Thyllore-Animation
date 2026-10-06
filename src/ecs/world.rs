@@ -409,6 +409,10 @@ impl World {
             .send(Box::new(command));
     }
 
+    pub fn send_boxed_command(&self, command: Box<dyn UiCommand>) {
+        self.resource_mut::<UiCommandQueue>().send(command);
+    }
+
     pub fn spawn(&mut self) -> Entity {
         let entity = self.next_entity;
         self.next_entity += 1;

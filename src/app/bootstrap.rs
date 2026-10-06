@@ -24,6 +24,10 @@ pub fn apply_startup_overrides(app: &mut App, config: &AppConfig) -> Result<()> 
 
 /// GPU setup that has to wait for the startup overrides: subsystem hooks, then imgui.
 pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) -> Result<()> {
+    crate::hooks::external_command::start_external_command_sources(
+        &system.external_command_sender(),
+    );
+
     let command_pool = app.resource::<CommandState>().pool.clone();
     let rrrender = app.resource::<RenderTargets>().render.clone();
 

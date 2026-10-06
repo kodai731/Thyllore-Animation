@@ -358,7 +358,7 @@ fn build_scalar_curve_selector_inline(
 
         let (color, name) = scalar_curve_style(property_type);
         let mut visible = editor_state.visible_curves.contains(&property_type);
-        ui.text_colored(color, "\u{25CF}");
+        draw_curve_color_swatch(ui, color);
         ui.same_line();
         let label = if key_count > 0 {
             format!("{name} ({key_count})")
@@ -442,7 +442,7 @@ fn build_curve_selector_inline(
         }
 
         let mut visible = editor_state.visible_curves.contains(prop_type);
-        ui.text_colored(*color, "\u{25CF}");
+        draw_curve_color_swatch(ui, *color);
         ui.same_line();
         if ui.checkbox(name, &mut visible) {
             if visible {
@@ -640,6 +640,19 @@ fn hsv_to_rgba(h: f32, s: f32, v: f32) -> [f32; 4] {
         _ => (v, p, q),
     };
     [r, g, b, 1.0]
+}
+
+fn draw_curve_color_swatch(ui: &imgui::Ui, color: [f32; 4]) {
+    let side = ui.text_line_height() * 0.6;
+    let top_left = ui.cursor_screen_pos();
+    let offset_y = (ui.text_line_height() - side) * 0.5;
+    let min = [top_left[0], top_left[1] + offset_y];
+    let max = [min[0] + side, min[1] + side];
+    ui.get_window_draw_list()
+        .add_rect(min, max, color)
+        .filled(true)
+        .build();
+    ui.dummy([side, ui.text_line_height()]);
 }
 
 fn collect_visible_curves<'a>(
@@ -994,7 +1007,11 @@ fn build_curve_editor_context_menu(
 ) {
     ui.popup("curve_editor_context_menu", || {
         if ui.selectable_config("Add Key").build() {
-            if let Some(property_type) = add_key_target_property(editor_state, track_ref) {
+            let bone_role = track_ref
+                .bone_id()
+                .and_then(|bone_id| find_bone_role(&collect_humanoid_bone_roles(world), bone_id));
+            if let Some(property_type) = add_key_target_property(editor_state, track_ref, bone_role)
+            {
                 if let CurveTrackRef::Bone(bone_id) = track_ref {
                     if !current_clip_has_track(world, bone_id) {
                         world.send_command(EnsureBoneTrack { bone_id });
@@ -1022,10 +1039,13 @@ fn current_clip_has_track(world: &World, bone_id: BoneId) -> bool {
 /// still hold bone property types from a previous bone target, and letting one
 /// through would create a curve no channel answers to (grey "Custom", never
 /// sampled). Lowest code wins so the choice is deterministic; the bone target
-/// picks by declaration order for the same reason.
+/// picks by declaration order for the same reason. A role bone only lists the
+/// curves its role allows, so a translation left visible by the default set
+/// must not win over the rotation the user checked.
 fn add_key_target_property(
     editor_state: &CurveEditorState,
     track_ref: CurveTrackRef,
+    bone_role: Option<HumanoidRole>,
 ) -> Option<PropertyType> {
     match track_ref {
         CurveTrackRef::Scalar => editor_state
@@ -1040,6 +1060,9 @@ fn add_key_target_property(
         CurveTrackRef::Bone(_) => ALL_PROPERTY_TYPES
             .iter()
             .map(|(property_type, _, _)| *property_type)
+            .filter(|property_type| {
+                bone_role.is_none_or(|role| is_role_curve_allowed(role, *property_type))
+            })
             .find(|property_type| editor_state.visible_curves.contains(property_type)),
         CurveTrackRef::Morph(_) => Some(PropertyType::MorphWeight),
     }
@@ -2579,6 +2602,30 @@ fn build_curve_toolbar(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn add_key_on_a_role_bone_skips_translations_left_visible_by_default() {
+        let mut editor_state = CurveEditorState::default();
+        editor_state.visible_curves.remove(&PropertyType::RotationX);
+        editor_state.visible_curves.remove(&PropertyType::RotationZ);
+
+        let property = add_key_target_property(
+            &editor_state,
+            CurveTrackRef::Bone(3),
+            Some(HumanoidRole::Neck),
+        );
+
+        assert_eq!(property, Some(PropertyType::RotationY));
+    }
+
+    #[test]
+    fn add_key_on_a_plain_bone_keeps_declaration_order() {
+        let editor_state = CurveEditorState::default();
+
+        let property = add_key_target_property(&editor_state, CurveTrackRef::Bone(3), None);
+
+        assert_eq!(property, Some(PropertyType::TranslationX));
+    }
 
     #[test]
     fn test_format_morph_track_name_short() {

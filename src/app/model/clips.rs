@@ -176,6 +176,7 @@ fn register_clips_to_library(
 fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) -> SourceClipId {
     let mut editable = EditableAnimationClip::new(0, "New Animation".to_string());
     editable.duration = EMPTY_CLIP_DEFAULT_DURATION_SECONDS;
+    editable.min_duration = EMPTY_CLIP_DEFAULT_DURATION_SECONDS;
     let source_id = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         let id = clip_library_register_and_activate(&mut clip_library, assets, editable);
@@ -345,6 +346,27 @@ mod tests {
             world.resource::<TimelineState>().current_clip_id,
             Some(user_source_id)
         );
+    }
+
+    #[test]
+    fn auto_created_clip_keeps_its_length_after_the_first_key() {
+        use crate::animation::editable::{clip_add_keyframe, clip_recalculate_duration};
+        use crate::animation::editable::{BoneTrack, PropertyType};
+
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        let source_id = register_empty_editable_clip(&mut world, &mut assets);
+        let mut library = world.resource_mut::<ClipLibrary>();
+        let clip = library.get_mut(source_id).expect("clip registered");
+        clip.tracks
+            .insert(1, BoneTrack::new(1, "Hips".to_string(), 0));
+        clip_add_keyframe(clip, 1, PropertyType::RotationX, 0.5, 10.0);
+        clip_recalculate_duration(clip);
+
+        assert!((clip.duration - EMPTY_CLIP_DEFAULT_DURATION_SECONDS).abs() < f32::EPSILON);
     }
 
     #[test]

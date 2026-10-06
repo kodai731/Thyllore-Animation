@@ -4,7 +4,7 @@ use super::clips::restore_batch_playback;
 use super::gpu::release_model_gpu_resources;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    BakedRoleClips, BonePoseOverride, ClipLibrary, MeshAssets, NodeAssets, PoseApplyCache,
+    BakedHumanoidClips, BonePoseOverride, ClipLibrary, MeshAssets, NodeAssets, PoseApplyCache,
     TimelineState,
 };
 use crate::ecs::world::World;
@@ -58,8 +58,8 @@ fn reset_model_world_state(world: &mut World) {
         *pose_apply_cache = PoseApplyCache::default();
     }
 
-    if let Some(mut baked) = world.get_resource_mut::<BakedRoleClips>() {
-        *baked = BakedRoleClips::default();
+    if let Some(mut baked) = world.get_resource_mut::<BakedHumanoidClips>() {
+        *baked = BakedHumanoidClips::default();
     }
 }
 
@@ -77,7 +77,7 @@ mod tests {
         world.insert_resource(MeshAssets::default());
         world.insert_resource(NodeAssets::default());
         world.insert_resource(BonePoseOverride::default());
-        world.insert_resource(BakedRoleClips::default());
+        world.insert_resource(BakedHumanoidClips::default());
         world
     }
 

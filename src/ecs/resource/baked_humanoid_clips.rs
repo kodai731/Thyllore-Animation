@@ -4,19 +4,19 @@ use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetId;
 
 #[derive(Default)]
-pub struct BakedRoleClips {
-    pub by_key: HashMap<(SourceClipId, crate::ecs::world::Entity), BakedRoleClip>,
+pub struct BakedHumanoidClips {
+    pub by_key: HashMap<(SourceClipId, crate::ecs::world::Entity), BakedHumanoidClip>,
     pub failed: HashSet<(SourceClipId, crate::ecs::world::Entity)>,
     pub rig_revision: u64,
 }
 
-pub struct BakedRoleClip {
+pub struct BakedHumanoidClip {
     pub fps: u32,
     pub asset_id: AssetId,
     pub clip: EditableAnimationClip,
 }
 
-impl BakedRoleClips {
+impl BakedHumanoidClips {
     pub fn invalidate_source(&mut self, source_id: SourceClipId) -> Vec<AssetId> {
         self.failed.retain(|(sid, _)| *sid != source_id);
         let keys_to_remove: Vec<_> = self
@@ -60,8 +60,8 @@ mod tests {
         source_id: SourceClipId,
         entity: crate::ecs::world::Entity,
         asset_id: AssetId,
-    ) -> BakedRoleClip {
-        BakedRoleClip {
+    ) -> BakedHumanoidClip {
+        BakedHumanoidClip {
             fps: 30,
             asset_id,
             clip: EditableAnimationClip::new(0, "test".to_string()),
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn invalidate_source_removes_every_entity_entry() {
-        let mut clips = BakedRoleClips::default();
+        let mut clips = BakedHumanoidClips::default();
         let source: SourceClipId = 1;
         let e1: crate::ecs::world::Entity = 0;
         let e2: crate::ecs::world::Entity = 1;

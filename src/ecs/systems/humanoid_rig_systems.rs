@@ -9,7 +9,7 @@ use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
 use crate::animation::Skeleton;
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
-use crate::ecs::systems::role_clip_systems::build_role_retarget_context;
+use crate::ecs::systems::humanoid_bake_systems::build_role_retarget_context;
 
 pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<HumanoidRig> {
     let bones = skeleton_to_bone_inputs(skeleton);

@@ -700,7 +700,7 @@ fn dump_includes_bone_tracks_when_requested() {
 }
 
 #[test]
-fn anim_edit_parses_role_clip_specs() {
+fn anim_edit_parses_clip_specs() {
     use super::anim_edits::anim_edit_parse_spec;
 
     let edit = anim_edit_parse_spec("new_clip=walk").unwrap();
@@ -748,8 +748,8 @@ fn copilot_extend_parses_role_axis_time_frames() {
 }
 
 #[test]
-fn template_then_save_round_trips_a_role_clip() {
-    use crate::ecs::systems::role_clip_systems::new_empty_clip;
+fn template_then_save_round_trips_a_clip() {
+    use crate::ecs::systems::humanoid_bake_systems::new_empty_clip;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();

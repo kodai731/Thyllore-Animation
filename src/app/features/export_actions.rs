@@ -6,7 +6,7 @@ use crate::app::App;
 use crate::ecs::resource::{
     ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, TimelineState,
 };
-use crate::ecs::systems::role_clip_systems;
+use crate::ecs::systems::humanoid_bake_systems;
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -131,7 +131,7 @@ pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimatio
         .snap_settings
         .frame_rate
         .round() as u32;
-    match role_clip_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
+    match humanoid_bake_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
         Ok(baked) => Some((baked, skeleton)),
         Err(e) => {
             msg_error!("Role clip bake failed: {:?}", e);

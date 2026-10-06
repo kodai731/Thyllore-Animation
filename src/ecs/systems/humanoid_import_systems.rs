@@ -195,10 +195,10 @@ mod tests {
     use thyllore_anim_core::editable::components::curve::PropertyCurve;
 
     use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+    use crate::ecs::systems::humanoid_bake_systems::bake_to_bone_clip;
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
-    use crate::ecs::systems::role_clip_systems::bake_to_bone_clip;
 
     fn assert_curves_match(original: &PropertyCurve, converted: &PropertyCurve, tolerance: f32) {
         for time in [0.0, 0.5, 1.0] {

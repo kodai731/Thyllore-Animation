@@ -1332,11 +1332,11 @@ mod tests {
         use crate::ecs::component::ClipSchedule;
         use crate::ecs::resource::HumanoidRigState;
         use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+        use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
         use crate::ecs::systems::humanoid_rig_systems::{
             build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
         };
         use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
-        use crate::ecs::systems::role_clip_systems::unresolved_clip_roles;
         use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
         use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
@@ -1347,18 +1347,18 @@ mod tests {
         let mut rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
         let mut library = ClipLibrary::default();
 
-        let role_clip_id: SourceClipId = 1;
-        let mut role_clip = EditableAnimationClip::new(role_clip_id, "role".to_string());
-        let track = role_clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
+        let clip_id: SourceClipId = 1;
+        let mut clip = EditableAnimationClip::new(clip_id, "role".to_string());
+        let track = clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
 
         rig.mapping.by_role.remove(&HumanoidRole::Hips);
-        assert!(!unresolved_clip_roles(&role_clip, Some(&rig.mapping)).is_empty());
+        assert!(!unresolved_clip_roles(&clip, Some(&rig.mapping)).is_empty());
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
         library
             .source_clips
-            .insert(role_clip_id, SourceClip::new(role_clip_id, role_clip));
+            .insert(clip_id, SourceClip::new(clip_id, clip));
         world.insert_resource(library);
         let entity = world.spawn();
         world.insert_component(entity, ClipSchedule::default());
@@ -1366,7 +1366,7 @@ mod tests {
         process_clip_instance_events(
             &[ClipInstanceEvent::Add {
                 entity,
-                source_id: role_clip_id,
+                source_id: clip_id,
                 start_time: 0.0,
             }],
             &mut world,
@@ -1465,13 +1465,13 @@ fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId,
         if let Some(clip) = clip {
             let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
             if let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) {
-                let unresolved = crate::ecs::systems::role_clip_systems::unresolved_clip_roles(
+                let unresolved = crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles(
                     clip,
                     Some(&rig.mapping),
                 );
                 if !unresolved.is_empty() {
                     log_warn!(
-                        "role clip '{}' has unresolved roles: {:?}",
+                        "clip '{}' has unresolved roles: {:?}",
                         clip.name,
                         unresolved
                     );

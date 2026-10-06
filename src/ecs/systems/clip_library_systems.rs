@@ -294,19 +294,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loading_a_role_clip_moves_role_tracks_to_model_bones() {
+    fn loading_a_clip_moves_role_tracks_to_model_bones() {
         use thyllore_anim_core::editable::curve_add_keyframe;
         use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-        let mut role_clip = crate::ecs::systems::role_clip_systems::new_empty_clip("bow");
-        let track = role_clip.add_track(
+        let mut clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip("bow");
+        let track = clip.add_track(
             HumanoidRole::Head.index() as BoneId,
             HumanoidRole::Head.unity_name().to_string(),
         );
         curve_add_keyframe(&mut track.rotation_x, 0.0, 10.0);
-        let path =
-            std::env::temp_dir().join(format!("role_clip_load_{}.anim.ron", std::process::id()));
-        crate::scene::save_animation_clip(&path, &role_clip).unwrap();
+        let path = std::env::temp_dir().join(format!("clip_load_{}.anim.ron", std::process::id()));
+        crate::scene::save_animation_clip(&path, &clip).unwrap();
 
         let model_head_bone: BoneId = 181;
         let mut model_bones = HashMap::new();

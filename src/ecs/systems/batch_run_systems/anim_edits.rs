@@ -12,7 +12,7 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, BakedRoleClips, BatchAnimEdit, BoneAxis, ClipLibrary, HumanoidRigState,
+    AnimationType, BakedHumanoidClips, BatchAnimEdit, BoneAxis, ClipLibrary, HumanoidRigState,
     PendingBatchAnimEdits, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -213,7 +213,7 @@ fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str)
     {
         assets.animation_clips.remove(&asset_id);
     }
-    if let Some(mut baked) = world.get_resource_mut::<BakedRoleClips>() {
+    if let Some(mut baked) = world.get_resource_mut::<BakedHumanoidClips>() {
         let invalidated = baked.invalidate_source(source_id);
         for asset_id in invalidated {
             assets.animation_clips.remove(&asset_id);
@@ -357,7 +357,7 @@ pub fn batch_apply_anim_edits(
                 );
             }
             BatchAnimEdit::NewClip { name } => {
-                let clip = crate::ecs::systems::role_clip_systems::new_empty_clip(name);
+                let clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip(name);
                 let id = crate::ecs::systems::clip_library_register_and_activate(
                     &mut world.resource_mut::<ClipLibrary>(),
                     assets,

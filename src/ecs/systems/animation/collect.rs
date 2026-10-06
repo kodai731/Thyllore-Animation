@@ -4,7 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::compute_local_time;
 use crate::ecs::resource::{
-    BakedRoleClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
+    BakedHumanoidClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
 };
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -15,7 +15,7 @@ fn resolve_playable_asset(
     source_id: SourceClipId,
     entity: Entity,
     clip_library: &ClipLibrary,
-    baked: &BakedRoleClips,
+    baked: &BakedHumanoidClips,
 ) -> Option<crate::asset::AssetId> {
     if let Some(baked_entry) = baked.by_key.get(&(source_id, entity)) {
         return Some(baked_entry.asset_id);
@@ -48,9 +48,9 @@ pub(crate) fn collect_animated_entities(
             .map(|owner| (owner, clip_id))
     });
 
-    let empty_baked = BakedRoleClips::default();
-    let baked_ref = world.get_resource::<BakedRoleClips>();
-    let baked: &BakedRoleClips = baked_ref.as_deref().unwrap_or(&empty_baked);
+    let empty_baked = BakedHumanoidClips::default();
+    let baked_ref = world.get_resource::<BakedHumanoidClips>();
+    let baked: &BakedHumanoidClips = baked_ref.as_deref().unwrap_or(&empty_baked);
 
     for (parent_entity, animator) in world.iter_components::<Animator>() {
         let Some(schedule) = world.get_component::<ClipSchedule>(parent_entity) else {
@@ -171,7 +171,7 @@ pub(crate) fn build_active_instances(
     schedule: &ClipSchedule,
     entity: Entity,
     clip_library: &ClipLibrary,
-    baked: &BakedRoleClips,
+    baked: &BakedHumanoidClips,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
     let active = crate::ecs::systems::clip_schedule_systems::clip_schedule_active_instances(
@@ -226,7 +226,7 @@ pub(crate) fn build_solo_instance(
     clip_id: SourceClipId,
     entity: Entity,
     clip_library: &ClipLibrary,
-    baked: &BakedRoleClips,
+    baked: &BakedHumanoidClips,
     animator: &Animator,
 ) -> Option<ActiveInstanceInfo> {
     let asset_id = resolve_playable_asset(clip_id, entity, clip_library, baked)?;
@@ -283,7 +283,7 @@ mod tests {
         clip_id: SourceClipId,
         entity: Entity,
         clip_library: &ClipLibrary,
-        baked: &BakedRoleClips,
+        baked: &BakedHumanoidClips,
         animator: &Animator,
     ) -> Vec<ActiveInstanceInfo> {
         build_solo_instance(clip_id, entity, clip_library, baked, animator)
@@ -297,7 +297,7 @@ mod tests {
         register_clip(&mut clip_library, 1, 2.0);
         let schedule = ClipSchedule::new();
         let animator = animator_at(0.5);
-        let baked = BakedRoleClips::default();
+        let baked = BakedHumanoidClips::default();
         let entity: Entity = 0;
 
         assert!(
@@ -330,7 +330,7 @@ mod tests {
         schedule.instances[1].muted = true;
         let muted_before: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
         let animator = animator_at(0.5);
-        let baked = BakedRoleClips::default();
+        let baked = BakedHumanoidClips::default();
         let entity: Entity = 0;
 
         let instances = collect_solo(3, entity, &clip_library, &baked, &animator);
@@ -353,7 +353,7 @@ mod tests {
         schedule.instances[0].weight = 0.4;
         schedule.instances[1].muted = true;
         let animator = animator_at(0.5);
-        let baked = BakedRoleClips::default();
+        let baked = BakedHumanoidClips::default();
         let entity: Entity = 0;
 
         let instances = build_active_instances(&schedule, entity, &clip_library, &baked, &animator);
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn role_clip_instance_plays_the_baked_asset() {
+    fn clip_instance_plays_the_baked_asset() {
         let mut clip_library = ClipLibrary::new();
         let mut clip = EditableAnimationClip::new(1, "role".to_string());
         clip.duration = 2.0;
@@ -374,10 +374,10 @@ mod tests {
             .insert(1, SourceClip::new(1, clip));
 
         let baked = {
-            let mut baked = BakedRoleClips::default();
+            let mut baked = BakedHumanoidClips::default();
             baked.by_key.insert(
                 (1, 42),
-                crate::ecs::resource::BakedRoleClip {
+                crate::ecs::resource::BakedHumanoidClip {
                     fps: 30,
                     asset_id: 999,
                     clip: EditableAnimationClip::new(1, "baked".to_string()),
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn role_clip_without_bake_is_skipped() {
+    fn clip_without_bake_is_skipped() {
         let mut clip_library = ClipLibrary::new();
         let mut clip = EditableAnimationClip::new(1, "role".to_string());
         clip.duration = 2.0;
@@ -406,7 +406,7 @@ mod tests {
             .source_clips
             .insert(1, SourceClip::new(1, clip));
 
-        let baked = BakedRoleClips::default();
+        let baked = BakedHumanoidClips::default();
 
         let mut schedule = ClipSchedule::new();
         clip_schedule_add_instance(&mut schedule, 1, 2.0);

@@ -1212,7 +1212,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FrameClock>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AppExit>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::BakedRoleClips>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::BakedHumanoidClips>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::HumanoidRigState>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {

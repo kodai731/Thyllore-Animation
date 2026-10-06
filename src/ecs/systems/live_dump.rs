@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -9,19 +9,25 @@ use serde::Deserialize;
 use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{CurveEditorState, CurveEditorTarget, TimelineState};
+use crate::ecs::resource::{
+    CpuFrameTimings, CurveEditorState, CurveEditorTarget, RenderPrepSubTimings, TimelineState,
+    UpdatePhaseTimings,
+};
 use crate::ecs::systems::animation_debug_dump::{
     build_animation_debug_dump, resolve_animation_debug_target,
 };
 use crate::ecs::systems::batch_run_systems::batch_anim_dump_json;
+use crate::ecs::FrameContext;
 use crate::ecs::World;
 use crate::hooks::external_command::ExternalCommandSender;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub const LIVE_DUMP_DIRECTORY: &str = "log/live_dump";
-const REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+const REPLY_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RECORDING_SECONDS: f32 = 20.0;
 
 crate::external_command_source!("live_dump", start_live_dump_listener);
+crate::frame_prep_hook!("live_dump_timings", Advance, record_frame_timings);
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -33,6 +39,74 @@ pub enum LiveDumpRequest {
     Pose {
         times: Vec<f32>,
     },
+    SetTime {
+        time: f32,
+    },
+    Timings {
+        #[serde(default)]
+        seconds: Option<f32>,
+    },
+}
+
+/// Collects one `timings_json` per frame until `until`, then answers the waiting client.
+#[derive(Debug, Default)]
+pub struct FrameTimingRecorder {
+    active: Option<ActiveRecording>,
+}
+
+#[derive(Debug)]
+struct ActiveRecording {
+    until: Instant,
+    samples: Vec<serde_json::Value>,
+    reply: mpsc::Sender<serde_json::Value>,
+}
+
+impl FrameTimingRecorder {
+    pub fn start(&mut self, seconds: f32, reply: mpsc::Sender<serde_json::Value>) {
+        self.active = Some(ActiveRecording {
+            until: Instant::now() + Duration::from_secs_f32(seconds),
+            samples: Vec::new(),
+            reply,
+        });
+    }
+
+    /// Appends the last frame's timings; returns the finished recording once the deadline passed.
+    pub fn record(
+        &mut self,
+        sample: serde_json::Value,
+    ) -> Option<(Vec<serde_json::Value>, mpsc::Sender<serde_json::Value>)> {
+        let recording = self.active.as_mut()?;
+        recording.samples.push(sample);
+        if Instant::now() < recording.until {
+            return None;
+        }
+        self.active
+            .take()
+            .map(|recording| (recording.samples, recording.reply))
+    }
+}
+
+fn record_frame_timings(ctx: &mut FrameContext) {
+    let sample = {
+        let Some(recorder) = ctx.world.get_resource::<FrameTimingRecorder>() else {
+            return;
+        };
+        if recorder.active.is_none() {
+            return;
+        }
+        timings_json(ctx.world)
+    };
+
+    let finished = ctx
+        .world
+        .resource_mut::<FrameTimingRecorder>()
+        .record(sample);
+    if let Some((samples, reply)) = finished {
+        let response = serde_json::json!({ "ok": true, "data": { "samples": samples } });
+        if reply.send(response).is_err() {
+            log_warn!("live dump: client went away before the timing recording ended");
+        }
+    }
 }
 
 /// Applied on the main thread in the dispatch phase; the reply goes back to the listener thread.
@@ -44,6 +118,14 @@ pub struct LiveDumpCommand {
 
 impl UiCommand for LiveDumpCommand {
     fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        if let LiveDumpRequest::Timings {
+            seconds: Some(seconds),
+        } = self.request
+        {
+            start_timing_recording(world, seconds, self.reply);
+            return;
+        }
+
         let response = match serve_request(world, assets, &self.request) {
             Ok(data) => serde_json::json!({ "ok": true, "data": data }),
             Err(error) => serde_json::json!({ "ok": false, "error": format!("{error:#}") }),
@@ -52,6 +134,25 @@ impl UiCommand for LiveDumpCommand {
             log_warn!("live dump: client went away before the reply");
         }
     }
+}
+
+fn start_timing_recording(world: &mut World, seconds: f32, reply: mpsc::Sender<serde_json::Value>) {
+    if !(seconds > 0.0 && seconds <= MAX_RECORDING_SECONDS) {
+        let error = format!("seconds must be within (0, {MAX_RECORDING_SECONDS}], got {seconds}");
+        let _ = reply.send(serde_json::json!({ "ok": false, "error": error }));
+        return;
+    }
+    if !world.contains_resource::<FrameTimingRecorder>() {
+        world.insert_resource(FrameTimingRecorder::default());
+    }
+    let mut recorder = world.resource_mut::<FrameTimingRecorder>();
+    if recorder.active.is_some() {
+        let _ = reply.send(
+            serde_json::json!({ "ok": false, "error": "a timing recording is already running" }),
+        );
+        return;
+    }
+    recorder.start(seconds, reply);
 }
 
 pub fn live_dump_socket_path() -> PathBuf {
@@ -121,11 +222,18 @@ fn handle_request_line<S: std::io::Read + Write>(
 }
 
 fn serve_request(
-    world: &World,
+    world: &mut World,
     assets: &AssetStorage,
     request: &LiveDumpRequest,
 ) -> Result<serde_json::Value> {
     match request {
+        LiveDumpRequest::SetTime { time } => {
+            let mut timeline = world.resource_mut::<TimelineState>();
+            timeline.playing = false;
+            timeline.set_time(*time);
+            Ok(serde_json::json!({ "current_time": timeline.current_time }))
+        }
+        LiveDumpRequest::Timings { seconds: _ } => Ok(timings_json(world)),
         LiveDumpRequest::Anim { include_tracks } => {
             let mut data = batch_anim_dump_json(world, *include_tracks);
             data["curve_editor"] = curve_editor_json(world);
@@ -139,6 +247,37 @@ fn serve_request(
             Ok(serde_json::to_value(dump)?)
         }
     }
+}
+
+fn stages_json(stages: &[(String, f32)]) -> serde_json::Value {
+    stages
+        .iter()
+        .map(|(label, ms)| (label.clone(), serde_json::json!(ms)))
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+/// The CPU cost of the last completed frame, by stage, update phase and render prep hook.
+pub fn timings_json(world: &World) -> serde_json::Value {
+    let cpu = world.get_resource::<CpuFrameTimings>();
+    let update_phases = world.get_resource::<UpdatePhaseTimings>();
+    let render_prep: serde_json::Value = world
+        .get_resource::<RenderPrepSubTimings>()
+        .map(|sub| {
+            let mut entries: Vec<(String, f32)> =
+                sub.timings.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            stages_json(&entries)
+        })
+        .unwrap_or(serde_json::Value::Null);
+
+    serde_json::json!({
+        "frame": cpu.as_ref().map(|c| c.frame),
+        "dt_ms": cpu.as_ref().map(|c| c.dt_ms),
+        "cpu": cpu.as_ref().map(|c| stages_json(&c.stages)),
+        "update_phases": update_phases.as_ref().map(|u| stages_json(&u.stages)),
+        "render_prep": render_prep,
+    })
 }
 
 pub fn curve_editor_json(world: &World) -> serde_json::Value {
@@ -214,6 +353,71 @@ mod tests {
                 times: vec![0.0, 1.5]
             }
         );
+    }
+
+    #[test]
+    fn request_parses_set_time_and_timings() {
+        let set_time: LiveDumpRequest =
+            serde_json::from_str(r#"{"kind": "set_time", "time": 1.25}"#).unwrap();
+        assert_eq!(set_time, LiveDumpRequest::SetTime { time: 1.25 });
+        let timings: LiveDumpRequest = serde_json::from_str(r#"{"kind": "timings"}"#).unwrap();
+        assert_eq!(timings, LiveDumpRequest::Timings { seconds: None });
+        let recorded: LiveDumpRequest =
+            serde_json::from_str(r#"{"kind": "timings", "seconds": 1.5}"#).unwrap();
+        assert_eq!(recorded, LiveDumpRequest::Timings { seconds: Some(1.5) });
+    }
+
+    #[test]
+    fn recorder_collects_samples_until_its_deadline_then_hands_them_back() {
+        let mut recorder = FrameTimingRecorder::default();
+        let (reply, reply_rx) = mpsc::channel();
+        recorder.start(0.05, reply);
+
+        let mut finished = None;
+        for i in 0..200 {
+            finished = recorder.record(serde_json::json!({ "i": i }));
+            if finished.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        let (samples, reply) = finished.expect("recording ends after the deadline");
+        assert!(samples.len() >= 2);
+        reply.send(serde_json::json!({ "ok": true })).unwrap();
+        assert_eq!(reply_rx.recv().unwrap()["ok"], true);
+        assert!(recorder.record(serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn recording_request_rejects_a_zero_duration() {
+        let mut world = World::new();
+        let (reply, reply_rx) = mpsc::channel();
+
+        start_timing_recording(&mut world, 0.0, reply);
+
+        assert_eq!(reply_rx.recv().unwrap()["ok"], false);
+    }
+
+    #[test]
+    fn set_time_moves_the_timeline_and_stops_playback() {
+        let mut world = World::new();
+        let mut timeline = TimelineState::default();
+        timeline.playing = true;
+        world.insert_resource(timeline);
+        let assets = AssetStorage::default();
+
+        let response = serve_request(
+            &mut world,
+            &assets,
+            &LiveDumpRequest::SetTime { time: 0.75 },
+        )
+        .unwrap();
+
+        assert_eq!(response["current_time"], 0.75);
+        let timeline = world.resource::<TimelineState>();
+        assert!(!timeline.playing);
+        assert_eq!(timeline.current_time, 0.75);
     }
 
     #[test]

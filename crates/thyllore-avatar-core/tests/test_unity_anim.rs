@@ -2,14 +2,21 @@
 
 mod support;
 
+use std::collections::BTreeMap;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
+use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoid_pose;
 use thyllore_avatar_core::muscle::components::unity_muscle_table::default_unity_muscle_table;
 use thyllore_avatar_core::muscle::systems::muscle_curves_sampler::muscle_curves_from_clip;
-use thyllore_avatar_core::muscle::systems::unity_anim_writer::unity_anim_text;
+use thyllore_avatar_core::muscle::systems::unity_anim_writer::{unity_anim_text, write_unity_anim};
 use thyllore_avatar_core::muscle::systems::unity_muscle_conversion::to_unity_muscles;
 
-fn mapping() -> thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping {
+fn mapping() -> HumanoidMapping {
     support::test_humanoid::build_ctx().0.mapping.clone()
 }
 
@@ -155,10 +162,7 @@ fn wave_slopes_are_finite_differences() {
     );
 }
 
-fn remap_tracks(
-    clip: &mut thyllore_anim_core::editable::components::clip::EditableAnimationClip,
-    mapping: &thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping,
-) {
+fn remap_tracks(clip: &mut EditableAnimationClip, mapping: &HumanoidMapping) {
     let old_tracks: Vec<_> = clip.tracks.drain().collect();
     for (_old_id, mut track) in old_tracks {
         let role = HumanoidRole::from_unity_name(&track.bone_name)
@@ -167,4 +171,68 @@ fn remap_tracks(
         track.bone_id = bone_id;
         clip.tracks.insert(bone_id, track);
     }
+}
+
+#[test]
+#[ignore]
+fn dump_unity_verify_inputs() {
+    let out_dir: PathBuf = env::var("UNITY_MUSCLE_VERIFY_DIR")
+        .map(PathBuf::from)
+        .expect("UNITY_MUSCLE_VERIFY_DIR not set");
+    fs::create_dir_all(&out_dir).unwrap();
+
+    let mapping = mapping();
+    let table = default_unity_muscle_table();
+    let sample_rate: u32 = 30;
+
+    let mut clips: Vec<serde_json::Value> = Vec::new();
+
+    for (name, mut clip) in [
+        ("wave", support::role_clips::wave()),
+        ("bow", support::role_clips::bow()),
+    ] {
+        remap_tracks(&mut clip, &mapping);
+        let curves = muscle_curves_from_clip(&clip, &mapping, sample_rate, table);
+        write_unity_anim(
+            &out_dir.join(format!("{name}.anim")),
+            name,
+            &curves,
+            table,
+            false,
+        )
+        .unwrap();
+
+        let frames: Vec<serde_json::Value> = curves
+            .frames
+            .iter()
+            .enumerate()
+            .map(|(frame_idx, frame)| {
+                let time = curves.times[frame_idx];
+                let pose = sample_humanoid_pose(&clip, &mapping, time);
+                let rotations: BTreeMap<String, [f32; 3]> = pose
+                    .rotations
+                    .iter()
+                    .map(|(role, euler_degrees)| (role.unity_name().to_string(), *euler_degrees))
+                    .collect();
+                let muscles: Vec<f32> = frame.to_vec();
+                serde_json::json!({
+                    "time": time,
+                    "rotations": rotations,
+                    "muscles": muscles,
+                })
+            })
+            .collect();
+
+        clips.push(serde_json::json!({
+            "name": name,
+            "frames": frames,
+        }));
+    }
+
+    let output = serde_json::json!({ "clips": clips });
+    fs::write(
+        out_dir.join("verify_poses.json"),
+        serde_json::to_string_pretty(&output).unwrap(),
+    )
+    .unwrap();
 }

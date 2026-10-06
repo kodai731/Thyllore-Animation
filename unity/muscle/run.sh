@@ -55,6 +55,9 @@ TEST_HUMANOID_SKELETON_JSON="$STICK_TMPDIR/skeleton.json" \
 BLENDER_CMD="${BLENDER:-bash "$REPO_ROOT/blender/docker/run_background.sh"}"
 TMPDIR="$WORK_DIR/tmp" $BLENDER_CMD -b --python "$REPO_ROOT/unity/muscle/build_stick.py" -- "$STICK_TMPDIR/skeleton.json" "$STICK_TMPDIR"
 
+mkdir -p "$PROJECT_DIR/Assets/Verify"
+UNITY_MUSCLE_VERIFY_DIR="$PROJECT_DIR/Assets/Verify" cargo test -p thyllore-avatar-core --test test_unity_anim dump_unity_verify_inputs -- --ignored
+
 mkdir -p "$PROJECT_DIR/Assets/Model"
 cp "$STICK_TMPDIR/test_humanoid.fbx" "$PROJECT_DIR/Assets/Model/"
 

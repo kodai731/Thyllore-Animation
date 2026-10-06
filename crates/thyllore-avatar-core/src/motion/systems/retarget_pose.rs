@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{InnerSpace, Matrix3, One, Quaternion, Rotation, Vector3, Zero};
+use cgmath::{InnerSpace, Matrix, Matrix3, One, Quaternion, Rotation, Vector3, Zero};
 
 use crate::humanoid::components::character_frame::CharacterFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
@@ -10,7 +10,7 @@ use crate::motion::components::retarget_context::{RetargetContext, RetargetedPos
 use crate::motion::components::retarget_skeleton::RetargetSkeleton;
 use crate::motion::components::sampled_pose::SampledPose;
 
-use super::role_rotation::role_rotation_to_engine;
+use super::role_rotation::{engine_rotation_to_role, role_rotation_to_engine};
 use super::tpose_basis::compute_tpose_world_rotations;
 
 pub fn build_retarget_context(
@@ -42,7 +42,7 @@ pub fn build_retarget_context(
     })
 }
 
-pub fn retarget_pose(ctx: &RetargetContext, pose: &SampledPose) -> RetargetedPose {
+pub fn retarget_to_bones(ctx: &RetargetContext, pose: &SampledPose) -> RetargetedPose {
     let mut local_rotations = BTreeMap::new();
 
     for (&role, &bone_idx) in &ctx.mapping.by_role {
@@ -76,6 +76,44 @@ pub fn retarget_pose(ctx: &RetargetContext, pose: &SampledPose) -> RetargetedPos
     RetargetedPose {
         local_rotations,
         hips_offset,
+    }
+}
+
+pub fn retarget_from_bones(
+    ctx: &RetargetContext,
+    local_rotations: &BTreeMap<usize, Quaternion<f32>>,
+    hips_offset: Vector3<f32>,
+) -> SampledPose {
+    let mut rotations = BTreeMap::new();
+
+    for (&role, &bone_idx) in &ctx.mapping.by_role {
+        let local_i = local_rotations
+            .get(&bone_idx)
+            .copied()
+            .unwrap_or_else(Quaternion::one);
+
+        let parent_rot = match ctx.skeleton.bones[bone_idx].parent {
+            Some(parent_idx) => ctx.tpose_world[parent_idx],
+            None => Quaternion::one(),
+        };
+
+        let t_i_inv = ctx.tpose_world[bone_idx].invert();
+        let r_i = parent_rot * local_i * t_i_inv;
+
+        rotations.insert(role, engine_rotation_to_role(&ctx.frame, r_i));
+    }
+
+    let m = Matrix3::from_cols(
+        Vector3::from(ctx.frame.right),
+        Vector3::from(ctx.frame.up),
+        Vector3::from(ctx.frame.forward),
+    );
+    let hips_translation = m.transpose() * hips_offset / ctx.hips_height;
+
+    SampledPose {
+        rotations,
+        hips_translation: hips_translation.into(),
+        morph: BTreeMap::new(),
     }
 }
 
@@ -242,7 +280,7 @@ mod tests {
 
         let ctx = build_ctx(&skeleton, RestPose::APose);
         let pose = empty_pose();
-        let retargeted = retarget_pose(&ctx, &pose);
+        let retargeted = retarget_to_bones(&ctx, &pose);
         let positions = pose_world_positions(&ctx, &retargeted);
 
         let upper_pos = positions[RIGHT_UPPER_ARM];
@@ -273,7 +311,7 @@ mod tests {
         pose.rotations
             .insert(HumanoidRole::RightUpperArm, [0.0, 0.0, 90.0]);
 
-        let retargeted = retarget_pose(&ctx, &pose);
+        let retargeted = retarget_to_bones(&ctx, &pose);
         let positions = pose_world_positions(&ctx, &retargeted);
 
         let upper_pos = positions[RIGHT_UPPER_ARM];
@@ -299,7 +337,7 @@ mod tests {
         pose.rotations
             .insert(HumanoidRole::RightUpperArm, [0.0, 0.0, 90.0]);
 
-        let retargeted = retarget_pose(&ctx, &pose);
+        let retargeted = retarget_to_bones(&ctx, &pose);
         let positions = pose_world_positions(&ctx, &retargeted);
 
         let upper_pos = positions[RIGHT_UPPER_ARM];
@@ -337,7 +375,7 @@ mod tests {
         let mut pose = empty_pose();
         pose.hips_translation = [0.0, -0.5, 0.0];
 
-        let retargeted = retarget_pose(&ctx, &pose);
+        let retargeted = retarget_to_bones(&ctx, &pose);
         let positions = pose_world_positions(&ctx, &retargeted);
 
         let hips_rest = skeleton.bones[HIPS].world_position;
@@ -360,5 +398,48 @@ mod tests {
             head_diff,
             expected_hips_offset
         );
+    }
+
+    #[test]
+    fn retarget_from_bones_inverts_retarget_to_bones() {
+        let skeleton = build_skeleton();
+        let ctx = build_ctx(&skeleton, RestPose::TPose);
+
+        let mut pose = empty_pose();
+        pose.rotations
+            .insert(HumanoidRole::Spine, [10.0, 20.0, -30.0]);
+        pose.rotations
+            .insert(HumanoidRole::LeftUpperArm, [0.0, 15.0, -70.0]);
+        pose.rotations
+            .insert(HumanoidRole::Head, [-20.0, 35.0, 5.0]);
+        pose.hips_translation = [0.1, -0.05, 0.2];
+
+        let retargeted = retarget_to_bones(&ctx, &pose);
+        let recovered =
+            retarget_from_bones(&ctx, &retargeted.local_rotations, retargeted.hips_offset);
+
+        for role in ctx.mapping.by_role.keys() {
+            let expected = pose.rotations.get(role).copied().unwrap_or([0.0; 3]);
+            let actual = recovered.rotations[role];
+            for axis in 0..3 {
+                assert!(
+                    (actual[axis] - expected[axis]).abs() < 1e-2,
+                    "role {:?}: expected {:?}, got {:?}",
+                    role,
+                    expected,
+                    actual
+                );
+            }
+        }
+
+        for axis in 0..3 {
+            assert!(
+                (recovered.hips_translation[axis] - pose.hips_translation[axis]).abs() < 1e-4,
+                "hips: expected {:?}, got {:?}",
+                pose.hips_translation,
+                recovered.hips_translation
+            );
+        }
+        assert!(recovered.morph.is_empty());
     }
 }

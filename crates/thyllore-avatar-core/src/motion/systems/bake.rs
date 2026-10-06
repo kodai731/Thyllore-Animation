@@ -7,7 +7,7 @@ use crate::motion::components::baked_motion::BakedMotion;
 use crate::motion::components::retarget_context::RetargetContext;
 use crate::motion::components::sampled_pose::SampledPose;
 
-use super::retarget_pose::retarget_pose;
+use super::retarget_pose::retarget_to_bones;
 use super::role_clip_sampler::sample_role_clip;
 
 pub fn bake_role_clip(
@@ -36,7 +36,7 @@ fn bake_sampled_motion(
         frame_times.push(time);
 
         let sampled = sample(time);
-        let retargeted = retarget_pose(ctx, &sampled);
+        let retargeted = retarget_to_bones(ctx, &sampled);
 
         for (&bone_idx, &rotation) in &retargeted.local_rotations {
             let curve = bone_rotations

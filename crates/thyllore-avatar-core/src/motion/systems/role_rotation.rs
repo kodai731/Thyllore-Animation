@@ -18,6 +18,25 @@ pub fn role_rotation_to_engine(frame: &CharacterFrame, euler_degrees: [f32; 3]) 
     Quaternion::from(engine_rotation)
 }
 
+pub fn engine_rotation_to_role(frame: &CharacterFrame, rotation: Quaternion<f32>) -> [f32; 3] {
+    let unity_to_engine = Matrix3::from_cols(
+        Vector3::from(frame.right),
+        Vector3::from(frame.up),
+        Vector3::from(frame.forward),
+    );
+    let unity_rotation = unity_to_engine.transpose() * Matrix3::from(rotation) * unity_to_engine;
+
+    let x_radians = (-unity_rotation[2][1]).clamp(-1.0, 1.0).asin();
+    let y_radians = unity_rotation[2][0].atan2(unity_rotation[2][2]);
+    let z_radians = unity_rotation[0][1].atan2(unity_rotation[1][1]);
+
+    [
+        x_radians.to_degrees(),
+        y_radians.to_degrees(),
+        z_radians.to_degrees(),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use cgmath::{InnerSpace, Matrix3, Rotation, Vector3};
@@ -154,6 +173,29 @@ mod tests {
             let neg_up = -up;
             let rotated = apply_quaternion(q, neg_up);
             assert!(almost_equal(rotated, -forward));
+        }
+    }
+
+    #[test]
+    fn test_engine_rotation_to_role_inverts_role_rotation_to_engine() {
+        let angle_sets = [
+            [25.0, -40.0, 60.0],
+            [-10.0, 75.0, -120.0],
+            [5.0, 170.0, 30.0],
+        ];
+        for frame in [CANONICAL, rotated_frame()] {
+            for euler in angle_sets {
+                let q = role_rotation_to_engine(&frame, euler);
+                let recovered = engine_rotation_to_role(&frame, q);
+                for axis in 0..3 {
+                    assert!(
+                        (recovered[axis] - euler[axis]).abs() < 1e-3,
+                        "euler {:?} recovered {:?}",
+                        euler,
+                        recovered
+                    );
+                }
+            }
         }
     }
 

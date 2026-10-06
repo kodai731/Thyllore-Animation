@@ -40,7 +40,7 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
             thyllore_avatar_core::motion::systems::role_clip_sampler::sample_role_clip(clip, time);
 
         let retargeted =
-            thyllore_avatar_core::motion::systems::retarget_pose::retarget_pose(&ctx, &sampled);
+            thyllore_avatar_core::motion::systems::retarget_pose::retarget_to_bones(&ctx, &sampled);
         let positions = thyllore_avatar_core::motion::systems::retarget_pose::pose_world_positions(
             &ctx,
             &retargeted,

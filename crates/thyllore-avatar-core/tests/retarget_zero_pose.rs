@@ -30,7 +30,7 @@ fn check_with_world(convention_id: &str) {
     };
 
     let retargeted =
-        thyllore_avatar_core::motion::systems::retarget_pose::retarget_pose(&ctx, &pose);
+        thyllore_avatar_core::motion::systems::retarget_pose::retarget_to_bones(&ctx, &pose);
     let positions = thyllore_avatar_core::motion::systems::retarget_pose::pose_world_positions(
         &ctx,
         &retargeted,

@@ -102,6 +102,7 @@ use std::collections::BTreeMap;
 
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
+use crate::humanoid::systems::hierarchy::is_ancestor;
 
 pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
     let canonical = super::skeleton::skeleton();
@@ -181,5 +182,37 @@ pub fn without_fingers() -> (Vec<BoneInput>, HumanoidMapping) {
             mapping.by_role.remove(&role);
         }
     }
+    (bones, mapping)
+}
+
+pub fn with_spine_below_hips() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (mut bones, mapping) = test_humanoid_bone_inputs();
+    let spine_idx = *mapping.by_role.get(&HumanoidRole::Spine).unwrap();
+    let hips_idx = *mapping.by_role.get(&HumanoidRole::Hips).unwrap();
+    bones[spine_idx].rest_position[1] = bones[hips_idx].rest_position[1] - 0.1;
+    (bones, mapping)
+}
+
+pub fn with_long_left_upper_arm() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (mut bones, mapping) = test_humanoid_bone_inputs();
+    let left_upper_arm_idx = *mapping.by_role.get(&HumanoidRole::LeftUpperArm).unwrap();
+    let left_lower_arm_idx = *mapping.by_role.get(&HumanoidRole::LeftLowerArm).unwrap();
+
+    let upper_arm_length_x =
+        bones[left_lower_arm_idx].rest_position[0] - bones[left_upper_arm_idx].rest_position[0];
+    let shift_x = 2.0 * upper_arm_length_x;
+
+    for &bone_index in mapping.by_role.values() {
+        if bone_index == left_lower_arm_idx || is_ancestor(&bones, left_lower_arm_idx, bone_index) {
+            bones[bone_index].rest_position[0] += shift_x;
+        }
+    }
+    (bones, mapping)
+}
+
+pub fn with_asymmetric_hand() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (mut bones, mapping) = test_humanoid_bone_inputs();
+    let left_hand_idx = *mapping.by_role.get(&HumanoidRole::LeftHand).unwrap();
+    bones[left_hand_idx].rest_position[2] += 0.2;
     (bones, mapping)
 }

@@ -1,4 +1,5 @@
 pub mod character_frame;
+pub mod geometry_checks;
 pub mod hierarchy;
 pub mod mapping_io;
 pub mod name_match;

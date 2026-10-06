@@ -75,14 +75,13 @@ fn check_bone_in_two_roles(mapping: &HumanoidMapping, issues: &mut Vec<MappingIs
         bone_to_roles.entry(bone_index).or_default().push(role);
     }
     for (bone_index, roles) in &bone_to_roles {
-        if roles.len() != 2 {
+        if roles.len() < 2 {
             continue;
         }
-        let [a, b] = roles.as_slice() else {
-            continue;
-        };
-        if a.mirrored() == *b || b.mirrored() == *a {
-            continue;
+        if let [a, b] = roles.as_slice() {
+            if a.mirrored() == *b {
+                continue;
+            }
         }
         let mut sorted = roles.clone();
         sorted.sort_by_key(|r| r.index());

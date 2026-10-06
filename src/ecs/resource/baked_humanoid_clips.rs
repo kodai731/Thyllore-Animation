@@ -9,6 +9,7 @@ pub struct BakedHumanoidClips {
     pub by_key: HashMap<(SourceClipId, crate::ecs::world::Entity), BakedHumanoidClip>,
     pub failed: HashSet<(SourceClipId, crate::ecs::world::Entity)>,
     pub rig_revision: u64,
+    pub inferred_warned_revision: Option<u64>,
     pub scan_requested: bool,
     pub last_view: Option<(Option<SourceClipId>, ClipPreview, u32)>,
 }

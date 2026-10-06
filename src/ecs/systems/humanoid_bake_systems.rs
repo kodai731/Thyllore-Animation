@@ -307,6 +307,15 @@ pub fn refresh_baked_humanoid_clips(world: &mut World, assets: &mut AssetStorage
     let rig = world.resource::<HumanoidRigState>().rig.clone();
     let clip_library = world.resource::<ClipLibrary>();
     let mut baked_clips = world.resource_mut::<BakedHumanoidClips>();
+
+    let is_inferred_rig = rig.as_ref().is_some_and(|rig| !rig.confirmed);
+    if is_inferred_rig && baked_clips.inferred_warned_revision != Some(current_revision) {
+        msg_warn!(
+            "humanoid mapping of this model is inferred, not confirmed; save it in Avatar Setup"
+        );
+        baked_clips.inferred_warned_revision = Some(current_revision);
+    }
+
     for key in keys_to_bake {
         let (source_id, entity) = key;
         let Some(source_clip) = clip_library.get(source_id) else {

@@ -3,6 +3,7 @@ use std::path::Path;
 
 use thyllore_anim_core::BoneId;
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
 
@@ -45,29 +46,12 @@ pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<Huma
         }
     };
 
-    let mut track_bones: HashMap<String, BoneId> = HashMap::new();
-    let mut track_names: HashMap<BoneId, String> = HashMap::new();
-
-    for (i, bone) in skeleton.bones.iter().enumerate() {
-        let bone_id = i as BoneId;
-        let name = if let Some((role, _)) = mapping.by_role.iter().find(|(_, &b)| b == i) {
-            role.unity_name().to_string()
-        } else {
-            let name = &bone.name;
-            if HumanoidRole::from_unity_name(name.as_str()).is_some() {
-                log_warn!(
-                    "Bone '{}' is not in mapping but matches role name, renamed to '{}#bone'",
-                    name,
-                    name
-                );
-                format!("{}#bone", name)
-            } else {
-                name.clone()
-            }
-        };
-        track_bones.insert(name.clone(), bone_id);
-        track_names.insert(bone_id, name);
-    }
+    let bone_names: Vec<String> = skeleton
+        .bones
+        .iter()
+        .map(|bone| bone.name.clone())
+        .collect();
+    let (track_bones, track_names) = build_track_name_table(&bone_names, &mapping);
 
     Some(HumanoidRig {
         confirmed,
@@ -76,6 +60,36 @@ pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<Huma
         track_bones,
         track_names,
     })
+}
+
+pub fn build_track_name_table(
+    bone_names: &[String],
+    mapping: &HumanoidMapping,
+) -> (HashMap<String, BoneId>, HashMap<BoneId, String>) {
+    let mut track_bones: HashMap<String, BoneId> = HashMap::new();
+    let mut track_names: HashMap<BoneId, String> = HashMap::new();
+
+    for (i, bone_name) in bone_names.iter().enumerate() {
+        let bone_id = i as BoneId;
+        let name = if let Some((role, _)) = mapping.by_role.iter().find(|(_, &b)| b == i) {
+            role.unity_name().to_string()
+        } else {
+            if HumanoidRole::from_unity_name(bone_name.as_str()).is_some() {
+                log_warn!(
+                    "Bone '{}' is not in mapping but matches role name, renamed to '{}#bone'",
+                    bone_name,
+                    bone_name
+                );
+                format!("{}#bone", bone_name)
+            } else {
+                bone_name.clone()
+            }
+        };
+        track_bones.insert(name.clone(), bone_id);
+        track_names.insert(bone_id, name);
+    }
+
+    (track_bones, track_names)
 }
 
 use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
@@ -394,6 +408,45 @@ mod tests {
             );
             assert_eq!(state.revision, 1, "revision should stay 1 (idempotent)");
         }
+    }
+
+    #[test]
+    fn name_collision_moves_the_bone_name_aside() {
+        let bone_names = vec![
+            "J_Bip_C_Hips".to_string(),
+            "J_Bip_C_Head".to_string(),
+            "Head".to_string(),
+        ];
+        let mut mapping = HumanoidMapping::default();
+        mapping.by_role.insert(HumanoidRole::Hips, 0);
+        mapping.by_role.insert(HumanoidRole::Head, 1);
+
+        let (track_bones, track_names) = build_track_name_table(&bone_names, &mapping);
+
+        assert_eq!(
+            track_bones.get("Head"),
+            Some(&1),
+            "Head should map to bone index 1"
+        );
+        assert_eq!(
+            track_bones.get("Head#bone"),
+            Some(&2),
+            "Head#bone should map to bone index 2"
+        );
+        assert!(
+            !track_bones.contains_key("J_Bip_C_Head"),
+            "J_Bip_C_Head should not be in the table"
+        );
+        assert_eq!(
+            track_names.get(&1).map(String::as_str),
+            Some("Head"),
+            "bone 1 track name should be Head"
+        );
+        assert_eq!(
+            track_names.get(&2).map(String::as_str),
+            Some("Head#bone"),
+            "bone 2 track name should be Head#bone"
+        );
     }
 }
 

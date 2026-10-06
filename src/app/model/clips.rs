@@ -59,7 +59,36 @@ pub(super) fn register_loaded_clips(
     if assets.skeletons.is_empty() {
         return None;
     }
+    if let Some(kept_clip_id) = select_kept_clip(world) {
+        return Some(kept_clip_id);
+    }
     Some(register_empty_editable_clip(world, assets))
+}
+
+fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
+    let kept_clip_id = {
+        let library = world.resource::<ClipLibrary>();
+        let selected = world
+            .resource::<TimelineState>()
+            .current_clip_id
+            .filter(|id| library.get(*id).is_some());
+        selected.or_else(|| library.all_clip_ids().min().copied())?
+    };
+
+    let clip_duration = world
+        .resource::<ClipLibrary>()
+        .get(kept_clip_id)
+        .map(|c| c.duration)
+        .unwrap_or(0.0);
+    let mut timeline_state = world.resource_mut::<TimelineState>();
+    timeline_state.current_clip_id = Some(kept_clip_id);
+    timeline_apply_fit_zoom(&mut timeline_state, clip_duration);
+    log!(
+        "Model has no animations; timeline keeps clip {} from the library",
+        kept_clip_id
+    );
+
+    Some(kept_clip_id)
 }
 
 fn import_editable_clips(
@@ -287,6 +316,54 @@ mod tests {
             world.resource::<TimelineState>().current_clip_id,
             Some(user_source_id)
         );
+    }
+
+    #[test]
+    fn model_without_animations_keeps_library_clip_instead_of_creating_an_empty_one() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton: Skeleton::default(),
+        });
+
+        let user_clip = EditableAnimationClip::new(0, "user".to_string());
+        let user_source_id = {
+            let mut clip_library = world.resource_mut::<ClipLibrary>();
+            clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
+        };
+
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+
+        assert_eq!(first_clip_id, Some(user_source_id));
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(user_source_id)
+        );
+    }
+
+    #[test]
+    fn model_without_animations_and_empty_library_creates_an_empty_clip() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton: Skeleton::default(),
+        });
+
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+
+        assert!(first_clip_id.is_some());
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
     }
 
     #[test]

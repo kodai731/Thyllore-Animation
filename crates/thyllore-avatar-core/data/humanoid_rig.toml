@@ -86,11 +86,13 @@ patterns = [["jaw"]]
 [[role]]
 part = "ThumbProximal"
 paired = true
+vrm1_part = "ThumbMetacarpal"
 patterns = [["thumb", "proximal"], ["thumb", "1"], ["thumb1"]]
 
 [[role]]
 part = "ThumbIntermediate"
 paired = true
+vrm1_part = "ThumbProximal"
 patterns = [["thumb", "intermediate"], ["thumb", "2"], ["thumb2"]]
 
 [[role]]

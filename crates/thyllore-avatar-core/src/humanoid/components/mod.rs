@@ -8,3 +8,4 @@ pub mod role;
 pub mod skeleton_input;
 pub mod spring_chain;
 pub mod tokens;
+pub mod vrm_version;

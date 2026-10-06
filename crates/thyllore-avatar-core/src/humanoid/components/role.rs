@@ -1,5 +1,7 @@
 use crate::expression::components::side::Side;
 
+use super::vrm_version::VrmVersion;
+
 include!(concat!(env!("OUT_DIR"), "/humanoid_rig.rs"));
 
 #[cfg(test)]
@@ -106,5 +108,45 @@ mod tests {
                 role.mirrored().side()
             );
         }
+    }
+
+    #[test]
+    fn test_vrm_name_roundtrip() {
+        for version in [VrmVersion::V0, VrmVersion::V1] {
+            for role in HumanoidRole::ALL {
+                assert_eq!(
+                    HumanoidRole::from_vrm_name(role.vrm_name(version), version),
+                    Some(role),
+                    "from_vrm_name({:?}, {:?}) should return Some({role:?})",
+                    role.vrm_name(version),
+                    version
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_thumb_proximal_vrm_names() {
+        assert_eq!(
+            HumanoidRole::LeftThumbProximal.vrm_name(VrmVersion::V1),
+            "leftThumbMetacarpal"
+        );
+        assert_eq!(
+            HumanoidRole::LeftThumbProximal.vrm_name(VrmVersion::V0),
+            "leftThumbProximal"
+        );
+    }
+
+    #[test]
+    fn test_hips_vrm_name() {
+        assert_eq!(HumanoidRole::Hips.vrm_name(VrmVersion::V1), "hips");
+    }
+
+    #[test]
+    fn test_upper_chest_vrm_name() {
+        assert_eq!(
+            HumanoidRole::UpperChest.vrm_name(VrmVersion::V0),
+            "upperChest"
+        );
     }
 }

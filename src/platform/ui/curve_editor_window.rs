@@ -2612,7 +2612,8 @@ mod tests {
 
     #[test]
     fn role_clip_lists_rotation_curves_before_any_key_exists() {
-        let clip = crate::ecs::systems::role_clip_systems::new_role_clip("empty");
+        let mut clip = crate::ecs::systems::role_clip_systems::new_role_clip("empty");
+        clip.space = ClipSpace::HumanoidRole;
         let hips = HumanoidRole::ALL
             .iter()
             .position(|r| *r == HumanoidRole::Hips)

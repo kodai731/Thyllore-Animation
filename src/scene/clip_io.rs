@@ -65,7 +65,7 @@ fn humanoid_role_slot(name: &str) -> Option<RoleSlot> {
 mod tests {
     use super::*;
     use crate::ecs::systems::scalar_clip_systems::test_support::{probe_property, PROBE_LEVEL};
-    use thyllore_anim_core::editable::{curve_add_keyframe, ClipSpace};
+    use thyllore_anim_core::editable::curve_add_keyframe;
 
     #[test]
     fn test_clip_files_persist_scalar_curves_by_channel_name() {
@@ -115,6 +115,5 @@ mod tests {
         let text = r#"(version: 1, clip: (id: 1, name: "v1", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [])"#;
         let clip = parse_animation_clip(text).expect("parse v1");
         assert_eq!(clip.name, "v1");
-        assert_eq!(clip.space, ClipSpace::Bone);
     }
 }

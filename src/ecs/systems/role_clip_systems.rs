@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use cgmath::{Quaternion, Vector3};
-use thyllore_anim_core::editable::components::clip::{ClipSpace, EditableAnimationClip};
+use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
@@ -153,7 +153,6 @@ pub fn bake_role_clip_to_bone_clip(
 
 pub fn new_role_clip(name: &str) -> EditableAnimationClip {
     let mut clip = EditableAnimationClip::new(0, name.to_string());
-    clip.space = ClipSpace::HumanoidRole;
     clip.duration = 2.0;
     clip.min_duration = 2.0;
     clip
@@ -325,7 +324,6 @@ mod tests {
     use std::collections::BTreeMap;
 
     use cgmath::{InnerSpace, Rad, Rotation3};
-    use thyllore_anim_core::editable::components::clip::ClipSpace;
     use thyllore_math_core::euler_degrees_to_quaternion;
 
     use crate::ecs::systems::humanoid_rig_systems::{
@@ -457,7 +455,6 @@ mod tests {
         let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
 
         let mut role_clip = EditableAnimationClip::new(0, "test_role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
 
         let right_lower_arm_bone = rig.track_bones["RightLowerArm"];
         let track = role_clip.add_track(right_lower_arm_bone, "RightLowerArm".to_string());
@@ -505,7 +502,6 @@ mod tests {
             .build();
 
         let mut bone_clip = EditableAnimationClip::new(0, "test_role".to_string());
-        bone_clip.space = ClipSpace::Bone;
         let track = bone_clip.add_track(hips_bone, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);
@@ -536,7 +532,6 @@ mod tests {
     #[test]
     fn unresolved_clip_roles_without_mapping_lists_every_role() {
         let mut clip = EditableAnimationClip::new(0, "test".to_string());
-        clip.space = ClipSpace::HumanoidRole;
 
         let hips_idx = HumanoidRole::Hips.index();
         let spine_idx = HumanoidRole::Spine.index();
@@ -555,7 +550,6 @@ mod tests {
     #[test]
     fn unresolved_clip_roles_lists_unmapped_roles() {
         let mut clip = EditableAnimationClip::new(0, "test".to_string());
-        clip.space = ClipSpace::HumanoidRole;
 
         let hips_idx = HumanoidRole::Hips.index();
         let spine_idx = HumanoidRole::Spine.index();
@@ -576,7 +570,6 @@ mod tests {
     #[test]
     fn new_role_clip_starts_without_tracks() {
         let clip = new_role_clip("test");
-        assert_eq!(clip.space, ClipSpace::HumanoidRole);
         assert!((clip.duration - 2.0).abs() < f32::EPSILON);
         assert!((clip.min_duration - 2.0).abs() < f32::EPSILON);
         assert!(clip.tracks.is_empty());
@@ -615,7 +608,6 @@ mod tests {
             .build();
 
         let mut bone_clip = EditableAnimationClip::new(0, "test_role".to_string());
-        bone_clip.space = ClipSpace::Bone;
         let track = bone_clip.add_track(hips_bone, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);
@@ -661,7 +653,6 @@ mod tests {
         let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
 
         let mut role_clip = EditableAnimationClip::new(0, "test_unmapped".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
 
         let head_bone = rig.track_bones["Head"];
         let head_track = role_clip.add_track(head_bone, "Head".to_string());
@@ -696,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn space_bone_clip_is_baked_on_a_humanoid_model() {
+    fn bone_clip_is_baked_on_a_humanoid_model() {
         use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
         use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
 
@@ -721,7 +712,6 @@ mod tests {
             .build();
 
         let mut bone_clip = EditableAnimationClip::new(0, "test_bone".to_string());
-        bone_clip.space = ClipSpace::Bone;
         let track = bone_clip.add_track(hips_bone, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);
@@ -758,7 +748,6 @@ mod tests {
             .build();
 
         let mut bone_clip2 = EditableAnimationClip::new(0, "test_bone2".to_string());
-        bone_clip2.space = ClipSpace::Bone;
         let track2 = bone_clip2.add_track(0, "Hips".to_string());
         curve_add_keyframe(&mut track2.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track2.rotation_y, 1.0, 45.0);

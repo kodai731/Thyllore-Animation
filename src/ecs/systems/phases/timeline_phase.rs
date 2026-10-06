@@ -89,15 +89,15 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    let role_source_ids = clip_library_sync_dirty(&mut clip_library, ctx.assets);
-    if role_source_ids.is_empty() {
+    let dirty_source_ids = clip_library_sync_dirty(&mut clip_library, ctx.assets);
+    if dirty_source_ids.is_empty() {
         return;
     }
     let mut baked_role_clips = ctx
         .world
         .resource_mut::<crate::ecs::resource::BakedRoleClips>();
     let mut removed_assets: Vec<_> = Vec::new();
-    for source_id in role_source_ids {
+    for source_id in dirty_source_ids {
         let invalidated = baked_role_clips.invalidate_source(source_id);
         removed_assets.extend(invalidated);
     }

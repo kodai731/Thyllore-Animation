@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use thyllore_anim_core::editable::{ClipSpace, EditableAnimationClip, PropertyCurve, PropertyType};
+use thyllore_anim_core::editable::{EditableAnimationClip, PropertyCurve, PropertyType};
 use thyllore_anim_core::BoneId;
 
 use crate::asset::AssetStorage;
@@ -12,7 +12,7 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, AvatarSetupState, BakedRoleClips, BatchAnimEdit, ClipLibrary,
+    AnimationType, BakedRoleClips, BatchAnimEdit, ClipLibrary, HumanoidRigState,
     PendingBatchAnimEdits, RoleAxis, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -305,13 +305,6 @@ pub fn batch_apply_anim_edits(
                     Some(c) => c,
                     None => continue,
                 };
-                if clip.space != thyllore_anim_core::editable::ClipSpace::HumanoidRole {
-                    log_warn!(
-                        "key edit: current clip is not a role clip (space={:?}), skipping",
-                        clip.space
-                    );
-                    continue;
-                }
                 let table = match crate::ecs::systems::engine_bone_name_to_id(world, assets) {
                     Some(t) => t,
                     None => {
@@ -446,13 +439,6 @@ pub fn batch_apply_anim_edits(
                         Some(c) => c,
                         None => continue,
                     };
-                    if clip.space != thyllore_anim_core::editable::ClipSpace::HumanoidRole {
-                        log_warn!(
-                            "copilot_extend: current clip is not a role clip (space={:?}), skipping",
-                            clip.space
-                        );
-                        continue;
-                    }
                     let Some(model_path) = crate::ml::resolve_curve_copilot_model_path() else {
                         log_warn!("copilot_extend: curve copilot model not found, skipping");
                         continue;
@@ -545,22 +531,12 @@ fn schedule_instances_json(world: &World, entity: Entity) -> Vec<serde_json::Val
         .unwrap_or_default()
 }
 
-fn collect_role_names_by_bone(
-    world: &World,
-    clip: &EditableAnimationClip,
-) -> HashMap<BoneId, String> {
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-
-    if clip.space == ClipSpace::HumanoidRole {
-        let role_space_names =
-            HumanoidRole::ALL.map(|role| (role.index() as BoneId, role.unity_name().to_string()));
-        return role_space_names.into_iter().collect();
-    }
-
+fn collect_role_names_by_bone(world: &World) -> HashMap<BoneId, String> {
     let mut role_names: HashMap<BoneId, String> = HashMap::new();
 
-    if let Some(setup) = world.get_resource::<AvatarSetupState>() {
-        for (role, &bone_index) in &setup.mapping.by_role {
+    let rig_state = world.get_resource::<HumanoidRigState>();
+    if let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) {
+        for (role, &bone_index) in &rig.mapping.by_role {
             role_names.insert(bone_index as BoneId, role.unity_name().to_string());
         }
     }
@@ -569,7 +545,7 @@ fn collect_role_names_by_bone(
 }
 
 fn bone_tracks_json(world: &World, clip: &EditableAnimationClip) -> Vec<serde_json::Value> {
-    let role_names = collect_role_names_by_bone(world, clip);
+    let role_names = collect_role_names_by_bone(world);
 
     let mut tracks: Vec<_> = clip.tracks.values().collect();
     tracks.sort_unstable_by_key(|track| track.bone_id);

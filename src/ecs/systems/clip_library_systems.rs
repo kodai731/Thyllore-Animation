@@ -5,8 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 
 use crate::animation::editable::{
-    clip_remap_bone_ids, clip_to_animation, ClipSpace, EditableAnimationClip, SourceClip,
-    SourceClipId,
+    clip_remap_bone_ids, clip_to_animation, EditableAnimationClip, SourceClip, SourceClipId,
 };
 use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
@@ -25,14 +24,12 @@ pub fn clip_library_register_and_activate(
     let mut clip = editable;
     clip.id = source_id;
 
-    if clip.space != ClipSpace::HumanoidRole {
-        let playable = clip_to_animation(&clip);
-        let asset_id = assets.add_animation_clip(AnimationClipAsset {
-            id: 0,
-            clip: playable,
-        });
-        lib.source_to_asset_id.insert(source_id, asset_id);
-    }
+    let playable = clip_to_animation(&clip);
+    let asset_id = assets.add_animation_clip(AnimationClipAsset {
+        id: 0,
+        clip: playable,
+    });
+    lib.source_to_asset_id.insert(source_id, asset_id);
 
     let source = SourceClip::new(source_id, clip);
     lib.source_clips.insert(source_id, source);
@@ -67,26 +64,23 @@ pub fn clip_library_sync_dirty(
     lib: &mut ClipLibrary,
     assets: &mut AssetStorage,
 ) -> Vec<SourceClipId> {
-    let mut role_clips: Vec<SourceClipId> = Vec::new();
+    let mut synced_ids: Vec<SourceClipId> = Vec::new();
     for source_id in lib.dirty_sources.drain() {
-        let Some(source) = lib.source_clips.get(&source_id) else {
-            continue;
-        };
-        if source.editable_clip.space == ClipSpace::HumanoidRole {
-            role_clips.push(source_id);
-            continue;
-        }
         let asset_id = match lib.source_to_asset_id.get(&source_id) {
             Some(&aid) => aid,
             None => continue,
         };
 
+        let Some(source) = lib.source_clips.get(&source_id) else {
+            continue;
+        };
         let playable = clip_to_animation(&source.editable_clip);
         if let Some(asset) = assets.animation_clips.get_mut(&asset_id) {
             asset.clip = playable;
         }
+        synced_ids.push(source_id);
     }
-    role_clips
+    synced_ids
 }
 
 pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)> {
@@ -332,41 +326,37 @@ mod tests {
     }
 
     #[test]
-    fn role_clip_registers_without_a_playable_asset() {
+    fn clip_registers_with_a_playable_asset() {
         let mut lib = ClipLibrary::default();
         let mut assets = AssetStorage::default();
 
-        let mut clip = EditableAnimationClip::new(0, "role".to_string());
-        clip.space = ClipSpace::HumanoidRole;
+        let clip = EditableAnimationClip::new(0, "clip".to_string());
 
         let source_id = clip_library_register_and_activate(&mut lib, &mut assets, clip);
 
         assert!(lib.source_clips.contains_key(&source_id));
-        assert!(!lib.source_to_asset_id.contains_key(&source_id));
-        assert_eq!(assets.animation_clips.len(), 0);
+        assert!(lib.source_to_asset_id.contains_key(&source_id));
+        assert_eq!(assets.animation_clips.len(), 1);
     }
 
     #[test]
-    fn sync_dirty_returns_role_clips_without_converting() {
+    fn sync_dirty_returns_all_synced_ids() {
         let mut lib = ClipLibrary::default();
         let mut assets = AssetStorage::default();
 
-        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
-        let role_source_id = clip_library_register_and_activate(&mut lib, &mut assets, role_clip);
+        let clip_a = EditableAnimationClip::new(0, "a".to_string());
+        let source_id_a = clip_library_register_and_activate(&mut lib, &mut assets, clip_a);
 
-        let bone_clip = EditableAnimationClip::new(0, "bone".to_string());
-        let bone_source_id = clip_library_register_and_activate(&mut lib, &mut assets, bone_clip);
+        let clip_b = EditableAnimationClip::new(0, "b".to_string());
+        let source_id_b = clip_library_register_and_activate(&mut lib, &mut assets, clip_b);
 
-        lib.dirty_sources.insert(role_source_id);
-        lib.dirty_sources.insert(bone_source_id);
+        lib.dirty_sources.insert(source_id_a);
+        lib.dirty_sources.insert(source_id_b);
 
         let returned = clip_library_sync_dirty(&mut lib, &mut assets);
 
-        assert_eq!(returned.len(), 1);
-        assert_eq!(returned[0], role_source_id);
-        assert!(assets
-            .animation_clips
-            .contains_key(&lib.source_to_asset_id[&bone_source_id]));
+        assert_eq!(returned.len(), 2);
+        assert!(returned.contains(&source_id_a));
+        assert!(returned.contains(&source_id_b));
     }
 }

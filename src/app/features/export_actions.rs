@@ -3,7 +3,10 @@ use std::path::Path;
 use crate::animation::editable::EditableAnimationClip;
 use crate::animation::Skeleton;
 use crate::app::App;
-use crate::ecs::resource::{BakedRoleClips, ClipLibrary, FbxModelCache, GltfModelCache};
+use crate::ecs::resource::{
+    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, TimelineState,
+};
+use crate::ecs::systems::role_clip_systems;
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -116,15 +119,25 @@ pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimatio
         .next()
         .map(|sa| sa.skeleton.clone())?;
 
-    if clip.space == crate::animation::editable::ClipSpace::HumanoidRole {
-        let owner =
-            crate::ecs::systems::clip_schedule_systems::find_preview_owner(&app.data.ecs_world)?;
-        let baked = app.data.ecs_world.get_resource::<BakedRoleClips>()?;
-        let entry = baked.by_key.get(&(source_id, owner))?;
-        return Some((entry.clip.clone(), skeleton));
-    }
+    let rig_state = app.data.ecs_world.get_resource::<HumanoidRigState>();
+    let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) else {
+        return Some((clip, skeleton));
+    };
 
-    Some((clip, skeleton))
+    let fps = app
+        .data
+        .ecs_world
+        .resource::<TimelineState>()
+        .snap_settings
+        .frame_rate
+        .round() as u32;
+    match role_clip_systems::bake_role_clip_to_bone_clip(&clip, &skeleton, rig, fps) {
+        Ok(baked) => Some((baked, skeleton)),
+        Err(e) => {
+            msg_error!("Role clip bake failed: {:?}", e);
+            None
+        }
+    }
 }
 
 fn resolve_glb_bytes(cache: &GltfModelCache) -> Option<Vec<u8>> {

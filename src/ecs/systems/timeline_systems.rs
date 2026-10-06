@@ -1291,40 +1291,41 @@ mod tests {
     }
 
     #[test]
-    fn role_clip_schedule_rejects_without_mapping() {
-        use crate::animation::editable::{ClipSpace, SourceClip};
+    fn clip_with_unresolved_roles_is_scheduled() {
+        use crate::animation::editable::SourceClip;
         use crate::ecs::component::ClipSchedule;
+        use crate::ecs::resource::HumanoidRigState;
         use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
         use crate::ecs::systems::humanoid_rig_systems::{
             build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
         };
         use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+        use crate::ecs::systems::role_clip_systems::unresolved_clip_roles;
         use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+        use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let mut rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
         let mut library = ClipLibrary::default();
 
         let role_clip_id: SourceClipId = 1;
         let mut role_clip = EditableAnimationClip::new(role_clip_id, "role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
         let track = role_clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
+
+        rig.mapping.by_role.remove(&HumanoidRole::Hips);
+        assert!(!unresolved_clip_roles(&role_clip, Some(&rig.mapping)).is_empty());
+        world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+
         library
             .source_clips
             .insert(role_clip_id, SourceClip::new(role_clip_id, role_clip));
-
         world.insert_resource(library);
         let entity = world.spawn();
         world.insert_component(entity, ClipSchedule::default());
-
-        let initial_count = {
-            let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
-            schedule.instances.len()
-        };
 
         process_clip_instance_events(
             &[ClipInstanceEvent::Add {
@@ -1338,8 +1339,8 @@ mod tests {
         let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
         assert_eq!(
             schedule.instances.len(),
-            initial_count,
-            "role clip should not be added without a humanoid mapping"
+            1,
+            "a clip with unresolved roles should still be scheduled"
         );
     }
 }
@@ -1426,23 +1427,18 @@ fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId,
         let clip = library.get(source_id);
 
         if let Some(clip) = clip {
-            use crate::animation::editable::ClipSpace;
-            if clip.space == ClipSpace::HumanoidRole {
-                let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
-                let mapping = rig_state
-                    .as_ref()
-                    .and_then(|state| state.rig.as_ref())
-                    .map(|rig| &rig.mapping);
-
-                let unresolved =
-                    crate::ecs::systems::role_clip_systems::unresolved_clip_roles(clip, mapping);
+            let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
+            if let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) {
+                let unresolved = crate::ecs::systems::role_clip_systems::unresolved_clip_roles(
+                    clip,
+                    Some(&rig.mapping),
+                );
                 if !unresolved.is_empty() {
                     log_warn!(
-                        "role clip '{}' needs a humanoid mapping; unresolved roles: {:?}",
+                        "role clip '{}' has unresolved roles: {:?}",
                         clip.name,
                         unresolved
                     );
-                    return;
                 }
             }
         }

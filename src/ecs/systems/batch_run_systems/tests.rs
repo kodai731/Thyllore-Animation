@@ -671,23 +671,20 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
 #[test]
 fn dump_includes_bone_tracks_when_requested() {
     use crate::ecs::systems::clip_library_register_and_activate;
-    use thyllore_anim_core::editable::{curve_add_keyframe, ClipSpace, EditableAnimationClip};
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use tempfile::tempdir;
+    use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
 
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
+    let tmp = tempdir().unwrap();
+    let (world, mut assets) = humanoid_rig_world(tmp.path());
 
-    let right_upper_arm_idx = HumanoidRole::RightUpperArm.index();
     let mut clip = EditableAnimationClip::new(0, "t".into());
-    clip.space = ClipSpace::HumanoidRole;
     let track = clip.add_track(
-        right_upper_arm_idx as thyllore_anim_core::BoneId,
-        HumanoidRole::RightUpperArm.unity_name().into(),
+        role_track_bone(&world, "RightUpperArm"),
+        "RightUpperArm".into(),
     );
     curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
     curve_add_keyframe(&mut track.rotation_z, 1.0, 45.0);
 
-    let mut assets = AssetStorage::new();
     clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), &mut assets, clip);
 
     let dump = batch_anim_dump_json(&world, true);
@@ -788,7 +785,6 @@ fn template_then_save_round_trips_a_role_clip() {
     let loaded_saved = crate::scene::load_animation_clip(&save_path).unwrap();
 
     assert_eq!(loaded_template.tracks.len(), loaded_saved.tracks.len());
-    assert_eq!(loaded_template.space, loaded_saved.space);
 }
 
 #[test]
@@ -891,10 +887,6 @@ fn key_edit_addresses_role_curve() {
 
     let lib = world.resource::<ClipLibrary>();
     let clip = lib.get(clip_id).unwrap();
-    assert_eq!(
-        clip.space,
-        thyllore_anim_core::editable::ClipSpace::HumanoidRole
-    );
 
     let track = clip.get_track(role_track_bone(&world, "Head")).unwrap();
     assert_eq!(track.rotation_x.keyframes.len(), 1);

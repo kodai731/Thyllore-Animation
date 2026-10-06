@@ -225,14 +225,14 @@ def anim_edit(
       path; creates the curve when the clip is empty)
     - `trim_end=<seconds>`: set the entity's clip instance clip_out through the
       real ClipInstanceTrimEnd event (what releasing a right-edge drag sends)
-    - `new_role_clip=<name>`: create an empty role clip and make it the current
-      clip
-    - `template=<path.anim.ron>`: load a role clip file, replace any clip with
+    - `new_clip=<name>`: create an empty clip and make it the current clip
+    - `template=<path.anim.ron>`: load a clip file, replace any clip with
       the same name in the library and make it the current clip
     - `save=<path>`: write the current clip to `path`
-    - `key=<Role>.<x|y|z|tx|ty|tz>@<t>=<deg>`: insert a role key into the current
-      clip (Role = Unity humanoid name, e.g. Hips, LeftUpperArm; x/y/z rotation
-      in degrees, tx/ty/tz translation for Hips only)
+    - `key=<bone>.<x|y|z|tx|ty|tz>@<t>=<deg>`: insert a bone key into the current
+      clip (bone = bone name; standard name for humanoid model, i.e. Unity role
+      name; own bone name for unmapped bones; x/y/z rotation in degrees,
+      tx/ty/tz translation for Hips and unmapped bones only)
     - `clear`: remove all scalar curves
 
     Returns {"ok": true, "anim": {entities, clips, timeline}} —
@@ -676,9 +676,9 @@ def water_depth_mask(camera: str = "80,10,6,0,0,0", frames: int = 30, dood: bool
 
 @mcp.tool()
 def template_check(dood: bool = True) -> str:
-    """Run the role clip template smoke test (tools/template_smoke.py) and return its JSON.
+    """Run the clip template smoke test (tools/template_smoke.py) and return its JSON.
 
-    Keys role clips on the test humanoid, checks them against the identity-rig
+    Keys bones on the test humanoid, checks them against the identity-rig
     oracle and an FBX round trip. Returns the script's one-line JSON:
     {"ok": bool, "oracle_violations": [...], "roundtrip_max_diff": float}."""
     cmd = ["uv", "run", "python3", "tools/template_smoke.py"]

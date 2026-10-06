@@ -1,8 +1,8 @@
-"""Smoke test: bake a role clip from template and verify round-trip via FBX export/import.
+"""Smoke test: bake a humanoid clip from template and verify round-trip via FBX export/import.
 
 For each run this script:
   1. Writes target/template_smoke/scene.ron pointing at assets/models/test_humanoid/test_humanoid.fbx
-  2. Runs the engine with --batch-anim-edit new_role_clip=oracle and key edits for several roles,
+  2. Runs the engine with --batch-anim-edit new_clip=oracle and key edits for several bones,
      --batch-anim-debug-dump a.json@0,1 and --batch-export-fbx exported.fbx and --batch-screenshot a.png
   3. Runs the engine again with scene_rt.ron pointing at exported.fbx and --batch-anim-debug-dump b.json@0,1
   4. Checks that pose t==1 matches expected_local_rotation (Ry(-y)*Rx(x)*Rz(-z)) within 1e-3
@@ -105,6 +105,44 @@ def check_identity_rig_pose(dump: dict, keys: dict[str, tuple[int, int, int]]) -
     return violations
 
 
+def check_passthrough_key(dump: dict, bone_name: str, x_degrees: float) -> list[dict]:
+    """Check that a non-mapped bone's local rotation passes through unchanged.
+
+    Finds the bone by name in each pose's bones list and checks:
+    - t=1: local_rotation_quaternion is x-axis rotation of x_degrees
+      (cos(x/2), sin(x/2), 0, 0)
+    - t=0: local_rotation_quaternion is identity [1,0,0,0]
+    Sign flip is allowed (q and -q are the same rotation).
+    Returns list of violations where max component difference exceeds 1e-3.
+    """
+    violations = []
+    half = math.radians(x_degrees / 2)
+    expected_t1 = (math.cos(half), math.sin(half), 0.0, 0.0)
+    expected_t0 = (1.0, 0.0, 0.0, 0.0)
+    for pose in dump.get("poses", []):
+        time = pose["time"]
+        expected_t = 1.0 if time > 0.5 else 0.0
+        for bone in pose["bones"]:
+            if bone.get("name") != bone_name:
+                continue
+            if expected_t == 1.0:
+                expected_q = expected_t1
+            else:
+                expected_q = expected_t0
+            actual_q = tuple(bone["local_rotation_quaternion"])
+            diff = max(abs(a - b) for a, b in zip(actual_q, expected_q))
+            neg_diff = max(abs(a + b) for a, b in zip(actual_q, expected_q))
+            if min(diff, neg_diff) > 1e-3:
+                violations.append({
+                    "time": time,
+                    "bone": bone_name,
+                    "expected": list(expected_q),
+                    "actual": actual_q,
+                    "max_diff": round(min(diff, neg_diff), 6),
+                })
+    return violations
+
+
 def compare_dumps(a: dict, b: dict) -> float:
     """Max component difference of world_position for matching time+bone name."""
     max_diff = 0.0
@@ -127,12 +165,12 @@ def compare_dumps(a: dict, b: dict) -> float:
 
 
 def run_engine_first(out_dir: Path, scene_path: Path, dood: bool) -> subprocess.CompletedProcess[str]:
-    """Run engine with role clip creation and key edits."""
-    edit_args = ["--batch-anim-edit", "new_role_clip=oracle"]
+    """Run engine with clip creation and key edits."""
+    edit_args = ["--batch-anim-edit", "new_clip=oracle"]
     for role, (x, y, z) in KEYS.items():
         for axis, value in [("x", x), ("y", y), ("z", z)]:
             edit_args += ["--batch-anim-edit", f"key={role}.{axis}@0=0", "--batch-anim-edit", f"key={role}.{axis}@1={value}"]
-
+    edit_args += ["--batch-anim-edit", "key=Skirt_Front_1.x@0=0", "--batch-anim-edit", "key=Skirt_Front_1.x@1=45"]
     command = [
         str(engine_path()),
         "--batch-scene", str(scene_path),
@@ -172,7 +210,7 @@ def run_engine_second(out_dir: Path, scene_path: Path, dood: bool) -> subprocess
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Smoke test: role clip template bake and FBX round-trip.")
+    parser = argparse.ArgumentParser(description="Smoke test: clip template bake and FBX round-trip.")
     parser.add_argument("--dood", action="store_true", help="run the engine through the docker harness")
     args = parser.parse_args()
 
@@ -238,6 +276,7 @@ def main() -> None:
         dump_b = json.load(f)
 
     violations = check_identity_rig_pose(dump_a, KEYS)
+    violations += check_passthrough_key(dump_a, "Skirt_Front_1", 45)
     roundtrip_diff = compare_dumps(dump_a, dump_b)
 
     ok = len(violations) == 0 and roundtrip_diff < 1e-3

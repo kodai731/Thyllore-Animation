@@ -78,9 +78,56 @@ pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<Huma
     })
 }
 
+use crate::asset::AssetStorage;
+use crate::ecs::resource::HumanoidRigState;
+use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
+use crate::ecs::world::World;
+
+pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
+    let Some(model_path) = find_model_path(world) else {
+        return;
+    };
+    let is_synced = world
+        .get_resource::<HumanoidRigState>()
+        .is_none_or(|state| state.source_model_path == model_path);
+    if is_synced {
+        return;
+    }
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        return;
+    };
+
+    let rig = build_humanoid_rig(Path::new(&model_path), skeleton);
+
+    let mut state = world.resource_mut::<HumanoidRigState>();
+    state.rig = rig;
+    state.source_model_path = model_path;
+    state.revision += 1;
+}
+
+pub fn invalidate_humanoid_rig(world: &mut World) {
+    if let Some(mut state) = world.get_resource_mut::<HumanoidRigState>() {
+        state.source_model_path.clear();
+    }
+}
+
+pub fn engine_bone_name_to_id(
+    world: &World,
+    assets: &AssetStorage,
+) -> Option<HashMap<String, BoneId>> {
+    if let Some(state) = world.get_resource::<HumanoidRigState>() {
+        if let Some(ref rig) = state.rig {
+            return Some(rig.track_bones.clone());
+        }
+    }
+    find_first_skeleton(assets).map(|skeleton| skeleton.bone_name_to_id.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset::SkeletonAsset;
+    use crate::ecs::resource::ModelState;
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_not_humanoid;
 
     fn copy_test_fixture(temp_dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
@@ -180,4 +227,134 @@ mod tests {
         let rig = build_humanoid_rig(&fbx_path, &skeleton);
         assert!(rig.is_none(), "expected None for not-humanoid sidecar");
     }
+
+    #[test]
+    fn sync_is_idempotent_revision_increases_only_once() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, _) = copy_test_fixture(temp_dir.path());
+        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+
+        sync_humanoid_rig(&mut world, &assets);
+        let revision_after_first = world.resource::<HumanoidRigState>().revision;
+        assert_eq!(
+            revision_after_first, 1,
+            "first sync should increment revision to 1"
+        );
+
+        sync_humanoid_rig(&mut world, &assets);
+        let revision_after_second = world.resource::<HumanoidRigState>().revision;
+        assert_eq!(
+            revision_after_second, 1,
+            "second sync should not increment revision (idempotent)"
+        );
+    }
+
+    #[test]
+    fn invalidate_then_sync_increments_revision_again() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, _) = copy_test_fixture(temp_dir.path());
+        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+
+        sync_humanoid_rig(&mut world, &assets);
+        assert_eq!(world.resource::<HumanoidRigState>().revision, 1);
+
+        invalidate_humanoid_rig(&mut world);
+        assert!(
+            world
+                .resource::<HumanoidRigState>()
+                .source_model_path
+                .is_empty(),
+            "invalidate should clear source_model_path"
+        );
+
+        sync_humanoid_rig(&mut world, &assets);
+        let revision_after_rebuild = world.resource::<HumanoidRigState>().revision;
+        assert_eq!(
+            revision_after_rebuild, 2,
+            "sync after invalidate should increment revision again"
+        );
+    }
+
+    #[test]
+    fn not_humanoid_model_is_synced_once() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, sidecar_path) = copy_test_fixture(temp_dir.path());
+        save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
+
+        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+
+        sync_humanoid_rig(&mut world, &assets);
+        {
+            let state = world.resource::<HumanoidRigState>();
+            assert!(
+                state.rig.is_none(),
+                "rig should be None for not-humanoid model"
+            );
+            assert_eq!(state.revision, 1, "revision should be 1 after first sync");
+        }
+
+        sync_humanoid_rig(&mut world, &assets);
+        {
+            let state = world.resource::<HumanoidRigState>();
+            assert!(
+                state.rig.is_none(),
+                "rig should still be None after second sync"
+            );
+            assert_eq!(state.revision, 1, "revision should stay 1 (idempotent)");
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
+    let skeleton = {
+        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
+            fbx_path.to_str().unwrap(),
+        );
+        let (fbx_result, _) = load_result.expect("Failed to load FBX");
+        fbx_result
+            .animation_system
+            .skeletons
+            .first()
+            .expect("No skeleton in loaded model")
+            .clone()
+    };
+
+    let model_path = fbx_path.to_string_lossy().to_string();
+    let mut assets = AssetStorage::new();
+    assets.add_skeleton(crate::asset::SkeletonAsset {
+        id: 0,
+        skeleton_id: 0,
+        skeleton,
+    });
+
+    let mut world = World::new();
+    world.insert_resource(HumanoidRigState::default());
+    world.insert_resource(crate::ecs::resource::ModelState {
+        model_path,
+        ..Default::default()
+    });
+
+    (world, assets)
 }

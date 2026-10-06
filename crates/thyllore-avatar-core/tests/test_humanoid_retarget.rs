@@ -15,23 +15,7 @@ use thyllore_avatar_core::motion::systems::retarget_pose::{
 };
 use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_engine;
 
-fn build_ctx() -> (
-    thyllore_avatar_core::motion::components::retarget_context::RetargetContext,
-    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
-) {
-    let fbx_text = support::test_humanoid::write_test_humanoid_fbx();
-    let (bones, skeleton) = support::fixture_bones::load_rig_from_fbx_text("test", &fbx_text);
-    let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
-    let frame = thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame(
-        &mapping, &bones,
-    )
-    .expect("derive character frame");
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
-    let ctx =
-        build_retarget_context(&skeleton, &mapping, &frame, rest_pose).expect("build context");
-    (ctx, bones)
-}
+use support::test_humanoid::build_ctx;
 
 fn skirt_front_1_bone_index(
     bones: &[thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput],

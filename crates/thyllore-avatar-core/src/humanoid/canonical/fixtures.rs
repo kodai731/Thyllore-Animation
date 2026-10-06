@@ -97,3 +97,89 @@ pub fn extra_bones() -> Vec<ExtraBone> {
 
     output
 }
+
+use std::collections::BTreeMap;
+
+use crate::humanoid::components::mapping::HumanoidMapping;
+use crate::humanoid::components::skeleton_input::BoneInput;
+
+pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
+    let canonical = super::skeleton::skeleton();
+    let mut bones: Vec<BoneInput> = canonical
+        .iter()
+        .enumerate()
+        .map(|(i, cb)| BoneInput {
+            name: cb.role.unity_name().to_string(),
+            parent: cb.parent,
+            rest_position: [
+                cb.position[0] as f32,
+                cb.position[1] as f32,
+                cb.position[2] as f32,
+            ],
+        })
+        .collect();
+
+    for (i, eb) in extra_bones().iter().enumerate() {
+        let parent_index = match eb.parent {
+            ExtraParent::Role(role) => canonical
+                .iter()
+                .position(|cb| cb.role == role)
+                .expect("role not found in skeleton"),
+            ExtraParent::Row(row) => bones.len() + row,
+        };
+        bones.push(BoneInput {
+            name: eb.name.clone(),
+            parent: Some(parent_index),
+            rest_position: [
+                eb.position[0] as f32,
+                eb.position[1] as f32,
+                eb.position[2] as f32,
+            ],
+        });
+    }
+
+    let mut by_role = BTreeMap::new();
+    for (i, cb) in canonical.iter().enumerate() {
+        by_role.insert(cb.role, i);
+    }
+
+    (bones, HumanoidMapping { by_role })
+}
+
+pub fn with_swapped_upper_arms() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (bones, mut mapping) = test_humanoid_bone_inputs();
+    let left_upper_arm_bone = *mapping
+        .by_role
+        .get(&HumanoidRole::LeftUpperArm)
+        .expect("LeftUpperArm not in mapping");
+    mapping
+        .by_role
+        .insert(HumanoidRole::RightUpperArm, left_upper_arm_bone);
+    (bones, mapping)
+}
+
+pub fn with_bone_in_two_roles() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (bones, mut mapping) = test_humanoid_bone_inputs();
+    let head_bone = *mapping
+        .by_role
+        .get(&HumanoidRole::Head)
+        .expect("Head not in mapping");
+    mapping.by_role.insert(HumanoidRole::Jaw, head_bone);
+    (bones, mapping)
+}
+
+pub fn without_fingers() -> (Vec<BoneInput>, HumanoidMapping) {
+    let (bones, mut mapping) = test_humanoid_bone_inputs();
+    for role in HumanoidRole::ALL {
+        let name = role.unity_name();
+        if name.contains("Thumb")
+            || name.contains("Index")
+            || name.contains("Middle")
+            || name.contains("Ring")
+            || name.contains("Little")
+        {
+            mapping.by_role.remove(&role);
+        }
+    }
+    (bones, mapping)
+}

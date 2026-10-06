@@ -206,6 +206,16 @@ fn format_mapping_issue(issue: &MappingIssue) -> String {
             child.unity_name(),
             expected_ancestor.unity_name()
         ),
+        MappingIssue::MirroredRolesShareBone { left, right } => format!(
+            "{} and {} share the same bone",
+            left.unity_name(),
+            right.unity_name()
+        ),
+        MappingIssue::BoneInTwoRoles { roles, .. } => format!(
+            "bone used by both {} and {}",
+            roles[0].unity_name(),
+            roles[1].unity_name()
+        ),
     }
 }
 

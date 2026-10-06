@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+
+use crate::expression::components::side::Side;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::mapping_issues::MappingIssue;
 use crate::humanoid::components::role::{HumanoidRole, HUMANOID_CHAINS, REQUIRED};
@@ -9,6 +12,8 @@ pub fn validate_mapping(mapping: &HumanoidMapping, bones: &[BoneInput]) -> Vec<M
     let mut issues = Vec::new();
     check_missing_required(mapping, &mut issues);
     check_hierarchy_order(mapping, bones, &mut issues);
+    check_mirrored_roles_share_bone(mapping, &mut issues);
+    check_bone_in_two_roles(mapping, &mut issues);
     issues
 }
 
@@ -41,6 +46,50 @@ fn check_hierarchy_order(
             }
             previous = Some((role, bone_index));
         }
+    }
+}
+
+fn check_mirrored_roles_share_bone(mapping: &HumanoidMapping, issues: &mut Vec<MappingIssue>) {
+    for role in HumanoidRole::ALL
+        .iter()
+        .copied()
+        .filter(|role| role.side() == Some(Side::Left))
+    {
+        let right_role = role.mirrored();
+        if let (Some(&left_bone), Some(&right_bone)) =
+            (mapping.by_role.get(&role), mapping.by_role.get(&right_role))
+        {
+            if left_bone == right_bone {
+                issues.push(MappingIssue::MirroredRolesShareBone {
+                    left: role,
+                    right: right_role,
+                });
+            }
+        }
+    }
+}
+
+fn check_bone_in_two_roles(mapping: &HumanoidMapping, issues: &mut Vec<MappingIssue>) {
+    let mut bone_to_roles: BTreeMap<usize, Vec<HumanoidRole>> = BTreeMap::new();
+    for (&role, &bone_index) in &mapping.by_role {
+        bone_to_roles.entry(bone_index).or_default().push(role);
+    }
+    for (bone_index, roles) in &bone_to_roles {
+        if roles.len() != 2 {
+            continue;
+        }
+        let [a, b] = roles.as_slice() else {
+            continue;
+        };
+        if a.mirrored() == *b || b.mirrored() == *a {
+            continue;
+        }
+        let mut sorted = roles.clone();
+        sorted.sort_by_key(|r| r.index());
+        issues.push(MappingIssue::BoneInTwoRoles {
+            bone_index: *bone_index,
+            roles: [sorted[0], sorted[1]],
+        });
     }
 }
 

@@ -18,8 +18,10 @@ pub struct StoredHumanoidMapping {
 #[serde(rename_all = "lowercase")]
 pub enum StoredRig {
     #[default]
-    Confirmed,
-    NotHumanoid,
+    #[serde(alias = "confirmed")]
+    Humanoid,
+    #[serde(alias = "nothumanoid")]
+    Generic,
 }
 
 #[derive(Clone, Debug)]

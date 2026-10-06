@@ -2,16 +2,16 @@ use super::mapping::HumanoidMapping;
 
 #[derive(Clone, Debug)]
 pub enum AvatarRig {
-    NotHumanoid,
+    Generic,
     Inferred(HumanoidMapping),
-    Confirmed(HumanoidMapping),
+    Humanoid(HumanoidMapping),
 }
 
 impl AvatarRig {
     pub fn mapping(&self) -> Option<&HumanoidMapping> {
         match self {
-            AvatarRig::NotHumanoid => None,
-            AvatarRig::Inferred(mapping) | AvatarRig::Confirmed(mapping) => Some(mapping),
+            AvatarRig::Generic => None,
+            AvatarRig::Inferred(mapping) | AvatarRig::Humanoid(mapping) => Some(mapping),
         }
     }
 }

@@ -176,9 +176,9 @@ pub(crate) fn load_or_infer_mapping(
     imported: Option<&HumanoidMapping>,
 ) -> (HumanoidMapping, Vec<String>) {
     match load_or_infer_rig(model_path, bones, imported) {
-        Ok((AvatarRig::Confirmed(m), missing)) => (m, missing),
+        Ok((AvatarRig::Humanoid(m), missing)) => (m, missing),
         Ok((AvatarRig::Inferred(m), _)) => (m, Vec::new()),
-        Ok((AvatarRig::NotHumanoid, _)) => (HumanoidMapping::default(), Vec::new()),
+        Ok((AvatarRig::Generic, _)) => (HumanoidMapping::default(), Vec::new()),
         Err(error) => {
             log_warn!(
                 "Failed to load or infer humanoid mapping {}: {}",

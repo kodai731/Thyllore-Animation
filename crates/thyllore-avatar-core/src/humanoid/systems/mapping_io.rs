@@ -28,17 +28,17 @@ pub fn save_mapping(
     }
     let stored = StoredHumanoidMapping {
         roles,
-        rig: StoredRig::Confirmed,
+        rig: StoredRig::Humanoid,
     };
     let content = ron::ser::to_string_pretty(&stored, ron::ser::PrettyConfig::new())?;
     fs::write(path, content)?;
     Ok(())
 }
 
-pub fn save_not_humanoid(path: &Path) -> anyhow::Result<()> {
+pub fn save_generic_rig(path: &Path) -> anyhow::Result<()> {
     let stored = StoredHumanoidMapping {
         roles: BTreeMap::new(),
-        rig: StoredRig::NotHumanoid,
+        rig: StoredRig::Generic,
     };
     let content = ron::ser::to_string_pretty(&stored, ron::ser::PrettyConfig::new())?;
     fs::write(path, content)?;
@@ -55,10 +55,10 @@ pub fn load_or_infer_rig(
         let data = fs::read_to_string(&mapping_path)?;
         let stored: StoredHumanoidMapping = ron::from_str(&data)?;
         match stored.rig {
-            StoredRig::NotHumanoid => Ok((AvatarRig::NotHumanoid, Vec::new())),
-            StoredRig::Confirmed => {
+            StoredRig::Generic => Ok((AvatarRig::Generic, Vec::new())),
+            StoredRig::Humanoid => {
                 let (mapping, missing) = resolve_stored(&stored, bones);
-                Ok((AvatarRig::Confirmed(mapping), missing))
+                Ok((AvatarRig::Humanoid(mapping), missing))
             }
         }
     } else if let Some(imported) = imported {
@@ -205,26 +205,54 @@ mod tests {
         let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
         assert!(missing.is_empty());
         match rig {
-            AvatarRig::Confirmed(mapping) => {
+            AvatarRig::Humanoid(mapping) => {
                 assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
                 assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), Some(&1));
             }
-            other => panic!("expected Confirmed, got {:?}", other),
+            other => panic!("expected Humanoid, got {:?}", other),
         }
     }
 
     #[test]
-    fn test_save_not_humanoid_and_load() {
+    fn test_save_generic_rig_and_load() {
         let dir = tempdir().unwrap();
         let model_path = dir.path().join("model.fbx");
         let sidecar_path = humanoid_mapping_path(&model_path);
 
-        save_not_humanoid(&sidecar_path).unwrap();
+        save_generic_rig(&sidecar_path).unwrap();
 
         let bones = make_bones(&["Hips", "Spine"]);
         let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
         assert!(missing.is_empty());
-        assert!(matches!(rig, AvatarRig::NotHumanoid));
+        assert!(matches!(rig, AvatarRig::Generic));
+    }
+
+    #[test]
+    fn test_legacy_nothumanoid_value_reads_as_generic() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        fs::write(&sidecar_path, r#"(roles: {}, rig: nothumanoid)"#).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Generic));
+    }
+
+    #[test]
+    fn test_legacy_confirmed_value_reads_as_humanoid() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        fs::write(&sidecar_path, r#"(roles: {}, rig: confirmed)"#).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Humanoid(_)));
     }
 
     #[test]
@@ -277,11 +305,11 @@ mod tests {
         let (rig, missing) = load_or_infer_rig(&model_path, &bones, Some(&imported)).unwrap();
         assert!(missing.is_empty());
         match rig {
-            AvatarRig::Confirmed(mapping) => {
+            AvatarRig::Humanoid(mapping) => {
                 assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
                 assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), None);
             }
-            other => panic!("expected Confirmed, got {:?}", other),
+            other => panic!("expected Humanoid, got {:?}", other),
         }
     }
 }

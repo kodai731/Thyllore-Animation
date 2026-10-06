@@ -30,12 +30,12 @@ pub fn build_humanoid_rig(
         }
     };
 
-    let confirmed = matches!(avatar_rig, AvatarRig::Confirmed(_));
+    let confirmed = matches!(avatar_rig, AvatarRig::Humanoid(_));
 
     let mapping = match avatar_rig {
-        AvatarRig::NotHumanoid => return None,
+        AvatarRig::Generic => return None,
         AvatarRig::Inferred(mapping) => mapping,
-        AvatarRig::Confirmed(mapping) => mapping,
+        AvatarRig::Humanoid(mapping) => mapping,
     };
 
     let context = match build_role_retarget_context(skeleton, &mapping) {
@@ -199,7 +199,7 @@ mod tests {
     use crate::animation::editable::SourceClip;
     use crate::asset::SkeletonAsset;
     use crate::ecs::resource::ModelState;
-    use thyllore_avatar_core::humanoid::systems::mapping_io::save_not_humanoid;
+    use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
 
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
         let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
@@ -260,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn not_humanoid_sidecar_builds_no_rig() {
+    fn generic_sidecar_builds_no_rig() {
         let temp_dir = match tempfile::tempdir() {
             Ok(d) => d,
             Err(e) => {
@@ -272,10 +272,10 @@ mod tests {
         let (fbx_path, sidecar_path) = copy_test_humanoid_fixture(temp_dir.path());
         let skeleton = load_skeleton(&fbx_path);
 
-        save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
+        save_generic_rig(&sidecar_path).expect("failed to save generic sidecar");
 
         let rig = build_humanoid_rig(&fbx_path, &skeleton, None);
-        assert!(rig.is_none(), "expected None for not-humanoid sidecar");
+        assert!(rig.is_none(), "expected None for generic sidecar");
     }
 
     #[test]
@@ -380,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn not_humanoid_model_is_synced_once() {
+    fn generic_model_is_synced_once() {
         let temp_dir = match tempfile::tempdir() {
             Ok(d) => d,
             Err(e) => {
@@ -390,17 +390,14 @@ mod tests {
         };
 
         let (fbx_path, sidecar_path) = copy_test_humanoid_fixture(temp_dir.path());
-        save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
+        save_generic_rig(&sidecar_path).expect("failed to save generic sidecar");
 
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
         {
             let state = world.resource::<HumanoidRigState>();
-            assert!(
-                state.rig.is_none(),
-                "rig should be None for not-humanoid model"
-            );
+            assert!(state.rig.is_none(), "rig should be None for generic model");
             assert_eq!(state.revision, 1, "revision should be 1 after first sync");
         }
 

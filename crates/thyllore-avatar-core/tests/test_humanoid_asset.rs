@@ -382,7 +382,7 @@ fn test_humanoid_sidecar_loads_as_confirmed_identity() {
     assert!(missing.is_empty(), "missing bones: {:?}", missing);
 
     match rig {
-        thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig::Confirmed(mapping) => {
+        thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig::Humanoid(mapping) => {
             for role in HumanoidRole::ALL {
                 let unity_name = role.unity_name();
                 let index = *mapping

@@ -7,6 +7,7 @@ use crate::motion::components::baked_motion::BakedMotion;
 use crate::motion::components::retarget_context::RetargetContext;
 use crate::motion::components::sampled_pose::SampledPose;
 
+use super::humanoid_pose_sampler::sample_humanoid_pose;
 use super::retarget_pose::retarget_to_bones;
 use super::role_clip_sampler::sample_role_clip;
 
@@ -16,6 +17,16 @@ pub fn bake_role_clip(
     fps: u32,
 ) -> BakedMotion {
     bake_sampled_motion(ctx, fps, clip.duration, |time| sample_role_clip(clip, time))
+}
+
+pub fn bake_humanoid_clip(
+    ctx: &RetargetContext,
+    clip: &EditableAnimationClip,
+    fps: u32,
+) -> BakedMotion {
+    bake_sampled_motion(ctx, fps, clip.duration, |time| {
+        sample_humanoid_pose(clip, &ctx.mapping, time)
+    })
 }
 
 fn bake_sampled_motion(

@@ -81,9 +81,7 @@ pub fn extra_bones() -> Vec<ExtraBone> {
         });
     }
 
-    for (row_idx, &(base, side, parent, position, tip, euler)) in
-        EXTRA_BONE_TABLE.iter().enumerate()
-    {
+    for &(base, side, parent, position, tip, euler) in EXTRA_BONE_TABLE.iter() {
         if side != Some(Side::Left) {
             continue;
         }

@@ -1,4 +1,5 @@
 pub mod bake;
+pub mod humanoid_pose_sampler;
 pub mod retarget_pose;
 pub mod role_clip_sampler;
 pub mod role_rotation;

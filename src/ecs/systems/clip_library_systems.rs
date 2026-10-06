@@ -57,16 +57,6 @@ pub fn clip_library_register_loaded(
         .collect()
 }
 
-pub fn clip_library_create_from_imported(
-    lib: &mut ClipLibrary,
-    assets: &mut AssetStorage,
-    clip: &AnimationClip,
-    bone_names: &HashMap<BoneId, String>,
-) -> SourceClipId {
-    let editable = crate::animation::editable::clip_from_animation(0, clip, bone_names);
-    clip_library_register_and_activate(lib, assets, editable)
-}
-
 pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<AnimationClip> {
     lib.source_clips
         .get(&id)

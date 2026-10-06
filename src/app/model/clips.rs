@@ -4,10 +4,13 @@ use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
 use crate::ecs::systems::clip_library_systems::{
-    clip_library_create_from_imported, clip_library_register_and_activate, find_best_clip,
+    clip_library_register_and_activate, find_best_clip,
 };
 use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
-use crate::ecs::systems::timeline_apply_fit_zoom;
+use crate::ecs::systems::{
+    build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
+    timeline_apply_fit_zoom,
+};
 use crate::ecs::world::World;
 use crate::loader::ModelLoadResult;
 
@@ -54,6 +57,34 @@ pub(super) fn register_loaded_clips(
     Some(register_empty_editable_clip(world, assets))
 }
 
+fn import_editable_clips(
+    world: &World,
+    assets: &AssetStorage,
+    loaded_clips: &[AnimationClip],
+    bone_names: &std::collections::HashMap<u32, String>,
+) -> Vec<EditableAnimationClip> {
+    let editable_clips = loaded_clips
+        .iter()
+        .map(|clip| crate::animation::editable::clip_from_animation(0, clip, bone_names));
+
+    let (Some(model_path), Some(skeleton)) = (find_model_path(world), find_first_skeleton(assets))
+    else {
+        return editable_clips.collect();
+    };
+    let Some(rig) = build_humanoid_rig(std::path::Path::new(&model_path), skeleton) else {
+        return editable_clips.collect();
+    };
+
+    let fps = world
+        .resource::<TimelineState>()
+        .snap_settings
+        .frame_rate
+        .round() as u32;
+    editable_clips
+        .map(|editable| convert_clip_to_standard_space(&editable, skeleton, &rig, fps))
+        .collect()
+}
+
 fn register_clips_to_library(
     world: &mut World,
     assets: &mut AssetStorage,
@@ -65,16 +96,19 @@ fn register_clips_to_library(
         .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
         .collect();
 
+    let editable_clips = import_editable_clips(world, assets, loaded_clips, &bone_names);
+
     let mut first_editable_clip_id = None;
     {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        for clip in loaded_clips {
+        for editable in editable_clips {
+            let clip_name = editable.name.clone();
             let editable_id =
-                clip_library_create_from_imported(&mut clip_library, assets, clip, &bone_names);
+                clip_library_register_and_activate(&mut clip_library, assets, editable);
             first_editable_clip_id.get_or_insert(editable_id);
             log!(
                 "Registered clip '{}' (source_id={})",
-                clip.name,
+                clip_name,
                 editable_id,
             );
         }

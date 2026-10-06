@@ -37,6 +37,7 @@ mod frame_systems;
 mod gizmo_systems;
 mod grid_systems;
 mod hierarchy_systems;
+mod humanoid_import_systems;
 mod humanoid_rig_systems;
 #[cfg(feature = "ml")]
 mod inference_actor_systems;
@@ -111,6 +112,7 @@ pub use frame_systems::*;
 pub use gizmo_systems::*;
 pub use grid_systems::*;
 pub use hierarchy_systems::*;
+pub use humanoid_import_systems::*;
 pub use humanoid_rig_systems::*;
 #[cfg(feature = "ml")]
 pub use inference_actor_systems::*;

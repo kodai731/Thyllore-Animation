@@ -44,7 +44,7 @@ fn rest_pose_gives_rest_muscles() {
 }
 
 #[test]
-fn left_upper_arm_z_follows_slopes() {
+fn left_upper_arm_z_follows_muscle() {
     let table = default_unity_muscle_table();
     let mut rotations = BTreeMap::new();
     rotations.insert(HumanoidRole::LeftUpperArm, [0.0, 0.0, 20.0]);
@@ -61,13 +61,8 @@ fn left_upper_arm_z_follows_slopes() {
         .find(|m| m.name == "Left Arm Down-Up")
         .expect("muscle 'Left Arm Down-Up' not found");
 
-    let z_slope = muscle
-        .slopes
-        .iter()
-        .find(|s| s.role == HumanoidRole::LeftUpperArm && s.axis == 2)
-        .expect("z slope not found");
-
-    let expected = muscle.rest + z_slope.positive * 20.0;
+    let expected: f32 = muscle.rest - 20.0 / -muscle.min;
+    assert_eq!(muscle.sign, -1.0);
     assert!(
         (values[muscle.index] - expected).abs() < 1e-5,
         "value {:.6} != expected {:.6}",
@@ -102,8 +97,8 @@ fn from_unity_muscles_inverts_primary_axes() {
         for axis in 0..3 {
             let diff = (recovered_angles[axis] - expected_angles[axis]).abs();
             assert!(
-                diff < 0.5,
-                "{:?} axis {}: recovered {:.4} != expected {:.4} (diff {:.4})",
+                diff < 1e-6,
+                "{:?} axis {}: recovered {:.6} != expected {:.6} (diff {:.6})",
                 role,
                 axis,
                 recovered_angles[axis],

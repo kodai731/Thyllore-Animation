@@ -3817,6 +3817,7 @@ dependencies = [
  "tempfile",
  "thyllore-anim-core",
  "thyllore-importer-core",
+ "thyllore-math-core",
  "toml",
 ]
 

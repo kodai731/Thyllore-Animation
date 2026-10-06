@@ -6,9 +6,9 @@ use crate::muscle::components::unity_muscle_table::UnityMuscleTable;
 
 const TEMPLATE: &str = include_str!("../../../data/unity_anim_clip.yaml");
 
-fn compute_slopes(times: &[f32], values: &[f32]) -> Vec<(f32, f32)> {
+fn compute_tangents(times: &[f32], values: &[f32]) -> Vec<(f32, f32)> {
     let n = times.len();
-    let mut slopes = Vec::with_capacity(n);
+    let mut tangents = Vec::with_capacity(n);
     for i in 0..n {
         let in_slope = if i > 0 {
             (values[i] - values[i - 1]) / (times[i] - times[i - 1])
@@ -20,9 +20,9 @@ fn compute_slopes(times: &[f32], values: &[f32]) -> Vec<(f32, f32)> {
         } else {
             0.0
         };
-        slopes.push((in_slope, out_slope));
+        tangents.push((in_slope, out_slope));
     }
-    slopes
+    tangents
 }
 
 fn build_curve_entries(curves: &MuscleCurves, table: &UnityMuscleTable) -> Vec<String> {
@@ -32,11 +32,11 @@ fn build_curve_entries(curves: &MuscleCurves, table: &UnityMuscleTable) -> Vec<S
         let i = muscle.index;
 
         let values: Vec<f32> = curves.frames.iter().map(|frame| frame[i]).collect();
-        let slopes = compute_slopes(&curves.times, &values);
+        let tangents = compute_tangents(&curves.times, &values);
 
         let mut curve_keys = Vec::new();
         for (k, (&time, &value)) in curves.times.iter().zip(values.iter()).enumerate() {
-            let (in_slope, out_slope) = slopes[k];
+            let (in_slope, out_slope) = tangents[k];
 
             curve_keys.push(format!(
                 "      - serializedVersion: 3\n        time: {}\n        value: {}\n        inSlope: {}\n        outSlope: {}\n        tangentMode: 0\n        weightedMode: 0\n        inWeight: 0.33333334\n        outWeight: 0.33333334",

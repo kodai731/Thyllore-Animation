@@ -15,19 +15,11 @@ pub struct UnityMuscle {
     pub name: String,
     pub attribute: String,
     pub role: HumanoidRole,
-    pub dof: usize,
+    pub axis: usize,
+    pub sign: f32,
     pub min: f32,
     pub max: f32,
     pub rest: f32,
-    pub slopes: Vec<MuscleSlope>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MuscleSlope {
-    pub role: HumanoidRole,
-    pub axis: usize,
-    pub positive: f32,
-    pub negative: f32,
 }
 
 #[derive(Deserialize)]
@@ -41,19 +33,11 @@ struct RawMuscle {
     name: String,
     attribute: String,
     role: String,
-    dof: usize,
+    axis: String,
+    sign: i8,
     min: f64,
     max: f64,
     rest: f64,
-    slopes: Vec<RawSlope>,
-}
-
-#[derive(Deserialize)]
-struct RawSlope {
-    role: String,
-    axis: String,
-    positive: f64,
-    negative: f64,
 }
 
 fn load() -> UnityMuscleTable {
@@ -66,29 +50,22 @@ fn load() -> UnityMuscleTable {
         .map(|raw| {
             let role = HumanoidRole::from_unity_name(&raw.role)
                 .unwrap_or_else(|| panic!("unknown muscle role: {}", raw.role));
-            let slopes = raw
-                .slopes
-                .into_iter()
-                .map(|rs| MuscleSlope {
-                    role: HumanoidRole::from_unity_name(&rs.role)
-                        .unwrap_or_else(|| panic!("unknown slope role: {}", rs.role)),
-                    axis: "xyz"
-                        .find(rs.axis.chars().next().unwrap())
-                        .unwrap_or_else(|| panic!("unknown slope axis: {}", rs.axis)),
-                    positive: rs.positive as f32,
-                    negative: rs.negative as f32,
-                })
-                .collect();
+            let axis = match raw.axis.as_str() {
+                "x" => 0,
+                "y" => 1,
+                "z" => 2,
+                other => panic!("unknown muscle axis: {}", other),
+            };
             UnityMuscle {
                 index: raw.index,
                 name: raw.name,
                 attribute: raw.attribute,
                 role,
-                dof: raw.dof,
+                axis,
+                sign: f32::from(raw.sign),
                 min: raw.min as f32,
                 max: raw.max as f32,
                 rest: raw.rest as f32,
-                slopes,
             }
         })
         .collect();

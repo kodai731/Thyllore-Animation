@@ -1,13 +1,12 @@
 #![cfg(test)]
-use thyllore_anim_core::editable::components::clip::{ClipSpace, EditableAnimationClip};
+use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 fn role_index(name: &str) -> usize {
-    HumanoidRole::ALL
-        .iter()
-        .position(|r| format!("{r:?}") == name)
+    HumanoidRole::from_unity_name(name)
+        .map(|r| r.index())
         .unwrap_or_else(|| panic!("role not found in HumanoidRole::ALL: {name}"))
 }
 
@@ -19,7 +18,6 @@ pub fn role_clip(
 ) -> EditableAnimationClip {
     let mut clip = EditableAnimationClip::new(1, name.to_string());
     clip.duration = duration;
-    clip.space = ClipSpace::HumanoidRole;
 
     let mut roles: Vec<&str> = Vec::new();
     for (_, role_name, _) in rotation_keys {

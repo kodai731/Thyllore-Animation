@@ -198,7 +198,7 @@ mod tests {
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
-    use crate::ecs::systems::role_clip_systems::bake_role_clip_to_bone_clip;
+    use crate::ecs::systems::role_clip_systems::bake_to_bone_clip;
 
     fn assert_curves_match(original: &PropertyCurve, converted: &PropertyCurve, tolerance: f32) {
         for time in [0.0, 0.5, 1.0] {
@@ -241,7 +241,7 @@ mod tests {
         curve_add_keyframe(&mut head.rotation_x, 0.0, 0.0);
         curve_add_keyframe(&mut head.rotation_x, 1.0, 20.0);
 
-        let baked = bake_role_clip_to_bone_clip(&clip, &skeleton, &rig, 30).unwrap();
+        let baked = bake_to_bone_clip(&clip, &skeleton, &rig, 30).unwrap();
         let converted = convert_clip_to_standard_space(&baked, &skeleton, &rig, 30);
 
         let original_track = |bone_id: BoneId| &clip.tracks[&bone_id];

@@ -116,7 +116,7 @@ pub fn build_role_retarget_context(
     Ok(ctx)
 }
 
-pub fn bake_role_clip_to_bone_clip(
+pub fn bake_to_bone_clip(
     role_clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     rig: &HumanoidRig,
@@ -281,9 +281,7 @@ pub fn refresh_baked_role_clips(world: &mut World, assets: &mut AssetStorage) {
             continue;
         };
         let baked = match (&skeleton, &rig) {
-            (Some(skeleton), Some(rig)) => {
-                bake_role_clip_to_bone_clip(role_clip, skeleton, rig, fps)
-            }
+            (Some(skeleton), Some(rig)) => bake_to_bone_clip(role_clip, skeleton, rig, fps),
             _ => Err(anyhow::anyhow!("no model rig to bake onto")),
         };
 
@@ -447,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn bake_role_clip_to_bone_clip_keys_the_mapped_bone() {
+    fn bake_to_bone_clip_keys_the_mapped_bone() {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (_, assets) = test_humanoid_world(&fbx_path);
@@ -462,7 +460,7 @@ mod tests {
         curve_add_keyframe(&mut track.rotation_z, 2.0, 90.0);
         role_clip.duration = 2.0;
 
-        let baked = bake_role_clip_to_bone_clip(&role_clip, &skeleton, &rig, 30).unwrap();
+        let baked = bake_to_bone_clip(&role_clip, &skeleton, &rig, 30).unwrap();
 
         let baked_track = baked
             .get_track(right_lower_arm_bone)
@@ -666,7 +664,7 @@ mod tests {
 
         role_clip.duration = 2.0;
 
-        let baked = bake_role_clip_to_bone_clip(&role_clip, &skeleton, &rig, 30).unwrap();
+        let baked = bake_to_bone_clip(&role_clip, &skeleton, &rig, 30).unwrap();
 
         let baked_skirt = baked
             .get_track(skirt_bone)

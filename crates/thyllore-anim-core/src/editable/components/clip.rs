@@ -9,13 +9,6 @@ use super::keyframe::SourceClipId;
 use super::morph_track::MorphTrack;
 use super::track::BoneTrack;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ClipSpace {
-    #[default]
-    Bone,
-    HumanoidRole,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
     pub id: SourceClipId,
@@ -25,8 +18,6 @@ pub struct EditableAnimationClip {
     /// keyframes, so a schedule can loop over an unkeyed clip.
     #[serde(default)]
     pub min_duration: f32,
-    #[serde(default)]
-    pub space: ClipSpace,
     pub tracks: HashMap<BoneId, BoneTrack>,
     /// Keyed by process-local `PropertyType::Custom` codes; `AnimationClipFile` persists them by name.
     #[serde(skip)]
@@ -44,7 +35,6 @@ impl EditableAnimationClip {
             name,
             duration: 0.0,
             min_duration: 0.0,
-            space: ClipSpace::Bone,
             tracks: HashMap::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),
@@ -248,7 +238,6 @@ impl Default for EditableAnimationClip {
             name: String::new(),
             duration: 0.0,
             min_duration: 0.0,
-            space: ClipSpace::Bone,
             tracks: HashMap::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),

@@ -131,7 +131,7 @@ pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimatio
         .snap_settings
         .frame_rate
         .round() as u32;
-    match role_clip_systems::bake_role_clip_to_bone_clip(&clip, &skeleton, rig, fps) {
+    match role_clip_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
         Ok(baked) => Some((baked, skeleton)),
         Err(e) => {
             msg_error!("Role clip bake failed: {:?}", e);

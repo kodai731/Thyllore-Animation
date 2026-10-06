@@ -1,8 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use thyllore_anim_core::editable::{PropertyType, RoleSlot};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_anim_core::editable::PropertyType;
 
 use crate::animation::editable::EditableAnimationClip;
 use crate::ecs::component::{scalar_channel_for_cli_name, scalar_channel_for_property};
@@ -33,7 +32,7 @@ pub fn load_animation_clip(path: &Path) -> SceneResult<EditableAnimationClip> {
 pub fn parse_animation_clip(content: &str) -> SceneResult<EditableAnimationClip> {
     let clip_file: AnimationClipFile = ron::from_str(content)?;
 
-    if !(clip_file.version == 1 || clip_file.version == ANIMATION_FORMAT_VERSION) {
+    if !(1..=ANIMATION_FORMAT_VERSION).contains(&clip_file.version) {
         return Err(SceneError::VersionMismatch {
             expected: ANIMATION_FORMAT_VERSION,
             found: clip_file.version,
@@ -41,7 +40,7 @@ pub fn parse_animation_clip(content: &str) -> SceneResult<EditableAnimationClip>
     }
 
     clip_file
-        .into_clip(scalar_channel_property, humanoid_role_slot)
+        .into_clip(scalar_channel_property)
         .map_err(SceneError::ClipFile)
 }
 
@@ -51,14 +50,6 @@ fn scalar_channel_name(property_type: PropertyType) -> Option<String> {
 
 fn scalar_channel_property(name: &str) -> Option<PropertyType> {
     scalar_channel_for_cli_name(name).and_then(|(domain, channel)| domain.property_type_of(channel))
-}
-
-fn humanoid_role_slot(name: &str) -> Option<RoleSlot> {
-    let role = HumanoidRole::from_unity_name(name)?;
-    Some(RoleSlot {
-        index: role.index() as thyllore_anim_core::BoneId,
-        allows_translation: role.allows_translation(),
-    })
 }
 
 #[cfg(test)]
@@ -98,16 +89,11 @@ mod tests {
     }
 
     #[test]
-    fn role_clip_file_resolves_role_indices() {
+    fn v2_role_clip_file_still_loads() {
         let text = r#"(version: 2, clip: (id: 1, name: "role", duration: 1.0, space: HumanoidRole, tracks: {0: (bone_id: 0, bone_name: "LeftUpperArm", translation_x: (id: 0, property_type: TranslationX, keyframes: [], next_keyframe_id: 1), translation_y: (id: 1, property_type: TranslationY, keyframes: [], next_keyframe_id: 1), translation_z: (id: 2, property_type: TranslationZ, keyframes: [], next_keyframe_id: 1), rotation_x: (id: 3, property_type: RotationX, keyframes: [(id: 1, time: 0.0, value: 0.5, in_tangent: (time_offset: 0.0, value_offset: 0.0), out_tangent: (time_offset: 0.0, value_offset: 0.0))], next_keyframe_id: 2), rotation_y: (id: 4, property_type: RotationY, keyframes: [], next_keyframe_id: 1), rotation_z: (id: 5, property_type: RotationZ, keyframes: [], next_keyframe_id: 1), scale_x: (id: 6, property_type: ScaleX, keyframes: [], next_keyframe_id: 1), scale_y: (id: 7, property_type: ScaleY, keyframes: [], next_keyframe_id: 1), scale_z: (id: 8, property_type: ScaleZ, keyframes: [], next_keyframe_id: 1))}, source_path: None, next_curve_id: 9), scalar_curves: [])"#;
         let clip = parse_animation_clip(text).expect("parse");
-        let expected: u32 = HumanoidRole::LeftUpperArm.index() as u32;
-        let track = clip.get_track(expected).expect("track at role index");
-        assert_eq!(track.bone_id, expected);
-        assert!(
-            clip.get_track(0).is_none(),
-            "track at index 0 should not exist"
-        );
+        let track = clip.get_track(0).expect("track");
+        assert_eq!(track.bone_name, "LeftUpperArm");
     }
 
     #[test]

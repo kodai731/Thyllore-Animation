@@ -9,15 +9,6 @@ use crate::motion::components::sampled_pose::SampledPose;
 
 use super::humanoid_pose_sampler::sample_humanoid_pose;
 use super::retarget_pose::retarget_to_bones;
-use super::role_clip_sampler::sample_role_clip;
-
-pub fn bake_role_clip(
-    ctx: &RetargetContext,
-    clip: &EditableAnimationClip,
-    fps: u32,
-) -> BakedMotion {
-    bake_sampled_motion(ctx, fps, clip.duration, |time| sample_role_clip(clip, time))
-}
 
 pub fn bake_humanoid_clip(
     ctx: &RetargetContext,
@@ -185,7 +176,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let baked = bake_role_clip(&ctx, &make_empty_clip(1.0), 30);
+        let baked = bake_humanoid_clip(&ctx, &make_empty_clip(1.0), 30);
 
         let expected_count = (1.0f32 * 30.0f32).round() as usize + 1;
         assert_eq!(baked.frame_times.len(), expected_count);
@@ -195,11 +186,11 @@ mod tests {
     }
 
     #[test]
-    fn bake_role_clip_frame_count_follows_duration_and_fps() {
+    fn bake_humanoid_clip_frame_count_follows_duration_and_fps() {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let baked = bake_role_clip(&ctx, &make_empty_clip(2.0), 30);
+        let baked = bake_humanoid_clip(&ctx, &make_empty_clip(2.0), 30);
 
         assert_eq!(baked.frame_times.len(), 61);
     }
@@ -209,7 +200,7 @@ mod tests {
         let skeleton = build_skeleton();
         let ctx = build_ctx(&skeleton);
 
-        let baked = bake_role_clip(&ctx, &make_empty_clip(1.0), 30);
+        let baked = bake_humanoid_clip(&ctx, &make_empty_clip(1.0), 30);
 
         for (_bone_idx, curve) in &baked.bone_rotations {
             for i in 1..curve.len() {

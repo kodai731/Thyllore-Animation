@@ -1,4 +1,6 @@
 #![cfg(test)]
+use std::collections::HashMap;
+
 use cgmath::{InnerSpace, Vector3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
@@ -34,10 +36,23 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
     let hips_height = ctx.hips_height;
 
     let total_frames = (clip.duration * 30.0) as usize;
+
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    for (role, &bone_idx) in mapping.by_role.iter() {
+        name_to_id.insert(role.unity_name().to_string(), bone_idx as u32);
+    }
+
     for frame_idx in 0..=total_frames {
         let time = frame_idx as f32 / 30.0;
+        let mut remapped = clip.clone();
+        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(
+            &mut remapped,
+            &name_to_id,
+        );
         let sampled =
-            thyllore_avatar_core::motion::systems::role_clip_sampler::sample_role_clip(clip, time);
+            thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoid_pose(
+                &remapped, &mapping, time,
+            );
 
         let retargeted =
             thyllore_avatar_core::motion::systems::retarget_pose::retarget_to_bones(&ctx, &sampled);

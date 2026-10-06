@@ -649,6 +649,8 @@ pub fn process_clip_instance_events(events: &[ClipInstanceEvent], world: &mut Wo
 
     dispatch_clip_group_events(events, world);
 
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
+
     if let Some((entity, instance_id)) = deselect_after {
         let mut ts = world.resource_mut::<TimelineState>();
         if let Some((sel_entity, sel_id)) = ts.selected_clip_instance {

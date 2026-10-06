@@ -88,8 +88,10 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 }
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
-    let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    let dirty_source_ids = clip_library_sync_dirty(&mut clip_library, ctx.assets);
+    let dirty_source_ids = {
+        let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
+        clip_library_sync_dirty(&mut clip_library, ctx.assets)
+    };
     if dirty_source_ids.is_empty() {
         return;
     }
@@ -101,9 +103,11 @@ fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
         let invalidated = baked_clips.invalidate_source(source_id);
         removed_assets.extend(invalidated);
     }
+    drop(baked_clips);
     for asset_id in removed_assets {
         ctx.assets.animation_clips.remove(&asset_id);
     }
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(ctx.world);
 }
 
 #[cfg(feature = "ml")]

@@ -487,6 +487,8 @@ pub fn batch_apply_anim_edits(
             }
         }
     }
+
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
 }
 
 fn schedule_instances_json(world: &World, entity: Entity) -> Vec<serde_json::Value> {

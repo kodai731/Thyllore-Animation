@@ -4,9 +4,12 @@ use cgmath::{Quaternion, Vector3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::components::track::BoneTrack;
 use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::components::vrm_version::VrmVersion;
 use thyllore_avatar_core::motion::components::sampled_pose::SampledPose;
 use thyllore_avatar_core::motion::systems::retarget_pose::retarget_from_bones;
+use thyllore_importer_core::gltf::vrm_humanoid_extension::VrmHumanoid;
 use thyllore_math_core::{continuous_euler, decompose, euler_degrees_to_quaternion};
 
 use crate::animation::{BoneId, Skeleton};
@@ -17,6 +20,31 @@ pub struct StandardBoneKey {
     pub role: HumanoidRole,
     pub euler_degrees: [f32; 3],
     pub hips_translation: Option<[f32; 3]>,
+}
+
+pub fn vrm_humanoid_bones(rig: &HumanoidRig) -> Vec<(String, usize)> {
+    rig.mapping
+        .by_role
+        .iter()
+        .map(|(role, &bone_index)| (role.vrm_name(VrmVersion::V1).to_string(), bone_index))
+        .collect()
+}
+
+pub fn vrm_humanoid_to_mapping(vrm: &VrmHumanoid) -> Option<HumanoidMapping> {
+    let version = if vrm.is_v1 {
+        VrmVersion::V1
+    } else {
+        VrmVersion::V0
+    };
+    let by_role: BTreeMap<HumanoidRole, usize> = vrm
+        .bones
+        .iter()
+        .filter_map(|(name, node)| {
+            HumanoidRole::from_vrm_name(name, version).map(|role| (role, *node as usize))
+        })
+        .collect();
+
+    (!by_role.is_empty()).then_some(HumanoidMapping { by_role })
 }
 
 pub fn local_pose_to_standard(
@@ -213,6 +241,26 @@ mod tests {
                 actual
             );
         }
+    }
+
+    #[test]
+    fn vrm_humanoid_bones_round_trip_to_rig_mapping() {
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (_, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
+
+        let vrm = VrmHumanoid {
+            is_v1: true,
+            bones: vrm_humanoid_bones(&rig)
+                .into_iter()
+                .map(|(name, bone_index)| (name, bone_index as u32))
+                .collect(),
+        };
+        let mapping = vrm_humanoid_to_mapping(&vrm).expect("mapping should not be empty");
+
+        assert_eq!(mapping.by_role, rig.mapping.by_role);
     }
 
     #[test]

@@ -1,7 +1,3 @@
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::vrm_version::VrmVersion;
-
 use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
@@ -13,7 +9,7 @@ use crate::ecs::systems::clip_library_systems::{
 use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
 use crate::ecs::systems::{
     build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
-    timeline_apply_fit_zoom,
+    timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
 };
 use crate::ecs::world::World;
 use crate::loader::ModelLoadResult;
@@ -40,26 +36,10 @@ pub(super) fn register_imported_animation(
 
     let mut model_state = world.resource_mut::<ModelState>();
     model_state.has_skinned_meshes = load_result.has_skinned_meshes;
-    if let Some(vrm) = &load_result.vrm_humanoid {
-        let version = if vrm.is_v1 {
-            VrmVersion::V1
-        } else {
-            VrmVersion::V0
-        };
-        let mut by_role = std::collections::BTreeMap::new();
-        for (name, joint) in &vrm.bones {
-            if let Some(role) = HumanoidRole::from_vrm_name(name, version) {
-                by_role.insert(role, *joint as usize);
-            }
-        }
-        if !by_role.is_empty() {
-            model_state.imported_humanoid = Some(HumanoidMapping { by_role });
-        } else {
-            model_state.imported_humanoid = None;
-        }
-    } else {
-        model_state.imported_humanoid = None;
-    }
+    model_state.imported_humanoid = load_result
+        .vrm_humanoid
+        .as_ref()
+        .and_then(vrm_humanoid_to_mapping);
 }
 
 /// Returns the clip the timeline should start on, or `None` when the scene restores its own clips.

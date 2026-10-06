@@ -1,12 +1,14 @@
 use std::path::Path;
 
+use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
+
 use crate::animation::editable::EditableAnimationClip;
 use crate::animation::Skeleton;
 use crate::app::App;
 use crate::ecs::resource::{
-    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, TimelineState,
+    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
 };
-use crate::ecs::systems::humanoid_bake_systems;
+use crate::ecs::systems::{humanoid_bake_systems, vrm_humanoid_bones};
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -35,9 +37,42 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     };
 
     match result {
-        Ok(()) => msg_info!("FBX exported: {:?}", path),
+        Ok(()) => {
+            msg_info!("FBX exported: {:?}", path);
+            copy_humanoid_sidecar(app, path);
+        }
         Err(e) => msg_error!("FBX export failed: {:?}", e),
     }
+}
+
+fn copy_humanoid_sidecar(app: &App, output_path: &Path) {
+    let model_path = app
+        .data
+        .ecs_world
+        .resource::<ModelState>()
+        .model_path
+        .clone();
+    let sidecar_path = humanoid_mapping_path(Path::new(&model_path));
+    if !sidecar_path.exists() {
+        return;
+    }
+
+    let output_sidecar_path = humanoid_mapping_path(output_path);
+    if let Err(e) = std::fs::copy(&sidecar_path, &output_sidecar_path) {
+        msg_warn!(
+            "Humanoid sidecar copy to {:?} failed: {:?}",
+            output_sidecar_path,
+            e
+        );
+    }
+}
+
+fn current_vrm_humanoid_bones(app: &App) -> Vec<(String, usize)> {
+    app.data
+        .ecs_world
+        .get_resource::<HumanoidRigState>()
+        .and_then(|state| state.rig.as_ref().map(vrm_humanoid_bones))
+        .unwrap_or_default()
 }
 
 pub(crate) fn export_current_clip_fbx(app: &App, path: &Path) {
@@ -72,6 +107,7 @@ pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
         &clip,
         &skeleton,
         path,
+        &current_vrm_humanoid_bones(app),
     ) {
         Ok(()) => msg_info!("glTF exported: {:?}", path),
         Err(e) => msg_error!("glTF export failed: {:?}", e),
@@ -83,7 +119,12 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_only(&clip, &skeleton, path) {
+    match crate::exporter::gltf::export_gltf_animation_only(
+        &clip,
+        &skeleton,
+        path,
+        &current_vrm_humanoid_bones(app),
+    ) {
         Ok(()) => msg_info!("Animation-only glTF exported: {:?}", path),
         Err(e) => msg_error!("Animation-only glTF export failed: {:?}", e),
     }

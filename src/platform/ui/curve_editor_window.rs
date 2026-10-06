@@ -6,18 +6,19 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use super::curve_editor_bone_label::{format_bone_label, order_bone_ids_by_role};
 
 use crate::animation::editable::{
-    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, ClipSpace,
-    EditableAnimationClip, EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve,
-    PropertyType, TangentType, TangentWeightMode,
+    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
+    EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
+    TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
-    AvatarSetupState, ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget,
-    CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, PoseLibrary,
+    ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
+    CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, HumanoidRigState, PoseLibrary,
     TangentHandleType, TimelineState,
 };
+use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 #[cfg(feature = "ml")]
 use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
@@ -202,45 +203,39 @@ fn get_current_clip<'a>(
         .and_then(|id| clip_library.get(id))
 }
 
-fn collect_current_clip_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
-    let timeline_state = world.resource::<TimelineState>();
-    let clip_library = world.resource::<ClipLibrary>();
-    let Some(current_clip_id) = timeline_state.current_clip_id else {
-        return Vec::new();
-    };
-    let Some(clip) = clip_library.get(current_clip_id) else {
-        return Vec::new();
-    };
-
-    if clip.space == ClipSpace::HumanoidRole {
-        clip.tracks
-            .keys()
-            .filter_map(|bone_id| {
-                let role = HumanoidRole::ALL.get(*bone_id as usize)?;
-                Some((*bone_id, *role))
-            })
-            .collect()
-    } else {
-        collect_avatar_setup_bone_roles(world)
-    }
-}
-
-fn collect_avatar_setup_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
+fn collect_humanoid_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
     world
-        .get_resource::<AvatarSetupState>()
-        .map(|state| {
-            state
-                .mapping
-                .by_role
-                .iter()
-                .map(|(role, &bone_index)| (bone_index as BoneId, *role))
-                .collect()
+        .get_resource::<HumanoidRigState>()
+        .and_then(|state| {
+            state.rig.as_ref().map(|rig| {
+                rig.mapping
+                    .by_role
+                    .iter()
+                    .map(|(role, &bone_index)| (bone_index as BoneId, *role))
+                    .collect()
+            })
         })
         .unwrap_or_default()
 }
 
-fn is_role_space_clip(clip: Option<&EditableAnimationClip>) -> bool {
-    clip.is_some_and(|c| c.space == ClipSpace::HumanoidRole)
+fn find_bone_role(bone_roles: &[(BoneId, HumanoidRole)], bone_id: BoneId) -> Option<HumanoidRole> {
+    bone_roles
+        .iter()
+        .find(|(role_bone_id, _)| *role_bone_id == bone_id)
+        .map(|(_, role)| *role)
+}
+
+fn collect_listed_bone_ids(
+    clip: &EditableAnimationClip,
+    bone_roles: &[(BoneId, HumanoidRole)],
+) -> Vec<BoneId> {
+    let mut bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
+    let untracked_role_bones = bone_roles
+        .iter()
+        .map(|(bone_id, _)| *bone_id)
+        .filter(|bone_id| !clip.tracks.contains_key(bone_id));
+    bone_ids.extend(untracked_role_bones);
+    order_bone_ids_by_role(&bone_ids, bone_roles)
 }
 
 fn build_track_list(
@@ -277,52 +272,53 @@ fn build_track_list(
         return;
     }
 
-    if is_role_space_clip(Some(clip)) {
-        ui.text_disabled("Role space (character axes, deg)");
-    } else {
-        ui.text("Bones:");
-    }
+    ui.text("Bones:");
     ui.separator();
 
-    let bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
-    let sorted_bone_ids = order_bone_ids_by_role(&bone_ids, bone_roles);
+    let rig_state = world.get_resource::<HumanoidRigState>();
+    let rig_track_names = rig_state
+        .as_ref()
+        .and_then(|state| state.rig.as_ref())
+        .map(|rig| &rig.track_names);
 
-    for bone_id in sorted_bone_ids {
-        if let Some(track) = clip.tracks.get(&bone_id) {
-            let is_selected = editor_state.selected_bone_id() == Some(bone_id);
-            let is_spring_bone = timeline_state.baked_bone_ids.contains(&bone_id);
-            let role = bone_roles
-                .iter()
-                .find(|(role_bone_id, _)| *role_bone_id == bone_id)
-                .map(|(_, role)| *role);
-            let label = if role.is_some() {
-                let role_label = format_bone_label(&track.bone_name, role);
-                if is_spring_bone {
-                    format!("[SB] {}", role_label)
-                } else {
-                    role_label
-                }
-            } else if is_spring_bone {
-                let name = if track.bone_name.len() > 13 {
-                    &track.bone_name[..10]
-                } else {
-                    &track.bone_name
-                };
-                format!("[SB] {}", name)
-            } else if track.bone_name.len() > 18 {
-                format!("{}...", &track.bone_name[..15])
+    for bone_id in collect_listed_bone_ids(clip, bone_roles) {
+        let bone_name = match clip.tracks.get(&bone_id) {
+            Some(track) => &track.bone_name,
+            None => match rig_track_names.and_then(|names| names.get(&bone_id)) {
+                Some(name) => name,
+                None => continue,
+            },
+        };
+        let is_selected = editor_state.selected_bone_id() == Some(bone_id);
+        let is_spring_bone = timeline_state.baked_bone_ids.contains(&bone_id);
+        let role = find_bone_role(bone_roles, bone_id);
+        let label = if role.is_some() {
+            let role_label = format_bone_label(bone_name, role);
+            if is_spring_bone {
+                format!("[SB] {}", role_label)
             } else {
-                track.bone_name.clone()
+                role_label
+            }
+        } else if is_spring_bone {
+            let name = if bone_name.len() > 13 {
+                &bone_name[..10]
+            } else {
+                bone_name
             };
+            format!("[SB] {}", name)
+        } else if bone_name.len() > 18 {
+            format!("{}...", &bone_name[..15])
+        } else {
+            bone_name.clone()
+        };
 
-            if ui.selectable_config(&label).selected(is_selected).build() {
-                editor_state.select_bone(bone_id);
-                editor_state.view_initialized = false;
-            }
+        if ui.selectable_config(&label).selected(is_selected).build() {
+            editor_state.select_bone(bone_id);
+            editor_state.view_initialized = false;
+        }
 
-            if is_selected {
-                build_curve_selector_inline(ui, clip, bone_id, editor_state);
-            }
+        if is_selected {
+            build_curve_selector_inline(ui, clip, bone_roles, bone_id, editor_state);
         }
     }
 
@@ -406,29 +402,26 @@ fn build_scalar_curve_selector_inline(
     ui.spacing();
 }
 
-/// A bone clip lists only the curves that already hold keys. A role clip lists
-/// every curve a key may legally be added to, so a freshly created clip offers
-/// its rotation axes before any key exists.
 fn is_curve_listed(
     clip: &EditableAnimationClip,
+    bone_roles: &[(BoneId, HumanoidRole)],
     bone_id: BoneId,
     property_type: PropertyType,
 ) -> bool {
-    match clip.space {
-        ClipSpace::Bone => clip
+    match find_bone_role(bone_roles, bone_id) {
+        Some(role) => is_role_curve_allowed(role, property_type),
+        None => clip
             .tracks
             .get(&bone_id)
             .is_some_and(|track| !track.get_curve(property_type).is_empty()),
-        ClipSpace::HumanoidRole => is_role_curve_allowed(bone_id, property_type),
     }
 }
 
-fn is_role_curve_allowed(bone_id: BoneId, property_type: PropertyType) -> bool {
-    let role = HumanoidRole::ALL.get(bone_id as usize).copied();
+fn is_role_curve_allowed(role: HumanoidRole, property_type: PropertyType) -> bool {
     match property_type {
         PropertyType::RotationX | PropertyType::RotationY | PropertyType::RotationZ => true,
         PropertyType::TranslationX | PropertyType::TranslationY | PropertyType::TranslationZ => {
-            role.is_some_and(HumanoidRole::allows_translation)
+            role.allows_translation()
         }
         _ => false,
     }
@@ -437,13 +430,14 @@ fn is_role_curve_allowed(bone_id: BoneId, property_type: PropertyType) -> bool {
 fn build_curve_selector_inline(
     ui: &imgui::Ui,
     clip: &EditableAnimationClip,
+    bone_roles: &[(BoneId, HumanoidRole)],
     bone_id: BoneId,
     editor_state: &mut CurveEditorState,
 ) {
     ui.indent();
 
     for (prop_type, color, name) in ALL_PROPERTY_TYPES {
-        if !is_curve_listed(clip, bone_id, *prop_type) {
+        if !is_curve_listed(clip, bone_roles, bone_id, *prop_type) {
             continue;
         }
 
@@ -461,7 +455,7 @@ fn build_curve_selector_inline(
 
     if ui.small_button("All") {
         for (prop_type, _, _) in ALL_PROPERTY_TYPES {
-            if is_curve_listed(clip, bone_id, *prop_type) {
+            if is_curve_listed(clip, bone_roles, bone_id, *prop_type) {
                 editor_state.visible_curves.insert(*prop_type);
             }
         }
@@ -494,13 +488,11 @@ fn build_curve_view(
     };
 
     let curves_to_draw = match editor_state.selected_target {
-        Some(CurveEditorTarget::Bone(bone_id)) => {
-            let Some(track) = clip.tracks.get(&bone_id) else {
-                ui.text("Track not found");
-                return;
-            };
-            collect_visible_curves(track, editor_state)
-        }
+        Some(CurveEditorTarget::Bone(bone_id)) => clip
+            .tracks
+            .get(&bone_id)
+            .map(|track| collect_visible_curves(track, editor_state))
+            .unwrap_or_default(),
         Some(CurveEditorTarget::Scalars) => collect_visible_scalar_curves(clip, editor_state),
         Some(CurveEditorTarget::Morph(i)) => {
             let Some(morph_track) = clip.morph_tracks.get(i) else {
@@ -1003,6 +995,11 @@ fn build_curve_editor_context_menu(
     ui.popup("curve_editor_context_menu", || {
         if ui.selectable_config("Add Key").build() {
             if let Some(property_type) = add_key_target_property(editor_state, track_ref) {
+                if let CurveTrackRef::Bone(bone_id) = track_ref {
+                    if !current_clip_has_track(world, bone_id) {
+                        world.send_command(EnsureBoneTrack { bone_id });
+                    }
+                }
                 world.send_command(TimelineEvent::AddKeyframe {
                     track: track_ref,
                     property_type,
@@ -1012,6 +1009,13 @@ fn build_curve_editor_context_menu(
             }
         }
     });
+}
+
+fn current_clip_has_track(world: &World, bone_id: BoneId) -> bool {
+    let timeline_state = world.resource::<TimelineState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    get_current_clip(&timeline_state, &clip_library)
+        .is_some_and(|clip| clip.tracks.contains_key(&bone_id))
 }
 
 /// The scalar target only accepts registered channels: the visible set can
@@ -2598,45 +2602,68 @@ mod tests {
     }
 
     #[test]
-    fn role_space_label_only_for_role_clips() {
-        let mut bone_clip = EditableAnimationClip::new(0, "bone".to_string());
-        bone_clip.space = ClipSpace::Bone;
+    fn mapped_bones_list_rotation_curves_before_any_key_exists() {
+        use crate::ecs::systems::{
+            build_humanoid_rig, copy_test_humanoid_fixture, find_first_skeleton,
+            test_humanoid_world,
+        };
 
-        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (world, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets)
+            .expect("fixture has a skeleton")
+            .clone();
+        world.resource_mut::<HumanoidRigState>().rig =
+            Some(build_humanoid_rig(&fbx_path, &skeleton).expect("fixture is humanoid"));
 
-        assert!(!is_role_space_clip(Some(&bone_clip)));
-        assert!(is_role_space_clip(Some(&role_clip)));
-        assert!(!is_role_space_clip(None));
+        let bone_roles = collect_humanoid_bone_roles(&world);
+        let role_bone = |role: HumanoidRole| {
+            bone_roles
+                .iter()
+                .find(|(_, bone_role)| *bone_role == role)
+                .map(|(bone_id, _)| *bone_id)
+                .expect("role is mapped")
+        };
+        let hips = role_bone(HumanoidRole::Hips);
+        let head = role_bone(HumanoidRole::Head);
+        let clip = EditableAnimationClip::new(0, "empty".to_string());
+
+        assert!(collect_listed_bone_ids(&clip, &bone_roles).contains(&head));
+        assert!(is_curve_listed(
+            &clip,
+            &bone_roles,
+            head,
+            PropertyType::RotationZ
+        ));
+        assert!(!is_curve_listed(
+            &clip,
+            &bone_roles,
+            head,
+            PropertyType::TranslationY
+        ));
+        assert!(is_curve_listed(
+            &clip,
+            &bone_roles,
+            hips,
+            PropertyType::TranslationY
+        ));
+        assert!(!is_curve_listed(
+            &clip,
+            &bone_roles,
+            hips,
+            PropertyType::ScaleX
+        ));
     }
 
     #[test]
-    fn role_clip_lists_rotation_curves_before_any_key_exists() {
-        let mut clip = crate::ecs::systems::role_clip_systems::new_role_clip("empty");
-        clip.space = ClipSpace::HumanoidRole;
-        let hips = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Hips)
-            .unwrap() as BoneId;
-        let head = HumanoidRole::ALL
-            .iter()
-            .position(|r| *r == HumanoidRole::Head)
-            .unwrap() as BoneId;
-
-        assert!(is_curve_listed(&clip, head, PropertyType::RotationZ));
-        assert!(!is_curve_listed(&clip, head, PropertyType::TranslationY));
-        assert!(is_curve_listed(&clip, hips, PropertyType::TranslationY));
-        assert!(!is_curve_listed(&clip, hips, PropertyType::ScaleX));
-    }
-
-    #[test]
-    fn bone_clip_lists_only_keyed_curves() {
+    fn unmapped_bones_list_only_keyed_curves() {
         let mut clip = EditableAnimationClip::new(0, "bone".to_string());
         let track = clip.add_track(0, "Spine".to_string());
         crate::animation::editable::curve_add_keyframe(&mut track.rotation_x, 0.0, 1.0);
 
-        assert!(is_curve_listed(&clip, 0, PropertyType::RotationX));
-        assert!(!is_curve_listed(&clip, 0, PropertyType::RotationY));
+        assert!(is_curve_listed(&clip, &[], 0, PropertyType::RotationX));
+        assert!(!is_curve_listed(&clip, &[], 0, PropertyType::RotationY));
     }
 }
 
@@ -2661,7 +2688,7 @@ fn build_curve_editor_window(
         })
     };
     let suggestion_overlays = collect_suggestion_overlays(world);
-    let bone_roles = collect_current_clip_bone_roles(world);
+    let bone_roles = collect_humanoid_bone_roles(world);
 
     let timeline_state = world.resource::<TimelineState>();
     let clip_library = world.resource::<ClipLibrary>();

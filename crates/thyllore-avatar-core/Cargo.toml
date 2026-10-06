@@ -20,10 +20,6 @@ thyllore-anim-core = { path = "../thyllore-anim-core" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 
-[features]
-test-fixtures = []
-
 [dev-dependencies]
 tempfile = "3"
-thyllore-avatar-core = { path = ".", features = ["test-fixtures"] }
 thyllore-importer-core = { path = "../thyllore-importer-core" }

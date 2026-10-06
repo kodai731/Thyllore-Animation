@@ -5,12 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use support::fixture_bones::load_rig_from_fbx_text;
+use support::fixtures::ExtraParent;
 use support::test_humanoid::{
     build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, write_test_humanoid_sidecar,
     CanonicalTip,
 };
 use thyllore_avatar_core::expression::components::side::Side;
-use thyllore_avatar_core::humanoid::canonical::fixtures::ExtraParent;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
 
@@ -444,12 +444,8 @@ fn dump_test_humanoid_skeleton_json() {
 
     for (ei, extra) in extras.iter().enumerate() {
         let parent = match extra.parent {
-            thyllore_avatar_core::humanoid::canonical::fixtures::ExtraParent::Role(r) => {
-                serde_json::Value::String(r.unity_name().to_string())
-            }
-            thyllore_avatar_core::humanoid::canonical::fixtures::ExtraParent::Row(i) => {
-                serde_json::Value::String(extras[i].name.clone())
-            }
+            ExtraParent::Role(r) => serde_json::Value::String(r.unity_name().to_string()),
+            ExtraParent::Row(i) => serde_json::Value::String(extras[i].name.clone()),
         };
         entries.push(serde_json::json!({
             "name": extra.name,

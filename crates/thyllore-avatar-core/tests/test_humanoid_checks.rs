@@ -1,6 +1,8 @@
 #![cfg(test)]
 
-use thyllore_avatar_core::humanoid::canonical::fixtures::{
+mod support;
+
+use support::fixtures::{
     test_humanoid_bone_inputs, with_asymmetric_hand, with_bone_in_two_roles,
     with_long_left_upper_arm, with_spine_below_hips, with_swapped_upper_arms, without_fingers,
 };

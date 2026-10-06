@@ -2,11 +2,9 @@
 use cgmath::{Euler, InnerSpace, One, Quaternion, Vector3};
 
 use super::fbx_ascii::{cube_vertices, stick_polygon_indices, ClothMaterial, RigMesh};
+pub use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
 use super::rig_convention::rig_convention;
 use super::rig_nodes::RigNode;
-pub use thyllore_avatar_core::humanoid::canonical::fixtures::{
-    extra_bones, ExtraBone, ExtraParent,
-};
 pub use thyllore_avatar_core::humanoid::canonical::skeleton::{
     skeleton, CanonicalBone, CanonicalTip,
 };

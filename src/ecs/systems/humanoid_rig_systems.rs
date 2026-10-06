@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use thyllore_anim_core::BoneId;
@@ -78,8 +78,11 @@ pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<Huma
     })
 }
 
+use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
+
+use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::HumanoidRigState;
+use crate::ecs::resource::{ClipLibrary, HumanoidRigState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
 
@@ -99,10 +102,58 @@ pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
 
     let rig = build_humanoid_rig(Path::new(&model_path), skeleton);
 
-    let mut state = world.resource_mut::<HumanoidRigState>();
-    state.rig = rig;
-    state.source_model_path = model_path;
-    state.revision += 1;
+    {
+        let mut state = world.resource_mut::<HumanoidRigState>();
+        state.rig = rig;
+        state.source_model_path = model_path;
+        state.revision += 1;
+    }
+
+    remap_user_clips_to_model(world, assets);
+}
+
+fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
+    let Some(table) = engine_bone_name_to_id(world, assets) else {
+        return;
+    };
+    let Some(mut library) = world.get_resource_mut::<ClipLibrary>() else {
+        return;
+    };
+
+    let user_clip_ids: Vec<SourceClipId> = library
+        .source_clips
+        .keys()
+        .filter(|id| !library.model_clip_ids.contains(id))
+        .copied()
+        .collect();
+
+    for id in user_clip_ids {
+        let Some(clip) = library.get_mut(id) else {
+            continue;
+        };
+
+        let names_before = collect_track_names(clip);
+        clip_remap_bone_ids(clip, &table);
+        let names_after = collect_track_names(clip);
+
+        let dropped: Vec<&String> = names_before.difference(&names_after).collect();
+        if !dropped.is_empty() {
+            log_warn!(
+                "clip '{}' dropped tracks not on this model: {:?}",
+                clip.name,
+                dropped
+            );
+        }
+
+        library.mark_dirty(id);
+    }
+}
+
+fn collect_track_names(clip: &EditableAnimationClip) -> HashSet<String> {
+    clip.tracks
+        .values()
+        .map(|track| track.bone_name.clone())
+        .collect()
 }
 
 pub fn invalidate_humanoid_rig(world: &mut World) {
@@ -126,6 +177,7 @@ pub fn engine_bone_name_to_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::editable::SourceClip;
     use crate::asset::SkeletonAsset;
     use crate::ecs::resource::ModelState;
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_not_humanoid;
@@ -266,6 +318,46 @@ mod tests {
             revision_after_rebuild, 2,
             "sync after invalidate should increment revision again"
         );
+    }
+
+    #[test]
+    fn sync_remaps_user_clips_to_the_new_model() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        world.insert_resource(ClipLibrary::new());
+
+        let source_id: SourceClipId = 1;
+        {
+            let mut library = world.resource_mut::<ClipLibrary>();
+            let mut clip = EditableAnimationClip::new(source_id, "user".to_string());
+            let track = clip.add_track(999, "Head".to_string());
+            let curve = track.get_curve_mut(thyllore_anim_core::editable::PropertyType::RotationX);
+            thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe(curve, 0.0, 0.5);
+            library
+                .source_clips
+                .insert(source_id, SourceClip::new(source_id, clip));
+        }
+
+        sync_humanoid_rig(&mut world, &assets);
+
+        let state = world.resource::<HumanoidRigState>();
+        let rig = state.rig.as_ref().expect("rig should be Some");
+        let expected_bone_id = *rig.track_bones.get("Head").expect("Head in track_bones");
+
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id).expect("clip should exist");
+        let track = clip
+            .get_track(expected_bone_id)
+            .expect("track should be at remapped bone id");
+        assert_eq!(track.bone_id, expected_bone_id);
     }
 
     #[test]

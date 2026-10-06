@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{ClipSpace, EditableAnimationClip, SourceClip, SourceClipId};
+use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
 
@@ -12,6 +12,7 @@ pub struct ClipLibrary {
     pub dirty_sources: HashSet<SourceClipId>,
     pub next_source_id: SourceClipId,
     pub source_to_asset_id: HashMap<SourceClipId, AssetId>,
+    pub model_clip_ids: HashSet<SourceClipId>,
 }
 
 impl ClipLibrary {
@@ -22,6 +23,7 @@ impl ClipLibrary {
             dirty_sources: HashSet::new(),
             next_source_id: 1,
             source_to_asset_id: HashMap::new(),
+            model_clip_ids: HashSet::new(),
         }
     }
 
@@ -38,16 +40,11 @@ impl ClipLibrary {
 
     pub fn clear_model_clips(&mut self) {
         self.animation.clear();
-        let role_ids: HashSet<SourceClipId> = self
-            .source_clips
-            .iter()
-            .filter(|(_, s)| s.editable_clip.space == ClipSpace::HumanoidRole)
-            .map(|(id, _)| *id)
-            .collect();
-        self.source_clips.retain(|id, _| role_ids.contains(id));
-        self.dirty_sources.retain(|id| role_ids.contains(id));
-        self.source_to_asset_id
-            .retain(|id, _| role_ids.contains(id));
+        let ids: HashSet<SourceClipId> = self.model_clip_ids.clone();
+        self.source_clips.retain(|id, _| !ids.contains(id));
+        self.dirty_sources.retain(|id| !ids.contains(id));
+        self.source_to_asset_id.retain(|id, _| !ids.contains(id));
+        self.model_clip_ids.clear();
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {

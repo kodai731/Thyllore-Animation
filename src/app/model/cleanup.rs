@@ -66,7 +66,7 @@ fn reset_model_world_state(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{ClipSpace, EditableAnimationClip};
+    use crate::animation::editable::EditableAnimationClip;
     use cgmath::Matrix4;
     use cgmath::SquareMatrix;
 
@@ -106,15 +106,14 @@ mod tests {
     }
 
     #[test]
-    fn model_reset_keeps_role_clips_and_their_selection() {
+    fn model_reset_keeps_user_clips_and_their_selection() {
         let mut world = make_world_with_model_resources();
         {
             let mut library = world.resource_mut::<ClipLibrary>();
-            let mut role_clip = EditableAnimationClip::new(1, "role".to_string());
-            role_clip.space = ClipSpace::HumanoidRole;
+            let user_clip = EditableAnimationClip::new(1, "user".to_string());
             library
                 .source_clips
-                .insert(1, crate::animation::editable::SourceClip::new(1, role_clip));
+                .insert(1, crate::animation::editable::SourceClip::new(1, user_clip));
         }
         {
             let mut timeline = world.resource_mut::<TimelineState>();
@@ -131,14 +130,16 @@ mod tests {
     }
 
     #[test]
-    fn model_reset_drops_bone_clips() {
+    fn model_reset_drops_model_clips() {
         let mut world = make_world_with_model_resources();
         {
             let mut library = world.resource_mut::<ClipLibrary>();
-            let bone_clip = EditableAnimationClip::new(2, "bone".to_string());
-            library
-                .source_clips
-                .insert(2, crate::animation::editable::SourceClip::new(2, bone_clip));
+            let model_clip = EditableAnimationClip::new(2, "model".to_string());
+            library.source_clips.insert(
+                2,
+                crate::animation::editable::SourceClip::new(2, model_clip),
+            );
+            library.model_clip_ids.insert(2);
         }
         {
             let mut timeline = world.resource_mut::<TimelineState>();

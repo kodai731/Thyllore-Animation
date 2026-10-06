@@ -1,4 +1,4 @@
-use crate::animation::editable::{ClipSpace, EditableAnimationClip, SourceClipId};
+use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
@@ -99,12 +99,14 @@ fn register_clips_to_library(
     let editable_clips = import_editable_clips(world, assets, loaded_clips, &bone_names);
 
     let mut first_editable_clip_id = None;
+    let mut model_ids: Vec<SourceClipId> = Vec::new();
     {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         for editable in editable_clips {
             let clip_name = editable.name.clone();
             let editable_id =
                 clip_library_register_and_activate(&mut clip_library, assets, editable);
+            model_ids.push(editable_id);
             first_editable_clip_id.get_or_insert(editable_id);
             log!(
                 "Registered clip '{}' (source_id={})",
@@ -112,6 +114,7 @@ fn register_clips_to_library(
                 editable_id,
             );
         }
+        clip_library.model_clip_ids.extend(model_ids.iter());
     }
 
     let editable_id = first_editable_clip_id?;
@@ -120,9 +123,9 @@ fn register_clips_to_library(
         .get(editable_id)
         .map(|c| c.duration)
         .unwrap_or(0.0);
-    let keeps_role = keeps_selected_role_clip(world);
+    let keeps_user = keeps_selected_user_clip(world);
     let mut timeline_state = world.resource_mut::<TimelineState>();
-    if !keeps_role {
+    if !keeps_user {
         timeline_state.current_clip_id = Some(editable_id);
         timeline_apply_fit_zoom(&mut timeline_state, clip_duration);
     }
@@ -136,10 +139,12 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
     editable.duration = EMPTY_CLIP_DEFAULT_DURATION_SECONDS;
     let source_id = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        clip_library_register_and_activate(&mut clip_library, assets, editable)
+        let id = clip_library_register_and_activate(&mut clip_library, assets, editable);
+        clip_library.model_clip_ids.insert(id);
+        id
     };
 
-    if !keeps_selected_role_clip(world) {
+    if !keeps_selected_user_clip(world) {
         world.resource_mut::<TimelineState>().current_clip_id = Some(source_id);
     }
 
@@ -201,7 +206,7 @@ pub fn build_initial_clip_schedule(
     schedule
 }
 
-pub fn keeps_selected_role_clip(world: &World) -> bool {
+pub fn keeps_selected_user_clip(world: &World) -> bool {
     let timeline = match world.get_resource::<TimelineState>() {
         Some(t) => t,
         None => return false,
@@ -213,10 +218,7 @@ pub fn keeps_selected_role_clip(world: &World) -> bool {
         Some(l) => l,
         None => return false,
     };
-    let Some(clip) = library.get(current_id) else {
-        return false;
-    };
-    clip.space == ClipSpace::HumanoidRole
+    library.get(current_id).is_some() && !library.model_clip_ids.contains(&current_id)
 }
 
 #[cfg(test)]
@@ -225,31 +227,30 @@ mod tests {
     use crate::animation::Skeleton;
 
     #[test]
-    fn model_load_keeps_a_selected_role_clip() {
+    fn model_load_keeps_a_selected_user_clip() {
         let mut world = World::new();
         let mut assets = AssetStorage::default();
         world.insert_resource(ClipLibrary::default());
         world.insert_resource(TimelineState::default());
 
-        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
-        let role_source_id = {
+        let user_clip = EditableAnimationClip::new(0, "user".to_string());
+        let user_source_id = {
             let mut clip_library = world.resource_mut::<ClipLibrary>();
-            clip_library_register_and_activate(&mut clip_library, &mut assets, role_clip)
+            clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        world.resource_mut::<TimelineState>().current_clip_id = Some(role_source_id);
+        world.resource_mut::<TimelineState>().current_clip_id = Some(user_source_id);
 
         register_empty_editable_clip(&mut world, &mut assets);
 
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,
-            Some(role_source_id)
+            Some(user_source_id)
         );
     }
 
     #[test]
-    fn model_load_with_clips_keeps_a_selected_role_clip() {
+    fn model_load_with_clips_keeps_a_selected_user_clip() {
         let mut world = World::new();
         let mut assets = AssetStorage::default();
         world.insert_resource(ClipLibrary::default());
@@ -261,44 +262,45 @@ mod tests {
             skeleton: Skeleton::default(),
         });
 
-        let mut role_clip = EditableAnimationClip::new(0, "role".to_string());
-        role_clip.space = ClipSpace::HumanoidRole;
-        let role_source_id = {
+        let user_clip = EditableAnimationClip::new(0, "user".to_string());
+        let user_source_id = {
             let mut clip_library = world.resource_mut::<ClipLibrary>();
-            clip_library_register_and_activate(&mut clip_library, &mut assets, role_clip)
+            clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        world.resource_mut::<TimelineState>().current_clip_id = Some(role_source_id);
+        world.resource_mut::<TimelineState>().current_clip_id = Some(user_source_id);
 
         let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
         register_clips_to_library(&mut world, &mut assets, &loaded_clips);
 
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,
-            Some(role_source_id)
+            Some(user_source_id)
         );
     }
 
     #[test]
-    fn model_load_replaces_a_selected_bone_clip() {
+    fn model_load_replaces_a_selected_model_clip() {
         let mut world = World::new();
         let mut assets = AssetStorage::default();
         world.insert_resource(ClipLibrary::default());
         world.insert_resource(TimelineState::default());
 
-        let bone_clip = EditableAnimationClip::new(0, "bone".to_string());
-        let bone_source_id = {
+        let model_clip = EditableAnimationClip::new(0, "model".to_string());
+        let model_source_id = {
             let mut clip_library = world.resource_mut::<ClipLibrary>();
-            clip_library_register_and_activate(&mut clip_library, &mut assets, bone_clip)
+            let id = clip_library_register_and_activate(&mut clip_library, &mut assets, model_clip);
+            clip_library.model_clip_ids.insert(id);
+            id
         };
 
-        world.resource_mut::<TimelineState>().current_clip_id = Some(bone_source_id);
+        world.resource_mut::<TimelineState>().current_clip_id = Some(model_source_id);
 
         register_empty_editable_clip(&mut world, &mut assets);
 
         assert_ne!(
             world.resource::<TimelineState>().current_clip_id,
-            Some(bone_source_id)
+            Some(model_source_id)
         );
     }
 }

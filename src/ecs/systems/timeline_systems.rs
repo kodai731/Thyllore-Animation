@@ -8,7 +8,8 @@ use crate::animation::editable::{
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{ClipLibrary, CurveTrackRef, TimelineState};
+use crate::ecs::resource::{ClipLibrary, CurveTrackRef, HumanoidRig, TimelineState};
+use crate::ecs::systems::humanoid_import_systems::local_pose_to_standard;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::{Entity, World};
@@ -789,6 +790,7 @@ pub fn process_bone_set_key(
     clip_library: &mut ClipLibrary,
     timeline_state: &TimelineState,
     skeleton: &crate::animation::Skeleton,
+    rig: Option<&HumanoidRig>,
 ) -> bool {
     let Some(clip_id) = timeline_state.current_clip_id else {
         return false;
@@ -804,28 +806,62 @@ pub fn process_bone_set_key(
     let time = timeline_state.current_time;
 
     for (&bone_id, local_pose) in overrides {
-        let bone_name = skeleton
-            .get_bone(bone_id)
-            .map(|b| b.name.clone())
-            .unwrap_or_else(|| format!("bone_{}", bone_id));
+        let standard = rig.and_then(|rig| {
+            local_pose_to_standard(
+                rig,
+                skeleton,
+                bone_id,
+                local_pose.rotation,
+                local_pose.translation,
+            )
+        });
+        if let Some(standard) = standard {
+            let track_name = standard.role.unity_name().to_string();
+            match clip.tracks.get_mut(&bone_id) {
+                Some(track) => track.bone_name = track_name,
+                None => {
+                    clip.add_track(bone_id, track_name);
+                }
+            }
 
-        if !clip.tracks.contains_key(&bone_id) {
-            clip.add_track(bone_id, bone_name.clone());
+            let [x_degrees, y_degrees, z_degrees] = standard.euler_degrees;
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, x_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, y_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, z_degrees);
+
+            if let Some([x, y, z]) = standard.hips_translation {
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, x);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, y);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, z);
+            }
+        } else {
+            let bone_name = rig
+                .and_then(|r| r.track_names.get(&bone_id).cloned())
+                .unwrap_or_else(|| {
+                    skeleton
+                        .get_bone(bone_id)
+                        .map(|b| b.name.clone())
+                        .unwrap_or_else(|| format!("bone_{}", bone_id))
+                });
+
+            if !clip.tracks.contains_key(&bone_id) {
+                clip.add_track(bone_id, bone_name.clone());
+            }
+
+            let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
+
+            let t = &local_pose.translation;
+            let s = &local_pose.scale;
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
         }
-
-        let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
-
-        let t = &local_pose.translation;
-        let s = &local_pose.scale;
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
     }
 
     clip_recalculate_duration(clip);

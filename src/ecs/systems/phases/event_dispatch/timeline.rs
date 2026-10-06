@@ -15,8 +15,8 @@ use crate::ecs::resource::CurveTrackRef;
 use crate::ecs::resource::SelectedKeyframe;
 use crate::ecs::resource::SelectionModifier;
 use crate::ecs::resource::{
-    BonePoseOverride, ClipLibrary, CurveEditorBuffer, EditHistory, KeyframeCopyBuffer,
-    TimelineState,
+    BonePoseOverride, ClipLibrary, CurveEditorBuffer, EditHistory, HumanoidRigState,
+    KeyframeCopyBuffer, TimelineState,
 };
 use crate::ecs::systems::{
     edit_history_push_clip_mergeable, process_bone_set_key, process_keyframe_clipboard_events,
@@ -237,7 +237,15 @@ fn dispatch_bone_set_key_events(
     let clip_id = timeline_state.current_clip_id;
     let before_clip = clip_id.and_then(|id| clip_library.get(id).cloned());
 
-    let modified = process_bone_set_key(&overrides, &mut clip_library, &timeline_state, &skeleton);
+    let state = world.resource::<HumanoidRigState>();
+    let rig = state.rig.as_ref();
+    let modified = process_bone_set_key(
+        &overrides,
+        &mut clip_library,
+        &timeline_state,
+        &skeleton,
+        rig,
+    );
 
     if modified {
         if let (Some(cid), Some(before)) = (clip_id, before_clip) {

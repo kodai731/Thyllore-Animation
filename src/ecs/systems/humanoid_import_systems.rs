@@ -13,6 +13,41 @@ use crate::animation::{BoneId, Skeleton};
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 
+pub struct StandardBoneKey {
+    pub role: HumanoidRole,
+    pub euler_degrees: [f32; 3],
+    pub hips_translation: Option<[f32; 3]>,
+}
+
+pub fn local_pose_to_standard(
+    rig: &HumanoidRig,
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+    local_rotation: Quaternion<f32>,
+    local_translation: Vector3<f32>,
+) -> Option<StandardBoneKey> {
+    let (&role, &bone_index) = rig
+        .mapping
+        .by_role
+        .iter()
+        .find(|(_, &bone_index)| bone_index as BoneId == bone_id)?;
+
+    let is_hips = role == HumanoidRole::Hips;
+    let hips_offset = if is_hips {
+        hips_world_offset(skeleton, bone_index, local_translation)
+    } else {
+        Vector3::new(0.0, 0.0, 0.0)
+    };
+    let local_rotations = BTreeMap::from([(bone_index, local_rotation)]);
+    let pose = retarget_from_bones(&rig.context, &local_rotations, hips_offset);
+
+    Some(StandardBoneKey {
+        role,
+        euler_degrees: pose.rotations.get(&role).copied()?,
+        hips_translation: is_hips.then_some(pose.hips_translation),
+    })
+}
+
 pub fn convert_clip_to_standard_space(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
@@ -99,6 +134,20 @@ fn sample_hips_offset(
         return zero;
     };
 
+    let bind_translation = skeleton.bones[hips_bone].local_transform.w.truncate();
+    let translation = Vector3::new(
+        curve_sample(&track.translation_x, time).unwrap_or(bind_translation.x),
+        curve_sample(&track.translation_y, time).unwrap_or(bind_translation.y),
+        curve_sample(&track.translation_z, time).unwrap_or(bind_translation.z),
+    );
+    hips_world_offset(skeleton, hips_bone, translation)
+}
+
+fn hips_world_offset(
+    skeleton: &Skeleton,
+    hips_bone: usize,
+    local_translation: Vector3<f32>,
+) -> Vector3<f32> {
     let hips = &skeleton.bones[hips_bone];
     let bind_translation = hips.local_transform.w.truncate();
     let parent_world_rotation = match hips.parent_id {
@@ -107,12 +156,7 @@ fn sample_hips_offset(
         }
         None => Quaternion::new(1.0, 0.0, 0.0, 0.0),
     };
-    let translation = Vector3::new(
-        curve_sample(&track.translation_x, time).unwrap_or(bind_translation.x),
-        curve_sample(&track.translation_y, time).unwrap_or(bind_translation.y),
-        curve_sample(&track.translation_z, time).unwrap_or(bind_translation.z),
-    );
-    parent_world_rotation * (translation - bind_translation)
+    parent_world_rotation * (local_translation - bind_translation)
 }
 
 fn key_standard_pose(
@@ -221,6 +265,98 @@ mod tests {
             &original_track(head_bone).rotation_x,
             &converted_track(head_bone).rotation_x,
             1e-2,
+        );
+    }
+
+    #[test]
+    fn bone_set_key_writes_standard_values_on_a_humanoid_model() {
+        use crate::ecs::systems::timeline_systems::process_bone_set_key;
+        use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_engine;
+
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (_, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
+        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+
+        let left_upper_arm_bone: BoneId = rig.track_bones["LeftUpperArm"];
+
+        let mut clip_library = crate::ecs::resource::ClipLibrary::new();
+        let clip_id: crate::animation::editable::SourceClipId = 1;
+        let clip = EditableAnimationClip::new(clip_id, "test".to_string());
+        let source = crate::animation::editable::SourceClip::new(clip_id, clip);
+        clip_library.source_clips.insert(clip_id, source);
+
+        let mut timeline_state = crate::ecs::resource::TimelineState::new();
+        timeline_state.current_clip_id = Some(clip_id);
+        timeline_state.current_time = 0.0;
+
+        let mut overrides: std::collections::HashMap<BoneId, crate::animation::BoneLocalPose> =
+            std::collections::HashMap::new();
+
+        let left_upper_arm_pose = crate::animation::BoneLocalPose {
+            translation: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            rotation: role_rotation_to_engine(&rig.context.frame, [0.0, 0.0, -40.0]),
+            scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+        };
+        overrides.insert(left_upper_arm_bone, left_upper_arm_pose);
+
+        let skirt_bone_id: BoneId = rig.track_bones["Skirt_Front_1"];
+        let skirt_pose = crate::animation::BoneLocalPose {
+            translation: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            rotation: euler_degrees_to_quaternion(&cgmath::Vector3::new(30.0, 0.0, 0.0)),
+            scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+        };
+        overrides.insert(skirt_bone_id, skirt_pose);
+
+        process_bone_set_key(
+            &overrides,
+            &mut clip_library,
+            &timeline_state,
+            &skeleton,
+            Some(&rig),
+        );
+
+        let clip = clip_library.get(clip_id).unwrap();
+
+        let left_upper_arm_track = clip
+            .tracks
+            .get(&left_upper_arm_bone)
+            .expect("LeftUpperArm track");
+        assert_eq!(
+            left_upper_arm_track.bone_name, "LeftUpperArm",
+            "track name should be role name"
+        );
+
+        let rz = curve_sample(&left_upper_arm_track.rotation_z, 0.0).unwrap();
+        assert!(
+            (rz - (-40.0)).abs() < 1e-2,
+            "rotation_z should be ≈ -40, got {:.4}",
+            rz
+        );
+        let rx = curve_sample(&left_upper_arm_track.rotation_x, 0.0).unwrap_or(0.0);
+        assert!(rx.abs() < 1e-2, "rotation_x should be ≈ 0, got {:.4}", rx);
+        let ry = curve_sample(&left_upper_arm_track.rotation_y, 0.0).unwrap_or(0.0);
+        assert!(ry.abs() < 1e-2, "rotation_y should be ≈ 0, got {:.4}", ry);
+
+        assert!(
+            left_upper_arm_track.scale_x.keyframes.is_empty(),
+            "scale_x should have no keyframes for mapped bone"
+        );
+        assert!(
+            left_upper_arm_track.translation_x.keyframes.is_empty(),
+            "translation_x should have no keyframes for non-Hips mapped bone"
+        );
+
+        let skirt_track = clip
+            .tracks
+            .get(&skirt_bone_id)
+            .expect("Skirt_Front_1 track");
+        let skirt_rx = curve_sample(&skirt_track.rotation_x, 0.0).unwrap();
+        assert!(
+            (skirt_rx - 30.0).abs() < 1e-2,
+            "Skirt_Front_1 rotation_x should be ≈ 30 (local value), got {:.4}",
+            skirt_rx
         );
     }
 }

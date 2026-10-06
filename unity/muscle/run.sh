@@ -47,6 +47,7 @@ fi
 
 mkdir -p "$PROJECT_DIR/Assets/Editor"
 cp "$REPO_ROOT/unity/muscle/Editor/MuscleProbe.cs" "$PROJECT_DIR/Assets/Editor/"
+cp "$REPO_ROOT/unity/muscle/Editor/MuscleVerify.cs" "$PROJECT_DIR/Assets/Editor/"
 
 mkdir -p "$WORK_DIR/tmp"
 STICK_TMPDIR="$(mktemp -d "$WORK_DIR/tmp/unity_muscle.XXXX")"
@@ -74,3 +75,17 @@ fi
 
 cp "$PROJECT_DIR/muscles.json" "$WORK_DIR/muscles.json"
 echo "muscles.json written to $WORK_DIR/muscles.json"
+
+echo "running MuscleVerify"
+run_in_container "$IMAGE_TAG" \
+    unity-editor -batchmode -nographics -projectPath /work/project \
+        -executeMethod Thyllore.Muscle.MuscleVerify.Run -quit -logFile /work/verify.log
+
+if [[ ! -f "$PROJECT_DIR/verify_result.json" ]]; then
+    echo "verify_result.json not found at $PROJECT_DIR/verify_result.json — verify may have failed; last lines of log:" >&2
+    tail -20 "$WORK_DIR/verify.log" >&2
+    exit 1
+fi
+
+cp "$PROJECT_DIR/verify_result.json" "$WORK_DIR/verify_result.json"
+echo "verify_result.json written to $WORK_DIR/verify_result.json"

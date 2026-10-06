@@ -190,6 +190,11 @@ fn dump_unity_verify_inputs() {
     for (name, mut clip) in [
         ("wave", support::role_clips::wave()),
         ("bow", support::role_clips::bow()),
+        ("mixed", support::role_clips::mixed()),
+        (
+            "hands_on_hips_tilt",
+            support::role_clips::hands_on_hips_tilt(),
+        ),
     ] {
         remap_tracks(&mut clip, &mapping);
         let curves = muscle_curves_from_clip(&clip, &mapping, sample_rate, table);

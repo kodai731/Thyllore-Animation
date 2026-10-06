@@ -1,0 +1,1754 @@
+[[muscle]]
+index = 0
+name = "Spine Front-Back"
+role = "Spine"
+dof = 2
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Spine"
+axis = "x"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 1
+name = "Spine Left-Right"
+role = "Spine"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Spine"
+axis = "z"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 2
+name = "Spine Twist Left-Right"
+role = "Spine"
+dof = 0
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Spine"
+axis = "y"
+positive = 0.025000
+negative = 0.025000
+
+[[muscle]]
+index = 3
+name = "Chest Front-Back"
+role = "Chest"
+dof = 2
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Chest"
+axis = "x"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 4
+name = "Chest Left-Right"
+role = "Chest"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Chest"
+axis = "z"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 5
+name = "Chest Twist Left-Right"
+role = "Chest"
+dof = 0
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Chest"
+axis = "y"
+positive = 0.025000
+negative = 0.025000
+
+[[muscle]]
+index = 6
+name = "UpperChest Front-Back"
+role = "UpperChest"
+dof = 2
+min = -20.000000
+max = 20.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "UpperChest"
+axis = "x"
+positive = -0.050000
+negative = -0.050000
+
+[[muscle]]
+index = 7
+name = "UpperChest Left-Right"
+role = "UpperChest"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "UpperChest"
+axis = "z"
+positive = -0.050000
+negative = -0.050000
+
+[[muscle]]
+index = 8
+name = "UpperChest Twist Left-Right"
+role = "UpperChest"
+dof = 0
+min = -20.000000
+max = 20.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "UpperChest"
+axis = "y"
+positive = 0.050000
+negative = 0.050000
+
+[[muscle]]
+index = 9
+name = "Neck Nod Down-Up"
+role = "Neck"
+dof = 2
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Neck"
+axis = "x"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 10
+name = "Neck Tilt Left-Right"
+role = "Neck"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Neck"
+axis = "z"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 11
+name = "Neck Turn Left-Right"
+role = "Neck"
+dof = 0
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Neck"
+axis = "y"
+positive = 0.025000
+negative = 0.025000
+
+[[muscle]]
+index = 12
+name = "Head Nod Down-Up"
+role = "Head"
+dof = 2
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Head"
+axis = "x"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 13
+name = "Head Tilt Left-Right"
+role = "Head"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Head"
+axis = "z"
+positive = -0.025000
+negative = -0.025000
+
+[[muscle]]
+index = 14
+name = "Head Turn Left-Right"
+role = "Head"
+dof = 0
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Head"
+axis = "y"
+positive = 0.025000
+negative = 0.025000
+
+[[muscle]]
+index = 15
+name = "Left Eye Down-Up"
+role = "LeftEye"
+dof = 2
+min = -10.000000
+max = 15.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftEye"
+axis = "x"
+positive = -0.100000
+negative = -0.066667
+
+[[muscle]]
+index = 16
+name = "Left Eye In-Out"
+role = "LeftEye"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftEye"
+axis = "y"
+positive = -0.050000
+negative = -0.050000
+
+[[muscle]]
+index = 17
+name = "Right Eye Down-Up"
+role = "RightEye"
+dof = 2
+min = -10.000000
+max = 15.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightEye"
+axis = "x"
+positive = -0.100000
+negative = -0.066667
+
+[[muscle]]
+index = 18
+name = "Right Eye In-Out"
+role = "RightEye"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightEye"
+axis = "y"
+positive = 0.050000
+negative = 0.050000
+
+[[muscle]]
+index = 19
+name = "Jaw Close"
+role = "Jaw"
+dof = 2
+min = -10.000000
+max = 10.000000
+rest = 1.028553
+[[muscle.slopes]]
+role = "Jaw"
+axis = "x"
+positive = -0.100000
+negative = -0.100000
+[[muscle.slopes]]
+role = "Jaw"
+axis = "y"
+positive = -0.001603
+negative = 0.001603
+
+[[muscle]]
+index = 20
+name = "Jaw Left-Right"
+role = "Jaw"
+dof = 1
+min = -10.000000
+max = 10.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "Jaw"
+axis = "y"
+positive = -0.100769
+negative = -0.100769
+
+[[muscle]]
+index = 21
+name = "Left Upper Leg Front-Back"
+role = "LeftUpperLeg"
+dof = 2
+min = -90.000000
+max = 50.000000
+rest = 0.600109
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "z"
+positive = -0.000624
+negative = 0.000624
+[[muscle.slopes]]
+role = "LeftUpperLeg"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+[[muscle.slopes]]
+role = "LeftUpperLeg"
+axis = "z"
+positive = -0.000955
+negative = 0.000955
+
+[[muscle]]
+index = 22
+name = "Left Upper Leg In-Out"
+role = "LeftUpperLeg"
+dof = 1
+min = -60.000000
+max = 60.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftUpperLeg"
+axis = "z"
+positive = -0.017798
+negative = -0.017798
+
+[[muscle]]
+index = 23
+name = "Left Upper Leg Twist In-Out"
+role = "LeftUpperLeg"
+dof = 0
+min = -60.000000
+max = 60.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "z"
+positive = 0.072125
+negative = 0.072125
+[[muscle.slopes]]
+role = "LeftUpperLeg"
+axis = "y"
+positive = -0.016667
+negative = -0.016667
+[[muscle.slopes]]
+role = "LeftUpperLeg"
+axis = "z"
+positive = 0.004509
+negative = 0.004509
+
+[[muscle]]
+index = 24
+name = "Left Lower Leg Stretch"
+role = "LeftLowerLeg"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = 0.999916
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "x"
+positive = -0.012500
+negative = -0.012500
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "z"
+positive = -0.012482
+negative = 0.012482
+
+[[muscle]]
+index = 25
+name = "Left Lower Leg Twist In-Out"
+role = "LeftLowerLeg"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftFoot"
+axis = "y"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "y"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "z"
+positive = -0.048076
+negative = -0.048076
+
+[[muscle]]
+index = 26
+name = "Left Foot Up-Down"
+role = "LeftFoot"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftFoot"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+[[muscle.slopes]]
+role = "LeftLowerLeg"
+axis = "z"
+positive = -0.000594
+negative = 0.000594
+
+[[muscle]]
+index = 27
+name = "Left Foot Twist In-Out"
+role = "LeftFoot"
+dof = 1
+min = -30.000000
+max = 30.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftFoot"
+axis = "z"
+positive = -0.033333
+negative = -0.033333
+
+[[muscle]]
+index = 28
+name = "Left Toes Up-Down"
+role = "LeftToes"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "LeftToes"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+
+[[muscle]]
+index = 29
+name = "Right Upper Leg Front-Back"
+role = "RightUpperLeg"
+dof = 2
+min = -90.000000
+max = 50.000000
+rest = 0.600109
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "z"
+positive = -0.000624
+negative = 0.000624
+[[muscle.slopes]]
+role = "RightUpperLeg"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+[[muscle.slopes]]
+role = "RightUpperLeg"
+axis = "z"
+positive = -0.000955
+negative = 0.000955
+
+[[muscle]]
+index = 30
+name = "Right Upper Leg In-Out"
+role = "RightUpperLeg"
+dof = 1
+min = -60.000000
+max = 60.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightUpperLeg"
+axis = "z"
+positive = 0.017798
+negative = 0.017798
+
+[[muscle]]
+index = 31
+name = "Right Upper Leg Twist In-Out"
+role = "RightUpperLeg"
+dof = 0
+min = -60.000000
+max = 60.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "z"
+positive = -0.072125
+negative = -0.072125
+[[muscle.slopes]]
+role = "RightUpperLeg"
+axis = "y"
+positive = 0.016667
+negative = 0.016667
+[[muscle.slopes]]
+role = "RightUpperLeg"
+axis = "z"
+positive = -0.004509
+negative = -0.004509
+
+[[muscle]]
+index = 32
+name = "Right Lower Leg Stretch"
+role = "RightLowerLeg"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = 0.999916
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "x"
+positive = -0.012500
+negative = -0.012500
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "z"
+positive = -0.012482
+negative = 0.012482
+
+[[muscle]]
+index = 33
+name = "Right Lower Leg Twist In-Out"
+role = "RightLowerLeg"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightFoot"
+axis = "y"
+positive = 0.011111
+negative = 0.011111
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "y"
+positive = 0.011111
+negative = 0.011111
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "z"
+positive = 0.048076
+negative = 0.048076
+
+[[muscle]]
+index = 34
+name = "Right Foot Up-Down"
+role = "RightFoot"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightFoot"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+[[muscle.slopes]]
+role = "RightLowerLeg"
+axis = "z"
+positive = -0.000594
+negative = 0.000594
+
+[[muscle]]
+index = 35
+name = "Right Foot Twist In-Out"
+role = "RightFoot"
+dof = 1
+min = -30.000000
+max = 30.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightFoot"
+axis = "z"
+positive = 0.033333
+negative = 0.033333
+
+[[muscle]]
+index = 36
+name = "Right Toes Up-Down"
+role = "RightToes"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightToes"
+axis = "x"
+positive = 0.020000
+negative = 0.020000
+
+[[muscle]]
+index = 37
+name = "Left Shoulder Down-Up"
+role = "LeftShoulder"
+dof = 2
+min = -15.000000
+max = 30.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftShoulder"
+axis = "z"
+positive = -0.066667
+negative = -0.033333
+
+[[muscle]]
+index = 38
+name = "Left Shoulder Front-Back"
+role = "LeftShoulder"
+dof = 1
+min = -15.000000
+max = 15.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftShoulder"
+axis = "y"
+positive = -0.066667
+negative = -0.066667
+
+[[muscle]]
+index = 39
+name = "Left Arm Down-Up"
+role = "LeftUpperArm"
+dof = 2
+min = -60.000000
+max = 100.000000
+rest = 0.400031
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "y"
+positive = -0.000629
+negative = 0.000760
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "z"
+positive = -0.010641
+negative = -0.010554
+
+[[muscle]]
+index = 40
+name = "Left Arm Front-Back"
+role = "LeftUpperArm"
+dof = 1
+min = -100.000000
+max = 100.000000
+rest = 0.300054
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "y"
+positive = -0.011227
+negative = -0.011097
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "z"
+positive = -0.000474
+negative = 0.000613
+
+[[muscle]]
+index = 41
+name = "Left Arm Twist In-Out"
+role = "LeftUpperArm"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "z"
+positive = -0.047948
+negative = -0.048181
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "y"
+positive = -0.003897
+negative = -0.004282
+[[muscle.slopes]]
+role = "LeftUpperArm"
+axis = "z"
+positive = 0.002825
+negative = 0.003212
+
+[[muscle]]
+index = 42
+name = "Left Forearm Stretch"
+role = "LeftLowerArm"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = 0.999916
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "y"
+positive = -0.012500
+negative = -0.012500
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "z"
+positive = -0.012482
+negative = 0.012482
+
+[[muscle]]
+index = 43
+name = "Left Forearm Twist In-Out"
+role = "LeftLowerArm"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = -0.000001
+[[muscle.slopes]]
+role = "LeftHand"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "z"
+positive = 0.048076
+negative = 0.048076
+[[muscle.slopes]]
+role = "LeftShoulder"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+
+[[muscle]]
+index = 44
+name = "Left Hand Down-Up"
+role = "LeftHand"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftHand"
+axis = "z"
+positive = -0.012500
+negative = -0.012500
+
+[[muscle]]
+index = 45
+name = "Left Hand In-Out"
+role = "LeftHand"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "LeftHand"
+axis = "y"
+positive = -0.025000
+negative = -0.025000
+[[muscle.slopes]]
+role = "LeftLowerArm"
+axis = "z"
+positive = 0.000806
+negative = -0.000806
+
+[[muscle]]
+index = 46
+name = "Right Shoulder Down-Up"
+role = "RightShoulder"
+dof = 2
+min = -15.000000
+max = 30.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightShoulder"
+axis = "z"
+positive = 0.033333
+negative = 0.066667
+
+[[muscle]]
+index = 47
+name = "Right Shoulder Front-Back"
+role = "RightShoulder"
+dof = 1
+min = -15.000000
+max = 15.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightShoulder"
+axis = "y"
+positive = 0.066667
+negative = 0.066667
+
+[[muscle]]
+index = 48
+name = "Right Arm Down-Up"
+role = "RightUpperArm"
+dof = 2
+min = -60.000000
+max = 100.000000
+rest = 0.400031
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "y"
+positive = -0.000760
+negative = 0.000629
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "z"
+positive = 0.010554
+negative = 0.010641
+
+[[muscle]]
+index = 49
+name = "Right Arm Front-Back"
+role = "RightUpperArm"
+dof = 1
+min = -100.000000
+max = 100.000000
+rest = 0.300054
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "y"
+positive = 0.011097
+negative = 0.011227
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "z"
+positive = -0.000613
+negative = 0.000474
+
+[[muscle]]
+index = 50
+name = "Right Arm Twist In-Out"
+role = "RightUpperArm"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "z"
+positive = 0.048181
+negative = 0.047948
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "y"
+positive = 0.004282
+negative = 0.003897
+[[muscle.slopes]]
+role = "RightUpperArm"
+axis = "z"
+positive = -0.003212
+negative = -0.002825
+
+[[muscle]]
+index = 51
+name = "Right Forearm Stretch"
+role = "RightLowerArm"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = 0.999916
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "y"
+positive = 0.012500
+negative = 0.012500
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "z"
+positive = -0.012482
+negative = 0.012482
+
+[[muscle]]
+index = 52
+name = "Right Forearm Twist In-Out"
+role = "RightLowerArm"
+dof = 0
+min = -90.000000
+max = 90.000000
+rest = -0.000001
+[[muscle.slopes]]
+role = "RightHand"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "z"
+positive = -0.048076
+negative = -0.048076
+[[muscle.slopes]]
+role = "RightShoulder"
+axis = "x"
+positive = -0.011111
+negative = -0.011111
+
+[[muscle]]
+index = 53
+name = "Right Hand Down-Up"
+role = "RightHand"
+dof = 2
+min = -80.000000
+max = 80.000000
+rest = -0.000000
+[[muscle.slopes]]
+role = "RightHand"
+axis = "z"
+positive = 0.012500
+negative = 0.012500
+
+[[muscle]]
+index = 54
+name = "Right Hand In-Out"
+role = "RightHand"
+dof = 1
+min = -40.000000
+max = 40.000000
+rest = 0.000000
+[[muscle.slopes]]
+role = "RightHand"
+axis = "y"
+positive = 0.025000
+negative = 0.025000
+[[muscle.slopes]]
+role = "RightLowerArm"
+axis = "z"
+positive = 0.000806
+negative = -0.000806
+
+[[muscle]]
+index = 55
+name = "Left Thumb 1 Stretched"
+role = "LeftThumbProximal"
+dof = 2
+min = -20.000000
+max = 20.000000
+rest = -0.668597
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "x"
+positive = -0.007416
+negative = -0.000118
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "y"
+positive = 0.049885
+negative = 0.050356
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "z"
+positive = -0.000977
+negative = -0.010921
+
+[[muscle]]
+index = 56
+name = "Left Thumb Spread"
+role = "LeftThumbProximal"
+dof = 1
+min = -25.000000
+max = 25.000000
+rest = 0.511847
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "x"
+positive = -0.021670
+negative = -0.022405
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "y"
+positive = -0.006189
+negative = -0.005061
+[[muscle.slopes]]
+role = "LeftThumbProximal"
+axis = "z"
+positive = -0.033691
+negative = -0.032447
+
+[[muscle]]
+index = 57
+name = "Left Thumb 2 Stretched"
+role = "LeftThumbIntermediate"
+dof = 2
+min = -40.000000
+max = 35.000000
+rest = 0.646282
+[[muscle.slopes]]
+role = "LeftThumbIntermediate"
+axis = "x"
+positive = -0.002180
+negative = 0.002180
+[[muscle.slopes]]
+role = "LeftThumbIntermediate"
+axis = "y"
+positive = 0.028571
+negative = 0.028571
+[[muscle.slopes]]
+role = "LeftThumbIntermediate"
+axis = "z"
+positive = 0.001217
+negative = -0.001217
+
+[[muscle]]
+index = 58
+name = "Left Thumb 3 Stretched"
+role = "LeftThumbDistal"
+dof = 2
+min = -40.000000
+max = 35.000000
+rest = 0.646282
+[[muscle.slopes]]
+role = "LeftThumbDistal"
+axis = "x"
+positive = -0.002180
+negative = 0.002180
+[[muscle.slopes]]
+role = "LeftThumbDistal"
+axis = "y"
+positive = 0.028571
+negative = 0.028571
+[[muscle.slopes]]
+role = "LeftThumbDistal"
+axis = "z"
+positive = 0.001217
+negative = -0.001217
+
+[[muscle]]
+index = 59
+name = "Left Index 1 Stretched"
+role = "LeftIndexProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "LeftIndexProximal"
+axis = "y"
+positive = -0.001045
+negative = 0.001106
+[[muscle.slopes]]
+role = "LeftIndexProximal"
+axis = "z"
+positive = -0.020117
+negative = -0.020105
+
+[[muscle]]
+index = 60
+name = "Left Index Spread"
+role = "LeftIndexProximal"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = -0.457392
+[[muscle.slopes]]
+role = "LeftIndexProximal"
+axis = "y"
+positive = 0.054290
+negative = 0.054152
+[[muscle.slopes]]
+role = "LeftIndexProximal"
+axis = "z"
+positive = 0.000700
+negative = -0.000865
+
+[[muscle]]
+index = 61
+name = "Left Index 2 Stretched"
+role = "LeftIndexIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftIndexIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftIndexIntermediate"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 62
+name = "Left Index 3 Stretched"
+role = "LeftIndexDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftIndexDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftIndexDistal"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 63
+name = "Left Middle 1 Stretched"
+role = "LeftMiddleProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "LeftMiddleProximal"
+axis = "y"
+positive = -0.001055
+negative = 0.001086
+[[muscle.slopes]]
+role = "LeftMiddleProximal"
+axis = "z"
+positive = -0.020029
+negative = -0.020026
+
+[[muscle]]
+index = 64
+name = "Left Middle Spread"
+role = "LeftMiddleProximal"
+dof = 1
+min = -7.500000
+max = 7.500000
+rest = -0.610829
+[[muscle.slopes]]
+role = "LeftMiddleProximal"
+axis = "y"
+positive = 0.144737
+negative = 0.144553
+[[muscle.slopes]]
+role = "LeftMiddleProximal"
+axis = "z"
+positive = 0.000934
+negative = -0.001154
+
+[[muscle]]
+index = 65
+name = "Left Middle 2 Stretched"
+role = "LeftMiddleIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftMiddleIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftMiddleIntermediate"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 66
+name = "Left Middle 3 Stretched"
+role = "LeftMiddleDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftMiddleDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftMiddleDistal"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 67
+name = "Left Ring 1 Stretched"
+role = "LeftRingProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "LeftRingProximal"
+axis = "y"
+positive = -0.001086
+negative = 0.001055
+[[muscle.slopes]]
+role = "LeftRingProximal"
+axis = "z"
+positive = -0.020029
+negative = -0.020026
+
+[[muscle]]
+index = 68
+name = "Left Ring Spread"
+role = "LeftRingProximal"
+dof = 1
+min = -7.500000
+max = 7.500000
+rest = -0.610832
+[[muscle.slopes]]
+role = "LeftRingProximal"
+axis = "y"
+positive = -0.144552
+negative = -0.144737
+[[muscle.slopes]]
+role = "LeftRingProximal"
+axis = "z"
+positive = 0.000934
+negative = -0.001155
+
+[[muscle]]
+index = 69
+name = "Left Ring 2 Stretched"
+role = "LeftRingIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftRingIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftRingIntermediate"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 70
+name = "Left Ring 3 Stretched"
+role = "LeftRingDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftRingDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftRingDistal"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 71
+name = "Left Little 1 Stretched"
+role = "LeftLittleProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667969
+[[muscle.slopes]]
+role = "LeftLittleProximal"
+axis = "y"
+positive = -0.001106
+negative = 0.001045
+[[muscle.slopes]]
+role = "LeftLittleProximal"
+axis = "z"
+positive = -0.020117
+negative = -0.020105
+
+[[muscle]]
+index = 72
+name = "Left Little Spread"
+role = "LeftLittleProximal"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = -0.457392
+[[muscle.slopes]]
+role = "LeftLittleProximal"
+axis = "y"
+positive = -0.054152
+negative = -0.054290
+[[muscle.slopes]]
+role = "LeftLittleProximal"
+axis = "z"
+positive = 0.000700
+negative = -0.000865
+
+[[muscle]]
+index = 73
+name = "Left Little 2 Stretched"
+role = "LeftLittleIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftLittleIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftLittleIntermediate"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 74
+name = "Left Little 3 Stretched"
+role = "LeftLittleDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "LeftLittleDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "LeftLittleDistal"
+axis = "z"
+positive = -0.022222
+negative = -0.022222
+
+[[muscle]]
+index = 75
+name = "Right Thumb 1 Stretched"
+role = "RightThumbProximal"
+dof = 2
+min = -20.000000
+max = 20.000000
+rest = -0.668598
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "x"
+positive = -0.007416
+negative = -0.000118
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "y"
+positive = -0.050356
+negative = -0.049884
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "z"
+positive = 0.010921
+negative = 0.000977
+
+[[muscle]]
+index = 76
+name = "Right Thumb Spread"
+role = "RightThumbProximal"
+dof = 1
+min = -25.000000
+max = 25.000000
+rest = 0.511847
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "x"
+positive = -0.021670
+negative = -0.022405
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "y"
+positive = 0.005061
+negative = 0.006189
+[[muscle.slopes]]
+role = "RightThumbProximal"
+axis = "z"
+positive = 0.032447
+negative = 0.033691
+
+[[muscle]]
+index = 77
+name = "Right Thumb 2 Stretched"
+role = "RightThumbIntermediate"
+dof = 2
+min = -40.000000
+max = 35.000000
+rest = 0.646283
+[[muscle.slopes]]
+role = "RightThumbIntermediate"
+axis = "x"
+positive = -0.002180
+negative = 0.002180
+[[muscle.slopes]]
+role = "RightThumbIntermediate"
+axis = "y"
+positive = -0.028571
+negative = -0.028571
+[[muscle.slopes]]
+role = "RightThumbIntermediate"
+axis = "z"
+positive = 0.001217
+negative = -0.001217
+
+[[muscle]]
+index = 78
+name = "Right Thumb 3 Stretched"
+role = "RightThumbDistal"
+dof = 2
+min = -40.000000
+max = 35.000000
+rest = 0.646282
+[[muscle.slopes]]
+role = "RightThumbDistal"
+axis = "x"
+positive = -0.002180
+negative = 0.002180
+[[muscle.slopes]]
+role = "RightThumbDistal"
+axis = "y"
+positive = -0.028571
+negative = -0.028571
+[[muscle.slopes]]
+role = "RightThumbDistal"
+axis = "z"
+positive = 0.001217
+negative = -0.001217
+
+[[muscle]]
+index = 79
+name = "Right Index 1 Stretched"
+role = "RightIndexProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "RightIndexProximal"
+axis = "y"
+positive = -0.001106
+negative = 0.001045
+[[muscle.slopes]]
+role = "RightIndexProximal"
+axis = "z"
+positive = 0.020105
+negative = 0.020117
+
+[[muscle]]
+index = 80
+name = "Right Index Spread"
+role = "RightIndexProximal"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = -0.457391
+[[muscle.slopes]]
+role = "RightIndexProximal"
+axis = "y"
+positive = -0.054152
+negative = -0.054290
+[[muscle.slopes]]
+role = "RightIndexProximal"
+axis = "z"
+positive = 0.000865
+negative = -0.000700
+
+[[muscle]]
+index = 81
+name = "Right Index 2 Stretched"
+role = "RightIndexIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightIndexIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightIndexIntermediate"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 82
+name = "Right Index 3 Stretched"
+role = "RightIndexDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightIndexDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightIndexDistal"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 83
+name = "Right Middle 1 Stretched"
+role = "RightMiddleProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "RightMiddleProximal"
+axis = "y"
+positive = -0.001086
+negative = 0.001055
+[[muscle.slopes]]
+role = "RightMiddleProximal"
+axis = "z"
+positive = 0.020026
+negative = 0.020029
+
+[[muscle]]
+index = 84
+name = "Right Middle Spread"
+role = "RightMiddleProximal"
+dof = 1
+min = -7.500000
+max = 7.500000
+rest = -0.610829
+[[muscle.slopes]]
+role = "RightMiddleProximal"
+axis = "y"
+positive = -0.144553
+negative = -0.144737
+[[muscle.slopes]]
+role = "RightMiddleProximal"
+axis = "z"
+positive = 0.001154
+negative = -0.000934
+
+[[muscle]]
+index = 85
+name = "Right Middle 2 Stretched"
+role = "RightMiddleIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightMiddleIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightMiddleIntermediate"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 86
+name = "Right Middle 3 Stretched"
+role = "RightMiddleDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightMiddleDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightMiddleDistal"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 87
+name = "Right Ring 1 Stretched"
+role = "RightRingProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667969
+[[muscle.slopes]]
+role = "RightRingProximal"
+axis = "y"
+positive = -0.001055
+negative = 0.001086
+[[muscle.slopes]]
+role = "RightRingProximal"
+axis = "z"
+positive = 0.020026
+negative = 0.020029
+
+[[muscle]]
+index = 88
+name = "Right Ring Spread"
+role = "RightRingProximal"
+dof = 1
+min = -7.500000
+max = 7.500000
+rest = -0.610829
+[[muscle.slopes]]
+role = "RightRingProximal"
+axis = "y"
+positive = 0.144737
+negative = 0.144553
+[[muscle.slopes]]
+role = "RightRingProximal"
+axis = "z"
+positive = 0.001154
+negative = -0.000934
+
+[[muscle]]
+index = 89
+name = "Right Ring 2 Stretched"
+role = "RightRingIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightRingIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightRingIntermediate"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 90
+name = "Right Ring 3 Stretched"
+role = "RightRingDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightRingDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightRingDistal"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 91
+name = "Right Little 1 Stretched"
+role = "RightLittleProximal"
+dof = 2
+min = -50.000000
+max = 50.000000
+rest = 0.667970
+[[muscle.slopes]]
+role = "RightLittleProximal"
+axis = "y"
+positive = -0.001045
+negative = 0.001106
+[[muscle.slopes]]
+role = "RightLittleProximal"
+axis = "z"
+positive = 0.020105
+negative = 0.020117
+
+[[muscle]]
+index = 92
+name = "Right Little Spread"
+role = "RightLittleProximal"
+dof = 1
+min = -20.000000
+max = 20.000000
+rest = -0.457391
+[[muscle.slopes]]
+role = "RightLittleProximal"
+axis = "y"
+positive = 0.054290
+negative = 0.054152
+[[muscle.slopes]]
+role = "RightLittleProximal"
+axis = "z"
+positive = 0.000865
+negative = -0.000700
+
+[[muscle]]
+index = 93
+name = "Right Little 2 Stretched"
+role = "RightLittleIntermediate"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightLittleIntermediate"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightLittleIntermediate"
+axis = "z"
+positive = 0.022222
+negative = 0.022222
+
+[[muscle]]
+index = 94
+name = "Right Little 3 Stretched"
+role = "RightLittleDistal"
+dof = 2
+min = -45.000000
+max = 45.000000
+rest = 0.811684
+[[muscle.slopes]]
+role = "RightLittleDistal"
+axis = "y"
+positive = -0.001306
+negative = 0.001306
+[[muscle.slopes]]
+role = "RightLittleDistal"
+axis = "z"
+positive = 0.022222
+negative = 0.022222

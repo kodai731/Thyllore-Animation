@@ -12,8 +12,8 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, BakedRoleClips, BatchAnimEdit, ClipLibrary, HumanoidRigState,
-    PendingBatchAnimEdits, RoleAxis, TimelineState,
+    AnimationType, BakedRoleClips, BatchAnimEdit, BoneAxis, ClipLibrary, HumanoidRigState,
+    PendingBatchAnimEdits, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
@@ -22,7 +22,7 @@ use crate::ecs::world::{Entity, World};
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
 
 /// Parse repeated `--batch-anim-edit <spec>` flags. Specs:
-/// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
+/// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
 pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchAnimEdit>> {
     let mut edits = Vec::new();
     for i in 0..args.len() {
@@ -30,7 +30,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_role_clip=<name> | template=<path> | save=<path> | copilot_extend=<Role>.<x|y|z>@<time>,<frames> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -66,10 +66,10 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
     }
     if let Some(rest) = spec.strip_prefix("key=") {
         let (param_str, rest) = rest.split_once('@').ok_or_else(|| {
-            anyhow::anyhow!("key spec must be key=<param>@<time>=<value>, got '{spec}'")
+            anyhow::anyhow!("key spec must be key=<bone_name>.<axis>@<time>=<value>, got '{spec}'")
         })?;
         let (time_str, value_str) = rest.split_once('=').ok_or_else(|| {
-            anyhow::anyhow!("key spec must be key=<param>@<time>=<value>, got '{spec}'")
+            anyhow::anyhow!("key spec must be key=<bone_name>.<axis>@<time>=<value>, got '{spec}'")
         })?;
         let time: f32 = time_str
             .trim()
@@ -83,12 +83,11 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             bail!("key time must be >= 0 and value finite: '{spec}'");
         }
         if let Some(dot) = param_str.find('.') {
-            let role_name = &param_str[..dot];
+            let bone_name = &param_str[..dot];
             let axis_str = &param_str[dot + 1..];
-            let role = parse_humanoid_role(role_name)?;
-            let axis = parse_role_axis(axis_str, role)?;
-            return Ok(BatchAnimEdit::RoleKey {
-                role,
+            let axis = parse_bone_axis(axis_str, bone_name)?;
+            return Ok(BatchAnimEdit::BoneKey {
+                bone_name: bone_name.to_string(),
                 axis,
                 time,
                 value,
@@ -101,12 +100,12 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             value,
         });
     }
-    if let Some(name) = spec.strip_prefix("new_role_clip=") {
+    if let Some(name) = spec.strip_prefix("new_clip=") {
         let name = name.trim();
         if name.is_empty() {
-            bail!("new_role_clip name must not be empty: '{spec}'");
+            bail!("new_clip name must not be empty: '{spec}'");
         }
-        return Ok(BatchAnimEdit::NewRoleClip {
+        return Ok(BatchAnimEdit::NewClip {
             name: name.to_string(),
         });
     }
@@ -125,11 +124,11 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         return Ok(BatchAnimEdit::Save { path });
     }
     if let Some(rest) = spec.strip_prefix("copilot_extend=") {
-        let (role_axis, frames_str) = rest.split_once(',').ok_or_else(|| {
-            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<Role>.<x|y|z>@<time>,<frames>, got '{spec}'")
+        let (bone_axis, frames_str) = rest.split_once(',').ok_or_else(|| {
+            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>, got '{spec}'")
         })?;
-        let (param_str, time_str) = role_axis.split_once('@').ok_or_else(|| {
-            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<Role>.<x|y|z>@<time>,<frames>, got '{spec}'")
+        let (param_str, time_str) = bone_axis.split_once('@').ok_or_else(|| {
+            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>, got '{spec}'")
         })?;
         let time: f32 = time_str
             .trim()
@@ -143,26 +142,27 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             bail!("copilot_extend time must be >= 0 and finite: '{spec}'");
         }
         let dot = param_str.find('.').ok_or_else(|| {
-            anyhow::anyhow!("copilot_extend role must have a dot (e.g. Hips.x), got '{param_str}'")
+            anyhow::anyhow!(
+                "copilot_extend bone_name must have a dot (e.g. Hips.x), got '{param_str}'"
+            )
         })?;
-        let role_name = &param_str[..dot];
+        let bone_name = &param_str[..dot];
         let axis_str = &param_str[dot + 1..];
-        let role = parse_humanoid_role(role_name)?;
-        let axis = parse_role_axis(axis_str, role)?;
+        let axis = parse_bone_axis(axis_str, bone_name)?;
         match axis {
-            RoleAxis::RotationX | RoleAxis::RotationY | RoleAxis::RotationZ => {}
-            RoleAxis::TranslationX | RoleAxis::TranslationY | RoleAxis::TranslationZ => {
+            BoneAxis::RotationX | BoneAxis::RotationY | BoneAxis::RotationZ => {}
+            BoneAxis::TranslationX | BoneAxis::TranslationY | BoneAxis::TranslationZ => {
                 bail!("copilot_extend axis must be x, y or z: '{spec}'");
             }
         }
         return Ok(BatchAnimEdit::CopilotExtend {
-            role,
+            bone_name: bone_name.to_string(),
             axis,
             time,
             frames,
         });
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_role_clip=<name> | template=<path> | save=<path> | copilot_extend=<Role>.<x|y|z>@<time>,<frames> | clear")
+    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
@@ -178,35 +178,21 @@ fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
         .ok_or_else(|| anyhow::anyhow!("scalar channel '{name}' is not in its domain table"))
 }
 
-fn parse_humanoid_role(
-    name: &str,
-) -> Result<thyllore_avatar_core::humanoid::components::role::HumanoidRole> {
+fn parse_bone_axis(axis_str: &str, bone_name: &str) -> Result<BoneAxis> {
     use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-    HumanoidRole::from_unity_name(name).ok_or_else(|| {
-        let valid_roles: Vec<&str> = HumanoidRole::ALL.iter().map(|r| r.unity_name()).collect();
-        anyhow::anyhow!(
-            "unknown role '{}'. Valid roles: {}",
-            name,
-            valid_roles.join(", ")
-        )
-    })
-}
-
-fn parse_role_axis(
-    axis_str: &str,
-    role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-) -> Result<RoleAxis> {
+    let allows_translation =
+        HumanoidRole::from_unity_name(bone_name).map_or(true, |role| role.allows_translation());
     match axis_str {
-        "x" => Ok(RoleAxis::RotationX),
-        "y" => Ok(RoleAxis::RotationY),
-        "z" => Ok(RoleAxis::RotationZ),
-        "tx" if role.allows_translation() => Ok(RoleAxis::TranslationX),
-        "ty" if role.allows_translation() => Ok(RoleAxis::TranslationY),
-        "tz" if role.allows_translation() => Ok(RoleAxis::TranslationZ),
+        "x" => Ok(BoneAxis::RotationX),
+        "y" => Ok(BoneAxis::RotationY),
+        "z" => Ok(BoneAxis::RotationZ),
+        "tx" if allows_translation => Ok(BoneAxis::TranslationX),
+        "ty" if allows_translation => Ok(BoneAxis::TranslationY),
+        "tz" if allows_translation => Ok(BoneAxis::TranslationZ),
         other => Err(anyhow::anyhow!(
-            "invalid axis '{}' for role '{}'. Valid axes: x, y, z (tx, ty, tz only for translation-allowed roles)",
+            "invalid axis '{}' for bone '{}'. Valid axes: x, y, z (tx, ty, tz not for roles without translation)",
             other,
-            role.unity_name()
+            bone_name
         )),
     }
 }
@@ -290,8 +276,8 @@ pub fn batch_apply_anim_edits(
                 );
                 world.resource_mut::<TimelineState>().current_time = previous_time;
             }
-            BatchAnimEdit::RoleKey {
-                role,
+            BatchAnimEdit::BoneKey {
+                bone_name,
                 axis,
                 time,
                 value,
@@ -312,28 +298,25 @@ pub fn batch_apply_anim_edits(
                         continue;
                     }
                 };
-                let bone_id = match table.get(role.unity_name()) {
+                let bone_id = match table.get(bone_name.as_str()) {
                     Some(&id) => id,
                     None => {
-                        log_warn!(
-                            "key edit: role {} is not mapped on this model",
-                            role.unity_name()
-                        );
+                        log_warn!("key edit: bone {} is not on this model", bone_name);
                         continue;
                     }
                 };
                 let track = if let Some(t) = clip.get_track_mut(bone_id) {
                     t
                 } else {
-                    clip.add_track(bone_id, role.unity_name().to_string())
+                    clip.add_track(bone_id, bone_name.clone())
                 };
                 let curve = match axis {
-                    RoleAxis::RotationX => &mut track.rotation_x,
-                    RoleAxis::RotationY => &mut track.rotation_y,
-                    RoleAxis::RotationZ => &mut track.rotation_z,
-                    RoleAxis::TranslationX => &mut track.translation_x,
-                    RoleAxis::TranslationY => &mut track.translation_y,
-                    RoleAxis::TranslationZ => &mut track.translation_z,
+                    BoneAxis::RotationX => &mut track.rotation_x,
+                    BoneAxis::RotationY => &mut track.rotation_y,
+                    BoneAxis::RotationZ => &mut track.rotation_z,
+                    BoneAxis::TranslationX => &mut track.translation_x,
+                    BoneAxis::TranslationY => &mut track.translation_y,
+                    BoneAxis::TranslationZ => &mut track.translation_z,
                 };
                 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
                 curve_add_keyframe(curve, *time, *value);
@@ -373,8 +356,8 @@ pub fn batch_apply_anim_edits(
                     world,
                 );
             }
-            BatchAnimEdit::NewRoleClip { name } => {
-                let clip = crate::ecs::systems::role_clip_systems::new_role_clip(name);
+            BatchAnimEdit::NewClip { name } => {
+                let clip = crate::ecs::systems::role_clip_systems::new_empty_clip(name);
                 let id = crate::ecs::systems::clip_library_register_and_activate(
                     &mut world.resource_mut::<ClipLibrary>(),
                     assets,
@@ -423,7 +406,7 @@ pub fn batch_apply_anim_edits(
                 dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);
             }
             BatchAnimEdit::CopilotExtend {
-                role,
+                bone_name,
                 axis,
                 time,
                 frames,
@@ -457,28 +440,25 @@ pub fn batch_apply_anim_edits(
                             continue;
                         }
                     };
-                    let bone_id = match table.get(role.unity_name()) {
+                    let bone_id = match table.get(bone_name.as_str()) {
                         Some(&id) => id,
                         None => {
-                            log_warn!(
-                                "copilot_extend: role {} is not mapped on this model",
-                                role.unity_name()
-                            );
+                            log_warn!("copilot_extend: bone {} is not on this model", bone_name);
                             continue;
                         }
                     };
                     let track = if let Some(t) = clip.get_track_mut(bone_id) {
                         t
                     } else {
-                        clip.add_track(bone_id, role.unity_name().to_string())
+                        clip.add_track(bone_id, bone_name.clone())
                     };
                     let curve = match axis {
-                        RoleAxis::RotationX => &mut track.rotation_x,
-                        RoleAxis::RotationY => &mut track.rotation_y,
-                        RoleAxis::RotationZ => &mut track.rotation_z,
-                        RoleAxis::TranslationX => &mut track.translation_x,
-                        RoleAxis::TranslationY => &mut track.translation_y,
-                        RoleAxis::TranslationZ => &mut track.translation_z,
+                        BoneAxis::RotationX => &mut track.rotation_x,
+                        BoneAxis::RotationY => &mut track.rotation_y,
+                        BoneAxis::RotationZ => &mut track.rotation_z,
+                        BoneAxis::TranslationX => &mut track.translation_x,
+                        BoneAxis::TranslationY => &mut track.translation_y,
+                        BoneAxis::TranslationZ => &mut track.translation_z,
                     };
                     match crate::ecs::systems::curve_copilot::copilot_extend_curve(
                         &mut session,
@@ -501,7 +481,7 @@ pub fn batch_apply_anim_edits(
                 }
                 #[cfg(not(feature = "ml"))]
                 {
-                    let _ = (role, axis, time, frames);
+                    let _ = (bone_name, axis, time, frames);
                     log_warn!("copilot_extend: ml feature is disabled, skipping");
                 }
             }

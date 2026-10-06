@@ -151,7 +151,7 @@ pub fn bake_role_clip_to_bone_clip(
     Ok(baked_clip)
 }
 
-pub fn new_role_clip(name: &str) -> EditableAnimationClip {
+pub fn new_empty_clip(name: &str) -> EditableAnimationClip {
     let mut clip = EditableAnimationClip::new(0, name.to_string());
     clip.duration = 2.0;
     clip.min_duration = 2.0;
@@ -568,8 +568,8 @@ mod tests {
     }
 
     #[test]
-    fn new_role_clip_starts_without_tracks() {
-        let clip = new_role_clip("test");
+    fn new_empty_clip_starts_without_tracks() {
+        let clip = new_empty_clip("test");
         assert!((clip.duration - 2.0).abs() < f32::EPSILON);
         assert!((clip.min_duration - 2.0).abs() < f32::EPSILON);
         assert!(clip.tracks.is_empty());
@@ -577,7 +577,7 @@ mod tests {
 
     #[test]
     fn unresolved_clip_roles_ignores_unkeyed_tracks() {
-        let clip = new_role_clip("test");
+        let clip = new_empty_clip("test");
         let roles = unresolved_clip_roles(&clip, None);
         assert!(roles.is_empty());
     }
@@ -796,7 +796,7 @@ mod tests {
             })
             .build();
 
-        let mut role_clip = new_role_clip("test_role");
+        let mut role_clip = new_empty_clip("test_role");
         let track = role_clip.add_track(hips_bone, "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_y, 0.0, 0.0);
         curve_add_keyframe(&mut track.rotation_y, 1.0, 45.0);

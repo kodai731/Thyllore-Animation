@@ -12,9 +12,9 @@ pub enum BatchAnimEdit {
         time: f32,
         value: f32,
     },
-    RoleKey {
-        role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-        axis: RoleAxis,
+    BoneKey {
+        bone_name: String,
+        axis: BoneAxis,
         time: f32,
         value: f32,
     },
@@ -24,7 +24,7 @@ pub enum BatchAnimEdit {
     TrimEnd {
         seconds: f32,
     },
-    NewRoleClip {
+    NewClip {
         name: String,
     },
     Template {
@@ -34,8 +34,8 @@ pub enum BatchAnimEdit {
         path: PathBuf,
     },
     CopilotExtend {
-        role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-        axis: RoleAxis,
+        bone_name: String,
+        axis: BoneAxis,
         time: f32,
         frames: usize,
     },
@@ -43,7 +43,7 @@ pub enum BatchAnimEdit {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum RoleAxis {
+pub enum BoneAxis {
     RotationX,
     RotationY,
     RotationZ,

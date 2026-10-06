@@ -6,7 +6,7 @@ mod debug_actions;
 mod orbit;
 mod sequence_analyze;
 
-pub use crate::ecs::resource::{BatchAnimEdit, RoleAxis};
+pub use crate::ecs::resource::{BatchAnimEdit, BoneAxis};
 pub use anim_edits::*;
 pub use apply_overrides::*;
 pub use batch_action::*;

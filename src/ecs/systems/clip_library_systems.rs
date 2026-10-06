@@ -298,7 +298,7 @@ mod tests {
         use thyllore_anim_core::editable::curve_add_keyframe;
         use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-        let mut role_clip = crate::ecs::systems::role_clip_systems::new_role_clip("bow");
+        let mut role_clip = crate::ecs::systems::role_clip_systems::new_empty_clip("bow");
         let track = role_clip.add_track(
             HumanoidRole::Head.index() as BoneId,
             HumanoidRole::Head.unity_name().to_string(),

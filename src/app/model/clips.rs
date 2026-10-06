@@ -1,3 +1,7 @@
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::components::vrm_version::VrmVersion;
+
 use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
@@ -34,7 +38,28 @@ pub(super) fn register_imported_animation(
         });
     }
 
-    world.resource_mut::<ModelState>().has_skinned_meshes = load_result.has_skinned_meshes;
+    let mut model_state = world.resource_mut::<ModelState>();
+    model_state.has_skinned_meshes = load_result.has_skinned_meshes;
+    if let Some(vrm) = &load_result.vrm_humanoid {
+        let version = if vrm.is_v1 {
+            VrmVersion::V1
+        } else {
+            VrmVersion::V0
+        };
+        let mut by_role = std::collections::BTreeMap::new();
+        for (name, joint) in &vrm.bones {
+            if let Some(role) = HumanoidRole::from_vrm_name(name, version) {
+                by_role.insert(role, *joint as usize);
+            }
+        }
+        if !by_role.is_empty() {
+            model_state.imported_humanoid = Some(HumanoidMapping { by_role });
+        } else {
+            model_state.imported_humanoid = None;
+        }
+    } else {
+        model_state.imported_humanoid = None;
+    }
 }
 
 /// Returns the clip the timeline should start on, or `None` when the scene restores its own clips.
@@ -71,7 +96,12 @@ fn import_editable_clips(
     else {
         return editable_clips.collect();
     };
-    let Some(rig) = build_humanoid_rig(std::path::Path::new(&model_path), skeleton) else {
+    let imported = world.resource::<ModelState>().imported_humanoid.clone();
+    let Some(rig) = build_humanoid_rig(
+        std::path::Path::new(&model_path),
+        skeleton,
+        imported.as_ref(),
+    ) else {
         return editable_clips.collect();
     };
 

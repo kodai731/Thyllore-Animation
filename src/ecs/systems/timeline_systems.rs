@@ -1346,7 +1346,8 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let mut rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let mut rig =
+            build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let mut library = ClipLibrary::default();
 
         let clip_id: SourceClipId = 1;

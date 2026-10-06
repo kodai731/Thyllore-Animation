@@ -156,7 +156,9 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
-    let (mapping, missing_bone_names) = load_or_infer_mapping(Path::new(&model_path), &bones);
+    let imported = world.resource::<ModelState>().imported_humanoid.clone();
+    let (mapping, missing_bone_names) =
+        load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
     let stats = count_avatar_stats(graphics, Some(skeleton), find_spring_bone_setup(world));
 
     let mut state = world.resource_mut::<AvatarSetupState>();
@@ -171,8 +173,9 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
 pub(crate) fn load_or_infer_mapping(
     model_path: &Path,
     bones: &[BoneInput],
+    imported: Option<&HumanoidMapping>,
 ) -> (HumanoidMapping, Vec<String>) {
-    match load_or_infer_rig(model_path, bones) {
+    match load_or_infer_rig(model_path, bones, imported) {
         Ok((AvatarRig::Confirmed(m), missing)) => (m, missing),
         Ok((AvatarRig::Inferred(m), _)) => (m, Vec::new()),
         Ok((AvatarRig::NotHumanoid, _)) => (HumanoidMapping::default(), Vec::new()),

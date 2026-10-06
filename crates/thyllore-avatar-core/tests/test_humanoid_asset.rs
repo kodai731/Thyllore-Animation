@@ -373,9 +373,12 @@ fn test_humanoid_sidecar_loads_as_confirmed_identity() {
 
     let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
 
-    let (rig, missing) =
-        thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig(&model_path, &bones)
-            .unwrap();
+    let (rig, missing) = thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig(
+        &model_path,
+        &bones,
+        None,
+    )
+    .unwrap();
     assert!(missing.is_empty(), "missing bones: {:?}", missing);
 
     match rig {

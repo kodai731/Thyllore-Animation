@@ -67,7 +67,7 @@ mod tests {
         let skeleton = find_first_skeleton(&assets)
             .expect("fixture has a skeleton")
             .clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("fixture is humanoid");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("fixture is humanoid");
         let head_bone_id = rig.mapping.by_role[&HumanoidRole::Head] as BoneId;
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 

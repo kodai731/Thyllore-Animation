@@ -1,3 +1,5 @@
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+
 use crate::vulkanr::resource::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
@@ -40,6 +42,7 @@ pub struct ModelState {
     pub has_skinned_meshes: bool,
     pub model_path: String,
     pub load_status: String,
+    pub imported_humanoid: Option<HumanoidMapping>,
 }
 
 impl Default for ModelState {
@@ -48,6 +51,7 @@ impl Default for ModelState {
             has_skinned_meshes: false,
             model_path: String::new(),
             load_status: String::from("No model loaded"),
+            imported_humanoid: None,
         }
     }
 }

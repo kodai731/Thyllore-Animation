@@ -221,7 +221,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (_, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
 
         let hips_bone = rig.track_bones["Hips"];
         let left_upper_arm_bone = rig.track_bones["LeftUpperArm"];
@@ -277,7 +277,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (_, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
 
         let left_upper_arm_bone: BoneId = rig.track_bones["LeftUpperArm"];
 

@@ -12,9 +12,13 @@ use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::humanoid_bake_systems::build_role_retarget_context;
 
-pub fn build_humanoid_rig(model_path: &Path, skeleton: &Skeleton) -> Option<HumanoidRig> {
+pub fn build_humanoid_rig(
+    model_path: &Path,
+    skeleton: &Skeleton,
+    imported: Option<&HumanoidMapping>,
+) -> Option<HumanoidRig> {
     let bones = skeleton_to_bone_inputs(skeleton);
-    let (avatar_rig, _) = match load_or_infer_rig(model_path, &bones) {
+    let (avatar_rig, _) = match load_or_infer_rig(model_path, &bones, imported) {
         Ok(result) => result,
         Err(error) => {
             log_warn!(
@@ -96,7 +100,7 @@ use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
 
 use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{ClipLibrary, HumanoidRigState};
+use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
 
@@ -114,7 +118,8 @@ pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
         return;
     };
 
-    let rig = build_humanoid_rig(Path::new(&model_path), skeleton);
+    let imported = world.resource::<ModelState>().imported_humanoid.clone();
+    let rig = build_humanoid_rig(Path::new(&model_path), skeleton, imported.as_ref());
 
     {
         let mut state = world.resource_mut::<HumanoidRigState>();
@@ -222,8 +227,8 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let skeleton = load_skeleton(&fbx_path);
 
-        let rig =
-            build_humanoid_rig(&fbx_path, &skeleton).expect("build_humanoid_rig returned None");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None)
+            .expect("build_humanoid_rig returned None");
 
         assert!(rig.confirmed, "expected confirmed rig");
         assert_eq!(
@@ -269,7 +274,7 @@ mod tests {
 
         save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
 
-        let rig = build_humanoid_rig(&fbx_path, &skeleton);
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None);
         assert!(rig.is_none(), "expected None for not-humanoid sidecar");
     }
 

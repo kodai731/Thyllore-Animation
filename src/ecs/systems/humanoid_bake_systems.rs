@@ -491,7 +491,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (_, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
 
         let mut clip = EditableAnimationClip::new(0, "test_role".to_string());
 
@@ -524,7 +524,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
@@ -577,7 +577,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
@@ -634,7 +634,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
@@ -734,7 +734,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
@@ -793,7 +793,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (_, assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
 
         let mut clip = EditableAnimationClip::new(0, "test_unmapped".to_string());
 
@@ -838,7 +838,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 
@@ -923,7 +923,7 @@ mod tests {
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
         let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
-        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
+        let rig = build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
         let hips_bone = rig.track_bones["Hips"];
         world.resource_mut::<HumanoidRigState>().rig = Some(rig);
 

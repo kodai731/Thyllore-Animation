@@ -849,7 +849,7 @@ fn humanoid_rig_world(dir: &std::path::Path) -> (World, AssetStorage) {
     let (fbx_path, _) = copy_test_humanoid_fixture(dir);
     let (mut world, assets) = test_humanoid_world(&fbx_path);
     let skeleton = &assets.skeletons.values().next().unwrap().skeleton;
-    let rig = build_humanoid_rig(&fbx_path, skeleton).expect("test humanoid has no rig");
+    let rig = build_humanoid_rig(&fbx_path, skeleton, None).expect("test humanoid has no rig");
     world.resource_mut::<HumanoidRigState>().rig = Some(rig);
     world.insert_resource(ClipLibrary::new());
     world.insert_resource(TimelineState::default());

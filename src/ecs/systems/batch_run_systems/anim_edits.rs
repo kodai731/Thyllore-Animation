@@ -12,63 +12,14 @@ use crate::ecs::component::{
     scalar_cli_names_joined, AnimationMeta, ClipSchedule,
 };
 use crate::ecs::resource::{
-    AnimationType, AvatarSetupState, BakedRoleClips, ClipLibrary, TimelineState,
+    AnimationType, AvatarSetupState, BakedRoleClips, BatchAnimEdit, ClipLibrary,
+    PendingBatchAnimEdits, RoleAxis, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::{Entity, World};
 
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum BatchAnimEdit {
-    DebugKeys {
-        seed: u64,
-    },
-    Key {
-        property_type: PropertyType,
-        time: f32,
-        value: f32,
-    },
-    RoleKey {
-        role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-        axis: RoleAxis,
-        time: f32,
-        value: f32,
-    },
-    KeyAtPlayhead {
-        property_type: PropertyType,
-    },
-    TrimEnd {
-        seconds: f32,
-    },
-    NewRoleClip {
-        name: String,
-    },
-    Template {
-        path: PathBuf,
-    },
-    Save {
-        path: PathBuf,
-    },
-    CopilotExtend {
-        role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-        axis: RoleAxis,
-        time: f32,
-        frames: usize,
-    },
-    Clear,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum RoleAxis {
-    RotationX,
-    RotationY,
-    RotationZ,
-    TranslationX,
-    TranslationY,
-    TranslationZ,
-}
 
 /// Parse repeated `--batch-anim-edit <spec>` flags. Specs:
 /// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<Role>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
@@ -284,10 +235,19 @@ fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str)
     }
 }
 
-/// Apply anim edits through the production scalar-clip event dispatcher, so batch
-/// runs exercise the same path as the UI (clip creation, undo history, schedule
-/// extension). Key edits temporarily move the timeline to the key's time because
-/// `InsertScalarKey` always keys at `TimelineState::current_time`.
+pub fn batch_apply_pending_anim_edits(world: &mut World, assets: &mut AssetStorage) {
+    use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+    let edits = match world.remove_resource::<PendingBatchAnimEdits>() {
+        Some(resource) => resource.edits,
+        None => return,
+    };
+    if find_first_skeleton(assets).is_some() {
+        batch_apply_anim_edits(world, assets, &edits);
+    } else {
+        world.insert_resource(PendingBatchAnimEdits { edits });
+    }
+}
+
 pub fn batch_apply_anim_edits(
     world: &mut World,
     assets: &mut AssetStorage,
@@ -297,6 +257,8 @@ pub fn batch_apply_anim_edits(
     use crate::ecs::systems::scalar_clip_systems::{
         ensure_entity_clip, resolve_selected_scalar_entity,
     };
+
+    crate::ecs::systems::humanoid_rig_systems::sync_humanoid_rig(world, assets);
 
     for edit in edits {
         match edit {
@@ -350,7 +312,23 @@ pub fn batch_apply_anim_edits(
                     );
                     continue;
                 }
-                let bone_id: BoneId = role.index() as u32;
+                let table = match crate::ecs::systems::engine_bone_name_to_id(world, assets) {
+                    Some(t) => t,
+                    None => {
+                        log_warn!("key edit: no bone name table available, skipping");
+                        continue;
+                    }
+                };
+                let bone_id = match table.get(role.unity_name()) {
+                    Some(&id) => id,
+                    None => {
+                        log_warn!(
+                            "key edit: role {} is not mapped on this model",
+                            role.unity_name()
+                        );
+                        continue;
+                    }
+                };
                 let track = if let Some(t) = clip.get_track_mut(bone_id) {
                     t
                 } else {
@@ -412,13 +390,19 @@ pub fn batch_apply_anim_edits(
                 world.resource_mut::<TimelineState>().current_clip_id = Some(id);
             }
             BatchAnimEdit::Template { path } => {
-                let loaded = match crate::scene::load_animation_clip(path) {
+                let mut loaded = match crate::scene::load_animation_clip(path) {
                     Ok(c) => c,
                     Err(e) => {
                         log_warn!("template {} failed: {}", path.display(), e);
                         continue;
                     }
                 };
+                if let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) {
+                    thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(
+                        &mut loaded,
+                        &table,
+                    );
+                }
                 remove_clip_by_name(world, assets, &loaded.name);
                 let id = crate::ecs::systems::clip_library_register_and_activate(
                     &mut world.resource_mut::<ClipLibrary>(),
@@ -480,7 +464,23 @@ pub fn batch_apply_anim_edits(
                             continue;
                         }
                     };
-                    let bone_id: BoneId = role.index() as u32;
+                    let table = match crate::ecs::systems::engine_bone_name_to_id(world, assets) {
+                        Some(t) => t,
+                        None => {
+                            log_warn!("copilot_extend: no bone name table available, skipping");
+                            continue;
+                        }
+                    };
+                    let bone_id = match table.get(role.unity_name()) {
+                        Some(&id) => id,
+                        None => {
+                            log_warn!(
+                                "copilot_extend: role {} is not mapped on this model",
+                                role.unity_name()
+                            );
+                            continue;
+                        }
+                    };
                     let track = if let Some(t) = clip.get_track_mut(bone_id) {
                         t
                     } else {

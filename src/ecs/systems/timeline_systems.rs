@@ -1294,17 +1294,24 @@ mod tests {
     fn role_clip_schedule_rejects_without_mapping() {
         use crate::animation::editable::{ClipSpace, SourceClip};
         use crate::ecs::component::ClipSchedule;
+        use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+        use crate::ecs::systems::humanoid_rig_systems::{
+            build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+        };
         use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
         use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
 
-        let mut world = World::new();
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
+        let rig = build_humanoid_rig(&fbx_path, &skeleton).expect("test humanoid has no rig");
         let mut library = ClipLibrary::default();
 
         let role_clip_id: SourceClipId = 1;
         let mut role_clip = EditableAnimationClip::new(role_clip_id, "role".to_string());
         role_clip.space = ClipSpace::HumanoidRole;
-        let hips_idx = thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips.index();
-        let track = role_clip.add_track(hips_idx as BoneId, "Hips".to_string());
+        let track = role_clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
         curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
         library
             .source_clips
@@ -1421,21 +1428,11 @@ fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId,
         if let Some(clip) = clip {
             use crate::animation::editable::ClipSpace;
             if clip.space == ClipSpace::HumanoidRole {
-                let model_path: Option<String> = world
-                    .get_resource::<crate::ecs::resource::ModelState>()
-                    .map(|m| m.model_path.clone());
-                let avatar_state = world.get_resource::<crate::ecs::resource::AvatarSetupState>();
-                let mapping: Option<
-                    &thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping,
-                > = if let (Some(ref model_path), Some(state)) = (&model_path, &avatar_state) {
-                    if state.source_model_path == **model_path {
-                        Some(&state.mapping)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
+                let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
+                let mapping = rig_state
+                    .as_ref()
+                    .and_then(|state| state.rig.as_ref())
+                    .map(|rig| &rig.mapping);
 
                 let unresolved =
                     crate::ecs::systems::role_clip_systems::unresolved_clip_roles(clip, mapping);

@@ -6,9 +6,8 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use crate::animation::{decompose_transform, AnimationClip, BoneId, Skeleton};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{BakedRoleClips, ClipLibrary, TimelineState};
+use crate::ecs::resource::{BakedRoleClips, ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
-use crate::ecs::systems::role_clip_systems::resolve_model_rig;
 use crate::ecs::systems::skeleton_pose_systems::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
@@ -136,9 +135,11 @@ pub fn resolve_animation_debug_target<'a>(
 ) -> Option<AnimationDebugTarget<'a>> {
     let owner = find_preview_owner(world)?;
     let skeleton = assets.skeletons.values().next().map(|a| &a.skeleton)?;
-    let (_, mapping) = resolve_model_rig(world, assets)?;
+    let rig_state = world.get_resource::<HumanoidRigState>()?;
+    let rig = rig_state.rig.as_ref()?;
 
-    let role_by_bone: HashMap<BoneId, HumanoidRole> = mapping
+    let role_by_bone: HashMap<BoneId, HumanoidRole> = rig
+        .mapping
         .by_role
         .iter()
         .map(|(role, &bone_index)| (bone_index as BoneId, *role))

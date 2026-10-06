@@ -130,27 +130,6 @@ mod tests {
     use crate::ecs::resource::ModelState;
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_not_humanoid;
 
-    fn copy_test_fixture(temp_dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
-        let source_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/models/test_humanoid");
-        let fbx_source = source_dir.join("test_humanoid.fbx");
-        let sidecar_source = source_dir.join("test_humanoid.humanoid.ron");
-
-        if !fbx_source.exists() || !sidecar_source.exists() {
-            panic!(
-                "test fixture not found at {:?} (fbx or sidecar missing)",
-                source_dir
-            );
-        }
-
-        let fbx_dest = temp_dir.join("test_humanoid.fbx");
-        let sidecar_dest = temp_dir.join("test_humanoid.humanoid.ron");
-
-        std::fs::copy(&fbx_source, &fbx_dest).unwrap();
-        std::fs::copy(&sidecar_source, &sidecar_dest).unwrap();
-
-        (fbx_dest, sidecar_dest)
-    }
-
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
         let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
             fbx_path.to_str().unwrap(),
@@ -174,7 +153,7 @@ mod tests {
             }
         };
 
-        let (fbx_path, _) = copy_test_fixture(temp_dir.path());
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let skeleton = load_skeleton(&fbx_path);
 
         let rig =
@@ -219,7 +198,7 @@ mod tests {
             }
         };
 
-        let (fbx_path, sidecar_path) = copy_test_fixture(temp_dir.path());
+        let (fbx_path, sidecar_path) = copy_test_humanoid_fixture(temp_dir.path());
         let skeleton = load_skeleton(&fbx_path);
 
         save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
@@ -238,7 +217,7 @@ mod tests {
             }
         };
 
-        let (fbx_path, _) = copy_test_fixture(temp_dir.path());
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
@@ -266,7 +245,7 @@ mod tests {
             }
         };
 
-        let (fbx_path, _) = copy_test_fixture(temp_dir.path());
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
@@ -299,7 +278,7 @@ mod tests {
             }
         };
 
-        let (fbx_path, sidecar_path) = copy_test_fixture(temp_dir.path());
+        let (fbx_path, sidecar_path) = copy_test_humanoid_fixture(temp_dir.path());
         save_not_humanoid(&sidecar_path).expect("failed to save not-humanoid sidecar");
 
         let (mut world, mut assets) = test_humanoid_world(&fbx_path);
@@ -357,4 +336,26 @@ pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
     });
 
     (world, assets)
+}
+
+#[cfg(test)]
+pub(crate) fn copy_test_humanoid_fixture(dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let source_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/models/test_humanoid");
+    let fbx_source = source_dir.join("test_humanoid.fbx");
+    let sidecar_source = source_dir.join("test_humanoid.humanoid.ron");
+
+    if !fbx_source.exists() || !sidecar_source.exists() {
+        panic!(
+            "test fixture not found at {:?} (fbx or sidecar missing)",
+            source_dir
+        );
+    }
+
+    let fbx_dest = dir.join("test_humanoid.fbx");
+    let sidecar_dest = dir.join("test_humanoid.humanoid.ron");
+
+    std::fs::copy(&fbx_source, &fbx_dest).unwrap();
+    std::fs::copy(&sidecar_source, &sidecar_dest).unwrap();
+
+    (fbx_dest, sidecar_dest)
 }

@@ -12,6 +12,7 @@ use crate::ecs::systems::inference_actor_systems::{
 use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
+use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
 use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
 use crate::ecs::systems::role_clip_systems::refresh_baked_role_clips;
 use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
@@ -59,6 +60,7 @@ fn update_timeline(ctx: &mut FrameContext) {
     sync_timeline_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
+    batch_apply_pending_anim_edits(ctx.world, ctx.assets);
     refresh_baked_role_clips(ctx.world, ctx.assets);
 }
 

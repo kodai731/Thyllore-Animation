@@ -7,6 +7,7 @@ use crate::asset::AssetId;
 pub struct BakedRoleClips {
     pub by_key: HashMap<(SourceClipId, crate::ecs::world::Entity), BakedRoleClip>,
     pub failed: HashSet<(SourceClipId, crate::ecs::world::Entity)>,
+    pub rig_revision: u64,
 }
 
 pub struct BakedRoleClip {

@@ -727,7 +727,8 @@ fn anim_edit_parses_role_clip_specs() {
 
 #[test]
 fn copilot_extend_parses_role_axis_time_frames() {
-    use super::anim_edits::{anim_edit_parse_spec, RoleAxis};
+    use super::anim_edits::anim_edit_parse_spec;
+    use super::RoleAxis;
     use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
     let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
@@ -755,12 +756,8 @@ fn template_then_save_round_trips_a_role_clip() {
     use crate::ecs::systems::role_clip_systems::new_role_clip;
     use tempfile::tempdir;
 
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
-    world.insert_resource(TimelineState::default());
-
-    let mut assets = AssetStorage::new();
     let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
 
     let template_path = tmp.path().join("template.anim.json");
     let save_path = tmp.path().join("saved.anim.json");
@@ -848,16 +845,35 @@ fn template_replaces_a_same_named_bone_clip_with_a_playable_asset() {
     }
 }
 
+fn humanoid_rig_world(dir: &std::path::Path) -> (World, AssetStorage) {
+    use crate::ecs::resource::HumanoidRigState;
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+
+    let (fbx_path, _) = copy_test_humanoid_fixture(dir);
+    let (mut world, assets) = test_humanoid_world(&fbx_path);
+    let skeleton = &assets.skeletons.values().next().unwrap().skeleton;
+    let rig = build_humanoid_rig(&fbx_path, skeleton).expect("test humanoid has no rig");
+    world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+    (world, assets)
+}
+
+fn role_track_bone(world: &World, role_name: &str) -> thyllore_anim_core::BoneId {
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    rig.track_bones[role_name]
+}
+
 #[test]
 fn key_edit_addresses_role_curve() {
     use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use tempfile::tempdir;
 
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
-    world.insert_resource(TimelineState::default());
-
-    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
 
     batch_apply_anim_edits(
         &mut world,
@@ -880,8 +896,7 @@ fn key_edit_addresses_role_curve() {
         thyllore_anim_core::editable::ClipSpace::HumanoidRole
     );
 
-    let head_idx = HumanoidRole::Head.index();
-    let track = clip.get_track(head_idx as u32).unwrap();
+    let track = clip.get_track(role_track_bone(&world, "Head")).unwrap();
     assert_eq!(track.rotation_x.keyframes.len(), 1);
     let kf = &track.rotation_x.keyframes[0];
     assert!((kf.time - 0.5).abs() < f32::EPSILON);
@@ -933,12 +948,10 @@ fn role_key_rejects_translation_on_non_hips() {
 #[test]
 fn role_key_extends_duration() {
     use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use tempfile::tempdir;
 
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
-    world.insert_resource(TimelineState::default());
-
-    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
 
     batch_apply_anim_edits(
         &mut world,
@@ -962,13 +975,10 @@ fn role_key_extends_duration() {
 #[test]
 fn role_key_keeps_earlier_keys_on_the_same_curve() {
     use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use tempfile::tempdir;
 
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
-    world.insert_resource(TimelineState::default());
-
-    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
 
     batch_apply_anim_edits(
         &mut world,
@@ -992,11 +1002,53 @@ fn role_key_keeps_earlier_keys_on_the_same_curve() {
 
     let lib = world.resource::<ClipLibrary>();
     let clip = lib.get(clip_id).unwrap();
-    let left_upper_arm_idx = HumanoidRole::LeftUpperArm.index();
-    let track = clip.get_track(left_upper_arm_idx as u32).unwrap();
+    let track = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
     assert_eq!(track.rotation_z.keyframes.len(), 2);
     assert!((track.rotation_z.keyframes[0].time - 0.0).abs() < f32::EPSILON);
     assert!((track.rotation_z.keyframes[0].value - 0.0).abs() < f32::EPSILON);
     assert!((track.rotation_z.keyframes[1].time - 1.0).abs() < f32::EPSILON);
     assert!((track.rotation_z.keyframes[1].value - (-90.0)).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_builds_the_rig_before_resolving_names() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (fbx_path, _) = copy_test_humanoid_fixture(tmp.path());
+    let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_role_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@1=20").unwrap()],
+    );
+
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    let bone_id = rig.track_bones["Head"];
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip.get_track(bone_id).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 1.0).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
 }

@@ -143,8 +143,7 @@ pub fn clip_library_load_from_file(
     let mut clip = deserialize_clip(&content)
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
-    let remap_to_model_bones = clip.space == ClipSpace::Bone;
-    if let (true, Some(name_to_id)) = (remap_to_model_bones, bone_name_to_id) {
+    if let Some(name_to_id) = bone_name_to_id {
         let needs_remap = clip.tracks.values().any(|track| {
             name_to_id
                 .get(&track.bone_name)
@@ -311,14 +310,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loading_a_role_clip_keeps_role_indices_when_a_model_is_loaded() {
-        let role_clip = crate::ecs::systems::role_clip_systems::new_role_clip("bow");
+    fn loading_a_role_clip_moves_role_tracks_to_model_bones() {
+        use thyllore_anim_core::editable::curve_add_keyframe;
+        use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+        let mut role_clip = crate::ecs::systems::role_clip_systems::new_role_clip("bow");
+        let track = role_clip.add_track(
+            HumanoidRole::Head.index() as BoneId,
+            HumanoidRole::Head.unity_name().to_string(),
+        );
+        curve_add_keyframe(&mut track.rotation_x, 0.0, 10.0);
         let path =
             std::env::temp_dir().join(format!("role_clip_load_{}.anim.ron", std::process::id()));
         crate::scene::save_animation_clip(&path, &role_clip).unwrap();
 
+        let model_head_bone: BoneId = 181;
         let mut model_bones = HashMap::new();
-        model_bones.insert("Head".to_string(), 181 as BoneId);
+        model_bones.insert("Head".to_string(), model_head_bone);
         let mut lib = ClipLibrary::default();
         let mut assets = AssetStorage::default();
         let id =
@@ -326,9 +334,11 @@ mod tests {
         fs::remove_file(&path).ok();
 
         let loaded = lib.get(id).unwrap();
-        assert_eq!(loaded.tracks.len(), role_clip.tracks.len());
-        assert!(loaded.tracks.keys().all(|bone_id| (*bone_id as usize)
-            < thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL.len()));
+        assert_eq!(loaded.tracks.len(), 1);
+        let head_track = loaded.get_track(model_head_bone).unwrap();
+        assert_eq!(head_track.bone_name, "Head");
+        assert_eq!(head_track.bone_id, model_head_bone);
+        assert_eq!(head_track.rotation_x.keyframes.len(), 1);
     }
 
     #[test]

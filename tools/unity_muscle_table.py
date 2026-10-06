@@ -1,5 +1,18 @@
 import argparse
 import json
+import re
+
+
+def unity_curve_attribute(name):
+    finger = re.match(r"^(Left|Right)\s+(Thumb|Index|Middle|Ring|Little)(\s+\d+)?\s+(\w+.*)$", name)
+    if finger:
+        side, digit, num, rest = finger.groups()
+        hand = "LeftHand" if side == "Left" else "RightHand"
+        num_part = num.strip() if num else ""
+        if num_part:
+            return f"{hand}.{digit}.{num_part} {rest}"
+        return f"{hand}.{digit}.{rest}"
+    return name
 
 
 def format_float(v):
@@ -67,6 +80,7 @@ def write_toml(path, muscles, rest_muscles, slopes_by_muscle):
         lines.append("[[muscle]]")
         lines.append(f"index = {idx}")
         lines.append(f"name = \"{name}\"")
+        lines.append(f"attribute = \"{unity_curve_attribute(name)}\"")
         lines.append(f"role = \"{role}\"")
         lines.append(f"dof = {dof}")
         lines.append(f"min = {format_float(mn)}")

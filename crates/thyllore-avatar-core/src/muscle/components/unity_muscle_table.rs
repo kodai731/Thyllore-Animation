@@ -13,6 +13,7 @@ pub struct UnityMuscleTable {
 pub struct UnityMuscle {
     pub index: usize,
     pub name: String,
+    pub attribute: String,
     pub role: HumanoidRole,
     pub dof: usize,
     pub min: f32,
@@ -38,6 +39,7 @@ struct RawTable {
 struct RawMuscle {
     index: usize,
     name: String,
+    attribute: String,
     role: String,
     dof: usize,
     min: f64,
@@ -80,6 +82,7 @@ fn load() -> UnityMuscleTable {
             UnityMuscle {
                 index: raw.index,
                 name: raw.name,
+                attribute: raw.attribute,
                 role,
                 dof: raw.dof,
                 min: raw.min as f32,

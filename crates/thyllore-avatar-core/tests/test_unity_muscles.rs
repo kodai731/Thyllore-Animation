@@ -113,3 +113,32 @@ fn from_unity_muscles_inverts_primary_axes() {
         }
     }
 }
+
+#[test]
+fn finger_muscles_use_hand_attribute() {
+    let table = default_unity_muscle_table();
+    let muscle = &table.muscles[55];
+    assert_eq!(muscle.name, "Left Thumb 1 Stretched");
+    assert_eq!(muscle.attribute, "LeftHand.Thumb.1 Stretched");
+
+    let index_muscle = table
+        .muscles
+        .iter()
+        .find(|m| m.name == "Left Index 1 Stretched")
+        .expect("Left Index 1 Stretched not found");
+    assert_eq!(index_muscle.attribute, "LeftHand.Index.1 Stretched");
+
+    let spread = table
+        .muscles
+        .iter()
+        .find(|m| m.name == "Left Index Spread")
+        .expect("Left Index Spread not found");
+    assert_eq!(spread.attribute, "LeftHand.Index.Spread");
+
+    let right_little = table
+        .muscles
+        .iter()
+        .find(|m| m.name == "Right Little 3 Stretched")
+        .expect("Right Little 3 Stretched not found");
+    assert_eq!(right_little.attribute, "RightHand.Little.3 Stretched");
+}

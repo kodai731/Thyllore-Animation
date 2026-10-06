@@ -3,7 +3,7 @@ import tempfile
 import pytest
 import tomllib
 
-from unity_muscle_table import build_slope_table, write_toml
+from unity_muscle_table import build_slope_table, write_toml, unity_curve_attribute
 
 
 def load_generated_muscles(muscles, rest_muscles, probes):
@@ -81,3 +81,10 @@ def test_slopes_role_axis_order():
     assert (m[0]["slopes"][0]["role"], m[0]["slopes"][0]["axis"]) == ("Chest", "x")
     assert (m[0]["slopes"][1]["role"], m[0]["slopes"][1]["axis"]) == ("Chest", "y")
     assert (m[0]["slopes"][2]["role"], m[0]["slopes"][2]["axis"]) == ("Spine", "x")
+
+
+def test_curve_attribute_for_fingers_and_body():
+    assert unity_curve_attribute("Left Thumb 1 Stretched") == "LeftHand.Thumb.1 Stretched"
+    assert unity_curve_attribute("Left Index Spread") == "LeftHand.Index.Spread"
+    assert unity_curve_attribute("Right Little 3 Stretched") == "RightHand.Little.3 Stretched"
+    assert unity_curve_attribute("Spine Front-Back") == "Spine Front-Back"

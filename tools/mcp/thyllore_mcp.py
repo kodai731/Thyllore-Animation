@@ -207,6 +207,7 @@ def anim_edit(
     camera: str = "",
     flame_mode: str = "",
     scene: str = "",
+    play: bool = False,
 ) -> str:
     """Apply scalar animation edits through the engine's production event path,
     render `frames` frames (batch time advances 1/60s per frame, so keyframed
@@ -229,10 +230,19 @@ def anim_edit(
     - `template=<path.anim.ron>`: load a clip file, replace any clip with
       the same name in the library and make it the current clip
     - `save=<path>`: write the current clip to `path`
+    - `compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>]`:
+      key the current clip from the pose table
+      (`crates/thyllore-avatar-core/data/pose_table.toml`): the motion's poses
+      are expanded to role keys, mirrored for `side=left`, the cycle repeated
+      `count` times, degrees scaled by `amount`, times divided by `speed`. A
+      motion with `settle` then gets Curve Copilot follow-through on the curves
+      that just arrived into a hold. This is the deterministic text-to-motion
+      path; add a motion to the table instead of keying by hand
     - `key=<bone>.<x|y|z|tx|ty|tz>@<t>=<deg>`: insert a bone key into the current
       clip (bone = bone name; standard name for humanoid model, i.e. Unity role
       name; own bone name for unmapped bones; x/y/z rotation in degrees,
-      tx/ty/tz translation for Hips and unmapped bones only)
+      tx/ty/tz translation for Hips and unmapped bones only). For fine
+      adjustment after `compose=`, not for authoring from scratch
     - `clear`: remove all scalar curves
 
     Returns {"ok": true, "anim": {entities, clips, timeline}} —
@@ -241,10 +251,14 @@ def anim_edit(
     (time ≈ frames/60) with the owning `domain` name. `anim.models[]` lists
     skinned models on the schedule. Set `screenshot` to also keep a PNG (path in
     result). `camera` and `flame_mode` work like in the screenshot tool.
-    `scene` = "<path>" loads the given scene file before rendering."""
+    `scene` = "<path>" loads the given scene file before rendering. `play`
+    starts timeline playback so the screenshot shows the current clip at
+    frames/60 s (needed for bone clips; without it the pose stays at t=0)."""
     args, png_path = _batch_base_args(frames, camera, flame_mode, screenshot)
     if scene:
         args += ["--batch-scene", scene]
+    if play:
+        args.append("--batch-play")
     specs = [s.strip() for s in edits.split(";") if s.strip()]
     if not specs:
         return _error("edits must contain at least one spec")

@@ -1084,3 +1084,42 @@ fn role_key_builds_the_rig_before_resolving_names() {
     assert!((kf.time - 1.0).abs() < f32::EPSILON);
     assert!((kf.value - 20.0).abs() < f32::EPSILON);
 }
+
+#[test]
+fn compose_edit_keys_every_touched_role_from_the_pose_table() {
+    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[
+            anim_edit_parse_spec("new_clip=p").unwrap(),
+            anim_edit_parse_spec("compose=punch,side=left").unwrap(),
+        ],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert_eq!(clip.tracks.len(), 10);
+    assert!((clip.duration - 2.0).abs() < 1e-6);
+
+    let left_upper = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
+    let punch_key = &left_upper.rotation_y.keyframes[2];
+    assert!((punch_key.time - 0.55).abs() < 1e-6);
+    assert!((punch_key.value - 85.0).abs() < 1e-6);
+}
+
+#[test]
+fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
+    use super::anim_edits::anim_edit_parse_spec;
+    assert!(anim_edit_parse_spec("compose=").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=0").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=2").is_ok());
+}

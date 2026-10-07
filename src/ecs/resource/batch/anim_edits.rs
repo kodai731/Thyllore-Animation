@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use thyllore_anim_core::editable::PropertyType;
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BatchAnimEdit {
@@ -32,6 +33,9 @@ pub enum BatchAnimEdit {
     },
     Save {
         path: PathBuf,
+    },
+    Compose {
+        spec: MotionSpec,
     },
     CopilotExtend {
         bone_name: String,

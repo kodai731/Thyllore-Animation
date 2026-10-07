@@ -20,6 +20,11 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::{Entity, World};
 
 use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
+use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
+use thyllore_avatar_core::motion::seed::systems::compose_motion::{
+    compose_motion, settle_requests,
+};
 
 /// Parse repeated `--batch-anim-edit <spec>` flags. Specs:
 /// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
@@ -30,7 +35,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -123,6 +128,11 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
         }
         return Ok(BatchAnimEdit::Save { path });
     }
+    if let Some(rest) = spec.strip_prefix("compose=") {
+        return Ok(BatchAnimEdit::Compose {
+            spec: MotionSpec::parse(rest)?,
+        });
+    }
     if let Some(rest) = spec.strip_prefix("copilot_extend=") {
         let (bone_axis, frames_str) = rest.split_once(',').ok_or_else(|| {
             anyhow::anyhow!("copilot_extend spec must be copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>, got '{spec}'")
@@ -162,7 +172,7 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             frames,
         });
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
+    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
@@ -195,6 +205,133 @@ fn parse_bone_axis(axis_str: &str, bone_name: &str) -> Result<BoneAxis> {
             bone_name
         )),
     }
+}
+
+fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
+    match axis {
+        RotationAxis::X => BoneAxis::RotationX,
+        RotationAxis::Y => BoneAxis::RotationY,
+        RotationAxis::Z => BoneAxis::RotationZ,
+    }
+}
+
+#[cfg(feature = "ml")]
+fn apply_settle_requests(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+) {
+    if requests.is_empty() {
+        return;
+    }
+    let Some(model_path) = crate::ml::resolve_curve_copilot_model_path() else {
+        log_warn!("compose settle: curve copilot model not found, keys stay as composed");
+        return;
+    };
+    let mut session =
+        match thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
+            &model_path,
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                log_warn!("compose settle: failed to load model: {}", e);
+                return;
+            }
+        };
+    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        return;
+    };
+    let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) else {
+        return;
+    };
+
+    let mut lib = world.resource_mut::<ClipLibrary>();
+    let Some(clip) = lib.get_mut(clip_id) else {
+        return;
+    };
+    for request in requests {
+        let Some(&bone_id) = table.get(request.role.unity_name()) else {
+            continue;
+        };
+        let Some(track) = clip.get_track_mut(bone_id) else {
+            continue;
+        };
+        let curve = track.get_curve_mut(request.axis.property_type());
+        match crate::ecs::systems::curve_copilot::copilot_settle_curve(
+            &mut session,
+            curve,
+            request.time,
+            request.until,
+            request.max_frames,
+            request.blend,
+        ) {
+            Ok(count) => log!(
+                "compose settle: {}.{:?} @{:.2} added {} keys",
+                request.role.unity_name(),
+                request.axis,
+                request.time,
+                count
+            ),
+            Err(e) => log_warn!("compose settle failed: {}", e),
+        }
+    }
+    lib.mark_dirty(clip_id);
+}
+
+#[cfg(not(feature = "ml"))]
+fn apply_settle_requests(
+    _world: &mut World,
+    _assets: &mut AssetStorage,
+    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+) {
+    if !requests.is_empty() {
+        log_warn!("compose settle: ml feature is disabled, keys stay as composed");
+    }
+}
+
+fn insert_bone_key(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    bone_name: &str,
+    axis: BoneAxis,
+    time: f32,
+    value: f32,
+) {
+    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        return;
+    };
+    let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) else {
+        log_warn!("key edit: no bone name table available, skipping");
+        return;
+    };
+    let Some(&bone_id) = table.get(bone_name) else {
+        log_warn!("key edit: bone {} is not on this model", bone_name);
+        return;
+    };
+
+    let mut lib = world.resource_mut::<ClipLibrary>();
+    let Some(clip) = lib.get_mut(clip_id) else {
+        return;
+    };
+    let track = if let Some(t) = clip.get_track_mut(bone_id) {
+        t
+    } else {
+        clip.add_track(bone_id, bone_name.to_string())
+    };
+    let curve = match axis {
+        BoneAxis::RotationX => &mut track.rotation_x,
+        BoneAxis::RotationY => &mut track.rotation_y,
+        BoneAxis::RotationZ => &mut track.rotation_z,
+        BoneAxis::TranslationX => &mut track.translation_x,
+        BoneAxis::TranslationY => &mut track.translation_y,
+        BoneAxis::TranslationZ => &mut track.translation_z,
+    };
+    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    curve_add_keyframe(curve, time, value);
+    if time > clip.duration {
+        clip.duration = time;
+    }
+    lib.mark_dirty(clip_id);
 }
 
 fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str) {
@@ -282,48 +419,30 @@ pub fn batch_apply_anim_edits(
                 time,
                 value,
             } => {
-                let clip_id = match world.resource::<TimelineState>().current_clip_id {
-                    Some(id) => id,
-                    None => continue,
-                };
-                let mut lib = world.resource_mut::<ClipLibrary>();
-                let clip = match lib.get_mut(clip_id) {
-                    Some(c) => c,
-                    None => continue,
-                };
-                let table = match crate::ecs::systems::engine_bone_name_to_id(world, assets) {
-                    Some(t) => t,
-                    None => {
-                        log_warn!("key edit: no bone name table available, skipping");
+                insert_bone_key(world, assets, bone_name, *axis, *time, *value);
+            }
+            BatchAnimEdit::Compose { spec } => {
+                let keys = match compose_motion(PoseTable::builtin(), spec) {
+                    Ok(keys) => keys,
+                    Err(e) => {
+                        log_warn!("compose {}: {}", spec.motion, e);
                         continue;
                     }
                 };
-                let bone_id = match table.get(bone_name.as_str()) {
-                    Some(&id) => id,
-                    None => {
-                        log_warn!("key edit: bone {} is not on this model", bone_name);
-                        continue;
-                    }
-                };
-                let track = if let Some(t) = clip.get_track_mut(bone_id) {
-                    t
-                } else {
-                    clip.add_track(bone_id, bone_name.clone())
-                };
-                let curve = match axis {
-                    BoneAxis::RotationX => &mut track.rotation_x,
-                    BoneAxis::RotationY => &mut track.rotation_y,
-                    BoneAxis::RotationZ => &mut track.rotation_z,
-                    BoneAxis::TranslationX => &mut track.translation_x,
-                    BoneAxis::TranslationY => &mut track.translation_y,
-                    BoneAxis::TranslationZ => &mut track.translation_z,
-                };
-                use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
-                curve_add_keyframe(curve, *time, *value);
-                if *time > clip.duration {
-                    clip.duration = *time;
+                for key in &keys {
+                    insert_bone_key(
+                        world,
+                        assets,
+                        key.role.unity_name(),
+                        bone_axis_of(key.axis),
+                        key.time,
+                        key.degrees,
+                    );
                 }
-                lib.mark_dirty(clip_id);
+                match settle_requests(PoseTable::builtin(), spec, &keys) {
+                    Ok(requests) => apply_settle_requests(world, assets, &requests),
+                    Err(e) => log_warn!("compose {}: {}", spec.motion, e),
+                }
             }
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
                 dispatch_scalar_clip_events(

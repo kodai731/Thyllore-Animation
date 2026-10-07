@@ -66,6 +66,10 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
+- `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
+  `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
+  sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and,
+  later, helm's `GenerateMotion` call the same function; nothing in `src/` holds angles or poses.
 - GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
   next to its own `destroy`; a type that only aggregates such fields writes `#[derive(GpuResource)]`
   (`thyllore-vulkan-derive`) and never enumerates them, `#[gpu_resource(skip)]` marks a borrowed handle.

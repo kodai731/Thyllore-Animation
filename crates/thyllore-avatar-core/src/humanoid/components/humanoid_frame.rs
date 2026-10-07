@@ -1,11 +1,11 @@
 #[derive(Clone, Copy, Debug)]
-pub struct CharacterFrame {
+pub struct HumanoidFrame {
     pub right: [f32; 3],
     pub up: [f32; 3],
     pub forward: [f32; 3],
 }
 
-impl CharacterFrame {
+impl HumanoidFrame {
     pub fn to_character(&self, v: [f32; 3]) -> [f32; 3] {
         [dot(v, self.right), dot(v, self.up), dot(v, self.forward)]
     }

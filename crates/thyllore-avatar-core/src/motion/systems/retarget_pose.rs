@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use cgmath::{InnerSpace, Matrix, Matrix3, One, Quaternion, Rotation, Vector3, Zero};
 
-use crate::humanoid::components::character_frame::CharacterFrame;
+use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::rest_pose::RestPose;
 use crate::humanoid::components::role::HumanoidRole;
@@ -10,13 +10,13 @@ use crate::motion::components::retarget_context::{RetargetContext, RetargetedPos
 use crate::motion::components::retarget_skeleton::RetargetSkeleton;
 use crate::motion::components::sampled_pose::SampledPose;
 
-use super::role_rotation::{engine_rotation_to_role, role_rotation_to_engine};
+use super::role_rotation::{role_rotation_to_thyllore, thyllore_rotation_to_role};
 use super::tpose_basis::compute_tpose_world_rotations;
 
 pub fn build_retarget_context(
     skeleton: &RetargetSkeleton,
     mapping: &HumanoidMapping,
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
     rest_pose: RestPose,
 ) -> Option<RetargetContext> {
     let hips_idx = mapping.by_role.get(&HumanoidRole::Hips)?;
@@ -47,7 +47,7 @@ pub fn retarget_to_bones(ctx: &RetargetContext, pose: &SampledPose) -> Retargete
 
     for (&role, &bone_idx) in &ctx.mapping.by_role {
         let euler = pose.rotations.get(&role).copied().unwrap_or([0.0; 3]);
-        let r_i = role_rotation_to_engine(&ctx.frame, euler);
+        let r_i = role_rotation_to_thyllore(&ctx.frame, euler);
 
         let parent_rot = match ctx.skeleton.bones[bone_idx].parent {
             Some(parent_idx) => ctx.tpose_world[parent_idx],
@@ -100,7 +100,7 @@ pub fn retarget_from_bones(
         let t_i_inv = ctx.tpose_world[bone_idx].invert();
         let r_i = parent_rot * local_i * t_i_inv;
 
-        rotations.insert(role, engine_rotation_to_role(&ctx.frame, r_i));
+        rotations.insert(role, thyllore_rotation_to_role(&ctx.frame, r_i));
     }
 
     let m = Matrix3::from_cols(
@@ -182,7 +182,7 @@ mod tests {
 
     use cgmath::{InnerSpace, One, Quaternion, Vector3};
 
-    use crate::humanoid::components::character_frame::CharacterFrame;
+    use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
     use crate::humanoid::components::rest_pose::RestPose;
     use crate::humanoid::components::role::HumanoidRole;
@@ -201,8 +201,8 @@ mod tests {
     const LEFT_FOOT: usize = 7;
     const RIGHT_FOOT: usize = 8;
 
-    fn default_frame() -> CharacterFrame {
-        CharacterFrame {
+    fn default_frame() -> HumanoidFrame {
+        HumanoidFrame {
             right: [1.0, 0.0, 0.0],
             up: [0.0, 1.0, 0.0],
             forward: [0.0, 0.0, -1.0],

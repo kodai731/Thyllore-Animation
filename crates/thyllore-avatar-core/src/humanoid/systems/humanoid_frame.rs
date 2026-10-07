@@ -1,12 +1,12 @@
-use crate::humanoid::components::character_frame::CharacterFrame;
+use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::role::HumanoidRole;
 use crate::humanoid::components::skeleton_input::BoneInput;
 
-pub fn derive_character_frame(
+pub fn derive_humanoid_frame(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-) -> Option<CharacterFrame> {
+) -> Option<HumanoidFrame> {
     let hips_idx = *mapping.by_role.get(&HumanoidRole::Hips)?;
     let head_idx = *mapping.by_role.get(&HumanoidRole::Head)?;
     let left_upper_arm_idx = *mapping.by_role.get(&HumanoidRole::LeftUpperArm)?;
@@ -17,62 +17,20 @@ pub fn derive_character_frame(
     let left_arm_pos = bones[left_upper_arm_idx].rest_position;
     let right_arm_pos = bones[right_upper_arm_idx].rest_position;
 
-    let mut up = [
+    let up = [
         head_pos[0] - hips_pos[0],
         head_pos[1] - hips_pos[1],
         head_pos[2] - hips_pos[2],
     ];
-    let up_len = magnitude(&up);
-    if up_len < 1e-6 {
-        return None;
-    }
-    normalize_in_place(&mut up);
-
-    let mut right = [
+    let right = [
         right_arm_pos[0] - left_arm_pos[0],
         right_arm_pos[1] - left_arm_pos[1],
         right_arm_pos[2] - left_arm_pos[2],
     ];
-    remove_parallel_component(&mut right, &up);
-    let right_len = magnitude(&right);
-    if right_len < 1e-6 {
-        return None;
-    }
-    normalize_in_place(&mut right);
 
-    let forward = cross(&up, &right);
+    let [right, up, forward] = thyllore_math_core::orthonormal_basis_from_up_and_right(up, right)?;
 
-    Some(CharacterFrame { right, up, forward })
-}
-
-fn dot(a: &[f32; 3], b: &[f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn magnitude(v: &[f32; 3]) -> f32 {
-    dot(v, v).sqrt()
-}
-
-fn normalize_in_place(v: &mut [f32; 3]) {
-    let len = magnitude(v);
-    v[0] /= len;
-    v[1] /= len;
-    v[2] /= len;
-}
-
-fn remove_parallel_component(v: &mut [f32; 3], parallel_to: &[f32; 3]) {
-    let proj = dot(v, parallel_to);
-    v[0] -= proj * parallel_to[0];
-    v[1] -= proj * parallel_to[1];
-    v[2] -= proj * parallel_to[2];
-}
-
-fn cross(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    Some(HumanoidFrame { right, up, forward })
 }
 
 #[cfg(test)]
@@ -155,7 +113,7 @@ mod tests {
     fn test_tpose_axes() {
         let bones = tpose_bones();
         let mapping = tpose_mapping();
-        let frame = derive_character_frame(&mapping, &bones).unwrap();
+        let frame = derive_humanoid_frame(&mapping, &bones).unwrap();
 
         assert!(almost_eq(frame.right, [-1.0, 0.0, 0.0], 1e-5));
         assert!(almost_eq(frame.up, [0.0, 1.0, 0.0], 1e-5));
@@ -166,7 +124,7 @@ mod tests {
     fn test_rotated_scaled_invariance() {
         let source_bones = tpose_bones();
         let mapping = tpose_mapping();
-        let source_frame = derive_character_frame(&mapping, &source_bones).unwrap();
+        let source_frame = derive_humanoid_frame(&mapping, &source_bones).unwrap();
 
         let rx = std::f32::consts::FRAC_PI_2;
         let rz = std::f32::consts::PI;
@@ -181,7 +139,7 @@ mod tests {
             })
             .collect();
 
-        let transformed_frame = derive_character_frame(&mapping, &transformed_bones).unwrap();
+        let transformed_frame = derive_humanoid_frame(&mapping, &transformed_bones).unwrap();
 
         let expected_right = rotate_and_scale([-1.0, 0.0, 0.0], rx, rz, 1.0);
         let expected_up = rotate_and_scale([0.0, 1.0, 0.0], rx, rz, 1.0);
@@ -208,6 +166,6 @@ mod tests {
         by_role.insert(HumanoidRole::RightUpperArm, 6);
         let mapping = HumanoidMapping { by_role };
 
-        assert!(derive_character_frame(&mapping, &bones).is_none());
+        assert!(derive_humanoid_frame(&mapping, &bones).is_none());
     }
 }

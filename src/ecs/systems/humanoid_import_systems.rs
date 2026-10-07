@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn bone_set_key_writes_standard_values_on_a_humanoid_model() {
         use crate::ecs::systems::timeline_systems::process_bone_set_key;
-        use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_engine;
+        use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_thyllore;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -344,7 +344,7 @@ mod tests {
 
         let left_upper_arm_pose = crate::animation::BoneLocalPose {
             translation: cgmath::Vector3::new(0.0, 0.0, 0.0),
-            rotation: role_rotation_to_engine(&rig.context.frame, [0.0, 0.0, -40.0]),
+            rotation: role_rotation_to_thyllore(&rig.context.frame, [0.0, 0.0, -40.0]),
             scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
         };
         overrides.insert(left_upper_arm_bone, left_upper_arm_pose);

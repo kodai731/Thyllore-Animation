@@ -11,7 +11,7 @@ fn test_rest_pose(
 
     let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
 
-    let frame = thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame(
+    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
         &mapping, &bones,
     )
     .unwrap();

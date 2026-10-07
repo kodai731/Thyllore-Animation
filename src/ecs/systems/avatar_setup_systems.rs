@@ -6,8 +6,8 @@ use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame;
 use thyllore_avatar_core::humanoid::systems::geometry_checks::check_mapping_geometry;
+use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
 use thyllore_avatar_core::humanoid::systems::mapping_io::{
     humanoid_mapping_path, load_or_infer_rig, save_mapping,
 };
@@ -194,7 +194,7 @@ pub(crate) fn load_or_infer_mapping(
 fn refresh_avatar_validation(state: &mut AvatarSetupState) {
     state.unresolved = collect_unresolved_roles(&state.mapping);
     state.issues = validate_mapping(&state.mapping, &state.bones);
-    state.geometry_warnings = derive_character_frame(&state.mapping, &state.bones)
+    state.geometry_warnings = derive_humanoid_frame(&state.mapping, &state.bones)
         .map(|frame| check_mapping_geometry(&state.mapping, &state.bones, &frame))
         .unwrap_or_default();
     state.rest_pose = detect_rest_pose(&state.mapping, &state.bones);

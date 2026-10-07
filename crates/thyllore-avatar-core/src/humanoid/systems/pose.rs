@@ -3,13 +3,13 @@ use crate::humanoid::components::rest_pose::RestPose;
 use crate::humanoid::components::role::HumanoidRole;
 use crate::humanoid::components::skeleton_input::BoneInput;
 
-use super::character_frame::derive_character_frame;
+use super::humanoid_frame::derive_humanoid_frame;
 
 pub const T_POSE_ANGLE_THRESHOLD: f32 = 20.0;
 pub const A_POSE_ANGLE_THRESHOLD: f32 = 60.0;
 
 pub fn detect_rest_pose(mapping: &HumanoidMapping, bones: &[BoneInput]) -> RestPose {
-    let frame = match derive_character_frame(mapping, bones) {
+    let frame = match derive_humanoid_frame(mapping, bones) {
         Some(f) => f,
         None => return RestPose::Unknown,
     };

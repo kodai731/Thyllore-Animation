@@ -76,7 +76,7 @@ fn bake_sampled_motion(
 mod tests {
     use cgmath::Vector3;
 
-    use crate::humanoid::components::character_frame::CharacterFrame;
+    use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
     use crate::humanoid::components::rest_pose::RestPose;
     use crate::humanoid::components::role::HumanoidRole;
@@ -95,8 +95,8 @@ mod tests {
     const LEFT_FOOT: usize = 7;
     const RIGHT_FOOT: usize = 8;
 
-    fn default_frame() -> CharacterFrame {
-        CharacterFrame {
+    fn default_frame() -> HumanoidFrame {
+        HumanoidFrame {
             right: [1.0, 0.0, 0.0],
             up: [0.0, 1.0, 0.0],
             forward: [0.0, 0.0, -1.0],

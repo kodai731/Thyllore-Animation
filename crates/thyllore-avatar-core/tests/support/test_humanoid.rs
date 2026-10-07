@@ -197,7 +197,7 @@ pub fn build_ctx() -> (
     let fbx_text = write_test_humanoid_fbx();
     let (bones, skeleton) = super::fixture_bones::load_rig_from_fbx_text("test", &fbx_text);
     let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
-    let frame = thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame(
+    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
         &mapping, &bones,
     )
     .expect("derive character frame");

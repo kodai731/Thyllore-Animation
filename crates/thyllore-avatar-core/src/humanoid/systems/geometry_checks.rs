@@ -1,6 +1,6 @@
 use crate::expression::components::side::Side;
-use crate::humanoid::components::character_frame::CharacterFrame;
 use crate::humanoid::components::geometry_warning::GeometryWarning;
+use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::role::HumanoidRole;
 use crate::humanoid::components::skeleton_input::BoneInput;
@@ -27,7 +27,7 @@ const LENGTH_RATIO_LIMBS: &[[HumanoidRole; 3]] = &[
 pub fn check_mapping_geometry(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
 ) -> Vec<GeometryWarning> {
     let mut warnings = Vec::new();
     check_symmetry(mapping, bones, frame, &mut warnings);
@@ -39,7 +39,7 @@ pub fn check_mapping_geometry(
 fn character_position(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
     role: HumanoidRole,
 ) -> Option<[f32; 3]> {
     let &bone_index = mapping.by_role.get(&role)?;
@@ -49,7 +49,7 @@ fn character_position(
 fn measure_hips_height(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
 ) -> Option<f32> {
     let hips = character_position(mapping, bones, frame, HumanoidRole::Hips)?;
     let left_foot = character_position(mapping, bones, frame, HumanoidRole::LeftFoot)?;
@@ -61,7 +61,7 @@ fn measure_hips_height(
 fn check_symmetry(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
     warnings: &mut Vec<GeometryWarning>,
 ) {
     let Some(hips_height) = measure_hips_height(mapping, bones, frame) else {
@@ -95,7 +95,7 @@ fn check_symmetry(
 fn check_ascending_chains(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
     warnings: &mut Vec<GeometryWarning>,
 ) {
     for chain in ASCENDING_CHAINS {

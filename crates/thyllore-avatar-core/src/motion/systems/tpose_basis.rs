@@ -1,6 +1,6 @@
 use cgmath::{InnerSpace, Quaternion, Vector3};
 
-use crate::humanoid::components::character_frame::CharacterFrame;
+use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::rest_pose::RestPose;
 use crate::humanoid::components::role::HumanoidRole;
@@ -9,7 +9,7 @@ use crate::motion::components::retarget_skeleton::RetargetSkeleton;
 pub fn compute_tpose_world_rotations(
     skeleton: &RetargetSkeleton,
     mapping: &HumanoidMapping,
-    frame: &CharacterFrame,
+    frame: &HumanoidFrame,
     rest_pose: RestPose,
 ) -> Vec<Quaternion<f32>> {
     let mut rotations: Vec<_> = skeleton.bones.iter().map(|b| b.world_rotation).collect();
@@ -86,7 +86,7 @@ fn apply_arm_correction(
 mod tests {
     use cgmath::{InnerSpace, One, Quaternion, Rotation, Vector3};
 
-    use crate::humanoid::components::character_frame::CharacterFrame;
+    use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
     use crate::humanoid::components::rest_pose::RestPose;
     use crate::humanoid::components::role::HumanoidRole;
@@ -102,8 +102,8 @@ mod tests {
     const LEFT_LOWER_ARM: usize = 5;
     const RIGHT_LOWER_ARM: usize = 6;
 
-    fn default_frame() -> CharacterFrame {
-        CharacterFrame {
+    fn default_frame() -> HumanoidFrame {
+        HumanoidFrame {
             right: [1.0, 0.0, 0.0],
             up: [0.0, 1.0, 0.0],
             forward: [0.0, 0.0, -1.0],

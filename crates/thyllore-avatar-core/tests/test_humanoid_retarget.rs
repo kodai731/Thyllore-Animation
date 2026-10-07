@@ -13,7 +13,7 @@ use thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoi
 use thyllore_avatar_core::motion::systems::retarget_pose::{
     build_retarget_context, retarget_from_bones, retarget_to_bones,
 };
-use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_engine;
+use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_thyllore;
 
 use support::test_humanoid::build_ctx;
 
@@ -89,7 +89,7 @@ fn test_humanoid_bake_is_the_role_rotation() {
             curve_sample(&lua_track.rotation_y, time).unwrap_or(0.0),
             curve_sample(&lua_track.rotation_z, time).unwrap_or(0.0),
         ];
-        let expected_q = role_rotation_to_engine(&ctx.frame, expected_euler);
+        let expected_q = role_rotation_to_thyllore(&ctx.frame, expected_euler);
         let actual_q = left_upper_arm_curve[frame_idx];
         let dot = expected_q.dot(actual_q).abs();
         assert!(
@@ -109,7 +109,7 @@ fn test_humanoid_bake_is_the_role_rotation() {
             curve_sample(&head_track.rotation_y, time).unwrap_or(0.0),
             curve_sample(&head_track.rotation_z, time).unwrap_or(0.0),
         ];
-        let head_expected_q = role_rotation_to_engine(&ctx.frame, head_expected_euler);
+        let head_expected_q = role_rotation_to_thyllore(&ctx.frame, head_expected_euler);
         let head_actual_q = head_curve[frame_idx];
         let head_dot = head_expected_q.dot(head_actual_q).abs();
         assert!(

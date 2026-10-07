@@ -8,8 +8,8 @@ use support::fixtures::{
 };
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
-use thyllore_avatar_core::humanoid::systems::character_frame::derive_character_frame;
 use thyllore_avatar_core::humanoid::systems::geometry_checks::check_mapping_geometry;
+use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 
 #[test]
@@ -85,7 +85,7 @@ fn test_without_fingers_has_no_issues() {
 #[test]
 fn test_valid_geometry_has_no_warnings() {
     let (bones, mapping) = test_humanoid_bone_inputs();
-    let frame = derive_character_frame(&mapping, &bones).unwrap();
+    let frame = derive_humanoid_frame(&mapping, &bones).unwrap();
     let warnings = check_mapping_geometry(&mapping, &bones, &frame);
     assert!(
         warnings.is_empty(),
@@ -97,7 +97,7 @@ fn test_valid_geometry_has_no_warnings() {
 #[test]
 fn test_spine_below_hips_has_not_ascending() {
     let (bones, mapping) = with_spine_below_hips();
-    let frame = derive_character_frame(&mapping, &bones).unwrap();
+    let frame = derive_humanoid_frame(&mapping, &bones).unwrap();
     let warnings = check_mapping_geometry(&mapping, &bones, &frame);
 
     let not_ascending: Vec<_> = warnings
@@ -124,7 +124,7 @@ fn test_spine_below_hips_has_not_ascending() {
 #[test]
 fn test_long_left_upper_arm_has_length_ratio() {
     let (bones, mapping) = with_long_left_upper_arm();
-    let frame = derive_character_frame(&mapping, &bones).unwrap();
+    let frame = derive_humanoid_frame(&mapping, &bones).unwrap();
     let warnings = check_mapping_geometry(&mapping, &bones, &frame);
 
     let length_ratio: Vec<_> = warnings
@@ -151,7 +151,7 @@ fn test_long_left_upper_arm_has_length_ratio() {
 #[test]
 fn test_asymmetric_hand_has_asymmetric() {
     let (bones, mapping) = with_asymmetric_hand();
-    let frame = derive_character_frame(&mapping, &bones).unwrap();
+    let frame = derive_humanoid_frame(&mapping, &bones).unwrap();
     let warnings = check_mapping_geometry(&mapping, &bones, &frame);
 
     let asymmetric: Vec<_> = warnings

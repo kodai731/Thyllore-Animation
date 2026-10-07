@@ -1,6 +1,6 @@
 pub mod avatar_rig;
-pub mod character_frame;
 pub mod geometry_warning;
+pub mod humanoid_frame;
 pub mod mapping;
 pub mod mapping_issues;
 pub mod rest_pose;

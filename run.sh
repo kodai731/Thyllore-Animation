@@ -95,13 +95,6 @@ Commands:
       window (unity/docker/run_gui.sh). The project persists in
       target/unity_gui; UNITY_GUI_DIR overrides it:
         ./run.sh unity --model assets/models/purchased/Shinano_ver1.02/FBX/Shinano.fbx
-  unity-muscle
-      Run the muscle probe on the test humanoid model (unity/muscle/run.sh):
-      Unity reads the FBX as Humanoid, records rest pose muscles, and probes
-      each bone's rotation against every axis to find which muscles change.
-      Writes ../muscles.json relative to the project root.
-      UNITY_LICENSE_DIR overrides the license directory (default
-      ~/.config/unity3d/Unity/licenses).
   live-dump [--tracks] [--pose TIME...] [--set-time T] [--timings [1s]] [--clip NAME] [--out FILE]
       Talk to the engine that is already running (started earlier with
       ./run.sh engine); never launches one. Prints its clips, timeline and
@@ -213,9 +206,6 @@ case "$command" in
         ;;
     unity)
         exec bash "$REPO_ROOT/unity/docker/run_gui.sh" "$@"
-        ;;
-    unity-muscle)
-        exec bash "$REPO_ROOT/unity/muscle/run.sh" "$@"
         ;;
     live-dump)
         exec python3 "$REPO_ROOT/tools/live_dump.py" "$@"

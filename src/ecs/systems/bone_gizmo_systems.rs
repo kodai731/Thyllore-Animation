@@ -994,7 +994,7 @@ fn append_sphere_wire_colored(
 mod tests {
     use super::*;
     use crate::animation::SkinData;
-    use crate::ecs::{apply_skinning, compute_pose_global_transforms, create_pose_from_rest};
+    use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
     use crate::loader::{LoadedNode, ModelLoadResult};
     use crate::vulkanr::data::{Vertex, VertexData};
     use crate::vulkanr::resource::graphics_resource::MeshBuffer;
@@ -1243,7 +1243,7 @@ mod tests {
         let vc = skin_data.base_positions.len();
         let mut positions = vec![Vector3::new(0.0f32, 0.0, 0.0); vc];
         let mut normals = vec![Vector3::new(0.0f32, 1.0, 0.0); vc];
-        apply_skinning(
+        thyllore_model_core::apply_skinning(
             skin_data,
             global_transforms,
             skeleton,

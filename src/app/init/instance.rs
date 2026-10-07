@@ -32,8 +32,6 @@ use crate::vulkanr::VulkanBackend;
 use crate::ecs::resource::Camera;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use vulkanalia::Device as VkDevice;
-
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
@@ -41,6 +39,8 @@ use std::os::raw::c_void;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
+use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
+use vulkanalia::Device as VkDevice;
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
@@ -345,6 +345,8 @@ impl App {
         let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;
         ui_windows.init_window_state(&mut data.ecs_world);
         data.ecs_world.insert_resource(ui_windows);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ValidationReport::default());
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -1019,9 +1021,11 @@ impl App {
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
             log_error!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Error, &message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
             log_warn!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Warning, &message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
             log!("({:?}) {}", type_, message);

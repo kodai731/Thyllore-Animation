@@ -4,6 +4,7 @@ use serde_json::json;
 
 use crate::ecs::resource::{
     AppExit, BatchRun, BatchRunState, Camera, CaptureOutput, CaptureSchedule, FrameClock,
+    ValidationReport,
 };
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::CaptureSlot;
@@ -126,17 +127,25 @@ fn format_camera_string(world: &World) -> String {
     }
 }
 
-pub fn batch_run_report(batch: &BatchRun) -> (bool, String) {
+pub fn batch_run_report(batch: &BatchRun, validation: &ValidationReport) -> (bool, String) {
+    let validation_json = json!({
+        "errors": validation.stats.errors,
+        "warnings": validation.stats.warnings,
+        "first": validation.stats.first_message,
+        "first_frame": validation.first_issue_frame,
+    });
     match &batch.state {
-        BatchRunState::Completed { result: Ok(path) } => {
-            (true, json!({"ok": true, "path": path}).to_string())
-        }
-        BatchRunState::Completed { result: Err(error) } => {
-            (false, json!({"ok": false, "error": error}).to_string())
-        }
+        BatchRunState::Completed { result: Ok(path) } => (
+            true,
+            json!({"ok": true, "path": path, "validation": validation_json}).to_string(),
+        ),
+        BatchRunState::Completed { result: Err(error) } => (
+            false,
+            json!({"ok": false, "error": error, "validation": validation_json}).to_string(),
+        ),
         BatchRunState::WaitingForFrame { .. } | BatchRunState::CaptureRequested { .. } => (
             false,
-            json!({"ok": false, "error": "batch run ended before screenshot completed"})
+            json!({"ok": false, "error": "batch run ended before screenshot completed", "validation": validation_json})
                 .to_string(),
         ),
     }
@@ -146,6 +155,7 @@ pub fn batch_run_report(batch: &BatchRun) -> (bool, String) {
 mod tests {
     use super::*;
     use crate::ecs::resource::BatchRunState;
+    use thyllore_log_core::validation_stats::{ValidationSeverity, ValidationStats};
 
     fn single_run(first_frame: u64) -> BatchRun {
         BatchRun::new(CaptureSchedule::single(
@@ -209,7 +219,7 @@ mod tests {
             }
         );
         assert!(world.resource::<AppExit>().is_requested());
-        let (ok, line) = batch_run_report(&batch);
+        let (ok, line) = batch_run_report(&batch, &ValidationReport::default());
         assert!(ok);
         assert!(line.contains("/tmp/out.png"));
     }
@@ -239,7 +249,7 @@ mod tests {
         let batch = world.resource::<BatchRun>();
         assert!(batch.is_completed());
         assert!(world.resource::<AppExit>().is_requested());
-        let (ok, line) = batch_run_report(&batch);
+        let (ok, line) = batch_run_report(&batch, &ValidationReport::default());
         assert!(!ok);
         assert!(line.contains("save failed"));
     }
@@ -292,8 +302,25 @@ mod tests {
     #[test]
     fn report_incomplete_state_is_error() {
         let batch = single_run(1);
-        let (ok, line) = batch_run_report(&batch);
+        let (ok, line) = batch_run_report(&batch, &ValidationReport::default());
         assert!(!ok);
         assert!(line.contains("before screenshot completed"));
+    }
+
+    #[test]
+    fn report_contains_validation_field_with_issues() {
+        let batch = single_run(1);
+        let mut validation = ValidationReport::default();
+        let mut stats = ValidationStats::default();
+        stats.record(ValidationSeverity::Error, "test error");
+        validation.sync(stats);
+
+        let (_ok, line) = batch_run_report(&batch, &validation);
+        let json: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(json.get("validation").is_some());
+        assert_eq!(json["validation"]["errors"], 1);
+        assert_eq!(json["validation"]["warnings"], 0);
+        assert_eq!(json["validation"]["first"], "test error");
+        assert_eq!(json["validation"]["first_frame"], 1);
     }
 }

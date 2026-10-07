@@ -85,8 +85,13 @@ pub fn finish_run(app: &App, overrides: &EngineCliOverrides, is_batch_mode: bool
 
     if is_batch_mode {
         let batch = app.data.ecs_world.resource::<BatchRun>();
-        let (ok, report_line) = batch_run_report(&batch);
+        let validation = app
+            .data
+            .ecs_world
+            .resource::<crate::ecs::resource::ValidationReport>();
+        let (ok, report_line) = batch_run_report(&batch, &validation);
         drop(batch);
+        drop(validation);
         println!("{report_line}");
         if !ok {
             std::process::exit(1);

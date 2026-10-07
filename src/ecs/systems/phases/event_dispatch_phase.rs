@@ -9,6 +9,10 @@ pub fn run_event_dispatch_phase(
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
 ) {
+    if let Some(mut report) = world.get_resource_mut::<crate::ecs::resource::ValidationReport>() {
+        report.sync(thyllore_log_core::validation_stats::validation_stats_snapshot());
+    }
+
     run_dispatch_prep_hooks(world, assets);
 
     apply_queued_ui_commands(world, assets, graphics);

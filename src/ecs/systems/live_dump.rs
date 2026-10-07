@@ -10,7 +10,7 @@ use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
-    CpuFrameTimings, CurveEditorState, CurveEditorTarget, RenderPrepSubTimings, TimelineState,
+    CpuFrameTimings, CurveEditorState, CurveEditorTarget, PhaseSubTimings, TimelineState,
     UpdatePhaseTimings,
 };
 use crate::ecs::systems::animation_debug_dump::{
@@ -257,19 +257,25 @@ fn stages_json(stages: &[(String, f32)]) -> serde_json::Value {
         .into()
 }
 
-/// The CPU cost of the last completed frame, by stage, update phase and render prep hook.
-pub fn timings_json(world: &World) -> serde_json::Value {
-    let cpu = world.get_resource::<CpuFrameTimings>();
-    let update_phases = world.get_resource::<UpdatePhaseTimings>();
-    let render_prep: serde_json::Value = world
-        .get_resource::<RenderPrepSubTimings>()
-        .map(|sub| {
+fn phase_sub_json(phase_sub: Option<&PhaseSubTimings>, phase: &str) -> serde_json::Value {
+    phase_sub
+        .and_then(|sub| sub.phases.get(phase))
+        .map(|timings| {
             let mut entries: Vec<(String, f32)> =
-                sub.timings.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                timings.iter().map(|(k, v)| (k.clone(), *v)).collect();
             entries.sort_by(|a, b| a.0.cmp(&b.0));
             stages_json(&entries)
         })
-        .unwrap_or(serde_json::Value::Null);
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// The CPU cost of the last completed frame, by stage, update phase and phase sub-step.
+pub fn timings_json(world: &World) -> serde_json::Value {
+    let cpu = world.get_resource::<CpuFrameTimings>();
+    let update_phases = world.get_resource::<UpdatePhaseTimings>();
+    let phase_sub = world.get_resource::<PhaseSubTimings>();
+    let render_prep = phase_sub_json(phase_sub.as_deref(), "render_prep");
+    let animation = phase_sub_json(phase_sub.as_deref(), "animation");
 
     serde_json::json!({
         "frame": cpu.as_ref().map(|c| c.frame),
@@ -277,6 +283,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
         "cpu": cpu.as_ref().map(|c| stages_json(&c.stages)),
         "update_phases": update_phases.as_ref().map(|u| stages_json(&u.stages)),
         "render_prep": render_prep,
+        "animation": animation,
     })
 }
 

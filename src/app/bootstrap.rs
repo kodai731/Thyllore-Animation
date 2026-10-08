@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::{
     animation_debug_dump::write_animation_debug_dump, apply_engine_overrides,
-    batch_anim_dump_write, batch_run_report, EngineCliOverrides,
+    batch_anim_dump_write, batch_run_report, format_validation_summary, EngineCliOverrides,
 };
 use crate::vulkanr::context::{CommandState, RenderTargets};
 
@@ -48,6 +48,16 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
 }
 
 pub fn finish_run(app: &App, overrides: &EngineCliOverrides, is_batch_mode: bool) {
+    let stats = thyllore_log_core::validation_stats::validation_stats_snapshot();
+    let first_issue_frame = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::ValidationReport>()
+        .and_then(|report| report.first_issue_frame);
+    let summary = format_validation_summary(&stats, first_issue_frame);
+    log!("{}", summary);
+    println!("{summary}");
+
     if let Some(ref dump_path) = overrides.anim_dump_path {
         if let Err(e) =
             batch_anim_dump_write(&app.data.ecs_world, dump_path, overrides.anim_dump_tracks)

@@ -313,7 +313,7 @@ mod tests {
         let mut validation = ValidationReport::default();
         let mut stats = ValidationStats::default();
         stats.record(ValidationSeverity::Error, "test error");
-        validation.sync(stats);
+        crate::ecs::systems::validation_report_sync(&mut validation, stats);
 
         let (_ok, line) = batch_run_report(&batch, &validation);
         let json: serde_json::Value = serde_json::from_str(&line).unwrap();

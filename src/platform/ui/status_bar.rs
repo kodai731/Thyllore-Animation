@@ -1,9 +1,11 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ViewportInput,
+    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ValidationReport,
+    ViewportInput,
 };
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
+use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
@@ -74,6 +76,8 @@ fn draw_status_bar(
     viewport: &ViewportInput,
     timeline_state: &TimelineState,
     clip_duration: f32,
+    errors: usize,
+    warnings: usize,
 ) {
     state.update_fps(delta_time);
     state.update_memory();
@@ -105,12 +109,18 @@ fn draw_status_bar(
         state.memory_mb,
     );
 
+    let validation_text = format_validation_status(errors, warnings);
+    let validation_color = validation_status_color(errors, warnings);
+
     let text_size = ui.calc_text_size(&text);
+    let validation_text_size = ui.calc_text_size(&validation_text);
 
     let vp_right = viewport.position[0] + viewport.size[0];
     let vp_bottom = viewport.position[1] + viewport.size[1];
 
-    let window_width = text_size[0] + OVERLAY_PADDING * 2.0;
+    let item_spacing = ui.clone_style().item_spacing[0];
+    let window_width =
+        text_size[0] + item_spacing + validation_text_size[0] + OVERLAY_PADDING * 2.0;
     let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
@@ -125,7 +135,23 @@ fn draw_status_bar(
         .save_settings(false)
         .build(|| {
             ui.text_colored(TEXT_COLOR, &text);
+            ui.same_line();
+            ui.text_colored(validation_color, &validation_text);
         });
+}
+
+fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
+    if errors > 0 {
+        COLOR_ERROR
+    } else if warnings > 0 {
+        COLOR_WARNING
+    } else {
+        TEXT_COLOR
+    }
+}
+
+fn format_validation_status(errors: usize, warnings: usize) -> String {
+    format!("VK E:{} W:{}", errors, warnings)
 }
 
 fn read_rss_mb() -> f32 {
@@ -194,6 +220,35 @@ mod tests {
     fn test_parse_rss_invalid() {
         assert_eq!(parse_rss_from_statm("abc def"), 0.0);
     }
+
+    #[test]
+    fn validation_status_color_errors_red() {
+        let color = validation_status_color(1, 0);
+        assert_eq!(color, COLOR_ERROR);
+        let color = validation_status_color(5, 3);
+        assert_eq!(color, COLOR_ERROR);
+    }
+
+    #[test]
+    fn validation_status_color_warnings_yellow() {
+        let color = validation_status_color(0, 1);
+        assert_eq!(color, COLOR_WARNING);
+        let color = validation_status_color(0, 10);
+        assert_eq!(color, COLOR_WARNING);
+    }
+
+    #[test]
+    fn validation_status_color_zero_white() {
+        let color = validation_status_color(0, 0);
+        assert_eq!(color, TEXT_COLOR);
+    }
+
+    #[test]
+    fn format_validation_status_values() {
+        assert_eq!(format_validation_status(0, 0), "VK E:0 W:0");
+        assert_eq!(format_validation_status(3, 5), "VK E:3 W:5");
+        assert_eq!(format_validation_status(1, 0), "VK E:1 W:0");
+    }
 }
 
 /// Wall-clock values (FPS, memory) are skipped under a fixed step so a reproducible frame stays identical.
@@ -218,6 +273,10 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
     };
 
     let mut state = world.resource_mut::<StatusBarState>();
+    let (errors, warnings) = world
+        .get_resource::<ValidationReport>()
+        .map(|report| (report.stats.errors, report.stats.warnings))
+        .unwrap_or((0, 0));
     draw_status_bar(
         ui,
         &mut state,
@@ -227,6 +286,8 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         &viewport,
         &timeline_state,
         clip_duration,
+        errors,
+        warnings,
     );
 }
 

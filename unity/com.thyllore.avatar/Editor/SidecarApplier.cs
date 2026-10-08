@@ -231,6 +231,7 @@ namespace Thyllore.Avatar
             desc.skeleton = BuildSkeleton(modelAsset);
             importer.humanDescription = desc;
             importer.animationType = ModelImporterAnimationType.Human;
+            HumanoidClipImport.KeepAllTransformCurves(importer, modelAsset);
             importer.SaveAndReimport();
 
             Debug.Log($"Applied humanoid mapping ({bones.Length} bones) to {importer.assetPath}");

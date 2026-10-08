@@ -280,7 +280,7 @@ def main() -> None:
     roundtrip_diff = compare_dumps(dump_a, dump_b)
 
     ok = len(violations) == 0 and roundtrip_diff < 1e-3
-    result = {"ok": ok, "oracle_violations": violations, "roundtrip_max_diff": round(roundtrip_diff, 6)}
+    result = {"ok": ok, "oracle_violations": violations, "roundtrip_max_diff": round(roundtrip_diff, 6), "validation": {"export_run": report.get("validation"), "reimport_run": report2.get("validation")}}
     print(json.dumps(result))
 
 

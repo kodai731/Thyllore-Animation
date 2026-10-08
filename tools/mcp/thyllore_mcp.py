@@ -46,6 +46,12 @@ def _error(message: str) -> str:
     return json.dumps({"ok": False, "error": message}, ensure_ascii=False)
 
 
+def find_last_validation_summary(text: str) -> str | None:
+    """Return the last line starting with 'validation errors:' from engine log text, or None."""
+    matches = [line.strip() for line in text.splitlines() if "validation errors:" in line]
+    return matches[-1] if matches else None
+
+
 def _engine_env() -> dict[str, str]:
     """Direct binary spawn skips cargo's [env] section, so mirror ORT_DYLIB_PATH here."""
     env = dict(os.environ)
@@ -138,7 +144,10 @@ def screenshot(
             obj = json.loads(result)
             if obj.get("ok"):
                 paths = sorted(str(p) for p in seq_dir.glob("*.png"))
-                return json.dumps({"ok": True, "paths": paths}, ensure_ascii=False)
+                out = {"ok": True, "paths": paths}
+                if obj.get("validation") is not None:
+                    out["validation"] = obj["validation"]
+                return json.dumps(out, ensure_ascii=False)
         except (json.JSONDecodeError, KeyError):
             pass
     return result
@@ -167,6 +176,8 @@ def _run_batch_with_dump(args: list[str], keep_png: bool, png_path: str) -> str:
         if dump is None:
             return _error("engine succeeded but wrote no readable anim dump")
         out = {"ok": True, "anim": dump}
+        if data.get("validation") is not None:
+            out["validation"] = data["validation"]
         if keep_png:
             out["path"] = data.get("path")
         return json.dumps(out, ensure_ascii=False)
@@ -344,10 +355,19 @@ def status() -> str:
     engine = _engine_path()
     if engine is None:
         return _error("engine not built: cargo build --bin thyllore-animation")
-    return json.dumps(
-        {"ok": True, "engine": str(engine), "built_at": int(engine.stat().st_mtime)},
-        ensure_ascii=False,
-    )
+    out = {"ok": True, "engine": str(engine), "built_at": int(engine.stat().st_mtime)}
+    log_dir = _repo_root() / "log"
+    if log_dir.is_dir():
+        latest_log = max(
+            (p for p in log_dir.glob("log_*.txt") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            default=None,
+        )
+        if latest_log is not None:
+            summary = find_last_validation_summary(latest_log.read_text())
+            if summary is not None:
+                out["last_validation"] = {"log": str(latest_log.relative_to(_repo_root())), "summary": summary}
+    return json.dumps(out, ensure_ascii=False)
 
 
 @mcp.tool()

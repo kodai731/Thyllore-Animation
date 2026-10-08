@@ -22,7 +22,7 @@ pub fn export_ron_clip(clip_file: &AnimationClipFile, output_path: &Path) -> any
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_anim_core::editable::EditableAnimationClip;
+    use thyllore_anim_core::editable::{EditableAnimationClip, ANIMATION_FORMAT_VERSION};
 
     #[test]
     fn test_export_and_reload_ron_clip() {
@@ -35,7 +35,7 @@ mod tests {
         let content = fs::read_to_string(&output_path).unwrap();
         let loaded: AnimationClipFile = ron::from_str(&content).unwrap();
 
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, ANIMATION_FORMAT_VERSION);
         assert_eq!(loaded.clip.name, "test_clip");
         assert_eq!(loaded.clip.id, 1);
 

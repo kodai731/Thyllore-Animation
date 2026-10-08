@@ -732,7 +732,7 @@ pub(crate) fn write_header_extension<W: Write + Seek>(
 
     {
         let mut attrs = writer.new_node("Creator")?;
-        attrs.append_string_direct("Thyllore Animation Engine")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
         drop(attrs);
         writer.close_node()?;
     }
@@ -1056,6 +1056,10 @@ pub(crate) fn write_anim_layer<W: Write + Seek>(
     attrs.append_string_direct("BaseLayer\x00\x01AnimLayer")?;
     attrs.append_string_direct("")?;
     drop(attrs);
+
+    drop(writer.new_node("Properties70")?);
+    writer.close_node()?;
+
     writer.close_node()?;
     Ok(())
 }
@@ -1210,18 +1214,47 @@ pub(crate) fn write_connections<W: Write + Seek>(
     Ok(())
 }
 
+pub(crate) fn write_top_level_nodes<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
+    {
+        let mut attrs = writer.new_node("FileId")?;
+        attrs.append_binary_direct(&crate::systems::fbx::file_identity::FILE_ID_BYTES)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    {
+        let mut attrs = writer.new_node("CreationTime")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATION_TIME)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    {
+        let mut attrs = writer.new_node("Creator")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    Ok(())
+}
+
 fn write_fbx_binary<W: Write + Seek>(
     mut writer: Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
+    write_top_level_nodes(&mut writer)?;
     write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps, 1.0)?;
     write_documents(&mut writer, data.document_uid)?;
     write_references(&mut writer)?;
     write_definitions(&mut writer, data)?;
     write_objects(&mut writer, data)?;
     write_connections(&mut writer, data)?;
-    writer.finalize_and_flush(&FbxFooter::default())?;
+    writer.finalize_and_flush(&FbxFooter {
+        unknown1: Some(&crate::systems::fbx::file_identity::FOOTER_ID),
+        ..Default::default()
+    })?;
     Ok(())
 }
 
@@ -1469,5 +1502,65 @@ mod tests {
             assert_eq!(bone.rotation, [0.0, 0.0, 0.0]);
             assert_eq!(bone.scaling, [1.0, 1.0, 1.0]);
         }
+    }
+
+    #[test]
+    fn exported_fbx_has_file_id_and_layer_block() {
+        let skeleton = build_test_skeleton_with_rootnode();
+        let mut clip = EditableAnimationClip::new(1, "test_clip".to_string());
+        clip.add_track(2, "Hips".to_string());
+        let data =
+            build_export_data(&clip, &skeleton, false, FbxAxesInfo::default(), 30.0).unwrap();
+
+        let mut buf = Vec::new();
+        let writer = Writer::new(std::io::Cursor::new(&mut buf), FbxVersion::V7_4).unwrap();
+        write_fbx_binary(writer, &data).unwrap();
+
+        let mut parser = match fbxcel::pull_parser::any::AnyParser::from_seekable_reader(
+            std::io::Cursor::new(&buf),
+        )
+        .unwrap()
+        {
+            fbxcel::pull_parser::any::AnyParser::V7400(parser) => parser,
+            _ => panic!("exported FBX is not v7400"),
+        };
+        let mut node_path: Vec<String> = Vec::new();
+        let mut top_level_names: Vec<String> = Vec::new();
+        let mut animation_layer_child_names: Vec<String> = Vec::new();
+        loop {
+            match parser.next_event().unwrap() {
+                fbxcel::pull_parser::v7400::Event::StartNode(start) => {
+                    let name = start.name().to_owned();
+                    match node_path.last().map(String::as_str) {
+                        None => top_level_names.push(name.clone()),
+                        Some("AnimationLayer") => animation_layer_child_names.push(name.clone()),
+                        Some(_) => {}
+                    }
+                    node_path.push(name);
+                }
+                fbxcel::pull_parser::v7400::Event::EndNode => {
+                    node_path.pop();
+                }
+                fbxcel::pull_parser::v7400::Event::EndFbx(_) => break,
+            }
+        }
+
+        assert!(
+            top_level_names.iter().any(|name| name == "FileId"),
+            "top-level FileId missing, got {:?}",
+            top_level_names
+        );
+        assert!(
+            top_level_names.iter().any(|name| name == "CreationTime"),
+            "top-level CreationTime missing, got {:?}",
+            top_level_names
+        );
+        assert!(
+            animation_layer_child_names
+                .iter()
+                .any(|name| name == "Properties70"),
+            "AnimationLayer has no Properties70 child, got {:?}",
+            animation_layer_child_names
+        );
     }
 }

@@ -63,6 +63,7 @@ rm -rf "$PROJECT_DIR/Assets/Editor" "$PROJECT_DIR/Assets/Check" \
        "$PROJECT_DIR/Assets/Editor.meta" "$PROJECT_DIR/Assets/Check.meta"
 mkdir -p "$PROJECT_DIR/Assets/Editor" "$PROJECT_DIR/Assets/Check"
 cp "$REPO_ROOT/unity/verify/HumanoidFbxCheck.cs" "$PROJECT_DIR/Assets/Editor/"
+cp "$REPO_ROOT/unity/com.thyllore.avatar/Editor/HumanoidClipImport.cs" "$PROJECT_DIR/Assets/Editor/"
 cp "$ENGINE_FBX" "$PROJECT_DIR/Assets/Check/"
 
 echo "running Unity HumanoidFbxCheck (batch)"

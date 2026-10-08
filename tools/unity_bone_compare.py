@@ -3,8 +3,8 @@
 For each time and bone, computes the max absolute difference of the 3 world_position components
 between the engine dump and Unity's output (with Unity x negated for left-hand to right-hand
 coordinate conversion). Reports the ratio of that difference to Hips' y position (hips height)
-for each bone. Only bones with a non-null role (humanoid bones) count toward the pass/fail
-verdict; bones with null role are reported separately as "extra" and never cause failure.
+for each bone. Both humanoid bones (with a non-null role) and extra bones (role=null) count toward
+the pass/fail verdict.
 
     uv run python3 tools/unity_bone_compare.py <engine_dump.json> <unity_pose.json> [--tolerance 0.01]
 
@@ -92,7 +92,7 @@ def compare_bone_positions(engine_dump: dict, unity_pose: dict, tolerance: float
                     extra_max_ratio = ratio
                     extra_worst_bone = name
 
-    ok = humanoid_max_ratio <= tolerance and len(missing_humanoid_bones) == 0
+    ok = humanoid_max_ratio <= tolerance and extra_max_ratio <= tolerance and len(missing_humanoid_bones) == 0
 
     return {
         "ok": ok,

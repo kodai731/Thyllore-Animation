@@ -73,8 +73,8 @@ def test_humanoid_bone_2_percent_off_is_ng() -> None:
     assert result["humanoid_worst_bone"] == "Spine"
 
 
-def test_extra_only_offset_is_ok() -> None:
-    """Only extra bones (role=null) are offset -> still ok because they don't count."""
+def test_extra_only_offset_is_ng() -> None:
+    """Only extra bones (role=null) are offset beyond tolerance -> ng because extra bones count."""
     bones = [
         {"id": 1, "name": "Hips", "role": "Hips", "world_position": (0.0, 0.95, 0.0)},
         {"id": 2, "name": "Spine", "role": "Spine", "world_position": (0.0, 1.05, 0.0)},
@@ -96,7 +96,7 @@ def test_extra_only_offset_is_ok() -> None:
     })
 
     result = compare_bone_positions(engine, unity, 0.01)
-    assert result["ok"] is True, f"Expected ok=True (extra only), got {json.dumps(result)}"
+    assert result["ok"] is False, f"Expected ok=False (extra bones exceed tolerance), got {json.dumps(result)}"
     assert result["humanoid_max_ratio"] == 0.0
     assert result["extra_worst_bone"] == "Skirt_Back_1"
 

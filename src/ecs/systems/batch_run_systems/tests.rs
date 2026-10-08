@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::anim_edit_spec::anim_edits_resolve_from_args;
 use super::flags::DEFAULT_SCREENSHOT_FRAME;
 use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
@@ -702,7 +703,7 @@ fn dump_includes_bone_tracks_when_requested() {
 
 #[test]
 fn anim_edit_parses_clip_specs() {
-    use super::anim_edits::anim_edit_parse_spec;
+    use super::anim_edit_spec::anim_edit_parse_spec;
 
     let edit = anim_edit_parse_spec("new_clip=walk").unwrap();
     match edit {
@@ -725,7 +726,7 @@ fn anim_edit_parses_clip_specs() {
 
 #[test]
 fn copilot_extend_parses_role_axis_time_frames() {
-    use super::anim_edits::anim_edit_parse_spec;
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use super::BoneAxis;
 
     let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
@@ -865,7 +866,7 @@ fn role_track_bone(world: &World, role_name: &str) -> thyllore_anim_core::BoneId
 
 #[test]
 fn key_edit_addresses_role_curve() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();
@@ -900,7 +901,7 @@ fn key_edit_addresses_role_curve() {
 
 #[test]
 fn key_edit_rejects_role_on_bone_clip() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
 
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());
@@ -929,7 +930,7 @@ fn key_edit_rejects_role_on_bone_clip() {
 
 #[test]
 fn role_key_rejects_translation_on_non_hips() {
-    use super::anim_edits::anim_edit_parse_spec;
+    use super::anim_edit_spec::anim_edit_parse_spec;
 
     let result = anim_edit_parse_spec("key=Head.tx@0=1");
     assert!(result.is_err());
@@ -939,7 +940,7 @@ fn role_key_rejects_translation_on_non_hips() {
 
 #[test]
 fn bone_key_rejects_translation_on_a_non_hips_role() {
-    use super::anim_edits::anim_edit_parse_spec;
+    use super::anim_edit_spec::anim_edit_parse_spec;
 
     assert!(anim_edit_parse_spec("key=Head.tx@0=1").is_err());
     assert!(anim_edit_parse_spec("key=Skirt_Front_1.tx@0=1").is_ok());
@@ -947,7 +948,7 @@ fn bone_key_rejects_translation_on_a_non_hips_role() {
 
 #[test]
 fn bone_key_addresses_an_unmapped_bone() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();
@@ -980,7 +981,7 @@ fn bone_key_addresses_an_unmapped_bone() {
 
 #[test]
 fn role_key_extends_duration() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();
@@ -1007,7 +1008,7 @@ fn role_key_extends_duration() {
 
 #[test]
 fn role_key_keeps_earlier_keys_on_the_same_curve() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();
@@ -1047,7 +1048,7 @@ fn role_key_keeps_earlier_keys_on_the_same_curve() {
 
 #[test]
 fn role_key_builds_the_rig_before_resolving_names() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
@@ -1088,7 +1089,7 @@ fn role_key_builds_the_rig_before_resolving_names() {
 
 #[test]
 fn compose_edit_keys_every_touched_role_from_the_pose_table() {
-    use super::anim_edits::{anim_edit_parse_spec, batch_apply_anim_edits};
+    use super::anim_edit_spec::anim_edit_parse_spec;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();
@@ -1119,7 +1120,7 @@ fn compose_edit_keys_every_touched_role_from_the_pose_table() {
 
 #[test]
 fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
-    use super::anim_edits::anim_edit_parse_spec;
+    use super::anim_edit_spec::anim_edit_parse_spec;
     assert!(anim_edit_parse_spec("compose=").is_err());
     assert!(anim_edit_parse_spec("compose=punch,count=0").is_err());
     assert!(anim_edit_parse_spec("compose=punch,count=2").is_ok());

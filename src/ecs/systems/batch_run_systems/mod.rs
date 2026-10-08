@@ -1,3 +1,5 @@
+mod anim_dump;
+mod anim_edit_spec;
 mod anim_edits;
 mod apply_overrides;
 mod batch_action;
@@ -8,6 +10,7 @@ mod orbit;
 mod sequence_analyze;
 
 pub use crate::ecs::resource::{BatchAnimEdit, BoneAxis};
+pub use anim_dump::*;
 pub use anim_edits::*;
 pub use apply_overrides::*;
 pub use batch_action::*;

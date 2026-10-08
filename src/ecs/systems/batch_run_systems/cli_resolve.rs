@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use crate::ecs::resource::{BatchRun, CaptureOutput, CaptureSchedule, ScheduledBatchAction};
 use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 
-use super::anim_edits::anim_edits_resolve_from_args;
+use super::anim_edit_spec::anim_edits_resolve_from_args;
 use super::batch_action::BatchAction;
 use super::debug_actions::{debug_actions_resolve_from_args, scheduled_actions_resolve_from_args};
 use super::flags::*;

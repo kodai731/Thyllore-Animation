@@ -5,8 +5,7 @@ use serde_json::json;
 
 use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 
-const BATCH_SEQUENCE_ANALYZE_FLAG: &str = "--batch-sequence-analyze";
-const BATCH_SEQUENCE_DUMP_FLAG: &str = "--batch-sequence-dump";
+use super::flags::{BATCH_SEQUENCE_ANALYZE_FLAG, BATCH_SEQUENCE_DUMP_FLAG};
 
 #[derive(Clone, Debug)]
 pub struct SequenceAnalyzeArgs {

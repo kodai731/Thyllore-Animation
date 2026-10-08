@@ -19,7 +19,7 @@ use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEven
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::{Entity, World};
 
-use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
+use super::flags::BATCH_ANIM_EDIT_FLAG;
 use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
 use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
 use thyllore_avatar_core::motion::seed::systems::compose_motion::{

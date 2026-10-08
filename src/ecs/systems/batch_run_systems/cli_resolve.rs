@@ -8,27 +8,8 @@ use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 use super::anim_edits::anim_edits_resolve_from_args;
 use super::batch_action::BatchAction;
 use super::debug_actions::{debug_actions_resolve_from_args, scheduled_actions_resolve_from_args};
+use super::flags::*;
 use super::BatchAnimEdit;
-
-const BATCH_SCREENSHOT_FLAG: &str = "--batch-screenshot";
-const BATCH_SCREENSHOT_SEQUENCE_FLAG: &str = "--batch-screenshot-sequence";
-const BATCH_FRAMES_FLAG: &str = "--batch-frames";
-const BATCH_CAMERA_FLAG: &str = "--batch-camera";
-const GPU_TIMINGS_FLAG: &str = "--gpu-timings";
-const EXPOSURE_DUMP_FLAG: &str = "--exposure-dump";
-const BATCH_PICK_FLAG: &str = "--batch-pick";
-const BATCH_SCENE_FLAG: &str = "--batch-scene";
-const BATCH_PLAY_FLAG: &str = "--batch-play";
-const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
-const BATCH_ANIM_DUMP_TRACKS_FLAG: &str = "--batch-anim-dump-tracks";
-pub(super) const BATCH_ANIM_EDIT_FLAG: &str = "--batch-anim-edit";
-pub(super) const BATCH_DEBUG_ACTION_FLAG: &str = "--batch-debug-action";
-pub(super) const BATCH_DEBUG_ACTION_AT_FLAG: &str = "--batch-debug-action-at";
-pub const BATCH_LIST_DEBUG_ACTIONS_FLAG: &str = "--batch-list-debug-actions";
-const BATCH_PREVIEW_FLAG: &str = "--batch-preview";
-const BATCH_ANIM_DEBUG_DUMP_FLAG: &str = "--batch-anim-debug-dump";
-const BATCH_EXPORT_FBX_FLAG: &str = "--batch-export-fbx";
-pub(super) const DEFAULT_SCREENSHOT_FRAME: u64 = 120;
 
 #[derive(Clone, Debug)]
 pub struct AnimDebugDumpRequest {

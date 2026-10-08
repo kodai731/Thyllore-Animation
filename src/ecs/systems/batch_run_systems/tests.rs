@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::flags::DEFAULT_SCREENSHOT_FRAME;
 use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;

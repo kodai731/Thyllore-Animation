@@ -12,8 +12,17 @@ pub fn build_message_window_content(ui: &imgui::Ui, world: &World, message_log: 
     let total = message_log.messages.len();
     let warn_count = message_log.warning_count;
     let err_count = message_log.error_count;
+    let vk_count = crate::ecs::systems::message_log_validation_count(message_log);
 
-    build_filter_buttons(ui, world, message_log, total, warn_count, err_count);
+    build_filter_buttons(
+        ui,
+        world,
+        message_log,
+        total,
+        warn_count,
+        err_count,
+        vk_count,
+    );
 
     ui.separator();
 
@@ -27,6 +36,7 @@ fn build_filter_buttons(
     total: usize,
     warn_count: usize,
     err_count: usize,
+    vk_count: usize,
 ) {
     let filters = [
         (format!("All ({})", total), MessageFilter::All),
@@ -37,6 +47,10 @@ fn build_filter_buttons(
         (
             format!("Error ({})##err_filter", err_count),
             MessageFilter::ErrorOnly,
+        ),
+        (
+            format!("Vulkan ({})##vk_filter", vk_count),
+            MessageFilter::Validation,
         ),
     ];
 

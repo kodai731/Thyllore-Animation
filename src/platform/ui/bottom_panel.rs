@@ -35,7 +35,12 @@ fn draw_bottom_panel(
                     build_debug_panel_content(ui, ecs_world);
                 });
 
-                imgui::TabItem::new(&msg_tab_label).build(ui, || {
+                let mut tab = imgui::TabItem::new(&msg_tab_label);
+                if message_log.select_tab_requested {
+                    tab = tab.flags(imgui::TabItemFlags::SET_SELECTED);
+                    message_log.select_tab_requested = false;
+                }
+                tab.build(ui, || {
                     build_message_window_content(ui, ecs_world, message_log);
                 });
             });

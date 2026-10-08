@@ -39,7 +39,7 @@ use std::os::raw::c_void;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
-use thyllore_log_core::message_buffer::{push_message, MessageLevel};
+use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
 use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
 use vulkanalia::Device as VkDevice;
 
@@ -1023,12 +1023,18 @@ impl App {
             error!("({:?}) {}", type_, message);
             log_error!("({:?}) {}", type_, message);
             record_validation(ValidationSeverity::Error, &message);
-            push_message(MessageLevel::Error, format!("[Vulkan] {message}"));
+            push_message(
+                MessageLevel::Error,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
             log_warn!("({:?}) {}", type_, message);
             record_validation(ValidationSeverity::Warning, &message);
-            push_message(MessageLevel::Warning, format!("[Vulkan] {message}"));
+            push_message(
+                MessageLevel::Warning,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
             log!("({:?}) {}", type_, message);

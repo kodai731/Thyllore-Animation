@@ -3,6 +3,7 @@ use crate::ecs::resource::{
     ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ValidationReport,
     ViewportInput,
 };
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
@@ -78,7 +79,7 @@ fn draw_status_bar(
     clip_duration: f32,
     errors: usize,
     warnings: usize,
-) {
+) -> Option<OverlayEvent> {
     state.update_fps(delta_time);
     state.update_memory();
 
@@ -124,20 +125,30 @@ fn draw_status_bar(
     let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
-    ui.window("##status_bar")
-        .position(window_pos, imgui::Condition::Always)
-        .size([window_width, window_height], imgui::Condition::Always)
-        .no_decoration()
-        .no_nav()
-        .mouse_inputs(false)
-        .bg_alpha(BG_COLOR[3])
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| {
-            ui.text_colored(TEXT_COLOR, &text);
-            ui.same_line();
-            ui.text_colored(validation_color, &validation_text);
-        });
+    let clicked: bool = {
+        let result: Option<bool> = ui
+            .window("##status_bar")
+            .position(window_pos, imgui::Condition::Always)
+            .size([window_width, window_height], imgui::Condition::Always)
+            .no_decoration()
+            .no_nav()
+            .bg_alpha(BG_COLOR[3])
+            .focus_on_appearing(false)
+            .save_settings(false)
+            .build(|| {
+                ui.text_colored(TEXT_COLOR, &text);
+                ui.same_line();
+                ui.text_colored(validation_color, &validation_text);
+                ui.is_item_clicked()
+            });
+        result.unwrap_or(false)
+    };
+
+    if clicked {
+        Some(OverlayEvent::ShowValidationMessages)
+    } else {
+        None
+    }
 }
 
 fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
@@ -277,7 +288,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         .get_resource::<ValidationReport>()
         .map(|report| (report.stats.errors, report.stats.warnings))
         .unwrap_or((0, 0));
-    draw_status_bar(
+    if let Some(event) = draw_status_bar(
         ui,
         &mut state,
         delta_time,
@@ -288,7 +299,9 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         clip_duration,
         errors,
         warnings,
-    );
+    ) {
+        world.send_command(event);
+    }
 }
 
 crate::ui_window!(

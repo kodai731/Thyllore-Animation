@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use serde::Serialize;
 
-use thyllore_anim_core::editable::{EditableAnimationClip, PropertyCurve};
+use thyllore_anim_core::editable::{EditableAnimationClip, EditableKeyframe};
 use thyllore_anim_core::BoneId;
 
 use crate::ecs::component::{
@@ -12,24 +13,115 @@ use crate::ecs::component::{
 use crate::ecs::resource::{AnimationType, ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::world::{Entity, World};
 
-fn schedule_instances_json(world: &World, entity: Entity) -> Vec<serde_json::Value> {
+#[derive(Serialize)]
+struct ScheduleInstanceJson {
+    instance_id: u64,
+    source_id: u64,
+    start_time: f32,
+    clip_in: f32,
+    clip_out: f32,
+    speed: f32,
+    muted: bool,
+}
+
+#[derive(Serialize)]
+struct CurveKeyJson {
+    time: f32,
+    value: f32,
+}
+
+#[derive(Serialize)]
+struct ScalarCurveJson {
+    property: String,
+    keyframes: Vec<CurveKeyJson>,
+}
+
+#[derive(Serialize)]
+struct BoneCurvesJson {
+    rot_x: Vec<CurveKeyJson>,
+    rot_y: Vec<CurveKeyJson>,
+    rot_z: Vec<CurveKeyJson>,
+    pos_x: Vec<CurveKeyJson>,
+    pos_y: Vec<CurveKeyJson>,
+    pos_z: Vec<CurveKeyJson>,
+}
+
+#[derive(Serialize)]
+struct BoneTrackJson {
+    bone_id: BoneId,
+    bone_name: String,
+    role: Option<String>,
+    curves: BoneCurvesJson,
+}
+
+#[derive(Serialize)]
+struct ClipJson {
+    id: u64,
+    name: String,
+    duration: f32,
+    bone_track_count: usize,
+    scalar_curves: Vec<ScalarCurveJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bone_tracks: Option<Vec<BoneTrackJson>>,
+}
+
+#[derive(Serialize)]
+struct EntityJson {
+    entity: Entity,
+    domain: &'static str,
+    time: Option<f32>,
+    clip_id: Option<u64>,
+    params: serde_json::Map<String, serde_json::Value>,
+    schedule: Vec<ScheduleInstanceJson>,
+}
+
+#[derive(Serialize)]
+struct DragPreviewJson {
+    entity: Entity,
+    instance_id: u64,
+    start_time: f32,
+    end_time: f32,
+}
+
+#[derive(Serialize)]
+struct TimelineJson {
+    current_time: f32,
+    playing: bool,
+    looping: bool,
+    current_clip_id: Option<u64>,
+    drag_preview: Option<DragPreviewJson>,
+}
+
+#[derive(Serialize)]
+struct ModelJson {
+    entity: Entity,
+    schedule: Vec<ScheduleInstanceJson>,
+}
+
+#[derive(Serialize)]
+struct AnimDumpJson {
+    entities: Vec<EntityJson>,
+    clips: Vec<ClipJson>,
+    timeline: Option<TimelineJson>,
+    models: Vec<ModelJson>,
+}
+
+fn schedule_instances_json(world: &World, entity: Entity) -> Vec<ScheduleInstanceJson> {
     world
         .get_component::<ClipSchedule>(entity)
         .map(|s| {
             s.instances
                 .iter()
-                .map(|i| {
-                    serde_json::json!({
-                        "instance_id": i.instance_id,
-                        "source_id": i.source_id,
-                        "start_time": i.start_time,
-                        "clip_in": i.clip_in,
-                        "clip_out": i.clip_out,
-                        "speed": i.speed,
-                        "muted": i.muted,
-                    })
+                .map(|i| ScheduleInstanceJson {
+                    instance_id: i.instance_id,
+                    source_id: i.source_id,
+                    start_time: i.start_time,
+                    clip_in: i.clip_in,
+                    clip_out: i.clip_out,
+                    speed: i.speed,
+                    muted: i.muted,
                 })
-                .collect::<Vec<_>>()
+                .collect()
         })
         .unwrap_or_default()
 }
@@ -47,7 +139,7 @@ fn collect_role_names_by_bone(world: &World) -> HashMap<BoneId, String> {
     role_names
 }
 
-fn bone_tracks_json(world: &World, clip: &EditableAnimationClip) -> Vec<serde_json::Value> {
+fn bone_tracks_json(world: &World, clip: &EditableAnimationClip) -> Vec<BoneTrackJson> {
     let role_names = collect_role_names_by_bone(world);
 
     let mut tracks: Vec<_> = clip.tracks.values().collect();
@@ -55,43 +147,36 @@ fn bone_tracks_json(world: &World, clip: &EditableAnimationClip) -> Vec<serde_js
 
     tracks
         .into_iter()
-        .map(|track| {
-            let role = role_names.get(&track.bone_id);
-
-            let curves = serde_json::json!({
-                "rot_x": build_curve_array(&track.rotation_x),
-                "rot_y": build_curve_array(&track.rotation_y),
-                "rot_z": build_curve_array(&track.rotation_z),
-                "pos_x": build_curve_array(&track.translation_x),
-                "pos_y": build_curve_array(&track.translation_y),
-                "pos_z": build_curve_array(&track.translation_z),
-            });
-
-            serde_json::json!({
-                "bone_id": track.bone_id,
-                "bone_name": track.bone_name,
-                "role": role,
-                "curves": curves,
-            })
+        .map(|track| BoneTrackJson {
+            bone_id: track.bone_id,
+            bone_name: track.bone_name.clone(),
+            role: role_names.get(&track.bone_id).cloned(),
+            curves: BoneCurvesJson {
+                rot_x: curve_keyframes(&track.rotation_x.keyframes),
+                rot_y: curve_keyframes(&track.rotation_y.keyframes),
+                rot_z: curve_keyframes(&track.rotation_z.keyframes),
+                pos_x: curve_keyframes(&track.translation_x.keyframes),
+                pos_y: curve_keyframes(&track.translation_y.keyframes),
+                pos_z: curve_keyframes(&track.translation_z.keyframes),
+            },
         })
         .collect()
 }
 
-fn build_curve_array(curve: &PropertyCurve) -> Vec<serde_json::Value> {
-    curve
-        .keyframes
+fn curve_keyframes(keyframes: &[EditableKeyframe]) -> Vec<CurveKeyJson> {
+    keyframes
         .iter()
-        .map(|k| serde_json::json!({"time": k.time, "value": k.value}))
+        .map(|k| CurveKeyJson {
+            time: k.time,
+            value: k.value,
+        })
         .collect()
 }
 
-/// Serialize the animation-facing world state (effects, their scheduled clips,
-/// every clip's scalar curves, timeline) so agents can inspect edits without a
-/// window. Written once at engine exit; the file is the access surface.
-pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::Value {
+fn entity_dumps(world: &World) -> Vec<EntityJson> {
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 
-    let entities: Vec<serde_json::Value> = scalar_channel_domains()
+    scalar_channel_domains()
         .iter()
         .flat_map(|domain| {
             (domain.entities)(world).into_iter().map(move |entity| {
@@ -105,85 +190,86 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
                     })
                     .collect();
                 let schedule = schedule_instances_json(world, entity);
-                serde_json::json!({
-                    "entity": entity,
-                    "domain": domain.name,
-                    "time": (domain.local_time)(world, entity),
-                    "clip_id": find_entity_clip_id(world, entity),
-                    "params": params,
-                    "schedule": schedule,
-                })
+                EntityJson {
+                    entity,
+                    domain: domain.name,
+                    time: (domain.local_time)(world, entity),
+                    clip_id: find_entity_clip_id(world, entity),
+                    params,
+                    schedule,
+                }
             })
+        })
+        .collect()
+}
+
+fn clip_dump(world: &World, clip: &EditableAnimationClip, include_tracks: bool) -> ClipJson {
+    let scalar_curves: Vec<ScalarCurveJson> = clip
+        .scalar_curves
+        .iter()
+        .map(|curve| {
+            let property = scalar_channel_for_property(curve.property_type)
+                .map(|(_, c)| c.cli_name.to_string())
+                .unwrap_or_else(|| format!("{:?}", curve.property_type));
+            ScalarCurveJson {
+                property,
+                keyframes: curve_keyframes(&curve.keyframes),
+            }
         })
         .collect();
 
-    let clips: Vec<serde_json::Value> = world
+    ClipJson {
+        id: clip.id,
+        name: clip.name.clone(),
+        duration: clip.duration,
+        bone_track_count: clip.tracks.len(),
+        scalar_curves,
+        bone_tracks: if include_tracks {
+            Some(bone_tracks_json(world, clip))
+        } else {
+            None
+        },
+    }
+}
+
+fn clips_dumps(world: &World, include_tracks: bool) -> Vec<ClipJson> {
+    world
         .get_resource::<ClipLibrary>()
         .map(|library| {
             let mut ids: Vec<_> = library.all_clip_ids().copied().collect();
             ids.sort_unstable();
             ids.iter()
                 .filter_map(|&id| library.get(id))
-                .map(|clip| {
-                    let curves: Vec<serde_json::Value> = clip
-                        .scalar_curves
-                        .iter()
-                        .map(|curve| {
-                            let property = scalar_channel_for_property(curve.property_type)
-                                .map(|(_, c)| c.cli_name.to_string())
-                                .unwrap_or_else(|| format!("{:?}", curve.property_type));
-                            let keyframes: Vec<serde_json::Value> = curve
-                                .keyframes
-                                .iter()
-                                .map(|k| serde_json::json!({"time": k.time, "value": k.value}))
-                                .collect();
-                            serde_json::json!({"property": property, "keyframes": keyframes})
-                        })
-                        .collect();
-                    let mut clip_obj = serde_json::json!({
-                        "id": clip.id,
-                        "name": clip.name,
-                        "duration": clip.duration,
-                        "bone_track_count": clip.tracks.len(),
-                        "scalar_curves": curves,
-                    });
-                    if include_tracks {
-                        let bone_tracks = bone_tracks_json(world, clip);
-                        clip_obj["bone_tracks"] = serde_json::json!(bone_tracks);
-                    }
-                    clip_obj
-                })
+                .map(|clip| clip_dump(world, clip, include_tracks))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
 
-    let drag_preview = world
-        .get_resource::<crate::ecs::resource::TimelineInteractionState>()
-        .and_then(|s| s.drag_preview)
-        .map(|p| {
-            serde_json::json!({
-                "entity": p.entity,
-                "instance_id": p.instance_id,
-                "start_time": p.start_time,
-                "end_time": p.end_time,
-            })
-        })
-        .unwrap_or(serde_json::Value::Null);
+fn timeline_dump(world: &World) -> Option<TimelineJson> {
+    world.get_resource::<TimelineState>().map(|t| {
+        let drag_preview = world
+            .get_resource::<crate::ecs::resource::TimelineInteractionState>()
+            .and_then(|s| s.drag_preview)
+            .map(|p| DragPreviewJson {
+                entity: p.entity,
+                instance_id: p.instance_id,
+                start_time: p.start_time,
+                end_time: p.end_time,
+            });
 
-    let timeline = world
-        .get_resource::<TimelineState>()
-        .map(|t| {
-            serde_json::json!({
-                "current_time": t.current_time,
-                "playing": t.playing,
-                "looping": t.looping,
-                "current_clip_id": t.current_clip_id,
-                "drag_preview": drag_preview,
-            })
-        })
-        .unwrap_or(serde_json::Value::Null);
+        TimelineJson {
+            current_time: t.current_time,
+            playing: t.playing,
+            looping: t.looping,
+            current_clip_id: t.current_clip_id,
+            drag_preview,
+        }
+    })
+}
 
-    let models: Vec<serde_json::Value> = world
+fn model_dumps(world: &World) -> Vec<ModelJson> {
+    world
         .component_entities::<ClipSchedule>()
         .into_iter()
         .filter(|&entity| {
@@ -191,15 +277,24 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
                 .get_component::<AnimationMeta>(entity)
                 .is_some_and(|meta| meta.animation_type == AnimationType::Skeletal)
         })
-        .map(|entity| {
-            serde_json::json!({
-                "entity": entity,
-                "schedule": schedule_instances_json(world, entity),
-            })
+        .map(|entity| ModelJson {
+            entity,
+            schedule: schedule_instances_json(world, entity),
         })
-        .collect();
+        .collect()
+}
 
-    serde_json::json!({"entities": entities, "clips": clips, "timeline": timeline, "models": models})
+/// Serialize the animation-facing world state (effects, their scheduled clips,
+/// every clip's scalar curves, timeline) so agents can inspect edits without a
+/// window. Written once at engine exit; the file is the access surface.
+pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::Value {
+    let dump = AnimDumpJson {
+        entities: entity_dumps(world),
+        clips: clips_dumps(world, include_tracks),
+        timeline: timeline_dump(world),
+        models: model_dumps(world),
+    };
+    serde_json::to_value(&dump).expect("AnimDumpJson serialization")
 }
 
 pub fn batch_anim_dump_write(world: &World, path: &str, include_tracks: bool) -> Result<()> {

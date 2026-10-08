@@ -4,9 +4,13 @@ use crate::ecs::resource::{
     BakedHumanoidClips, BatchAnimEdit, BoneAxis, ClipLibrary, PendingBatchAnimEdits, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::{
+    dispatch_scalar_clip_events, ScalarCurveEvent,
+};
 use crate::ecs::world::World;
 
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
 use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
 use thyllore_avatar_core::motion::seed::systems::compose_motion::{
     compose_motion, settle_requests,
@@ -181,236 +185,275 @@ pub fn batch_apply_anim_edits(
     assets: &mut AssetStorage,
     edits: &[BatchAnimEdit],
 ) {
-    use crate::ecs::systems::phases::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
-    use crate::ecs::systems::scalar_clip_systems::{
-        ensure_entity_clip, resolve_selected_scalar_entity,
-    };
-
     crate::ecs::systems::humanoid_rig_systems::sync_humanoid_rig(world, assets);
 
     for edit in edits {
         match edit {
-            BatchAnimEdit::DebugKeys { seed } => {
-                dispatch_scalar_clip_events(
-                    &[ScalarCurveEvent::InsertScalarDebugKeys { seed: *seed }],
-                    world,
-                    assets,
-                );
-            }
+            BatchAnimEdit::DebugKeys { seed } => apply_debug_keys(world, assets, *seed),
             BatchAnimEdit::Key {
                 property_type,
                 time,
                 value,
-            } => {
-                let previous_time = {
-                    let mut timeline = world.resource_mut::<TimelineState>();
-                    let previous = timeline.current_time;
-                    timeline.current_time = *time;
-                    previous
-                };
-                dispatch_scalar_clip_events(
-                    &[ScalarCurveEvent::InsertScalarKey {
-                        property_type: *property_type,
-                        value: *value,
-                    }],
-                    world,
-                    assets,
-                );
-                world.resource_mut::<TimelineState>().current_time = previous_time;
-            }
+            } => apply_key(world, assets, *property_type, *time, *value),
             BatchAnimEdit::BoneKey {
                 bone_name,
                 axis,
                 time,
                 value,
-            } => {
-                insert_bone_key(world, assets, bone_name, *axis, *time, *value);
-            }
-            BatchAnimEdit::Compose { spec } => {
-                let keys = match compose_motion(PoseTable::builtin(), spec) {
-                    Ok(keys) => keys,
-                    Err(e) => {
-                        log_warn!("compose {}: {}", spec.motion, e);
-                        continue;
-                    }
-                };
-                for key in &keys {
-                    insert_bone_key(
-                        world,
-                        assets,
-                        key.role.unity_name(),
-                        bone_axis_of(key.axis),
-                        key.time,
-                        key.degrees,
-                    );
-                }
-                match settle_requests(PoseTable::builtin(), spec, &keys) {
-                    Ok(requests) => apply_settle_requests(world, assets, &requests),
-                    Err(e) => log_warn!("compose {}: {}", spec.motion, e),
-                }
-            }
+            } => insert_bone_key(world, assets, bone_name, *axis, *time, *value),
+            BatchAnimEdit::Compose { spec } => apply_compose(world, assets, spec),
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
-                dispatch_scalar_clip_events(
-                    &[ScalarCurveEvent::InsertScalarKeyAtPlayhead {
-                        property_type: *property_type,
-                    }],
-                    world,
-                    assets,
-                );
+                apply_key_at_playhead(world, assets, *property_type)
             }
-            BatchAnimEdit::TrimEnd { seconds } => {
-                let Some((entity, domain)) = resolve_selected_scalar_entity(world) else {
-                    continue;
-                };
-                let clip_id = ensure_entity_clip(world, assets, entity, domain);
-                let Some(instance_id) = world.get_component::<ClipSchedule>(entity).and_then(|s| {
-                    s.instances
-                        .iter()
-                        .find(|i| i.source_id == clip_id)
-                        .map(|i| i.instance_id)
-                }) else {
-                    continue;
-                };
-                crate::ecs::systems::timeline_systems::process_clip_instance_events(
-                    &[ClipInstanceEvent::TrimEnd {
-                        entity,
-                        instance_id,
-                        new_clip_out: *seconds,
-                    }],
-                    world,
-                );
-            }
-            BatchAnimEdit::NewClip { name } => {
-                let clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip(name);
-                let id = crate::ecs::systems::clip_library_register_and_activate(
-                    &mut world.resource_mut::<ClipLibrary>(),
-                    assets,
-                    clip,
-                );
-                world.resource_mut::<TimelineState>().current_clip_id = Some(id);
-            }
-            BatchAnimEdit::Template { path } => {
-                let mut loaded = match crate::scene::load_animation_clip(path) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        log_warn!("template {} failed: {}", path.display(), e);
-                        continue;
-                    }
-                };
-                if let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) {
-                    thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(
-                        &mut loaded,
-                        &table,
-                    );
-                }
-                remove_clip_by_name(world, assets, &loaded.name);
-                let id = crate::ecs::systems::clip_library_register_and_activate(
-                    &mut world.resource_mut::<ClipLibrary>(),
-                    assets,
-                    loaded,
-                );
-                world.resource_mut::<TimelineState>().current_clip_id = Some(id);
-            }
-            BatchAnimEdit::Save { path } => {
-                let current_clip_id = world.resource::<TimelineState>().current_clip_id;
-                let Some(clip_id) = current_clip_id else {
-                    log_warn!("save {}: no current clip", path.display());
-                    continue;
-                };
-                let lib = world.resource::<ClipLibrary>();
-                let Some(clip) = lib.get(clip_id) else {
-                    log_warn!("save {}: clip id {} not found", path.display(), clip_id);
-                    continue;
-                };
-                if let Err(e) = crate::scene::save_animation_clip(path, clip) {
-                    log_warn!("save {} failed: {}", path.display(), e);
-                }
-            }
-            BatchAnimEdit::Clear => {
-                dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);
-            }
+            BatchAnimEdit::TrimEnd { seconds } => apply_trim_end(world, assets, *seconds),
+            BatchAnimEdit::NewClip { name } => apply_new_clip(world, assets, name),
+            BatchAnimEdit::Template { path } => apply_template(world, assets, path),
+            BatchAnimEdit::Save { path } => apply_save(world, path),
+            BatchAnimEdit::Clear => apply_clear(world, assets),
             BatchAnimEdit::CopilotExtend {
                 bone_name,
                 axis,
                 time,
                 frames,
-            } => {
-                #[cfg(feature = "ml")]
-                {
-                    let clip_id = match world.resource::<TimelineState>().current_clip_id {
-                        Some(id) => id,
-                        None => continue,
-                    };
-                    let mut lib = world.resource_mut::<ClipLibrary>();
-                    let clip = match lib.get_mut(clip_id) {
-                        Some(c) => c,
-                        None => continue,
-                    };
-                    let Some(model_path) = crate::ml::resolve_curve_copilot_model_path() else {
-                        log_warn!("copilot_extend: curve copilot model not found, skipping");
-                        continue;
-                    };
-                    let mut session = match thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(&model_path) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            log_warn!("copilot_extend: failed to load model: {}", e);
-                            continue;
-                        }
-                    };
-                    let table = match crate::ecs::systems::engine_bone_name_to_id(world, assets) {
-                        Some(t) => t,
-                        None => {
-                            log_warn!("copilot_extend: no bone name table available, skipping");
-                            continue;
-                        }
-                    };
-                    let bone_id = match table.get(bone_name.as_str()) {
-                        Some(&id) => id,
-                        None => {
-                            log_warn!("copilot_extend: bone {} is not on this model", bone_name);
-                            continue;
-                        }
-                    };
-                    let track = if let Some(t) = clip.get_track_mut(bone_id) {
-                        t
-                    } else {
-                        clip.add_track(bone_id, bone_name.clone())
-                    };
-                    let curve = match axis {
-                        BoneAxis::RotationX => &mut track.rotation_x,
-                        BoneAxis::RotationY => &mut track.rotation_y,
-                        BoneAxis::RotationZ => &mut track.rotation_z,
-                        BoneAxis::TranslationX => &mut track.translation_x,
-                        BoneAxis::TranslationY => &mut track.translation_y,
-                        BoneAxis::TranslationZ => &mut track.translation_z,
-                    };
-                    match crate::ecs::systems::curve_copilot::copilot_extend_curve(
-                        &mut session,
-                        curve,
-                        *time,
-                        *frames,
-                    ) {
-                        Ok(count) => {
-                            log!("copilot_extend: added {} keys", count);
-                            let last_time = curve.keyframes.last().map(|k| k.time).unwrap_or(0.0);
-                            if last_time > clip.duration {
-                                clip.duration = last_time;
-                            }
-                            lib.mark_dirty(clip_id);
-                        }
-                        Err(e) => {
-                            log_warn!("copilot_extend failed: {}", e);
-                        }
-                    }
-                }
-                #[cfg(not(feature = "ml"))]
-                {
-                    let _ = (bone_name, axis, time, frames);
-                    log_warn!("copilot_extend: ml feature is disabled, skipping");
-                }
-            }
+            } => apply_copilot_extend(world, assets, bone_name, *axis, *time, *frames),
         }
     }
 
     crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
+}
+
+fn apply_debug_keys(world: &mut World, assets: &mut AssetStorage, seed: u64) {
+    dispatch_scalar_clip_events(
+        &[ScalarCurveEvent::InsertScalarDebugKeys { seed }],
+        world,
+        assets,
+    );
+}
+
+fn apply_key(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    property_type: PropertyType,
+    time: f32,
+    value: f32,
+) {
+    let previous_time = {
+        let mut timeline = world.resource_mut::<TimelineState>();
+        let previous = timeline.current_time;
+        timeline.current_time = time;
+        previous
+    };
+    dispatch_scalar_clip_events(
+        &[ScalarCurveEvent::InsertScalarKey {
+            property_type,
+            value,
+        }],
+        world,
+        assets,
+    );
+    world.resource_mut::<TimelineState>().current_time = previous_time;
+}
+
+fn apply_compose(world: &mut World, assets: &mut AssetStorage, spec: &MotionSpec) {
+    let keys = match compose_motion(PoseTable::builtin(), spec) {
+        Ok(keys) => keys,
+        Err(e) => {
+            log_warn!("compose {}: {}", spec.motion, e);
+            return;
+        }
+    };
+    for key in &keys {
+        insert_bone_key(
+            world,
+            assets,
+            key.role.unity_name(),
+            bone_axis_of(key.axis),
+            key.time,
+            key.degrees,
+        );
+    }
+    match settle_requests(PoseTable::builtin(), spec, &keys) {
+        Ok(requests) => apply_settle_requests(world, assets, &requests),
+        Err(e) => log_warn!("compose {}: {}", spec.motion, e),
+    }
+}
+
+fn apply_key_at_playhead(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    property_type: PropertyType,
+) {
+    dispatch_scalar_clip_events(
+        &[ScalarCurveEvent::InsertScalarKeyAtPlayhead { property_type }],
+        world,
+        assets,
+    );
+}
+
+fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
+    use crate::ecs::systems::scalar_clip_systems::{
+        ensure_entity_clip, resolve_selected_scalar_entity,
+    };
+    let Some((entity, domain)) = resolve_selected_scalar_entity(world) else {
+        return;
+    };
+    let clip_id = ensure_entity_clip(world, assets, entity, domain);
+    let Some(instance_id) = world.get_component::<ClipSchedule>(entity).and_then(|s| {
+        s.instances
+            .iter()
+            .find(|i| i.source_id == clip_id)
+            .map(|i| i.instance_id)
+    }) else {
+        return;
+    };
+    crate::ecs::systems::timeline_systems::process_clip_instance_events(
+        &[ClipInstanceEvent::TrimEnd {
+            entity,
+            instance_id,
+            new_clip_out: seconds,
+        }],
+        world,
+    );
+}
+
+fn apply_new_clip(world: &mut World, assets: &mut AssetStorage, name: &str) {
+    let clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip(name);
+    let id = crate::ecs::systems::clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        assets,
+        clip,
+    );
+    world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+}
+
+fn apply_template(world: &mut World, assets: &mut AssetStorage, path: &std::path::Path) {
+    let mut loaded = match crate::scene::load_animation_clip(path) {
+        Ok(c) => c,
+        Err(e) => {
+            log_warn!("template {} failed: {}", path.display(), e);
+            return;
+        }
+    };
+    if let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) {
+        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(&mut loaded, &table);
+    }
+    remove_clip_by_name(world, assets, &loaded.name);
+    let id = crate::ecs::systems::clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        assets,
+        loaded,
+    );
+    world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+}
+
+fn apply_save(world: &mut World, path: &std::path::Path) {
+    let current_clip_id = world.resource::<TimelineState>().current_clip_id;
+    let Some(clip_id) = current_clip_id else {
+        log_warn!("save {}: no current clip", path.display());
+        return;
+    };
+    let lib = world.resource::<ClipLibrary>();
+    let Some(clip) = lib.get(clip_id) else {
+        log_warn!("save {}: clip id {} not found", path.display(), clip_id);
+        return;
+    };
+    if let Err(e) = crate::scene::save_animation_clip(path, clip) {
+        log_warn!("save {} failed: {}", path.display(), e);
+    }
+}
+
+fn apply_clear(world: &mut World, assets: &mut AssetStorage) {
+    dispatch_scalar_clip_events(&[ScalarCurveEvent::ClearScalarKeys], world, assets);
+}
+
+#[cfg(feature = "ml")]
+fn apply_copilot_extend(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    bone_name: &str,
+    axis: BoneAxis,
+    time: f32,
+    frames: usize,
+) {
+    if let Err(e) = try_apply_copilot_extend(world, assets, bone_name, axis, time, frames) {
+        log_warn!("copilot_extend: {:#}", e);
+    }
+}
+
+#[cfg(feature = "ml")]
+fn try_apply_copilot_extend(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    bone_name: &str,
+    axis: BoneAxis,
+    time: f32,
+    frames: usize,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        return Ok(());
+    };
+    let mut lib = world.resource_mut::<ClipLibrary>();
+    let Some(clip) = lib.get_mut(clip_id) else {
+        return Ok(());
+    };
+
+    let model_path = crate::ml::resolve_curve_copilot_model_path()
+        .context("curve copilot model not found, skipping")?;
+    let mut session =
+        thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
+            &model_path,
+        )
+        .context("failed to load model")?;
+    let table = crate::ecs::systems::engine_bone_name_to_id(world, assets)
+        .context("no bone name table available, skipping")?;
+    let &bone_id = table
+        .get(bone_name)
+        .with_context(|| format!("bone {} is not on this model", bone_name))?;
+
+    let track = if let Some(t) = clip.get_track_mut(bone_id) {
+        t
+    } else {
+        clip.add_track(bone_id, bone_name.to_string())
+    };
+
+    let curve = match axis {
+        BoneAxis::RotationX => &mut track.rotation_x,
+        BoneAxis::RotationY => &mut track.rotation_y,
+        BoneAxis::RotationZ => &mut track.rotation_z,
+        BoneAxis::TranslationX => &mut track.translation_x,
+        BoneAxis::TranslationY => &mut track.translation_y,
+        BoneAxis::TranslationZ => &mut track.translation_z,
+    };
+
+    match crate::ecs::systems::curve_copilot::copilot_extend_curve(
+        &mut session,
+        curve,
+        time,
+        frames,
+    ) {
+        Ok(count) => {
+            log!("copilot_extend: added {} keys", count);
+            let last_time = curve.keyframes.last().map(|k| k.time).unwrap_or(0.0);
+            if last_time > clip.duration {
+                clip.duration = last_time;
+            }
+            lib.mark_dirty(clip_id);
+        }
+        Err(e) => log_warn!("copilot_extend failed: {}", e),
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "ml"))]
+fn apply_copilot_extend(
+    _world: &mut World,
+    _assets: &mut AssetStorage,
+    _bone_name: &str,
+    _axis: BoneAxis,
+    _time: f32,
+    _frames: usize,
+) {
+    log_warn!("copilot_extend: ml feature is disabled, skipping");
 }

@@ -15,7 +15,6 @@ mod erf_response;
 mod oscillatory_response;
 pub use oscillatory_response::*;
 mod matrix;
-pub mod muscle;
 mod noise;
 mod npy;
 mod polynomial;

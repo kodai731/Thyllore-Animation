@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine_harness import dood_wrap, engine_env, engine_path, repo_root
 
 MODEL_PATH = "assets/models/test_humanoid/test_humanoid.fbx"
+HIPS_TY_STANDARD = 0.1
 OUT_DIR = "target/template_smoke"
 
 KEYS = {
@@ -35,6 +36,7 @@ KEYS = {
     "Head": (15, 30, 5),
     "Spine": (-20, 10, 0),
     "RightLowerLeg": (45, 0, 0),
+    "Hips": (0, 20, 0),
 }
 
 
@@ -143,6 +145,44 @@ def check_passthrough_key(dump: dict, bone_name: str, x_degrees: float) -> list[
     return violations
 
 
+def check_hips_translation(dump: dict) -> list[dict]:
+    """Check Hips world y at t=1 is rest_y + HIPS_TY_STANDARD * (Hips-LeftFoot height at t=0)."""
+    violations = []
+    hips_rest_y = None
+    foot_rest_y = None
+    for pose in dump.get("poses", []):
+        if pose["time"] > 0.5:
+            break
+        for bone in pose["bones"]:
+            if bone.get("role") == "Hips":
+                hips_rest_y = bone["world_position"][1]
+            elif bone.get("role") == "LeftFoot":
+                foot_rest_y = bone["world_position"][1]
+    if hips_rest_y is None or foot_rest_y is None:
+        violations.append({"role": "Hips", "error": "missing Hips or LeftFoot at t=0"})
+        return violations
+    height = hips_rest_y - foot_rest_y
+    expected_dy = HIPS_TY_STANDARD * height
+    for pose in dump.get("poses", []):
+        time = pose["time"]
+        if time <= 0.5:
+            continue
+        for bone in pose["bones"]:
+            if bone.get("role") != "Hips":
+                continue
+            wy = bone["world_position"][1]
+            expected_wy = hips_rest_y + expected_dy
+            if abs(wy - expected_wy) > 1e-3:
+                violations.append({
+                    "time": time,
+                    "role": "Hips",
+                    "expected_wy": round(expected_wy, 6),
+                    "actual_wy": round(wy, 6),
+                    "diff": round(abs(wy - expected_wy), 6),
+                })
+    return violations
+
+
 def compare_dumps(a: dict, b: dict) -> float:
     """Max component difference of world_position for matching time+bone name."""
     max_diff = 0.0
@@ -171,6 +211,7 @@ def run_engine_first(out_dir: Path, scene_path: Path, dood: bool) -> subprocess.
         for axis, value in [("x", x), ("y", y), ("z", z)]:
             edit_args += ["--batch-anim-edit", f"key={role}.{axis}@0=0", "--batch-anim-edit", f"key={role}.{axis}@1={value}"]
     edit_args += ["--batch-anim-edit", "key=Skirt_Front_1.x@0=0", "--batch-anim-edit", "key=Skirt_Front_1.x@1=45"]
+    edit_args += ["--batch-anim-edit", "key=Hips.ty@0=0", "--batch-anim-edit", f"key=Hips.ty@1={HIPS_TY_STANDARD}"]
     command = [
         str(engine_path()),
         "--batch-scene", str(scene_path),
@@ -277,6 +318,7 @@ def main() -> None:
 
     violations = check_identity_rig_pose(dump_a, KEYS)
     violations += check_passthrough_key(dump_a, "Skirt_Front_1", 45)
+    violations += check_hips_translation(dump_a)
     roundtrip_diff = compare_dumps(dump_a, dump_b)
 
     ok = len(violations) == 0 and roundtrip_diff < 1e-3

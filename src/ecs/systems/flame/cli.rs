@@ -15,11 +15,9 @@ use crate::ecs::resource::{
     BatchEffectOrbit, FlameDumpSink, FlameFieldTraceCapture, FlameRenderSettings, FlameSdfSource,
     FlameShadingMode,
 };
-use crate::ecs::systems::cli_args::{
-    finite_float_parse, float_pair_parse, scalar_assignment_parse,
-};
 use crate::ecs::world::{Entity, World};
 use crate::hooks::bootstrap::BootstrapOverrides;
+use thyllore_cli_core::{finite_float_parse, float_pair_parse, scalar_assignment_parse};
 
 const ROT_Z_DEG_KEY: &str = "rot_z_deg";
 

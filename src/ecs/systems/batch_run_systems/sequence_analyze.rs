@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::json;
 
-use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
+use thyllore_cli_core::flag_value_resolve_from_args;
 
 use super::flags::{BATCH_SEQUENCE_ANALYZE_FLAG, BATCH_SEQUENCE_DUMP_FLAG};
 

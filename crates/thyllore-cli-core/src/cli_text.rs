@@ -53,3 +53,55 @@ pub fn finite_float_parse(text: &str) -> Result<f32, String> {
     }
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flag_value_resolve_from_args_missing_flag() {
+        let args: Vec<String> = vec!["--other".into(), "val".into()];
+        assert_eq!(flag_value_resolve_from_args(&args, "--foo").unwrap(), None);
+    }
+
+    #[test]
+    fn flag_value_resolve_from_args_present() {
+        let args: Vec<String> = vec!["--foo".into(), "bar".into()];
+        assert_eq!(
+            flag_value_resolve_from_args(&args, "--foo").unwrap(),
+            Some("bar".into())
+        );
+    }
+
+    #[test]
+    fn scalar_assignment_parse_valid() {
+        let (key, value) = scalar_assignment_parse("intensity=2.5", &["intensity"]).unwrap();
+        assert_eq!(key, "intensity");
+        assert!((value - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn scalar_assignment_parse_unknown_key() {
+        let err = scalar_assignment_parse("unknown=1.0", &["intensity"]).unwrap_err();
+        assert!(err.contains("unknown key"));
+    }
+
+    #[test]
+    fn float_pair_parse_valid() {
+        let (a, b) = float_pair_parse("1.5,2.5").unwrap();
+        assert!((a - 1.5).abs() < 1e-6);
+        assert!((b - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn finite_float_parse_valid() {
+        let v = finite_float_parse("3.14").unwrap();
+        assert!((v - 3.14).abs() < 1e-6);
+    }
+
+    #[test]
+    fn finite_float_parse_infinite_rejected() {
+        let err = finite_float_parse("inf").unwrap_err();
+        assert!(err.contains("finite"));
+    }
+}

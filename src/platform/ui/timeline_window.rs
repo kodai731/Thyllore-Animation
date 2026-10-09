@@ -17,7 +17,7 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::{
     clip_drag_preview_times, clip_schedule_assign_lanes, find_preview_owner,
-    timeline_effective_duration,
+    timeline_effective_duration, CameraSwitchMarker,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -222,7 +222,15 @@ fn build_timeline_content(
         .horizontal_scrollbar(true)
         .build(|| {
             ui.set_scroll_x(synced_scroll_x);
-            build_time_ruler_with_scrub(ui, world, state, interaction, timeline_width, duration);
+            build_time_ruler_with_scrub(
+                ui,
+                world,
+                state,
+                interaction,
+                timeline_width,
+                duration,
+                &clip_track_snapshot.camera_switch_markers,
+            );
         });
     ui.separator();
 
@@ -258,6 +266,7 @@ fn build_time_ruler_with_scrub(
     interaction: &mut TimelineInteractionState,
     timeline_width: f32,
     display_duration: f32,
+    markers: &[crate::ecs::systems::CameraSwitchMarker],
 ) {
     let cursor_pos = ui.cursor_screen_pos();
     let ruler_start_x = cursor_pos[0] + TRACK_LABEL_WIDTH;
@@ -313,6 +322,11 @@ fn build_time_ruler_with_scrub(
         time += tick_interval;
     }
 
+    for marker in markers {
+        let x = ruler_start_x + marker.time * pixels_per_second;
+        draw_camera_switch_marker(&draw_list, x, cursor_pos[1], &marker.camera_name);
+    }
+
     let playhead_x = ruler_start_x + state.current_time * pixels_per_second;
     draw_playhead_handle(&draw_list, playhead_x, cursor_pos[1], TIME_RULER_HEIGHT);
 
@@ -334,6 +348,26 @@ fn build_time_ruler_with_scrub(
     );
 
     ui.dummy([ruler_width + TRACK_LABEL_WIDTH, TIME_RULER_HEIGHT]);
+}
+
+const CAMERA_SWITCH_MARKER_COLOR: [f32; 4] = [0.95, 0.75, 0.2, 1.0];
+
+fn draw_camera_switch_marker(draw_list: &imgui::DrawListMut, x: f32, y: f32, camera_name: &str) {
+    let size = PLAYHEAD_HANDLE_SIZE * 0.8;
+    draw_list
+        .add_triangle(
+            [x - size, y + TIME_RULER_HEIGHT],
+            [x + size, y + TIME_RULER_HEIGHT],
+            [x, y + TIME_RULER_HEIGHT - size * 1.5],
+            CAMERA_SWITCH_MARKER_COLOR,
+        )
+        .filled(true)
+        .build();
+    draw_list.add_text(
+        [x + size + 2.0, y + TIME_RULER_HEIGHT * 0.25],
+        CAMERA_SWITCH_MARKER_COLOR,
+        camera_name,
+    );
 }
 
 fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_height: f32) {

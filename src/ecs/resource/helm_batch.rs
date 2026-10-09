@@ -61,37 +61,3 @@ impl HelmBatchState {
         self.next += 1;
     }
 }
-
-/// Parse `--batch-utterance <path>` and optional `--batch-utterance-out <path>` from CLI args.
-/// Returns `(input_path, output_path)` where output_path defaults to "log/helm_batch_results.jsonl".
-pub fn parse_batch_flags() -> Option<(PathBuf, PathBuf)> {
-    let args: Vec<String> = std::env::args().collect();
-    let mut input_path: Option<PathBuf> = None;
-    let mut output_path: Option<PathBuf> = None;
-
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "--batch-utterance" {
-            if let Some(arg) = args.get(i + 1) {
-                input_path = Some(PathBuf::from(arg));
-                i += 2;
-                continue;
-            }
-        } else if args[i] == "--batch-utterance-out" {
-            if let Some(arg) = args.get(i + 1) {
-                output_path = Some(PathBuf::from(arg));
-                i += 2;
-                continue;
-            }
-        }
-        i += 1;
-    }
-
-    match input_path {
-        Some(input) => {
-            let out = output_path.unwrap_or_else(|| PathBuf::from("log/helm_batch_results.jsonl"));
-            Some((input, out))
-        }
-        None => None,
-    }
-}

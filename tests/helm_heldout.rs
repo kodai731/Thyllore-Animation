@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 //! Held-out evaluation of the helm router on 128 samples.
 //!
 //! Loads JSONL from `THYLLORE_HELM_HELDOUT` (each line `{lang, utterance, tool, args}`),

@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 //! Holds the Rust router to the decisions the Python evaluation driver reached.
 //!
 //! The published route accuracy was measured by `AnimationModelTraining scripts/helm_router/`, so

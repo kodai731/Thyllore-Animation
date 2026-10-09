@@ -1,4 +1,6 @@
-//! E2E integration test: text → ONNX encoder → router index → dispatch → UIEvent.
+#![cfg(test)]
+
+//! E2E integration test: text → ONNX encoder → router index → dispatch → command.
 //!
 //! Runs the real ONNX encoder against the real exemplar index with real thresholds,
 //! exercising the full path from an utterance string to a dispatched UI command.
@@ -12,12 +14,12 @@
 
 use std::path::PathBuf;
 
-use thyllore_animation::ecs::events::UIEvent;
+use thyllore_animation::ecs::events::UiCommandQueue;
 use thyllore_animation::ecs::resource::{load_runtime, HelmRuntime, HierarchyState, TimelineState};
+use thyllore_animation::ecs::systems::helm::command::HelmCommand;
 use thyllore_animation::ecs::systems::helm::dispatcher::dispatch_tool_call;
 use thyllore_animation::ecs::systems::helm::name_resolver::list_entity_names;
 use thyllore_animation::ecs::world::{Entity, Name, World};
-use thyllore_animation::ecs::UIEventQueue;
 use thyllore_animation::helm::components::route::{HelmMode, Route, RouteKind};
 use thyllore_animation::helm::systems::normalize::normalize_utterance;
 use thyllore_animation::helm::systems::resolution::{
@@ -48,8 +50,8 @@ fn build_world() -> (World, Entity) {
     world.insert_resource(TimelineState::default());
     // Insert ClipLibrary
     world.insert_resource(thyllore_animation::ecs::resource::ClipLibrary::default());
-    // Insert UIEventQueue (starts empty)
-    world.insert_resource(UIEventQueue::new());
+    // Insert command queue (starts empty)
+    world.insert_resource(UiCommandQueue::default());
     (world, hero)
 }
 
@@ -85,7 +87,7 @@ fn e2e_text_to_ui_event_full_path() {
 
     // Case (1): AllowEdit + confirm_all=false + "play the animation"
     // -> Accept { route: PlayAnimation } -> AwaitConfirm { call: PlayAnimation, reason: Mutating }
-    // -> dispatch_tool_call (user confirmation) returns Command(TimelinePlay) -> UIEventQueue len increases
+    // -> dispatch_tool_call (user confirmation) returns Command(Play) -> queue len increases
     {
         let (world, hero_entity) = build_world();
         let utterance = "play the animation";
@@ -141,7 +143,7 @@ fn e2e_text_to_ui_event_full_path() {
             other => panic!("expected AwaitConfirm action, got {:?}", other),
         };
 
-        let queue_len_before = world.get_resource::<UIEventQueue>().unwrap().len();
+        let queue_len_before = world.get_resource::<UiCommandQueue>().unwrap().len();
         let outcome = dispatch_tool_call(
             &world,
             &thyllore_animation::helm::systems::seek::TimelineContext::default(),
@@ -151,22 +153,19 @@ fn e2e_text_to_ui_event_full_path() {
         match outcome {
             thyllore_animation::ecs::systems::helm::dispatcher::DispatchOutcome::Command(event) => {
                 assert!(
-                    matches!(event, UIEvent::TimelinePlay),
-                    "expected TimelinePlay event, got {:?}",
+                    matches!(event, HelmCommand::Play),
+                    "expected Play command, got {:?}",
                     event
                 );
-                world
-                    .get_resource_mut::<UIEventQueue>()
-                    .unwrap()
-                    .send(event);
+                world.send_command(event);
             }
             other => panic!("expected Command outcome, got {:?}", other),
         }
 
-        let queue_len_after = world.get_resource::<UIEventQueue>().unwrap().len();
+        let queue_len_after = world.get_resource::<UiCommandQueue>().unwrap().len();
         assert!(
             queue_len_after > queue_len_before,
-            "UIEventQueue length should increase after dispatch"
+            "UiCommandQueue length should increase after dispatch"
         );
     }
 
@@ -267,7 +266,7 @@ fn e2e_text_to_ui_event_full_path() {
             other => panic!("expected AwaitConfirm action, got {:?}", other),
         };
 
-        let queue_len_before = world.get_resource::<UIEventQueue>().unwrap().len();
+        let queue_len_before = world.get_resource::<UiCommandQueue>().unwrap().len();
         let outcome = dispatch_tool_call(
             &world,
             &thyllore_animation::helm::systems::seek::TimelineContext::default(),
@@ -277,22 +276,19 @@ fn e2e_text_to_ui_event_full_path() {
         match outcome {
             thyllore_animation::ecs::systems::helm::dispatcher::DispatchOutcome::Command(event) => {
                 assert!(
-                    matches!(event, UIEvent::SelectEntity(entity) if entity == hero_entity),
-                    "expected SelectEntity(hero_entity) event, got {:?}",
+                    matches!(event, HelmCommand::SelectEntity(e) if e == hero_entity),
+                    "expected SelectEntity(hero_entity) command, got {:?}",
                     event
                 );
-                world
-                    .get_resource_mut::<UIEventQueue>()
-                    .unwrap()
-                    .send(event);
+                world.send_command(event);
             }
             other => panic!("expected Command outcome, got {:?}", other),
         }
 
-        let queue_len_after = world.get_resource::<UIEventQueue>().unwrap().len();
+        let queue_len_after = world.get_resource::<UiCommandQueue>().unwrap().len();
         assert!(
             queue_len_after > queue_len_before,
-            "UIEventQueue length should increase after dispatch"
+            "UiCommandQueue length should increase after dispatch"
         );
     }
 

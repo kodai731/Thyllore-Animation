@@ -1,6 +1,6 @@
 pub mod batch_driver;
 mod cli;
-mod command;
+pub mod command;
 pub mod dispatcher;
 mod frame_prep;
 pub mod name_resolver;

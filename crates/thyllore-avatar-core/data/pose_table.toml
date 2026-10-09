@@ -45,6 +45,31 @@ keys = [
 ]
 
 [[pose]]
+name = "knee_up"
+labels = ["膝を上げる", "raise the knee"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -90 },
+  { role = "RightLowerLeg", axis = "x", degrees = 90 },
+]
+
+[[pose]]
+name = "leg_kick_extended"
+labels = ["脚を前に蹴り出す", "leg kicked out forward"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -80 },
+  { role = "RightLowerLeg", axis = "x", degrees = 0 },
+]
+
+[[pose]]
+name = "guard"
+labels = ["拳を顔の前で構える", "fists up in guard"]
+keys = [
+  { role = "RightUpperArm", axis = "y", degrees = -30 },
+  { role = "RightUpperArm", axis = "z", degrees = -50 },
+  { role = "RightLowerArm", axis = "y", degrees = -120 },
+]
+
+[[pose]]
 name = "hips_twist"
 labels = ["腰を右へ捻る、足は正面のまま", "twist the hips to the right, feet stay planted"]
 keys = [
@@ -143,4 +168,27 @@ duration = 1.3
 poses = [
   { time = 0.4, set = [{ pose = "head_turn" }] },
   { time = 0.9, set = [{ pose = "head_turn" }] },
+]
+
+[[motion]]
+name = "knee_raise"
+labels = ["膝を上げる", "腿上げ", "raise the knee", "knee up"]
+region = "lower_body"
+duration = 1.5
+poses = [
+  { time = 0.5, set = [{ pose = "knee_up" }] },
+  { time = 1.0, set = [{ pose = "knee_up" }] },
+]
+
+[[motion]]
+name = "front_kick"
+labels = ["前蹴り", "キック", "蹴る", "front kick", "kick"]
+region = "full_body"
+duration = 1.8
+poses = [
+  { time = 0.3, set = [{ pose = "stance", side = "both" }, { pose = "guard", side = "both" }] },
+  { time = 0.6, set = [{ pose = "knee_up" }, { pose = "guard", side = "both" }] },
+  { time = 0.8, set = [{ pose = "leg_kick_extended" }, { pose = "guard", side = "both" }] },
+  { time = 1.1, set = [{ pose = "knee_up" }, { pose = "guard", side = "both" }] },
+  { time = 1.4, set = [{ pose = "stance", side = "both" }, { pose = "guard", side = "both" }] },
 ]

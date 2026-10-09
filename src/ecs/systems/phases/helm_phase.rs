@@ -5,7 +5,7 @@ use crate::ecs::resource::{ClipLibrary, HelmState, TimelineState};
 use crate::ecs::systems::helm::dispatcher::{dispatch_tool_call, DispatchOutcome};
 use crate::ecs::systems::helm::name_resolver::list_entity_names;
 use crate::ecs::systems::helm::timeline_context::build_timeline_context;
-use crate::ecs::UIEventQueue;
+use crate::ecs::systems::helm::HelmCommand;
 use crate::helm::components::route::Route;
 use crate::helm::components::tool_call::ToolCall;
 use crate::helm::systems::binder::{bind_route, BindOutcome};
@@ -13,7 +13,6 @@ use crate::helm::systems::normalize::normalize_utterance;
 use crate::helm::systems::resolution::{confirm_reason, resolve_decision, ResolvedAction};
 use crate::helm::systems::router::{rank_routes, route_utterance, RoutingRequest};
 
-use crate::ecs::events::UIEvent;
 use std::io::Write;
 
 /// Construct a jsonl entry for Reject / Clarify decisions (pure function).
@@ -129,10 +128,10 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
     if let Some(response) = confirm_response {
         let (outcome, tool_name): (Option<DispatchOutcome>, String) = {
             let mut state = ctx.world.resource_mut::<HelmState>();
-            if let Some((call, reason)) = state.pending.take() {
+            if let Some((call, _)) = state.pending.take() {
                 let tool_name = call.tool_name().to_string();
                 if response {
-                    (Some(execute_call(ctx.world, call, &state)), tool_name)
+                    (Some(execute_call(ctx.world, call)), tool_name)
                 } else {
                     state.feedback = Some(crate::ecs::resource::CommandFeedback::Report(
                         "cancelled".to_string(),
@@ -183,11 +182,11 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                     state.pending = Some((call, reason));
                 } else {
                     let tool_name = call.tool_name().to_string();
-                    let outcome = execute_call(ctx.world, call, &ctx.world.resource::<HelmState>());
+                    let outcome = execute_call(ctx.world, call);
                     handle_dispatch_outcome(ctx.world, outcome, &tool_name);
                 }
             }
-            BindOutcome::MissingSlot { route: _, slot } => {
+            BindOutcome::MissingSlot { .. } => {
                 let mut state = ctx.world.resource_mut::<HelmState>();
                 state.feedback = Some(crate::ecs::resource::CommandFeedback::Router(
                     crate::helm::systems::resolution::HelmFeedback::MissingObjectName { route },
@@ -325,8 +324,7 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                 match action {
                     ResolvedAction::Dispatch(call) => {
                         let tool_name = call.tool_name().to_string();
-                        let outcome =
-                            execute_call(ctx.world, call, &ctx.world.resource::<HelmState>());
+                        let outcome = execute_call(ctx.world, call);
                         handle_dispatch_outcome(ctx.world, outcome.clone(), &tool_name);
                         let dispatch_result = match &outcome {
                             DispatchOutcome::Command(_) => "Command",
@@ -460,27 +458,22 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
 }
 
 /// Execute a tool call and return its outcome.
-fn execute_call(
-    world: &crate::ecs::world::World,
-    call: ToolCall,
-    state: &HelmState,
-) -> DispatchOutcome {
+fn execute_call(world: &crate::ecs::world::World, call: ToolCall) -> DispatchOutcome {
     let timeline_state = world.resource::<TimelineState>();
     let clip_library = world.resource::<ClipLibrary>();
     let timeline_ctx = build_timeline_context(&timeline_state, &clip_library);
     dispatch_tool_call(world, &timeline_ctx, &call)
 }
 
-/// Handle a dispatch outcome by updating the UI event queue and feedback.
+/// Handle a dispatch outcome by sending UI commands and updating feedback.
 fn handle_dispatch_outcome(
     world: &crate::ecs::world::World,
     outcome: DispatchOutcome,
     tool_name: &str,
 ) {
     match outcome {
-        DispatchOutcome::Command(event) => {
-            let mut ui_events = world.resource_mut::<UIEventQueue>();
-            ui_events.send(event);
+        DispatchOutcome::Command(command) => {
+            world.send_command(command);
             let mut state = world.resource_mut::<HelmState>();
             state.feedback = Some(crate::ecs::resource::CommandFeedback::Executed(
                 tool_name.to_string(),
@@ -570,14 +563,13 @@ fn handle_dispatch_outcome(
                 }
             };
 
-            // (f) Get timeline current_time and push UIEvent::ClipInstanceAdd
+            // (f) Get timeline current_time and send HelmCommand::ClipInstanceAdd
             let current_time = {
                 let timeline = world.resource::<TimelineState>();
                 timeline.current_time
             };
 
-            let mut ui_events = world.resource_mut::<UIEventQueue>();
-            ui_events.send(UIEvent::ClipInstanceAdd {
+            world.send_command(HelmCommand::ClipInstanceAdd {
                 entity: target_entity,
                 source_id,
                 start_time: current_time,
@@ -591,9 +583,7 @@ fn handle_dispatch_outcome(
             )));
         }
         DispatchOutcome::CameraDirectionRequest { utterance, target } => {
-            world
-                .resource_mut::<UIEventQueue>()
-                .send(UIEvent::CameraDirection { utterance, target });
+            world.send_command(HelmCommand::CameraDirection { utterance, target });
             let mut state = world.resource_mut::<HelmState>();
             state.feedback = Some(crate::ecs::resource::CommandFeedback::Executed(
                 "camera_direction".to_string(),
@@ -611,9 +601,10 @@ fn handle_dispatch_outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::events::UIEvent;
-    use crate::ecs::world::{Entity, Name, World};
+    use crate::ecs::events::{apply_queued_ui_commands, UiCommandQueue};
+    use crate::ecs::world::{Name, World};
     use crate::helm::systems::resolution::ConfirmReason;
+    use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
     fn make_world() -> World {
         let mut world = World::new();
@@ -621,8 +612,16 @@ mod tests {
         world.insert_resource(TimelineState::new());
         world.insert_resource(ClipLibrary::new());
         world.insert_resource(HelmState::default());
-        world.insert_resource(UIEventQueue::new());
+        world.insert_resource(UiCommandQueue::default());
         world
+    }
+
+    fn apply_ui_commands(world: &mut World) {
+        apply_queued_ui_commands(
+            world,
+            &mut crate::asset::AssetStorage::new(),
+            &GraphicsResources::default(),
+        );
     }
 
     /// Test that ListObjects dispatch produces Report feedback.
@@ -650,7 +649,7 @@ mod tests {
         }
     }
 
-    /// Test that PlayAnimation dispatch produces a Command (UIEvent) outcome.
+    /// Test that PlayAnimation dispatch produces a Command (HelmCommand) outcome.
     #[test]
     fn test_play_animation_dispatch_produces_command() {
         let world = make_world();
@@ -661,40 +660,36 @@ mod tests {
         let outcome = dispatch_tool_call(&world, &timeline_ctx, &ToolCall::PlayAnimation);
 
         match outcome {
-            DispatchOutcome::Command(event) => {
+            DispatchOutcome::Command(command) => {
                 assert!(
-                    matches!(event, UIEvent::TimelinePlay),
-                    "expected TimelinePlay, got {:?}",
-                    event
+                    matches!(command, HelmCommand::Play),
+                    "expected Play, got {:?}",
+                    command
                 );
             }
             other => panic!("expected Command, got {:?}", other),
         }
     }
 
-    /// Test that handle_dispatch_outcome for PlayAnimation pushes to UIEventQueue.
+    /// Test that handle_dispatch_outcome for PlayAnimation starts timeline playback.
     #[test]
-    fn test_play_animation_pushes_to_ui_event_queue() {
-        let world = make_world();
+    fn test_play_animation_command_starts_playback() {
+        let mut world = make_world();
 
         let timeline_state = world.resource::<TimelineState>();
         let clip_library = world.resource::<ClipLibrary>();
         let timeline_ctx = build_timeline_context(&timeline_state, &clip_library);
+        drop(timeline_state);
+        drop(clip_library);
         let outcome = dispatch_tool_call(&world, &timeline_ctx, &ToolCall::PlayAnimation);
 
-        let events_before = {
-            let queue = world.resource::<UIEventQueue>();
-            queue.len()
-        };
-
         handle_dispatch_outcome(&world, outcome, "play_animation");
+        apply_ui_commands(&mut world);
 
-        let events_after = {
-            let queue = world.resource::<UIEventQueue>();
-            queue.len()
-        };
-
-        assert_eq!(events_after - events_before, 1, "expected 1 event pushed");
+        assert!(
+            world.resource::<TimelineState>().playing,
+            "expected timeline to be playing"
+        );
 
         let feedback = {
             let state = world.resource::<HelmState>();
@@ -709,9 +704,9 @@ mod tests {
         }
     }
 
-    /// Test that handle_dispatch_outcome for CameraDirectionRequest pushes to UIEventQueue.
+    /// Test that handle_dispatch_outcome for CameraDirectionRequest pushes to UiCommandQueue.
     #[test]
-    fn test_camera_direction_request_pushes_to_ui_event_queue() {
+    fn test_camera_direction_request_pushes_to_ui_command_queue() {
         let world = make_world();
 
         let outcome = DispatchOutcome::CameraDirectionRequest {
@@ -720,14 +715,14 @@ mod tests {
         };
 
         let events_before = {
-            let queue = world.resource::<UIEventQueue>();
+            let queue = world.resource::<UiCommandQueue>();
             queue.len()
         };
 
         handle_dispatch_outcome(&world, outcome, "camera_direction");
 
         let events_after = {
-            let queue = world.resource::<UIEventQueue>();
+            let queue = world.resource::<UiCommandQueue>();
             queue.len()
         };
 
@@ -768,7 +763,6 @@ mod tests {
             swapchain_extent: (800, 600),
             world: &mut world,
             assets: &mut crate::asset::AssetStorage::new(),
-            mesh_positions: Vec::new(),
         };
         run_helm_phase(&mut ctx);
 
@@ -795,7 +789,7 @@ mod tests {
         }
 
         let events_before = {
-            let queue = world.resource::<UIEventQueue>();
+            let queue = world.resource::<UiCommandQueue>();
             queue.len()
         };
 
@@ -807,12 +801,11 @@ mod tests {
             swapchain_extent: (800, 600),
             world: &mut world,
             assets: &mut crate::asset::AssetStorage::new(),
-            mesh_positions: Vec::new(),
         };
         run_helm_phase(&mut ctx);
 
         let events_after = {
-            let queue = world.resource::<UIEventQueue>();
+            let queue = world.resource::<UiCommandQueue>();
             queue.len()
         };
 
@@ -856,7 +849,6 @@ mod tests {
             swapchain_extent: (800, 600),
             world: &mut world,
             assets: &mut crate::asset::AssetStorage::new(),
-            mesh_positions: Vec::new(),
         };
         run_helm_phase(&mut ctx);
 
@@ -903,7 +895,6 @@ mod tests {
             swapchain_extent: (800, 600),
             world: &mut world,
             assets: &mut crate::asset::AssetStorage::new(),
-            mesh_positions: Vec::new(),
         };
         run_helm_phase(&mut ctx);
 
@@ -952,6 +943,8 @@ mod tests {
         let timeline_state = world.resource::<TimelineState>();
         let clip_library = world.resource::<ClipLibrary>();
         let timeline_ctx = build_timeline_context(&timeline_state, &clip_library);
+        drop(timeline_state);
+        drop(clip_library);
         let outcome = dispatch_tool_call(
             &world,
             &timeline_ctx,
@@ -963,19 +956,17 @@ mod tests {
 
         handle_dispatch_outcome(&world, outcome, "generate_motion");
 
-        // Assert UIEventQueue has 1 ClipInstanceAdd with speed 1.0
+        // Assert the applied ClipInstanceAdd added 1 instance with speed 1.0
+        apply_ui_commands(&mut world);
         {
-            let queue = world.resource::<UIEventQueue>();
-            assert_eq!(queue.len(), 1, "expected 1 event in queue");
-            match &queue[0] {
-                UIEvent::ClipInstanceAdd {
-                    entity: e, speed, ..
-                } => {
-                    assert_eq!(*e, entity, "expected target entity to match");
-                    assert_eq!(*speed, 1.0, "expected speed 1.0 for Normal");
-                }
-                other => panic!("expected ClipInstanceAdd, got {:?}", other),
-            }
+            let schedule = world
+                .get_component::<crate::ecs::component::ClipSchedule>(entity)
+                .expect("expected target entity to keep its ClipSchedule");
+            assert_eq!(schedule.instances.len(), 1, "expected 1 added instance");
+            assert_eq!(
+                schedule.instances[0].speed, 1.0,
+                "expected speed 1.0 for Normal"
+            );
         }
 
         // Assert feedback is Executed
@@ -1031,6 +1022,8 @@ mod tests {
         let timeline_state = world.resource::<TimelineState>();
         let clip_library = world.resource::<ClipLibrary>();
         let timeline_ctx = build_timeline_context(&timeline_state, &clip_library);
+        drop(timeline_state);
+        drop(clip_library);
         let outcome = dispatch_tool_call(
             &world,
             &timeline_ctx,
@@ -1045,6 +1038,8 @@ mod tests {
         let timeline_state = world.resource::<TimelineState>();
         let clip_library = world.resource::<ClipLibrary>();
         let timeline_ctx = build_timeline_context(&timeline_state, &clip_library);
+        drop(timeline_state);
+        drop(clip_library);
         let outcome = dispatch_tool_call(
             &world,
             &timeline_ctx,
@@ -1055,10 +1050,13 @@ mod tests {
         );
         handle_dispatch_outcome(&world, outcome, "generate_motion");
 
-        // Assert queue has 2 events (round robin progression)
+        // Assert 2 instances were added (round robin progression)
+        apply_ui_commands(&mut world);
         {
-            let queue = world.resource::<UIEventQueue>();
-            assert_eq!(queue.len(), 2, "expected 2 events in queue");
+            let schedule = world
+                .get_component::<crate::ecs::component::ClipSchedule>(entity)
+                .expect("expected target entity to keep its ClipSchedule");
+            assert_eq!(schedule.instances.len(), 2, "expected 2 added instances");
         }
 
         // Assert motion_seed_counters[Walk] == 2
@@ -1115,7 +1113,7 @@ mod tests {
 
         // Assert queue length did not increase (still 0)
         {
-            let queue = world.resource::<UIEventQueue>();
+            let queue = world.resource::<UiCommandQueue>();
             assert_eq!(queue.len(), 0, "expected no events in queue");
         }
     }

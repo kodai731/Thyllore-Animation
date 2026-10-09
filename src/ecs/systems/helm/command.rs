@@ -1,7 +1,9 @@
+use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::camera_rig::CameraRigEvent;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
@@ -30,6 +32,16 @@ pub enum HelmCommand {
     CameraShot {
         preset: ShotPreset,
         speed: SpeedPreset,
+        target: Option<Entity>,
+    },
+    ClipInstanceAdd {
+        entity: Entity,
+        source_id: SourceClipId,
+        start_time: f32,
+        speed: f32,
+    },
+    CameraDirection {
+        utterance: String,
         target: Option<Entity>,
     },
 }
@@ -99,6 +111,24 @@ impl UiCommand for HelmCommand {
                     target,
                 })
                 .apply(world, assets, graphics);
+            }
+            HelmCommand::ClipInstanceAdd {
+                entity,
+                source_id,
+                start_time,
+                speed,
+            } => {
+                Box::new(ClipInstanceEvent::Add {
+                    entity,
+                    source_id,
+                    start_time,
+                    speed,
+                })
+                .apply(world, assets, graphics);
+            }
+            HelmCommand::CameraDirection { utterance, target } => {
+                Box::new(CameraRigEvent::Direction { utterance, target })
+                    .apply(world, assets, graphics);
             }
         }
     }

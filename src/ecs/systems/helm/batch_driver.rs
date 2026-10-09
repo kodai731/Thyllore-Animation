@@ -7,8 +7,8 @@
 use std::io::Write;
 
 use crate::ecs::context::EcsContext;
+use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{CommandFeedback, HelmBatchState, HelmState};
-use crate::ecs::UIEventQueue;
 
 /// Read RSS from /proc/self/status (VmRSS in kB). Returns 0 on error.
 fn read_rss_kb() -> usize {
@@ -57,9 +57,9 @@ pub fn run_before_helm(ctx: &mut EcsContext) {
         return;
     }
 
-    // Record UI event queue length before injection.
+    // Record UI command queue length before injection.
     {
-        let ui_events = ctx.world.resource::<UIEventQueue>();
+        let ui_events = ctx.world.resource::<UiCommandQueue>();
         batch.ui_events_before = ui_events.len();
     }
 
@@ -140,7 +140,7 @@ pub fn run_after_helm(ctx: &mut EcsContext) {
     // Compute UI events diff from stored before count.
     let ui_events_before = batch.ui_events_before;
     let ui_events_after = {
-        let ui_events = ctx.world.resource::<UIEventQueue>();
+        let ui_events = ctx.world.resource::<UiCommandQueue>();
         ui_events.len()
     };
     let ui_events_diff = ui_events_after - ui_events_before;
@@ -358,7 +358,11 @@ fn finish_if_draining(ctx: &mut EcsContext) -> bool {
 
     let args: Vec<String> = std::env::args().collect();
     if let Some(path) = flag_value(&args, "--batch-anim-dump") {
-        if let Err(e) = crate::ecs::systems::batch_anim_dump_write(ctx.world, path) {
+        let include_tracks = args
+            .iter()
+            .any(|a| a == crate::ecs::systems::BATCH_ANIM_DUMP_TRACKS_FLAG);
+        if let Err(e) = crate::ecs::systems::batch_anim_dump_write(ctx.world, path, include_tracks)
+        {
             eprintln!("[helm-batch] anim dump failed: {e}");
             std::process::exit(1);
         }

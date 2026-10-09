@@ -613,6 +613,7 @@ mod tests {
         world.insert_resource(ClipLibrary::new());
         world.insert_resource(HelmState::default());
         world.insert_resource(UiCommandQueue::default());
+        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
         world
     }
 

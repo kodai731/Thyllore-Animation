@@ -10,6 +10,7 @@ use crate::fbx_animation::{
 };
 
 use crate::components::fbx::*;
+use crate::systems::fbx::file_identity::{FileIdentity, DEFAULT_CREATION_TIME};
 
 pub(crate) fn write_full_definitions<W: Write + Seek>(
     writer: &mut Writer<W>,
@@ -801,8 +802,9 @@ pub(crate) fn write_full_fbx_binary<W: Write + Seek>(
     mut writer: Writer<W>,
     data: &FullFbxExportData,
 ) -> FbxWriteResult<()> {
+    let identity = FileIdentity::from_creation_time(DEFAULT_CREATION_TIME);
     write_header_extension(&mut writer)?;
-    crate::fbx_animation::write_top_level_nodes(&mut writer)?;
+    crate::fbx_animation::write_top_level_nodes(&mut writer, &identity)?;
     let unit_scale_factor = (data.unit_scale * 100.0) as f64;
     write_global_settings(
         &mut writer,
@@ -817,7 +819,7 @@ pub(crate) fn write_full_fbx_binary<W: Write + Seek>(
     write_full_objects(&mut writer, data)?;
     write_connections(&mut writer, &data.anim_data)?;
     writer.finalize_and_flush(&FbxFooter {
-        unknown1: Some(&crate::systems::fbx::file_identity::FOOTER_ID),
+        unknown1: Some(&identity.footer_id),
         ..Default::default()
     })?;
     Ok(())

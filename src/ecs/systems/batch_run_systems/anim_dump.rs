@@ -9,6 +9,7 @@ use thyllore_anim_core::BoneId;
 
 use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_property, AnimationMeta, ClipSchedule,
+    ScalarChannelDomain,
 };
 use crate::ecs::resource::{AnimationType, ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::world::{Entity, World};
@@ -174,31 +175,41 @@ fn curve_keyframes(keyframes: &[EditableKeyframe]) -> Vec<CurveKeyJson> {
 }
 
 fn entity_dumps(world: &World) -> Vec<EntityJson> {
-    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
-
     scalar_channel_domains()
         .iter()
         .flat_map(|domain| {
-            (domain.entities)(world).into_iter().map(move |entity| {
-                let params: serde_json::Map<String, serde_json::Value> = domain
-                    .channels()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, channel)| {
-                        (domain.read)(world, entity, domain.property_type_at(index))
-                            .map(|value| (channel.cli_name.to_string(), value.into()))
-                    })
-                    .collect();
-                let schedule = schedule_instances_json(world, entity);
-                EntityJson {
-                    entity,
-                    domain: domain.name,
-                    time: (domain.local_time)(world, entity),
-                    clip_id: find_entity_clip_id(world, entity),
-                    params,
-                    schedule,
-                }
-            })
+            (domain.entities)(world)
+                .into_iter()
+                .map(move |entity| entity_dump(world, domain, entity))
+        })
+        .collect()
+}
+
+fn entity_dump(world: &World, domain: &ScalarChannelDomain, entity: Entity) -> EntityJson {
+    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
+
+    EntityJson {
+        entity,
+        domain: domain.name,
+        time: (domain.local_time)(world, entity),
+        clip_id: find_entity_clip_id(world, entity),
+        params: channel_values_json(world, domain, entity),
+        schedule: schedule_instances_json(world, entity),
+    }
+}
+
+fn channel_values_json(
+    world: &World,
+    domain: &ScalarChannelDomain,
+    entity: Entity,
+) -> serde_json::Map<String, serde_json::Value> {
+    domain
+        .channels()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, channel)| {
+            (domain.read)(world, entity, domain.property_type_at(index))
+                .map(|value| (channel.cli_name.to_string(), value.into()))
         })
         .collect()
 }

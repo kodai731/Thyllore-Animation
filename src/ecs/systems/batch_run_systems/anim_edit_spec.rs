@@ -10,8 +10,8 @@ use thyllore_cli_core::{finite_float_parse, nonnegative_finite_float_parse, requ
 use super::flags::BATCH_ANIM_EDIT_FLAG;
 use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
 
-/// Parse repeated `--batch-anim-edit <spec>` flags. Specs:
-/// `debug_keys=<seed>` | `key=<param>@<time>=<value>` | `key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value>` | `clear`.
+const SPEC_USAGE: &str = "debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear";
+
 pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchAnimEdit>> {
     let mut edits = Vec::new();
     for i in 0..args.len() {
@@ -19,7 +19,7 @@ pub(super) fn anim_edits_resolve_from_args(args: &[String]) -> Result<Vec<BatchA
             continue;
         }
         let Some(spec) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear");
+            bail!("{BATCH_ANIM_EDIT_FLAG} requires a spec: {SPEC_USAGE}");
         };
         edits.push(anim_edit_parse_spec(spec)?);
     }
@@ -31,9 +31,9 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
     if spec == "clear" {
         return Ok(BatchAnimEdit::Clear);
     }
-    let (kind, rest) = spec.split_once('=').ok_or_else(|| {
-        anyhow::anyhow!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
-    })?;
+    let (kind, rest) = spec
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("unknown anim edit spec '{spec}'. Expected {SPEC_USAGE}"))?;
     match kind {
         "debug_keys" => parse_debug_keys(rest),
         "key" => parse_key(rest),
@@ -48,7 +48,7 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
             spec: MotionSpec::parse(rest)?,
         }),
         "copilot_extend" => parse_copilot_extend(rest),
-        unknown => bail!("unknown anim edit spec '{unknown}=<value>'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear"),
+        unknown => bail!("unknown anim edit spec '{unknown}=<value>'. Expected {SPEC_USAGE}"),
     }
 }
 

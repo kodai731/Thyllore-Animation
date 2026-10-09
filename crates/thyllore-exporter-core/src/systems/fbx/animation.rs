@@ -5,6 +5,8 @@ use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
+use crate::systems::fbx::file_identity::{FileIdentity, CREATOR, DEFAULT_CREATION_TIME};
+
 use thyllore_anim_core::editable::{
     BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType, PropertyCurve,
     TangentWeightMode,
@@ -732,7 +734,7 @@ pub(crate) fn write_header_extension<W: Write + Seek>(
 
     {
         let mut attrs = writer.new_node("Creator")?;
-        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
+        attrs.append_string_direct(CREATOR)?;
         drop(attrs);
         writer.close_node()?;
     }
@@ -1214,24 +1216,27 @@ pub(crate) fn write_connections<W: Write + Seek>(
     Ok(())
 }
 
-pub(crate) fn write_top_level_nodes<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
+pub(crate) fn write_top_level_nodes<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    identity: &FileIdentity,
+) -> FbxWriteResult<()> {
     {
         let mut attrs = writer.new_node("FileId")?;
-        attrs.append_binary_direct(&crate::systems::fbx::file_identity::FILE_ID_BYTES)?;
+        attrs.append_binary_direct(&identity.file_id)?;
         drop(attrs);
         writer.close_node()?;
     }
 
     {
         let mut attrs = writer.new_node("CreationTime")?;
-        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATION_TIME)?;
+        attrs.append_string_direct(&identity.creation_time.to_fbx_string())?;
         drop(attrs);
         writer.close_node()?;
     }
 
     {
         let mut attrs = writer.new_node("Creator")?;
-        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
+        attrs.append_string_direct(CREATOR)?;
         drop(attrs);
         writer.close_node()?;
     }
@@ -1243,8 +1248,9 @@ fn write_fbx_binary<W: Write + Seek>(
     mut writer: Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
+    let identity = FileIdentity::from_creation_time(DEFAULT_CREATION_TIME);
     write_header_extension(&mut writer)?;
-    write_top_level_nodes(&mut writer)?;
+    write_top_level_nodes(&mut writer, &identity)?;
     write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps, 1.0)?;
     write_documents(&mut writer, data.document_uid)?;
     write_references(&mut writer)?;
@@ -1252,7 +1258,7 @@ fn write_fbx_binary<W: Write + Seek>(
     write_objects(&mut writer, data)?;
     write_connections(&mut writer, data)?;
     writer.finalize_and_flush(&FbxFooter {
-        unknown1: Some(&crate::systems::fbx::file_identity::FOOTER_ID),
+        unknown1: Some(&identity.footer_id),
         ..Default::default()
     })?;
     Ok(())

@@ -1,7 +1,8 @@
-use imgui::{Condition, Ui};
-
+use crate::asset::AssetStorage;
 use crate::ecs::World;
 use crate::helm::components::route::HelmMode;
+use crate::hooks::ui_window::init_window_state;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub struct CommandBarState {
@@ -59,7 +60,7 @@ fn confirm_reason_text(reason: &crate::helm::systems::resolution::ConfirmReason)
     }
 }
 
-pub fn build_command_bar(ui: &Ui, state_ui: &mut CommandBarState, world: &World) {
+fn build_command_bar(ui: &imgui::Ui, state_ui: &mut CommandBarState, world: &World) {
     let mut helm_state = match world.get_resource_mut::<crate::ecs::resource::HelmState>() {
         Some(r) => r,
         None => return,
@@ -133,3 +134,21 @@ pub fn build_command_bar(ui: &Ui, state_ui: &mut CommandBarState, world: &World)
 
     ui.close_current_popup();
 }
+
+fn build_command_bar_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let mut state = world.resource_mut::<CommandBarState>();
+    build_command_bar(ui, &mut state, world);
+}
+
+crate::ui_window!(
+    "command_bar",
+    Floating,
+    3,
+    init = init_window_state::<CommandBarState>,
+    build = build_command_bar_window
+);

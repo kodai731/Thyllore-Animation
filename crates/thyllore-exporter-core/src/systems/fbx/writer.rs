@@ -10,6 +10,7 @@ use crate::fbx_animation::{
 };
 
 use crate::components::fbx::*;
+use crate::systems::fbx::file_identity::{FileIdentity, DEFAULT_CREATION_TIME};
 
 pub(crate) fn write_full_definitions<W: Write + Seek>(
     writer: &mut Writer<W>,
@@ -801,7 +802,9 @@ pub(crate) fn write_full_fbx_binary<W: Write + Seek>(
     mut writer: Writer<W>,
     data: &FullFbxExportData,
 ) -> FbxWriteResult<()> {
+    let identity = FileIdentity::from_creation_time(DEFAULT_CREATION_TIME);
     write_header_extension(&mut writer)?;
+    crate::fbx_animation::write_top_level_nodes(&mut writer, &identity)?;
     let unit_scale_factor = (data.unit_scale * 100.0) as f64;
     write_global_settings(
         &mut writer,
@@ -815,6 +818,110 @@ pub(crate) fn write_full_fbx_binary<W: Write + Seek>(
     write_full_definitions(&mut writer, data)?;
     write_full_objects(&mut writer, data)?;
     write_connections(&mut writer, &data.anim_data)?;
-    writer.finalize_and_flush(&FbxFooter::default())?;
+    writer.finalize_and_flush(&FbxFooter {
+        unknown1: Some(&identity.footer_id),
+        ..Default::default()
+    })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::systems::fbx::build::build_full_export_data;
+    use fbxcel::low::FbxVersion;
+    use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+
+    fn load_test_humanoid_for_roundtrip() -> (
+        thyllore_file_format_core::fbx::FbxModel,
+        thyllore_anim_core::Skeleton,
+        EditableAnimationClip,
+    ) {
+        let path: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/models/test_humanoid/test_humanoid.fbx"
+        );
+
+        let fbx_model =
+            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
+        let (load_result, _) =
+            thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(path)
+                .expect("Failed to load graphics");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton")
+            .clone();
+
+        let clip = if let Some(source_clip) = load_result.clips.first() {
+            let bone_names: std::collections::HashMap<u32, String> = skeleton
+                .bones
+                .iter()
+                .enumerate()
+                .map(|(i, b)| (i as u32, b.name.clone()))
+                .collect();
+            thyllore_anim_core::editable::clip_from_animation(1, source_clip, &bone_names)
+        } else {
+            let hips_bone_id = skeleton
+                .bone_name_to_id
+                .get("Hips")
+                .expect("skeleton has no Hips bone");
+            let mut clip = EditableAnimationClip::new(1, "idle".to_string());
+            clip.add_track(*hips_bone_id, "Hips".to_string());
+            clip
+        };
+
+        (fbx_model, skeleton, clip)
+    }
+
+    #[test]
+    fn full_exported_fbx_has_file_id() {
+        let (fbx_model, skeleton, clip) = load_test_humanoid_for_roundtrip();
+
+        let export_path = std::path::Path::new("assets/exports/test_file_id.fbx");
+        let data = build_full_export_data(&fbx_model, Some(&clip), &skeleton, export_path)
+            .expect("build_full_export_data failed");
+
+        let mut buf = Vec::new();
+        let writer = Writer::new(std::io::Cursor::new(&mut buf), FbxVersion::V7_4).unwrap();
+        write_full_fbx_binary(writer, &data).unwrap();
+
+        let mut parser = match fbxcel::pull_parser::any::AnyParser::from_seekable_reader(
+            std::io::Cursor::new(&buf),
+        )
+        .unwrap()
+        {
+            fbxcel::pull_parser::any::AnyParser::V7400(parser) => parser,
+            _ => panic!("exported FBX is not v7400"),
+        };
+        let mut node_path: Vec<String> = Vec::new();
+        let mut top_level_names: Vec<String> = Vec::new();
+        loop {
+            match parser.next_event().unwrap() {
+                fbxcel::pull_parser::v7400::Event::StartNode(start) => {
+                    let name = start.name().to_owned();
+                    if node_path.is_empty() {
+                        top_level_names.push(name.clone());
+                    }
+                    node_path.push(name);
+                }
+                fbxcel::pull_parser::v7400::Event::EndNode => {
+                    node_path.pop();
+                }
+                fbxcel::pull_parser::v7400::Event::EndFbx(_) => break,
+            }
+        }
+
+        assert!(
+            top_level_names.iter().any(|name| name == "FileId"),
+            "top-level FileId missing in full export, got {:?}",
+            top_level_names
+        );
+        assert!(
+            top_level_names.iter().any(|name| name == "CreationTime"),
+            "top-level CreationTime missing in full export, got {:?}",
+            top_level_names
+        );
+    }
 }

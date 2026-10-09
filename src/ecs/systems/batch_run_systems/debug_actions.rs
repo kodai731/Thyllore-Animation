@@ -4,7 +4,7 @@ use crate::ecs::resource::{FrameClock, ScheduledBatchAction, ScheduledBatchActio
 use crate::ecs::world::World;
 
 use super::batch_action::{batch_action_registry, BatchAction};
-use super::cli_resolve::{BATCH_DEBUG_ACTION_AT_FLAG, BATCH_DEBUG_ACTION_FLAG};
+use super::flags::{BATCH_DEBUG_ACTION_AT_FLAG, BATCH_DEBUG_ACTION_FLAG};
 
 pub(super) fn debug_actions_resolve_from_args(
     args: &[String],

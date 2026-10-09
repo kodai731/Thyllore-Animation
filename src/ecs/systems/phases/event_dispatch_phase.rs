@@ -1,5 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::apply_queued_ui_commands;
+use crate::ecs::systems::validation_report_sync;
 use crate::ecs::world::World;
 use crate::hooks::dispatch_prep::run_dispatch_prep_hooks;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -9,6 +10,13 @@ pub fn run_event_dispatch_phase(
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
 ) {
+    if let Some(mut report) = world.get_resource_mut::<crate::ecs::resource::ValidationReport>() {
+        validation_report_sync(
+            &mut report,
+            thyllore_log_core::validation_stats::validation_stats_snapshot(),
+        );
+    }
+
     run_dispatch_prep_hooks(world, assets);
 
     apply_queued_ui_commands(world, assets, graphics);

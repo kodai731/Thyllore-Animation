@@ -1,4 +1,5 @@
 use imgui::Condition;
+use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
@@ -179,6 +180,12 @@ fn build_validation_tab(ui: &imgui::Ui, state: &AvatarSetupState) {
     }
     ui.separator();
 
+    ui.text(format!("Warnings: {}", state.geometry_warnings.len()));
+    for warning in &state.geometry_warnings {
+        ui.bullet_text(format_geometry_warning(warning));
+    }
+    ui.separator();
+
     ui.text(format!("Missing bones: {}", state.missing_bone_names.len()));
     for bone_name in &state.missing_bone_names {
         ui.bullet_text(bone_name);
@@ -205,6 +212,44 @@ fn format_mapping_issue(issue: &MappingIssue) -> String {
             "{} is not under {}",
             child.unity_name(),
             expected_ancestor.unity_name()
+        ),
+        MappingIssue::MirroredRolesShareBone { left, right } => format!(
+            "{} and {} share the same bone",
+            left.unity_name(),
+            right.unity_name()
+        ),
+        MappingIssue::BoneInTwoRoles { roles, .. } => format!(
+            "bone used by both {} and {}",
+            roles[0].unity_name(),
+            roles[1].unity_name()
+        ),
+    }
+}
+
+fn format_geometry_warning(warning: &GeometryWarning) -> String {
+    match warning {
+        GeometryWarning::Asymmetric {
+            left,
+            right,
+            distance,
+        } => format!(
+            "{} and {} are asymmetric (distance {:.3})",
+            left.unity_name(),
+            right.unity_name(),
+            distance
+        ),
+        GeometryWarning::NotAscending { lower, upper } => {
+            format!("{} is not below {}", lower.unity_name(), upper.unity_name())
+        }
+        GeometryWarning::LengthRatio {
+            upper,
+            lower,
+            ratio,
+        } => format!(
+            "{} / {} length ratio {:.2} is out of range",
+            upper.unity_name(),
+            lower.unity_name(),
+            ratio
         ),
     }
 }

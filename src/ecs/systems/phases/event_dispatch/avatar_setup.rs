@@ -4,8 +4,9 @@ use thyllore_avatar_core::vrchat::rank::Platform;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
 use crate::ecs::systems::{
-    add_spring_chains_by_prefix, export_unity_avatar, open_avatar_setup, save_humanoid_mapping,
-    save_material_textures, set_avatar_rank_platform, set_humanoid_role, set_material_texture,
+    add_spring_chains_by_prefix, export_unity_avatar, invalidate_humanoid_rig, open_avatar_setup,
+    save_humanoid_mapping, save_material_textures, set_avatar_rank_platform, set_humanoid_role,
+    set_material_texture,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -44,7 +45,10 @@ impl UiCommand for AvatarSetupEvent {
             AvatarSetupEvent::SetHumanoidRole { role, bone } => {
                 set_humanoid_role(world, role, bone)
             }
-            AvatarSetupEvent::SaveHumanoidMapping => save_humanoid_mapping(world),
+            AvatarSetupEvent::SaveHumanoidMapping => {
+                save_humanoid_mapping(world);
+                invalidate_humanoid_rig(world);
+            }
             AvatarSetupEvent::SetAvatarRankPlatform(platform) => {
                 set_avatar_rank_platform(world, platform)
             }

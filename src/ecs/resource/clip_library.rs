@@ -12,6 +12,7 @@ pub struct ClipLibrary {
     pub dirty_sources: HashSet<SourceClipId>,
     pub next_source_id: SourceClipId,
     pub source_to_asset_id: HashMap<SourceClipId, AssetId>,
+    pub model_clip_ids: HashSet<SourceClipId>,
 }
 
 impl ClipLibrary {
@@ -22,6 +23,7 @@ impl ClipLibrary {
             dirty_sources: HashSet::new(),
             next_source_id: 1,
             source_to_asset_id: HashMap::new(),
+            model_clip_ids: HashSet::new(),
         }
     }
 
@@ -34,6 +36,15 @@ impl ClipLibrary {
         self.source_clips.clear();
         self.dirty_sources.clear();
         self.source_to_asset_id.clear();
+    }
+
+    pub fn clear_model_clips(&mut self) {
+        self.animation.clear();
+        let ids: HashSet<SourceClipId> = self.model_clip_ids.clone();
+        self.source_clips.retain(|id, _| !ids.contains(id));
+        self.dirty_sources.retain(|id| !ids.contains(id));
+        self.source_to_asset_id.retain(|id, _| !ids.contains(id));
+        self.model_clip_ids.clear();
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
@@ -86,5 +97,12 @@ impl ClipLibrary {
 
     pub fn clip_count(&self) -> usize {
         self.source_clips.len()
+    }
+
+    pub fn find_source_by_name(&self, name: &str) -> Option<SourceClipId> {
+        self.source_clips
+            .iter()
+            .find(|(_, s)| s.editable_clip.name == name)
+            .map(|(id, _)| *id)
     }
 }

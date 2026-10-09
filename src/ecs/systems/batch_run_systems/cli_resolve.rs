@@ -3,27 +3,19 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 
 use crate::ecs::resource::{BatchRun, CaptureOutput, CaptureSchedule, ScheduledBatchAction};
-use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
+use thyllore_cli_core::flag_value_resolve_from_args;
 
-use super::anim_edits::{anim_edits_resolve_from_args, BatchAnimEdit};
+use super::anim_edit_spec::anim_edits_resolve_from_args;
 use super::batch_action::BatchAction;
 use super::debug_actions::{debug_actions_resolve_from_args, scheduled_actions_resolve_from_args};
+use super::flags::*;
+use super::BatchAnimEdit;
 
-const BATCH_SCREENSHOT_FLAG: &str = "--batch-screenshot";
-const BATCH_SCREENSHOT_SEQUENCE_FLAG: &str = "--batch-screenshot-sequence";
-const BATCH_FRAMES_FLAG: &str = "--batch-frames";
-const BATCH_CAMERA_FLAG: &str = "--batch-camera";
-const GPU_TIMINGS_FLAG: &str = "--gpu-timings";
-const EXPOSURE_DUMP_FLAG: &str = "--exposure-dump";
-const BATCH_PICK_FLAG: &str = "--batch-pick";
-const BATCH_SCENE_FLAG: &str = "--batch-scene";
-const BATCH_PLAY_FLAG: &str = "--batch-play";
-const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
-pub(super) const BATCH_ANIM_EDIT_FLAG: &str = "--batch-anim-edit";
-pub(super) const BATCH_DEBUG_ACTION_FLAG: &str = "--batch-debug-action";
-pub(super) const BATCH_DEBUG_ACTION_AT_FLAG: &str = "--batch-debug-action-at";
-pub const BATCH_LIST_DEBUG_ACTIONS_FLAG: &str = "--batch-list-debug-actions";
-pub(super) const DEFAULT_SCREENSHOT_FRAME: u64 = 120;
+#[derive(Clone, Debug)]
+pub struct AnimDebugDumpRequest {
+    pub path: String,
+    pub times: Vec<f32>,
+}
 
 /// The engine's own startup flags; subsystem flags arrive through `bootstrap_hook!` and their
 /// actions through `batch_action!`.
@@ -37,8 +29,12 @@ pub struct EngineCliOverrides {
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
     pub anim_dump_path: Option<String>,
+    pub anim_dump_tracks: bool,
     pub debug_actions: Vec<Box<dyn BatchAction>>,
     pub scheduled_actions: Vec<ScheduledBatchAction>,
+    pub preview: Option<crate::ecs::resource::ClipPreview>,
+    pub anim_debug_dump: Option<AnimDebugDumpRequest>,
+    pub export_fbx_path: Option<String>,
 }
 
 pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverrides> {
@@ -52,8 +48,12 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
         anim_dump_path: flag_value_resolve_from_args(args, BATCH_ANIM_DUMP_FLAG)?,
+        anim_dump_tracks: args.iter().any(|a| a == BATCH_ANIM_DUMP_TRACKS_FLAG),
         debug_actions: debug_actions_resolve_from_args(args)?,
         scheduled_actions: scheduled_actions_resolve_from_args(args)?,
+        preview: preview_resolve_from_args(args)?,
+        anim_debug_dump: anim_debug_dump_resolve_from_args(args)?,
+        export_fbx_path: flag_value_resolve_from_args(args, BATCH_EXPORT_FBX_FLAG)?,
     })
 }
 
@@ -238,4 +238,104 @@ pub fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} y in '{value}'"))?;
     Ok(Some((x, y)))
+}
+
+pub fn preview_resolve_from_args(
+    args: &[String],
+) -> Result<Option<crate::ecs::resource::ClipPreview>> {
+    let Some(position) = args.iter().position(|arg| arg == BATCH_PREVIEW_FLAG) else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_PREVIEW_FLAG} requires <solo|mix>");
+    };
+    match value.as_str() {
+        "solo" => Ok(Some(crate::ecs::resource::ClipPreview::Solo)),
+        "mix" => Ok(Some(crate::ecs::resource::ClipPreview::Mix)),
+        _ => bail!("{BATCH_PREVIEW_FLAG} expects 'solo' or 'mix', got '{value}'"),
+    }
+}
+
+pub fn anim_debug_dump_resolve_from_args(args: &[String]) -> Result<Option<AnimDebugDumpRequest>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_ANIM_DEBUG_DUMP_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_ANIM_DEBUG_DUMP_FLAG} requires <path>@<t>[,<t>...]");
+    };
+    let at_pos = value
+        .find('@')
+        .ok_or_else(|| anyhow::anyhow!("{BATCH_ANIM_DEBUG_DUMP_FLAG} missing '@' in '{value}'"))?;
+    let path = value[..at_pos].to_string();
+    let times_str = &value[at_pos + 1..];
+    if times_str.is_empty() {
+        bail!("{BATCH_ANIM_DEBUG_DUMP_FLAG} has no times after '@' in '{value}'");
+    }
+    let times: Vec<f32> = times_str
+        .split(',')
+        .map(|s| {
+            s.parse::<f32>().map_err(|e| {
+                anyhow::anyhow!("{BATCH_ANIM_DEBUG_DUMP_FLAG} time '{s}' is not a number: {e}")
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Some(AnimDebugDumpRequest { path, times }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batch_preview_parses_mix() {
+        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("mix")];
+        let result = preview_resolve_from_args(&args).unwrap();
+        assert_eq!(result, Some(crate::ecs::resource::ClipPreview::Mix));
+    }
+
+    #[test]
+    fn batch_preview_rejects_unknown() {
+        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("foo")];
+        let result = preview_resolve_from_args(&args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn batch_preview_absent_is_none() {
+        let args: Vec<String> = vec![];
+        let result = preview_resolve_from_args(&args).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn anim_debug_dump_parses_path_and_times() {
+        let args: Vec<String> = vec![
+            String::from("--batch-anim-debug-dump"),
+            String::from("out.json@0,0.5,1"),
+        ];
+        let result = anim_debug_dump_resolve_from_args(&args).unwrap();
+        let req = result.unwrap();
+        assert_eq!(req.path, "out.json");
+        assert_eq!(req.times, [0.0f32, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn anim_debug_dump_rejects_missing_times() {
+        let args: Vec<String> = vec![
+            String::from("--batch-anim-debug-dump"),
+            String::from("out.json"),
+        ];
+        let result = anim_debug_dump_resolve_from_args(&args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn export_fbx_flag_reads_path() {
+        let args: Vec<String> = vec![String::from("--batch-export-fbx"), String::from("out.fbx")];
+        let result = flag_value_resolve_from_args(&args, BATCH_EXPORT_FBX_FLAG).unwrap();
+        assert_eq!(result.as_deref(), Some("out.fbx"));
+    }
 }

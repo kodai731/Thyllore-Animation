@@ -32,7 +32,7 @@ pub fn load_animation_clip(path: &Path) -> SceneResult<EditableAnimationClip> {
 pub fn parse_animation_clip(content: &str) -> SceneResult<EditableAnimationClip> {
     let clip_file: AnimationClipFile = ron::from_str(content)?;
 
-    if clip_file.version != ANIMATION_FORMAT_VERSION {
+    if !(1..=ANIMATION_FORMAT_VERSION).contains(&clip_file.version) {
         return Err(SceneError::VersionMismatch {
             expected: ANIMATION_FORMAT_VERSION,
             found: clip_file.version,
@@ -81,10 +81,25 @@ mod tests {
 
     #[test]
     fn test_unknown_channel_names_are_rejected() {
-        let text = r#"(version: 1, clip: (id: 1, name: "x", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [(channel: "no_such_channel", id: 1, keyframes: [], next_keyframe_id: 1)])"#;
+        let text = r#"(version: 2, clip: (id: 1, name: "x", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [(channel: "no_such_channel", id: 1, keyframes: [], next_keyframe_id: 1)])"#;
         assert!(matches!(
             parse_animation_clip(text),
             Err(SceneError::ClipFile(_))
         ));
+    }
+
+    #[test]
+    fn v2_clip_file_still_loads() {
+        let text = r#"(version: 2, clip: (id: 1, name: "role", duration: 1.0, space: HumanoidRole, tracks: {0: (bone_id: 0, bone_name: "LeftUpperArm", translation_x: (id: 0, property_type: TranslationX, keyframes: [], next_keyframe_id: 1), translation_y: (id: 1, property_type: TranslationY, keyframes: [], next_keyframe_id: 1), translation_z: (id: 2, property_type: TranslationZ, keyframes: [], next_keyframe_id: 1), rotation_x: (id: 3, property_type: RotationX, keyframes: [(id: 1, time: 0.0, value: 0.5, in_tangent: (time_offset: 0.0, value_offset: 0.0), out_tangent: (time_offset: 0.0, value_offset: 0.0))], next_keyframe_id: 2), rotation_y: (id: 4, property_type: RotationY, keyframes: [], next_keyframe_id: 1), rotation_z: (id: 5, property_type: RotationZ, keyframes: [], next_keyframe_id: 1), scale_x: (id: 6, property_type: ScaleX, keyframes: [], next_keyframe_id: 1), scale_y: (id: 7, property_type: ScaleY, keyframes: [], next_keyframe_id: 1), scale_z: (id: 8, property_type: ScaleZ, keyframes: [], next_keyframe_id: 1))}, source_path: None, next_curve_id: 9), scalar_curves: [])"#;
+        let clip = parse_animation_clip(text).expect("parse");
+        let track = clip.get_track(0).expect("track");
+        assert_eq!(track.bone_name, "LeftUpperArm");
+    }
+
+    #[test]
+    fn v1_clip_file_still_loads() {
+        let text = r#"(version: 1, clip: (id: 1, name: "v1", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [])"#;
+        let clip = parse_animation_clip(text).expect("parse v1");
+        assert_eq!(clip.name, "v1");
     }
 }

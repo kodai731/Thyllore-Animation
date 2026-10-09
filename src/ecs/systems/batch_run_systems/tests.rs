@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use super::anim_edit_spec::anim_edits_resolve_from_args;
+use super::flags::DEFAULT_SCREENSHOT_FRAME;
 use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;
@@ -377,7 +379,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         "key edit must restore timeline time"
     );
 
-    let dump = batch_anim_dump_json(&world);
+    let dump = batch_anim_dump_json(&world, false);
     let entities = dump["entities"].as_array().unwrap();
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0]["domain"], PROBE_DOMAIN.name);
@@ -666,4 +668,460 @@ fn scheduled_actions_apply_once_their_frame_is_reached() {
     assert_eq!(first_frame_commands, vec!["ResetCamera"]);
     assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
     assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
+}
+
+#[test]
+fn dump_includes_bone_tracks_when_requested() {
+    use crate::ecs::systems::clip_library_register_and_activate;
+    use tempfile::tempdir;
+    use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
+
+    let tmp = tempdir().unwrap();
+    let (world, mut assets) = humanoid_rig_world(tmp.path());
+
+    let mut clip = EditableAnimationClip::new(0, "t".into());
+    let track = clip.add_track(
+        role_track_bone(&world, "RightUpperArm"),
+        "RightUpperArm".into(),
+    );
+    curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
+    curve_add_keyframe(&mut track.rotation_z, 1.0, 45.0);
+
+    clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), &mut assets, clip);
+
+    let dump = batch_anim_dump_json(&world, true);
+    let bone_track = &dump["clips"][0]["bone_tracks"][0];
+    assert_eq!(bone_track["role"], "RightUpperArm");
+    assert_eq!(
+        bone_track["curves"]["rot_z"].as_array().map(Vec::len),
+        Some(2)
+    );
+
+    let dump = batch_anim_dump_json(&world, false);
+    assert!(dump["clips"][0].get("bone_tracks").is_none());
+}
+
+#[test]
+fn anim_edit_parses_clip_specs() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let edit = anim_edit_parse_spec("new_clip=walk").unwrap();
+    match edit {
+        BatchAnimEdit::NewClip { name } => assert_eq!(name, "walk"),
+        other => panic!("expected NewClip, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("template=/tmp/a.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Template { path } => assert_eq!(path.to_str().unwrap(), "/tmp/a.anim.json"),
+        other => panic!("expected Template, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("save=/tmp/b.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Save { path } => assert_eq!(path.to_str().unwrap(), "/tmp/b.anim.json"),
+        other => panic!("expected Save, got {:?}", other),
+    }
+}
+
+#[test]
+fn copilot_extend_parses_role_axis_time_frames() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use super::BoneAxis;
+
+    let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
+    match edit {
+        BatchAnimEdit::CopilotExtend {
+            bone_name,
+            axis,
+            time,
+            frames,
+        } => {
+            assert_eq!(bone_name, "Hips");
+            assert_eq!(axis, BoneAxis::RotationY);
+            assert_eq!(time, 1.5);
+            assert_eq!(frames, 30);
+        }
+        other => panic!("expected CopilotExtend, got {:?}", other),
+    }
+
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.tx@1.0,30").is_err());
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.x@1.0").is_err());
+}
+
+#[test]
+fn template_then_save_round_trips_a_clip() {
+    use crate::ecs::systems::humanoid_bake_systems::new_empty_clip;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    let template_path = tmp.path().join("template.anim.json");
+    let save_path = tmp.path().join("saved.anim.json");
+
+    let clip = new_empty_clip("walk");
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    let current_id = world.resource::<TimelineState>().current_clip_id;
+    assert!(current_id.is_some());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Save {
+            path: save_path.clone(),
+        }],
+    );
+
+    let loaded_template = crate::scene::load_animation_clip(&template_path).unwrap();
+    let loaded_saved = crate::scene::load_animation_clip(&save_path).unwrap();
+
+    assert_eq!(loaded_template.tracks.len(), loaded_saved.tracks.len());
+}
+
+#[test]
+fn template_replaces_a_same_named_bone_clip_with_a_playable_asset() {
+    use tempfile::tempdir;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+
+    let template_path = tmp.path().join("template.anim.json");
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(99, "walk".to_string());
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        assert_eq!(lib.source_clips.len(), 1);
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+}
+
+fn humanoid_rig_world(dir: &std::path::Path) -> (World, AssetStorage) {
+    use crate::ecs::resource::HumanoidRigState;
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+
+    let (fbx_path, _) = copy_test_humanoid_fixture(dir);
+    let (mut world, assets) = test_humanoid_world(&fbx_path);
+    let skeleton = &assets.skeletons.values().next().unwrap().skeleton;
+    let rig = build_humanoid_rig(&fbx_path, skeleton, None).expect("test humanoid has no rig");
+    world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+    (world, assets)
+}
+
+fn role_track_bone(world: &World, role_name: &str) -> thyllore_anim_core::BoneId {
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    rig.track_bones[role_name]
+}
+
+#[test]
+fn key_edit_addresses_role_curve() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+
+    let track = clip.get_track(role_track_bone(&world, "Head")).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 0.5).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
+
+    let lib = world.resource::<ClipLibrary>();
+    assert!(lib.dirty_sources.contains(&clip_id));
+}
+
+#[test]
+fn key_edit_rejects_role_on_bone_clip() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(1, "bone".to_string());
+    let id = crate::ecs::systems::clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        &mut assets,
+        clip,
+    );
+    world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(id).unwrap();
+    assert_eq!(clip.tracks.len(), 0);
+}
+
+#[test]
+fn role_key_rejects_translation_on_non_hips() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let result = anim_edit_parse_spec("key=Head.tx@0=1");
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("tx"));
+}
+
+#[test]
+fn bone_key_rejects_translation_on_a_non_hips_role() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    assert!(anim_edit_parse_spec("key=Head.tx@0=1").is_err());
+    assert!(anim_edit_parse_spec("key=Skirt_Front_1.tx@0=1").is_ok());
+}
+
+#[test]
+fn bone_key_addresses_an_unmapped_bone() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Skirt_Front_1.x@1=45").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip
+        .get_track(role_track_bone(&world, "Skirt_Front_1"))
+        .unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 1.0).abs() < f32::EPSILON);
+    assert!((kf.value - 45.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_extends_duration() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Hips.ty@3=0.1").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert!((clip.duration - 3.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_keeps_earlier_keys_on_the_same_curve() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@0=0").unwrap()],
+    );
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@1=-90").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
+    assert_eq!(track.rotation_z.keyframes.len(), 2);
+    assert!((track.rotation_z.keyframes[0].time - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[0].value - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].time - 1.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].value - (-90.0)).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_builds_the_rig_before_resolving_names() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (fbx_path, _) = copy_test_humanoid_fixture(tmp.path());
+    let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@1=20").unwrap()],
+    );
+
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    let bone_id = rig.track_bones["Head"];
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip.get_track(bone_id).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 1.0).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn compose_edit_keys_every_touched_role_from_the_pose_table() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[
+            anim_edit_parse_spec("new_clip=p").unwrap(),
+            anim_edit_parse_spec("compose=punch,side=left").unwrap(),
+        ],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert_eq!(clip.tracks.len(), 10);
+    assert!((clip.duration - 2.0).abs() < 1e-6);
+
+    let left_upper = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
+    let punch_key = &left_upper.rotation_y.keyframes[2];
+    assert!((punch_key.time - 0.55).abs() < 1e-6);
+    assert!((punch_key.value - 85.0).abs() < 1e-6);
+}
+
+#[test]
+fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    assert!(anim_edit_parse_spec("compose=").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=0").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=2").is_ok());
 }

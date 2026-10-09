@@ -1,3 +1,6 @@
+pub mod avatar_rig;
+pub mod geometry_warning;
+pub mod humanoid_frame;
 pub mod mapping;
 pub mod mapping_issues;
 pub mod rest_pose;
@@ -5,3 +8,4 @@ pub mod role;
 pub mod skeleton_input;
 pub mod spring_chain;
 pub mod tokens;
+pub mod vrm_version;

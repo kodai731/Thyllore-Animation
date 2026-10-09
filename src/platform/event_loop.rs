@@ -5,9 +5,14 @@ use winit::event::Event;
 use super::events::dispatch_window_event;
 use super::key_bindings::default_bindings;
 use crate::app::App;
+use crate::hooks::external_command::ExternalCommandSender;
 use crate::platform::System;
 
 impl System {
+    pub fn external_command_sender(&self) -> ExternalCommandSender {
+        ExternalCommandSender::new(self.event_loop.create_proxy())
+    }
+
     pub fn main_loop(self, app: &mut App) {
         let System {
             event_loop,
@@ -47,6 +52,10 @@ impl System {
                         &window,
                         &bindings,
                     );
+                }
+
+                Event::UserEvent(command) => {
+                    app.data.ecs_world.send_boxed_command(command);
                 }
 
                 Event::LoopExiting => {

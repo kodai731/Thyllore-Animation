@@ -8,7 +8,8 @@ use crate::animation::editable::{
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{ClipLibrary, CurveTrackRef, TimelineState};
+use crate::ecs::resource::{ClipLibrary, CurveTrackRef, HumanoidRig, TimelineState};
+use crate::ecs::systems::humanoid_import_systems::local_pose_to_standard;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::{Entity, World};
@@ -93,6 +94,9 @@ pub fn timeline_process_events(
             }
             TimelineEvent::ZoomOut { min_zoom } => {
                 timeline_zoom_out(timeline_state, *min_zoom);
+            }
+            TimelineEvent::SetPreview(preview) => {
+                timeline_state.preview = *preview;
             }
             _ => {}
         }
@@ -360,6 +364,10 @@ fn timeline_select_clip(
     clip_library: &ClipLibrary,
     clip_id: SourceClipId,
 ) {
+    if timeline_state.current_clip_id == Some(clip_id) {
+        return;
+    }
+
     if let Some(clip) = clip_library.get(clip_id) {
         timeline_state.current_clip_id = Some(clip_id);
         timeline_state.current_time = 0.0;
@@ -641,6 +649,8 @@ pub fn process_clip_instance_events(events: &[ClipInstanceEvent], world: &mut Wo
 
     dispatch_clip_group_events(events, world);
 
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
+
     if let Some((entity, instance_id)) = deselect_after {
         let mut ts = world.resource_mut::<TimelineState>();
         if let Some((sel_entity, sel_id)) = ts.selected_clip_instance {
@@ -782,6 +792,7 @@ pub fn process_bone_set_key(
     clip_library: &mut ClipLibrary,
     timeline_state: &TimelineState,
     skeleton: &crate::animation::Skeleton,
+    rig: Option<&HumanoidRig>,
 ) -> bool {
     let Some(clip_id) = timeline_state.current_clip_id else {
         return false;
@@ -797,28 +808,62 @@ pub fn process_bone_set_key(
     let time = timeline_state.current_time;
 
     for (&bone_id, local_pose) in overrides {
-        let bone_name = skeleton
-            .get_bone(bone_id)
-            .map(|b| b.name.clone())
-            .unwrap_or_else(|| format!("bone_{}", bone_id));
+        let standard = rig.and_then(|rig| {
+            local_pose_to_standard(
+                rig,
+                skeleton,
+                bone_id,
+                local_pose.rotation,
+                local_pose.translation,
+            )
+        });
+        if let Some(standard) = standard {
+            let track_name = standard.role.unity_name().to_string();
+            match clip.tracks.get_mut(&bone_id) {
+                Some(track) => track.bone_name = track_name,
+                None => {
+                    clip.add_track(bone_id, track_name);
+                }
+            }
 
-        if !clip.tracks.contains_key(&bone_id) {
-            clip.add_track(bone_id, bone_name.clone());
+            let [x_degrees, y_degrees, z_degrees] = standard.euler_degrees;
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, x_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, y_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, z_degrees);
+
+            if let Some([x, y, z]) = standard.hips_translation {
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, x);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, y);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, z);
+            }
+        } else {
+            let bone_name = rig
+                .and_then(|r| r.track_names.get(&bone_id).cloned())
+                .unwrap_or_else(|| {
+                    skeleton
+                        .get_bone(bone_id)
+                        .map(|b| b.name.clone())
+                        .unwrap_or_else(|| format!("bone_{}", bone_id))
+                });
+
+            if !clip.tracks.contains_key(&bone_id) {
+                clip.add_track(bone_id, bone_name.clone());
+            }
+
+            let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
+
+            let t = &local_pose.translation;
+            let s = &local_pose.scale;
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
         }
-
-        let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
-
-        let t = &local_pose.translation;
-        let s = &local_pose.scale;
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
     }
 
     clip_recalculate_duration(clip);
@@ -1238,6 +1283,105 @@ mod tests {
         assert!((start - 1.0).abs() < 1e-6);
         assert!((end - 5.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn select_same_clip_keeps_time() {
+        let (mut state, mut library) = setup_test_clip();
+        let clip_id = state.current_clip_id.unwrap();
+        state.current_time = 0.7;
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert!((state.current_time - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn select_clip_does_not_touch_schedule() {
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+
+        let (mut state, mut library) = setup_test_clip();
+        let first_clip_id = state.current_clip_id.unwrap();
+
+        let other_clip_id: SourceClipId = 99;
+        let mut other_clip = EditableAnimationClip::new(other_clip_id, "other".to_string());
+        other_clip.add_track(0, "bone0".to_string());
+        library
+            .source_clips
+            .insert(other_clip_id, SourceClip::new(other_clip_id, other_clip));
+
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, first_clip_id, 1.0);
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(other_clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert_eq!(state.current_clip_id, Some(other_clip_id));
+        assert_eq!(schedule.instances.len(), 1);
+        assert_eq!(schedule.instances[0].source_id, first_clip_id);
+    }
+
+    #[test]
+    fn clip_with_unresolved_roles_is_scheduled() {
+        use crate::animation::editable::SourceClip;
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::resource::HumanoidRigState;
+        use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+        use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
+        use crate::ecs::systems::humanoid_rig_systems::{
+            build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+        };
+        use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+        use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+        use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
+        let mut rig =
+            build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
+        let mut library = ClipLibrary::default();
+
+        let clip_id: SourceClipId = 1;
+        let mut clip = EditableAnimationClip::new(clip_id, "role".to_string());
+        let track = clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
+        curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
+
+        rig.mapping.by_role.remove(&HumanoidRole::Hips);
+        assert!(!unresolved_clip_roles(&clip, Some(&rig.mapping)).is_empty());
+        world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+
+        library
+            .source_clips
+            .insert(clip_id, SourceClip::new(clip_id, clip));
+        world.insert_resource(library);
+        let entity = world.spawn();
+        world.insert_component(entity, ClipSchedule::default());
+
+        process_clip_instance_events(
+            &[ClipInstanceEvent::Add {
+                entity,
+                source_id: clip_id,
+                start_time: 0.0,
+            }],
+            &mut world,
+        );
+
+        let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            1,
+            "a clip with unresolved roles should still be scheduled"
+        );
+    }
 }
 
 /// Persisted timeline state; the active clip is named because clip ids are not stable on disk.
@@ -1316,11 +1460,30 @@ fn apply_timeline_scene_record(
 }
 
 fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId, start_time: f32) {
-    let duration = world
-        .resource::<ClipLibrary>()
-        .get(source_id)
-        .map(|c| c.duration)
-        .unwrap_or(1.0);
+    let duration;
+    {
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id);
+
+        if let Some(clip) = clip {
+            let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
+            if let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) {
+                let unresolved = crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles(
+                    clip,
+                    Some(&rig.mapping),
+                );
+                if !unresolved.is_empty() {
+                    log_warn!(
+                        "clip '{}' has unresolved roles: {:?}",
+                        clip.name,
+                        unresolved
+                    );
+                }
+            }
+        }
+
+        duration = library.get(source_id).map(|c| c.duration).unwrap_or(1.0);
+    }
 
     let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
         return;

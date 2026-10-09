@@ -3,6 +3,7 @@ mod blend_shape_inspector;
 mod bottom_panel;
 mod clip_browser_window;
 mod constraint_inspector;
+mod curve_editor_bone_label;
 mod curve_editor_window;
 mod debug_window;
 mod effect_sections;

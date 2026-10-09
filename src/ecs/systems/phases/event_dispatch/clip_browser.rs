@@ -29,10 +29,8 @@ fn dispatch_clip_browser_events(
         match event {
             ClipBrowserEvent::CreateEmpty => {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
-                let editable = crate::animation::editable::EditableAnimationClip::new(
-                    0,
-                    "New Clip".to_string(),
-                );
+                let editable =
+                    crate::ecs::systems::humanoid_bake_systems::new_empty_clip("New Clip");
                 let id =
                     crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
                         &mut clip_library,

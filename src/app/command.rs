@@ -87,13 +87,10 @@ unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
 unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
     match command {
         AssetEditCommand::LoadClipFromFile { path } => {
-            let bone_name_to_id = app
-                .data
-                .ecs_assets
-                .skeletons
-                .values()
-                .next()
-                .map(|sa| sa.skeleton.bone_name_to_id.clone());
+            let bone_name_to_id = crate::ecs::systems::engine_bone_name_to_id(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+            );
 
             let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
             match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
@@ -154,11 +151,9 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::DumpAnimationDebug => {
-            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
                 &app.data.ecs_world,
                 &app.data.ecs_assets,
-                &*clip_library,
             ) {
                 log_warn!("Animation debug dump failed: {:?}", e);
             }

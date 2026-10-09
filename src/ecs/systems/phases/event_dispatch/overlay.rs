@@ -25,6 +25,7 @@ pub enum OverlayEvent {
     SelectEffectInstance { key: &'static str, index: usize },
     SetGridShowYAxis(bool),
     ClearMessageLog,
+    ShowValidationMessages,
 }
 
 impl UiCommand for OverlayEvent {
@@ -91,6 +92,11 @@ impl UiCommand for OverlayEvent {
             OverlayEvent::ClearMessageLog => {
                 if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
                     crate::ecs::systems::message_log_clear_buffer(&mut log);
+                }
+            }
+            OverlayEvent::ShowValidationMessages => {
+                if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
+                    crate::ecs::systems::message_log_show_validation(&mut log);
                 }
             }
         }

@@ -1,7 +1,10 @@
 use crate::animation::editable::{
     ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId, SourceClipId,
 };
-use crate::ecs::component::ClipSchedule;
+use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::resource::{AnimationType, HierarchyState};
+use crate::ecs::systems::clip_library_systems::find_clip_schedule_owner;
+use crate::ecs::world::{Entity, World};
 
 pub fn clip_schedule_add_instance(
     schedule: &mut ClipSchedule,
@@ -43,6 +46,33 @@ pub fn clip_schedule_active_instances(schedule: &ClipSchedule, time: f32) -> Vec
             true
         })
         .collect()
+}
+
+pub fn clip_schedule_assign_lanes(instances: &[ClipInstance]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..instances.len()).collect();
+    order.sort_by(|&a, &b| instances[a].start_time.total_cmp(&instances[b].start_time));
+
+    let mut lane_end_times: Vec<f32> = Vec::new();
+    let mut lanes = vec![0; instances.len()];
+
+    for index in order {
+        let instance = &instances[index];
+        let free_lane = lane_end_times
+            .iter()
+            .position(|&lane_end| lane_end <= instance.start_time);
+
+        let lane = match free_lane {
+            Some(lane) => lane,
+            None => {
+                lane_end_times.push(0.0);
+                lane_end_times.len() - 1
+            }
+        };
+        lane_end_times[lane] = instance.end_time();
+        lanes[index] = lane;
+    }
+
+    lanes
 }
 
 pub fn clip_schedule_create_group(schedule: &mut ClipSchedule, name: String) -> ClipGroupId {
@@ -122,6 +152,25 @@ pub fn clip_schedule_effective_weight(schedule: &ClipSchedule, instance_id: Clip
         None => inst_weight,
     }
 }
+pub fn find_preview_owner(world: &World) -> Option<Entity> {
+    if let Some(selected) = world.resource::<HierarchyState>().selected_entity {
+        return find_clip_schedule_owner(world, selected);
+    }
+
+    let candidates: Vec<Entity> = world
+        .component_entities::<ClipSchedule>()
+        .into_iter()
+        .filter(|&entity| {
+            world
+                .get_component::<AnimationMeta>(entity)
+                .is_some_and(|meta| meta.animation_type == AnimationType::Skeletal)
+        })
+        .collect();
+    if candidates.len() != 1 {
+        return None;
+    }
+    Some(candidates[0])
+}
 
 #[cfg(test)]
 mod switch_source_tests {
@@ -157,5 +206,67 @@ mod switch_source_tests {
         assert_eq!(inst.source_id, 7);
         assert!((inst.clip_in - 0.0).abs() < 1e-6);
         assert!((inst.clip_out - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lane_assignment_stacks_overlapping_instances() {
+        let overlapping = [
+            instance_spanning(0, 0.0, 3.0),
+            instance_spanning(1, 1.0, 4.0),
+            instance_spanning(2, 2.0, 5.0),
+        ];
+        let lanes = clip_schedule_assign_lanes(&overlapping);
+        assert_eq!(lanes, vec![0, 1, 2]);
+
+        let disjoint = [
+            instance_spanning(3, 2.0, 3.0),
+            instance_spanning(4, 0.0, 2.0),
+        ];
+        assert_eq!(clip_schedule_assign_lanes(&disjoint), vec![0, 0]);
+    }
+
+    fn instance_spanning(id: ClipInstanceId, start_time: f32, end_time: f32) -> ClipInstance {
+        let mut instance = ClipInstance::new(id, 0, end_time - start_time);
+        instance.start_time = start_time;
+        instance
+    }
+}
+
+#[cfg(test)]
+mod preview_owner_tests {
+    use super::*;
+
+    fn make_world(schedule_count: usize) -> World {
+        let mut world = World::new();
+        world.insert_resource(HierarchyState::default());
+        for _ in 0..schedule_count {
+            world
+                .entity()
+                .with_clip_schedule(ClipSchedule::new())
+                .with_animation_meta(AnimationMeta {
+                    animation_type: AnimationType::Skeletal,
+                    node_animation_scale: 1.0,
+                })
+                .build();
+        }
+        world
+    }
+
+    #[test]
+    fn preview_owner_none_when_ambiguous() {
+        let world = make_world(2);
+        let owner = find_preview_owner(&world);
+        assert!(
+            owner.is_none(),
+            "expected None with 2 skeletal clip schedules"
+        );
+    }
+
+    #[test]
+    fn preview_owner_single_skeletal_schedule() {
+        let world = make_world(1);
+        let entity = *world.component_entities::<ClipSchedule>().first().unwrap();
+        let owner = find_preview_owner(&world);
+        assert_eq!(owner, Some(entity), "expected the single skeletal schedule");
     }
 }

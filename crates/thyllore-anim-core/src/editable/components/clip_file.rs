@@ -4,7 +4,7 @@ use super::clip::EditableAnimationClip;
 use super::curve::{PropertyCurve, PropertyType};
 use super::keyframe::{CurveId, EditableKeyframe, KeyframeId};
 
-pub const ANIMATION_FORMAT_VERSION: u32 = 1;
+pub const ANIMATION_FORMAT_VERSION: u32 = 3;
 
 /// On-disk clip. Scalar curves are keyed by channel name because `PropertyType::Custom`
 /// codes are process-local; the application resolves names when it saves and loads.
@@ -67,6 +67,7 @@ impl AnimationClipFile {
 
         let mut file_clip = clip.clone();
         file_clip.scalar_curves.clear();
+        retain_keyed_tracks(&mut file_clip);
 
         Ok(Self {
             version: ANIMATION_FORMAT_VERSION,
@@ -80,6 +81,8 @@ impl AnimationClipFile {
         property_type: impl Fn(&str) -> Option<PropertyType>,
     ) -> Result<EditableAnimationClip, ClipFileError> {
         let mut clip = self.clip;
+        retain_keyed_tracks(&mut clip);
+
         clip.scalar_curves = self
             .scalar_curves
             .into_iter()
@@ -96,6 +99,14 @@ impl AnimationClipFile {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(clip)
     }
+}
+
+fn retain_keyed_tracks(clip: &mut EditableAnimationClip) {
+    clip.tracks.retain(|_, track| {
+        track.has_rotation_keyframes()
+            || track.has_translation_keyframes()
+            || track.has_scale_keyframes()
+    });
 }
 
 #[cfg(test)]
@@ -150,5 +161,56 @@ mod tests {
             file.into_clip(|_| None).err(),
             Some(ClipFileError::UnknownScalarChannel("gone".to_string()))
         );
+    }
+
+    #[test]
+    fn clip_file_v1_loads() {
+        let text = r#"(version: 1, clip: (id: 1, name: "v1", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [])"#;
+        let file: AnimationClipFile = ron::from_str(text).expect("parse v1 format");
+        let clip = file.into_clip(|_| None).expect("into clip");
+        assert_eq!(clip.name, "v1");
+    }
+
+    #[test]
+    fn v2_role_clip_loads_and_keeps_track_names() {
+        let text = r#"(version: 2, clip: (id: 1, name: "role", duration: 1.0, space: HumanoidRole, tracks: {0: (bone_id: 0, bone_name: "LeftUpperArm", translation_x: (id: 0, property_type: TranslationX, keyframes: [], next_keyframe_id: 1), translation_y: (id: 1, property_type: TranslationY, keyframes: [], next_keyframe_id: 1), translation_z: (id: 2, property_type: TranslationZ, keyframes: [], next_keyframe_id: 1), rotation_x: (id: 3, property_type: RotationX, keyframes: [(id: 1, time: 0.0, value: 0.5, in_tangent: (time_offset: 0.0, value_offset: 0.0), out_tangent: (time_offset: 0.0, value_offset: 0.0))], next_keyframe_id: 2), rotation_y: (id: 4, property_type: RotationY, keyframes: [], next_keyframe_id: 1), rotation_z: (id: 5, property_type: RotationZ, keyframes: [], next_keyframe_id: 1), scale_x: (id: 6, property_type: ScaleX, keyframes: [], next_keyframe_id: 1), scale_y: (id: 7, property_type: ScaleY, keyframes: [], next_keyframe_id: 1), scale_z: (id: 8, property_type: ScaleZ, keyframes: [], next_keyframe_id: 1))}, source_path: None, next_curve_id: 9), scalar_curves: [])"#;
+        let file: AnimationClipFile = ron::from_str(text).expect("parse v2 role clip");
+        let clip = file.into_clip(|_| None).expect("into clip");
+
+        let track = clip.get_track(0).expect("track");
+        assert_eq!(track.bone_name, "LeftUpperArm");
+        assert_eq!(track.rotation_x.keyframes.len(), 1);
+    }
+
+    #[test]
+    fn save_is_version_3_without_space_and_without_unkeyed_tracks() {
+        let mut clip = EditableAnimationClip::new(1, "clip".to_string());
+        let keyed = clip.add_track(0, "Hips".to_string());
+        curve_add_keyframe(&mut keyed.rotation_x, 0.5, 0.3);
+        clip.add_track(1, "UnkeyedBone".to_string());
+
+        let file = AnimationClipFile::from_clip(&clip, |_| None).expect("named");
+        let text = ron::to_string(&file).expect("serialize");
+        assert!(!text.contains("space"), "{text}");
+        assert!(!text.contains("UnkeyedBone"), "{text}");
+
+        let parsed: AnimationClipFile = ron::from_str(&text).expect("parse");
+        assert_eq!(parsed.version, 3);
+        assert_eq!(parsed.clip.tracks.len(), 1);
+        assert_eq!(parsed.clip.get_track(0).expect("track").bone_name, "Hips");
+    }
+
+    #[test]
+    fn unkeyed_tracks_are_dropped_on_load() {
+        let mut file_clip = EditableAnimationClip::new(1, "clip".to_string());
+        file_clip.add_track(0, "UnkeyedBone".to_string());
+        let file = AnimationClipFile {
+            version: ANIMATION_FORMAT_VERSION,
+            clip: file_clip,
+            scalar_curves: Vec::new(),
+        };
+
+        let clip = file.into_clip(|_| None).expect("into clip");
+        assert!(clip.tracks.is_empty());
     }
 }

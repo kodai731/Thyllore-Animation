@@ -11,16 +11,19 @@ use crate::ecs::world::World;
 
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
-use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
+use thyllore_avatar_core::motion::seed::components::pose_table::{PoseAxis, PoseTable};
 use thyllore_avatar_core::motion::seed::systems::compose_motion::{
     compose_motion, settle_requests,
 };
 
-fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
+fn bone_axis_of(axis: PoseAxis) -> BoneAxis {
     match axis {
-        RotationAxis::X => BoneAxis::RotationX,
-        RotationAxis::Y => BoneAxis::RotationY,
-        RotationAxis::Z => BoneAxis::RotationZ,
+        PoseAxis::X => BoneAxis::RotationX,
+        PoseAxis::Y => BoneAxis::RotationY,
+        PoseAxis::Z => BoneAxis::RotationZ,
+        PoseAxis::TranslationX => BoneAxis::TranslationX,
+        PoseAxis::TranslationY => BoneAxis::TranslationY,
+        PoseAxis::TranslationZ => BoneAxis::TranslationZ,
     }
 }
 
@@ -269,7 +272,7 @@ fn apply_compose(world: &mut World, assets: &mut AssetStorage, spec: &MotionSpec
             key.role.unity_name(),
             bone_axis_of(key.axis),
             key.time,
-            key.degrees,
+            key.value,
         );
     }
     match settle_requests(PoseTable::builtin(), spec, &keys) {

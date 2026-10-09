@@ -1,10 +1,16 @@
+use std::ffi::c_void;
+use std::mem::size_of;
+
+use anyhow::Result;
 use cgmath::Vector4;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
-use thyllore_model_core::{SkeletonId, SkinData};
+use crate::vulkan::Instance;
+use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
 #[derive(Clone, Debug)]
 pub struct MeshBuffer {
@@ -23,6 +29,7 @@ pub struct MeshBuffer {
     pub node_index: Option<usize>,
     pub base_vertices: Vec<Vertex>,
     pub base_colors: Option<Vec<Vector4<f32>>>,
+    pub morph: MeshMorph,
 }
 
 impl Default for MeshBuffer {
@@ -43,11 +50,29 @@ impl Default for MeshBuffer {
             node_index: None,
             base_vertices: Vec::new(),
             base_colors: None,
+            morph: MeshMorph::default(),
         }
     }
 }
 
 impl MeshBuffer {
+    pub unsafe fn upload_vertices(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+    ) -> Result<()> {
+        let vertices = &self.vertex_data.vertices;
+        self.vertex_buffer.update(
+            instance,
+            rrdevice,
+            command_pool,
+            (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+            vertices.as_ptr() as *const c_void,
+            vertices.len(),
+        )
+    }
+
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.image_view != vk::ImageView::null() {
             rrdevice.device.destroy_image_view(self.image_view, None);
@@ -57,30 +82,8 @@ impl MeshBuffer {
             rrdevice.device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.vertex_buffer.buffer, None);
-            self.vertex_buffer.buffer = vk::Buffer::null();
-        }
-        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.vertex_buffer.buffer_memory, None);
-            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
-        if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.index_buffer.buffer, None);
-            self.index_buffer.buffer = vk::Buffer::null();
-        }
-        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.index_buffer.buffer_memory, None);
-            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
+        self.vertex_buffer.destroy(rrdevice);
+        self.index_buffer.destroy(rrdevice);
         if self.image != vk::Image::null() {
             rrdevice.device.destroy_image(self.image, None);
             self.image = vk::Image::null();

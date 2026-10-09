@@ -1,0 +1,12 @@
+{
+  "name": "Thyllore.Avatar.Editor",
+  "rootNamespace": "Thyllore.Avatar",
+  "references": [
+    "VRC.SDK3A",
+    "VRC.SDKBase"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

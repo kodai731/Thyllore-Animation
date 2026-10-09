@@ -10,7 +10,7 @@ use thyllore_anim_core::editable::{
     TangentWeightMode,
 };
 use thyllore_anim_core::Skeleton;
-use thyllore_importer_core::fbx::fbx::FbxAxesInfo;
+use thyllore_file_format_core::fbx::FbxAxesInfo;
 
 pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -37,6 +37,7 @@ pub(crate) enum FbxChannel {
     Translation,
     Rotation,
     Scale,
+    DeformPercent,
 }
 
 impl FbxChannel {
@@ -45,6 +46,7 @@ impl FbxChannel {
             FbxChannel::Translation => "Lcl Translation",
             FbxChannel::Rotation => "Lcl Rotation",
             FbxChannel::Scale => "Lcl Scaling",
+            FbxChannel::DeformPercent => "DeformPercent",
         }
     }
 
@@ -53,6 +55,16 @@ impl FbxChannel {
             FbxChannel::Translation => "T",
             FbxChannel::Rotation => "R",
             FbxChannel::Scale => "S",
+            FbxChannel::DeformPercent => "DeformPercent",
+        }
+    }
+
+    pub(crate) fn axis_property_names(&self) -> &'static [&'static str] {
+        match self {
+            FbxChannel::Translation | FbxChannel::Rotation | FbxChannel::Scale => {
+                &["d|X", "d|Y", "d|Z"]
+            }
+            FbxChannel::DeformPercent => &["d|DeformPercent"],
         }
     }
 }
@@ -101,7 +113,6 @@ pub(crate) enum FbxConnection {
 pub(crate) struct FbxExportData {
     pub clip_name: String,
     pub duration_ktime: i64,
-    pub needs_coord_conversion: bool,
     pub axes: FbxAxesInfo,
     pub fps: f32,
     pub bones: Vec<FbxBoneExport>,
@@ -125,7 +136,10 @@ fn convert_interpolation_to_flags(interp: InterpolationType) -> i32 {
     }
 }
 
-fn convert_tangent_to_fbx_slope_weight(handle: &BezierHandle, key_interval: f32) -> (f32, f32) {
+pub(crate) fn convert_tangent_to_fbx_slope_weight(
+    handle: &BezierHandle,
+    key_interval: f32,
+) -> (f32, f32) {
     let slope = if handle.time_offset.abs() > 1e-8 {
         handle.value_offset / handle.time_offset
     } else {
@@ -191,7 +205,7 @@ pub(crate) fn build_bone_export_list(
     uid_alloc: &mut UidAllocator,
     mesh_node_names: &std::collections::HashSet<String>,
     inv_unit_scale: f32,
-    needs_coord_conversion: bool,
+    has_skinned_meshes: bool,
 ) -> Vec<FbxBoneExport> {
     let mut bones = Vec::new();
     let mut skeleton_idx_to_export_idx: Vec<Option<usize>> =
@@ -209,26 +223,14 @@ pub(crate) fn build_bone_export_list(
         let model_uid = uid_alloc.allocate();
         let is_root = bone.parent_id.is_none();
 
-        let is_root_or_root_child = bone.parent_id.is_none()
-            || bone.name == "RootNode"
-            || bone
-                .parent_id
-                .and_then(|pid| skeleton.get_bone(pid))
-                .map_or(false, |parent| parent.name == "RootNode");
-
-        let export_transform = if needs_coord_conversion && is_root_or_root_child {
-            reverse_coord_conversion_for_export(&bone.local_transform)
-        } else {
-            bone.local_transform
-        };
-        let (mut translation, rotation, scaling) = decompose_matrix_to_trs(&export_transform);
+        let (mut translation, rotation, scaling) = decompose_matrix_to_trs(&bone.local_transform);
 
         let scale = inv_unit_scale as f64;
         translation[0] *= scale;
         translation[1] *= scale;
         translation[2] *= scale;
 
-        let node_attribute_uid = if needs_coord_conversion {
+        let node_attribute_uid = if has_skinned_meshes {
             Some(uid_alloc.allocate())
         } else {
             None
@@ -310,12 +312,6 @@ fn resolve_bone_parent_uids(
             }
         }
     }
-}
-
-fn reverse_coord_conversion_for_export(local_transform: &Matrix4<f32>) -> Matrix4<f32> {
-    use thyllore_math_core::coordinate_system::world_to_fbx;
-    let inv = world_to_fbx();
-    inv * *local_transform
 }
 
 fn build_key_attr_arrays(
@@ -438,7 +434,7 @@ pub(crate) fn build_channel_exports(
 
     let value_scale = match channel {
         FbxChannel::Translation => inv_unit_scale,
-        FbxChannel::Rotation | FbxChannel::Scale => 1.0,
+        FbxChannel::Rotation | FbxChannel::Scale | FbxChannel::DeformPercent => 1.0,
     };
 
     let curvenode_uid = uid_alloc.allocate();
@@ -541,7 +537,7 @@ fn generate_connections(data: &mut FbxExportData) {
 fn build_export_data(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
-    needs_coord_conversion: bool,
+    has_skinned_meshes: bool,
     axes: FbxAxesInfo,
     fps: f32,
 ) -> anyhow::Result<FbxExportData> {
@@ -559,7 +555,7 @@ fn build_export_data(
         &mut uid_alloc,
         &empty_set,
         inv_unit_scale,
-        needs_coord_conversion,
+        has_skinned_meshes,
     );
     attach_root_transform_node(&mut bones, skeleton, &mut uid_alloc, inv_unit_scale);
 
@@ -623,7 +619,6 @@ fn build_export_data(
     let mut data = FbxExportData {
         clip_name: clip.name.clone(),
         duration_ktime,
-        needs_coord_conversion,
         axes,
         fps,
         bones,
@@ -737,7 +732,7 @@ pub(crate) fn write_header_extension<W: Write + Seek>(
 
     {
         let mut attrs = writer.new_node("Creator")?;
-        attrs.append_string_direct("Thyllore Animation Engine")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
         drop(attrs);
         writer.close_node()?;
     }
@@ -1061,6 +1056,10 @@ pub(crate) fn write_anim_layer<W: Write + Seek>(
     attrs.append_string_direct("BaseLayer\x00\x01AnimLayer")?;
     attrs.append_string_direct("")?;
     drop(attrs);
+
+    drop(writer.new_node("Properties70")?);
+    writer.close_node()?;
+
     writer.close_node()?;
     Ok(())
 }
@@ -1077,9 +1076,10 @@ pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     drop(attrs);
 
     drop(writer.new_node("Properties70")?);
-    write_property_f64(writer, "d|X", "Number", "", "A", cn.default_values[0])?;
-    write_property_f64(writer, "d|Y", "Number", "", "A", cn.default_values[1])?;
-    write_property_f64(writer, "d|Z", "Number", "", "A", cn.default_values[2])?;
+    let axis_names = cn.channel.axis_property_names();
+    for (i, axis) in axis_names.iter().enumerate() {
+        write_property_f64(writer, axis, "Number", "", "A", cn.default_values[i])?;
+    }
     writer.close_node()?;
 
     writer.close_node()?;
@@ -1214,18 +1214,47 @@ pub(crate) fn write_connections<W: Write + Seek>(
     Ok(())
 }
 
+pub(crate) fn write_top_level_nodes<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
+    {
+        let mut attrs = writer.new_node("FileId")?;
+        attrs.append_binary_direct(&crate::systems::fbx::file_identity::FILE_ID_BYTES)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    {
+        let mut attrs = writer.new_node("CreationTime")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATION_TIME)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    {
+        let mut attrs = writer.new_node("Creator")?;
+        attrs.append_string_direct(crate::systems::fbx::file_identity::CREATOR)?;
+        drop(attrs);
+        writer.close_node()?;
+    }
+
+    Ok(())
+}
+
 fn write_fbx_binary<W: Write + Seek>(
     mut writer: Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
+    write_top_level_nodes(&mut writer)?;
     write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps, 1.0)?;
     write_documents(&mut writer, data.document_uid)?;
     write_references(&mut writer)?;
     write_definitions(&mut writer, data)?;
     write_objects(&mut writer, data)?;
     write_connections(&mut writer, data)?;
-    writer.finalize_and_flush(&FbxFooter::default())?;
+    writer.finalize_and_flush(&FbxFooter {
+        unknown1: Some(&crate::systems::fbx::file_identity::FOOTER_ID),
+        ..Default::default()
+    })?;
     Ok(())
 }
 
@@ -1233,11 +1262,11 @@ pub fn export_animation_fbx(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     path: &Path,
-    needs_coord_conversion: bool,
+    has_skinned_meshes: bool,
     axes: FbxAxesInfo,
     fps: f32,
 ) -> anyhow::Result<()> {
-    let export_data = build_export_data(clip, skeleton, needs_coord_conversion, axes, fps)?;
+    let export_data = build_export_data(clip, skeleton, has_skinned_meshes, axes, fps)?;
 
     let file = std::fs::File::create(path)?;
     let writer = Writer::new(file, FbxVersion::V7_4)
@@ -1360,26 +1389,6 @@ mod tests {
         assert_eq!(missing[0], "NonExistent");
     }
 
-    #[test]
-    fn test_coord_conversion_roundtrip() {
-        use cgmath::SquareMatrix;
-        use thyllore_math_core::coordinate_system::{fbx_to_world, world_to_fbx};
-
-        let original = Matrix4::from_translation(Vector3::new(1.0, 2.0, 3.0));
-        let roundtrip = world_to_fbx() * fbx_to_world() * original;
-
-        for col in 0..4 {
-            for row in 0..4 {
-                assert!(
-                    (roundtrip[col][row] - original[col][row]).abs() < 1e-5,
-                    "Mismatch at [{col}][{row}]: {} vs {}",
-                    roundtrip[col][row],
-                    original[col][row]
-                );
-            }
-        }
-    }
-
     fn build_test_skeleton_with_rootnode() -> Skeleton {
         let mut skeleton = Skeleton::new("test");
         skeleton.add_bone("RootNode", None);
@@ -1390,25 +1399,24 @@ mod tests {
     }
 
     #[test]
-    fn test_build_bone_export_list_with_coord_conversion() {
+    fn test_build_bone_export_list_skinned_flag_only_adds_limb_attributes() {
         let skeleton = build_test_skeleton_with_rootnode();
         let mut uid_alloc = UidAllocator::new();
         let empty_set = std::collections::HashSet::new();
 
-        let bones_with = build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, true);
+        let bones_skinned =
+            build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, true);
         let mut uid_alloc2 = UidAllocator::new();
-        let bones_without =
+        let bones_plain =
             build_bone_export_list(&skeleton, &mut uid_alloc2, &empty_set, 1.0, false);
 
-        let hips_with = bones_with.iter().find(|b| b.name == "Hips").unwrap();
-        let hips_without = bones_without.iter().find(|b| b.name == "Hips").unwrap();
-        assert_eq!(hips_with.translation, hips_without.translation);
-        assert_eq!(hips_with.rotation, hips_without.rotation);
-
-        let rootnode_with = bones_with.iter().find(|b| b.name == "RootNode").unwrap();
-        let rootnode_without = bones_without.iter().find(|b| b.name == "RootNode").unwrap();
-        assert_eq!(rootnode_without.translation, [0.0, 0.0, 0.0]);
-        assert_eq!(rootnode_with.translation, rootnode_without.translation);
+        for (skinned, plain) in bones_skinned.iter().zip(&bones_plain) {
+            assert_eq!(skinned.name, plain.name);
+            assert_eq!(skinned.translation, plain.translation);
+            assert_eq!(skinned.rotation, plain.rotation);
+            assert!(skinned.node_attribute_uid.is_some());
+            assert!(plain.node_attribute_uid.is_none());
+        }
     }
 
     #[test]
@@ -1494,5 +1502,65 @@ mod tests {
             assert_eq!(bone.rotation, [0.0, 0.0, 0.0]);
             assert_eq!(bone.scaling, [1.0, 1.0, 1.0]);
         }
+    }
+
+    #[test]
+    fn exported_fbx_has_file_id_and_layer_block() {
+        let skeleton = build_test_skeleton_with_rootnode();
+        let mut clip = EditableAnimationClip::new(1, "test_clip".to_string());
+        clip.add_track(2, "Hips".to_string());
+        let data =
+            build_export_data(&clip, &skeleton, false, FbxAxesInfo::default(), 30.0).unwrap();
+
+        let mut buf = Vec::new();
+        let writer = Writer::new(std::io::Cursor::new(&mut buf), FbxVersion::V7_4).unwrap();
+        write_fbx_binary(writer, &data).unwrap();
+
+        let mut parser = match fbxcel::pull_parser::any::AnyParser::from_seekable_reader(
+            std::io::Cursor::new(&buf),
+        )
+        .unwrap()
+        {
+            fbxcel::pull_parser::any::AnyParser::V7400(parser) => parser,
+            _ => panic!("exported FBX is not v7400"),
+        };
+        let mut node_path: Vec<String> = Vec::new();
+        let mut top_level_names: Vec<String> = Vec::new();
+        let mut animation_layer_child_names: Vec<String> = Vec::new();
+        loop {
+            match parser.next_event().unwrap() {
+                fbxcel::pull_parser::v7400::Event::StartNode(start) => {
+                    let name = start.name().to_owned();
+                    match node_path.last().map(String::as_str) {
+                        None => top_level_names.push(name.clone()),
+                        Some("AnimationLayer") => animation_layer_child_names.push(name.clone()),
+                        Some(_) => {}
+                    }
+                    node_path.push(name);
+                }
+                fbxcel::pull_parser::v7400::Event::EndNode => {
+                    node_path.pop();
+                }
+                fbxcel::pull_parser::v7400::Event::EndFbx(_) => break,
+            }
+        }
+
+        assert!(
+            top_level_names.iter().any(|name| name == "FileId"),
+            "top-level FileId missing, got {:?}",
+            top_level_names
+        );
+        assert!(
+            top_level_names.iter().any(|name| name == "CreationTime"),
+            "top-level CreationTime missing, got {:?}",
+            top_level_names
+        );
+        assert!(
+            animation_layer_child_names
+                .iter()
+                .any(|name| name == "Properties70"),
+            "AnimationLayer has no Properties70 child, got {:?}",
+            animation_layer_child_names
+        );
     }
 }

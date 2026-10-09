@@ -3,6 +3,7 @@ pub mod camera;
 pub(crate) mod channels;
 pub(crate) mod glb;
 pub(crate) mod minimal_json;
+pub(crate) mod vrm_humanoid;
 use std::fs;
 use std::path::Path;
 
@@ -22,9 +23,10 @@ pub fn export_gltf_animation(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     output_path: &Path,
+    vrm_humanoid_bones: &[(String, usize)],
 ) -> Result<()> {
     let raw_bytes = fs::read(source_glb_path)?;
-    export_gltf_animation_from_bytes(&raw_bytes, clip, skeleton, output_path)
+    export_gltf_animation_from_bytes(&raw_bytes, clip, skeleton, output_path, vrm_humanoid_bones)
 }
 
 pub fn export_gltf_animation_from_bytes(
@@ -32,6 +34,7 @@ pub fn export_gltf_animation_from_bytes(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     output_path: &Path,
+    vrm_humanoid_bones: &[(String, usize)],
 ) -> Result<()> {
     let glb =
         Glb::from_slice(source_glb_bytes).map_err(|e| anyhow!("Failed to parse GLB: {:?}", e))?;
@@ -45,6 +48,9 @@ pub fn export_gltf_animation_from_bytes(
 
     replace_animations(&mut root, &mut bin, &baked_clip, skeleton)?;
 
+    let bone_to_node = accessors::build_bone_to_node_map(skeleton, &root.nodes);
+    vrm_humanoid::write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
+
     write_glb(&root, bin, output_path)?;
 
     log!("glTF animation exported to {:?}", output_path);
@@ -55,12 +61,16 @@ pub fn export_gltf_animation_only(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     output_path: &Path,
+    vrm_humanoid_bones: &[(String, usize)],
 ) -> anyhow::Result<()> {
     let baked_clip = clip_to_animation(clip);
     let mut root = build_minimal_gltf_json(skeleton)?;
     let mut bin = Vec::new();
 
     write_animation_channels(&mut root, &mut bin, &baked_clip, skeleton)?;
+
+    let bone_to_node = accessors::build_bone_to_node_map(skeleton, &root.nodes);
+    vrm_humanoid::write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
 
     write_glb(&root, bin, output_path)?;
 
@@ -206,7 +216,7 @@ mod tests {
         clip.duration = 1.0;
 
         let output_path = std::env::temp_dir().join("test_export_gltf_animation_only.glb");
-        export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
         assert!(
             output_path.exists(),
@@ -229,7 +239,7 @@ mod tests {
         clip.duration = 1.0;
 
         let output_path = std::env::temp_dir().join("test_node_count.glb");
-        export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
         let bytes = fs::read(&output_path).unwrap();
         let glb = Glb::from_slice(&bytes).unwrap();
@@ -254,7 +264,7 @@ mod tests {
         clip.duration = 1.0;
 
         let output_path = std::env::temp_dir().join("test_channels.glb");
-        export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
         let bytes = fs::read(&output_path).unwrap();
         let glb = Glb::from_slice(&bytes).unwrap();
@@ -279,7 +289,7 @@ mod tests {
         clip.duration = 1.0;
 
         let output_path = std::env::temp_dir().join("test_hierarchy.glb");
-        export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
         let bytes = fs::read(&output_path).unwrap();
         let glb = Glb::from_slice(&bytes).unwrap();
@@ -332,7 +342,7 @@ mod tests {
         clip.duration = 1.0;
 
         let output_path = std::env::temp_dir().join("test_scene.glb");
-        export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
         let bytes = fs::read(&output_path).unwrap();
         let glb = Glb::from_slice(&bytes).unwrap();
@@ -358,6 +368,41 @@ mod tests {
             );
         }
 
+        fs::remove_file(output_path).ok();
+    }
+
+    #[test]
+    fn test_export_gltf_animation_only_writes_vrm_humanoid() {
+        let skeleton = create_test_skeleton();
+        let mut clip = EditableAnimationClip::new(1, "test_anim".to_string());
+        let track = clip.add_track(0, "Hips".to_string());
+        let curve = track.get_curve_mut(PropertyType::TranslationX);
+        curve_add_keyframe(curve, 0.0, 0.0);
+        curve_add_keyframe(curve, 1.0, 1.0);
+        clip.duration = 1.0;
+        let humanoid_bones = [("hips".to_string(), 0), ("spine".to_string(), 1)];
+
+        let output_path = std::env::temp_dir().join("test_vrm_humanoid.glb");
+        export_gltf_animation_only(&clip, &skeleton, &output_path, &humanoid_bones).unwrap();
+
+        let bytes = fs::read(&output_path).unwrap();
+        let glb = Glb::from_slice(&bytes).unwrap();
+        let json_value: serde_json::Value = serde_json::from_slice(&glb.json).unwrap();
+        let root: json::Root = json::Root::from_slice(&glb.json).unwrap();
+        let bone_to_node = build_bone_to_node_map(&skeleton, &root.nodes);
+        let vrm = thyllore_importer_core::gltf::vrm_humanoid_extension::parse_vrm_humanoid(
+            json_value.pointer("/extensions/VRMC_vrm"),
+            None,
+        )
+        .unwrap();
+
+        assert!(vrm.is_v1);
+        assert_eq!(vrm.bones.len(), 2);
+        for (vrm_name, bone_index) in &humanoid_bones {
+            let expected_node = bone_to_node[&(*bone_index as u32)];
+            assert!(vrm.bones.contains(&(vrm_name.clone(), expected_node)));
+        }
+        assert!(root.extensions_used.contains(&"VRMC_vrm".to_string()));
         fs::remove_file(output_path).ok();
     }
 }

@@ -3,13 +3,25 @@ use thyllore_color_core::blackbody_rgb;
 
 /// Emission color: either the authored base/tip pair or a blackbody pair
 /// sampled from the base/tip temperatures.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameColor {
+    /// Emission color at the flame base (used when blackbody is off)
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub base: [f32; 3],
+    /// Emission color at the flame tip (used when blackbody is off)
+    #[persist(ui(primary, min = 0.0, max = 1.0, group = "color"))]
     pub tip: [f32; 3],
+    /// Blackbody temperature at the base in kelvin
+    #[persist(curve, debug_range = (800.0, 3000.0), ui(label = "Temp Base K", min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_base_k: f32,
+    /// Blackbody temperature at the tip in kelvin
+    #[persist(curve, debug_range = (800.0, 3000.0), ui(label = "Temp Tip K", min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_tip_k: f32,
+    /// Derive the base/tip colors from the blackbody temperatures
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.0f"))]
     pub use_blackbody: bool,
+    #[persist]
     pub occlusion_lum_ref: f32,
 }
 
@@ -40,14 +52,19 @@ pub fn resolve_flame_colors(color: &FlameColor) -> ([f32; 3], [f32; 3], [f32; 3]
     (color.base, mid, color.tip)
 }
 
-/// Planckian chromaticity sampled from the tip temperature (index 0) to the
-/// base temperature (index 7).
+/// Emission chromaticity from the tip temperature (index 0) to the base
+/// temperature (index 7): Planckian when `use_blackbody`, otherwise the authored
+/// tip -> base colors so the RTE path honours `color_base` / `color_tip`.
 pub fn build_temperature_ramp(color: &FlameColor) -> [[f32; 4]; 8] {
-    let cold = color.temperature_tip_k;
-    let hot = color.temperature_base_k;
     std::array::from_fn(|index| {
-        let kelvin = cold + (hot - cold) * index as f32 / 7.0;
-        let rgb = blackbody_rgb(kelvin);
+        let t = index as f32 / 7.0;
+        let rgb = if color.use_blackbody {
+            blackbody_rgb(
+                color.temperature_tip_k + (color.temperature_base_k - color.temperature_tip_k) * t,
+            )
+        } else {
+            std::array::from_fn(|c| color.tip[c] + (color.base[c] - color.tip[c]) * t)
+        };
         [rgb[0], rgb[1], rgb[2], 1.0]
     })
 }
@@ -77,4 +94,31 @@ pub fn build_color_ramp(color: &FlameColor, baked_state: &FlameBaked) -> [[f32; 
             0.0,
         ]
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn temperature_ramp_uses_authored_colors_without_blackbody() {
+        let color = FlameColor {
+            base: [0.15, 0.35, 1.0],
+            tip: [0.45, 0.65, 1.0],
+            use_blackbody: false,
+            ..FlameColor::default()
+        };
+        let ramp = build_temperature_ramp(&color);
+        assert_eq!(&ramp[0][..3], &color.tip);
+        assert_eq!(&ramp[7][..3], &color.base);
+        assert!((ramp[3][0] - (0.45 + (0.15 - 0.45) * 3.0 / 7.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn temperature_ramp_is_planckian_with_blackbody() {
+        let color = FlameColor::default();
+        let ramp = build_temperature_ramp(&color);
+        assert_eq!(&ramp[0][..3], &blackbody_rgb(color.temperature_tip_k));
+        assert_eq!(&ramp[7][..3], &blackbody_rgb(color.temperature_base_k));
+    }
 }

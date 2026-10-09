@@ -17,14 +17,11 @@ pub fn find_entity_clip_id(world: &World, entity: Entity) -> Option<SourceClipId
         .and_then(|schedule| schedule.first_instance().map(|i| i.source_id))
 }
 
-/// Returns the entity's clip, creating the clip (named after the domain) and a
-/// schedule instance (start 0, speed 1, so clip-local time equals timeline
-/// time) on first use.
-pub fn ensure_entity_clip(
+pub fn ensure_entity_clip_named(
     world: &mut World,
     assets: &mut AssetStorage,
     entity: Entity,
-    domain: &ScalarChannelDomain,
+    name: &str,
 ) -> SourceClipId {
     if let Some(id) = find_entity_clip_id(world, entity) {
         return id;
@@ -32,7 +29,7 @@ pub fn ensure_entity_clip(
 
     let source_id = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let editable = EditableAnimationClip::new(0, domain.name.to_string());
+        let editable = EditableAnimationClip::new(0, name.to_string());
         super::clip_library_systems::clip_library_register_and_activate(
             &mut clip_library,
             assets,
@@ -55,6 +52,57 @@ pub fn ensure_entity_clip(
     world.insert_component(entity, schedule);
 
     source_id
+}
+
+/// Returns the entity's clip, creating the clip (named after the domain) and a
+/// schedule instance (start 0, speed 1, so clip-local time equals timeline
+/// time) on first use.
+pub fn ensure_entity_clip(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    entity: Entity,
+    domain: &ScalarChannelDomain,
+) -> SourceClipId {
+    ensure_entity_clip_named(world, assets, entity, domain.name)
+}
+
+/// Gives a scalar-domain entity its clip when nothing scheduled one for it.
+pub fn ensure_scalar_entity_clip(world: &mut World, assets: &mut AssetStorage, entity: Entity) {
+    if find_entity_clip_id(world, entity).is_some() {
+        return;
+    }
+    if let Some(domain) = scalar_domain_for_entity(world, entity) {
+        ensure_entity_clip(world, assets, entity, domain);
+    }
+}
+
+/// Replaces the entity's schedule with one instance of `clip_id` from time 0 and drops the
+/// clip it scheduled before, so a reload never leaves an orphan clip in the library.
+pub fn schedule_entity_clip(world: &mut World, entity: Entity, clip_id: SourceClipId) {
+    if let Some(previous) = find_entity_clip_id(world, entity) {
+        if previous != clip_id {
+            world.resource_mut::<ClipLibrary>().remove(previous);
+        }
+    }
+
+    let duration = world
+        .resource::<ClipLibrary>()
+        .get(clip_id)
+        .map(|clip| clip.duration)
+        .unwrap_or(0.0);
+    let mut schedule = ClipSchedule::new();
+    super::clip_schedule_systems::clip_schedule_add_instance(&mut schedule, clip_id, duration);
+    world.insert_component(entity, schedule);
+}
+
+/// Despawns an entity together with the clip its schedule references.
+pub fn despawn_entity_with_clip(world: &mut World, entity: Entity) {
+    if let Some(clip_id) = find_entity_clip_id(world, entity) {
+        if let Some(mut library) = world.get_resource_mut::<ClipLibrary>() {
+            library.remove(clip_id);
+        }
+    }
+    world.despawn(entity);
 }
 
 /// The entity the scalar-curve events act on: the selected entity when it
@@ -148,25 +196,134 @@ pub fn scalar_clip_insert_debug_keys(
     };
 
     let key_count = DEBUG_KEYS_PER_CURVE;
-    for channel in domain.channels {
+    for (index, channel) in domain.channels().iter().enumerate() {
+        let property_type = domain.property_type_at(index);
         let (lo, hi) = channel.debug_value_range;
         for i in 0..key_count {
             let time = span_seconds * i as f32 / (key_count - 1) as f32;
             let value = lo + next_unit() * (hi - lo);
-            scalar_clip_insert_key(clip, channel.property_type(), time, value);
+            scalar_clip_insert_key(clip, property_type, time, value);
         }
     }
 }
 
 #[cfg(test)]
+pub(crate) mod test_support {
+    use thyllore_anim_core::editable::PropertyType;
+
+    use super::ensure_entity_clip;
+    use crate::asset::AssetStorage;
+    use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
+    use crate::ecs::world::{Entity, World};
+    use crate::hooks::effect_spawn::EffectSpawnHook;
+    use crate::hooks::scene::spawn_scene_owner;
+    use crate::scene::test_support::ProbeOwner;
+
+    /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
+    /// dispatch code never depend on a concrete effect.
+    pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
+        display_name: "Level",
+        cli_name: "probe_level",
+        debug_value_range: (0.0, 1.0),
+        renamed_from: &[],
+    };
+
+    pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
+        display_name: "Height",
+        cli_name: "probe_height",
+        debug_value_range: (0.5, 4.0),
+        renamed_from: &[],
+    };
+
+    pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
+        name: "Probe",
+        channel_table: || &[PROBE_LEVEL, PROBE_HEIGHT],
+        has_component: probe_has_component,
+        entities: probe_entities,
+        read: probe_read,
+        local_time: probe_local_time,
+    };
+
+    crate::scalar_channel_domain!(PROBE_DOMAIN);
+
+    pub fn probe_property(channel: &ScalarChannel) -> PropertyType {
+        PROBE_DOMAIN
+            .property_type_of(channel)
+            .expect("channel belongs to the Probe domain")
+    }
+
+    pub const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+        key: "probe",
+        max_instances: 4,
+        spawn: spawn_probe_instance,
+        entities: probe_entities,
+        default_in_empty_scene: false,
+    };
+
+    crate::effect_spawn_hook!(PROBE_SPAWN_HOOK);
+
+    fn probe_has_component(world: &World, entity: Entity) -> bool {
+        world.get_component::<ProbeOwner>(entity).is_some()
+    }
+
+    fn probe_entities(world: &World) -> Vec<Entity> {
+        world.entities_with::<ProbeOwner>()
+    }
+
+    fn probe_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {
+        let probe = world.get_component::<ProbeOwner>(entity)?;
+        if property_type == probe_property(&PROBE_LEVEL) {
+            Some(probe.level)
+        } else if property_type == probe_property(&PROBE_HEIGHT) {
+            Some(probe.position[1])
+        } else {
+            None
+        }
+    }
+
+    fn probe_local_time(world: &World, entity: Entity) -> Option<f32> {
+        world.get_component::<ProbeOwner>(entity).map(|_| 0.0)
+    }
+
+    fn spawn_probe_instance(
+        world: &mut World,
+        assets: &mut AssetStorage,
+        ordinal: usize,
+    ) -> Entity {
+        spawn_probe_with_clip(world, assets, &format!("Probe {}", ordinal + 1))
+    }
+
+    pub fn spawn_probe(world: &mut World, name: &str) -> Entity {
+        spawn_scene_owner(
+            world,
+            name,
+            ProbeOwner {
+                position: [1.0, 2.0, 3.0],
+                level: 0.5,
+            },
+        )
+    }
+
+    pub fn spawn_probe_with_clip(
+        world: &mut World,
+        assets: &mut AssetStorage,
+        name: &str,
+    ) -> Entity {
+        let entity = spawn_probe(world, name);
+        ensure_entity_clip(world, assets, entity, &PROBE_DOMAIN);
+        entity
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::test_support::{probe_property, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
     use super::*;
-    use crate::ecs::component::{FlameParam, FLAME_DOMAIN};
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {
-        let mut clip = EditableAnimationClip::new(1, FLAME_DOMAIN.name.to_string());
-        let height = FlameParam::Height.property_type();
+        let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
+        let height = probe_property(&PROBE_LEVEL);
         scalar_clip_insert_key(&mut clip, height, 1.0, 2.0);
         scalar_clip_insert_key(&mut clip, height, 1.0, 3.0);
         let curve = clip.get_scalar_curve(height).unwrap();
@@ -177,8 +334,8 @@ mod tests {
 
     #[test]
     fn test_sampled_values_clamp_at_curve_ends() {
-        let mut clip = EditableAnimationClip::new(1, FLAME_DOMAIN.name.to_string());
-        let height = FlameParam::Height.property_type();
+        let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
+        let height = probe_property(&PROBE_LEVEL);
         scalar_clip_insert_key(&mut clip, height, 0.0, 1.0);
         scalar_clip_insert_key(&mut clip, height, 2.0, 3.0);
 
@@ -193,12 +350,12 @@ mod tests {
 
     #[test]
     fn test_debug_keys_cover_all_channels_within_safe_ranges() {
-        let mut clip = EditableAnimationClip::new(1, FLAME_DOMAIN.name.to_string());
-        scalar_clip_insert_debug_keys(&mut clip, &FLAME_DOMAIN, 42, 5.0);
+        let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
+        scalar_clip_insert_debug_keys(&mut clip, &PROBE_DOMAIN, 42, 5.0);
 
-        assert_eq!(clip.scalar_curves.len(), FLAME_DOMAIN.channels.len());
-        for channel in FLAME_DOMAIN.channels {
-            let curve = clip.get_scalar_curve(channel.property_type()).unwrap();
+        assert_eq!(clip.scalar_curves.len(), PROBE_DOMAIN.channels().len());
+        for channel in PROBE_DOMAIN.channels() {
+            let curve = clip.get_scalar_curve(probe_property(channel)).unwrap();
             assert_eq!(curve.keyframes.len(), DEBUG_KEYS_PER_CURVE);
             let (lo, hi) = channel.debug_value_range;
             for key in &curve.keyframes {
@@ -216,18 +373,18 @@ mod tests {
 
     #[test]
     fn test_debug_keys_are_deterministic_per_seed() {
-        let mut a = EditableAnimationClip::new(1, FLAME_DOMAIN.name.to_string());
-        let mut b = EditableAnimationClip::new(2, FLAME_DOMAIN.name.to_string());
-        scalar_clip_insert_debug_keys(&mut a, &FLAME_DOMAIN, 7, 5.0);
-        scalar_clip_insert_debug_keys(&mut b, &FLAME_DOMAIN, 7, 5.0);
+        let mut a = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
+        let mut b = EditableAnimationClip::new(2, PROBE_DOMAIN.name.to_string());
+        scalar_clip_insert_debug_keys(&mut a, &PROBE_DOMAIN, 7, 5.0);
+        scalar_clip_insert_debug_keys(&mut b, &PROBE_DOMAIN, 7, 5.0);
 
-        for channel in FLAME_DOMAIN.channels {
+        for channel in PROBE_DOMAIN.channels() {
             let ka = &a
-                .get_scalar_curve(channel.property_type())
+                .get_scalar_curve(probe_property(channel))
                 .unwrap()
                 .keyframes;
             let kb = &b
-                .get_scalar_curve(channel.property_type())
+                .get_scalar_curve(probe_property(channel))
                 .unwrap()
                 .keyframes;
             let va: Vec<f32> = ka.iter().map(|k| k.value).collect();
@@ -238,15 +395,15 @@ mod tests {
 
     #[test]
     fn test_delete_keys_at_removes_empty_curves() {
-        let mut clip = EditableAnimationClip::new(1, FLAME_DOMAIN.name.to_string());
-        scalar_clip_insert_key(&mut clip, FlameParam::Height.property_type(), 1.0, 2.0);
-        scalar_clip_insert_key(&mut clip, FlameParam::Radius.property_type(), 4.0, 0.5);
+        let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
+        scalar_clip_insert_key(&mut clip, probe_property(&PROBE_LEVEL), 1.0, 2.0);
+        scalar_clip_insert_key(&mut clip, probe_property(&PROBE_HEIGHT), 4.0, 0.5);
         scalar_clip_delete_keys_at(&mut clip, 1.0);
         assert!(clip
-            .get_scalar_curve(FlameParam::Height.property_type())
+            .get_scalar_curve(probe_property(&PROBE_LEVEL))
             .is_none());
         assert!(clip
-            .get_scalar_curve(FlameParam::Radius.property_type())
+            .get_scalar_curve(probe_property(&PROBE_HEIGHT))
             .is_some());
     }
 }

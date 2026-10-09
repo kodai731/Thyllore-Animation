@@ -1,4 +1,5 @@
 use super::device::*;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::*;
 use crate::vulkan::*;
 use winit::window::Window;
@@ -32,11 +33,21 @@ impl RRSwapchain {
         Ok(rrswapchain)
     }
 
-    pub unsafe fn destroy(&self, device: &super::device::Device) {
-        for &view in &self.swapchain_image_views {
+    pub unsafe fn destroy(&mut self, device: &super::device::Device) {
+        for view in self.swapchain_image_views.drain(..) {
             device.destroy_image_view(view, None);
         }
-        device.destroy_swapchain_khr(self.swapchain, None);
+        self.swapchain_images.clear();
+        if self.swapchain != vk::SwapchainKHR::null() {
+            device.destroy_swapchain_khr(self.swapchain, None);
+            self.swapchain = vk::SwapchainKHR::null();
+        }
+    }
+}
+
+impl GpuResource for RRSwapchain {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }
 

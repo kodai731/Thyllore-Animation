@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::render::pass::get_depth_format;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
 
 #[derive(Clone, Debug, Default)]
@@ -352,5 +353,11 @@ impl OffscreenFramebuffer {
 
     pub fn resolve_image_view(&self) -> vk::ImageView {
         self.resolve_color_image_view
+    }
+}
+
+impl GpuResource for OffscreenFramebuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

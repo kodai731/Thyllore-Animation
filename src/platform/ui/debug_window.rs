@@ -1,36 +1,36 @@
-use crate::ecs::events::{UIEvent, UIEventQueue};
+#![cfg(debug_assertions)]
+
+use crate::asset::AssetStorage;
+use crate::ecs::events::{send_dialog_request, DialogRequest};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::CurveSuggestionState;
 use crate::ecs::resource::{DebugViewMode, DebugViewState};
 use crate::ecs::resource::{GridMeshData, MouseInput};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
+use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub struct DebugWindowState {
-    pub debug_view_mode: DebugViewMode,
-}
-
-pub fn build_debug_panel_content(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut DebugWindowState,
-    ecs_world: &World,
-) {
-    build_camera_debug_panel(ui, ui_events);
+pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
+    build_camera_debug_panel(ui, ecs_world);
     ui.separator();
 
-    build_debug_view_mode_panel(ui, state);
+    build_debug_view_mode_panel(ui, ecs_world);
     ui.separator();
 
-    build_debug_panel(ui, ui_events, ecs_world);
+    build_debug_panel(ui, ecs_world);
     ui.separator();
 
-    build_grid_debug_panel(ui, ui_events, ecs_world);
+    build_grid_debug_panel(ui, ecs_world);
     ui.separator();
 
     build_fbx_debug_panel(ui);
     ui.separator();
 
-    build_curve_resample_panel(ui, ui_events, ecs_world);
+    build_curve_resample_panel(ui, ecs_world);
     ui.separator();
 
     #[cfg(feature = "ml")]
@@ -48,22 +48,43 @@ pub fn build_debug_panel_content(
     build_mouse_info(ui, ecs_world);
 }
 
-fn build_camera_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+fn build_camera_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
     ui.text("Camera:");
     if ui.button("Reset Camera") {
-        ui_events.send(UIEvent::ResetCamera);
+        ecs_world.send_command(CameraEvent::ResetCamera);
     }
     ui.same_line();
     if ui.button("Reset Up") {
-        ui_events.send(UIEvent::ResetCameraUp);
+        ecs_world.send_command(CameraEvent::ResetCameraUp);
     }
     ui.same_line();
     if ui.button("To Model") {
-        ui_events.send(UIEvent::MoveCameraToModel);
+        ecs_world.send_command(CameraEvent::MoveCameraToModel);
+    }
+
+    ui.separator();
+    ui.text("Debug Primitives:");
+    if ui.button("Spawn Cube") {
+        ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
+            kind: crate::ecs::events::DebugPrimitiveKind::Cube,
+        });
+    }
+    ui.same_line();
+    if ui.button("Spawn Sphere") {
+        ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
+            kind: crate::ecs::events::DebugPrimitiveKind::Sphere,
+        });
+    }
+    ui.same_line();
+    if ui.button("Spawn Floor") {
+        ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
+            kind: crate::ecs::events::DebugPrimitiveKind::Floor,
+        });
     }
 }
 
-fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {
+fn build_debug_view_mode_panel(ui: &imgui::Ui, ecs_world: &World) {
+    let mut state = ecs_world.resource_mut::<DebugViewState>();
     ui.text("Debug View Mode:");
     let mut current_mode = state.debug_view_mode.as_int();
 
@@ -99,7 +120,7 @@ fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {
     }
 }
 
-fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
     ui.text("Debug Info:");
 
     if let Some(mut debug_view) = ecs_world.get_resource_mut::<DebugViewState>() {
@@ -107,46 +128,45 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
     }
 
     if ui.button("Debug Shadow Info") {
-        ui_events.send(crate::ecs::events::UIEvent::DebugShadowInfo);
+        ecs_world.send_command(CameraEvent::DebugShadowInfo);
     }
 
     ui.same_line();
 
     if ui.button("Debug Billboard Depth") {
-        ui_events.send(crate::ecs::events::UIEvent::DebugBillboardDepth);
+        ecs_world.send_command(CameraEvent::DebugBillboardDepth);
     }
 
     if ui.button("Dump Debug Information") {
-        ui_events.send(crate::ecs::events::UIEvent::DumpDebugInfo);
+        ecs_world.send_command(CameraEvent::DumpDebugInfo);
     }
 
     ui.same_line();
 
     if ui.button("Dump Animation Debug") {
-        ui_events.send(crate::ecs::events::UIEvent::DumpAnimationDebug);
+        ecs_world.send_command(CameraEvent::DumpAnimationDebug);
     }
 
     if ui.button("Add Test Constraints") {
-        ui_events.send(crate::ecs::events::UIEvent::CreateTestConstraints);
+        ecs_world.send_command(ConstraintEvent::CreateTestConstraints);
     }
     ui.same_line();
     if ui.button("Clear Constraints") {
-        ui_events.send(crate::ecs::events::UIEvent::ClearTestConstraints);
+        ecs_world.send_command(ConstraintEvent::ClearTestConstraints);
     }
 
     if ui.button("Add Spring Bones") {
-        ui_events.send(crate::ecs::events::UIEvent::AddTestSpringBones);
+        ecs_world.send_command(ConstraintEvent::AddTestSpringBones);
     }
     ui.same_line();
     if ui.button("Clear Spring Bones") {
-        ui_events.send(crate::ecs::events::UIEvent::ClearSpringBones);
+        ecs_world.send_command(ConstraintEvent::ClearSpringBones);
     }
 
-    build_spring_bone_bake_panel(ui, ui_events, ecs_world);
+    build_spring_bone_bake_panel(ui, ecs_world);
 }
 
-fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
-    use crate::ecs::events::UIEvent;
+fn build_spring_bone_bake_panel(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
 
     let Some(state) = ecs_world.get_resource::<SpringBoneState>() else {
@@ -159,7 +179,7 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
             ui.text("Spring Bone: Realtime");
             ui.text_colored([0.5, 0.8, 0.5, 1.0], "  Simulating...");
             if ui.button("Bake Spring Bones") {
-                ui_events.send(UIEvent::SpringBoneBake);
+                ecs_world.send_command(SpringBoneEvent::Bake);
             }
         }
         SpringBoneMode::Baked => {
@@ -170,11 +190,11 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
                 "  Editing will switch to BakedOverride",
             );
             if ui.button("Discard Bake") {
-                ui_events.send(UIEvent::SpringBoneDiscardBake);
+                ecs_world.send_command(SpringBoneEvent::DiscardBake);
             }
             ui.same_line();
             if ui.button("Save Bake (.ron)") {
-                ui_events.send(UIEvent::SpringBoneSaveBake);
+                send_dialog_request(ecs_world, DialogRequest::SaveSpringBoneBake);
             }
         }
         SpringBoneMode::BakedOverride => {
@@ -182,28 +202,26 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
             ui.text(format!("Spring Bone: BakedOverride (clip_id={})", clip_id));
             ui.text_colored([1.0, 0.7, 0.3, 1.0], "  Manually edited");
             if ui.button("Re-bake") {
-                ui_events.send(UIEvent::SpringBoneRebake);
+                ecs_world.send_command(SpringBoneEvent::Rebake);
             }
             ui.same_line();
             if ui.button("Discard Bake") {
-                ui_events.send(UIEvent::SpringBoneDiscardBake);
+                ecs_world.send_command(SpringBoneEvent::DiscardBake);
             }
             ui.same_line();
             if ui.button("Save Bake (.ron)") {
-                ui_events.send(UIEvent::SpringBoneSaveBake);
+                send_dialog_request(ecs_world, DialogRequest::SaveSpringBoneBake);
             }
         }
     }
 }
 
-fn build_grid_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
-    use crate::ecs::events::UIEvent;
-
+fn build_grid_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
     ui.text("Grid:");
     if let Some(grid) = ecs_world.get_resource::<GridMeshData>() {
         let mut show_y = grid.show_y_axis_grid;
         if ui.checkbox("Show Y-Axis Grid", &mut show_y) {
-            ui_events.send(UIEvent::SetGridShowYAxis(show_y));
+            ecs_world.send_command(OverlayEvent::SetGridShowYAxis(show_y));
         }
     }
 }
@@ -232,7 +250,7 @@ fn build_fbx_debug_panel(ui: &imgui::Ui) {
     }
 }
 
-fn build_curve_resample_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_curve_resample_panel(ui: &imgui::Ui, ecs_world: &World) {
     ui.text("Curve Resample (60fps):");
 
     let clip_ids = crate::ecs::systems::query_selected_model_clip_ids(ecs_world);
@@ -256,7 +274,7 @@ fn build_curve_resample_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_
     }
 
     if ui.button("Resample to 60fps") {
-        ui_events.send(UIEvent::ResampleSelectedModelAnimations { fps: 60.0 });
+        ecs_world.send_command(ClipBrowserEvent::ResampleSelectedModelAnimations { fps: 60.0 });
     }
 }
 
@@ -379,3 +397,19 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
             .build();
     }
 }
+
+fn build_click_debug_overlay_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    build_click_debug_overlay(ui, world);
+}
+
+crate::ui_window!(
+    "click_debug_overlay",
+    Floating,
+    9,
+    build_click_debug_overlay_window
+);

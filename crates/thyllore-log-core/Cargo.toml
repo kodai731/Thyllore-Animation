@@ -2,6 +2,7 @@
 name = "thyllore-log-core"
 version = "0.1.0"
 edition = "2021"
+description = "Layer 0 file logger and log! / log_warn! / log_error! macros for ThylloreAnimation. Depends on nothing in the workspace"
 
 [dependencies]
 chrono = "0.4"

@@ -18,6 +18,7 @@ pub enum PropertyType {
     /// Application-defined scalar channel (e.g. effect parameters). The u16 code's
     /// meaning is owned by the application; core treats it as an opaque curve key.
     Custom(u16),
+    MorphWeight,
 }
 
 impl PropertyType {
@@ -33,6 +34,7 @@ impl PropertyType {
             PropertyType::ScaleY => "Scale Y",
             PropertyType::ScaleZ => "Scale Z",
             PropertyType::Custom(_) => "Custom",
+            PropertyType::MorphWeight => "MorphWeight",
         }
     }
 
@@ -48,6 +50,7 @@ impl PropertyType {
             PropertyType::ScaleY => "Scl.Y",
             PropertyType::ScaleZ => "Scl.Z",
             PropertyType::Custom(_) => "Custom",
+            PropertyType::MorphWeight => "MorphWeight",
         }
     }
 }
@@ -68,6 +71,24 @@ impl PropertyCurve {
             keyframes: Vec::new(),
             next_keyframe_id: 1,
         }
+    }
+
+    pub fn from_keyframes(
+        id: CurveId,
+        property_type: PropertyType,
+        keyframes: Vec<EditableKeyframe>,
+        next_keyframe_id: KeyframeId,
+    ) -> Self {
+        Self {
+            id,
+            property_type,
+            keyframes,
+            next_keyframe_id,
+        }
+    }
+
+    pub fn next_keyframe_id(&self) -> KeyframeId {
+        self.next_keyframe_id
     }
 
     pub(crate) fn allocate_keyframe_id(&mut self) -> KeyframeId {

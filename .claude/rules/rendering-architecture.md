@@ -2,125 +2,156 @@
 paths:
   - "src/vulkanr/**"
   - "src/app/**"
-  - "src/renderer/**"
-  - "src/gltf/**"
-  - "src/fbx/**"
-  - "src/math/**"
-  - "src/support/**"
+  - "src/render/**"
+  - "crates/thyllore-vulkan-core/**"
+  - "crates/thyllore-render-core/**"
 ---
 
-# Architecture Details
+# Rendering Architecture
 
-## Core Modules
+File placement is defined in `hierarchy.md`; this file describes how a frame is produced. Shader build and
+naming rules are in `shaders.md`, ECS phases in `ecs-architecture.md`.
 
-**`vulkanr/`** - Vulkan rendering abstraction layer
+## Layers
 
-- `vulkan.rs` - Core Vulkan utilities and memory management
-- `device.rs` - `RRDevice` wraps physical/logical device selection
-- `swapchain.rs` - `RRSwapchain` manages the swapchain lifecycle
-- `pipeline.rs` - `RRPipeline` handles graphics pipeline creation
-- `render.rs` - `RRRender` manages render passes and framebuffers
-- `command.rs` - `RRCommandPool` and `RRCommandBuffer` for command recording
-- `buffer.rs` - Buffer abstractions (`RRVertexBuffer`, `RRIndexBuffer`, `RRUniformBuffer`)
-- `descriptor.rs` - `RRDescriptorSet` for descriptor set management
-- `data.rs` - `RRData` aggregates vertex/index buffers, textures, and uniforms per drawable
-- `image.rs` - `RRImage` for texture image handling
+| Layer | Location | Knows |
+|---|---|---|
+| Abstract render types | `crates/thyllore-render-core` | `RenderBackend` trait, `MeshId`, buffer handles, `FrameUBO` / `ObjectUBO` / `MaterialUBO`, post-process settings. No Vulkan, no ECS |
+| Vulkan primitives | `crates/thyllore-vulkan-core` | `core/` (`RRDevice`, `RRSwapchain`, descriptor allocator), `command/`, `descriptor/` (reflected set layouts, one file per pass), `pipeline/` (builder from the pass manifest, cache, ray tracing), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/` (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`, `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend: RenderBackend`). No ECS |
+| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `backend.rs` (`BillboardBackend` impl) |
+| Frame driver | `src/app/` | `App` lifecycle, `AppData`, `ViewportState`, `begin_frame` / `update` / `render` / present |
 
-**`gltf/`** - glTF model loader
+Effect-specific pass recording, resize and descriptor updates live in `src/ecs/systems/<effect>/` (#151) as
+`RenderPassNode`s registered through the effect hook (#156). Do not add effect-specific code to
+`src/app/render.rs` or `src/vulkanr/renderer/deferred/`; a new pass is a node that declares its transients,
+reads and writes, and a declaration must hold whenever `record()` would emit the commands.
 
-- Loads meshes, textures, animations (morph targets and skeletal)
-- `GltfModel` contains `GltfData` per mesh with vertex/index data
-- Supports morph target animations and skeletal animations with joints
+### Fullscreen Overlay Passes
 
-**`fbx/`** - FBX model loader (in development)
+- An effect declares its overlay pass once as a `const OverlayNodeSpec` in
+  `src/ecs/systems/<effect>/pipeline.rs` (`thyllore_vulkan_core::renderer::OverlayNodeSpec`: shaders, one
+  `OverlayBlend` per color attachment, optional `DepthTestConfig`, `OverlayPushConstants`). Blend
+  definitions live only in vulkan-core.
+- `spec.build_pipeline(rrdevice, rrrender, render_pass, &[layouts], extent)` builds the pipeline at effect
+  setup (no vertex input, fullscreen triangle, dynamic viewport / scissor, so a resize never rebuilds it).
+- `spec.record(device, cmd, &OverlayPass, render_area, pipeline, push_constants, &[sets],
+  &[OverlayInstanceDraw])` records one render pass: every instance draw binds the same sets with its own
+  dynamic offsets inside its scissor. `OverlayPass` (render pass, framebuffer, extent,
+  `OverlayAttachmentLoad`) comes from the target: `HistoryTargets::overlay_pass(history_index, load)`, or
+  the effect resource's `overlay_pass()` for an HDR pass built with `create_color_overlay_render_pass`.
+- The shading settings block `ShadingPushConstants { mode, step_count, debug_view }` is shared; an effect
+  with a different block declares its own `#[repr(C)]` struct.
+- Instance scissors come from `src/vulkanr/renderer/deferred/scissor.rs::compute_bounds_scissor` (local
+  bound corners projected with the model matrix; full extent when a corner is behind the camera, `None`
+  when all are or the bounds are empty). Effects never project corners themselves.
+- Temporal history reuse is `src/ecs/systems/temporal_history.rs`: an effect implements `TemporalHistory`
+  (snapshot, accumulator) and calls `accumulate_temporal_history::<E>(world)` from its `Accumulate` frame
+  prep hook; the previous snapshot is the generic `HistorySnapshotState<S>` resource.
+- Render passes are created once during effect setup (`create_color_overlay_render_pass`), only the
+  resolution-dependent framebuffers are recreated on viewport resize.
+- Resolving at a reduced resolution is generic: `OverlayResolveScale { Half, Quarter }` reduces the extent
+  and the instance scissors, `ReducedResolveTarget` (vulkan-core `renderer/overlay_scale.rs`) owns the
+  cleared transient render pass and gives its `TransientDesc` and `OverlayPass` for the scale chosen this
+  frame, and the depth-aware upsample onto the full target is the shared `pass.overlay_upsample`
+  (`shaders/overlay/upsampleFragment.slang`, `UPSAMPLE_OVERLAY` spec, `OverlayUpsampleDescriptorSet` with
+  one set per frame slot). The effect maps its own scale setting to `OverlayResolveScale`, requests the
+  reduced image via `RenderPassNode::transients`, binds it in `prepare` (framebuffer from
+  `ctx.transient.framebuffer`, descriptor rewritten only when the generation changes) and records
+  resolve then upsample (`src/ecs/systems/wind/passes.rs`).
+- Everything around the overlay pass stays in the effect: the order of its nodes, compute passes (wind
+  shadow bake, water caustic), ray tracing (water trace) and the history ping-pong index.
 
-- Uses `fbxcel` and `fbxcel-dom` crates
-- `FbxModel` contains `FbxData` with positions and indices
-- Currently extracts mesh geometry (positions, indices)
+## Frame flow
 
-**`math/`** - Math utilities
+`App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI
+events and applies the queued commands, then calls three `App` methods in order and closes with Last:
 
-- Vector/matrix operations using cgmath
-- Rodrigues rotation, view matrix calculation
+1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
+   effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`
+   (recycle the frame-in-flight bucket, evict stale images), read back auto exposure and object id, acquire
+   the swapchain image.
+2. `update` (`src/app/update.rs`): builds `FrameContext` and runs the ECS phase pipeline (`run_frame`),
+   then uploads imgui buffers.
+3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
+   `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
+   `record_command_buffer`, submit, present, `FrameSync::advance`.
+4. `run_last_phase` (`src/ecs/systems/phases/last_phase.rs`): only when the
+   batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
+   the screenshot.
 
-**`support/`** - ImGui integration
+Descriptor sets that read a transient image exist once per frame slot (`MAX_FRAMES_IN_FLIGHT = 2`, in
+`src/app/init/instance.rs`). Never update a single descriptor set that a pending command buffer may still
+bind; either keep one set per frame slot or wait idle first (resize path).
 
-- Dual-window system (ImGui debug window + Vulkan render window)
-- Event handling for mouse/keyboard input
-- `GUIData` struct passes input state to rendering system
+## Pass order (`src/app/command_recording.rs`)
 
-## Application Structure
+```
+gbuffer → object id copy → ray query shadow → composite to HDR → onion skin
+→ effect stage in subscription order (`src/effect/subscription.rs`: water, flame, wind)
+   water: trace → caustic → scene color copy → resolve
+   flame: shading + temporal
+   wind:  shadow bake → resolve (full scale, or half scale + upsample)
+→ bloom (downsample / upsample mips) → dof → auto exposure (histogram + average)
+→ tonemap to offscreen → onion skin composite → imgui
+```
 
-The `App` struct in `main.rs` contains:
+Effects write into the HDR buffer and read it (water copies HDR to a transient scene-color image first). Post-process passes read the previous stage through per-slot descriptors. Passes and their shader
+stages / descriptor set roles are declared once in `shaders/passes.toml` and generated into
+`thyllore-vulkan-core` by its `build.rs`; a new pass starts there.
 
-- Vulkan instance, device, and swapchain
-- Multiple pipelines (model pipeline, grid pipeline)
-- Descriptor sets per pipeline
-- Command buffers for rendering
-- Camera state and mouse interaction handling
+## Render targets
 
-**Rendering flow:**
+- `RenderTargetStorage` (viewport-extent lifetime, keyed by `RenderTargetKey`): flame and water history,
+  caustic accumulation. Reset on resize, destroyed with the viewport.
+- `RenderTargetTransient` (pass lifetime inside a frame): dof output, bloom mips, water scene color copy
+  and trace image. `acquire(TransientDesc)` returns a frame-stamped `TransientHandle`; the image layout is
+  `UNDEFINED` right after acquire, so the first use must transition it. Framebuffers for transient
+  attachments come from `RenderTargetTransient::framebuffer` (cached by render pass + views).
+- Core attachments (HDR color, depth, gbuffer, offscreen) are owned by `ViewportState` / `RenderTargets`
+  and are not pooled.
+- Design and migration record: `Design/20260906_render_target_transient_design/` under
+  `${RustRenderingDocPath}`.
 
-1. Wait for previous frame fence
-2. Acquire swapchain image
-3. Update uniform buffers (camera transforms)
-4. Update vertex buffers (for morph animations)
-5. Submit command buffer
-6. Present to swapchain
+## Contexts passed to render code
 
-**Camera controls:**
+- `thyllore_vulkan_core::FrameRenderContext`: device, graphics resources, buffer registry, pipeline storage,
+  image index. Immutable; what crate-level `record_*_pass` helpers take.
+- `src/app/render_context.rs::RenderContext`: mutable GPU resources, builds `VulkanBackend`.
+- `src/ecs/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
+  swapchain extent. What the ECS phase pipeline takes.
+- `src/ecs/effect_context.rs::EffectContext`: instance, device, graphics resources, viewport extent and
+  storage pool, HDR view, raytracing data, pass image states, `World`. What the effect `setup`,
+  `after_overrides` (with `&RRRender`) and `on_viewport_resize` hooks take; `src/app/effect_hooks.rs` builds it.
+- `src/ecs/pass_context.rs::PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
+  data, the viewport's core buffers, the transient pool and this frame's slot map, onion skin state, `World`,
+  assets. What every `RenderPassNode` method takes (`prepare` mutably); `src/app/render_context.rs::build_pass_context`
+  builds it per graph phase.
 
-- Left mouse drag: Rotate camera (updates `camera_direction` and `camera_up`)
-- Middle mouse drag: Pan camera (translates `camera_pos`)
-- Mouse wheel: Zoom in/out (moves camera along view direction)
+## Camera controls (`src/ecs/systems/camera_systems.rs`)
 
-## Important Constants
+- Right drag: look (yaw / pitch); with WASD / QE while held: fly
+- Alt + right drag: orbit around the target
+- Middle (wheel) drag: pan
+- Wheel: zoom toward the cursor
 
-- `MAX_FRAMES_IN_FLIGHT = 2` - Number of concurrent GPU frames
-- `VALIDATION_ENABLED` - Enabled in debug builds for Vulkan validation layers
-- Validation layer: `VK_LAYER_KHRONOS_validation`
+## Constants (`src/app/init/instance.rs`)
 
-## Model Loading
+- `MAX_FRAMES_IN_FLIGHT = 2`
+- `VALIDATION_ENABLED = cfg!(debug_assertions)`, layer `VK_LAYER_KHRONOS_validation`
 
-**glTF models** are loaded from `assets/models/` (e.g., `stickman/stickman.glb`)
+## Model loading
 
-- Each mesh becomes an `RRData` with vertex/index buffers and textures
-- Morph animations are stored in `GltfModel.morph_animations`
+Importers live in `crates/thyllore-importer-core` (glTF / FBX / PNG) and return model-core + anim-core
+types; `src/loader/` only re-exports them. `src/app/model/` turns the result into `AssetStorage`
+entries, GPU meshes (`GraphicsResources`) and acceleration structures. Sample models live under
+`assets/models/<name>/`.
 
-**FBX models** are loaded from `assets/models/` (e.g., `stickman/stickman_bin.fbx`)
+## Common issues
 
-- Currently replaces the first `RRData` vertex/index buffers
-- Uses triangulation for quad faces
-
-## Shader Pipeline
-
-Two pipelines are created:
-
-1. **Model pipeline** - Triangle list, fill mode, renders 3D models
-2. **Grid pipeline** - Line list, line mode, renders coordinate grid
-
-Each pipeline has its own descriptor sets for uniform buffers and textures.
-
-## Module Organization
-
-- Embed imgui crates locally in `src/imgui*/` for custom modifications
-- Vulkan abstraction (`RR*` structs) provides a higher-level API over raw Vulkan
-- Model loaders are isolated in `gltf/` and `fbx/` modules
-
-## Camera Debugging
-
-The ImGui debug window shows:
-
-- Mouse position
-- Click states (left/wheel)
-- Current file path (for drag-and-drop)
-- Reset camera buttons for debugging
-
-Use `reset camera` to return to initial position, `reset camera up` to align camera up vector.
-
-## Common Issues
-
-- **Vulkan validation errors**: Check `RUST_LOG=debug` output for details
-- **Shader compilation errors**: Ensure VulkanSDK is installed and `glslc` is in PATH
-- **Missing textures**: Verify texture paths in model files match `assets/models/` or `assets/textures/` structure
-- **FBX loading errors**: Check that FBX file is binary format (not ASCII)
+- Validation errors: run with `RUST_LOG=debug`; messages are logged through `log_error!` and appear in
+  `log/log_0.txt`. Batch runs (`--batch-scene ... --batch-screenshot ...`) are the quickest reproduction.
+- Objects dropped without `destroy()`: every Vulkan wrapper logs a warning from `Drop`. Batch runs exit
+  without teardown, so these warnings at the very end of a batch log are expected; in the GUI they are bugs.
+- Shader compilation errors: see `shaders.md` (`glslc` from VulkanSDK, run by `thyllore-vulkan-core/build.rs`).
+- Descriptor written while in use: symptom is `vkUpdateDescriptorSets` validation errors or flicker one frame
+  behind; the fix is a per-frame-slot set, see "Frame flow".

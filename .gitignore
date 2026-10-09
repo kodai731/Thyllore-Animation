@@ -13,7 +13,8 @@ target/
 *.pdb
 
 # resource files
-assets
+assets/*
+!assets/templates/
 
 # builds
 # Note: build.rs SOURCE files are tracked. The `target/` and `debug/` rules above
@@ -126,3 +127,5 @@ fixtures/
 
 # machine-local secrets / runtime env (never commit)
 .config/
+build/docker_gui_cache/
+build/docker_gui/

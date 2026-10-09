@@ -16,6 +16,8 @@ use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::MeshBuffer;
 use crate::vulkanr::vulkan::Instance;
+use thyllore_model_core::MeshMorph;
+use thyllore_vulkan_core::raytracing::GpuPrimitive;
 use thyllore_vulkan_core::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
@@ -65,7 +67,21 @@ pub unsafe fn spawn_color_test_quads(
         graphics.mesh_material_ids.push(material_id);
     }
 
-    raytracing.build_acceleration_structures(instance, device, command_pool, &graphics.meshes)?;
+    let procedural_primitives: Vec<GpuPrimitive> = vec![];
+    let mesh_transforms: Vec<cgmath::Matrix4<f32>> = vec![
+        cgmath::Matrix4::new(
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0
+        );
+        specs.len()
+    ];
+    raytracing.build_acceleration_structures(
+        instance,
+        device,
+        command_pool,
+        &graphics.meshes,
+        &mesh_transforms,
+        &procedural_primitives,
+    )?;
 
     for (i, spec) in specs.iter().enumerate() {
         let mesh_idx = mesh_start_index + i;
@@ -194,6 +210,7 @@ unsafe fn create_quad_mesh_buffer(
         node_index: None,
         base_vertices: Vec::new(),
         base_colors: None,
+        morph: MeshMorph::default(),
     })
 }
 

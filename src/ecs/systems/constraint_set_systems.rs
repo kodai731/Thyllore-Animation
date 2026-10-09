@@ -1,5 +1,8 @@
 use crate::animation::{BoneId, ConstraintId, ConstraintType};
-use crate::ecs::component::{ConstraintEntry, ConstraintSet};
+use crate::asset::AssetStorage;
+use crate::ecs::component::{Constrained, ConstraintEntry, ConstraintSet};
+use crate::ecs::world::{Animator, World};
+use crate::hooks::model_load::LoadedModel;
 
 pub fn constraint_set_add(
     set: &mut ConstraintSet,
@@ -50,3 +53,34 @@ pub fn constraint_set_enabled(set: &ConstraintSet) -> Vec<&ConstraintEntry> {
         .filter(|e| e.constraint.is_enabled())
         .collect()
 }
+
+pub fn constraint_set_attach_loaded(
+    world: &mut World,
+    _assets: &AssetStorage,
+    loaded: &LoadedModel,
+) {
+    let constraints = &loaded.load_result.constraints;
+    if constraints.is_empty() || !world.has_component::<Animator>(loaded.entity) {
+        return;
+    }
+
+    let mut constraint_set = ConstraintSet::new();
+    for constraint in constraints {
+        constraint_set_add(
+            &mut constraint_set,
+            constraint.constraint_type.clone(),
+            constraint.priority,
+        );
+    }
+
+    world.insert_component(loaded.entity, constraint_set);
+    world.insert_component(loaded.entity, Constrained);
+
+    log!(
+        "Applied {} constraints to entity {}",
+        constraints.len(),
+        loaded.entity
+    );
+}
+
+crate::model_load_hook!("constraint_set", Rig, constraint_set_attach_loaded);

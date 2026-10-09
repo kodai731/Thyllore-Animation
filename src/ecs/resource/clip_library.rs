@@ -1,35 +1,34 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
-use crate::animation::{AnimationSystem, MorphAnimationSystem};
+use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {
     pub animation: AnimationSystem,
-    pub morph_animation: MorphAnimationSystem,
 
     pub source_clips: HashMap<SourceClipId, SourceClip>,
     pub dirty_sources: HashSet<SourceClipId>,
     pub next_source_id: SourceClipId,
     pub source_to_asset_id: HashMap<SourceClipId, AssetId>,
+    pub model_clip_ids: HashSet<SourceClipId>,
 }
 
 impl ClipLibrary {
     pub fn new() -> Self {
         Self {
             animation: AnimationSystem::new(),
-            morph_animation: MorphAnimationSystem::new(),
             source_clips: HashMap::new(),
             dirty_sources: HashSet::new(),
             next_source_id: 1,
             source_to_asset_id: HashMap::new(),
+            model_clip_ids: HashSet::new(),
         }
     }
 
     pub fn clear(&mut self) {
         self.animation.clear();
-        self.morph_animation = MorphAnimationSystem::new();
         self.clear_editable();
     }
 
@@ -37,6 +36,15 @@ impl ClipLibrary {
         self.source_clips.clear();
         self.dirty_sources.clear();
         self.source_to_asset_id.clear();
+    }
+
+    pub fn clear_model_clips(&mut self) {
+        self.animation.clear();
+        let ids: HashSet<SourceClipId> = self.model_clip_ids.clone();
+        self.source_clips.retain(|id, _| !ids.contains(id));
+        self.dirty_sources.retain(|id| !ids.contains(id));
+        self.source_to_asset_id.retain(|id, _| !ids.contains(id));
+        self.model_clip_ids.clear();
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
@@ -89,5 +97,12 @@ impl ClipLibrary {
 
     pub fn clip_count(&self) -> usize {
         self.source_clips.len()
+    }
+
+    pub fn find_source_by_name(&self, name: &str) -> Option<SourceClipId> {
+        self.source_clips
+            .iter()
+            .find(|(_, s)| s.editable_clip.name == name)
+            .map(|(id, _)| *id)
     }
 }

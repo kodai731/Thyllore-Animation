@@ -1,21 +1,27 @@
+use std::path::{Path, PathBuf};
+
 use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{Camera, FlameRenderSettings};
-use crate::ecs::systems::flame_dump_systems::{
-    write_flame_field_traces, write_flame_wall_probe_dump,
+use crate::ecs::systems::camera_systems::{
+    compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
 };
+use crate::ecs::systems::flame::{write_flame_field_traces, write_flame_wall_probe_dump};
 use crate::ecs::World;
-use thyllore_effect_core::{probe_flame_wall, WallProbeView};
+use thyllore_effect_core::{probe_flame_wall, WallProbeReport, WallProbeView};
 use thyllore_log_core::{log, log_warn};
 
-/// Wall-probe + field-trace dump over every flame entity's components. The
-/// sampling mirrors live in thyllore-render-debug; this system owns the
-/// component reads and is the shared entry for the interactive UIEvent and
-/// the batch run path.
-pub fn perform_flame_wall_probe_dump(world: &World, viewport_size: [f32; 2]) {
-    use crate::ecs::systems::camera_systems::{
-        compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
-    };
+pub const BATCH_VIEWPORT_SIZE: [f32; 2] = [1680.0, 840.0];
 
+type ProbedFlame = (FlameEffect, FlameBaked, FlameTemporalAccum, WallProbeReport);
+
+struct WallProbeScene {
+    camera: Camera,
+    settings: FlameRenderSettings,
+    view: WallProbeView,
+    flames: Vec<ProbedFlame>,
+}
+
+fn probe_wall_scene(world: &World, viewport_size: [f32; 2]) -> Option<WallProbeScene> {
     let camera = (*world.resource::<Camera>()).clone();
     let settings = world
         .get_resource::<FlameRenderSettings>()
@@ -30,8 +36,8 @@ pub fn perform_flame_wall_probe_dump(world: &World, viewport_size: [f32; 2]) {
         viewport_size_px: viewport_size,
     };
 
-    let flames: Vec<_> = world
-        .query_flames()
+    let flames: Vec<ProbedFlame> = world
+        .entities_with::<FlameEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<FlameEffect>(entity)?;
@@ -49,20 +55,91 @@ pub fn perform_flame_wall_probe_dump(world: &World, viewport_size: [f32; 2]) {
         .collect();
     if flames.is_empty() {
         log_warn!("wall probe dump skipped: no flame entity");
-        return;
+        return None;
     }
 
-    match write_flame_wall_probe_dump(&camera, &settings, viewport_size, &flames, None) {
-        Ok(path) => log!("wall probe dumped to {}", path.display()),
+    Some(WallProbeScene {
+        camera,
+        settings,
+        view,
+        flames,
+    })
+}
+
+fn write_wall_probe(scene: &WallProbeScene, viewport_size: [f32; 2], path: Option<&Path>) {
+    match write_flame_wall_probe_dump(
+        &scene.camera,
+        &scene.settings,
+        viewport_size,
+        &scene.flames,
+        path,
+    ) {
+        Ok(written) => log!("wall probe dumped to {}", written.display()),
         Err(error) => log_warn!("wall probe dump failed: {}", error),
     }
+}
 
-    match write_flame_field_traces(&view, &flames, None) {
+fn write_field_traces(scene: &WallProbeScene, path: Option<&Path>) {
+    match write_flame_field_traces(&scene.view, &scene.flames, path) {
         Ok(paths) => {
-            for path in paths {
-                log!("flame field trace dumped to {}", path.display());
+            for written in paths {
+                log!("flame field trace dumped to {}", written.display());
             }
         }
         Err(error) => log_warn!("flame field trace dump failed: {}", error),
+    }
+}
+
+/// Wall-probe and field-trace dump of every flame into the default dump locations.
+pub fn perform_flame_wall_probe_dump(world: &World, viewport_size: [f32; 2]) {
+    let Some(scene) = probe_wall_scene(world, viewport_size) else {
+        return;
+    };
+    write_wall_probe(&scene, viewport_size, None);
+    write_field_traces(&scene, None);
+}
+
+/// The same dump written to the paths a batch run asked for, at the screenshot frame.
+pub fn batch_run_flame_dump(
+    world: &World,
+    flame_trace_path: Option<&Path>,
+    wall_probe_path: Option<&Path>,
+) {
+    let Some(scene) = probe_wall_scene(world, BATCH_VIEWPORT_SIZE) else {
+        return;
+    };
+    if let Some(path) = wall_probe_path {
+        write_wall_probe(&scene, BATCH_VIEWPORT_SIZE, Some(path));
+    }
+    if let Some(path) = flame_trace_path {
+        write_field_traces(&scene, Some(path));
+    }
+}
+
+pub fn flame_dump_npy_path(json_path: &Path) -> PathBuf {
+    let mut npy = json_path.to_path_buf();
+    if npy.extension().is_some() {
+        npy.set_extension("npy");
+    }
+    npy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn npy_path_replaces_the_extension() {
+        let json = Path::new("/tmp/flame_dump_frame_0001.json");
+        assert_eq!(
+            flame_dump_npy_path(json),
+            PathBuf::from("/tmp/flame_dump_frame_0001.npy")
+        );
+
+        let jsonl = Path::new("/tmp/flame_dump_frame_0001.jsonl");
+        assert_eq!(
+            flame_dump_npy_path(jsonl),
+            PathBuf::from("/tmp/flame_dump_frame_0001.npy")
+        );
     }
 }

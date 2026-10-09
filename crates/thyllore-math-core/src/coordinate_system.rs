@@ -89,17 +89,25 @@ pub fn perspective_infinite_reverse(fovy: Deg<f32>, aspect: f32, near: f32) -> M
     )
 }
 
-/// FBX Z-up → ワールド Y-up 変換（X軸周りに-90度回転）
-pub fn fbx_to_world() -> Matrix4<f32> {
-    Matrix4::new(
-        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    )
-}
+/// Blender / FBX Z-up to engine Y-up: engine y = source z, engine z = -source y.
+pub const BLENDER_TO_ENGINE: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+);
 
-pub fn world_to_fbx() -> Matrix4<f32> {
-    Matrix4::new(
-        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    )
+pub const ENGINE_TO_BLENDER: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+);
+
+/// Row-major rows of `BLENDER_TO_ENGINE`, the layout Python-side matrices use.
+pub fn blender_to_engine_rows() -> [[f32; 4]; 4] {
+    let columns: [[f32; 4]; 4] = BLENDER_TO_ENGINE.into();
+    let mut rows = [[0.0f32; 4]; 4];
+    for (column_index, column) in columns.iter().enumerate() {
+        for (row_index, value) in column.iter().enumerate() {
+            rows[row_index][column_index] = *value;
+        }
+    }
+    rows
 }
 
 /// glTF Y-up → ワールド Y-up 変換（恒等変換）
@@ -109,7 +117,7 @@ pub fn gltf_to_world() -> Matrix4<f32> {
 
 /// Blender Z-up → ワールド Y-up 変換（FBXと同じ）
 pub fn blender_to_world() -> Matrix4<f32> {
-    fbx_to_world()
+    BLENDER_TO_ENGINE
 }
 
 /// ワールド座標系のY軸（上向き）
@@ -324,11 +332,10 @@ mod tests {
     use cgmath::{vec3, vec4, InnerSpace, Matrix4, SquareMatrix, Vector3};
 
     #[test]
-    fn test_fbx_to_world() {
-        let transform = fbx_to_world();
-        let fbx_up = vec4(0.0, 0.0, 1.0, 0.0);
-        let world_up = transform * fbx_up;
-        assert_eq!(world_up, vec4(0.0, 1.0, 0.0, 0.0));
+    fn test_blender_to_engine_maps_z_up_to_y_up() {
+        let blender_up = vec4(0.0, 0.0, 1.0, 0.0);
+        let engine_up = BLENDER_TO_ENGINE * blender_up;
+        assert_eq!(engine_up, vec4(0.0, 1.0, 0.0, 0.0));
     }
 
     #[test]

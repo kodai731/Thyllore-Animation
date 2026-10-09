@@ -1,0 +1,380 @@
+from __future__ import annotations
+
+import math
+from typing import Callable
+
+from .coordinates import blender_to_engine_point, engine_to_blender_point
+
+ABSORPTION_COLOR_FLOOR = 1e-3
+
+
+def precision_from_format(fmt: str) -> int:
+    if "d" in fmt:
+        return 0
+    if "." in fmt and "f" in fmt:
+        dot = fmt.index(".")
+        rest = fmt[dot + 1 :]
+        fpos = rest.index("f")
+        digits = rest[:fpos]
+        return int(digits) if digits else 0
+    return 3
+
+
+def property_kind(default) -> str:
+    if isinstance(default, str):
+        return default
+    if isinstance(default, bool):
+        return "bool"
+    if isinstance(default, (list, tuple)):
+        return "vector"
+    if isinstance(default, int):
+        return "int"
+    return "float"
+
+
+def absorption_to_color(absorption: list[float], reference_distance: float) -> list[float]:
+    return [math.exp(-coefficient * reference_distance) for coefficient in absorption]
+
+
+def color_to_absorption(color: list[float], reference_distance: float) -> list[float]:
+    return [-math.log(max(channel, ABSORPTION_COLOR_FLOOR)) / reference_distance for channel in color]
+
+
+def absorption_color_property_name(name: str) -> str:
+    return f"{name}_color"
+
+
+def display_property_names(exposed_params: list[dict]) -> dict[str, str]:
+    """Picker attribute shown in place of a parameter whose stored value is not the edited colour."""
+    return {
+        p["name"]: absorption_color_property_name(p["name"])
+        for p in exposed_params
+        if p.get("kind") == "absorption"
+    }
+
+
+def offset_param_names(exposed_params: list[dict]) -> list[str]:
+    """Names of parameters whose UI kind is 'offset'."""
+    return [p["name"] for p in exposed_params if p.get("kind") == "offset"]
+
+
+def convert_offsets_to_blender(values: dict, names: list[str]) -> dict:
+    """Convert offset values from engine coordinates to Blender coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in engine_to_blender_point(v)]
+    return result
+
+
+def convert_offsets_to_engine(values: dict, names: list[str]) -> dict:
+    """Convert offset values from Blender coordinates to engine coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in blender_to_engine_point(v)]
+    return result
+
+
+def read_path(nested: dict, path: str):
+    """Value at a dotted serde path inside a preset dict."""
+    current = nested
+    for segment in path.split("."):
+        current = current[segment]
+    return current
+
+
+def flatten_by_paths(nested: dict, parameter_paths: list[tuple[str, str]]) -> dict:
+    """Preset dict as `{public name: value}` for every persisted parameter."""
+    return {name: read_path(nested, path) for name, path in parameter_paths}
+
+
+def select_exposed_params(ui_params: list[dict]) -> list[dict]:
+    """Mirrors the engine's persisted UI parameters; runtime-only ones are driven by scene playback."""
+    return [p for p in ui_params if p["persisted"]]
+
+
+def group_params_by_owner(exposed_params: list[dict]) -> list[tuple[str, list[str]]]:
+    """Groups by the engine's "group" label when present, falling back to "owner"."""
+    groups: dict[str, list[str]] = {}
+    for param in exposed_params:
+        key = param.get("group") or param.get("owner", "frame")
+        groups.setdefault(key, []).append(param["name"])
+    return list(groups.items())
+
+
+def split_primary_params(exposed_params: list[dict]) -> tuple[list[str], list[dict]]:
+    """Primary names in declaration order, and the remaining param dicts."""
+    primary_names: list[str] = []
+    remaining: list[dict] = []
+    for param in exposed_params:
+        if param.get("primary", False):
+            primary_names.append(param["name"])
+        else:
+            remaining.append(param)
+    return primary_names, remaining
+
+
+def draw_param_groups(layout, props) -> None:
+    groups = type(props).PARAM_GROUPS
+    display_names = type(props).PARAM_DISPLAY_NAMES
+    for owner, names in groups:
+        box = layout.box()
+        if len(groups) > 1:
+            box.label(text=owner.title())
+        for name in names:
+            box.prop(props, display_names.get(name, name))
+
+
+def draw_primary_params(layout, props) -> None:
+    primary_names = type(props).PARAM_PRIMARY
+    if not primary_names:
+        return
+    display_names = type(props).PARAM_DISPLAY_NAMES
+    box = layout.box()
+    for name in primary_names:
+        box.prop(props, display_names.get(name, name))
+
+
+def collect_params(props, names: list[str]) -> dict:
+    result = {}
+    for name in names:
+        value = getattr(props, name)
+        if isinstance(value, (str, bool, int, float)):
+            result[name] = value
+        else:
+            result[name] = [float(v) for v in value]
+    return result
+
+
+def merge_preset_params(preset_values: dict, exposed_values: dict) -> dict:
+    merged = dict(preset_values)
+    merged.update(exposed_values)
+    return merged
+
+
+def render_params(
+    props,
+    preset_params: Callable[[str], dict],
+    parameter_paths: Callable[[], list[tuple[str, str]]],
+) -> dict:
+    """Flat `{public name: value}` the wheel's `pack_*_ubo` accepts: the preset overwritten by the exposed props."""
+    preset_values = flatten_by_paths(preset_params(props.preset), parameter_paths())
+    exposed_values = collect_params(props, type(props).PARAM_NAMES)
+    exposed_values = convert_offsets_to_engine(exposed_values, type(props).OFFSET_PARAM_NAMES)
+    return merge_preset_params(preset_values, exposed_values)
+
+
+def _range_kwargs(param: dict) -> dict:
+    kwargs = {}
+    if param.get("min") is not None:
+        kwargs["min"] = param["min"]
+    if param.get("max") is not None:
+        kwargs["max"] = param["max"]
+    return kwargs
+
+
+def _build_color_property(param: dict):
+    import bpy
+
+    return bpy.props.FloatVectorProperty(
+        name=param["label"],
+        description=param["tooltip"],
+        default=param["default"],
+        size=3,
+        subtype="COLOR",
+        min=0.0,
+        max=1.0,
+    )
+
+
+def _build_absorption_properties(param: dict) -> dict[str, object]:
+    """The stored coefficient stays keyed by the engine name; the picker is a derived colour property."""
+    import bpy
+
+    name = param["name"]
+    reference_distance = float(param["reference_distance"])
+
+    def get_color(self):
+        return absorption_to_color(list(getattr(self, name)), reference_distance)
+
+    def set_color(self, value):
+        setattr(self, name, color_to_absorption(list(value), reference_distance))
+
+    coefficient = bpy.props.FloatVectorProperty(
+        name=param["label"],
+        description=param["tooltip"],
+        default=param["default"],
+        size=3,
+        options={"HIDDEN"},
+        **_range_kwargs(param),
+    )
+    picker = bpy.props.FloatVectorProperty(
+        name=param["label"],
+        description=f"{param['tooltip']} ({reference_distance:g} m)",
+        default=absorption_to_color(list(param["default"]), reference_distance),
+        size=3,
+        subtype="COLOR",
+        min=0.0,
+        max=1.0,
+        get=get_color,
+        set=set_color,
+    )
+    return {name: coefficient, absorption_color_property_name(name): picker}
+
+
+def build_param_properties(param: dict) -> dict[str, object]:
+    """Blender property annotations for one engine parameter, keyed by attribute name."""
+    import bpy
+
+    name = param["name"]
+    label = param["label"]
+    tooltip = param["tooltip"]
+    default = param["default"]
+
+    ui_kind = param.get("kind", "scalar")
+    if ui_kind == "color":
+        return {name: _build_color_property(param)}
+    if ui_kind == "absorption":
+        return _build_absorption_properties(param)
+    if ui_kind == "offset":
+        return {
+            name: bpy.props.FloatVectorProperty(
+                name=label,
+                description=tooltip,
+                default=engine_to_blender_point(default),
+                size=3,
+                subtype="TRANSLATION",
+                **_range_kwargs(param),
+            )
+        }
+
+    kind = property_kind(default)
+    if kind == "bool":
+        return {name: bpy.props.BoolProperty(name=label, description=tooltip, default=default)}
+
+    if kind == "vector":
+        return {
+            name: bpy.props.FloatVectorProperty(
+                name=label,
+                description=tooltip,
+                default=default,
+                size=len(default),
+            )
+        }
+
+    if kind == "int":
+        return {
+            name: bpy.props.IntProperty(
+                name=label,
+                description=tooltip,
+                default=default,
+                **{k: int(v) for k, v in _range_kwargs(param).items()},
+            )
+        }
+
+    return {
+        name: bpy.props.FloatProperty(
+            name=label,
+            description=tooltip,
+            default=default,
+            precision=precision_from_format(param.get("format", "%.3f")),
+            **_range_kwargs(param),
+        )
+    }
+
+
+def build_effect_property_group(
+    *,
+    ui_params: Callable[[], list[dict]],
+    preset_params: Callable[[str], dict],
+    preset_names: Callable[[], list[str]],
+    flag_name: str,
+    default_preset: str,
+    class_name: str,
+    module_name: str,
+    preset_values_post_process: Callable[[dict], dict] | None = None,
+):
+    import bpy
+
+    exposed_params = select_exposed_params(ui_params())
+    param_names = [p["name"] for p in exposed_params]
+    exposed_paths = [(p["name"], p["path"]) for p in exposed_params]
+    offset_names = offset_param_names(exposed_params)
+
+    def apply_preset(self, context):
+        preset_values = preset_params(self.preset)
+        if preset_values_post_process is not None:
+            preset_values = preset_values_post_process(preset_values)
+        flat_values = flatten_by_paths(preset_values, exposed_paths)
+        flat_values = convert_offsets_to_blender(flat_values, offset_names)
+        for name, value in flat_values.items():
+            setattr(self, name, value)
+
+    annotations: dict[str, object] = {}
+    for param in exposed_params:
+        annotations.update(build_param_properties(param))
+
+    annotations[flag_name] = bpy.props.BoolProperty(default=False)
+    annotations["preset"] = bpy.props.EnumProperty(
+        items=[(n, n.title(), "") for n in preset_names()],
+        default=default_preset,
+        update=apply_preset,
+    )
+
+    primary_names, remaining_params = split_primary_params(exposed_params)
+
+    attrs = {
+        "__annotations__": annotations,
+        "PARAM_NAMES": param_names,
+        "OFFSET_PARAM_NAMES": offset_names,
+        "PARAM_PRIMARY": primary_names,
+        "PARAM_GROUPS": group_params_by_owner(remaining_params),
+        "PARAM_DISPLAY_NAMES": display_property_names(exposed_params),
+        "__module__": module_name,
+    }
+
+    return type(class_name, (bpy.types.PropertyGroup,), attrs)
+
+
+def build_effect_child_panel(effect_type: str, main_panel_id: str, suffix: str, label: str, draw_body):
+    """Closed sub-panel under an effect panel whose body is drawn by draw_body(layout, props)."""
+    import bpy
+
+    def _poll(cls, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return False
+        attr = getattr(obj, f"thyllore_{effect_type}", None)
+        if attr is None:
+            return False
+        flag = getattr(attr, f"is_{effect_type}", False)
+        return bool(flag)
+
+    def _draw(self, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return
+        props = getattr(obj, f"thyllore_{effect_type}")
+        draw_body(self.layout, props)
+
+    child_id = main_panel_id + "_" + suffix
+    return type(child_id, (bpy.types.Panel,), {
+        "bl_space_type": "VIEW_3D",
+        "bl_region_type": "UI",
+        "bl_category": "Thyllore",
+        "bl_parent_id": main_panel_id,
+        "bl_label": label,
+        "bl_options": {"DEFAULT_CLOSED"},
+        "poll": classmethod(_poll),
+        "draw": _draw,
+    })
+
+
+def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
+    """Closed "Advanced" sub-panel under an effect panel, drawing the non-primary groups."""
+    return build_effect_child_panel(
+        effect_type, main_panel_id, "advanced", "Advanced", draw_param_groups
+    )

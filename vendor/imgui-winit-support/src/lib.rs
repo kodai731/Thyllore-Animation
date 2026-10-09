@@ -466,18 +466,17 @@ impl WinitPlatform {
                 io.add_key_event(Key::ModSuper, state.super_key());
             }
             WindowEvent::KeyboardInput { ref event, .. } => {
-                if event.state == ElementState::Pressed && !self.ime_composing {
-                    if let Some(txt) = &event.text {
-                        for ch in txt.chars() {
-                            if ch != '\u{7f}' {
-                                io.add_input_character(ch)
-                            }
+                let key = event.key_without_modifiers();
+                let pressed = event.state == ElementState::Pressed;
+
+                // X11 attaches `text` to key releases as well, so only presses may type.
+                if let (true, Some(txt)) = (pressed && !self.ime_composing, &event.text) {
+                    for ch in txt.chars() {
+                        if ch != '\u{7f}' {
+                            io.add_input_character(ch)
                         }
                     }
                 }
-
-                let key = event.key_without_modifiers();
-                let pressed = event.state == ElementState::Pressed;
 
                 // We map both left and right ctrl to `ModCtrl`, etc.
                 // imgui is told both "left control is pressed" and

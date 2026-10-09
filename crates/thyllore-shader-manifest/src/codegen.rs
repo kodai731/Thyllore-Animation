@@ -49,7 +49,7 @@ fn write_pass_const(out: &mut String, pass: &PassDefinition, spirv_dir: &str) {
         variant_name(&pass.name)
     );
     for stage in &pass.stages {
-        let spirv_name = spirv_output_name(&stage.source_file)
+        let spirv_name = spirv_output_name(&stage.source_file, stage.stage)
             .expect("manifest validation guarantees a shader extension");
         let _ = writeln!(
             out,
@@ -95,8 +95,25 @@ mod tests {
 
     #[test]
     fn generates_enum_consts_and_registry() {
+        let entries = crate::manifest::ShaderEntries::from([
+            (
+                "gbufferVertex.slang".to_string(),
+                vec![crate::naming::EntryPoint {
+                    name: "main".into(),
+                    stage: crate::stage::StageKind::Vertex,
+                }],
+            ),
+            (
+                "onionSkinFragment.slang".to_string(),
+                vec![crate::naming::EntryPoint {
+                    name: "main".into(),
+                    stage: crate::stage::StageKind::Fragment,
+                }],
+            ),
+        ]);
         let manifest = PassManifest::parse(
-            "[pass.onion_skin_ghost]\nstages = [\"gbufferVertex.vert\", \"onionSkinFragment.frag\"]\nsets = { 0 = \"frame\", 2 = \"object\" }\n",
+            "[pass.onion_skin_ghost]\nstages = [\"gbufferVertex.slang\", \"onionSkinFragment.slang\"]\nsets = { 0 = \"frame\", 2 = \"object\" }\n",
+            &entries,
         )
         .unwrap();
         let code = generate_pass_manifest_rust(&manifest, "assets/shaders");

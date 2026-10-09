@@ -131,7 +131,7 @@ For every piece of data touched by the fix:
 - Components: data-only structs in `ecs/component/`
 - Resources: global dynamic state in `ecs/resource/`
 - Systems: pure functions in `ecs/systems/`
-- Bundles: predefined component combinations in `ecs/bundle/`
+- Spawning: `spawn_*` systems in the owning domain (no `bundle/` directory)
 - Query pattern for entity access, not stored IDs
 - RefCell-based interior mutability (`resource::<T>()` / `resource_mut::<T>()`)
 

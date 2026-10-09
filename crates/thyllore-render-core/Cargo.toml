@@ -10,6 +10,11 @@ repository = "https://github.com/kodai731/Thyllore-Animation"
 [dependencies]
 anyhow = "1"
 cgmath = "0.18"
+serde = { version = "1", features = ["derive"] }
 thyllore-anim-core = { path = "../thyllore-anim-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
+thyllore-scene-core = { path = "../thyllore-scene-core" }
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
+
+[dev-dependencies]
+ron = "0.8"

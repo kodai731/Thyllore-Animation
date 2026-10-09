@@ -1,22 +1,15 @@
 use imgui::Condition;
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::asset::AssetStorage;
+use crate::ecs::resource::{LayoutSnapshot, ViewportInput};
+use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-#[derive(Clone, Debug, Default)]
-pub struct ViewportInfo {
-    pub size: [f32; 2],
-    pub position: [f32; 2],
-    pub focused: bool,
-    pub hovered: bool,
-}
-
-pub fn build_viewport_window(
-    ui: &imgui::Ui,
-    texture_id: imgui::TextureId,
-    current_size: [f32; 2],
-    layout: &LayoutSnapshot,
-) -> ViewportInfo {
-    let mut info = ViewportInfo::default();
+fn build_viewport_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+    let layout = world.resource::<LayoutSnapshot>();
+    let mut viewport = world.resource_mut::<ViewportInput>();
+    let texture_id = imgui::TextureId::new(viewport.texture_id);
+    let image_size = [viewport.image_size[0] as f32, viewport.image_size[1] as f32];
 
     ui.window("Scene")
         .position([layout.viewport_x, 0.0], Condition::Always)
@@ -30,22 +23,27 @@ pub fn build_viewport_window(
         .bring_to_front_on_focus(false)
         .build(|| {
             let content_region = ui.content_region_avail();
-            info.size = content_region;
-            info.focused = ui.is_window_focused();
-            info.hovered = ui.is_window_hovered();
+            viewport.size = content_region;
+            viewport.focused = ui.is_window_focused();
+            viewport.hovered = ui.is_window_hovered();
 
             let window_pos = ui.window_pos();
             let cursor_pos = ui.cursor_pos();
-            info.position = [window_pos[0] + cursor_pos[0], window_pos[1] + cursor_pos[1]];
+            viewport.position = [window_pos[0] + cursor_pos[0], window_pos[1] + cursor_pos[1]];
 
             let display_size = if content_region[0] > 0.0 && content_region[1] > 0.0 {
                 content_region
             } else {
-                current_size
+                image_size
             };
-
             imgui::Image::new(texture_id, display_size).build(ui);
         });
 
-    info
+    let new_width = viewport.size[0] as u32;
+    let new_height = viewport.size[1] as u32;
+    if new_width > 0 && new_height > 0 && [new_width, new_height] != viewport.image_size {
+        viewport.resize_pending = Some((new_width, new_height));
+    }
 }
+
+crate::ui_window!("viewport", Viewport, 0, build_viewport_window);

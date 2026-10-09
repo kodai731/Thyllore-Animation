@@ -1,4 +1,5 @@
 use cgmath::{Deg, InnerSpace, Vector3};
+use thyllore_scene_core::declare_scene_format;
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -38,3 +39,49 @@ impl Default for Camera {
         }
     }
 }
+
+declare_scene_format! {
+    component: Camera,
+    record: CameraSceneRecord,
+    items {
+        key: "camera",
+        snapshot: camera_parameter_snapshot,
+        scalars: CAMERA_SCALAR_PARAMS,
+        ui: CAMERA_UI_PARAMS,
+        overwrite: overwrite_camera_persisted_fields,
+    },
+    persisted {
+        pivot: [f32; 3] {
+            get: |c| [c.pivot.x, c.pivot.y, c.pivot.z],
+            set: |c, v| {
+                c.pivot = Vector3::new(v[0], v[1], v[2]);
+                c.initial_pivot = c.pivot;
+            },
+        },
+        yaw: f32 {
+            get: |c| c.yaw,
+            set: |c, v| {
+                c.yaw = v;
+                c.initial_yaw = v;
+            },
+        },
+        pitch: f32 {
+            get: |c| c.pitch,
+            set: |c, v| {
+                c.pitch = v;
+                c.initial_pitch = v;
+            },
+        },
+        distance: f32 {
+            get: |c| c.distance,
+            set: |c, v| {
+                c.distance = v;
+                c.initial_distance = v;
+            },
+        },
+        fov_y: f32 { get: |c| c.fov_y.0, set: |c, v| c.fov_y = Deg(v) },
+    },
+    runtime {},
+}
+
+crate::scene_resource!(Camera);

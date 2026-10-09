@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
 use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
@@ -9,6 +8,7 @@ use crate::ecs::resource::gizmo::{
     TransformGizmoData,
 };
 use crate::ecs::resource::GridMeshData;
+use crate::ecs::World;
 use thyllore_render_core::DynamicMesh;
 use thyllore_vulkan_core::renderer::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
@@ -16,32 +16,32 @@ use thyllore_vulkan_core::renderer::{
 use thyllore_vulkan_core::FrameRenderContext;
 
 pub struct OverlayRenderer<'a> {
-    app: &'a App,
+    ctx: &'a FrameRenderContext<'a>,
+    world: &'a World,
 }
 
 impl<'a> OverlayRenderer<'a> {
-    pub fn new(app: &'a App) -> Self {
-        Self { app }
+    pub fn new(ctx: &'a FrameRenderContext<'a>, world: &'a World) -> Self {
+        Self { ctx, world }
     }
 
     pub unsafe fn draw_all_overlays(
         &self,
         command_buffer: vk::CommandBuffer,
-        image_index: usize,
         include_grid: bool,
     ) -> Result<()> {
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(self.app, image_index);
+        let ctx = self.ctx;
 
         if include_grid {
-            self.draw_grid(&ctx, command_buffer, None)?;
+            self.draw_grid(ctx, command_buffer, None)?;
         }
-        self.draw_gizmo(&ctx, command_buffer)?;
-        self.draw_transform_gizmo(&ctx, command_buffer)?;
-        self.draw_bone_gizmo(&ctx, command_buffer)?;
-        self.draw_constraint_gizmo(&ctx, command_buffer)?;
+        self.draw_gizmo(ctx, command_buffer)?;
+        self.draw_transform_gizmo(ctx, command_buffer)?;
+        self.draw_bone_gizmo(ctx, command_buffer)?;
+        self.draw_constraint_gizmo(ctx, command_buffer)?;
         if !self.reference_comparison_active() {
-            self.draw_light_lines(&ctx, command_buffer)?;
-            self.draw_billboard(&ctx, command_buffer)?;
+            self.draw_light_lines(ctx, command_buffer)?;
+            self.draw_billboard(ctx, command_buffer)?;
         }
 
         Ok(())
@@ -50,7 +50,7 @@ impl<'a> OverlayRenderer<'a> {
     /// The light icon and its guide lines are editor chrome; the black-background
     /// reference comparison renders the scene without them.
     fn reference_comparison_active(&self) -> bool {
-        self.app
+        self.world
             .get_resource::<crate::ecs::resource::DebugViewState>()
             .is_some_and(|state| state.black_background)
     }
@@ -58,11 +58,9 @@ impl<'a> OverlayRenderer<'a> {
     pub unsafe fn draw_grid_overlay(
         &self,
         command_buffer: vk::CommandBuffer,
-        image_index: usize,
         pipeline_override: Option<usize>,
     ) -> Result<()> {
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(self.app, image_index);
-        self.draw_grid(&ctx, command_buffer, pipeline_override)?;
+        self.draw_grid(self.ctx, command_buffer, pipeline_override)?;
         Ok(())
     }
 
@@ -72,7 +70,7 @@ impl<'a> OverlayRenderer<'a> {
         command_buffer: vk::CommandBuffer,
         pipeline_override: Option<usize>,
     ) -> Result<()> {
-        let grid = self.app.resource::<GridMeshData>();
+        let grid = self.world.resource::<GridMeshData>();
         let index_count = if grid.show_y_axis_grid {
             grid.mesh.indices.len() as u32
         } else {
@@ -96,7 +94,7 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let gizmo = self.app.resource::<GridGizmoData>();
+        let gizmo = self.world.resource::<GridGizmoData>();
         let options = LineMeshDrawOptions::default();
         record_line_mesh_draw(
             ctx,
@@ -113,7 +111,7 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let Some(tg) = self.app.get_resource::<TransformGizmoData>() else {
+        let Some(tg) = self.world.get_resource::<TransformGizmoData>() else {
             return Ok(());
         };
 
@@ -151,8 +149,8 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let grid_mesh = self.app.resource::<GridMeshData>();
-        let light_gizmo = self.app.resource::<LightGizmoData>();
+        let grid_mesh = self.world.resource::<GridMeshData>();
+        let light_gizmo = self.world.resource::<LightGizmoData>();
 
         let render_info = RenderInfo::new(
             grid_mesh.render_info.pipeline_id,
@@ -182,7 +180,7 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let Some(bone_gizmo) = self.app.get_resource::<BoneGizmoData>() else {
+        let Some(bone_gizmo) = self.world.get_resource::<BoneGizmoData>() else {
             return Ok(());
         };
 
@@ -266,7 +264,7 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let Some(constraint_gizmo) = self.app.get_resource::<ConstraintGizmoData>() else {
+        let Some(constraint_gizmo) = self.world.get_resource::<ConstraintGizmoData>() else {
             return Ok(());
         };
 
@@ -290,7 +288,7 @@ impl<'a> OverlayRenderer<'a> {
         ctx: &FrameRenderContext<'_>,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let billboard = self.app.resource::<BillboardData>();
+        let billboard = self.world.resource::<BillboardData>();
         let descriptor_set = billboard
             .render_state
             .descriptor_set

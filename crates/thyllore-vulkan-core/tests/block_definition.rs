@@ -1,10 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use thyllore_effect_core::FlameUBO;
+use thyllore_effect_core::{FlameUBO, LightningSegmentsUBO, LightningUBO, WaterUBO, WindUBO};
 use thyllore_render_core::{FrameUBO, MaterialUBO, ObjectUBO};
-use thyllore_shader_manifest::{
-    flame_gpu_blocks_source, FLAME_GPU_BLOCKS_PATH, REGENERATE_GPU_BLOCKS_COMMAND,
-};
 use thyllore_spirv_reflect::{
     compare_block_layout, BlockCoverage, DescriptorKind, GpuBlock, LayoutDifference, ReflectedBlock,
 };
@@ -13,6 +10,9 @@ use thyllore_vulkan_core::descriptor::{
     reflect_shader_bytes, DescriptorSetTable, LayoutMismatch, PassId, PassShaders,
     ReflectedLayoutSpec, SelectionUBO, ShaderFile, ShaderReflection, ALL_PASSES,
 };
+use thyllore_vulkan_core::renderer::TracePush;
+
+const GENERATED_PUSH_BLOCKS: [&str; 1] = ["TracePush"];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -65,10 +65,40 @@ fn rust_blocks() -> Vec<RustBlock> {
         rust_block::<MaterialUBO>("MaterialUBO"),
         rust_block::<ObjectUBO>("ObjectUBO"),
         rust_block::<FlameUBO>("FlameUBO"),
+        rust_block::<LightningUBO>("LightningUBO"),
+        rust_block::<LightningSegmentsUBO>("LightningSegmentsUBO"),
+        rust_block::<WaterUBO>("WaterUBO"),
+        rust_block::<WindUBO>("WindUBO"),
         rust_block::<SceneUniformData>("SceneData"),
         rust_block::<SelectionUBO>("SelectionData"),
         rust_block::<UniformBufferObject>("UniformBufferObject"),
+        rust_block::<TracePush>("TracePush"),
     ]
+}
+
+fn compare_registered_block(
+    rust_blocks: &[RustBlock],
+    location: &str,
+    block: &ReflectedBlock,
+    coverage: BlockCoverage,
+    failures: &mut Vec<String>,
+) {
+    let payload = block
+        .single_struct_payload()
+        .unwrap_or_else(|| block.clone());
+    let Some(rust) = rust_blocks
+        .iter()
+        .find(|rust| rust.glsl_name == payload.type_name)
+    else {
+        failures.push(format!("{location}: no Rust GpuBlock registered"));
+        return;
+    };
+
+    let differences = (rust.compare)(&payload, coverage);
+    if !differences.is_empty() {
+        let listed: Vec<String> = differences.iter().map(|d| format!("  {d}")).collect();
+        failures.push(format!("{location}:\n{}", listed.join("\n")));
+    }
 }
 
 fn block_coverage(pass: &PassShaders, set: u32, binding: u32) -> BlockCoverage {
@@ -182,21 +212,8 @@ fn rust_uniform_structs_match_every_shader_block_member() {
                     pass.name(),
                     block.type_name
                 );
-                let Some(rust) = rust_blocks
-                    .iter()
-                    .find(|rust| rust.glsl_name == block.type_name)
-                else {
-                    failures.push(format!("{location}: no Rust GpuBlock registered"));
-                    continue;
-                };
-
                 let coverage = block_coverage(pass, set, *binding_index);
-                let differences = (rust.compare)(block, coverage);
-                if !differences.is_empty() {
-                    let listed: Vec<String> =
-                        differences.iter().map(|d| format!("  {d}")).collect();
-                    failures.push(format!("{location}:\n{}", listed.join("\n")));
-                }
+                compare_registered_block(&rust_blocks, &location, block, coverage, &mut failures);
             }
         }
     }
@@ -208,36 +225,34 @@ fn rust_uniform_structs_match_every_shader_block_member() {
     );
 }
 
-fn first_line_difference(left: &str, right: &str) -> Option<(usize, String, String)> {
-    let mut left_lines = left.lines();
-    let mut right_lines = right.lines();
-    let mut line_number = 1;
-    loop {
-        match (left_lines.next(), right_lines.next()) {
-            (None, None) => return None,
-            (l, r) if l == r => line_number += 1,
-            (l, r) => {
-                return Some((
-                    line_number,
-                    l.unwrap_or("<end>").to_string(),
-                    r.unwrap_or("<end>").to_string(),
-                ))
+#[test]
+fn rust_push_constant_structs_match_every_generated_push_block() {
+    enter_workspace_root();
+    let rust_blocks = rust_blocks();
+    let mut failures = Vec::new();
+
+    for pass in ALL_PASSES {
+        for shader in pass.stages {
+            let Some(block) = load_reflection(shader).push_constant else {
+                continue;
+            };
+            if !GENERATED_PUSH_BLOCKS.contains(&block.type_name.as_str()) {
+                continue;
             }
+            let location = format!("{} `{}`", shader.path, block.type_name);
+            compare_registered_block(
+                &rust_blocks,
+                &location,
+                &block,
+                BlockCoverage::Exact,
+                &mut failures,
+            );
         }
     }
-}
 
-#[test]
-fn generated_flame_gpu_blocks_match_spirv() {
-    enter_workspace_root();
-    let generated = flame_gpu_blocks_source(Path::new("assets/shaders"))
-        .unwrap_or_else(|error| panic!("generate flame gpu blocks: {error}"));
-    let checked_in = std::fs::read_to_string(FLAME_GPU_BLOCKS_PATH)
-        .unwrap_or_else(|error| panic!("read {FLAME_GPU_BLOCKS_PATH}: {error}"));
-
-    if let Some((line, expected, current)) = first_line_difference(&generated, &checked_in) {
-        panic!(
-            "{FLAME_GPU_BLOCKS_PATH} is stale at line {line}; run `{REGENERATE_GPU_BLOCKS_COMMAND}`\n  generated : {expected}\n  checked in: {current}"
-        );
-    }
+    assert!(
+        failures.is_empty(),
+        "push constant layout drift against SPIR-V:\n{}",
+        failures.join("\n")
+    );
 }

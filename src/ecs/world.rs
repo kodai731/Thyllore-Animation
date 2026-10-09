@@ -11,6 +11,7 @@ use crate::ecs::component::{
 };
 #[cfg(feature = "ml")]
 use crate::ecs::component::{InferenceActorSetup, WithInferenceActor};
+use crate::ecs::events::{UiCommand, UiCommandQueue};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -403,6 +404,15 @@ impl World {
         self.resources.contains::<R>()
     }
 
+    pub fn send_command(&self, command: impl UiCommand + 'static) {
+        self.resource_mut::<UiCommandQueue>()
+            .send(Box::new(command));
+    }
+
+    pub fn send_boxed_command(&self, command: Box<dyn UiCommand>) {
+        self.resource_mut::<UiCommandQueue>().send(command);
+    }
+
     pub fn spawn(&mut self) -> Entity {
         let entity = self.next_entity;
         self.next_entity += 1;
@@ -463,11 +473,8 @@ impl World {
             .collect()
     }
 
-    pub fn query_flames(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::FlameEffect>()
-            .map(|(e, _)| e)
-            .collect();
+    pub fn entities_with<C: crate::ecs::storage::Component + 'static>(&self) -> Vec<Entity> {
+        let mut entities: Vec<Entity> = self.iter_components::<C>().map(|(e, _)| e).collect();
         entities.sort();
         entities
     }
@@ -675,17 +682,6 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_constrained(self) -> Self {
         self.world.insert_component(self.entity, Constrained);
-        self
-    }
-
-    pub fn with_flame(self, effect: crate::ecs::component::FlameEffect) -> Self {
-        self.world.insert_component(self.entity, effect);
-        self.world
-            .insert_component(self.entity, crate::ecs::component::FlameBaked::default());
-        self.world.insert_component(
-            self.entity,
-            crate::ecs::component::FlameTemporalAccum::default(),
-        );
         self
     }
 

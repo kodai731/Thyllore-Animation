@@ -1,6 +1,7 @@
 use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::resource::buffer::*;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use thyllore_math_core::*;
 use thyllore_spirv_reflect::declare_gpu_block;
@@ -124,6 +125,12 @@ impl RRData {
             rrdevice.device.free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
+    }
+}
+
+impl GpuResource for RRData {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.delete(rrdevice);
     }
 }
 

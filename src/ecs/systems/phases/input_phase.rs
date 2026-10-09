@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use cgmath::Matrix4;
+use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{BoneId, SkeletonId};
 use crate::ecs::component::LineMesh;
@@ -15,11 +15,11 @@ use crate::ecs::resource::{
     TransformGizmoState, ViewportInput,
 };
 use crate::ecs::systems::{
-    compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
-    compute_local_override_from_global_translation, select_bone_by_mesh_ray, select_bone_by_ray,
-    transform_gizmo_systems,
+    apply_mesh_selection, compute_local_override_from_global_rotation,
+    compute_local_override_from_global_scale, compute_local_override_from_global_translation,
+    select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
 };
-use crate::ecs::world::{Entity, GlobalTransform, Transform};
+use crate::ecs::world::{Entity, GlobalTransform, Parent, Transform};
 use crate::ecs::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
 };
@@ -27,6 +27,8 @@ use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
 use crate::math::screen_to_world_ray;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
+    process_pending_mesh_selection(ctx);
+
     update_pointer_state(ctx);
 
     ctx.pointer_capture_mut().active = false;
@@ -61,7 +63,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 
     request_batch_pick(ctx);
 
-    sync_transform_gizmo_to_bone(ctx);
+    sync_transform_gizmo(ctx);
 
     let capture_active = ctx.pointer_capture().active;
     let viewport_hovered = ctx.pointer_state().viewport_hovered;
@@ -926,9 +928,19 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
     }
 }
 
+/// The gizmo hands over a world position; a child entity stores it relative to its parent.
 fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vector3<f32>) {
+    let parent_global = ctx
+        .world
+        .get_component::<Parent>(entity)
+        .and_then(|parent| ctx.world.get_component::<GlobalTransform>(parent.0))
+        .map(|global| global.0);
+    let local_pos = match parent_global.and_then(|global| global.invert()) {
+        Some(inverse) => (inverse * new_pos.extend(1.0)).truncate(),
+        None => new_pos,
+    };
     if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
-        transform.translation = new_pos;
+        transform.translation = local_pos;
     }
 }
 
@@ -944,11 +956,9 @@ fn apply_entity_scale(ctx: &mut EcsContext, entity: Entity, scale: Vector3<f32>)
     }
 }
 
-fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
+/// An active bone on a visible bone gizmo owns the transform gizmo; otherwise the selected entity does.
+fn sync_transform_gizmo(ctx: &mut EcsContext) {
     if !ctx.world.contains_resource::<TransformGizmoData>() {
-        return;
-    }
-    if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
 
@@ -956,26 +966,21 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
         return;
     }
 
-    let (active_bone, transforms, offsets, mesh_scale) = {
-        let selection = ctx.bone_selection();
-        let active = selection.active_bone_index;
-        drop(selection);
+    let active_bone = ctx.bone_selection().active_bone_index;
+    let bone_gizmo_visible = ctx
+        .world
+        .get_resource::<BoneGizmoData>()
+        .is_some_and(|bone_gizmo| bone_gizmo.visible);
 
-        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        if !bone_gizmo.visible {
-            let mut tg = ctx.transform_gizmo_mut();
-            tg.visible = false;
-            return;
-        }
-        (
-            active,
-            bone_gizmo.cached_global_transforms.clone(),
-            bone_gizmo.bone_local_offsets.clone(),
-            bone_gizmo.mesh_scale,
-        )
-    };
-
-    if active_bone.is_some() {
+    if active_bone.is_some() && bone_gizmo_visible {
+        let (transforms, offsets, mesh_scale) = {
+            let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+            (
+                bone_gizmo.cached_global_transforms.clone(),
+                bone_gizmo.bone_local_offsets.clone(),
+                bone_gizmo.mesh_scale,
+            )
+        };
         let mut tg = ctx.transform_gizmo_mut();
         transform_gizmo_systems::transform_gizmo_sync_to_bone(
             &mut tg,
@@ -1096,4 +1101,80 @@ fn compute_animation_globals(
     sample_clip_to_pose(&clip_asset.clip, current_time, skeleton, &mut pose, false);
 
     Some(compute_pose_global_transforms(skeleton, &pose))
+}
+
+fn process_pending_mesh_selection(ctx: &mut EcsContext) {
+    if !ctx
+        .world
+        .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+    {
+        return;
+    }
+
+    let has_result = {
+        let readback = ctx.object_id_readback();
+        readback.last_read_object_id.is_some()
+    };
+
+    if !has_result {
+        return;
+    }
+
+    let mut readback = ctx.object_id_readback_mut();
+    let readback_clone = (*readback).clone();
+    drop(readback);
+
+    let mut readback_state = readback_clone;
+    apply_mesh_selection(ctx.world, ctx.assets, &mut readback_state);
+
+    let mut readback = ctx.object_id_readback_mut();
+    readback.last_read_object_id = readback_state.last_read_object_id;
+    readback.is_shift = readback_state.is_shift;
+    readback.is_ctrl = readback_state.is_ctrl;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::asset::AssetStorage;
+    use crate::ecs::resource::gizmo::BoneSelectionState;
+    use crate::ecs::resource::HierarchyState;
+    use crate::ecs::systems::hierarchy_select;
+    use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe;
+    use crate::ecs::World;
+
+    fn world_with_selected_probe_and_hidden_bone_gizmo() -> (World, Entity) {
+        let mut world = World::new();
+        let probe = spawn_probe(&mut world, "Probe");
+        crate::ecs::systems::transform_propagation_system(&mut world);
+
+        world.insert_resource(TransformGizmoData::default());
+        world.insert_resource(BoneGizmoData::default());
+        world.insert_resource(BoneSelectionState::default());
+        let mut hierarchy = HierarchyState::default();
+        hierarchy_select(&mut hierarchy, probe);
+        world.insert_resource(hierarchy);
+        (world, probe)
+    }
+
+    #[test]
+    fn a_selected_scene_owner_owns_the_transform_gizmo_without_a_skeleton() {
+        let (mut world, probe) = world_with_selected_probe_and_hidden_bone_gizmo();
+        let mut assets = AssetStorage::new();
+        let mut ctx = EcsContext {
+            time: 0.0,
+            delta_time: 0.0,
+            image_index: 0,
+            swapchain_extent: (1, 1),
+            world: &mut world,
+            assets: &mut assets,
+        };
+
+        sync_transform_gizmo(&mut ctx);
+
+        let gizmo = ctx.transform_gizmo();
+        assert!(gizmo.visible);
+        assert_eq!(gizmo.target_entity, Some(probe));
+        assert_eq!(gizmo.position.position, Vector3::new(1.0, 2.0, 3.0));
+    }
 }

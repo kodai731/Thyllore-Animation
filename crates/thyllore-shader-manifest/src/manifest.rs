@@ -1,40 +1,14 @@
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use toml::Value;
 
-use crate::naming::is_shader_source;
+use crate::naming::{is_shader_source, parse_entry_points, EntryPoint};
+use crate::stage::StageKind;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum StageKind {
-    Vertex,
-    Fragment,
-    Geometry,
-    Compute,
-}
-
-impl StageKind {
-    pub fn from_source_file(file_name: &str) -> Option<Self> {
-        let (_, extension) = file_name.rsplit_once('.')?;
-        match extension {
-            "vert" => Some(Self::Vertex),
-            "frag" => Some(Self::Fragment),
-            "geom" => Some(Self::Geometry),
-            "comp" => Some(Self::Compute),
-            _ => None,
-        }
-    }
-
-    pub fn reflect_variant(self) -> &'static str {
-        match self {
-            Self::Vertex => "Vertex",
-            Self::Fragment => "Fragment",
-            Self::Geometry => "Geometry",
-            Self::Compute => "Compute",
-        }
-    }
-}
+/// Entry files under `shaders/` keyed by their path relative to it, each with its entry points.
+pub type ShaderEntries = BTreeMap<String, Vec<EntryPoint>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SetRole {
@@ -77,6 +51,7 @@ impl SetRole {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StageSource {
     pub source_file: String,
+    pub entry: String,
     pub stage: StageKind,
 }
 
@@ -102,8 +77,8 @@ pub enum ManifestError {
     Shape(String),
     #[error("pass `{0}` is not a valid pass name (use [a-z][a-z0-9_]*)")]
     InvalidPassName(String),
-    #[error("pass `{pass}`: `{file}` has no shader extension (.vert/.frag/.geom/.comp)")]
-    UnknownStageExtension { pass: String, file: String },
+    #[error("pass `{pass}`: `{file}` declares no `[shader(\"..\")]` entry point")]
+    NoEntryPoint { pass: String, file: String },
     #[error("pass `{pass}`: {reason}")]
     StageComposition { pass: String, reason: String },
     #[error("pass `{pass}`: shader source `{file}` does not exist in shaders/")]
@@ -128,7 +103,9 @@ pub enum ManifestError {
 }
 
 impl PassManifest {
-    pub fn parse(toml_text: &str) -> Result<Self, ManifestError> {
+    /// Parses `passes.toml`; every stage file must be one of `entries` and every entry file must be
+    /// referenced by a pass.
+    pub fn parse(toml_text: &str, entries: &ShaderEntries) -> Result<Self, ManifestError> {
         let root: Value = toml_text
             .parse()
             .map_err(|error: toml::de::Error| ManifestError::Toml(error.to_string()))?;
@@ -139,47 +116,102 @@ impl PassManifest {
 
         let mut passes = Vec::with_capacity(pass_table.len());
         for (name, definition) in pass_table {
-            passes.push(parse_pass(name, definition)?);
+            passes.push(parse_pass(name, definition, entries)?);
         }
         if passes.is_empty() {
             return Err(ManifestError::NoPasses);
         }
-        Ok(Self { passes })
+
+        let manifest = Self { passes };
+        manifest.reject_orphans(entries)?;
+        Ok(manifest)
     }
 
-    pub fn validate_against_sources(&self, shader_dir: &Path) -> Result<(), ManifestError> {
-        let mut referenced = BTreeSet::new();
-        for pass in &self.passes {
-            for stage in &pass.stages {
-                if !shader_dir.join(&stage.source_file).is_file() {
-                    return Err(ManifestError::MissingSource {
-                        pass: pass.name.clone(),
-                        file: stage.source_file.clone(),
-                    });
-                }
-                referenced.insert(stage.source_file.clone());
-            }
-        }
-
-        let mut orphans: Vec<String> = std::fs::read_dir(shader_dir)
-            .map_err(|error| {
-                ManifestError::Toml(format!("read {}: {error}", shader_dir.display()))
-            })?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().is_file())
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|file_name| is_shader_source(file_name))
-            .filter(|file_name| !referenced.contains(file_name))
+    fn reject_orphans(&self, entries: &ShaderEntries) -> Result<(), ManifestError> {
+        let referenced: BTreeSet<&str> = self
+            .passes
+            .iter()
+            .flat_map(|pass| pass.stages.iter().map(|stage| stage.source_file.as_str()))
             .collect();
-        orphans.sort();
-        match orphans.into_iter().next() {
-            Some(orphan) => Err(ManifestError::OrphanShader(orphan)),
+        match entries
+            .keys()
+            .find(|file_name| !referenced.contains(file_name.as_str()))
+        {
+            Some(orphan) => Err(ManifestError::OrphanShader(orphan.clone())),
             None => Ok(()),
         }
     }
 }
 
-fn parse_pass(name: &str, definition: &Value) -> Result<PassDefinition, ManifestError> {
+/// Every `.slang` file under `shader_dir` that declares an entry point, keyed by its path relative
+/// to it (`wind/resolveFragment.slang`); modules without an entry point compile to no SPIR-V.
+pub fn collect_shader_sources(
+    shader_dir: &Path,
+) -> Result<BTreeMap<String, ShaderSource>, ManifestError> {
+    let mut sources = BTreeMap::new();
+    let mut pending = vec![shader_dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let entries = std::fs::read_dir(&dir)
+            .map_err(|error| ManifestError::Toml(format!("read {}: {error}", dir.display())))?;
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !is_shader_source(file_name) {
+                continue;
+            }
+            let Some(source_key) = relative_source_key(shader_dir, &path) else {
+                continue;
+            };
+            let text = std::fs::read_to_string(&path).map_err(|error| {
+                ManifestError::Toml(format!("read {}: {error}", path.display()))
+            })?;
+            let entry_points = parse_entry_points(&text);
+            if entry_points.is_empty() {
+                continue;
+            }
+            sources.insert(source_key, ShaderSource { path, entry_points });
+        }
+    }
+    Ok(sources)
+}
+
+/// An entry file on disk and the entry points it declares.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShaderSource {
+    pub path: PathBuf,
+    pub entry_points: Vec<EntryPoint>,
+}
+
+pub fn shader_entries(sources: &BTreeMap<String, ShaderSource>) -> ShaderEntries {
+    sources
+        .iter()
+        .map(|(file, source)| (file.clone(), source.entry_points.clone()))
+        .collect()
+}
+
+fn relative_source_key(shader_dir: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(shader_dir).ok()?;
+    let mut key = String::new();
+    for component in relative.components() {
+        if !key.is_empty() {
+            key.push('/');
+        }
+        key.push_str(component.as_os_str().to_str()?);
+    }
+    Some(key)
+}
+
+fn parse_pass(
+    name: &str,
+    definition: &Value,
+    entries: &ShaderEntries,
+) -> Result<PassDefinition, ManifestError> {
     validate_pass_name(name)?;
     let table = definition
         .as_table()
@@ -194,16 +226,23 @@ fn parse_pass(name: &str, definition: &Value) -> Result<PassDefinition, Manifest
         let file = file
             .as_str()
             .ok_or_else(|| ManifestError::Shape(format!("pass.{name}.stages")))?;
-        let stage = StageKind::from_source_file(file).ok_or_else(|| {
-            ManifestError::UnknownStageExtension {
+        let entry_points = entries
+            .get(file)
+            .ok_or_else(|| ManifestError::MissingSource {
                 pass: name.to_string(),
                 file: file.to_string(),
-            }
-        })?;
-        stages.push(StageSource {
+            })?;
+        if entry_points.is_empty() {
+            return Err(ManifestError::NoEntryPoint {
+                pass: name.to_string(),
+                file: file.to_string(),
+            });
+        }
+        stages.extend(entry_points.iter().map(|entry_point| StageSource {
             source_file: file.to_string(),
-            stage,
-        });
+            entry: entry_point.name.clone(),
+            stage: entry_point.stage,
+        }));
     }
     validate_stage_composition(name, &stages)?;
 
@@ -263,10 +302,22 @@ fn validate_stage_composition(name: &str, stages: &[StageSource]) -> Result<(), 
     if is_graphics || is_compute {
         return Ok(());
     }
+
+    // RT pipeline: must have at least one RT stage (rgen/rint/rahit/rchit/rmiss) and no graphics/compute stages
+    let rt_count = count(StageKind::RayGeneration)
+        + count(StageKind::Intersection)
+        + count(StageKind::AnyHit)
+        + count(StageKind::ClosestHit)
+        + count(StageKind::Miss);
+    let is_rt = rt_count > 0 && vertex == 0 && fragment == 0 && geometry == 0 && compute == 0;
+    if is_rt {
+        return Ok(());
+    }
+
     Err(ManifestError::StageComposition {
         pass: name.to_string(),
         reason: format!(
-            "stages must be one .vert + one .frag (+ optional .geom) or exactly one .comp, got {} vert / {} frag / {} geom / {} comp",
+            "stages must be one vertex + one fragment (+ optional geometry) entry or exactly one compute entry, got {} vertex / {} fragment / {} geometry / {} compute",
             vertex, fragment, geometry, compute
         ),
     })
@@ -308,23 +359,62 @@ mod tests {
 
     const VALID: &str = r#"
 [pass.model]
-stages = ["vertex.vert", "fragment.frag"]
+stages = ["model/raster.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.blur]
-stages = ["blur.comp"]
+stages = ["blurCompute.slang"]
 sets = { 0 = "local" }
 "#;
 
+    fn entry(name: &str, stage: StageKind) -> EntryPoint {
+        EntryPoint {
+            name: name.into(),
+            stage,
+        }
+    }
+
+    fn entries() -> ShaderEntries {
+        ShaderEntries::from([
+            (
+                "model/raster.slang".to_string(),
+                vec![
+                    entry("vertexMain", StageKind::Vertex),
+                    entry("fragmentMain", StageKind::Fragment),
+                ],
+            ),
+            (
+                "blurCompute.slang".to_string(),
+                vec![entry("main", StageKind::Compute)],
+            ),
+        ])
+    }
+
+    fn pair_entries() -> ShaderEntries {
+        ShaderEntries::from([
+            (
+                "aVertex.slang".to_string(),
+                vec![entry("main", StageKind::Vertex)],
+            ),
+            (
+                "bFragment.slang".to_string(),
+                vec![entry("main", StageKind::Fragment)],
+            ),
+        ])
+    }
+
     #[test]
     fn parses_graphics_and_compute_passes() {
-        let manifest = PassManifest::parse(VALID).unwrap();
+        let manifest = PassManifest::parse(VALID, &entries()).unwrap();
         assert_eq!(manifest.passes.len(), 2);
         let blur = &manifest.passes[0];
         assert_eq!(blur.name, "blur");
         assert_eq!(blur.stages[0].stage, StageKind::Compute);
         assert_eq!(blur.sets, vec![(0, SetRole::Local)]);
         let model = &manifest.passes[1];
+        assert_eq!(model.stages.len(), 2);
+        assert_eq!(model.stages[0].entry, "vertexMain");
+        assert_eq!(model.stages[1].stage, StageKind::Fragment);
         assert_eq!(
             model.sets,
             vec![
@@ -338,32 +428,33 @@ sets = { 0 = "local" }
     #[test]
     fn rejects_duplicate_pass_names() {
         let text =
-            format!("{VALID}\n[pass.model]\nstages = [\"a.vert\", \"b.frag\"]\nsets = {{}}\n");
+            format!("{VALID}\n[pass.model]\nstages = [\"model/raster.slang\"]\nsets = {{}}\n");
         assert!(matches!(
-            PassManifest::parse(&text),
+            PassManifest::parse(&text, &entries()),
             Err(ManifestError::Toml(_))
         ));
     }
 
     #[test]
     fn rejects_bad_stage_composition() {
-        let text = "[pass.p]\nstages = [\"a.vert\"]\nsets = {}\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\"]\nsets = {}\n";
         assert!(matches!(
-            PassManifest::parse(text),
+            PassManifest::parse(text, &pair_entries()),
             Err(ManifestError::StageComposition { .. })
         ));
-        let text = "[pass.p]\nstages = [\"a.comp\", \"b.comp\"]\nsets = {}\n";
+        let text =
+            "[pass.p]\nstages = [\"blurCompute.slang\", \"model/raster.slang\"]\nsets = {}\n";
         assert!(matches!(
-            PassManifest::parse(text),
+            PassManifest::parse(text, &entries()),
             Err(ManifestError::StageComposition { .. })
         ));
     }
 
     #[test]
     fn rejects_roles_at_wrong_set() {
-        let text = "[pass.p]\nstages = [\"a.vert\", \"b.frag\"]\nsets = { 1 = \"frame\" }\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = { 1 = \"frame\" }\n";
         assert_eq!(
-            PassManifest::parse(text),
+            PassManifest::parse(text, &pair_entries()),
             Err(ManifestError::RoleAtWrongSet {
                 pass: "p".into(),
                 role: SetRole::Frame,
@@ -375,42 +466,64 @@ sets = { 0 = "local" }
 
     #[test]
     fn rejects_unknown_role_and_bad_pass_name() {
-        let text = "[pass.p]\nstages = [\"a.vert\", \"b.frag\"]\nsets = { 0 = \"world\" }\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = { 0 = \"world\" }\n";
         assert!(matches!(
-            PassManifest::parse(text),
+            PassManifest::parse(text, &pair_entries()),
             Err(ManifestError::UnknownSetRole { .. })
         ));
-        let text = "[pass.BadName]\nstages = [\"a.vert\", \"b.frag\"]\nsets = {}\n";
+        let text = "[pass.BadName]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = {}\n";
         assert_eq!(
-            PassManifest::parse(text),
+            PassManifest::parse(text, &pair_entries()),
             Err(ManifestError::InvalidPassName("BadName".into()))
         );
     }
 
     #[test]
     fn detects_missing_and_orphan_sources() {
-        let dir =
-            std::env::temp_dir().join(format!("thyllore_shader_manifest_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("vertex.vert"), "").unwrap();
-        std::fs::write(dir.join("fragment.frag"), "").unwrap();
-        std::fs::write(dir.join("blur.comp"), "").unwrap();
-        std::fs::write(dir.join("common.glsl"), "").unwrap();
-
-        let manifest = PassManifest::parse(VALID).unwrap();
-        assert_eq!(manifest.validate_against_sources(&dir), Ok(()));
-
-        std::fs::write(dir.join("orphan.frag"), "").unwrap();
+        let mut with_orphan = entries();
+        with_orphan.insert(
+            "nested/orphanFragment.slang".into(),
+            vec![entry("main", StageKind::Fragment)],
+        );
         assert_eq!(
-            manifest.validate_against_sources(&dir),
-            Err(ManifestError::OrphanShader("orphan.frag".into()))
+            PassManifest::parse(VALID, &with_orphan),
+            Err(ManifestError::OrphanShader(
+                "nested/orphanFragment.slang".into()
+            ))
         );
 
-        std::fs::remove_file(dir.join("blur.comp")).unwrap();
+        let mut without_blur = entries();
+        without_blur.remove("blurCompute.slang");
         assert!(matches!(
-            manifest.validate_against_sources(&dir),
+            PassManifest::parse(VALID, &without_blur),
             Err(ManifestError::MissingSource { .. })
         ));
+    }
+
+    #[test]
+    fn collects_entry_files_and_skips_modules() {
+        let dir = std::env::temp_dir().join(format!(
+            "thyllore_shader_manifest_dirs_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(dir.join("flame")).unwrap();
+        std::fs::create_dir_all(dir.join("include")).unwrap();
+        std::fs::write(
+            dir.join("flame/blurCompute.slang"),
+            "[shader(\"compute\")]\n[numthreads(8, 8, 1)]\nvoid main(uint3 id : SV_DispatchThreadID) {}\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("include/noise.slang"), "module noise;\n").unwrap();
+
+        let sources = collect_shader_sources(&dir).unwrap();
+        assert_eq!(
+            shader_entries(&sources),
+            ShaderEntries::from([(
+                "flame/blurCompute.slang".to_string(),
+                vec![entry("main", StageKind::Compute)]
+            )])
+        );
+
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

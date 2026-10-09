@@ -18,6 +18,7 @@ pub struct DragState {
     pub start_value: f32,
 }
 
+#[derive(Clone, Debug)]
 pub struct PanelLayout {
     pub hierarchy_width: f32,
     pub inspector_width: f32,
@@ -172,3 +173,24 @@ mod tests {
         assert!(main_h >= 100.0);
     }
 }
+
+thyllore_scene_core::declare_scene_format! {
+    component: PanelLayout,
+    record: PanelLayoutSceneRecord,
+    items {
+        key: "panel_layout",
+        snapshot: panel_layout_parameter_snapshot,
+        scalars: PANEL_LAYOUT_SCALAR_PARAMS,
+        ui: PANEL_LAYOUT_UI_PARAMS,
+        overwrite: overwrite_panel_layout_persisted_fields,
+    },
+    persisted {
+        hierarchy_width: f32 { get: |l| l.hierarchy_width, set: |l, v| l.hierarchy_width = v },
+        inspector_width: f32 { get: |l| l.inspector_width, set: |l, v| l.inspector_width = v },
+        timeline_height: f32 { get: |l| l.timeline_height, set: |l, v| l.timeline_height = v },
+        debug_height: f32 { get: |l| l.debug_height, set: |l, v| l.debug_height = v },
+    },
+    runtime {},
+}
+
+crate::scene_resource!(PanelLayout);

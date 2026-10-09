@@ -1,17 +1,16 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{FlameEffect, FlameTrail};
-use crate::ecs::resource::{BatchRun, TimelineState};
+use crate::ecs::resource::{FrameClock, TimelineState};
+use crate::ecs::FrameContext;
 use thyllore_effect_core::advance_flame_trail;
 
 pub fn flame_trail_advance(ctx: &mut FrameContext) {
-    let flame_entities = ctx.world.query_flames();
-    let has_batch_run = ctx.world.contains_resource::<BatchRun>();
-    let batch_frames_rendered = if has_batch_run {
-        Some(ctx.world.resource::<BatchRun>().frames_rendered as f32)
-    } else {
-        None
-    };
-    let timeline_current_time = if has_batch_run {
+    let flame_entities = ctx.world.entities_with::<FlameEffect>();
+    let fixed_step_frame = ctx
+        .world
+        .get_resource::<FrameClock>()
+        .filter(|clock| clock.is_fixed())
+        .map(|clock| clock.frame as f32);
+    let timeline_current_time = if fixed_step_frame.is_some() {
         None
     } else {
         ctx.world
@@ -32,7 +31,7 @@ pub fn flame_trail_advance(ctx: &mut FrameContext) {
         if !trail.state.enabled {
             continue;
         }
-        let delta = if let Some(current_frame) = batch_frames_rendered {
+        let delta = if let Some(current_frame) = fixed_step_frame {
             let last_frame = trail.last_timeline_time.unwrap_or(current_frame);
             current_frame - last_frame
         } else if let Some(timeline_time) = timeline_current_time {
@@ -43,6 +42,6 @@ pub fn flame_trail_advance(ctx: &mut FrameContext) {
         };
         let pos: [f32; 3] = [position.x, position.y, position.z];
         advance_flame_trail(&mut trail.state, pos, delta);
-        trail.last_timeline_time = batch_frames_rendered.or(timeline_current_time);
+        trail.last_timeline_time = fixed_step_frame.or(timeline_current_time);
     }
 }

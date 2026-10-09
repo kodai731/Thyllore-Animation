@@ -3,10 +3,13 @@ use thyllore_scene_core::declare_scene_format;
 
 use crate::ecs::component::MotionPath;
 
+crate::scene_attachment!(MotionPath);
+
 declare_scene_format! {
     component: MotionPath,
     record: MotionPathSceneRecord,
     items {
+        key: "motion_path",
         snapshot: motion_path_parameter_snapshot,
         scalars: MOTION_PATH_SCALAR_PARAMS,
         ui: MOTION_PATH_UI_PARAMS,

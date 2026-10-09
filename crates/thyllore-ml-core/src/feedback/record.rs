@@ -120,9 +120,12 @@ fn quantize(value: f64) -> f64 {
     (value * QUANTIZE_FACTOR).round() / QUANTIZE_FACTOR
 }
 
-/// Bone names never leave the engine; only the channel kind and axis index
-/// are transmitted.
-pub fn channel_for_property_type(property_type: PropertyType) -> FeedbackChannel {
+/// Bone names never leave the engine; only the channel kind and axis index are transmitted.
+/// A scalar channel is sent under the name the engine resolves for its code.
+pub fn channel_for_property_type(
+    property_type: PropertyType,
+    scalar_channel_name: impl FnOnce(u16) -> String,
+) -> FeedbackChannel {
     let (kind, array_index) = match property_type {
         PropertyType::TranslationX => ("location", 0),
         PropertyType::TranslationY => ("location", 1),
@@ -133,7 +136,13 @@ pub fn channel_for_property_type(property_type: PropertyType) -> FeedbackChannel
         PropertyType::ScaleX => ("scale", 0),
         PropertyType::ScaleY => ("scale", 1),
         PropertyType::ScaleZ => ("scale", 2),
-        PropertyType::Custom(code) => ("custom", code as u32),
+        PropertyType::Custom(code) => {
+            return FeedbackChannel {
+                kind: scalar_channel_name(code),
+                array_index: 0,
+            }
+        }
+        PropertyType::MorphWeight => ("morph_weight", 0),
     };
     FeedbackChannel {
         kind: kind.to_string(),
@@ -242,7 +251,7 @@ mod tests {
             (PropertyType::ScaleZ, "scale", 2),
         ];
         for (property_type, kind, array_index) in cases {
-            let channel = channel_for_property_type(property_type);
+            let channel = channel_for_property_type(property_type, |code| format!("custom_{code}"));
             assert_eq!(channel.kind, kind);
             assert_eq!(channel.array_index, array_index);
         }

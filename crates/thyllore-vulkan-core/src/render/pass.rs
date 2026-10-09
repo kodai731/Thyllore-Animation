@@ -2,6 +2,7 @@ use crate::command::*;
 use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::render::framebuffer::{create_color_objects, create_framebuffers};
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::*;
 use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
@@ -25,18 +26,50 @@ pub struct RRRender {
 }
 
 impl RRRender {
-    pub unsafe fn destroy_size_dependent(&self, device: &crate::core::device::Device) {
-        for &fb in &self.framebuffers {
+    pub unsafe fn destroy_size_dependent(&mut self, device: &crate::core::device::Device) {
+        for fb in self.framebuffers.drain(..) {
             device.destroy_framebuffer(fb, None);
         }
 
-        device.destroy_image_view(self.depth_image_view, None);
-        device.free_memory(self.depth_image_memory, None);
-        device.destroy_image(self.depth_image, None);
+        destroy_image_objects(
+            device,
+            &mut self.depth_image_view,
+            &mut self.depth_image,
+            &mut self.depth_image_memory,
+        );
+        destroy_image_objects(
+            device,
+            &mut self.color_image_view,
+            &mut self.color_image,
+            &mut self.color_image_memory,
+        );
+    }
 
-        device.destroy_image_view(self.color_image_view, None);
-        device.free_memory(self.color_image_memory, None);
-        device.destroy_image(self.color_image, None);
+    pub unsafe fn destroy_gbuffer_attachments(&mut self, device: &crate::core::device::Device) {
+        if self.gbuffer_framebuffer != vk::Framebuffer::null() {
+            device.destroy_framebuffer(self.gbuffer_framebuffer, None);
+            self.gbuffer_framebuffer = vk::Framebuffer::null();
+        }
+        destroy_image_objects(
+            device,
+            &mut self.gbuffer_depth_image_view,
+            &mut self.gbuffer_depth_image,
+            &mut self.gbuffer_depth_image_memory,
+        );
+    }
+
+    pub unsafe fn destroy(&mut self, device: &crate::core::device::Device) {
+        self.destroy_size_dependent(device);
+        self.destroy_gbuffer_attachments(device);
+
+        if self.render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.render_pass, None);
+            self.render_pass = vk::RenderPass::null();
+        }
+        if self.gbuffer_render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.gbuffer_render_pass, None);
+            self.gbuffer_render_pass = vk::RenderPass::null();
+        }
     }
 
     pub unsafe fn new(
@@ -70,6 +103,32 @@ impl RRRender {
         }
         println!("created render pass {:?}", rrrender);
         rrrender
+    }
+}
+
+unsafe fn destroy_image_objects(
+    device: &crate::core::device::Device,
+    view: &mut vk::ImageView,
+    image: &mut vk::Image,
+    memory: &mut vk::DeviceMemory,
+) {
+    if *view != vk::ImageView::null() {
+        device.destroy_image_view(*view, None);
+        *view = vk::ImageView::null();
+    }
+    if *image != vk::Image::null() {
+        device.destroy_image(*image, None);
+        *image = vk::Image::null();
+    }
+    if *memory != vk::DeviceMemory::null() {
+        device.free_memory(*memory, None);
+        *memory = vk::DeviceMemory::null();
+    }
+}
+
+impl GpuResource for RRRender {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }
 
@@ -413,6 +472,72 @@ pub unsafe fn create_gbuffer_render_pass(
 
     rrrender.gbuffer_render_pass = rrdevice.device.create_render_pass(&info, None)?;
 
-    log::info!("Created G-Buffer render pass with ObjectID attachment");
+    log!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
+}
+
+/// Load or clear of a single color attachment that a fragment pass draws into and a later
+/// fragment pass samples; the incoming edge covers a previous color write and a previous read.
+pub struct ColorOverlayPassDesc {
+    pub format: vk::Format,
+    pub load_op: vk::AttachmentLoadOp,
+    pub initial_layout: vk::ImageLayout,
+    pub final_layout: vk::ImageLayout,
+}
+
+pub unsafe fn create_color_overlay_render_pass(
+    rrdevice: &RRDevice,
+    desc: ColorOverlayPassDesc,
+) -> Result<vk::RenderPass> {
+    let color_attachment = vk::AttachmentDescription::builder()
+        .format(desc.format)
+        .samples(vk::SampleCountFlags::_1)
+        .load_op(desc.load_op)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(desc.initial_layout)
+        .final_layout(desc.final_layout)
+        .build();
+
+    let color_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(0)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+    let color_attachments = [color_attachment_ref];
+    let subpass = vk::SubpassDescription::builder()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(&color_attachments);
+
+    let dependency_in = vk::SubpassDependency::builder()
+        .src_subpass(vk::SUBPASS_EXTERNAL)
+        .dst_subpass(0)
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::FRAGMENT_SHADER,
+        )
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::SHADER_READ)
+        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        )
+        .build();
+    let dependency_out = vk::SubpassDependency::builder()
+        .src_subpass(0)
+        .dst_subpass(vk::SUBPASS_EXTERNAL)
+        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+        .build();
+
+    let attachments = [color_attachment];
+    let subpasses = [subpass];
+    let dependencies = [dependency_in, dependency_out];
+    let info = vk::RenderPassCreateInfo::builder()
+        .attachments(&attachments)
+        .subpasses(&subpasses)
+        .dependencies(&dependencies);
+
+    Ok(rrdevice.device.create_render_pass(&info, None)?)
 }

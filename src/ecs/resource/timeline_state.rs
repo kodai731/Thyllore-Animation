@@ -7,6 +7,12 @@ use crate::ecs::world::Entity;
 pub use thyllore_anim_core::editable::SnapSettings;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClipPreview {
+    Solo,
+    Mix,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectionModifier {
     Replace,
     Add,
@@ -20,13 +26,14 @@ pub enum SelectionModifier {
 pub enum CurveTrackRef {
     Bone(BoneId),
     Scalar,
+    Morph(usize),
 }
 
 impl CurveTrackRef {
     pub fn bone_id(self) -> Option<BoneId> {
         match self {
             CurveTrackRef::Bone(id) => Some(id),
-            CurveTrackRef::Scalar => None,
+            CurveTrackRef::Scalar | CurveTrackRef::Morph(_) => None,
         }
     }
 }
@@ -81,6 +88,7 @@ pub struct ClipDragPreview {
 #[derive(Clone, Debug)]
 pub struct TimelineState {
     pub current_clip_id: Option<SourceClipId>,
+    pub preview: ClipPreview,
     pub current_time: f32,
     pub playing: bool,
     pub looping: bool,
@@ -108,6 +116,7 @@ impl TimelineState {
     pub fn new() -> Self {
         Self {
             current_clip_id: None,
+            preview: ClipPreview::Solo,
             current_time: 0.0,
             playing: false,
             looping: true,

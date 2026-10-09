@@ -698,6 +698,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap"
+version = "4.5.60"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.5.60"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap_lex",
+ "strsim",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a92793da1a46a5f2a02a6f4c46c6496b28c43638adea8306fcb0caa1634f24e5"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "clap_lex"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
+
+[[package]]
 name = "clipboard-win"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -867,9 +907,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-deque"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
+checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
 dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
@@ -877,9 +917,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.20"
+version = "0.9.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
+checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -941,9 +981,9 @@ dependencies = [
 
 [[package]]
 name = "daachorse"
-version = "1.0.1"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f55d7153ba3b507595872a3874803f07a8a81d1e888abed8e5db7da0597d6e2"
+checksum = "5614204febbc33cc07a2806aa6440b904ac012b68eecc37f4493ea4a76455a3d"
 
 [[package]]
 name = "darling"
@@ -1924,6 +1964,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 
 [[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2159,19 +2208,19 @@ checksum = "1670343e58806300d87950e3401e820b519b9384281bbabfb15e3636689ffd69"
 
 [[package]]
 name = "macro_rules_attribute"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65049d7923698040cd0b1ddcced9b0eb14dd22c5f86ae59c3740eab64a676520"
+checksum = "b3ae8f6d608c795738406608304d30a2dfbdc8e58e44f7ba43236da5208ded3c"
 dependencies = [
  "macro_rules_attribute-proc_macro",
- "paste",
+ "pastey",
 ]
 
 [[package]]
 name = "macro_rules_attribute-proc_macro"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "670fdfda89751bc4a84ac13eaa63e205cf0fd22b4c9a5fbfa085b63c1f1d3a30"
+checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "malloc_buf"
@@ -2802,6 +2851,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pem-rfc7468"
@@ -3680,6 +3735,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap 2.13.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3986,12 +4054,14 @@ dependencies = [
  "bincode",
  "cgmath",
  "chrono",
+ "clap",
  "copypasta",
  "env_logger",
  "fbxcel",
  "gltf",
  "imgui",
  "imgui-winit-support",
+ "inventory",
  "log",
  "once_cell",
  "ort",
@@ -4006,6 +4076,8 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
+ "thyllore-cli-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
  "thyllore-grpc-client",
@@ -4025,6 +4097,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "thyllore-avatar-core"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "cgmath",
+ "ron",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thyllore-anim-core",
+ "thyllore-importer-core",
+ "thyllore-math-core",
+ "toml",
+]
+
+[[package]]
+name = "thyllore-cli-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "thyllore-color-core"
 version = "0.0.1"
 
@@ -4032,15 +4127,31 @@ version = "0.0.1"
 name = "thyllore-effect-core"
 version = "0.0.1"
 dependencies = [
+ "cc",
  "cgmath",
+ "fastrand",
+ "numpy",
+ "pyo3",
+ "pythonize",
  "ron",
  "serde",
  "serde_json",
  "thyllore-color-core",
+ "thyllore-effect-derive",
  "thyllore-math-core",
  "thyllore-scene-core",
+ "thyllore-shader-manifest",
  "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
+]
+
+[[package]]
+name = "thyllore-effect-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4053,12 +4164,23 @@ dependencies = [
  "gltf",
  "ron",
  "serde_json",
+ "serde_yaml",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-log-core",
  "thyllore-math-core",
  "thyllore-model-core",
  "ufbx",
+]
+
+[[package]]
+name = "thyllore-file-format-core"
+version = "0.0.1"
+dependencies = [
+ "cgmath",
+ "thyllore-anim-core",
+ "thyllore-model-core",
 ]
 
 [[package]]
@@ -4091,7 +4213,9 @@ dependencies = [
  "png 0.17.16",
  "serde",
  "serde_json",
+ "tempfile",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-log-core",
  "thyllore-math-core",
  "thyllore-model-core",
@@ -4112,6 +4236,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "cgmath",
+ "fastrand",
 ]
 
 [[package]]
@@ -4161,8 +4286,11 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "cgmath",
+ "ron",
+ "serde",
  "thyllore-anim-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "thyllore-spirv-reflect",
 ]
 
@@ -4182,6 +4310,17 @@ name = "thyllore-scene-core"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "thyllore-color-core",
+ "thyllore-scene-derive",
+]
+
+[[package]]
+name = "thyllore-scene-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4226,8 +4365,18 @@ dependencies = [
  "thyllore-render-core",
  "thyllore-shader-manifest",
  "thyllore-spirv-reflect",
+ "thyllore-vulkan-derive",
  "vulkanalia",
  "winit",
+]
+
+[[package]]
+name = "thyllore-vulkan-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4267,9 +4416,9 @@ dependencies = [
 
 [[package]]
 name = "tokenizers"
-version = "0.23.1"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44e5bea67576e04b6ff8564c5d9e09c2ef0cf476502245f2f120e497769d3112"
+checksum = "7afbf6e88718afcc138bad01d6ccc3051dbbc3b2ce9793d8b8a3aeb610969cfc"
 dependencies = [
  "ahash",
  "compact_str",
@@ -4622,6 +4771,12 @@ name = "unicode_categories"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"

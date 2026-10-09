@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::COMPOSITE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::composite;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::*;
 use thyllore_spirv_reflect::declare_gpu_block;
@@ -152,5 +153,11 @@ impl RRCompositeDescriptorSet {
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.selection.destroy(device);
         self.layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRCompositeDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

@@ -11,14 +11,14 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PRODUCT_ENTRY: &str = "shaders/flameResolveFragment.frag";
+const PRODUCT_ENTRY: &str = "shaders/flame/resolveFragment.slang";
 
 /// Files whose whole purpose is sample-based reference integration. They may
 /// contain lattice loops, but nothing outside this list may include them
 /// except the product entry (which dispatches debug modes at runtime).
-const SAMPLING_INCLUDES: &[&str] = &["include/flame_reference_march.glsl"];
+const SAMPLING_INCLUDES: &[&str] = &["flame/include/reference_march.slang"];
 
-const GLSL_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
+const SHADER_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
 const RUST_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "lut_lerp", "[f32; 33]"];
 
 struct Exception {
@@ -31,20 +31,7 @@ struct Exception {
 /// Entries must still match a real occurrence; a stale entry fails the test.
 const EXCEPTION_LEDGER: &[Exception] = &[
     Exception {
-        file_suffix: "include/flame_radial_integral.glsl",
-        token: "FLAME_WAVE_SEGMENTS",
-        reason: "legacy 64-segment piecewise closed-form quadrature; the fully \
-                 closed-form v5 replacement was rejected on look (2026-08-10) \
-                 and stays env opt-in",
-    },
-    Exception {
-        file_suffix: "flameResolveFragment.frag",
-        token: "FLAME_WAVE_SEGMENTS",
-        reason: "debug-view-only uses: segment-grid visualization (view 9) and \
-                 the wave debug node search inside flameDebugViewColor",
-    },
-    Exception {
-        file_suffix: "flameResolveFragment.frag",
+        file_suffix: "resolveFragment.slang",
         token: "Raymarch",
         reason: "runtime dispatch of push.mode 1/3 into the quarantined \
                  reference integrators; the entry routes but does not integrate",
@@ -92,8 +79,8 @@ fn parse_includes(source: &str) -> Vec<String> {
         .lines()
         .filter_map(|line| {
             let line = line.trim();
-            line.strip_prefix("#include \"")
-                .and_then(|rest| rest.strip_suffix('"'))
+            line.strip_prefix("import \"")
+                .and_then(|rest| rest.strip_suffix("\";"))
                 .map(str::to_string)
         })
         .collect()
@@ -111,7 +98,7 @@ fn resolve_include(shader_dir: &Path, includer: &str, child: &str) -> String {
 
 fn collect_include_graph(root: &Path) -> BTreeSet<String> {
     let entry = root.join(PRODUCT_ENTRY);
-    let shader_dir = entry.parent().unwrap().to_path_buf();
+    let shader_dir = root.join("shaders");
     let mut visited = BTreeSet::new();
     let mut queue: Vec<String> = parse_includes(&read(&entry))
         .into_iter()
@@ -165,6 +152,11 @@ fn flame_runtime_stays_closed_form() {
     let shader_dir = root.join("shaders");
 
     let graph = collect_include_graph(&root);
+    assert!(
+        SAMPLING_INCLUDES.iter().all(|inc| graph.contains(*inc)),
+        "product entry no longer imports the sampling includes; \
+         the import graph walk found {graph:?}"
+    );
     for include in &graph {
         if SAMPLING_INCLUDES.contains(&include.as_str()) {
             continue;
@@ -180,7 +172,7 @@ fn flame_runtime_stays_closed_form() {
         }
     }
 
-    let glsl_files: Vec<PathBuf> = std::iter::once(root.join(PRODUCT_ENTRY))
+    let shader_files: Vec<PathBuf> = std::iter::once(root.join(PRODUCT_ENTRY))
         .chain(
             graph
                 .iter()
@@ -213,7 +205,12 @@ fn flame_runtime_stays_closed_form() {
 
     let mut used = BTreeSet::new();
     let mut violations = Vec::new();
-    scan_tokens(&glsl_files, GLSL_BANNED_TOKENS, &mut used, &mut violations);
+    scan_tokens(
+        &shader_files,
+        SHADER_BANNED_TOKENS,
+        &mut used,
+        &mut violations,
+    );
     scan_tokens(&rust_files, RUST_BANNED_TOKENS, &mut used, &mut violations);
 
     assert!(

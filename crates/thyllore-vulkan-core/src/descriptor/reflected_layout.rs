@@ -7,6 +7,7 @@ use crate::descriptor::pass_manifest::{passes_with_role, PassShaders, SetRole, S
 use crate::descriptor::reflection::{
     kind_accepts, reflect_shader_bytes, DescriptorSetTable, LayoutMismatch, ShaderReflection,
 };
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use thyllore_spirv_reflect::{GpuBlock, ShaderBinding};
 
@@ -457,5 +458,11 @@ impl DescriptorSetWriter<'_> {
         rrdevice
             .device
             .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
+    }
+}
+
+impl GpuResource for ReflectedSetLayout {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

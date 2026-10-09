@@ -1,7 +1,9 @@
 pub mod animation;
+pub(crate) mod blend_shape;
 pub(crate) mod build;
 pub(crate) mod connections;
 pub(crate) mod curves;
+pub(crate) mod file_identity;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;
@@ -14,7 +16,7 @@ use fbxcel::writer::v7400::binary::Writer;
 
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::Skeleton;
-use thyllore_importer_core::fbx::fbx::FbxModel;
+use thyllore_file_format_core::fbx::FbxModel;
 
 use crate::systems::fbx::build::build_full_export_data;
 use crate::systems::fbx::writer::*;
@@ -46,7 +48,7 @@ mod tests {
     use crate::systems::fbx::skin::matrix4_to_flat_f64_scaled;
     use cgmath::Matrix4;
     use std::path::PathBuf;
-    use thyllore_importer_core::fbx::fbx::FbxData;
+    use thyllore_file_format_core::fbx::FbxData;
 
     #[test]
     fn test_encode_triangle_polygon_indices() {

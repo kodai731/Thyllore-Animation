@@ -1,20 +1,21 @@
 use imgui::Condition;
 
 use crate::asset::AssetStorage;
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
+use super::blend_shape_inspector::build_blend_shape_section;
 use super::constraint_inspector::build_constraint_section;
-use super::layout_snapshot::LayoutSnapshot;
 use super::spring_bone_inspector::build_spring_bone_section;
+use crate::ecs::resource::LayoutSnapshot;
 
-pub fn build_inspector_window(
+fn draw_inspector_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     world: &World,
     state: &HierarchyState,
     assets: &AssetStorage,
@@ -38,15 +39,13 @@ pub fn build_inspector_window(
                 ui.text(&format!("[{}] {}", data.icon_char, data.name));
                 ui.separator();
 
-                build_transform_section(ui, ui_events, &data);
+                build_transform_section(ui, world, &data);
 
                 build_mesh_section(ui, &data);
 
                 build_material_section(ui, &data);
 
-                build_visible_section(ui, ui_events, &data);
-
-                build_camera_section(ui, ui_events, world, data.entity);
+                build_visible_section(ui, world, &data);
 
                 let (mut add_type_index, mut bake_fps) = world
                     .get_resource::<ConstraintEditorState>()
@@ -55,7 +54,6 @@ pub fn build_inspector_window(
 
                 build_constraint_section(
                     ui,
-                    ui_events,
                     world,
                     entity,
                     assets,
@@ -69,7 +67,14 @@ pub fn build_inspector_window(
                     editor_state.bake_fps = bake_fps;
                 }
 
-                build_spring_bone_section(ui, ui_events, world, entity, assets, state);
+                build_spring_bone_section(ui, world, entity, assets, state);
+
+                build_blend_shape_section(ui, world, entity, assets, graphics);
+
+                ui.separator();
+                if ui.button("Avatar Setup...") {
+                    world.send_command(AvatarSetupEvent::OpenAvatarSetup);
+                }
             } else {
                 ui.text("No entity selected");
             }
@@ -78,7 +83,7 @@ pub fn build_inspector_window(
 
 fn build_transform_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &crate::ecs::systems::InspectorData,
 ) {
     if data.translation.is_none() && data.rotation_euler.is_none() && data.scale.is_none() {
@@ -90,7 +95,7 @@ fn build_transform_section(
             let mut pos = [translation.x, translation.y, translation.z];
             ui.text("Position");
             if ui.input_float3("##position", &mut pos).build() {
-                ui_events.send(UIEvent::SetEntityTranslation(
+                world.send_command(HierarchyEvent::SetEntityTranslation(
                     data.entity,
                     cgmath::Vector3::new(pos[0], pos[1], pos[2]),
                 ));
@@ -103,7 +108,7 @@ fn build_transform_section(
             if ui.input_float3("##rotation", &mut rot).build() {
                 let euler = cgmath::Vector3::new(rot[0], rot[1], rot[2]);
                 let quat = euler_degrees_to_quaternion(&euler);
-                ui_events.send(UIEvent::SetEntityRotation(data.entity, quat));
+                world.send_command(HierarchyEvent::SetEntityRotation(data.entity, quat));
             }
         }
 
@@ -111,7 +116,7 @@ fn build_transform_section(
             let mut scl = [scale.x, scale.y, scale.z];
             ui.text("Scale");
             if ui.input_float3("##scale", &mut scl).build() {
-                ui_events.send(UIEvent::SetEntityScale(
+                world.send_command(HierarchyEvent::SetEntityScale(
                     data.entity,
                     cgmath::Vector3::new(scl[0], scl[1], scl[2]),
                 ));
@@ -171,16 +176,12 @@ fn format_number(n: usize) -> String {
     result
 }
 
-fn build_visible_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    data: &crate::ecs::systems::InspectorData,
-) {
+fn build_visible_section(ui: &imgui::Ui, world: &World, data: &crate::ecs::systems::InspectorData) {
     if let Some(visible) = data.visible {
         if ui.collapsing_header("Visible", imgui::TreeNodeFlags::DEFAULT_OPEN) {
             let mut vis = visible;
             if ui.checkbox("Visible##checkbox", &mut vis) {
-                ui_events.send(UIEvent::SetEntityVisible(
+                world.send_command(HierarchyEvent::SetEntityVisible(
                     data.entity,
                     Visibility::from(vis),
                 ));
@@ -189,38 +190,15 @@ fn build_visible_section(
     }
 }
 
-fn build_camera_section(
+fn build_inspector_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     world: &World,
-    entity: crate::ecs::world::Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
 ) {
-    if !world.has_component::<crate::ecs::component::CameraComponent>(entity) {
-        return;
-    }
-
-    let camera = match world.get_component::<crate::ecs::component::CameraComponent>(entity) {
-        Some(c) => c,
-        None => return,
-    };
-
-    if ui.collapsing_header("Camera", imgui::TreeNodeFlags::DEFAULT_OPEN) {
-        ui.text(&format!("FOV Y       {:.1}°", camera.fov_y.0));
-        ui.text(&format!("Near Plane  {:.2}", camera.near_plane));
-
-        let is_active = match world.get_resource::<crate::ecs::resource::ActiveCamera>() {
-            Some(ac) => ac.0 == Some(entity),
-            None => false,
-        };
-
-        if is_active {
-            if ui.button("Release camera##active") {
-                ui_events.send(UIEvent::SetActiveCamera(None));
-            }
-        } else {
-            if ui.button("Look through this camera##active") {
-                ui_events.send(UIEvent::SetActiveCamera(Some(entity)));
-            }
-        }
-    }
+    let hierarchy_state = world.resource::<HierarchyState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_inspector_window(ui, world, &hierarchy_state, assets, graphics, &layout);
 }
+
+crate::ui_window!("inspector", Side, 3, build_inspector_window);

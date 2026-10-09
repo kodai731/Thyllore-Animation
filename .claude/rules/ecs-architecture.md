@@ -22,7 +22,10 @@ This project uses an Entity-Component-System (ECS) architecture. The design foll
    should be in separate components (Flecs design principle: reduces cache misses and unnecessary data loading)
 6. **Module Independence**: Feature modules depend on shared component types, not on each other's system
    functions. Inter-module communication happens through components, resources, and events — never through
-   direct system-to-system calls across module boundaries (Flecs module design)
+   direct system-to-system calls across module boundaries (Flecs module design). Shared infrastructure
+   (`src/scene/`, `src/hooks/`, `src/app/`, `world.rs`) never names a feature: it consumes registries the
+   features subscribe to and reflection the feature's declaration generates (`SceneComponent::TYPE_KEY`,
+   `ScalarChannelDomain`, `UiParam`), see `hierarchy.md` "Feature isolation"
 
 ## Directory Structure
 
@@ -31,39 +34,68 @@ This project uses an Entity-Component-System (ECS) architecture. The design foll
 ```
 src/ecs/
 ├── component/           # Component definitions (data attached to entities)
-├── bundle/              # Common component combinations
-├── resource/            # Global dynamic state (changes per frame)
-├── systems/             # System functions (behavior/logic)
-│   └── phases/          # Phase coordinators (execution order)
-├── events/              # Event definitions
+├── resource/            # Global dynamic state (changes per frame), one file per resource
+├── systems/             # System functions (behavior/logic), one file per domain
+│   ├── phases/          # Phase coordinators (execution order); event dispatchers are in phases/event_dispatch/
+│   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
+│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, object_pick, passes, ...)
+│   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
+│   ├── curve_copilot/   # ML curve suggestion systems
+│   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)
+├── events/              # UiCommand / UiCommandQueue, DialogRequest
+├── query/               # Query builder, filters, tuple fetch
+├── storage/             # Sparse set component storage
+├── registry/            # Component registry (type info)
+├── context.rs           # EcsContext: World + assets + per-frame inputs for phases
+├── frame_context.rs     # FrameContext: EcsContext + GPU resources (what run_frame takes)
+├── effect_context.rs    # EffectContext: what the effect hooks take
+├── pass_context.rs      # PassContext: what every RenderPassNode method takes
 ├── world.rs             # World container for entities and resources
-├── query.rs             # Query functions for entity filtering
 └── mod.rs
 ```
+
+Component and resource types that an effect exposes as parameters (flame, water, wind, lightning) are declared
+once in `crates/thyllore-effect-core` via struct field attributes (`#[derive(thyllore_scene_core::SceneFields)]`, the
+proc-macro nested at `crates/thyllore-scene-core/derive/` and re-exported by scene-core, usable by any scene component); `src/ecs/component/`
+only wraps them. The effect struct carries `#[scene(key, tag, tags, snapshot, scalars, ui, overwrite, owner?, group?)]`,
+a sub-struct carries `#[params(tag, owner?, group?)]`, and a field carries one of `#[persist(owner?, as?, with?,
+curve?, debug_range?, renamed_from?, ui(...)?)]`, `#[runtime(ui(...)?)]` or `#[nested]` (`#[nested(runtime)]` for a sub-struct without persisted
+fields). The tooltip is the field's `///` doc comment, the label is the title-cased public name, and a `[f32; 3]` with
+`ui(...)` is a `Color` unless `kind = Absorption` / `Offset` says otherwise; no generated JSON is checked in. The scene form is nested by struct; the public parameter
+name is the underscore-joined path (`noise.amplitude` → `noise_amplitude`) and is the one string used by
+`ScalarChannel.cli_name`, the batch CLI, MCP and the Blender property identifier. `#[scene(key = ...)]` makes the
+component a `thyllore_scene_core::SceneComponent` (type key + persisted field list), which is all the scene format
+needs: it never names the effect (see `hierarchy.md`, "Feature isolation").
 
 ### Domain ECS Modules
 
 Feature-specific domains that have their own data/logic separation follow the `components/` and `systems/`
-pattern within their module directory.
+pattern within their module directory. The editable animation domain lives in the pure crate
+`crates/thyllore-anim-core` (re-exported as `src/animation.rs`); it has no ECS dependency.
 
 ```
-src/animation/editable/
+crates/thyllore-anim-core/src/editable/
 ├── components/          # Data types (structs, enums, type aliases)
 │   ├── keyframe.rs      # EditableKeyframe, BezierHandle, TangentType, etc.
 │   ├── curve.rs         # PropertyCurve, PropertyType (data + accessors only)
 │   ├── track.rs         # BoneTrack (data + accessors only)
 │   ├── clip.rs          # EditableAnimationClip (data + accessors only)
+│   ├── clip_file.rs     # Clip file record
 │   ├── blend.rs         # BlendMode, EaseType
 │   ├── clip_instance.rs # ClipInstance
 │   ├── clip_group.rs    # ClipGroup, ClipGroupId
 │   ├── source_clip.rs   # SourceClip
+│   ├── keyframe_copy.rs # Clipboard record
+│   ├── snap_settings.rs # Snap settings
 │   ├── mirror.rs        # MirrorAxis, MirrorMapping (data types only)
 │   └── mod.rs
 │
 ├── systems/             # Logic and operations (pure functions)
 │   ├── curve_ops.rs     # curve_sample, curve_add_keyframe, curve_sort_keyframes
+│   ├── clip_ops.rs      # clip-level edits
 │   ├── tangent.rs       # sample_bezier, apply_auto_tangent, apply_tangent_by_type
 │   ├── clip_convert.rs  # from_animation_clip, to_animation_clip
+│   ├── bake.rs          # bake constraints / spring bones into keyframes
 │   ├── mirror.rs        # build_mirror_mapping, mirror_keyframes
 │   ├── snap.rs          # snap_time, compute_snap_threshold_time
 │   ├── manager.rs       # EditableClipManager (I/O and lifecycle management)
@@ -71,6 +103,9 @@ src/animation/editable/
 │
 └── mod.rs
 ```
+
+The same split is used by `crates/thyllore-effect-core` (`flame/`, `water/`, `wind/`: `effect/` data,
+`analytic/` pure math, `gpu/` UBO structs, `presets.rs`, `settings.rs`).
 
 ### What Goes in `components/`
 
@@ -98,6 +133,10 @@ Data-only structs attached to entities. Located in `ecs/component/`.
 
 Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
 
+A resource that belongs in the scene file declares its persisted fields with `declare_scene_format!`
+(runtime-only fields stay out of the table) and registers with `scene_resource!(Type)` in its own file;
+`src/scene/` never mirrors it (see `hierarchy.md`, "Feature isolation").
+
 Resources correspond to **singleton components** in other ECS frameworks:
 - Flecs: singletons (component added to its own entity)
 - Unity DOTS: singleton components (`GetSingleton<T>()`)
@@ -112,24 +151,36 @@ pub fn camera_rotate(camera: &mut Camera, delta: Vector2<f32>);
 pub fn animation_update(playback: &mut AnimationPlayback, registry: &mut AnimationRegistry, dt: f32);
 ```
 
-### Bundles
+### Spawning
 
-Predefined component combinations for common entity types. Located in `ecs/bundle/`.
+There is no `bundle/` directory. Entities are spawned by a `spawn_*` system in the owning domain
+(`src/ecs/systems/flame/spawn.rs`, `water/spawn.rs`, `mesh_systems.rs`, ...) which inserts the component set.
 
 ## Phase Pipeline
 
-Systems execute in a fixed phase order, defined in `src/ecs/systems/phases/`. Each phase is a coordinator
-function that calls the appropriate systems in sequence.
+`FRAME_SCHEDULE` (`src/ecs/systems/world/frame.rs`) is the one list of phases. `App::drive_frame`
+(`src/app/frame.rs`, called from `src/platform/events/frame.rs` once the imgui frame is built) runs it:
+EventDispatch first, then `begin_frame`, the update phases through `run_frame()`, the render, and Last
+once the image is presented. The slots are:
 
 ```
-run_frame()
-├── run_input_phase()              # Input handling, gizmo interaction
-├── run_transform_phase_ecs()      # Transform propagation
-├── run_animation_phase_ecs()      # Animation evaluation, blending, skinning
-├── run_onion_skin_phase()         # Ghost frame generation
-├── run_render_prep_phase()        # Gizmo mesh building, render data collection
-└── run_event_dispatch_phase()     # UI event processing, deferred actions
+EventDispatch → run_event_dispatch_phase()   # DispatchPrepHooks (worker polls), UI commands → World; dialog requests; apply commands
+First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
+Input         → run_input_phase()            # Input handling, gizmo interaction
+Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
+Timeline      → run_timeline_phase()         # Timeline / clip schedule advance
+Animation     → run_animation_phase_ecs()    # Animation evaluation, blending, transform propagation
+              → run_animation_phase_gpu()    # Skinning / vertex upload
+OnionSkin     → run_onion_skin_phase()       # Ghost frame generation
+RenderPrep    → run_transform_phase_gpu()    # Light gizmo vertex upload (#194)
+              → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
+                (App::render: record, submit, present)
+Last          → run_last_phase()             # Requested BatchCapture readbacks + scheduled screenshot
 ```
+
+`run_frame()` runs `update_phases()`, the slots between EventDispatch and Last; `App::drive_frame`
+owns the two ends because they need `App` (file dialogs and queued commands before, the presented image
+after).
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)
 
@@ -139,17 +190,25 @@ run_frame()
 - **Animation completes before Transform propagation**: Standard in all major engines
   (Bevy: `.before(TransformSystems::Propagate)`, Unity DOTS: animation in SimulationSystemGroup
   before TransformSystemGroup)
-- **Event dispatch is last**: Deferred structural changes (entity creation/destruction, component
-  add/remove) are processed at the end of the frame, similar to Unity DOTS EntityCommandBuffer
-  pattern and Flecs sync points
+- **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
+  mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
+  sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
+  routes Slate input before `UWorld::Tick`). The file dialogs the engine asks of the platform are
+  `DialogRequest`s that `src/platform/events/file_dialog.rs` drains right after the dispatch; what `App` must do is pushed to a command queue and applied by `App` before
+  `begin_frame`; readbacks of the finished image are Last (Bevy `PostUpdate` egui output, Unreal
+  `ProcessLocalPlayerSlateOperations` after the world tick)
+- **Commands are queued by stage, not returned**: a dispatcher or system pushes to the `CommandQueue<C>`
+  resource of its command type (`src/ecs/resource/app_command.rs`) and never returns commands to its
+  caller. One queue exists per stage whose order is required, and `App` drains them in that order
+  (`src/app/command.rs::apply_queued_commands`): `EntityRemovalQueue` (ids of the scene before any load)
+  → `SceneLoadQueue` (model loads, spawns) → `AssetEditQueue` (edits of the loaded model's assets) →
+  `OutputQueue` (screenshots, dumps, saves, exports, which only read). Inside a queue the order is
+  unspecified; a command that needs a new ordering guarantee gets a new queue, not a position in a list
 
 ### Adding New Phases
 
-When adding a new phase:
-1. Create a coordinator function in `phases/`
-2. The function receives `FrameContext` and calls system functions in order
-3. Add the call in `run_frame()` at the correct position
-4. Document ordering dependencies (what must complete before this phase)
+Add a new variant to `FramePhase`, place it in `FRAME_SCHEDULE`, and create its coordinator in
+`phases/<name>_phase.rs`.
 
 ## Query Pattern
 
@@ -172,11 +231,18 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 
 ## Adding New Scene Objects
 
-1. Define components in `ecs/component/`
-2. Create a bundle in `ecs/bundle/`
-3. Add a marker component for queries
-4. Implement system functions in `ecs/systems/`
-5. Spawn entity with the bundle in initialization
+1. Define components in `ecs/component/` (effect parameters: declare them in `thyllore-effect-core`)
+2. Add a marker component for queries
+3. Implement system functions in `ecs/systems/<domain>/`
+4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
+   event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
+   the domain's per-frame system when missing, so a loaded entity and a spawned one converge
+5. Persist it: give the effect parameter component `#[scene(key = ...)]` (resource: `declare_scene_format!`) and write
+   `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
+   components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
+   Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited. For an
+   animatable scalar, add `curve` to the field's `#[persist(...)]` (effect-core); nothing in `src/`
+   changes and no number is assigned (see `ui.md`).
 
 ## Adding New Domain Features
 
@@ -204,7 +270,7 @@ Platform Layer (src/platform/, src/app/)
 ECS Systems Layer (src/ecs/systems/)
     │  calls pure domain functions, operates on components/resources
     ▼
-Domain Layer (src/animation/editable/, src/animation/)
+Domain Layer (crates/thyllore-anim-core, thyllore-effect-core, thyllore-model-core, ...)
     │  pure data types and pure functions, no World dependency
     ▼
 Core Types (src/ecs/component/, src/ecs/resource/)
@@ -213,35 +279,47 @@ Core Types (src/ecs/component/, src/ecs/resource/)
 
 **Allowed in platform layer** (`src/platform/`):
 - Reading resources for UI display (immutable access)
-- Sending events to `UIEventQueue`
+- Sending UI commands with `World::send_command` and dialog requests with `send_dialog_request`
 - Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase`)
 - Platform-specific I/O (file dialogs, window management, imgui orchestration)
-- Handling `DeferredAction` that requires `App`/`GUIData`
+- Converting file dialog results into commands and pushing them to their `CommandQueue` (applied by `App`,
+  never by the platform layer)
 
 **NOT allowed in platform layer**:
 - Directly calling multiple ECS system functions to process events
-- Match-dispatching `UIEvent` variants to mutate `World`/`AssetStorage`
+- Match-dispatching UI command variants to mutate `World`/`AssetStorage` (that is the command's `apply`)
 - Implementing event handler logic inline
 - Using `resource_mut` or `get_component_mut` for business logic mutations
 
 ### Domain Layer Independence
 
-Domain modules (`src/animation/editable/`) must be **pure** — no dependency on `World`, `Entity`,
-`AssetStorage`, or `GraphicsResources`. This enables:
+Domain crates (`crates/thyllore-anim-core`, `thyllore-effect-core`, ...) must be **pure** — no dependency on
+`World`, `Entity`, `AssetStorage`, or `GraphicsResources`. This enables:
 - Unit testing without ECS infrastructure
 - Reuse across different ECS contexts
 - Clear separation between "what the data is" and "how the engine uses it"
 
 ## Event System
 
-Events follow a **record-then-dispatch** pattern (similar to Unity DOTS EntityCommandBuffer
-and Flecs deferred events):
+UI input follows a **record-then-apply** pattern (similar to Unity DOTS EntityCommandBuffer and Flecs
+deferred events):
 
-1. **Platform layer** records events into `UIEventQueue` (immutable World access only)
-2. **Event dispatch phase** processes all queued events (mutable World access)
-3. **Structural changes** (entity creation/destruction) happen only during dispatch
+1. **Platform layer** sends commands with `World::send_command(command)` (immutable World access only)
+2. **Event dispatch phase** drains the one `UiCommandQueue` and calls `apply` on each command, in send order
+3. **Structural changes** (entity creation/destruction) happen only during that apply
 
-This prevents mutation during iteration and ensures deterministic ordering.
+A UI command is a per-feature enum that implements `UiCommand` (`src/ecs/events/ui_command.rs`:
+`apply(self: Box<Self>, world, assets, graphics)`), declared in the file that applies it
+(`src/ecs/systems/phases/event_dispatch/<feature>.rs`; a feature behind a cargo feature keeps the whole file under
+`#![cfg(...)]`, see `event_dispatch/ml/`). Adding a UI interaction touches that file (variant + match arm) and the
+sending window, nothing else: the phase never names a feature, there is no registration and no stage. Two commands
+that must apply in order within one frame are sent in that order (or merged into one command); the queue is FIFO.
+File-dialog requests are not commands: the window sends `DialogRequest` (`src/ecs/events/dialog_request.rs`,
+`send_dialog_request`) and `src/platform/events/file_dialog.rs` drains them after the phase.
+
+Editor windows are the other half: each file in `src/platform/ui/` registers its window with `ui_window!`
+(`src/hooks/ui_window.rs`), reads `LayoutSnapshot` / `ViewportInput` and its own state resource from `World`, and
+sends commands. When to use a hook and when a command is decided in `hierarchy.md`, "Hook or command?".
 
 ## Bones are NOT Entities
 
@@ -316,23 +394,23 @@ small structural hierarchies can use optimized storage rather than full entity r
 
 | Feature | This Project | Flecs | Unity DOTS | EnTT | Bevy |
 |---------|-------------|-------|------------|------|------|
-| Storage | Custom (HashMap) | Archetype | Archetype (Chunk) | Sparse Set | Archetype |
+| Storage | Sparse Set (`src/ecs/storage/`) | Archetype | Archetype (Chunk) | Sparse Set | Archetype |
 | Data/Logic Split | Separate dirs | Separate modules | Flat per feature | Free-form | Mixed per crate |
 | Organization Unit | Directory | Module | Directory | Free-form | Crate |
 | Phase System | Coordinator fns | DependsOn pipeline | SystemGroup hierarchy | User-defined | Schedule + SystemSet |
 | Global State | Resource | Singleton | Singleton Component | Context Variable | Resource |
-| Events | UIEventQueue | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
-| Deferred Changes | DeferredAction | Sync point flush | EntityCommandBuffer | - | Commands |
+| Events | `UiCommandQueue` (FIFO of `Box<dyn UiCommand>`) | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
+| Deferred Changes | `CommandQueue<C>` per stage | Sync point flush | EntityCommandBuffer | - | Commands |
 
 ### Key Patterns Adopted from Each
 
 | Pattern | Source | Implementation in This Project |
 |---------|--------|-------------------------------|
-| components/ + systems/ directory split | Flecs, Unity DOTS | `animation/editable/components/` + `systems/` |
+| components/ + systems/ directory split | Flecs, Unity DOTS | `thyllore-anim-core/src/editable/components/` + `systems/` |
 | Phase pipeline with explicit ordering | Flecs, Unity DOTS, Bevy | `phases/` directory with coordinator functions |
 | Resources for global state | All (unanimous) | `ecs/resource/` |
-| Record-then-dispatch events | Unity DOTS (ECB), Flecs (deferred) | `UIEventQueue` → `event_dispatch_phase` |
+| Record-then-dispatch events | Unity DOTS (ECB), Flecs (deferred) | `UiCommandQueue` → `event_dispatch_phase` |
 | Module depends on types only, not logic | Flecs | Platform layer reads resources, sends events only |
-| Pure domain layer (no World dependency) | Bevy (per-crate), Flecs (module independence) | `animation/editable/` has no ECS dependency |
+| Pure domain layer (no World dependency) | Bevy (per-crate), Flecs (module independence) | `thyllore-anim-core` / `thyllore-effect-core` have no ECS dependency |
 | Contiguous memory for bulk data | Flecs, Bevy, Unreal | `Vec<Bone>`, `Vec<Keyframe>` for animation data |
 | Animation before Transform propagation | Bevy, Unity DOTS | `run_animation_phase` before `run_transform_phase` |

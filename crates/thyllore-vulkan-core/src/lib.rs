@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate thyllore_log_core;
+extern crate self as thyllore_vulkan_core;
 
 pub mod backend;
 pub mod command;

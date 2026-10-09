@@ -146,3 +146,26 @@ impl Default for PhysicalCameraParameters {
         }
     }
 }
+
+impl ToneMapOperator {
+    pub const ALL: [ToneMapOperator; 3] = [
+        ToneMapOperator::None,
+        ToneMapOperator::AcesFilmic,
+        ToneMapOperator::Reinhard,
+    ];
+
+    /// Stable name persisted in scene files.
+    pub fn name(self) -> &'static str {
+        match self {
+            ToneMapOperator::None => "None",
+            ToneMapOperator::AcesFilmic => "AcesFilmic",
+            ToneMapOperator::Reinhard => "Reinhard",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|operator| operator.name() == name)
+    }
+}

@@ -1,6 +1,6 @@
 ---
 name: check-ecs
-description: Check if code follows ECS architecture rules defined in CLAUDE.md. Use when writing or reviewing systems, components, resources, or any ECS-related code.
+description: Check if code follows ECS architecture rules defined in .claude/rules/ecs-architecture.md. Use when writing or reviewing systems, components, resources, or any ECS-related code.
 user-invocable: true
 allowed-tools: Read, Grep, Glob
 ---

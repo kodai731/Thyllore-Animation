@@ -1,6 +1,7 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::data::UniformBufferObject;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -70,6 +71,12 @@ impl RRUniformBuffer {
             rrdevice.device.free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
+    }
+}
+
+impl GpuResource for RRUniformBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(rrdevice);
     }
 }
 
@@ -207,6 +214,7 @@ impl RRVertexBuffer {
             rrdevice,
             size,
             vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::TRANSFER_SRC
                 | vk::BufferUsageFlags::VERTEX_BUFFER
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,

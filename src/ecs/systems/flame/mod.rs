@@ -1,24 +1,50 @@
 mod attach;
-mod pick;
+mod batch_actions;
+mod cli;
+mod descriptors;
+mod dump;
+mod field;
+mod frame_prep;
+mod heat_distortion;
+mod history_accumulate;
+mod object_pick;
+mod passes;
+mod paths;
+mod pipeline;
 mod preset;
+mod render_targets;
+mod sdf;
 mod spawn;
 mod style;
-mod temporal;
 mod texture_fit;
 mod time;
 mod trace;
 mod trail;
+mod ui_apply;
+mod ui_command;
 
 pub use attach::*;
-pub use pick::*;
+pub use cli::*;
+pub use descriptors::*;
+pub use dump::*;
+pub use field::*;
+pub use heat_distortion::*;
+pub use history_accumulate::*;
+pub use object_pick::*;
+pub use passes::*;
+pub use paths::*;
+pub use pipeline::*;
 pub use preset::*;
+pub use render_targets::*;
 pub use spawn::*;
 pub use style::*;
-pub use temporal::*;
 pub use texture_fit::*;
 pub use time::*;
 pub use trace::*;
 pub use trail::*;
+pub use ui_command::*;
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

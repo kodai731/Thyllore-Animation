@@ -54,6 +54,26 @@ pub fn finite_float_parse(text: &str) -> Result<f32, String> {
     Ok(value)
 }
 
+pub fn nonnegative_finite_float_parse(text: &str) -> Result<f32, String> {
+    let value = finite_float_parse(text)?;
+    if value < 0.0 {
+        return Err(format!(
+            "expected a non-negative number, got '{}'",
+            text.trim()
+        ));
+    }
+    Ok(value)
+}
+
+pub fn required_split<'a>(
+    text: &'a str,
+    separator: char,
+    usage: &str,
+) -> Result<(&'a str, &'a str), String> {
+    text.split_once(separator)
+        .ok_or_else(|| format!("expected '{}', got '{}' ({})", separator, text, usage))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,5 +123,42 @@ mod tests {
     fn finite_float_parse_infinite_rejected() {
         let err = finite_float_parse("inf").unwrap_err();
         assert!(err.contains("finite"));
+    }
+
+    #[test]
+    fn nonnegative_finite_float_parse_valid() {
+        let v = nonnegative_finite_float_parse("2.5").unwrap();
+        assert!((v - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn nonnegative_finite_float_parse_zero() {
+        let v = nonnegative_finite_float_parse("0").unwrap();
+        assert!((v - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn nonnegative_finite_float_parse_negative_rejected() {
+        let err = nonnegative_finite_float_parse("-1.0").unwrap_err();
+        assert!(err.contains("non-negative"));
+    }
+
+    #[test]
+    fn nonnegative_finite_float_parse_infinite_rejected() {
+        let err = nonnegative_finite_float_parse("inf").unwrap_err();
+        assert!(err.contains("finite"));
+    }
+
+    #[test]
+    fn required_split_valid() {
+        let (left, right) = required_split("a=b", '=', "usage").unwrap();
+        assert_eq!(left, "a");
+        assert_eq!(right, "b");
+    }
+
+    #[test]
+    fn required_split_missing_separator() {
+        let err = required_split("abc", '=', "usage").unwrap_err();
+        assert!(err.contains("usage"));
     }
 }

@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{scalar_channel_for_cli_name, scalar_cli_names_joined};
 use crate::ecs::resource::{BatchAnimEdit, BoneAxis};
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_cli_core::{finite_float_parse, nonnegative_finite_float_parse, required_split};
 
 use super::flags::BATCH_ANIM_EDIT_FLAG;
 use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
@@ -31,132 +31,137 @@ pub(super) fn anim_edit_parse_spec(spec: &str) -> Result<BatchAnimEdit> {
     if spec == "clear" {
         return Ok(BatchAnimEdit::Clear);
     }
-    if let Some(seed_str) = spec.strip_prefix("debug_keys=") {
-        let seed: u64 = seed_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid debug_keys seed '{seed_str}': expected u64"))?;
-        return Ok(BatchAnimEdit::DebugKeys { seed });
-    }
-    if let Some(param_str) = spec.strip_prefix("key_at_playhead=") {
-        return Ok(BatchAnimEdit::KeyAtPlayhead {
-            property_type: scalar_property_for_cli_name(param_str)?,
-        });
-    }
-    if let Some(seconds_str) = spec.strip_prefix("trim_end=") {
-        let seconds: f32 = seconds_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid trim_end seconds '{seconds_str}'"))?;
-        if !seconds.is_finite() || seconds < 0.0 {
-            bail!("trim_end seconds must be >= 0 and finite: '{spec}'");
-        }
-        return Ok(BatchAnimEdit::TrimEnd { seconds });
-    }
-    if let Some(rest) = spec.strip_prefix("key=") {
-        let (param_str, rest) = rest.split_once('@').ok_or_else(|| {
-            anyhow::anyhow!("key spec must be key=<bone_name>.<axis>@<time>=<value>, got '{spec}'")
-        })?;
-        let (time_str, value_str) = rest.split_once('=').ok_or_else(|| {
-            anyhow::anyhow!("key spec must be key=<bone_name>.<axis>@<time>=<value>, got '{spec}'")
-        })?;
-        let time: f32 = time_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid key time '{time_str}'"))?;
-        let value: f32 = value_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid key value '{value_str}'"))?;
-        if !time.is_finite() || time < 0.0 || !value.is_finite() {
-            bail!("key time must be >= 0 and value finite: '{spec}'");
-        }
-        if let Some(dot) = param_str.find('.') {
-            let bone_name = &param_str[..dot];
-            let axis_str = &param_str[dot + 1..];
-            let axis = parse_bone_axis(axis_str, bone_name)?;
-            return Ok(BatchAnimEdit::BoneKey {
-                bone_name: bone_name.to_string(),
-                axis,
-                time,
-                value,
-            });
-        }
-        let property_type = scalar_property_for_cli_name(param_str)?;
-        return Ok(BatchAnimEdit::Key {
-            property_type,
-            time,
-            value,
-        });
-    }
-    if let Some(name) = spec.strip_prefix("new_clip=") {
-        let name = name.trim();
-        if name.is_empty() {
-            bail!("new_clip name must not be empty: '{spec}'");
-        }
-        return Ok(BatchAnimEdit::NewClip {
-            name: name.to_string(),
-        });
-    }
-    if let Some(path_str) = spec.strip_prefix("template=") {
-        let path = PathBuf::from(path_str.trim());
-        if path.as_os_str().is_empty() {
-            bail!("template path must not be empty: '{spec}'");
-        }
-        return Ok(BatchAnimEdit::Template { path });
-    }
-    if let Some(path_str) = spec.strip_prefix("save=") {
-        let path = PathBuf::from(path_str.trim());
-        if path.as_os_str().is_empty() {
-            bail!("save path must not be empty: '{spec}'");
-        }
-        return Ok(BatchAnimEdit::Save { path });
-    }
-    if let Some(rest) = spec.strip_prefix("compose=") {
-        return Ok(BatchAnimEdit::Compose {
+    let (kind, rest) = spec.split_once('=').ok_or_else(|| {
+        anyhow::anyhow!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
+    })?;
+    match kind {
+        "debug_keys" => parse_debug_keys(rest),
+        "key" => parse_key(rest),
+        "key_at_playhead" => Ok(BatchAnimEdit::KeyAtPlayhead {
+            property_type: scalar_property_for_cli_name(rest)?,
+        }),
+        "trim_end" => parse_trim_end(rest),
+        "new_clip" => parse_new_clip(rest),
+        "template" => parse_template(rest),
+        "save" => parse_save(rest),
+        "compose" => Ok(BatchAnimEdit::Compose {
             spec: MotionSpec::parse(rest)?,
-        });
+        }),
+        "copilot_extend" => parse_copilot_extend(rest),
+        unknown => bail!("unknown anim edit spec '{unknown}=<value>'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear"),
     }
-    if let Some(rest) = spec.strip_prefix("copilot_extend=") {
-        let (bone_axis, frames_str) = rest.split_once(',').ok_or_else(|| {
-            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>, got '{spec}'")
-        })?;
-        let (param_str, time_str) = bone_axis.split_once('@').ok_or_else(|| {
-            anyhow::anyhow!("copilot_extend spec must be copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>, got '{spec}'")
-        })?;
-        let time: f32 = time_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid copilot_extend time '{}'", time_str))?;
-        let frames: usize = frames_str
-            .trim()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid copilot_extend frames '{}'", frames_str))?;
-        if !time.is_finite() || time < 0.0 {
-            bail!("copilot_extend time must be >= 0 and finite: '{spec}'");
-        }
-        let dot = param_str.find('.').ok_or_else(|| {
-            anyhow::anyhow!(
-                "copilot_extend bone_name must have a dot (e.g. Hips.x), got '{param_str}'"
-            )
-        })?;
-        let bone_name = &param_str[..dot];
-        let axis_str = &param_str[dot + 1..];
-        let axis = parse_bone_axis(axis_str, bone_name)?;
-        match axis {
-            BoneAxis::RotationX | BoneAxis::RotationY | BoneAxis::RotationZ => {}
-            BoneAxis::TranslationX | BoneAxis::TranslationY | BoneAxis::TranslationZ => {
-                bail!("copilot_extend axis must be x, y or z: '{spec}'");
-            }
-        }
-        return Ok(BatchAnimEdit::CopilotExtend {
+}
+
+fn parse_debug_keys(rest: &str) -> Result<BatchAnimEdit> {
+    let seed: u64 = rest
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid debug_keys seed '{}': expected u64", rest.trim()))?;
+    Ok(BatchAnimEdit::DebugKeys { seed })
+}
+
+fn parse_key(rest: &str) -> Result<BatchAnimEdit> {
+    let (param_str, time_value) =
+        required_split(rest, '@', "key=<bone_name>.<axis>@<time>=<value>")
+            .map_err(anyhow::Error::msg)?;
+    let (time_str, value_str) =
+        required_split(time_value, '=', "key=<bone_name>.<axis>@<time>=<value>")
+            .map_err(anyhow::Error::msg)?;
+    let time = nonnegative_finite_float_parse(time_str.trim()).map_err(anyhow::Error::msg)?;
+    let value = finite_float_parse(value_str.trim()).map_err(anyhow::Error::msg)?;
+    if param_str.contains('.') {
+        let (bone_name, axis) = parse_bone_and_axis(param_str)?;
+        Ok(BatchAnimEdit::BoneKey {
             bone_name: bone_name.to_string(),
             axis,
             time,
-            frames,
-        });
+            value,
+        })
+    } else {
+        let property_type = scalar_property_for_cli_name(param_str)?;
+        Ok(BatchAnimEdit::Key {
+            property_type,
+            time,
+            value,
+        })
     }
-    bail!("unknown anim edit spec '{spec}'. Expected debug_keys=<seed> | key=<param>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear")
+}
+
+fn parse_trim_end(rest: &str) -> Result<BatchAnimEdit> {
+    let seconds = nonnegative_finite_float_parse(rest.trim()).map_err(anyhow::Error::msg)?;
+    Ok(BatchAnimEdit::TrimEnd { seconds })
+}
+
+fn parse_new_clip(rest: &str) -> Result<BatchAnimEdit> {
+    let name = rest.trim();
+    if name.is_empty() {
+        bail!("new_clip name must not be empty");
+    }
+    Ok(BatchAnimEdit::NewClip {
+        name: name.to_string(),
+    })
+}
+
+fn parse_template(rest: &str) -> Result<BatchAnimEdit> {
+    let path = PathBuf::from(rest.trim());
+    if path.as_os_str().is_empty() {
+        bail!("template path must not be empty");
+    }
+    Ok(BatchAnimEdit::Template { path })
+}
+
+fn parse_save(rest: &str) -> Result<BatchAnimEdit> {
+    let path = PathBuf::from(rest.trim());
+    if path.as_os_str().is_empty() {
+        bail!("save path must not be empty");
+    }
+    Ok(BatchAnimEdit::Save { path })
+}
+
+fn parse_copilot_extend(rest: &str) -> Result<BatchAnimEdit> {
+    let (bone_time, frames_str) = required_split(
+        rest,
+        ',',
+        "copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>",
+    )
+    .map_err(anyhow::Error::msg)?;
+    let (param_str, time_str) = required_split(
+        bone_time,
+        '@',
+        "copilot_extend=<bone_name>.<x|y|z>@<time>,<frames>",
+    )
+    .map_err(anyhow::Error::msg)?;
+    let time = nonnegative_finite_float_parse(time_str.trim()).map_err(anyhow::Error::msg)?;
+    let frames: usize = frames_str
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid copilot_extend frames '{}'", frames_str.trim()))?;
+    let (bone_name, axis) = parse_bone_and_axis(param_str)?;
+    match axis {
+        BoneAxis::RotationX | BoneAxis::RotationY | BoneAxis::RotationZ => {}
+        BoneAxis::TranslationX | BoneAxis::TranslationY | BoneAxis::TranslationZ => {
+            bail!("copilot_extend axis must be x, y or z");
+        }
+    }
+    Ok(BatchAnimEdit::CopilotExtend {
+        bone_name: bone_name.to_string(),
+        axis,
+        time,
+        frames,
+    })
+}
+
+fn parse_bone_and_axis(param_str: &str) -> Result<(&str, BoneAxis)> {
+    let dot = param_str.find('.').ok_or_else(|| {
+        anyhow::anyhow!(
+            "bone_name must have a dot (e.g. Hips.x), got '{}'",
+            param_str
+        )
+    })?;
+    let bone_name = &param_str[..dot];
+    let axis_str = &param_str[dot + 1..];
+    let axis = parse_bone_axis(axis_str, bone_name)?;
+    Ok((bone_name, axis))
 }
 
 fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {

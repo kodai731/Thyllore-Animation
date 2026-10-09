@@ -34,32 +34,13 @@ impl CameraParam {
         CameraParam::Active,
     ];
 
-    pub const fn code(self) -> u16 {
-        match self {
-            CameraParam::TranslationX => 256,
-            CameraParam::TranslationY => 257,
-            CameraParam::TranslationZ => 258,
-            CameraParam::RotationX => 259,
-            CameraParam::RotationY => 260,
-            CameraParam::RotationZ => 261,
-            CameraParam::FovY => 262,
-            CameraParam::Active => 263,
-        }
-    }
-
-    pub fn from_code(code: u16) -> Option<CameraParam> {
-        CameraParam::ALL.iter().copied().find(|p| p.code() == code)
-    }
-
-    pub const fn property_type(self) -> PropertyType {
-        PropertyType::Custom(self.code())
+    pub fn property_type(self) -> PropertyType {
+        CAMERA_DOMAIN.property_type_at(self as usize)
     }
 
     pub fn from_property_type(property_type: PropertyType) -> Option<CameraParam> {
-        match property_type {
-            PropertyType::Custom(code) => CameraParam::from_code(code),
-            _ => None,
-        }
+        let index = CAMERA_DOMAIN.channel_index(property_type)?;
+        CameraParam::ALL.get(index).copied()
     }
 
     pub const fn display_name(self) -> &'static str {
@@ -88,19 +69,6 @@ impl CameraParam {
         }
     }
 
-    pub const fn scene_name(self) -> &'static str {
-        match self {
-            CameraParam::TranslationX => "CameraTranslationX",
-            CameraParam::TranslationY => "CameraTranslationY",
-            CameraParam::TranslationZ => "CameraTranslationZ",
-            CameraParam::RotationX => "CameraRotationX",
-            CameraParam::RotationY => "CameraRotationY",
-            CameraParam::RotationZ => "CameraRotationZ",
-            CameraParam::FovY => "CameraFovY",
-            CameraParam::Active => "CameraActive",
-        }
-    }
-
     pub const fn debug_value_range(self) -> (f32, f32) {
         match self {
             CameraParam::TranslationX | CameraParam::TranslationY | CameraParam::TranslationZ => {
@@ -116,11 +84,10 @@ impl CameraParam {
 
     const fn channel(self) -> ScalarChannel {
         ScalarChannel {
-            code: self.code(),
             display_name: self.display_name(),
             cli_name: self.cli_name(),
-            scene_name: self.scene_name(),
             debug_value_range: self.debug_value_range(),
+            renamed_from: &[],
         }
     }
 }
@@ -135,14 +102,20 @@ pub static CAMERA_CHANNELS: [ScalarChannel; 8] = {
     channels
 };
 
+fn camera_channels() -> &'static [ScalarChannel] {
+    &CAMERA_CHANNELS
+}
+
 pub static CAMERA_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     name: "Camera",
-    channels: &CAMERA_CHANNELS,
+    channel_table: camera_channels,
     has_component: camera_has_component,
     entities: camera_entities,
     read: camera_channel_read,
     local_time: camera_local_time,
 };
+
+crate::scalar_channel_domain!(CAMERA_DOMAIN);
 
 fn camera_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<CameraComponent>(entity).is_some()

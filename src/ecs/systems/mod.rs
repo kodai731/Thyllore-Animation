@@ -14,6 +14,7 @@ mod bone_pose_override_systems;
 pub mod camera_aim_systems;
 pub mod camera_curve_systems;
 pub mod camera_export_systems;
+pub mod camera_import_systems;
 pub mod camera_shot_systems;
 pub mod camera_switch_systems;
 pub mod camera_systems;

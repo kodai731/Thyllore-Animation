@@ -1,6 +1,7 @@
 pub mod batch_driver;
 mod command;
 pub mod dispatcher;
+mod frame_prep;
 pub mod name_resolver;
 pub mod timeline_context;
 

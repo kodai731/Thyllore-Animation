@@ -589,6 +589,7 @@ fn build_clip_tracks_section(
                     entity: entry.entity,
                     source_id,
                     start_time,
+                    speed: 1.0,
                 });
             }
         }

@@ -81,6 +81,7 @@ pub enum ClipInstanceEvent {
         entity: Entity,
         source_id: SourceClipId,
         start_time: f32,
+        speed: f32,
     },
 }
 

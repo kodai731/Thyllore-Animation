@@ -559,7 +559,8 @@ pub fn process_clip_instance_events(events: &[ClipInstanceEvent], world: &mut Wo
                 entity,
                 source_id,
                 start_time,
-            } => add_clip_instance(world, *entity, *source_id, *start_time),
+                speed,
+            } => add_clip_instance(world, *entity, *source_id, *start_time, *speed),
             ClipInstanceEvent::Select {
                 entity,
                 instance_id,
@@ -1371,6 +1372,7 @@ mod tests {
                 entity,
                 source_id: clip_id,
                 start_time: 0.0,
+                speed: 1.0,
             }],
             &mut world,
         );
@@ -1459,7 +1461,13 @@ fn apply_timeline_scene_record(
     Ok(())
 }
 
-fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId, start_time: f32) {
+fn add_clip_instance(
+    world: &mut World,
+    entity: Entity,
+    source_id: SourceClipId,
+    start_time: f32,
+    speed: f32,
+) {
     let duration;
     {
         let library = world.resource::<ClipLibrary>();
@@ -1493,5 +1501,6 @@ fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId,
     );
     if let Some(last) = schedule.instances.last_mut() {
         last.start_time = start_time;
+        last.speed = speed;
     }
 }

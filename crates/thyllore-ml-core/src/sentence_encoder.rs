@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{ensure, Context, Result};
 use ort::session::Session;
 use ort::value::Tensor;
+use serde::Deserialize;
 use tokenizers::Tokenizer;
 
 pub const E5_QUERY_PREFIX: &str = "query: ";
@@ -28,6 +29,37 @@ const OUTPUT_HIDDEN_STATE: &str = "last_hidden_state";
 const FALLBACK_PAD_TOKEN_ID: i64 = 1;
 const PAD_TOKEN: &str = "<pad>";
 const PROBE_TEXT: &str = "sample utterance";
+
+const ENCODER_CONFIG_FILENAME: &str = "encoder.json";
+
+/// `encoder.json` written by AnimationModelTraining next to the model; every key may be omitted.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EncoderConfig {
+    pub query_prefix: Option<String>,
+    pub raw_encoder: Option<String>,
+    #[serde(default)]
+    pub thresholds: EncoderThresholds,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+pub struct EncoderThresholds {
+    pub tau_reject: Option<f32>,
+    pub tau_raw: Option<f32>,
+    pub tau_raw_nearmiss: Option<f32>,
+}
+
+/// Reads `encoder.json` from a model directory; a missing file yields the all-`None` config.
+pub fn read_encoder_config(model_dir: &Path) -> Result<EncoderConfig> {
+    let config_path = model_dir.join(ENCODER_CONFIG_FILENAME);
+    if !config_path.exists() {
+        return Ok(EncoderConfig::default());
+    }
+    let json = std::fs::read_to_string(&config_path)
+        .with_context(|| format!("failed to read {}", config_path.display()))?;
+    let config: EncoderConfig = serde_json::from_str(&json)
+        .with_context(|| format!("failed to parse {}", config_path.display()))?;
+    Ok(config)
+}
 
 struct TokenizedBatch {
     token_ids: Vec<i64>,
@@ -71,11 +103,14 @@ impl SentenceEncoder {
             .inputs()
             .iter()
             .any(|input| input.name() == TOKEN_TYPE_IDS);
+        let prefix = read_encoder_config(model_dir)?
+            .query_prefix
+            .unwrap_or_else(|| E5_QUERY_PREFIX.to_string());
 
         let mut encoder = Self {
             tokenizer,
             session,
-            prefix: E5_QUERY_PREFIX.to_string(),
+            prefix,
             pad_token_id,
             expects_token_type_ids,
             dimensions: 0,
@@ -251,5 +286,72 @@ mod tests {
         let pooled = pool_and_normalize(&hidden, &batch, 2);
         assert!((pooled[0][0] - 1.0).abs() < 1e-6);
         assert!((pooled[1][1] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn read_encoder_config_missing_file_returns_default() {
+        let dir = std::env::temp_dir().join("thyllore_test_missing_encoder_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = read_encoder_config(&dir).unwrap();
+        assert!(config.query_prefix.is_none());
+        assert!(config.raw_encoder.is_none());
+        assert!(config.thresholds.tau_reject.is_none());
+        assert!(config.thresholds.tau_raw.is_none());
+        assert!(config.thresholds.tau_raw_nearmiss.is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_encoder_config_full_keys() {
+        let dir = std::env::temp_dir().join("thyllore_test_full_encoder_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"query_prefix":"トピック: ","raw_encoder":"ruri-v3-310m-raw","thresholds":{"tau_reject":0.95,"tau_raw":0.85,"tau_raw_nearmiss":0.8}}"#;
+        std::fs::write(dir.join("encoder.json"), json).unwrap();
+        let config = read_encoder_config(&dir).unwrap();
+        assert_eq!(config.query_prefix, Some("トピック: ".to_string()));
+        assert_eq!(config.raw_encoder, Some("ruri-v3-310m-raw".to_string()));
+        assert_eq!(config.thresholds.tau_reject, Some(0.95));
+        assert_eq!(config.thresholds.tau_raw, Some(0.85));
+        assert_eq!(config.thresholds.tau_raw_nearmiss, Some(0.8));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_encoder_config_partial_keys() {
+        let dir = std::env::temp_dir().join("thyllore_test_partial_encoder_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"query_prefix":"topic: "}"#;
+        std::fs::write(dir.join("encoder.json"), json).unwrap();
+        let config = read_encoder_config(&dir).unwrap();
+        assert_eq!(config.query_prefix, Some("topic: ".to_string()));
+        assert!(config.raw_encoder.is_none());
+        assert!(config.thresholds.tau_reject.is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_encoder_config_thresholds_only() {
+        let dir = std::env::temp_dir().join("thyllore_test_thresholds_encoder_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"thresholds":{"tau_reject":0.95}}"#;
+        std::fs::write(dir.join("encoder.json"), json).unwrap();
+        let config = read_encoder_config(&dir).unwrap();
+        assert!(config.query_prefix.is_none());
+        assert_eq!(config.thresholds.tau_reject, Some(0.95));
+        assert!(config.thresholds.tau_raw.is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_encoder_config_empty_object() {
+        let dir = std::env::temp_dir().join("thyllore_test_empty_encoder_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = r#"{}"#;
+        std::fs::write(dir.join("encoder.json"), json).unwrap();
+        let config = read_encoder_config(&dir).unwrap();
+        assert!(config.query_prefix.is_none());
+        assert!(config.raw_encoder.is_none());
+        assert!(config.thresholds.tau_reject.is_none());
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

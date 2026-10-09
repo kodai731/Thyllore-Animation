@@ -4,7 +4,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use thyllore_ml_core::model_path::{EXPORTS_SUBDIR, SHARED_DATA_ENV_VAR};
-use thyllore_ml_core::sentence_encoder::SentenceEncoder;
+use thyllore_ml_core::sentence_encoder::{read_encoder_config, EncoderThresholds, SentenceEncoder};
 
 use crate::helm::components::route::{HelmMode, Route};
 use crate::helm::systems::polarity_tiebreak::embedded_exemplars_sha256;
@@ -18,6 +18,8 @@ pub const ROUTER_MODEL_DIR: &str = "models/gemma/setfit-3ep-camdir";
 
 /// Raw encoder model directory (for escape detection).
 pub const RAW_ENCODER_DIR: &str = "models/gemma/e5-raw";
+
+pub const DEFAULT_RAW_ENCODER_NAME: &str = "e5-raw";
 
 /// Exports bundle directory name inside SharedData/exports.
 pub const EXPORTS_BUNDLE_DIR: &str = "helm_router_20260822";
@@ -63,6 +65,7 @@ pub struct HelmRuntime {
     pub index: ExemplarIndex,
     pub raw_encoder: SentenceEncoder,
     pub raw_index: ExemplarIndex,
+    pub thresholds: EncoderThresholds,
 }
 
 /// The runtime's current state.
@@ -141,6 +144,9 @@ pub fn validate_artifact_consistency(
 
 /// Load the helm runtime from a model directory.
 pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
+    let config = read_encoder_config(model_dir)
+        .map_err(|e| format!("failed to read encoder config: {}", e))?;
+
     let encoder = SentenceEncoder::from_model_dir(model_dir)
         .map_err(|e| format!("failed to load sentence encoder: {}", e))?;
 
@@ -162,17 +168,8 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
         embedded_exemplars_sha256().as_deref(),
     )?;
 
-    // Load raw encoder for escape detection: prefer bundle sibling (model_dir/../e5-raw) if it
-    // exists, otherwise fall back to the fixed RAW_ENCODER_DIR.
-    let raw_encoder_dir = model_dir
-        .parent()
-        .map(|p| p.join("e5-raw"))
-        .filter(|p| p.is_dir());
-    let raw_encoder_path: &Path = match raw_encoder_dir {
-        Some(ref p) => p.as_path(),
-        None => Path::new(RAW_ENCODER_DIR),
-    };
-    let raw_encoder = SentenceEncoder::from_model_dir(raw_encoder_path)
+    let raw_encoder_path = select_raw_encoder_dir(model_dir, config.raw_encoder.as_deref())?;
+    let raw_encoder = SentenceEncoder::from_model_dir(&raw_encoder_path)
         .map_err(|e| format!("failed to load raw sentence encoder: {}", e))?;
 
     // Load raw index from model_dir/raw_index.json and model_dir/raw_index.f32
@@ -195,7 +192,52 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
         index,
         raw_encoder,
         raw_index,
+        thresholds: config.thresholds,
     })
+}
+
+pub fn select_raw_encoder_dir(
+    model_dir: &Path,
+    raw_encoder_name: Option<&str>,
+) -> Result<PathBuf, String> {
+    if let Some(name) = raw_encoder_name {
+        let candidate = model_dir.parent().map(|bundle_dir| bundle_dir.join(name));
+        match candidate {
+            Some(path) if path.is_dir() => Ok(path),
+            Some(path) => Err(format!(
+                "raw encoder \"{}\" is specified in encoder.json but its sibling directory does not exist: {}",
+                name,
+                path.display()
+            )),
+            None => Err(format!(
+                "raw encoder \"{}\" is specified in encoder.json but model_dir has no parent: {}",
+                name,
+                model_dir.display()
+            )),
+        }
+    } else {
+        let candidate = model_dir
+            .parent()
+            .map(|bundle_dir| bundle_dir.join(DEFAULT_RAW_ENCODER_NAME));
+        if let Some(path) = candidate {
+            if path.is_dir() {
+                return Ok(path);
+            }
+        }
+        Ok(PathBuf::from(RAW_ENCODER_DIR))
+    }
+}
+
+pub fn apply_encoder_thresholds(thresholds: &mut RouterThresholds, overrides: &EncoderThresholds) {
+    if let Some(tau_reject) = overrides.tau_reject {
+        thresholds.tau_reject = tau_reject;
+    }
+    if let Some(tau_raw) = overrides.tau_raw {
+        thresholds.tau_raw = tau_raw;
+    }
+    if let Some(tau_raw_nearmiss) = overrides.tau_raw_nearmiss {
+        thresholds.tau_raw_nearmiss = tau_raw_nearmiss;
+    }
 }
 
 #[cfg(test)]
@@ -269,5 +311,75 @@ mod tests {
         assert_eq!(path, bundle_path);
 
         std::fs::remove_dir_all(&temp_dir).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn apply_encoder_thresholds_without_overrides_keeps_defaults() {
+        let mut thresholds = HelmState::default().thresholds;
+        apply_encoder_thresholds(&mut thresholds, &EncoderThresholds::default());
+        assert_eq!(thresholds, HelmState::default().thresholds);
+    }
+
+    #[test]
+    fn apply_encoder_thresholds_overrides_only_given_fields() {
+        let defaults = HelmState::default().thresholds;
+        let mut thresholds = defaults;
+        let overrides = EncoderThresholds {
+            tau_reject: Some(0.95),
+            tau_raw: None,
+            tau_raw_nearmiss: Some(0.8),
+        };
+        apply_encoder_thresholds(&mut thresholds, &overrides);
+        assert_eq!(thresholds.tau_reject, 0.95);
+        assert_eq!(thresholds.tau_raw, defaults.tau_raw);
+        assert_eq!(thresholds.tau_raw_nearmiss, 0.8);
+        assert_eq!(thresholds.delta, defaults.delta);
+        assert_eq!(thresholds.tau_confirm, defaults.tau_confirm);
+    }
+
+    #[test]
+    fn select_raw_encoder_dir_prefers_named_bundle_sibling() {
+        let bundle_dir = std::env::temp_dir().join("thyllore_test_select_raw_encoder_dir");
+        let model_dir = bundle_dir.join("setfit");
+        let ruri_dir = bundle_dir.join("ruri-v3-310m-raw");
+        std::fs::create_dir_all(&model_dir).expect("failed to create model dir");
+        std::fs::create_dir_all(&ruri_dir).expect("failed to create raw encoder dir");
+
+        assert_eq!(
+            select_raw_encoder_dir(&model_dir, Some("ruri-v3-310m-raw")).unwrap(),
+            ruri_dir
+        );
+        assert_eq!(
+            select_raw_encoder_dir(&model_dir, None).unwrap(),
+            PathBuf::from(RAW_ENCODER_DIR)
+        );
+
+        std::fs::remove_dir_all(&bundle_dir).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn select_raw_encoder_dir_named_missing_is_error() {
+        let bundle_dir = std::env::temp_dir().join("thyllore_test_select_raw_encoder_dir_err");
+        let model_dir = bundle_dir.join("setfit");
+        std::fs::create_dir_all(&model_dir).expect("failed to create model dir");
+
+        let result = select_raw_encoder_dir(&model_dir, Some("missing-name"));
+        assert!(
+            result.is_err(),
+            "expected Err when named encoder sibling dir is missing"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("missing-name"),
+            "error message should mention the named encoder: {}",
+            err
+        );
+        assert!(
+            err.contains("does not exist"),
+            "error message should say the directory does not exist: {}",
+            err
+        );
+
+        std::fs::remove_dir_all(&bundle_dir).expect("failed to remove temp dir");
     }
 }

@@ -254,7 +254,7 @@ pub enum RouterDecision {
     NoCandidate,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RouterThresholds {
     pub tau_reject: f32,
     pub delta: f32,

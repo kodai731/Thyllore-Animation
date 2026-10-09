@@ -230,6 +230,10 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                 let mut state = ctx.world.resource_mut::<HelmState>();
                 match result {
                     Ok(runtime) => {
+                        crate::ecs::resource::apply_encoder_thresholds(
+                            &mut state.thresholds,
+                            &runtime.thresholds,
+                        );
                         state.runtime = crate::ecs::resource::RuntimeSlot::Ready(Box::new(runtime));
                         state.last_runtime_load_ms = Some(elapsed_ms);
                         state.submitted_utterance = Some(utterance);

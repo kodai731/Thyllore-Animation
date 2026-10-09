@@ -8,7 +8,8 @@ use crate::ecs::resource::{HierarchyState, TimelineState};
 use crate::ecs::systems::helm::HelmCommand;
 use crate::ecs::world::{Entity, World};
 use crate::helm::components::tool_call::{
-    FocusTarget, MotionCategory, ObjectName, ShotPreset, SpeedPreset, ToolCall, VisibilityState,
+    ComposeRequest, FocusTarget, MotionCategory, ObjectName, ShotPreset, SpeedPreset, ToolCall,
+    VisibilityState,
 };
 use crate::helm::systems::seek::{resolve_seek_time, TimelineContext};
 
@@ -81,6 +82,7 @@ pub fn dispatch_tool_call(
             category: *category,
             speed: *speed,
         },
+        ToolCall::ComposeMotion(request) => dispatch_compose_motion(world, timeline, *request),
 
         ToolCall::CameraShot(preset, speed) => dispatch_camera_shot(world, *preset, *speed),
 
@@ -119,6 +121,26 @@ fn dispatch_visibility_change(
     dispatch_for_named_object(world, name, move |entity| {
         HelmCommand::SetEntityVisible(entity, visibility)
     })
+}
+
+fn dispatch_compose_motion(
+    world: &World,
+    timeline: &TimelineContext,
+    request: ComposeRequest,
+) -> DispatchOutcome {
+    let target = read_selected_entity(world).or_else(|| {
+        world
+            .get_resource::<TimelineState>()
+            .and_then(|state| state.target_entity)
+    });
+    match target {
+        Some(entity) => DispatchOutcome::Command(HelmCommand::ComposeMotion {
+            entity,
+            spec: request.to_motion_spec(),
+            start_time: timeline.current_time,
+        }),
+        None => DispatchOutcome::Rejected(DispatchError::NothingSelected),
+    }
 }
 
 fn dispatch_camera_focus(world: &World, target: FocusTarget) -> DispatchOutcome {
@@ -515,6 +537,56 @@ mod tests {
                 speed: SpeedPreset::Slow,
             }
         ));
+    }
+
+    #[test]
+    fn compose_motion_targets_the_selection_at_the_playhead() {
+        use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
+
+        let mut world = World::new();
+        let hero = spawn_named(&mut world, "Hero");
+        select(&mut world, hero);
+        let timeline = TimelineContext {
+            current_time: 1.25,
+            ..empty_timeline()
+        };
+
+        let request = ComposeRequest {
+            motion: "wave",
+            side: MotionSide::Left,
+            count: 2,
+            speed: SpeedPreset::Normal,
+        };
+        let outcome = dispatch_tool_call(&world, &timeline, &ToolCall::ComposeMotion(request));
+        match expect_command(outcome) {
+            HelmCommand::ComposeMotion {
+                entity,
+                spec,
+                start_time,
+            } => {
+                assert_eq!(entity, hero);
+                assert_eq!(spec, request.to_motion_spec());
+                assert_eq!(start_time, 1.25);
+            }
+            other => panic!("expected ComposeMotion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compose_motion_without_a_target_is_rejected() {
+        use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
+
+        let world = World::new();
+        let outcome = dispatch(
+            &world,
+            ToolCall::ComposeMotion(ComposeRequest {
+                motion: "wave",
+                side: MotionSide::Right,
+                count: 1,
+                speed: SpeedPreset::Normal,
+            }),
+        );
+        assert_eq!(expect_rejection(outcome), DispatchError::NothingSelected);
     }
 
     #[test]

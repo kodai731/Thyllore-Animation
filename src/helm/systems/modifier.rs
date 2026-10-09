@@ -1,4 +1,4 @@
-//! Fills the speed slot from words in the utterance.
+//! Fills the speed, side and count slots from words in the utterance.
 //!
 //! This is slot extraction, not routing, which is why it outlived the keyword rule
 //! table it used to share a file with. A modifier can only set `speed` on a route
@@ -9,6 +9,8 @@
 //! Terms are matched against `normalize::normalize_utterance` output, so they must
 //! be lowercase. Longer terms come first within a preset because the first hit wins
 //! and `半分の速さ` must not be reached through `速`.
+
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
 
 use crate::helm::components::tool_call::SpeedPreset;
 
@@ -56,6 +58,63 @@ pub fn extract_speed_modifier(normalized: &str) -> Option<SpeedPreset> {
         .map(|(preset, _)| *preset)
 }
 
+const LEFT_TERMS: [&str; 3] = ["left", "左手", "左"];
+const RIGHT_TERMS: [&str; 3] = ["right", "右手", "右"];
+
+const SIDE_MODIFIERS: [(MotionSide, &[&str]); 2] = [
+    (MotionSide::Left, &LEFT_TERMS),
+    (MotionSide::Right, &RIGHT_TERMS),
+];
+
+pub fn extract_side_modifier(normalized: &str) -> Option<MotionSide> {
+    SIDE_MODIFIERS
+        .iter()
+        .find(|(_, terms)| terms.iter().any(|term| normalized.contains(term)))
+        .map(|(side, _)| *side)
+}
+
+const COUNT_WORDS: [(&str, u32); 9] = [
+    ("twice", 2),
+    ("three times", 3),
+    ("四回", 4),
+    ("三回", 3),
+    ("二回", 2),
+    ("2度", 2),
+    ("3度", 3),
+    ("二度", 2),
+    ("三度", 3),
+];
+
+const COUNT_UNITS: [&str; 2] = ["回", " times"];
+
+/// `3回` / `3 times` style counts first, then the spelled-out words; a count of 0 is no count.
+pub fn extract_count_modifier(normalized: &str) -> Option<u32> {
+    if let Some(count) = COUNT_UNITS
+        .iter()
+        .filter_map(|unit| digits_before(normalized, unit))
+        .find(|count| *count >= 1)
+    {
+        return Some(count);
+    }
+    COUNT_WORDS
+        .iter()
+        .find(|(word, _)| normalized.contains(word))
+        .map(|(_, count)| *count)
+}
+
+fn digits_before(normalized: &str, unit: &str) -> Option<u32> {
+    let unit_start = normalized.find(unit)?;
+    let digits: String = normalized[..unit_start]
+        .chars()
+        .rev()
+        .take_while(char::is_ascii_digit)
+        .collect::<Vec<char>>()
+        .into_iter()
+        .rev()
+        .collect();
+    digits.parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,5 +159,31 @@ mod tests {
     #[test]
     fn full_width_input_still_matches() {
         assert_eq!(extract("ＦＡＳＴ で再生"), Some(SpeedPreset::Fast));
+    }
+
+    fn side(utterance: &str) -> Option<MotionSide> {
+        extract_side_modifier(&normalize_utterance(utterance))
+    }
+
+    fn count(utterance: &str) -> Option<u32> {
+        extract_count_modifier(&normalize_utterance(utterance))
+    }
+
+    #[test]
+    fn side_words_in_both_languages_pick_the_side() {
+        assert_eq!(side("左手を振って"), Some(MotionSide::Left));
+        assert_eq!(side("wave the right hand"), Some(MotionSide::Right));
+        assert_eq!(side("手を振って"), None);
+    }
+
+    #[test]
+    fn counts_come_from_digits_or_words() {
+        assert_eq!(count("手を3回振って"), Some(3));
+        assert_eq!(count("３回頷いて"), Some(3));
+        assert_eq!(count("wave 2 times"), Some(2));
+        assert_eq!(count("wave twice"), Some(2));
+        assert_eq!(count("二回お辞儀して"), Some(2));
+        assert_eq!(count("0回振る"), None);
+        assert_eq!(count("手を振って"), None);
     }
 }

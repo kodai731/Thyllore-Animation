@@ -474,3 +474,178 @@ fn e2e_text_to_ui_event_full_path() {
         }
     }
 }
+
+/// Sentences that match a pose-table label verbatim are accepted (or clarified against a
+/// near-tie) through the label routes the runtime embeds at load, and their modifiers bind.
+/// Paraphrases with modifiers only have to keep their motion in the top three: acceptance
+/// under the bundle's thresholds is reported, not asserted, because those thresholds were tuned
+/// on the exported exemplars and the labels are a far smaller sample.
+#[test]
+fn e2e_gesture_sentences_reach_their_motion() {
+    use thyllore_animation::ecs::resource::{apply_encoder_thresholds, HelmState};
+    use thyllore_animation::helm::components::tool_call::ToolCall;
+    use thyllore_animation::helm::systems::binder::{bind_route, BindOutcome};
+    use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
+
+    let Some(model_dir) = resolve_model_dir() else {
+        eprintln!("Skipping: set {MODEL_DIR_ENV_VAR} to a router model directory");
+        return;
+    };
+    let load_started = std::time::Instant::now();
+    let mut runtime = load_runtime(&model_dir).expect("load_runtime must succeed");
+    eprintln!(
+        "runtime loaded in {:.1}s with {} exemplars",
+        load_started.elapsed().as_secs_f32(),
+        runtime.index.exemplar_count()
+    );
+    let encode_started = std::time::Instant::now();
+    for _ in 0..10 {
+        runtime.encoder.encode("右手を振って").unwrap();
+    }
+    eprintln!(
+        "one single-label encode: {:.1}ms",
+        encode_started.elapsed().as_secs_f32() * 100.0
+    );
+    let mut thresholds = HelmState::default().thresholds;
+    apply_encoder_thresholds(&mut thresholds, &runtime.thresholds);
+
+    #[derive(Clone, Copy)]
+    enum Expect {
+        Accepted,
+        InTopThree,
+    }
+    let cases: [(&str, &str, MotionSide, u32, Expect); 8] = [
+        (
+            "右手を振って",
+            "wave",
+            MotionSide::Right,
+            1,
+            Expect::Accepted,
+        ),
+        ("お辞儀して", "bow", MotionSide::Right, 1, Expect::Accepted),
+        ("頷いて", "nod", MotionSide::Right, 1, Expect::Accepted),
+        (
+            "しゃがんで",
+            "crouch",
+            MotionSide::Right,
+            1,
+            Expect::Accepted,
+        ),
+        (
+            "腕を上げて",
+            "arm_raise",
+            MotionSide::Right,
+            1,
+            Expect::Accepted,
+        ),
+        (
+            "左手を2回振って",
+            "wave",
+            MotionSide::Left,
+            2,
+            Expect::InTopThree,
+        ),
+        (
+            "左で正拳突き",
+            "punch",
+            MotionSide::Left,
+            1,
+            Expect::InTopThree,
+        ),
+        (
+            "throw a straight punch",
+            "punch",
+            MotionSide::Right,
+            1,
+            Expect::InTopThree,
+        ),
+    ];
+
+    let mut failures = Vec::new();
+    let mut accepted = 0;
+    for (utterance, motion, side, count, expect) in cases {
+        let normalized = normalize_utterance(utterance);
+        let query = runtime.encoder.encode(&normalized).unwrap();
+        let raw_query = runtime.raw_encoder.encode(&normalized).unwrap();
+        let raw_top_score = rank_routes(&runtime.raw_index, &raw_query, HelmMode::AllowEdit)
+            .first()
+            .map(|(_, score)| *score);
+        let ranked = rank_routes(&runtime.index, &query, HelmMode::AllowEdit);
+        let decision = route_utterance(
+            RoutingRequest {
+                utterance: &normalized,
+                query_vector: &query,
+                mode: HelmMode::AllowEdit,
+                raw_top_score,
+            },
+            &runtime.index,
+            thresholds,
+        );
+        eprintln!(
+            "{utterance:>24} -> {decision:?} | raw_top={:.3} | top3={:?}",
+            raw_top_score.unwrap_or(0.0),
+            ranked
+                .iter()
+                .take(3)
+                .map(|(r, s)| format!("{}={s:.3}", r.id()))
+                .collect::<Vec<_>>()
+        );
+
+        let expected = Route::ComposeMotion(motion);
+        let reached = match (&decision, expect) {
+            (RouterDecision::Accept { route, .. }, Expect::Accepted) => *route == expected,
+            (RouterDecision::Clarify { candidates }, Expect::Accepted) => {
+                candidates.iter().any(|(r, _)| *r == expected)
+            }
+            (_, Expect::InTopThree) => ranked.iter().take(3).any(|(r, _)| *r == expected),
+            (RouterDecision::Reject { .. } | RouterDecision::NoCandidate, Expect::Accepted) => {
+                false
+            }
+        };
+        if matches!(decision, RouterDecision::Accept { .. }) {
+            accepted += 1;
+        }
+        if !reached {
+            failures.push(format!("{utterance}: {decision:?}"));
+            continue;
+        }
+        match bind_route(expected, &normalized, &[]) {
+            BindOutcome::Call(ToolCall::ComposeMotion(request)) => {
+                if request.side != side || request.count != count {
+                    failures.push(format!("{utterance}: bound {request:?}"));
+                }
+            }
+            other => failures.push(format!("{utterance}: bound {other:?}")),
+        }
+    }
+    eprintln!(
+        "{accepted}/{} gesture sentences accepted at tau_reject={}",
+        cases.len(),
+        thresholds.tau_reject
+    );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Padded batch encoding of the setfit export drifts from single encoding (cosine 0.96 on a
+/// short label), so the runtime encodes labels one at a time. Ignored until the export is fixed.
+#[test]
+#[ignore = "setfit ONNX export is not padding invariant; labels are encoded singly instead"]
+fn e2e_batch_encoding_matches_single_encoding() {
+    let Some(model_dir) = resolve_model_dir() else {
+        eprintln!("Skipping: set {MODEL_DIR_ENV_VAR} to a router model directory");
+        return;
+    };
+    let mut runtime = load_runtime(&model_dir).expect("load_runtime must succeed");
+    let labels = ["右手を振って", "wave at the camera", "バイバイ"];
+
+    let batch = runtime.encoder.encode_batch(&labels).unwrap();
+    for (label, batched) in labels.iter().zip(&batch) {
+        let single = runtime.encoder.encode(label).unwrap();
+        let cosine: f32 = single.iter().zip(batched).map(|(a, b)| a * b).sum();
+        eprintln!("{label:>20}: batch vs single cosine = {cosine:.6}");
+        assert!(
+            cosine > 0.999,
+            "{label}: batch and single encodings differ ({cosine})"
+        );
+    }
+}

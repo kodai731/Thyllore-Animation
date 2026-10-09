@@ -4,10 +4,15 @@
 //! makes routing by similarity viable at all — a small model picks a
 //! zero-argument target far more reliably than it fills one in.
 
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
+use thyllore_avatar_core::motion::seed::components::pose_table::PoseTable;
+
 use super::tool_call::{
-    FocusTarget, MotionCategory, ObjectName, SeekPosition, ShotPreset, SpeedPreset, ToolCall,
-    VisibilityState,
+    ComposeRequest, FocusTarget, MotionCategory, ObjectName, SeekPosition, ShotPreset, SpeedPreset,
+    ToolCall, VisibilityState,
 };
+
+const COMPOSE_MOTION_TOOL: &str = "compose_motion";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RouteKind {
@@ -45,11 +50,14 @@ pub enum Route {
     Redo,
     SaveScene,
     GenerateMotion(MotionCategory),
+    ComposeMotion(&'static str),
     CameraShot(ShotPreset),
     CameraDirection,
     EscapeAnchor,
 }
 
+/// The routes the exported router index was evaluated on. `ComposeMotion` routes are not
+/// here: their exemplars are the pose table's labels, embedded when the runtime loads.
 pub const ALL_ROUTES: [Route; 36] = [
     Route::ListObjects,
     Route::DescribeSelection,
@@ -89,19 +97,30 @@ pub const ALL_ROUTES: [Route; 36] = [
     Route::CameraDirection,
 ];
 
+/// One route per motion of the pose table, so the router scores each motion by its own labels.
+pub fn compose_motion_routes() -> Vec<Route> {
+    PoseTable::builtin()
+        .motions()
+        .iter()
+        .map(|motion| Route::ComposeMotion(motion.name.as_str()))
+        .collect()
+}
+
 /// Values the router fills in before a route can become a `ToolCall`. Slots come
 /// from name resolution, modifiers from `systems::modifier`.
 #[derive(Clone, Debug, Default)]
 pub struct RouteSlots {
     pub object_name: Option<String>,
     pub speed: Option<SpeedPreset>,
+    pub side: Option<MotionSide>,
+    pub count: Option<u32>,
 }
 
 impl RouteSlots {
     pub fn with_object_name(name: impl Into<String>) -> Self {
         Self {
             object_name: Some(name.into()),
-            speed: None,
+            ..Self::default()
         }
     }
 }
@@ -121,6 +140,7 @@ impl Route {
             }
             Route::FocusCamera(target) => format!("focus_camera:{}", target.as_str()),
             Route::GenerateMotion(category) => format!("generate_motion:{}", category.as_str()),
+            Route::ComposeMotion(motion) => format!("{COMPOSE_MOTION_TOOL}:{motion}"),
             Route::CameraShot(preset) => format!("camera_shot:{}", preset.as_str()),
             Route::CameraDirection => "camera_direction".to_string(),
             Route::EscapeAnchor => "__escape__".to_string(),
@@ -131,6 +151,14 @@ impl Route {
     pub fn from_id(route_id: &str) -> Option<Self> {
         if route_id == "__escape__" {
             return Some(Route::EscapeAnchor);
+        }
+        if let Some(motion) = route_id
+            .strip_prefix(COMPOSE_MOTION_TOOL)
+            .and_then(|rest| rest.strip_prefix(':'))
+        {
+            return PoseTable::builtin()
+                .motion(motion)
+                .map(|found| Route::ComposeMotion(found.name.as_str()));
         }
         ALL_ROUTES
             .iter()
@@ -157,6 +185,7 @@ impl Route {
             Route::Redo => "redo",
             Route::SaveScene => "save_scene",
             Route::GenerateMotion(_) => "generate_motion",
+            Route::ComposeMotion(_) => COMPOSE_MOTION_TOOL,
             Route::CameraShot(_) => "camera_shot",
             Route::CameraDirection => "camera_direction",
             Route::EscapeAnchor => "__escape__",
@@ -207,6 +236,12 @@ impl Route {
             Route::SaveScene => Ok(ToolCall::SaveScene),
             Route::FocusCamera(target) => Ok(ToolCall::FocusCamera(target)),
             Route::GenerateMotion(category) => Ok(ToolCall::GenerateMotion(category, speed)),
+            Route::ComposeMotion(motion) => Ok(ToolCall::ComposeMotion(ComposeRequest {
+                motion,
+                side: slots.side.unwrap_or(MotionSide::Right),
+                count: slots.count.unwrap_or(1),
+                speed,
+            })),
             Route::CameraShot(preset) => Ok(ToolCall::CameraShot(preset, speed)),
             Route::CameraDirection => unreachable!(),
 
@@ -237,6 +272,7 @@ pub fn routes_for_mode(mode: HelmMode) -> Vec<Route> {
     ALL_ROUTES
         .iter()
         .copied()
+        .chain(compose_motion_routes())
         .filter(|route| route.is_available_in(mode))
         .collect()
 }
@@ -295,8 +331,51 @@ mod tests {
 
     #[test]
     fn route_ids_are_unique() {
-        let ids: HashSet<String> = ALL_ROUTES.iter().map(|route| route.id()).collect();
-        assert_eq!(ids.len(), ALL_ROUTES.len());
+        let routes = routes_for_mode(HelmMode::AllowEdit);
+        let ids: HashSet<String> = routes.iter().map(|route| route.id()).collect();
+        assert_eq!(ids.len(), routes.len());
+    }
+
+    #[test]
+    fn compose_motion_routes_cover_the_pose_table_and_round_trip_their_ids() {
+        let routes = compose_motion_routes();
+        assert_eq!(routes.len(), PoseTable::builtin().motions().len());
+        for route in &routes {
+            assert_eq!(route.tool_name(), "compose_motion");
+            assert_eq!(route.slot(), None);
+            assert_eq!(route.kind(), RouteKind::Edit);
+            assert_eq!(Route::from_id(&route.id()), Some(*route));
+        }
+        assert!(routes.contains(&Route::ComposeMotion("wave")));
+        assert_eq!(Route::from_id("compose_motion:moonwalk"), None);
+    }
+
+    #[test]
+    fn compose_motion_binds_side_count_and_speed_from_slots() {
+        let slots = RouteSlots {
+            object_name: None,
+            speed: Some(SpeedPreset::Slow),
+            side: Some(MotionSide::Left),
+            count: Some(3),
+        };
+        assert_eq!(
+            Route::ComposeMotion("wave").bind(&slots),
+            Ok(ToolCall::ComposeMotion(ComposeRequest {
+                motion: "wave",
+                side: MotionSide::Left,
+                count: 3,
+                speed: SpeedPreset::Slow,
+            }))
+        );
+        assert_eq!(
+            Route::ComposeMotion("wave").bind(&RouteSlots::default()),
+            Ok(ToolCall::ComposeMotion(ComposeRequest {
+                motion: "wave",
+                side: MotionSide::Right,
+                count: 1,
+                speed: SpeedPreset::Normal,
+            }))
+        );
     }
 
     #[test]
@@ -329,7 +408,10 @@ mod tests {
 
     #[test]
     fn allow_edit_mode_exposes_every_route() {
-        assert_eq!(routes_for_mode(HelmMode::AllowEdit).len(), 36);
+        assert_eq!(
+            routes_for_mode(HelmMode::AllowEdit).len(),
+            ALL_ROUTES.len() + compose_motion_routes().len()
+        );
     }
 
     #[test]
@@ -388,8 +470,8 @@ mod tests {
     #[test]
     fn generate_motion_takes_the_speed_modifier_when_present() {
         let slots = RouteSlots {
-            object_name: None,
             speed: Some(SpeedPreset::Slow),
+            ..RouteSlots::default()
         };
         assert_eq!(
             Route::GenerateMotion(MotionCategory::Walk).bind(&slots),

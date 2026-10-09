@@ -1,3 +1,5 @@
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
+
 use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
@@ -43,6 +45,11 @@ pub enum HelmCommand {
     CameraDirection {
         utterance: String,
         target: Option<Entity>,
+    },
+    ComposeMotion {
+        entity: Entity,
+        spec: MotionSpec,
+        start_time: f32,
     },
 }
 
@@ -129,6 +136,28 @@ impl UiCommand for HelmCommand {
             HelmCommand::CameraDirection { utterance, target } => {
                 Box::new(CameraRigEvent::Direction { utterance, target })
                     .apply(world, assets, graphics);
+            }
+            HelmCommand::ComposeMotion {
+                entity,
+                spec,
+                start_time,
+            } => {
+                let source_id = match crate::ecs::systems::motion_seed_systems::compose_new_clip(
+                    world, assets, &spec,
+                ) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        log_warn!("compose_motion {}: {}", spec, e);
+                        return;
+                    }
+                };
+                Box::new(ClipInstanceEvent::Add {
+                    entity,
+                    source_id,
+                    start_time,
+                    speed: 1.0,
+                })
+                .apply(world, assets, graphics);
             }
         }
     }

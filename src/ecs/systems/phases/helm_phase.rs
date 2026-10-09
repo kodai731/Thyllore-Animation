@@ -126,10 +126,12 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
 
     // Handle confirm_response first.
     if let Some(response) = confirm_response {
+        let mut argument_summary = None;
         let (outcome, tool_name): (Option<DispatchOutcome>, String) = {
             let mut state = ctx.world.resource_mut::<HelmState>();
             if let Some((call, _)) = state.pending.take() {
                 let tool_name = call.tool_name().to_string();
+                argument_summary = call.argument_summary();
                 if response {
                     (Some(execute_call(ctx.world, call)), tool_name)
                 } else {
@@ -149,12 +151,11 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
         if !tool_name.is_empty() {
             if let Some(outcome) = outcome {
                 handle_dispatch_outcome(ctx.world, outcome, &tool_name);
-                let _ = write_interaction_log(
-                    ts,
-                    "",
-                    "confirm_executed",
-                    serde_json::json!({ "tool": tool_name }),
-                );
+                let mut details = serde_json::json!({ "tool": tool_name });
+                if let Some(args) = argument_summary {
+                    details["args"] = serde_json::json!(args);
+                }
+                let _ = write_interaction_log(ts, "", "confirm_executed", details);
             } else {
                 let _ = write_interaction_log(
                     ts,
@@ -328,6 +329,7 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                 match action {
                     ResolvedAction::Dispatch(call) => {
                         let tool_name = call.tool_name().to_string();
+                        let argument_summary = call.argument_summary();
                         let outcome = execute_call(ctx.world, call);
                         handle_dispatch_outcome(ctx.world, outcome.clone(), &tool_name);
                         let dispatch_result = match &outcome {
@@ -343,20 +345,17 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                             DispatchOutcome::Report(response) => Some(serde_json::json!(response)),
                             _ => None,
                         };
-                        let details: serde_json::Value = if let Some(resp) = response_value {
-                            serde_json::json!({
-                                "tool": tool_name,
-                                "raw_top_score": raw_top_score.unwrap_or(0.0),
-                                "outcome": dispatch_result,
-                                "response": resp,
-                            })
-                        } else {
-                            serde_json::json!({
-                                "tool": tool_name,
-                                "raw_top_score": raw_top_score.unwrap_or(0.0),
-                                "outcome": dispatch_result,
-                            })
-                        };
+                        let mut details = serde_json::json!({
+                            "tool": tool_name,
+                            "raw_top_score": raw_top_score.unwrap_or(0.0),
+                            "outcome": dispatch_result,
+                        });
+                        if let Some(resp) = response_value {
+                            details["response"] = resp;
+                        }
+                        if let Some(args) = argument_summary {
+                            details["args"] = serde_json::json!(args);
+                        }
                         let _ = write_interaction_log(ts, &normalized, "dispatch", details);
                         let mut state = ctx.world.resource_mut::<HelmState>();
                         state.last_routed_tool = last_routed_tool;

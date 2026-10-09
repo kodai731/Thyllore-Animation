@@ -61,6 +61,8 @@ pub enum IndexError {
     VectorSizeMismatch { expected: usize, found: usize },
     #[error("router index row {row} has length {length}, expected unit length")]
     RowNotUnitLength { row: usize, length: f32 },
+    #[error("router index already has a block for route {0}")]
+    DuplicateRoute(String),
 }
 
 #[derive(Deserialize)]
@@ -129,6 +131,29 @@ impl ExemplarIndex {
         };
         index.verify_rows_are_unit_length()?;
         Ok(index)
+    }
+
+    /// Adds a route whose exemplars were embedded at runtime rather than exported.
+    pub fn append_route(&mut self, route: Route, vectors: &[Vec<f32>]) -> Result<(), IndexError> {
+        if self.blocks.iter().any(|block| block.route == route) {
+            return Err(IndexError::DuplicateRoute(route.id()));
+        }
+        if vectors.is_empty() {
+            return Err(IndexError::RouteWithoutExemplars(route.id()));
+        }
+        let expected = vectors.len() * self.dimensions * BYTES_PER_SCALAR;
+        let found: usize = vectors.iter().map(|v| v.len() * BYTES_PER_SCALAR).sum();
+        if found != expected {
+            return Err(IndexError::VectorSizeMismatch { expected, found });
+        }
+
+        let start = self.exemplar_count();
+        self.vectors.extend(vectors.iter().flatten());
+        self.blocks.push(RouteBlock {
+            route,
+            rows: start..start + vectors.len(),
+        });
+        self.verify_rows_are_unit_length()
     }
 
     pub fn dimensions(&self) -> usize {
@@ -434,6 +459,38 @@ mod tests {
                 vec![unit([0.0, 1.0, 0.0, 0.0]), unit([0.0, 0.9, 0.1, 0.0])],
             ),
         ])
+    }
+
+    #[test]
+    fn an_appended_route_is_ranked_by_its_own_rows() {
+        let mut index = two_route_index();
+        index
+            .append_route(
+                Route::ComposeMotion("wave"),
+                &[unit([0.0, 0.0, 1.0, 0.0]).to_vec()],
+            )
+            .unwrap();
+
+        let ranked = rank_routes(&index, &unit([0.0, 0.0, 1.0, 0.0]), HelmMode::AllowEdit);
+        assert_eq!(ranked[0].0, Route::ComposeMotion("wave"));
+        assert_eq!(index.exemplar_count(), 4);
+        assert_eq!(
+            index.append_route(
+                Route::ComposeMotion("wave"),
+                &[unit([0.0, 0.0, 1.0, 0.0]).to_vec()]
+            ),
+            Err(IndexError::DuplicateRoute(
+                "compose_motion:wave".to_string()
+            ))
+        );
+        assert!(matches!(
+            index.append_route(Route::ComposeMotion("bow"), &[vec![1.0, 0.0]]),
+            Err(IndexError::VectorSizeMismatch { .. })
+        ));
+        assert!(matches!(
+            index.append_route(Route::ComposeMotion("bow"), &[vec![2.0, 0.0, 0.0, 0.0]]),
+            Err(IndexError::RowNotUnitLength { .. })
+        ));
     }
 
     #[test]

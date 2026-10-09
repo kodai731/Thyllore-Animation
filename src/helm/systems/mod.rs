@@ -1,5 +1,6 @@
 pub mod binder;
 pub mod modifier;
+pub mod motion_labels;
 pub mod motion_seed;
 pub mod normalize;
 pub mod polarity_tiebreak;

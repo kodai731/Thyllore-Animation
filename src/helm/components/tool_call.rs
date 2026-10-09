@@ -1,3 +1,5 @@
+use thyllore_avatar_core::motion::seed::components::motion_spec::{MotionSide, MotionSpec};
+
 use crate::ecs::world::Visibility;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,6 +129,26 @@ impl MotionCategory {
     }
 }
 
+/// A motion of the pose table with the slots the utterance filled; `motion` names an
+/// entry of `PoseTable::builtin()`, which is what keeps the call copyable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ComposeRequest {
+    pub motion: &'static str,
+    pub side: MotionSide,
+    pub count: u32,
+    pub speed: SpeedPreset,
+}
+
+impl ComposeRequest {
+    pub fn to_motion_spec(self) -> MotionSpec {
+        let mut spec = MotionSpec::new(self.motion);
+        spec.side = self.side;
+        spec.count = self.count;
+        spec.speed = self.speed.to_multiplier();
+        spec
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectName(pub String);
 
@@ -157,6 +179,7 @@ pub enum ToolCall {
     Redo,
     SaveScene,
     GenerateMotion(MotionCategory, SpeedPreset),
+    ComposeMotion(ComposeRequest),
     CameraShot(ShotPreset, SpeedPreset),
     CameraDirection(String),
 }
@@ -195,9 +218,36 @@ impl ToolCall {
             | ToolCall::Undo
             | ToolCall::Redo => RiskLevel::Mutating,
 
-            ToolCall::SaveScene | ToolCall::GenerateMotion(_, _) | ToolCall::CameraDirection(_) => {
-                RiskLevel::Destructive
-            }
+            ToolCall::SaveScene
+            | ToolCall::GenerateMotion(_, _)
+            | ToolCall::ComposeMotion(_)
+            | ToolCall::CameraDirection(_) => RiskLevel::Destructive,
+        }
+    }
+
+    /// The arguments worth logging next to the tool name, in the syntax the batch CLI accepts.
+    pub fn argument_summary(&self) -> Option<String> {
+        match self {
+            ToolCall::ComposeMotion(request) => Some(request.to_motion_spec().to_string()),
+            ToolCall::ListObjects
+            | ToolCall::DescribeSelection
+            | ToolCall::GetPlaybackState
+            | ToolCall::TakeScreenshot
+            | ToolCall::PlayAnimation
+            | ToolCall::PauseAnimation
+            | ToolCall::StopAnimation
+            | ToolCall::SetPlaybackSpeed(_)
+            | ToolCall::SeekTime(_)
+            | ToolCall::ToggleLoop
+            | ToolCall::SelectObject(_)
+            | ToolCall::SetObjectVisibility(_, _)
+            | ToolCall::FocusCamera(_)
+            | ToolCall::Undo
+            | ToolCall::Redo
+            | ToolCall::SaveScene
+            | ToolCall::GenerateMotion(_, _)
+            | ToolCall::CameraShot(_, _)
+            | ToolCall::CameraDirection(_) => None,
         }
     }
 
@@ -220,6 +270,7 @@ impl ToolCall {
             ToolCall::Redo => "redo",
             ToolCall::SaveScene => "save_scene",
             ToolCall::GenerateMotion(_, _) => "generate_motion",
+            ToolCall::ComposeMotion(_) => "compose_motion",
             ToolCall::CameraShot(_, _) => "camera_shot",
             ToolCall::CameraDirection(_) => "camera_direction",
         }
@@ -263,5 +314,25 @@ mod tests {
                 .requires_confirmation()
         );
         assert!(!ToolCall::PlayAnimation.risk_level().requires_confirmation());
+    }
+
+    #[test]
+    fn compose_request_becomes_a_motion_spec_in_batch_syntax() {
+        let request = ComposeRequest {
+            motion: "wave",
+            side: MotionSide::Left,
+            count: 2,
+            speed: SpeedPreset::Fast,
+        };
+        let spec = request.to_motion_spec();
+        assert_eq!(spec.motion, "wave");
+        assert_eq!(spec.side, MotionSide::Left);
+        assert_eq!(spec.count, 2);
+        assert_eq!(spec.speed, 2.0);
+        assert_eq!(
+            ToolCall::ComposeMotion(request).argument_summary(),
+            Some("wave,side=left,count=2,speed=2".to_string())
+        );
+        assert_eq!(ToolCall::PlayAnimation.argument_summary(), None);
     }
 }

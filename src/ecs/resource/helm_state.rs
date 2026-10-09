@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use thyllore_ml_core::model_path::{EXPORTS_SUBDIR, SHARED_DATA_ENV_VAR};
 use thyllore_ml_core::sentence_encoder::{read_encoder_config, EncoderThresholds, SentenceEncoder};
 
+use thyllore_avatar_core::motion::seed::components::pose_table::PoseTable;
+
 use crate::helm::components::route::{HelmMode, Route};
+use crate::helm::systems::motion_labels::append_motion_label_routes;
 use crate::helm::systems::polarity_tiebreak::embedded_exemplars_sha256;
 use crate::helm::systems::router::{ExemplarIndex, RouterThresholds};
 
@@ -147,7 +150,7 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     let config = read_encoder_config(model_dir)
         .map_err(|e| format!("failed to read encoder config: {}", e))?;
 
-    let encoder = SentenceEncoder::from_model_dir(model_dir)
+    let mut encoder = SentenceEncoder::from_model_dir(model_dir)
         .map_err(|e| format!("failed to load sentence encoder: {}", e))?;
 
     let manifest_path = model_dir.join("router_index.json");
@@ -158,8 +161,11 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     let vector_bytes = std::fs::read(&vector_path)
         .map_err(|e| format!("failed to read {}: {}", vector_path.display(), e))?;
 
-    let index = ExemplarIndex::from_export(&manifest_json, &vector_bytes)
+    let mut index = ExemplarIndex::from_export(&manifest_json, &vector_bytes)
         .map_err(|e| format!("failed to load exemplar index: {}", e))?;
+    append_motion_label_routes(&mut index, PoseTable::builtin(), |label| {
+        encoder.encode(label)
+    })?;
 
     // Staleness check: if both index and embedded polarity table carry exemplars_sha256,
     // they must match — otherwise one artifact is stale.
@@ -169,7 +175,7 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     )?;
 
     let raw_encoder_path = select_raw_encoder_dir(model_dir, config.raw_encoder.as_deref())?;
-    let raw_encoder = SentenceEncoder::from_model_dir(&raw_encoder_path)
+    let mut raw_encoder = SentenceEncoder::from_model_dir(&raw_encoder_path)
         .map_err(|e| format!("failed to load raw sentence encoder: {}", e))?;
 
     // Load raw index from model_dir/raw_index.json and model_dir/raw_index.f32
@@ -181,8 +187,11 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     let raw_vector_bytes = std::fs::read(&raw_vector_path)
         .map_err(|e| format!("failed to read {}: {}", raw_vector_path.display(), e))?;
 
-    let raw_index = ExemplarIndex::from_export(&raw_manifest_json, &raw_vector_bytes)
+    let mut raw_index = ExemplarIndex::from_export(&raw_manifest_json, &raw_vector_bytes)
         .map_err(|e| format!("failed to load raw exemplar index: {}", e))?;
+    append_motion_label_routes(&mut raw_index, PoseTable::builtin(), |label| {
+        raw_encoder.encode(label)
+    })?;
 
     // Validate that raw_index exemplars_sha256 matches setfit index
     validate_artifact_consistency(raw_index.exemplars_sha256(), index.exemplars_sha256())?;

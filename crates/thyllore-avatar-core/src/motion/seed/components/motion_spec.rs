@@ -63,6 +63,25 @@ impl MotionSpec {
     }
 }
 
+impl std::fmt::Display for MotionSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.motion)?;
+        if self.side == MotionSide::Left {
+            write!(f, ",side=left")?;
+        }
+        if self.count != 1 {
+            write!(f, ",count={}", self.count)?;
+        }
+        if self.amount != 1.0 {
+            write!(f, ",amount={}", self.amount)?;
+        }
+        if self.speed != 1.0 {
+            write!(f, ",speed={}", self.speed)?;
+        }
+        Ok(())
+    }
+}
+
 fn parse_positive(value: &str, name: &str) -> Result<f32> {
     value
         .parse::<f32>()
@@ -88,6 +107,19 @@ mod tests {
     #[test]
     fn defaults_are_right_once_normal() {
         assert_eq!(MotionSpec::parse("bow").unwrap(), MotionSpec::new("bow"));
+    }
+
+    #[test]
+    fn display_round_trips_through_parse() {
+        for text in [
+            "bow",
+            "punch,side=left,count=2,amount=0.8,speed=1.5",
+            "wave,count=3",
+        ] {
+            let spec = MotionSpec::parse(text).unwrap();
+            assert_eq!(spec.to_string(), text);
+            assert_eq!(MotionSpec::parse(&spec.to_string()).unwrap(), spec);
+        }
     }
 
     #[test]

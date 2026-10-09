@@ -151,7 +151,7 @@ keys = [
 
 [[motion]]
 name = "punch"
-labels = ["正拳突き", "パンチ", "拳を突き出す", "straight punch", "punch"]
+labels = ["正拳突き", "パンチ", "拳を突き出す", "正拳突きをして", "パンチして", "拳を突き出して", "straight punch", "punch", "throw a punch", "punch forward"]
 region = "full_body"
 duration = 2.0
 cycle = [0.4, 1.3]
@@ -165,7 +165,7 @@ poses = [
 
 [[motion]]
 name = "wave"
-labels = ["手を振る", "バイバイ", "wave the hand", "wave hello"]
+labels = ["手を振る", "バイバイ", "手を振って", "右手を振って", "手を振るモーション", "wave the hand", "wave hello", "wave your hand", "wave at the camera"]
 region = "upper_body"
 duration = 2.0
 cycle = [0.8, 1.6]
@@ -178,7 +178,7 @@ poses = [
 
 [[motion]]
 name = "bow"
-labels = ["お辞儀", "礼をする", "bow"]
+labels = ["お辞儀", "礼をする", "お辞儀して", "礼をして", "頭を下げて", "bow", "take a bow", "bow politely"]
 region = "upper_body"
 duration = 1.6
 poses = [
@@ -188,7 +188,7 @@ poses = [
 
 [[motion]]
 name = "nod"
-labels = ["頷く", "うなずく", "nod"]
+labels = ["頷く", "うなずく", "頷いて", "うなずいて", "nod", "nod your head"]
 region = "head"
 duration = 0.8
 cycle = [0.0, 0.6]
@@ -199,7 +199,7 @@ poses = [
 
 [[motion]]
 name = "arm_raise"
-labels = ["腕を上げる", "手を上げる", "raise the arm", "raise the hand"]
+labels = ["腕を上げる", "手を上げる", "腕を上げて", "手を上げて", "raise the arm", "raise the hand", "raise your arm", "put your hand up"]
 region = "upper_body"
 duration = 1.5
 poses = [
@@ -209,7 +209,7 @@ poses = [
 
 [[motion]]
 name = "head_turn"
-labels = ["横を向く", "振り向く", "turn the head", "look sideways"]
+labels = ["横を向く", "振り向く", "横を向いて", "顔を横に向けて", "turn the head", "look sideways", "turn your head", "look to the side"]
 region = "head"
 duration = 1.3
 poses = [
@@ -219,7 +219,7 @@ poses = [
 
 [[motion]]
 name = "knee_raise"
-labels = ["膝を上げる", "腿上げ", "raise the knee", "knee up"]
+labels = ["膝を上げる", "腿上げ", "膝を上げて", "腿を上げて", "raise the knee", "knee up", "lift your knee"]
 region = "lower_body"
 duration = 1.5
 poses = [
@@ -229,7 +229,7 @@ poses = [
 
 [[motion]]
 name = "front_kick"
-labels = ["前蹴り", "キック", "蹴る", "front kick", "kick"]
+labels = ["前蹴り", "キック", "蹴る", "前蹴りして", "蹴って", "キックして", "front kick", "kick", "kick forward", "do a front kick"]
 region = "full_body"
 duration = 1.8
 poses = [
@@ -242,7 +242,7 @@ poses = [
 
 [[motion]]
 name = "grip"
-labels = ["拳を握る", "手を握る", "グー", "make a fist", "clench the fist"]
+labels = ["拳を握る", "手を握る", "グー", "拳を握って", "手を握って", "make a fist", "clench the fist", "clench your fist"]
 region = "upper_body"
 duration = 1.2
 poses = [
@@ -252,7 +252,7 @@ poses = [
 
 [[motion]]
 name = "open_hand"
-labels = ["手を開く", "パー", "指を広げる", "open the hand", "spread the fingers"]
+labels = ["手を開く", "パー", "指を広げる", "手を開いて", "指を広げて", "open the hand", "spread the fingers", "open your hand"]
 region = "upper_body"
 duration = 1.2
 poses = [
@@ -296,7 +296,7 @@ keys = [
 
 [[motion]]
 name = "crouch"
-labels = ["しゃがむ", "かがむ", "腰を落とす", "crouch", "squat down"]
+labels = ["しゃがむ", "かがむ", "腰を落とす", "しゃがんで", "腰を落として", "crouch", "squat down", "crouch down"]
 region = "full_body"
 duration = 2.0
 poses = [

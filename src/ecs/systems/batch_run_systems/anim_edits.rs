@@ -11,97 +11,10 @@ use crate::ecs::world::World;
 
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
-use thyllore_avatar_core::motion::seed::components::pose_table::{PoseAxis, PoseTable};
-use thyllore_avatar_core::motion::seed::systems::compose_motion::{
-    compose_motion, settle_requests,
-};
 
-fn bone_axis_of(axis: PoseAxis) -> BoneAxis {
-    match axis {
-        PoseAxis::X => BoneAxis::RotationX,
-        PoseAxis::Y => BoneAxis::RotationY,
-        PoseAxis::Z => BoneAxis::RotationZ,
-        PoseAxis::TranslationX => BoneAxis::TranslationX,
-        PoseAxis::TranslationY => BoneAxis::TranslationY,
-        PoseAxis::TranslationZ => BoneAxis::TranslationZ,
-    }
-}
+use crate::ecs::systems::motion_seed_systems::{compose_into_clip, insert_bone_key};
 
-#[cfg(feature = "ml")]
-fn apply_settle_requests(
-    world: &mut World,
-    assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
-) {
-    if requests.is_empty() {
-        return;
-    }
-    let Some(model_path) = crate::ml::resolve_curve_copilot_model_path() else {
-        log_warn!("compose settle: curve copilot model not found, keys stay as composed");
-        return;
-    };
-    let mut session =
-        match thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
-            &model_path,
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                log_warn!("compose settle: failed to load model: {}", e);
-                return;
-            }
-        };
-    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
-        return;
-    };
-    let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) else {
-        return;
-    };
-
-    let mut lib = world.resource_mut::<ClipLibrary>();
-    let Some(clip) = lib.get_mut(clip_id) else {
-        return;
-    };
-    for request in requests {
-        let Some(&bone_id) = table.get(request.role.unity_name()) else {
-            continue;
-        };
-        let Some(track) = clip.get_track_mut(bone_id) else {
-            continue;
-        };
-        let curve = track.get_curve_mut(request.axis.property_type());
-        match crate::ecs::systems::curve_copilot::copilot_settle_curve(
-            &mut session,
-            curve,
-            request.time,
-            request.until,
-            request.max_frames,
-            request.blend,
-        ) {
-            Ok(count) => log!(
-                "compose settle: {}.{:?} @{:.2} added {} keys",
-                request.role.unity_name(),
-                request.axis,
-                request.time,
-                count
-            ),
-            Err(e) => log_warn!("compose settle failed: {}", e),
-        }
-    }
-    lib.mark_dirty(clip_id);
-}
-
-#[cfg(not(feature = "ml"))]
-fn apply_settle_requests(
-    _world: &mut World,
-    _assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
-) {
-    if !requests.is_empty() {
-        log_warn!("compose settle: ml feature is disabled, keys stay as composed");
-    }
-}
-
-fn insert_bone_key(
+fn insert_bone_key_into_current_clip(
     world: &mut World,
     assets: &mut AssetStorage,
     bone_name: &str,
@@ -112,38 +25,7 @@ fn insert_bone_key(
     let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
         return;
     };
-    let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) else {
-        log_warn!("key edit: no bone name table available, skipping");
-        return;
-    };
-    let Some(&bone_id) = table.get(bone_name) else {
-        log_warn!("key edit: bone {} is not on this model", bone_name);
-        return;
-    };
-
-    let mut lib = world.resource_mut::<ClipLibrary>();
-    let Some(clip) = lib.get_mut(clip_id) else {
-        return;
-    };
-    let track = if let Some(t) = clip.get_track_mut(bone_id) {
-        t
-    } else {
-        clip.add_track(bone_id, bone_name.to_string())
-    };
-    let curve = match axis {
-        BoneAxis::RotationX => &mut track.rotation_x,
-        BoneAxis::RotationY => &mut track.rotation_y,
-        BoneAxis::RotationZ => &mut track.rotation_z,
-        BoneAxis::TranslationX => &mut track.translation_x,
-        BoneAxis::TranslationY => &mut track.translation_y,
-        BoneAxis::TranslationZ => &mut track.translation_z,
-    };
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
-    curve_add_keyframe(curve, time, value);
-    if time > clip.duration {
-        clip.duration = time;
-    }
-    lib.mark_dirty(clip_id);
+    insert_bone_key(world, assets, clip_id, bone_name, axis, time, value);
 }
 
 fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str) {
@@ -203,7 +85,7 @@ pub fn batch_apply_anim_edits(
                 axis,
                 time,
                 value,
-            } => insert_bone_key(world, assets, bone_name, *axis, *time, *value),
+            } => insert_bone_key_into_current_clip(world, assets, bone_name, *axis, *time, *value),
             BatchAnimEdit::Compose { spec } => apply_compose(world, assets, spec),
             BatchAnimEdit::KeyAtPlayhead { property_type } => {
                 apply_key_at_playhead(world, assets, *property_type)
@@ -258,26 +140,12 @@ fn apply_key(
 }
 
 fn apply_compose(world: &mut World, assets: &mut AssetStorage, spec: &MotionSpec) {
-    let keys = match compose_motion(PoseTable::builtin(), spec) {
-        Ok(keys) => keys,
-        Err(e) => {
-            log_warn!("compose {}: {}", spec.motion, e);
-            return;
-        }
+    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        log_warn!("compose {}: no current clip", spec.motion);
+        return;
     };
-    for key in &keys {
-        insert_bone_key(
-            world,
-            assets,
-            key.role.unity_name(),
-            bone_axis_of(key.axis),
-            key.time,
-            key.value,
-        );
-    }
-    match settle_requests(PoseTable::builtin(), spec, &keys) {
-        Ok(requests) => apply_settle_requests(world, assets, &requests),
-        Err(e) => log_warn!("compose {}: {}", spec.motion, e),
+    if let Err(e) = compose_into_clip(world, assets, clip_id, spec) {
+        log_warn!("compose {}: {}", spec.motion, e);
     }
 }
 

@@ -5,10 +5,12 @@
 //! the scene names are matched by normalized substring inclusion with longest-match
 //! tiebreaking.
 
-use crate::helm::components::route::{Route, SlotKind};
-use crate::helm::components::tool_call::{ObjectName, SpeedPreset, ToolCall};
+use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
 
-use super::modifier::extract_speed_modifier;
+use crate::helm::components::route::{Route, SlotKind};
+use crate::helm::components::tool_call::{ComposeRequest, ObjectName, SpeedPreset, ToolCall};
+
+use super::modifier::{extract_count_modifier, extract_side_modifier, extract_speed_modifier};
 use super::normalize::normalize_utterance;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,6 +54,12 @@ fn direct_call(route: Route, normalized_utterance: &str) -> BindOutcome {
             let speed = extract_speed_modifier(normalized_utterance).unwrap_or(SpeedPreset::Normal);
             ToolCall::GenerateMotion(category, speed)
         }
+        Route::ComposeMotion(motion) => ToolCall::ComposeMotion(ComposeRequest {
+            motion,
+            side: extract_side_modifier(normalized_utterance).unwrap_or(MotionSide::Right),
+            count: extract_count_modifier(normalized_utterance).unwrap_or(1),
+            speed: extract_speed_modifier(normalized_utterance).unwrap_or(SpeedPreset::Normal),
+        }),
         Route::CameraShot(preset) => {
             let speed = extract_speed_modifier(normalized_utterance).unwrap_or(SpeedPreset::Normal);
             ToolCall::CameraShot(preset, speed)

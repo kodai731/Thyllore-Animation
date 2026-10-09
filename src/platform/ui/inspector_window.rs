@@ -4,6 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
+use crate::ecs::systems::phases::event_dispatch::camera_rig::CameraRigEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
@@ -46,6 +47,8 @@ fn draw_inspector_window(
                 build_material_section(ui, &data);
 
                 build_visible_section(ui, world, &data);
+
+                build_camera_section(ui, world, data.entity);
 
                 let (mut add_type_index, mut bake_fps) = world
                     .get_resource::<ConstraintEditorState>()
@@ -157,6 +160,37 @@ fn build_material_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorD
         ));
         ui.text(&format!("Metallic    {:.2}", mat.metallic));
         ui.text(&format!("Roughness   {:.2}", mat.roughness));
+    }
+}
+
+fn build_camera_section(ui: &imgui::Ui, world: &World, entity: crate::ecs::world::Entity) {
+    if !world.has_component::<crate::ecs::component::CameraComponent>(entity) {
+        return;
+    }
+
+    let camera = match world.get_component::<crate::ecs::component::CameraComponent>(entity) {
+        Some(c) => c,
+        None => return,
+    };
+
+    if ui.collapsing_header("Camera", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        ui.text(&format!("FOV Y       {:.1}°", camera.fov_y.0));
+        ui.text(&format!("Near Plane  {:.2}", camera.near_plane));
+
+        let is_active = match world.get_resource::<crate::ecs::resource::ActiveCamera>() {
+            Some(ac) => ac.0 == Some(entity),
+            None => false,
+        };
+
+        if is_active {
+            if ui.button("Release camera##active") {
+                world.send_command(CameraRigEvent::SetActive(None));
+            }
+        } else {
+            if ui.button("Look through this camera##active") {
+                world.send_command(CameraRigEvent::SetActive(Some(entity)));
+            }
+        }
     }
 }
 

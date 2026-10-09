@@ -8,48 +8,61 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::humanoid::components::role::{HumanoidRole, HUMANOID_CHAINS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum RotationAxis {
+pub enum PoseAxis {
     X,
     Y,
     Z,
+    TranslationX,
+    TranslationY,
+    TranslationZ,
 }
 
-impl RotationAxis {
+impl PoseAxis {
     pub fn property_type(self) -> PropertyType {
         match self {
-            RotationAxis::X => PropertyType::RotationX,
-            RotationAxis::Y => PropertyType::RotationY,
-            RotationAxis::Z => PropertyType::RotationZ,
+            PoseAxis::X => PropertyType::RotationX,
+            PoseAxis::Y => PropertyType::RotationY,
+            PoseAxis::Z => PropertyType::RotationZ,
+            PoseAxis::TranslationX => PropertyType::TranslationX,
+            PoseAxis::TranslationY => PropertyType::TranslationY,
+            PoseAxis::TranslationZ => PropertyType::TranslationZ,
         }
     }
 
-    fn parse(text: &str) -> Option<RotationAxis> {
+    fn parse(text: &str) -> Option<PoseAxis> {
         match text {
-            "x" => Some(RotationAxis::X),
-            "y" => Some(RotationAxis::Y),
-            "z" => Some(RotationAxis::Z),
+            "x" => Some(PoseAxis::X),
+            "y" => Some(PoseAxis::Y),
+            "z" => Some(PoseAxis::Z),
+            "tx" => Some(PoseAxis::TranslationX),
+            "ty" => Some(PoseAxis::TranslationY),
+            "tz" => Some(PoseAxis::TranslationZ),
             _ => None,
         }
+    }
+
+    pub fn is_rotation(self) -> bool {
+        matches!(self, PoseAxis::X | PoseAxis::Y | PoseAxis::Z)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RoleKey {
     pub role: HumanoidRole,
-    pub axis: RotationAxis,
-    pub degrees: f32,
+    pub axis: PoseAxis,
+    pub value: f32,
 }
 
 impl RoleKey {
     pub fn mirrored(self) -> RoleKey {
-        let degrees = match self.axis {
-            RotationAxis::X => self.degrees,
-            RotationAxis::Y | RotationAxis::Z => -self.degrees,
+        let value = match self.axis {
+            PoseAxis::X | PoseAxis::TranslationY | PoseAxis::TranslationZ => self.value,
+            PoseAxis::Y | PoseAxis::Z | PoseAxis::TranslationX => -self.value,
         };
         RoleKey {
             role: self.role.mirrored(),
             axis: self.axis,
-            degrees,
+            value,
         }
     }
 }
@@ -241,7 +254,10 @@ struct RawPose {
 struct RawKey {
     role: String,
     axis: String,
-    degrees: f32,
+    #[serde(default)]
+    degrees: Option<f32>,
+    #[serde(default)]
+    offset: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -282,23 +298,36 @@ enum RawSetEntry {
     Key {
         role: String,
         axis: String,
-        degrees: f32,
+        #[serde(default)]
+        degrees: Option<f32>,
+        #[serde(default)]
+        offset: Option<f32>,
     },
 }
 
 fn parse_role_key(raw: &RawKey) -> Result<RoleKey> {
     let role = HumanoidRole::from_unity_name(&raw.role)
         .ok_or_else(|| anyhow::anyhow!("unknown role '{}'", raw.role))?;
-    let axis = RotationAxis::parse(&raw.axis)
-        .ok_or_else(|| anyhow::anyhow!("axis must be x, y or z, got '{}'", raw.axis))?;
-    if !raw.degrees.is_finite() {
-        bail!("degrees for {} must be finite", raw.role);
+    let axis = PoseAxis::parse(&raw.axis)
+        .ok_or_else(|| anyhow::anyhow!("axis must be x, y, z, tx, ty or tz, got '{}'", raw.axis))?;
+    if !axis.is_rotation() && role != HumanoidRole::Hips {
+        bail!(
+            "translation axis '{}' is only allowed for Hips, not {}",
+            raw.axis,
+            raw.role
+        );
     }
-    Ok(RoleKey {
-        role,
-        axis,
-        degrees: raw.degrees,
-    })
+
+    let value = match (axis.is_rotation(), raw.degrees, raw.offset) {
+        (true, Some(degrees), None) => degrees,
+        (false, None, Some(offset)) => offset,
+        (true, _, _) => bail!("axis '{}' of {} needs degrees only", raw.axis, raw.role),
+        (false, _, _) => bail!("axis '{}' of {} needs offset only", raw.axis, raw.role),
+    };
+    if !value.is_finite() {
+        bail!("value for {} must be finite", raw.role);
+    }
+    Ok(RoleKey { role, axis, value })
 }
 
 fn parse_motion(raw: RawMotion, poses: &HashMap<String, NamedPose>) -> Result<MotionDef> {
@@ -443,10 +472,12 @@ fn parse_set_entry(raw: RawSetEntry, poses: &HashMap<String, NamedPose>) -> Resu
             role,
             axis,
             degrees,
+            offset,
         } => Ok(PoseEntry::Key(parse_role_key(&RawKey {
             role,
             axis,
             degrees,
+            offset,
         })?)),
     }
 }
@@ -558,18 +589,108 @@ poses = [{{ time = 0.5, set = [{{ role = "Head", axis = "x", degrees = 30 }}] }}
     fn mirrored_key_flips_side_and_yz_sign() {
         let key = RoleKey {
             role: HumanoidRole::RightUpperArm,
-            axis: RotationAxis::Z,
-            degrees: 90.0,
+            axis: PoseAxis::Z,
+            value: 90.0,
         };
         let mirrored = key.mirrored();
         assert_eq!(mirrored.role, HumanoidRole::LeftUpperArm);
-        assert_eq!(mirrored.degrees, -90.0);
+        assert_eq!(mirrored.value, -90.0);
 
         let center = RoleKey {
             role: HumanoidRole::Head,
-            axis: RotationAxis::X,
-            degrees: 20.0,
+            axis: PoseAxis::X,
+            value: 20.0,
         };
         assert_eq!(center.mirrored(), center);
+    }
+
+    #[test]
+    fn translation_axis_only_allowed_on_hips() {
+        let non_hips = r#"
+[[pose]]
+name = "p"
+keys = [{ role = "Spine", axis = "ty", offset = 0.5 }]
+"#;
+        assert!(PoseTable::parse(non_hips).is_err());
+    }
+
+    #[test]
+    fn translation_axis_parses_for_hips() {
+        let text = r#"
+[[pose]]
+name = "squat"
+keys = [{ role = "Hips", axis = "ty", offset = -0.3 }]
+"#;
+        let table = PoseTable::parse(text).unwrap();
+        let pose = table.pose("squat").unwrap();
+        assert_eq!(pose.keys.len(), 1);
+        let key = &pose.keys[0];
+        assert_eq!(key.role, HumanoidRole::Hips);
+        assert_eq!(key.axis, PoseAxis::TranslationY);
+        assert_eq!(key.value, -0.3);
+    }
+
+    #[test]
+    fn translation_mirror_only_flips_tx() {
+        let tx = RoleKey {
+            role: HumanoidRole::Hips,
+            axis: PoseAxis::TranslationX,
+            value: 0.5,
+        };
+        assert_eq!(tx.mirrored().value, -0.5);
+
+        let ty = RoleKey {
+            role: HumanoidRole::Hips,
+            axis: PoseAxis::TranslationY,
+            value: 0.5,
+        };
+        assert_eq!(ty.mirrored().value, 0.5);
+
+        let tz = RoleKey {
+            role: HumanoidRole::Hips,
+            axis: PoseAxis::TranslationZ,
+            value: 0.5,
+        };
+        assert_eq!(tz.mirrored().value, 0.5);
+    }
+
+    #[test]
+    fn missing_value_is_rejected() {
+        let no_value = r#"
+[[pose]]
+name = "p"
+keys = [{ role = "Head", axis = "x" }]
+"#;
+        assert!(PoseTable::parse(no_value).is_err());
+    }
+
+    #[test]
+    fn both_degrees_and_offset_is_rejected() {
+        let both = r#"
+[[pose]]
+name = "p"
+keys = [{ role = "Head", axis = "x", degrees = 10, offset = 0.5 }]
+"#;
+        assert!(PoseTable::parse(both).is_err());
+    }
+
+    #[test]
+    fn rotation_axis_needs_degrees_not_offset() {
+        let wrong = r#"
+[[pose]]
+name = "p"
+keys = [{ role = "Head", axis = "x", offset = 0.5 }]
+"#;
+        assert!(PoseTable::parse(wrong).is_err());
+    }
+
+    #[test]
+    fn translation_axis_needs_offset_not_degrees() {
+        let wrong = r#"
+[[pose]]
+name = "p"
+keys = [{ role = "Hips", axis = "ty", degrees = 0.5 }]
+"#;
+        assert!(PoseTable::parse(wrong).is_err());
     }
 }

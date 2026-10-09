@@ -8,6 +8,7 @@ use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphWeightChannel, Skeleton,
     SkinData, TransformChannel,
 };
+pub use thyllore_file_format_core::fbx::{CameraProjection, LoadedCamera};
 use thyllore_math_core::*;
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
@@ -62,6 +63,7 @@ pub struct GltfLoadResult {
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
     pub spring_bone_setup: Option<SpringBoneSetup>,
+    pub cameras: Vec<LoadedCamera>,
     pub vrm_humanoid: Option<super::vrm_humanoid_extension::VrmHumanoid>,
 }
 
@@ -196,6 +198,7 @@ struct GltfParseContext {
     has_armature: bool,
     skeleton_root_transform: Option<[[f32; 4]; 4]>,
     spring_bone_setup: Option<SpringBoneSetup>,
+    cameras: Vec<LoadedCamera>,
     vrm_humanoid: Option<super::vrm_humanoid_extension::VrmHumanoid>,
 }
 
@@ -216,6 +219,7 @@ impl Default for GltfParseContext {
             has_armature: false,
             skeleton_root_transform: None,
             spring_bone_setup: None,
+            cameras: Vec::new(),
             vrm_humanoid: None,
         }
     }
@@ -752,6 +756,29 @@ unsafe fn process_node(
     let cumulative_transform = *parent_transform * node_transform;
     let node_name = node.name().unwrap_or("");
 
+    if let Some(camera) = node.camera() {
+        let projection = match camera.projection() {
+            gltf::camera::Projection::Perspective(p) => CameraProjection::Perspective {
+                yfov: p.yfov(),
+                aspect_ratio: p.aspect_ratio(),
+                znear: p.znear(),
+                zfar: p.zfar(),
+            },
+            gltf::camera::Projection::Orthographic(o) => CameraProjection::Orthographic {
+                xmag: o.xmag(),
+                ymag: o.ymag(),
+                znear: o.znear(),
+                zfar: o.zfar(),
+            },
+        };
+        ctx.cameras.push(LoadedCamera {
+            node_index: node.index(),
+            name: camera.name().unwrap_or(node_name).to_string(),
+            world_transform: cumulative_transform,
+            projection,
+        });
+    }
+
     if let Some(mesh) = node.mesh() {
         for primitive in mesh.primitives() {
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -1267,6 +1294,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,
         spring_bone_setup: ctx.spring_bone_setup,
+        cameras: ctx.cameras,
         vrm_humanoid: ctx.vrm_humanoid,
     }
 }

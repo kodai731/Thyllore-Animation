@@ -86,7 +86,7 @@ use winit::{
 
 use winit::{
     error::ExternalError,
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
+    event::{ElementState, Event, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
     window::{CursorIcon as MouseCursor, Window},
 };
 
@@ -96,6 +96,7 @@ pub struct WinitPlatform {
     hidpi_mode: ActiveHiDpiMode,
     hidpi_factor: f64,
     cursor_cache: Option<CursorSettings>,
+    ime_composing: bool,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -322,6 +323,7 @@ impl WinitPlatform {
             hidpi_mode: ActiveHiDpiMode::Default,
             hidpi_factor: 1.0,
             cursor_cache: None,
+            ime_composing: false,
         }
     }
     /// Attaches the platform instance to a winit window.
@@ -468,7 +470,7 @@ impl WinitPlatform {
                 let pressed = event.state == ElementState::Pressed;
 
                 // X11 attaches `text` to key releases as well, so only presses may type.
-                if let (true, Some(txt)) = (pressed, &event.text) {
+                if let (true, Some(txt)) = (pressed && !self.ime_composing, &event.text) {
                     for ch in txt.chars() {
                         if ch != '\u{7f}' {
                             io.add_input_character(ch)
@@ -489,6 +491,20 @@ impl WinitPlatform {
                     io.add_key_event(key, pressed);
                 }
             }
+            WindowEvent::Ime(ref ime) => match ime {
+                Ime::Preedit(text, _) => {
+                    self.ime_composing = !text.is_empty();
+                }
+                Ime::Commit(text) => {
+                    self.ime_composing = false;
+                    for ch in text.chars() {
+                        io.add_input_character(ch);
+                    }
+                }
+                Ime::Enabled | Ime::Disabled => {
+                    self.ime_composing = false;
+                }
+            },
             WindowEvent::CursorMoved { position, .. } => {
                 let position = position.to_logical(window.scale_factor());
                 let position = self.scale_pos_from_winit(window, position);

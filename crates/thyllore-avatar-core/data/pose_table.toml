@@ -45,6 +45,31 @@ keys = [
 ]
 
 [[pose]]
+name = "knee_up"
+labels = ["膝を上げる", "raise the knee"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -90 },
+  { role = "RightLowerLeg", axis = "x", degrees = 90 },
+]
+
+[[pose]]
+name = "leg_kick_extended"
+labels = ["脚を前に蹴り出す", "leg kicked out forward"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -80 },
+  { role = "RightLowerLeg", axis = "x", degrees = 0 },
+]
+
+[[pose]]
+name = "guard"
+labels = ["拳を顔の前で構える", "fists up in guard"]
+keys = [
+  { role = "RightUpperArm", axis = "y", degrees = -30 },
+  { role = "RightUpperArm", axis = "z", degrees = -50 },
+  { role = "RightLowerArm", axis = "y", degrees = -120 },
+]
+
+[[pose]]
 name = "hips_twist"
 labels = ["腰を右へ捻る、足は正面のまま", "twist the hips to the right, feet stay planted"]
 keys = [
@@ -77,9 +102,56 @@ keys = [
   { role = "Head", axis = "x", degrees = 5 },
 ]
 
+[[pose]]
+name = "fist"
+labels = ["拳を握る", "make a fist"]
+keys = [
+  { role = "RightIndexProximal", axis = "z", degrees = -80 },
+  { role = "RightIndexIntermediate", axis = "z", degrees = -90 },
+  { role = "RightIndexDistal", axis = "z", degrees = -60 },
+  { role = "RightMiddleProximal", axis = "z", degrees = -80 },
+  { role = "RightMiddleIntermediate", axis = "z", degrees = -90 },
+  { role = "RightMiddleDistal", axis = "z", degrees = -60 },
+  { role = "RightRingProximal", axis = "z", degrees = -80 },
+  { role = "RightRingIntermediate", axis = "z", degrees = -90 },
+  { role = "RightRingDistal", axis = "z", degrees = -60 },
+  { role = "RightLittleProximal", axis = "z", degrees = -80 },
+  { role = "RightLittleIntermediate", axis = "z", degrees = -90 },
+  { role = "RightLittleDistal", axis = "z", degrees = -60 },
+  { role = "RightThumbProximal", axis = "y", degrees = 25 },
+  { role = "RightThumbProximal", axis = "z", degrees = -25 },
+  { role = "RightThumbIntermediate", axis = "z", degrees = -30 },
+  { role = "RightThumbDistal", axis = "z", degrees = -30 },
+]
+
+[[pose]]
+name = "hand_open"
+labels = ["手を開く", "open the hand"]
+keys = [
+  { role = "RightIndexProximal", axis = "z", degrees = 0 },
+  { role = "RightIndexIntermediate", axis = "z", degrees = 0 },
+  { role = "RightIndexDistal", axis = "z", degrees = 0 },
+  { role = "RightMiddleProximal", axis = "z", degrees = 0 },
+  { role = "RightMiddleIntermediate", axis = "z", degrees = 0 },
+  { role = "RightMiddleDistal", axis = "z", degrees = 0 },
+  { role = "RightRingProximal", axis = "z", degrees = 0 },
+  { role = "RightRingIntermediate", axis = "z", degrees = 0 },
+  { role = "RightRingDistal", axis = "z", degrees = 0 },
+  { role = "RightLittleProximal", axis = "z", degrees = 0 },
+  { role = "RightLittleIntermediate", axis = "z", degrees = 0 },
+  { role = "RightLittleDistal", axis = "z", degrees = 0 },
+  { role = "RightThumbProximal", axis = "y", degrees = 0 },
+  { role = "RightThumbProximal", axis = "z", degrees = 0 },
+  { role = "RightThumbIntermediate", axis = "z", degrees = 0 },
+  { role = "RightThumbDistal", axis = "z", degrees = 0 },
+  { role = "RightIndexProximal", axis = "y", degrees = -10 },
+  { role = "RightRingProximal", axis = "y", degrees = 5 },
+  { role = "RightLittleProximal", axis = "y", degrees = 12 },
+]
+
 [[motion]]
 name = "punch"
-labels = ["正拳突き", "パンチ", "拳を突き出す", "straight punch", "punch"]
+labels = ["正拳突き", "パンチ", "拳を突き出す", "正拳突きをして", "パンチして", "拳を突き出して", "straight punch", "punch", "throw a punch", "punch forward"]
 region = "full_body"
 duration = 2.0
 cycle = [0.4, 1.3]
@@ -93,7 +165,7 @@ poses = [
 
 [[motion]]
 name = "wave"
-labels = ["手を振る", "バイバイ", "wave the hand", "wave hello"]
+labels = ["手を振る", "バイバイ", "手を振って", "右手を振って", "手を振るモーション", "wave the hand", "wave hello", "wave your hand", "wave at the camera"]
 region = "upper_body"
 duration = 2.0
 cycle = [0.8, 1.6]
@@ -106,7 +178,7 @@ poses = [
 
 [[motion]]
 name = "bow"
-labels = ["お辞儀", "礼をする", "bow"]
+labels = ["お辞儀", "礼をする", "お辞儀して", "礼をして", "頭を下げて", "bow", "take a bow", "bow politely"]
 region = "upper_body"
 duration = 1.6
 poses = [
@@ -116,7 +188,7 @@ poses = [
 
 [[motion]]
 name = "nod"
-labels = ["頷く", "うなずく", "nod"]
+labels = ["頷く", "うなずく", "頷いて", "うなずいて", "nod", "nod your head"]
 region = "head"
 duration = 0.8
 cycle = [0.0, 0.6]
@@ -127,7 +199,7 @@ poses = [
 
 [[motion]]
 name = "arm_raise"
-labels = ["腕を上げる", "手を上げる", "raise the arm", "raise the hand"]
+labels = ["腕を上げる", "手を上げる", "腕を上げて", "手を上げて", "raise the arm", "raise the hand", "raise your arm", "put your hand up"]
 region = "upper_body"
 duration = 1.5
 poses = [
@@ -137,10 +209,99 @@ poses = [
 
 [[motion]]
 name = "head_turn"
-labels = ["横を向く", "振り向く", "turn the head", "look sideways"]
+labels = ["横を向く", "振り向く", "横を向いて", "顔を横に向けて", "turn the head", "look sideways", "turn your head", "look to the side"]
 region = "head"
 duration = 1.3
 poses = [
   { time = 0.4, set = [{ pose = "head_turn" }] },
   { time = 0.9, set = [{ pose = "head_turn" }] },
+]
+
+[[motion]]
+name = "knee_raise"
+labels = ["膝を上げる", "腿上げ", "膝を上げて", "腿を上げて", "raise the knee", "knee up", "lift your knee"]
+region = "lower_body"
+duration = 1.5
+poses = [
+  { time = 0.5, set = [{ pose = "knee_up" }] },
+  { time = 1.0, set = [{ pose = "knee_up" }] },
+]
+
+[[motion]]
+name = "front_kick"
+labels = ["前蹴り", "キック", "蹴る", "前蹴りして", "蹴って", "キックして", "front kick", "kick", "kick forward", "do a front kick"]
+region = "full_body"
+duration = 1.8
+poses = [
+  { time = 0.3, set = [{ pose = "stance", side = "both" }, { pose = "guard", side = "both" }] },
+  { time = 0.6, set = [{ pose = "knee_up" }, { pose = "guard", side = "both" }] },
+  { time = 0.8, set = [{ pose = "leg_kick_extended" }, { pose = "guard", side = "both" }] },
+  { time = 1.1, set = [{ pose = "knee_up" }, { pose = "guard", side = "both" }] },
+  { time = 1.4, set = [{ pose = "stance", side = "both" }, { pose = "guard", side = "both" }] },
+]
+
+[[motion]]
+name = "grip"
+labels = ["拳を握る", "手を握る", "グー", "拳を握って", "手を握って", "make a fist", "clench the fist", "clench your fist"]
+region = "upper_body"
+duration = 1.2
+poses = [
+  { time = 0.4, set = [{ pose = "fist" }] },
+  { time = 0.8, set = [{ pose = "fist" }] },
+]
+
+[[motion]]
+name = "open_hand"
+labels = ["手を開く", "パー", "指を広げる", "手を開いて", "指を広げて", "open the hand", "spread the fingers", "open your hand"]
+region = "upper_body"
+duration = 1.2
+poses = [
+  { time = 0.4, set = [{ pose = "hand_open" }] },
+  { time = 0.8, set = [{ pose = "hand_open" }] },
+]
+
+[[pose]]
+name = "knees_bent_deep"
+labels = ["膝を深く曲げる", "bend the knees deeply"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -50 },
+  { role = "RightLowerLeg", axis = "x", degrees = 97 },
+  { role = "RightFoot", axis = "x", degrees = -47 },
+]
+
+[[pose]]
+name = "knees_bent_half"
+labels = ["膝を軽く曲げる", "bend the knees halfway"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -25 },
+  { role = "RightLowerLeg", axis = "x", degrees = 49 },
+  { role = "RightFoot", axis = "x", degrees = -24 },
+]
+
+[[pose]]
+name = "hips_lowered"
+labels = ["腰を落とす", "lower the hips"]
+keys = [
+  { role = "Hips", axis = "ty", offset = -0.316 },
+  { role = "Spine", axis = "x", degrees = 25 },
+]
+
+[[pose]]
+name = "hips_lowered_half"
+labels = ["腰を少し落とす", "lower the hips halfway"]
+keys = [
+  { role = "Hips", axis = "ty", offset = -0.084 },
+  { role = "Spine", axis = "x", degrees = 12 },
+]
+
+[[motion]]
+name = "crouch"
+labels = ["しゃがむ", "かがむ", "腰を落とす", "しゃがんで", "腰を落として", "crouch", "squat down", "crouch down"]
+region = "full_body"
+duration = 2.0
+poses = [
+  { time = 0.3, set = [{ pose = "knees_bent_half", side = "both" }, { pose = "hips_lowered_half" }] },
+  { time = 0.6, set = [{ pose = "knees_bent_deep", side = "both" }, { pose = "hips_lowered" }] },
+  { time = 1.4, set = [{ pose = "knees_bent_deep", side = "both" }, { pose = "hips_lowered" }] },
+  { time = 1.7, set = [{ pose = "knees_bent_half", side = "both" }, { pose = "hips_lowered_half" }] },
 ]

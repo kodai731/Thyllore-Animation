@@ -1,4 +1,6 @@
 mod animation_meta;
+mod camera;
+mod camera_param;
 mod clip_schedule;
 mod clip_track_snapshot;
 mod constraint_set;
@@ -24,6 +26,8 @@ mod water;
 mod wind;
 
 pub use animation_meta::*;
+pub use camera::*;
+pub use camera_param::*;
 pub use clip_schedule::*;
 pub use clip_track_snapshot::*;
 pub use constraint_set::*;

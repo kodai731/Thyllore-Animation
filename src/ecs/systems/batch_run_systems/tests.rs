@@ -1119,6 +1119,51 @@ fn compose_edit_keys_every_touched_role_from_the_pose_table() {
 }
 
 #[test]
+fn helm_compose_motion_registers_a_new_clip_and_schedules_it_on_the_target() {
+    use crate::ecs::component::ClipSchedule;
+    use crate::ecs::events::UiCommand;
+    use crate::ecs::systems::helm::HelmCommand;
+    use crate::ecs::systems::motion_seed_systems::composed_clip_name;
+    use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+    use tempfile::tempdir;
+    use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+    world.insert_resource(crate::ecs::resource::BakedHumanoidClips::default());
+    let target = world.spawn();
+    world.insert_component(target, ClipSchedule::default());
+    let spec = MotionSpec::parse("wave,side=left,count=2").unwrap();
+
+    Box::new(HelmCommand::ComposeMotion {
+        entity: target,
+        spec: spec.clone(),
+        start_time: 0.5,
+    })
+    .apply(&mut world, &mut assets, &GraphicsResources::default());
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert_eq!(clip.name, composed_clip_name(&spec));
+    assert_eq!(clip.name, "left_wave");
+    assert!(
+        clip.get_track(role_track_bone(&world, "LeftUpperArm"))
+            .is_some_and(|track| track.has_rotation_keyframes()),
+        "the left side mirrors the right-defined wave"
+    );
+    let schedule = world.get_component::<ClipSchedule>(target).unwrap();
+    assert_eq!(schedule.instances.len(), 1);
+    assert_eq!(schedule.instances[0].source_id, clip_id);
+    assert!((schedule.instances[0].start_time - 0.5).abs() < 1e-6);
+    assert!(
+        world
+            .resource::<crate::ecs::resource::BakedHumanoidClips>()
+            .scan_requested
+    );
+}
+
+#[test]
 fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
     use super::anim_edit_spec::anim_edit_parse_spec;
     assert!(anim_edit_parse_spec("compose=").is_err());

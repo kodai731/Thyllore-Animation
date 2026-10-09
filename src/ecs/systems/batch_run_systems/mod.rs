@@ -16,7 +16,7 @@ pub use apply_overrides::*;
 pub use batch_action::*;
 pub use cli_resolve::*;
 pub use debug_actions::*;
-pub use flags::BATCH_LIST_DEBUG_ACTIONS_FLAG;
+pub use flags::{BATCH_ANIM_DUMP_TRACKS_FLAG, BATCH_LIST_DEBUG_ACTIONS_FLAG};
 pub use orbit::*;
 pub use sequence_analyze::*;
 

@@ -109,6 +109,7 @@ pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -
         node_animation_scale: 1.0,
         constraints: Vec::new(),
         spring_bone_setup: None,
+        cameras: Vec::new(),
         vrm_humanoid: None,
     }
 }
@@ -211,6 +212,7 @@ pub fn build_uv_sphere_model(radius: f32, segments: u32, rings: u32) -> ModelLoa
         node_animation_scale: 1.0,
         constraints: Vec::new(),
         spring_bone_setup: None,
+        cameras: Vec::new(),
         vrm_humanoid: None,
     }
 }

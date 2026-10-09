@@ -1,0 +1,250 @@
+use cgmath::{Deg, Euler, Quaternion, Rad};
+
+use super::camera::CameraComponent;
+use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
+use crate::ecs::resource::{ActiveCamera, TimelineState};
+use crate::ecs::world::{Entity, Transform, World};
+use thyllore_anim_core::editable::PropertyType;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraParam {
+    TranslationX,
+    TranslationY,
+    TranslationZ,
+    RotationX,
+    RotationY,
+    RotationZ,
+    FovY,
+    /// 1.0 while this camera should drive the view; sampled with step semantics
+    /// by `sync_active_camera_switch`, so a key marks a cut to this camera.
+    Active,
+}
+
+pub const CAMERA_ACTIVE_THRESHOLD: f32 = 0.5;
+
+impl CameraParam {
+    pub const ALL: [CameraParam; 8] = [
+        CameraParam::TranslationX,
+        CameraParam::TranslationY,
+        CameraParam::TranslationZ,
+        CameraParam::RotationX,
+        CameraParam::RotationY,
+        CameraParam::RotationZ,
+        CameraParam::FovY,
+        CameraParam::Active,
+    ];
+
+    pub fn property_type(self) -> PropertyType {
+        CAMERA_DOMAIN.property_type_at(self as usize)
+    }
+
+    pub fn from_property_type(property_type: PropertyType) -> Option<CameraParam> {
+        let index = CAMERA_DOMAIN.channel_index(property_type)?;
+        CameraParam::ALL.get(index).copied()
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            CameraParam::TranslationX => "Translation X",
+            CameraParam::TranslationY => "Translation Y",
+            CameraParam::TranslationZ => "Translation Z",
+            CameraParam::RotationX => "Rotation X",
+            CameraParam::RotationY => "Rotation Y",
+            CameraParam::RotationZ => "Rotation Z",
+            CameraParam::FovY => "FOV Y",
+            CameraParam::Active => "Active",
+        }
+    }
+
+    pub const fn cli_name(self) -> &'static str {
+        match self {
+            CameraParam::TranslationX => "camera_translation_x",
+            CameraParam::TranslationY => "camera_translation_y",
+            CameraParam::TranslationZ => "camera_translation_z",
+            CameraParam::RotationX => "camera_rotation_x",
+            CameraParam::RotationY => "camera_rotation_y",
+            CameraParam::RotationZ => "camera_rotation_z",
+            CameraParam::FovY => "camera_fov_y",
+            CameraParam::Active => "camera_active",
+        }
+    }
+
+    pub const fn debug_value_range(self) -> (f32, f32) {
+        match self {
+            CameraParam::TranslationX | CameraParam::TranslationY | CameraParam::TranslationZ => {
+                (-5.0, 5.0)
+            }
+            CameraParam::RotationX | CameraParam::RotationY | CameraParam::RotationZ => {
+                (-90.0, 90.0)
+            }
+            CameraParam::FovY => (20.0, 90.0),
+            CameraParam::Active => (0.0, 1.0),
+        }
+    }
+
+    const fn channel(self) -> ScalarChannel {
+        ScalarChannel {
+            display_name: self.display_name(),
+            cli_name: self.cli_name(),
+            debug_value_range: self.debug_value_range(),
+            renamed_from: &[],
+        }
+    }
+}
+
+pub static CAMERA_CHANNELS: [ScalarChannel; 8] = {
+    let mut channels = [CameraParam::TranslationX.channel(); 8];
+    let mut i = 0;
+    while i < 8 {
+        channels[i] = CameraParam::ALL[i].channel();
+        i += 1;
+    }
+    channels
+};
+
+fn camera_channels() -> &'static [ScalarChannel] {
+    &CAMERA_CHANNELS
+}
+
+pub static CAMERA_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
+    name: "Camera",
+    channel_table: camera_channels,
+    has_component: camera_has_component,
+    entities: camera_entities,
+    read: camera_channel_read,
+    local_time: camera_local_time,
+};
+
+crate::scalar_channel_domain!(CAMERA_DOMAIN);
+
+fn camera_has_component(world: &World, entity: Entity) -> bool {
+    world.get_component::<CameraComponent>(entity).is_some()
+}
+
+fn camera_entities(world: &World) -> Vec<Entity> {
+    world
+        .iter_components::<CameraComponent>()
+        .map(|(e, _)| e)
+        .collect()
+}
+
+fn camera_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {
+    let param = CameraParam::from_property_type(property_type)?;
+    if param == CameraParam::Active {
+        let is_active = world
+            .get_resource::<ActiveCamera>()
+            .is_some_and(|active| active.0 == Some(entity));
+        return Some(if is_active { 1.0 } else { 0.0 });
+    }
+    let transform = world.get_component::<Transform>(entity)?;
+    let camera = world.get_component::<CameraComponent>(entity)?;
+    Some(camera_channel_value(&transform, &camera, param))
+}
+
+fn camera_local_time(world: &World, _entity: Entity) -> Option<f32> {
+    world
+        .get_resource::<TimelineState>()
+        .map(|ts| ts.current_time)
+}
+
+fn camera_channel_value(
+    transform: &Transform,
+    camera: &CameraComponent,
+    param: CameraParam,
+) -> f32 {
+    match param {
+        CameraParam::TranslationX => transform.translation.x,
+        CameraParam::TranslationY => transform.translation.y,
+        CameraParam::TranslationZ => transform.translation.z,
+        CameraParam::RotationX | CameraParam::RotationY | CameraParam::RotationZ => {
+            let euler: Euler<Rad<f32>> = Euler::from(transform.rotation);
+            match param {
+                CameraParam::RotationX => Deg::from(euler.x).0,
+                CameraParam::RotationY => Deg::from(euler.y).0,
+                _ => Deg::from(euler.z).0,
+            }
+        }
+        CameraParam::FovY => camera.fov_y.0,
+        CameraParam::Active => 0.0,
+    }
+}
+
+pub fn apply_camera_param_value(
+    transform: &mut Transform,
+    camera: &mut CameraComponent,
+    param: CameraParam,
+    value: f32,
+) {
+    match param {
+        CameraParam::TranslationX => transform.translation.x = value,
+        CameraParam::TranslationY => transform.translation.y = value,
+        CameraParam::TranslationZ => transform.translation.z = value,
+        CameraParam::RotationX | CameraParam::RotationY | CameraParam::RotationZ => {
+            let euler: Euler<Rad<f32>> = Euler::from(transform.rotation);
+            let (mut x, mut y, mut z) = (
+                Deg::from(euler.x).0,
+                Deg::from(euler.y).0,
+                Deg::from(euler.z).0,
+            );
+            match param {
+                CameraParam::RotationX => x = value,
+                CameraParam::RotationY => y = value,
+                _ => z = value,
+            }
+            transform.rotation = Quaternion::from(Euler::new(
+                Rad::from(Deg(x)),
+                Rad::from(Deg(y)),
+                Rad::from(Deg(z)),
+            ));
+        }
+        CameraParam::FovY => camera.fov_y = Deg(value),
+        CameraParam::Active => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_code_from_property_type_roundtrip_all() {
+        for param in CameraParam::ALL {
+            let pt = param.property_type();
+            let recovered = CameraParam::from_property_type(pt).unwrap();
+            assert_eq!(recovered, param);
+        }
+    }
+
+    #[test]
+    fn test_read_apply_roundtrip() {
+        let mut transform = Transform::default();
+        let mut camera = CameraComponent::default();
+
+        // Apply translation (1, 2, 3)
+        apply_camera_param_value(&mut transform, &mut camera, CameraParam::TranslationX, 1.0);
+        apply_camera_param_value(&mut transform, &mut camera, CameraParam::TranslationY, 2.0);
+        apply_camera_param_value(&mut transform, &mut camera, CameraParam::TranslationZ, 3.0);
+
+        // Apply rotation Y = 30 degrees
+        apply_camera_param_value(&mut transform, &mut camera, CameraParam::RotationY, 30.0);
+
+        // Read back and verify
+        assert!(
+            (camera_channel_value(&transform, &camera, CameraParam::TranslationX) - 1.0).abs()
+                < 1e-4
+        );
+        assert!(
+            (camera_channel_value(&transform, &camera, CameraParam::TranslationY) - 2.0).abs()
+                < 1e-4
+        );
+        assert!(
+            (camera_channel_value(&transform, &camera, CameraParam::TranslationZ) - 3.0).abs()
+                < 1e-4
+        );
+        assert!(
+            (camera_channel_value(&transform, &camera, CameraParam::RotationY) - 30.0).abs() < 1e-3,
+            "RotationY read back {}",
+            camera_channel_value(&transform, &camera, CameraParam::RotationY)
+        );
+    }
+}

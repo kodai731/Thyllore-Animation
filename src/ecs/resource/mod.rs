@@ -6,6 +6,7 @@ mod layout_snapshot;
 mod mouse_input;
 mod viewport_input;
 
+mod active_camera;
 mod app_command;
 mod app_exit;
 mod auto_exposure;
@@ -44,6 +45,8 @@ mod grid_state;
 #[cfg(feature = "text-to-motion")]
 mod grpc_server_process;
 mod heat_distortion;
+mod helm_batch;
+mod helm_state;
 mod hierarchy_state;
 mod history_snapshot;
 mod humanoid_rig;
@@ -95,6 +98,7 @@ pub use layout_snapshot::*;
 pub use mouse_input::*;
 pub use viewport_input::*;
 
+pub use active_camera::*;
 pub use app_command::*;
 pub use app_exit::*;
 pub use auto_exposure::*;
@@ -133,6 +137,8 @@ pub use grid_state::*;
 #[cfg(feature = "text-to-motion")]
 pub use grpc_server_process::*;
 pub use heat_distortion::*;
+pub use helm_batch::*;
+pub use helm_state::*;
 pub use hierarchy_state::*;
 pub use history_snapshot::*;
 pub use humanoid_rig::*;

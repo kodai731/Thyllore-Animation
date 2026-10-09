@@ -2,7 +2,9 @@ use anyhow::Result;
 use cgmath::Vector2;
 
 use crate::ecs::context::EcsContext;
+use crate::ecs::systems::camera_shot_step;
 use crate::ecs::systems::camera_systems::{compute_camera_position, compute_camera_up};
+use crate::ecs::systems::sync_active_camera_to_view;
 use crate::ecs::FrameContext;
 use crate::ecs::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
@@ -11,6 +13,16 @@ use crate::ecs::{
 use crate::math::calculate_billboard_click_rect;
 
 pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
+    camera_shot_step(
+        &mut ctx.camera_mut(),
+        &mut ctx
+            .world
+            .resource_mut::<crate::ecs::systems::CameraShotMotion>(),
+        ctx.delta_time,
+    );
+
+    sync_active_camera_to_view(&mut ctx.world);
+
     update_camera_near_plane(ctx);
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);

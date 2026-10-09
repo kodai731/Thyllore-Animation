@@ -43,6 +43,7 @@ pub fn init(title: &str, take_focus: bool) -> System {
             .with_position(PhysicalPosition::new(10000, 10000));
     }
     let window = builder.build(&event_loop).expect("Failed to create window");
+    window.set_ime_allowed(true);
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);

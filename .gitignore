@@ -54,6 +54,8 @@ models/**/tokenizer.json
 models/**/router_index.f32
 models/**/router_index.json
 models/**/router_parity.json
+# The pose table labels embedded by the raw encoder beside them, rebuilt when either changes.
+models/**/motion_label_vectors.json
 
 # lib
 vendor/

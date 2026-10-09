@@ -477,12 +477,14 @@ fn e2e_text_to_ui_event_full_path() {
 
 /// Sentences that match a pose-table label verbatim are accepted (or clarified against a
 /// near-tie) through the label routes the runtime embeds at load, and their modifiers bind.
-/// Paraphrases with modifiers only have to keep their motion in the top three: acceptance
-/// under the bundle's thresholds is reported, not asserted, because those thresholds were tuned
-/// on the exported exemplars and the labels are a far smaller sample.
+/// Gesture sentences, paraphrased and carrying side / count words, reach their motion through
+/// the same routing the helm phase runs; utterances of trained routes never become a motion.
 #[test]
 fn e2e_gesture_sentences_reach_their_motion() {
-    use thyllore_animation::ecs::resource::{apply_encoder_thresholds, HelmState};
+    use thyllore_animation::ecs::resource::{
+        apply_compose_thresholds, apply_encoder_thresholds, HelmState,
+    };
+    use thyllore_animation::ecs::systems::helm::routing::{route_with_runtime, RoutingThresholds};
     use thyllore_animation::helm::components::tool_call::ToolCall;
     use thyllore_animation::helm::systems::binder::{bind_route, BindOutcome};
     use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSide;
@@ -494,119 +496,47 @@ fn e2e_gesture_sentences_reach_their_motion() {
     let load_started = std::time::Instant::now();
     let mut runtime = load_runtime(&model_dir).expect("load_runtime must succeed");
     eprintln!(
-        "runtime loaded in {:.1}s with {} exemplars",
+        "runtime loaded in {:.1}s with {} raw exemplars",
         load_started.elapsed().as_secs_f32(),
-        runtime.index.exemplar_count()
+        runtime.raw_index.exemplar_count()
     );
-    let encode_started = std::time::Instant::now();
-    for _ in 0..10 {
-        runtime.encoder.encode("右手を振って").unwrap();
-    }
-    eprintln!(
-        "one single-label encode: {:.1}ms",
-        encode_started.elapsed().as_secs_f32() * 100.0
-    );
-    let mut thresholds = HelmState::default().thresholds;
-    apply_encoder_thresholds(&mut thresholds, &runtime.thresholds);
+    let defaults = HelmState::default();
+    let mut thresholds = RoutingThresholds {
+        router: defaults.thresholds,
+        compose: defaults.compose_thresholds,
+    };
+    apply_encoder_thresholds(&mut thresholds.router, &runtime.thresholds);
+    apply_compose_thresholds(&mut thresholds.compose, &runtime.thresholds);
 
-    #[derive(Clone, Copy)]
-    enum Expect {
-        Accepted,
-        InTopThree,
-    }
-    let cases: [(&str, &str, MotionSide, u32, Expect); 8] = [
-        (
-            "右手を振って",
-            "wave",
-            MotionSide::Right,
-            1,
-            Expect::Accepted,
-        ),
-        ("お辞儀して", "bow", MotionSide::Right, 1, Expect::Accepted),
-        ("頷いて", "nod", MotionSide::Right, 1, Expect::Accepted),
-        (
-            "しゃがんで",
-            "crouch",
-            MotionSide::Right,
-            1,
-            Expect::Accepted,
-        ),
-        (
-            "腕を上げて",
-            "arm_raise",
-            MotionSide::Right,
-            1,
-            Expect::Accepted,
-        ),
-        (
-            "左手を2回振って",
-            "wave",
-            MotionSide::Left,
-            2,
-            Expect::InTopThree,
-        ),
-        (
-            "左で正拳突き",
-            "punch",
-            MotionSide::Left,
-            1,
-            Expect::InTopThree,
-        ),
-        (
-            "throw a straight punch",
-            "punch",
-            MotionSide::Right,
-            1,
-            Expect::InTopThree,
-        ),
+    let cases: [(&str, &str, MotionSide, u32); 8] = [
+        ("右手を振って", "wave", MotionSide::Right, 1),
+        ("お辞儀して", "bow", MotionSide::Right, 1),
+        ("頷いて", "nod", MotionSide::Right, 1),
+        ("しゃがんで", "crouch", MotionSide::Right, 1),
+        ("腕を上げて", "arm_raise", MotionSide::Right, 1),
+        ("左手を2回振って", "wave", MotionSide::Left, 2),
+        ("左で正拳突き", "punch", MotionSide::Left, 1),
+        ("throw a straight punch", "punch", MotionSide::Right, 1),
     ];
 
     let mut failures = Vec::new();
-    let mut accepted = 0;
-    for (utterance, motion, side, count, expect) in cases {
+    for (utterance, motion, side, count) in cases {
         let normalized = normalize_utterance(utterance);
-        let query = runtime.encoder.encode(&normalized).unwrap();
-        let raw_query = runtime.raw_encoder.encode(&normalized).unwrap();
-        let raw_top_score = rank_routes(&runtime.raw_index, &raw_query, HelmMode::AllowEdit)
-            .first()
-            .map(|(_, score)| *score);
-        let ranked = rank_routes(&runtime.index, &query, HelmMode::AllowEdit);
-        let decision = route_utterance(
-            RoutingRequest {
-                utterance: &normalized,
-                query_vector: &query,
-                mode: HelmMode::AllowEdit,
-                raw_top_score,
-            },
-            &runtime.index,
-            thresholds,
-        );
-        eprintln!(
-            "{utterance:>24} -> {decision:?} | raw_top={:.3} | top3={:?}",
-            raw_top_score.unwrap_or(0.0),
-            ranked
-                .iter()
-                .take(3)
-                .map(|(r, s)| format!("{}={s:.3}", r.id()))
-                .collect::<Vec<_>>()
-        );
+        let routed =
+            route_with_runtime(&mut runtime, &normalized, HelmMode::AllowEdit, &thresholds)
+                .expect("routing must succeed");
+        eprintln!("{utterance:>24} -> {:?}", routed.decision);
 
         let expected = Route::ComposeMotion(motion);
-        let reached = match (&decision, expect) {
-            (RouterDecision::Accept { route, .. }, Expect::Accepted) => *route == expected,
-            (RouterDecision::Clarify { candidates }, Expect::Accepted) => {
+        let reached = match &routed.decision {
+            RouterDecision::Accept { route, .. } => *route == expected,
+            RouterDecision::Clarify { candidates } => {
                 candidates.iter().any(|(r, _)| *r == expected)
             }
-            (_, Expect::InTopThree) => ranked.iter().take(3).any(|(r, _)| *r == expected),
-            (RouterDecision::Reject { .. } | RouterDecision::NoCandidate, Expect::Accepted) => {
-                false
-            }
+            RouterDecision::Reject { .. } | RouterDecision::NoCandidate => false,
         };
-        if matches!(decision, RouterDecision::Accept { .. }) {
-            accepted += 1;
-        }
         if !reached {
-            failures.push(format!("{utterance}: {decision:?}"));
+            failures.push(format!("{utterance}: {:?}", routed.decision));
             continue;
         }
         match bind_route(expected, &normalized, &[]) {
@@ -618,11 +548,26 @@ fn e2e_gesture_sentences_reach_their_motion() {
             other => failures.push(format!("{utterance}: bound {other:?}")),
         }
     }
-    eprintln!(
-        "{accepted}/{} gesture sentences accepted at tau_reject={}",
-        cases.len(),
-        thresholds.tau_reject
-    );
+
+    for utterance in [
+        "play the animation",
+        "シーンを保存して",
+        "カメラを右に回して",
+        "walk forward",
+    ] {
+        let normalized = normalize_utterance(utterance);
+        let routed =
+            route_with_runtime(&mut runtime, &normalized, HelmMode::AllowEdit, &thresholds)
+                .expect("routing must succeed");
+        eprintln!("{utterance:>24} -> {:?}", routed.decision);
+        if let RouterDecision::Accept {
+            route: Route::ComposeMotion(motion),
+            ..
+        } = routed.decision
+        {
+            failures.push(format!("{utterance}: became the motion {motion}"));
+        }
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

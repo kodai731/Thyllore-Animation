@@ -46,6 +46,8 @@ pub struct EncoderThresholds {
     pub tau_reject: Option<f32>,
     pub tau_raw: Option<f32>,
     pub tau_raw_nearmiss: Option<f32>,
+    pub compose_tau: Option<f32>,
+    pub compose_margin: Option<f32>,
 }
 
 /// Reads `encoder.json` from a model directory; a missing file yields the all-`None` config.
@@ -59,6 +61,34 @@ pub fn read_encoder_config(model_dir: &Path) -> Result<EncoderConfig> {
     let config: EncoderConfig = serde_json::from_str(&json)
         .with_context(|| format!("failed to parse {}", config_path.display()))?;
     Ok(config)
+}
+
+/// Identifies the files `SentenceEncoder::from_model_dir` reads by size and modification time,
+/// so vectors derived from the encoder can be cached until one of them changes.
+pub fn model_fingerprint(model_dir: &Path) -> Result<String> {
+    let mut parts = Vec::new();
+    for relative in [
+        ONNX_RELATIVE_PATH,
+        TOKENIZER_FILENAME,
+        ENCODER_CONFIG_FILENAME,
+    ] {
+        let path = model_dir.join(relative);
+        let Ok(metadata) = std::fs::metadata(&path) else {
+            parts.push(format!("{relative}:absent"));
+            continue;
+        };
+        let modified = metadata
+            .modified()
+            .with_context(|| format!("{}", path.display()))?
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        parts.push(format!(
+            "{relative}:{}:{}",
+            metadata.len(),
+            modified.as_nanos()
+        ));
+    }
+    Ok(parts.join("|"))
 }
 
 struct TokenizedBatch {

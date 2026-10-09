@@ -4,6 +4,7 @@ use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{ClipLibrary, HelmState, TimelineState};
 use crate::ecs::systems::helm::dispatcher::{dispatch_tool_call, DispatchOutcome};
 use crate::ecs::systems::helm::name_resolver::list_entity_names;
+use crate::ecs::systems::helm::routing::{route_with_runtime, RoutedUtterance, RoutingThresholds};
 use crate::ecs::systems::helm::timeline_context::build_timeline_context;
 use crate::ecs::systems::helm::HelmCommand;
 use crate::helm::components::route::Route;
@@ -11,7 +12,6 @@ use crate::helm::components::tool_call::ToolCall;
 use crate::helm::systems::binder::{bind_route, BindOutcome};
 use crate::helm::systems::normalize::normalize_utterance;
 use crate::helm::systems::resolution::{confirm_reason, resolve_decision, ResolvedAction};
-use crate::helm::systems::router::{rank_routes, route_utterance, RoutingRequest};
 
 use std::io::Write;
 
@@ -235,6 +235,10 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                             &mut state.thresholds,
                             &runtime.thresholds,
                         );
+                        crate::ecs::resource::apply_compose_thresholds(
+                            &mut state.compose_thresholds,
+                            &runtime.thresholds,
+                        );
                         state.runtime = crate::ecs::resource::RuntimeSlot::Ready(Box::new(runtime));
                         state.last_runtime_load_ms = Some(elapsed_ms);
                         state.submitted_utterance = Some(utterance);
@@ -258,57 +262,30 @@ pub fn run_helm_phase(ctx: &mut EcsContext) {
                 }
                 let scene_names = list_entity_names(ctx.world);
 
-                let (decision, raw_top_score) = {
+                let routed = {
                     let mut state = ctx.world.resource_mut::<HelmState>();
+                    let routing_thresholds = RoutingThresholds {
+                        router: thresholds,
+                        compose: state.compose_thresholds,
+                    };
                     match &mut state.runtime {
                         crate::ecs::resource::RuntimeSlot::Ready(rt) => {
-                            let vector: Vec<f32> = match rt.encoder.encode(&normalized) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    drop(state);
-                                    let mut state = ctx.world.resource_mut::<HelmState>();
-                                    state.feedback =
-                                        Some(crate::ecs::resource::CommandFeedback::DispatchError(
-                                            format!("encoding failed: {}", e),
-                                        ));
-                                    return;
-                                }
-                            };
-
-                            let raw_vector: Vec<f32> = match rt.raw_encoder.encode(&normalized) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    drop(state);
-                                    let mut state = ctx.world.resource_mut::<HelmState>();
-                                    state.feedback =
-                                        Some(crate::ecs::resource::CommandFeedback::DispatchError(
-                                            format!("raw encoding failed: {}", e),
-                                        ));
-                                    return;
-                                }
-                            };
-
-                            let raw_top_score = {
-                                let ranked = rank_routes(&rt.raw_index, &raw_vector, mode);
-                                ranked.first().map(|(_, score)| *score)
-                            };
-
-                            let decision = route_utterance(
-                                RoutingRequest {
-                                    utterance: &normalized,
-                                    query_vector: &vector,
-                                    mode,
-                                    raw_top_score,
-                                },
-                                &rt.index,
-                                thresholds,
-                            );
-                            (decision, raw_top_score)
+                            route_with_runtime(rt, &normalized, mode, &routing_thresholds)
                         }
-                        _ => {
-                            drop(state);
-                            return;
-                        }
+                        _ => return,
+                    }
+                };
+                let RoutedUtterance {
+                    decision,
+                    raw_top_score,
+                } = match routed {
+                    Ok(routed) => routed,
+                    Err(message) => {
+                        let mut state = ctx.world.resource_mut::<HelmState>();
+                        state.feedback = Some(
+                            crate::ecs::resource::CommandFeedback::DispatchError(message),
+                        );
+                        return;
                     }
                 };
                 let elapsed_ms = start.elapsed().as_secs_f32() * 1000.0;

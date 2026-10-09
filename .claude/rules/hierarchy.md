@@ -69,9 +69,12 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
   `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
   sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and
-  helm's `compose_motion:<motion>` routes (`src/helm/systems/motion_labels.rs` embeds each motion's labels
-  into the router index when the runtime loads; `HelmCommand::ComposeMotion` composes a new clip through
-  `src/ecs/systems/motion_seed_systems.rs`) call the same function; nothing in `src/` holds angles or poses.
+  helm's `compose_motion:<motion>` routes call the same function; nothing in `src/` holds angles or poses.
+  `src/helm/systems/motion_labels.rs` embeds each motion's labels with the raw encoder into the raw index
+  when the runtime loads (cached beside that encoder), `src/ecs/systems/helm/routing.rs` ranks them on the
+  utterance without its slot words (`modifier.rs::strip_slot_terms`) and `compose_decision.rs` decides
+  before the trained router runs; `HelmCommand::ComposeMotion` composes a new clip through
+  `src/ecs/systems/motion_seed_systems.rs`.
 - GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
   next to its own `destroy`; a type that only aggregates such fields writes `#[derive(GpuResource)]`
   (`thyllore-vulkan-derive`) and never enumerates them, `#[gpu_resource(skip)]` marks a borrowed handle.

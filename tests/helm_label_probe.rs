@@ -6,12 +6,14 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use thyllore_animation::ecs::resource::{apply_encoder_thresholds, load_runtime, HelmState};
+use thyllore_animation::ecs::resource::{load_runtime, HelmRuntime};
+use thyllore_animation::ecs::systems::helm::routing::motion_query;
 use thyllore_animation::helm::components::route::{HelmMode, Route};
-use thyllore_animation::helm::systems::normalize::normalize_utterance;
-use thyllore_animation::helm::systems::router::{
-    rank_routes, route_utterance, ExemplarIndex, RouterDecision, RouterThresholds, RoutingRequest,
+use thyllore_animation::helm::systems::compose_decision::{
+    decide_compose_motion, ComposeThresholds,
 };
+use thyllore_animation::helm::systems::normalize::normalize_utterance;
+use thyllore_animation::helm::systems::router::{rank_routes, RouterDecision};
 use thyllore_avatar_core::motion::seed::components::pose_table::PoseTable;
 use thyllore_ml_core::sentence_encoder::SentenceEncoder;
 
@@ -459,186 +461,136 @@ fn probe_paraphrase_robustness() {
     }
 }
 
-struct FullRun {
-    top1: usize,
-    accepted: usize,
-    margin: f32,
-    misses: Vec<String>,
-}
+const HELDOUT_ENV_VAR: &str = "THYLLORE_HELM_HELDOUT";
+const ESCAPE_ENV_VAR: &str = "THYLLORE_HELM_ESCAPE";
 
-fn run_full_router(
-    encoder: &mut SentenceEncoder,
-    index: &ExemplarIndex,
-    strip: Strip,
-    mut accept: Option<(&mut SentenceEncoder, &ExemplarIndex, RouterThresholds)>,
-) -> FullRun {
-    let mut run = FullRun {
-        top1: 0,
-        accepted: 0,
-        margin: 0.0,
-        misses: Vec::new(),
-    };
-    for (utterance, expected) in CASES {
-        let query_text = strip_modifiers(&normalize_utterance(utterance), strip);
-        let query = encoder.encode(&query_text).unwrap();
-        let ranked = rank_routes(index, &query, HelmMode::AllowEdit);
-        let want = Route::ComposeMotion(expected);
-        let correct = ranked
-            .iter()
-            .find(|(r, _)| *r == want)
-            .map(|(_, s)| *s)
-            .unwrap_or(0.0);
-        let other = ranked
-            .iter()
-            .find(|(r, _)| *r != want)
-            .map(|(_, s)| *s)
-            .unwrap_or(0.0);
-        run.margin += correct - other;
-        if ranked[0].0 == want {
-            run.top1 += 1;
-        } else {
-            run.misses.push(format!(
-                "{utterance} -> {}={:.3} (want {expected}={correct:.3})",
-                ranked[0].0.id(),
-                ranked[0].1
-            ));
-        }
-        if let Some((raw_encoder, raw_index, thresholds)) = accept.as_mut() {
-            let raw_query = raw_encoder.encode(&query_text).unwrap();
-            let raw_top = rank_routes(raw_index, &raw_query, HelmMode::AllowEdit)
-                .first()
-                .map(|(_, s)| *s);
-            let decision = route_utterance(
-                RoutingRequest {
-                    utterance: &query_text,
-                    query_vector: &query,
-                    mode: HelmMode::AllowEdit,
-                    raw_top_score: raw_top,
-                },
-                index,
-                *thresholds,
-            );
-            if matches!(decision, RouterDecision::Accept { route, .. } if route == want) {
-                run.accepted += 1;
-            }
-        }
-    }
-    run.margin /= CASES.len() as f32;
-    run
-}
-
-fn report_full(name: &str, run: &FullRun) {
-    eprintln!(
-        "{name:<40} top1 {:>2}/{} | accepted {:>2} | mean margin {:+.3}",
-        run.top1,
-        CASES.len(),
-        run.accepted,
-        run.margin
-    );
-    for miss in &run.misses {
-        eprintln!("    miss: {miss}");
-    }
-}
-
-/// The production ranking: label blocks compete with the 36 trained routes inside each index.
-#[test]
-#[ignore = "measurement probe; needs the router model directory"]
-fn probe_full_router_ranking() {
-    let Ok(model_dir) = std::env::var(MODEL_DIR_ENV_VAR) else {
-        eprintln!("Skipping: set {MODEL_DIR_ENV_VAR}");
-        return;
-    };
-    let mut runtime = load_runtime(std::path::Path::new(&model_dir)).unwrap();
-    let mut thresholds = HelmState::default().thresholds;
-    apply_encoder_thresholds(&mut thresholds, &runtime.thresholds);
-
-    eprintln!("== setfit index (36 trained routes + label blocks), production thresholds");
-    for (name, strip) in [
-        ("raw query", Strip::None),
-        ("strip side+count+degree", Strip::SideCountDegree),
-    ] {
-        let run = run_full_router(
-            &mut runtime.encoder,
-            &runtime.index,
-            strip,
-            Some((&mut runtime.raw_encoder, &runtime.raw_index, thresholds)),
-        );
-        report_full(name, &run);
-    }
-
-    eprintln!("== raw index (36 trained routes + label blocks), ranking only");
-    for (name, strip) in [
-        ("raw query", Strip::None),
-        ("strip side+count+degree", Strip::SideCountDegree),
-    ] {
-        let run = run_full_router(&mut runtime.raw_encoder, &runtime.raw_index, strip, None);
-        report_full(name, &run);
-    }
-}
-
-/// Negative side: the smoke utterances of the trained routes must keep their route when the
-/// label blocks are present and when the query is stripped.
-#[test]
-#[ignore = "measurement probe; needs the router model directory"]
-fn probe_trained_routes_keep_winning() {
-    let Ok(model_dir) = std::env::var(MODEL_DIR_ENV_VAR) else {
-        eprintln!("Skipping: set {MODEL_DIR_ENV_VAR}");
-        return;
-    };
-    let mut runtime = load_runtime(std::path::Path::new(&model_dir)).unwrap();
-    let smoke = std::fs::read_to_string("tests/data/helm_batch_smoke.jsonl").unwrap();
-    let rows: Vec<(String, String)> = smoke
+fn read_utterances(path: &str, key: &str) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
             let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            v[key].as_str().unwrap().to_string()
+        })
+        .collect()
+}
+
+fn rank_motion_query(runtime: &mut HelmRuntime, utterance: &str) -> Vec<(Route, f32)> {
+    let query = motion_query(&normalize_utterance(utterance));
+    let vector = runtime.raw_encoder.encode(&query).unwrap();
+    rank_routes(&runtime.raw_index, &vector, HelmMode::AllowEdit)
+}
+
+fn reaches(decision: &Option<RouterDecision>, want: Route) -> bool {
+    match decision {
+        Some(RouterDecision::Accept { route, .. }) => *route == want,
+        Some(RouterDecision::Clarify { candidates }) => candidates.iter().any(|(r, _)| *r == want),
+        _ => false,
+    }
+}
+
+fn takes_a_motion(decision: &Option<RouterDecision>) -> bool {
+    match decision {
+        Some(RouterDecision::Accept { route, .. }) => matches!(route, Route::ComposeMotion(_)),
+        Some(RouterDecision::Clarify { candidates }) => candidates
+            .iter()
+            .any(|(r, _)| matches!(r, Route::ComposeMotion(_))),
+        _ => false,
+    }
+}
+
+/// The production compose stage (slot-stripped query, raw encoder, raw index with the label
+/// blocks) over the 46 gesture sentences and the utterances that must not become a motion:
+/// the smoke file, the training held-out set (`THYLLORE_HELM_HELDOUT`) and the out-of-scope
+/// set (`THYLLORE_HELM_ESCAPE`). Prints the score distributions and a (tau, margin) sweep.
+#[test]
+#[ignore = "measurement probe; needs the router model directory and the held-out files"]
+fn probe_compose_thresholds() {
+    let Ok(model_dir) = std::env::var(MODEL_DIR_ENV_VAR) else {
+        eprintln!("Skipping: set {MODEL_DIR_ENV_VAR}");
+        return;
+    };
+    let mut runtime = load_runtime(std::path::Path::new(&model_dir)).unwrap();
+
+    let mut negatives: Vec<(&str, Vec<String>)> = vec![(
+        "smoke",
+        read_utterances("tests/data/helm_batch_smoke.jsonl", "utterance"),
+    )];
+    for (name, env_var) in [("heldout", HELDOUT_ENV_VAR), ("escape", ESCAPE_ENV_VAR)] {
+        match std::env::var(env_var) {
+            Ok(path) => negatives.push((name, read_utterances(&path, "utterance"))),
+            Err(_) => eprintln!("({name} skipped: set {env_var})"),
+        }
+    }
+
+    let positives: Vec<(Route, Vec<(Route, f32)>)> = CASES
+        .iter()
+        .map(|(utterance, motion)| {
             (
-                v["utterance"].as_str().unwrap().to_string(),
-                v["expected_tool"].as_str().unwrap().to_string(),
+                Route::ComposeMotion(motion),
+                rank_motion_query(&mut runtime, utterance),
             )
         })
         .collect();
+    let negative_rankings: Vec<(&str, String, Vec<(Route, f32)>)> = negatives
+        .iter()
+        .flat_map(|(name, utterances)| utterances.iter().map(move |u| (*name, u.clone())))
+        .map(|(name, utterance)| {
+            let ranked = rank_motion_query(&mut runtime, &utterance);
+            (name, utterance, ranked)
+        })
+        .collect();
 
-    for (name, encoder, index) in [
-        ("setfit index", &mut runtime.encoder, &runtime.index),
-        ("raw index", &mut runtime.raw_encoder, &runtime.raw_index),
-    ] {
-        for (strip_name, strip) in [
-            ("raw query", Strip::None),
-            ("strip all", Strip::SideCountDegree),
-        ] {
-            let mut top1 = 0;
-            let mut stolen = Vec::new();
-            let mut min_gap: Option<f32> = None;
-            for (utterance, expected_tool) in &rows {
-                let query_text = strip_modifiers(&normalize_utterance(utterance), strip);
-                let query = encoder.encode(&query_text).unwrap();
-                let ranked = rank_routes(index, &query, HelmMode::AllowEdit);
-                let best_compose = ranked
-                    .iter()
-                    .find(|(r, _)| matches!(r, Route::ComposeMotion(_)))
-                    .map(|(_, s)| *s)
-                    .unwrap_or(0.0);
-                let gap = ranked[0].1 - best_compose;
-                min_gap = Some(min_gap.map_or(gap, |g: f32| g.min(gap)));
-                if ranked[0].0.tool_name() == expected_tool {
-                    top1 += 1;
-                } else {
-                    stolen.push(format!(
-                        "{utterance} -> {}={:.3} (want {expected_tool})",
-                        ranked[0].0.id(),
-                        ranked[0].1
-                    ));
+    eprintln!("== gesture sentences: top1 / score / lead over the runner-up");
+    for ((utterance, _), (want, ranked)) in CASES.iter().zip(&positives) {
+        eprintln!(
+            "  {} {utterance:<36} {}={:.3} lead {:+.3}",
+            if ranked[0].0 == *want { "ok  " } else { "MISS" },
+            ranked[0].0.id(),
+            ranked[0].1,
+            ranked[0].1 - ranked[1].1
+        );
+    }
+    eprintln!("== must-not-compose utterances whose raw top1 is a motion");
+    for (name, utterance, ranked) in &negative_rankings {
+        if matches!(ranked[0].0, Route::ComposeMotion(_)) {
+            eprintln!(
+                "  [{name}] {utterance:<44} {}={:.3} lead {:+.3}",
+                ranked[0].0.id(),
+                ranked[0].1,
+                ranked[0].1 - ranked[1].1
+            );
+        }
+    }
+
+    eprintln!(
+        "== sweep: reached / {} gestures (accepted outright), motions taken / {} others",
+        positives.len(),
+        negative_rankings.len()
+    );
+    for tau in [0.88, 0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96] {
+        for margin in [0.0, 0.01, 0.02, 0.03, 0.05] {
+            let thresholds = ComposeThresholds { tau, margin };
+            let mut reached = 0;
+            let mut outright = 0;
+            for (want, ranked) in &positives {
+                let decision = decide_compose_motion(ranked, thresholds);
+                if reaches(&decision, *want) {
+                    reached += 1;
+                }
+                if matches!(decision, Some(RouterDecision::Accept { route, needs_confirm: false, .. }) if route == *want)
+                {
+                    outright += 1;
                 }
             }
+            let taken = negative_rankings
+                .iter()
+                .filter(|(_, _, ranked)| takes_a_motion(&decide_compose_motion(ranked, thresholds)))
+                .count();
             eprintln!(
-                "{name:<14} {strip_name:<10} top1 {top1:>2}/{} | min gap trained-vs-best-compose {:+.3}",
-                rows.len(),
-                min_gap.unwrap_or(0.0)
+                "  tau {tau:.2} margin {margin:.2}: reached {reached:>2} ({outright:>2}) | taken {taken}"
             );
-            for s in stolen {
-                eprintln!("    miss: {s}");
-            }
         }
     }
 }

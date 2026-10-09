@@ -1,5 +1,9 @@
 //! Embeds the pose table's motion labels so each motion becomes a route of the exemplar index.
 
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
 use thyllore_avatar_core::motion::seed::components::pose_table::PoseTable;
 
 use crate::helm::components::route::Route;
@@ -28,6 +32,59 @@ pub fn append_motion_label_routes(
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+pub const LABEL_CACHE_FILENAME: &str = "motion_label_vectors.json";
+
+/// One encoder's label vectors, keyed by normalized label and valid while `fingerprint` (the
+/// encoder's files) is unchanged.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LabelVectorCache {
+    fingerprint: String,
+    vectors: BTreeMap<String, Vec<f32>>,
+}
+
+impl LabelVectorCache {
+    /// A missing, unreadable or stale file reads as an empty cache, so every label is encoded.
+    pub fn read(path: &Path, fingerprint: &str) -> Self {
+        let cached = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|json| serde_json::from_str::<Self>(&json).ok());
+        match cached {
+            Some(cache) if cache.fingerprint == fingerprint => cache,
+            _ => Self {
+                fingerprint: fingerprint.to_string(),
+                vectors: BTreeMap::new(),
+            },
+        }
+    }
+
+    pub fn write(&self, path: &Path) -> std::io::Result<()> {
+        std::fs::write(path, serde_json::to_string(self)?)
+    }
+}
+
+/// `append_motion_label_routes` that encodes only the labels `cached` lacks; the returned cache
+/// holds exactly the labels the table has now.
+pub fn append_motion_label_routes_cached(
+    index: &mut ExemplarIndex,
+    table: &'static PoseTable,
+    cached: &LabelVectorCache,
+    mut encode: impl FnMut(&str) -> anyhow::Result<Vec<f32>>,
+) -> Result<LabelVectorCache, String> {
+    let mut refreshed = LabelVectorCache {
+        fingerprint: cached.fingerprint.clone(),
+        vectors: BTreeMap::new(),
+    };
+    append_motion_label_routes(index, table, |label| {
+        let vector = match cached.vectors.get(label) {
+            Some(vector) => vector.clone(),
+            None => encode(label)?,
+        };
+        refreshed.vectors.insert(label.to_string(), vector.clone());
+        Ok(vector)
+    })?;
+    Ok(refreshed)
 }
 
 #[cfg(test)]
@@ -86,5 +143,67 @@ mod tests {
             error.contains(&PoseTable::builtin().motions()[0].name),
             "{error}"
         );
+    }
+
+    fn fake_encode(label: &str) -> anyhow::Result<Vec<f32>> {
+        Ok(unit([0.0, label.len() as f32, 1.0, 0.0]))
+    }
+
+    #[test]
+    fn a_warm_cache_encodes_nothing_and_ranks_like_a_cold_one() {
+        let table = PoseTable::builtin();
+        let empty = LabelVectorCache::default();
+
+        let mut cold_index = one_route_index();
+        let mut encoded = 0;
+        let warm = append_motion_label_routes_cached(&mut cold_index, table, &empty, |label| {
+            encoded += 1;
+            fake_encode(label)
+        })
+        .unwrap();
+        assert!(encoded > 0);
+
+        let mut warm_index = one_route_index();
+        let rewarmed = append_motion_label_routes_cached(
+            &mut warm_index,
+            table,
+            &warm,
+            |_| -> anyhow::Result<Vec<f32>> { anyhow::bail!("must not encode") },
+        )
+        .unwrap();
+        assert_eq!(rewarmed, warm);
+
+        let query = unit([0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(
+            rank_routes(&warm_index, &query, HelmMode::AllowEdit),
+            rank_routes(&cold_index, &query, HelmMode::AllowEdit)
+        );
+    }
+
+    #[test]
+    fn a_cache_from_another_encoder_reads_as_empty() {
+        let path = std::env::temp_dir().join("thyllore_test_label_vector_cache.json");
+        let mut index = one_route_index();
+        let cache = append_motion_label_routes_cached(
+            &mut index,
+            PoseTable::builtin(),
+            &LabelVectorCache {
+                fingerprint: "encoder-a".to_string(),
+                vectors: BTreeMap::new(),
+            },
+            fake_encode,
+        )
+        .unwrap();
+        cache.write(&path).unwrap();
+
+        assert_eq!(LabelVectorCache::read(&path, "encoder-a"), cache);
+        assert_eq!(
+            LabelVectorCache::read(&path, "encoder-b"),
+            LabelVectorCache {
+                fingerprint: "encoder-b".to_string(),
+                vectors: BTreeMap::new(),
+            }
+        );
+        std::fs::remove_file(&path).unwrap();
     }
 }

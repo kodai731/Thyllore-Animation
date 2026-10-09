@@ -1,4 +1,5 @@
-//! Fills the speed, side and count slots from words in the utterance.
+//! Fills the speed, side and count slots from words in the utterance, and strips those
+//! words so the rest of the utterance can be compared with the pose table's labels.
 //!
 //! This is slot extraction, not routing, which is why it outlived the keyword rule
 //! table it used to share a file with. A modifier can only set `speed` on a route
@@ -58,8 +59,15 @@ pub fn extract_speed_modifier(normalized: &str) -> Option<SpeedPreset> {
         .map(|(preset, _)| *preset)
 }
 
-const LEFT_TERMS: [&str; 3] = ["left", "左手", "左"];
-const RIGHT_TERMS: [&str; 3] = ["right", "右手", "右"];
+const LEFT_WORD: &str = "left";
+const RIGHT_WORD: &str = "right";
+const LEFT_MARK: &str = "左";
+const RIGHT_MARK: &str = "右";
+
+const LEFT_TERMS: [&str; 3] = [LEFT_WORD, "左手", LEFT_MARK];
+const RIGHT_TERMS: [&str; 3] = [RIGHT_WORD, "右手", RIGHT_MARK];
+
+const SIDE_PARTICLES: [&str; 4] = ["の", "で", "を", "に"];
 
 const SIDE_MODIFIERS: [(MotionSide, &[&str]); 2] = [
     (MotionSide::Left, &LEFT_TERMS),
@@ -73,8 +81,9 @@ pub fn extract_side_modifier(normalized: &str) -> Option<MotionSide> {
         .map(|(side, _)| *side)
 }
 
-const COUNT_WORDS: [(&str, u32); 9] = [
+const COUNT_WORDS: [(&str, u32); 10] = [
     ("twice", 2),
+    ("two times", 2),
     ("three times", 3),
     ("四回", 4),
     ("三回", 3),
@@ -86,6 +95,22 @@ const COUNT_WORDS: [(&str, u32); 9] = [
 ];
 
 const COUNT_UNITS: [&str; 2] = ["回", " times"];
+
+const DIGIT_COUNT_UNITS: [&str; 4] = ["回", "度", " times", "times"];
+
+const DEGREE_TERMS: [&str; 11] = [
+    "してください",
+    "ください",
+    "もう一度",
+    "大きく",
+    "深く",
+    "高く",
+    "低く",
+    "deeply",
+    "high",
+    "low",
+    "please",
+];
 
 /// `3回` / `3 times` style counts first, then the spelled-out words; a count of 0 is no count.
 pub fn extract_count_modifier(normalized: &str) -> Option<u32> {
@@ -113,6 +138,57 @@ fn digits_before(normalized: &str, unit: &str) -> Option<u32> {
         .rev()
         .collect();
     digits.parse().ok()
+}
+
+/// The utterance without its side, count, speed and degree words; body part nouns stay
+/// (`左手を振って` → `手を振って`), and the slots themselves are read by the extractors above.
+pub fn strip_slot_terms(normalized: &str) -> String {
+    let mut text = strip_side_terms(normalized);
+    text = strip_digit_counts(&text);
+
+    let count_words = COUNT_WORDS.iter().map(|(word, _)| *word);
+    let speed_terms = SPEED_MODIFIERS
+        .iter()
+        .flat_map(|(_, terms)| terms.iter().copied());
+    for term in count_words.chain(speed_terms).chain(DEGREE_TERMS) {
+        text = strip_term(&text, term);
+    }
+    text.split_whitespace().collect::<Vec<&str>>().join(" ")
+}
+
+fn strip_side_terms(normalized: &str) -> String {
+    let mut text = strip_term(&strip_term(normalized, LEFT_WORD), RIGHT_WORD);
+    for mark in [LEFT_MARK, RIGHT_MARK] {
+        for particle in SIDE_PARTICLES {
+            text = text.replace(&format!("{mark}{particle}"), "");
+        }
+        text = text.replace(mark, "");
+    }
+    text
+}
+
+fn strip_digit_counts(text: &str) -> String {
+    let mut stripped = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find(|c: char| c.is_ascii_digit()) {
+        stripped.push_str(&rest[..start]);
+        let after_digits = rest[start..].trim_start_matches(|c: char| c.is_ascii_digit());
+        rest = DIGIT_COUNT_UNITS
+            .iter()
+            .find_map(|unit| after_digits.strip_prefix(unit))
+            .unwrap_or(after_digits);
+    }
+    stripped.push_str(rest);
+    stripped
+}
+
+/// ASCII terms are removed as whole words (`low` must not cut `slowly`), others as substrings.
+fn strip_term(text: &str, term: &str) -> String {
+    if !term.is_ascii() {
+        return text.replace(term, "");
+    }
+    let padded = format!(" {text} ");
+    padded.replace(&format!(" {term} "), "  ")
 }
 
 #[cfg(test)]
@@ -185,5 +261,27 @@ mod tests {
         assert_eq!(count("二回お辞儀して"), Some(2));
         assert_eq!(count("0回振る"), None);
         assert_eq!(count("手を振って"), None);
+    }
+
+    fn strip(utterance: &str) -> String {
+        strip_slot_terms(&normalize_utterance(utterance))
+    }
+
+    #[test]
+    fn side_count_and_degree_words_leave_the_motion() {
+        assert_eq!(strip("左手を2回振って"), "手を振って");
+        assert_eq!(strip("右で2回パンチして"), "パンチして");
+        assert_eq!(strip("左を向いて"), "向いて");
+        assert_eq!(strip("深くお辞儀してください"), "お辞儀");
+        assert_eq!(strip("wave the left hand twice"), "wave the hand");
+        assert_eq!(strip("wave your right hand 3 times"), "wave your hand");
+        assert_eq!(strip("nod your head two times slowly"), "nod your head");
+        assert_eq!(strip("squat down low"), "squat down");
+    }
+
+    #[test]
+    fn utterances_without_slot_words_are_unchanged() {
+        assert_eq!(strip("手を振って"), "手を振って");
+        assert_eq!(strip("follow the camera"), "follow the camera");
     }
 }

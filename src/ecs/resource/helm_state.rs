@@ -4,12 +4,17 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use thyllore_ml_core::model_path::{EXPORTS_SUBDIR, SHARED_DATA_ENV_VAR};
-use thyllore_ml_core::sentence_encoder::{read_encoder_config, EncoderThresholds, SentenceEncoder};
+use thyllore_ml_core::sentence_encoder::{
+    model_fingerprint, read_encoder_config, EncoderThresholds, SentenceEncoder,
+};
 
 use thyllore_avatar_core::motion::seed::components::pose_table::PoseTable;
 
 use crate::helm::components::route::{HelmMode, Route};
-use crate::helm::systems::motion_labels::append_motion_label_routes;
+use crate::helm::systems::compose_decision::ComposeThresholds;
+use crate::helm::systems::motion_labels::{
+    append_motion_label_routes_cached, LabelVectorCache, LABEL_CACHE_FILENAME,
+};
 use crate::helm::systems::polarity_tiebreak::embedded_exemplars_sha256;
 use crate::helm::systems::router::{ExemplarIndex, RouterThresholds};
 
@@ -92,6 +97,7 @@ pub struct HelmState {
     pub feedback: Option<CommandFeedback>,
     pub confirm_all: bool,
     pub thresholds: RouterThresholds,
+    pub compose_thresholds: ComposeThresholds,
     pub runtime: RuntimeSlot,
     pub motion_seed_counters:
         std::collections::HashMap<crate::helm::components::tool_call::MotionCategory, usize>,
@@ -118,6 +124,7 @@ impl Default for HelmState {
                 tau_raw: crate::helm::systems::router::TUNED_TAU_RAW,
                 tau_raw_nearmiss: 0.85,
             },
+            compose_thresholds: ComposeThresholds::default(),
             runtime: RuntimeSlot::Uninitialized,
             motion_seed_counters: std::collections::HashMap::new(),
             last_routed_tool: None,
@@ -150,7 +157,7 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     let config = read_encoder_config(model_dir)
         .map_err(|e| format!("failed to read encoder config: {}", e))?;
 
-    let mut encoder = SentenceEncoder::from_model_dir(model_dir)
+    let encoder = SentenceEncoder::from_model_dir(model_dir)
         .map_err(|e| format!("failed to load sentence encoder: {}", e))?;
 
     let manifest_path = model_dir.join("router_index.json");
@@ -161,11 +168,8 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
     let vector_bytes = std::fs::read(&vector_path)
         .map_err(|e| format!("failed to read {}: {}", vector_path.display(), e))?;
 
-    let mut index = ExemplarIndex::from_export(&manifest_json, &vector_bytes)
+    let index = ExemplarIndex::from_export(&manifest_json, &vector_bytes)
         .map_err(|e| format!("failed to load exemplar index: {}", e))?;
-    append_motion_label_routes(&mut index, PoseTable::builtin(), |label| {
-        encoder.encode(label)
-    })?;
 
     // Staleness check: if both index and embedded polarity table carry exemplars_sha256,
     // they must match — otherwise one artifact is stale.
@@ -189,9 +193,7 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
 
     let mut raw_index = ExemplarIndex::from_export(&raw_manifest_json, &raw_vector_bytes)
         .map_err(|e| format!("failed to load raw exemplar index: {}", e))?;
-    append_motion_label_routes(&mut raw_index, PoseTable::builtin(), |label| {
-        raw_encoder.encode(label)
-    })?;
+    append_raw_motion_labels(&mut raw_index, &mut raw_encoder, &raw_encoder_path)?;
 
     // Validate that raw_index exemplars_sha256 matches setfit index
     validate_artifact_consistency(raw_index.exemplars_sha256(), index.exemplars_sha256())?;
@@ -203,6 +205,32 @@ pub fn load_runtime(model_dir: &Path) -> Result<HelmRuntime, String> {
         raw_index,
         thresholds: config.thresholds,
     })
+}
+
+fn append_raw_motion_labels(
+    raw_index: &mut ExemplarIndex,
+    raw_encoder: &mut SentenceEncoder,
+    raw_encoder_dir: &Path,
+) -> Result<(), String> {
+    let fingerprint = model_fingerprint(raw_encoder_dir)
+        .map_err(|e| format!("failed to fingerprint the raw encoder: {}", e))?;
+    let cache_path = raw_encoder_dir.join(LABEL_CACHE_FILENAME);
+    let cached = LabelVectorCache::read(&cache_path, &fingerprint);
+
+    let refreshed =
+        append_motion_label_routes_cached(raw_index, PoseTable::builtin(), &cached, |label| {
+            raw_encoder.encode(label)
+        })?;
+    if refreshed != cached {
+        if let Err(e) = refreshed.write(&cache_path) {
+            log_warn!(
+                "helm: label vectors not cached at {}: {}",
+                cache_path.display(),
+                e
+            );
+        }
+    }
+    Ok(())
 }
 
 pub fn select_raw_encoder_dir(
@@ -246,6 +274,15 @@ pub fn apply_encoder_thresholds(thresholds: &mut RouterThresholds, overrides: &E
     }
     if let Some(tau_raw_nearmiss) = overrides.tau_raw_nearmiss {
         thresholds.tau_raw_nearmiss = tau_raw_nearmiss;
+    }
+}
+
+pub fn apply_compose_thresholds(thresholds: &mut ComposeThresholds, overrides: &EncoderThresholds) {
+    if let Some(tau) = overrides.compose_tau {
+        thresholds.tau = tau;
+    }
+    if let Some(margin) = overrides.compose_margin {
+        thresholds.margin = margin;
     }
 }
 
@@ -337,6 +374,7 @@ mod tests {
             tau_reject: Some(0.95),
             tau_raw: None,
             tau_raw_nearmiss: Some(0.8),
+            ..EncoderThresholds::default()
         };
         apply_encoder_thresholds(&mut thresholds, &overrides);
         assert_eq!(thresholds.tau_reject, 0.95);
@@ -344,6 +382,19 @@ mod tests {
         assert_eq!(thresholds.tau_raw_nearmiss, 0.8);
         assert_eq!(thresholds.delta, defaults.delta);
         assert_eq!(thresholds.tau_confirm, defaults.tau_confirm);
+    }
+
+    #[test]
+    fn apply_compose_thresholds_overrides_only_given_fields() {
+        let defaults = ComposeThresholds::default();
+        let mut thresholds = defaults;
+        let overrides = EncoderThresholds {
+            compose_tau: Some(0.95),
+            ..EncoderThresholds::default()
+        };
+        apply_compose_thresholds(&mut thresholds, &overrides);
+        assert_eq!(thresholds.tau, 0.95);
+        assert_eq!(thresholds.margin, defaults.margin);
     }
 
     #[test]

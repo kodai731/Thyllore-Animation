@@ -5,7 +5,8 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/onnxruntime.sh"
 MAIN_ROOT="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
 # Bundle name SSoT: src/ecs/resource/helm_state.rs EXPORTS_BUNDLE_DIR
-EXPORTS_BUNDLE_DIR="helm_router_20260821"
+EXPORTS_BUNDLE_DIR=$(sed -n 's/^pub const EXPORTS_BUNDLE_DIR: &str = "\(.*\)";/\1/p' src/ecs/resource/helm_state.rs)
+ROUTER_MODEL_NAME=$(sed -n 's/^pub const ROUTER_MODEL_NAME: &str = "\(.*\)";/\1/p' src/ecs/resource/helm_state.rs)
 
 # ORT resolution
 if [[ -f "$ORT_DYLIB" ]]; then
@@ -24,10 +25,10 @@ fi
 
 # Router Model Dir (bundle name SSoT: src/ecs/resource/helm_state.rs EXPORTS_BUNDLE_DIR)
 if [[ -z "${THYLLORE_ROUTER_MODEL_DIR:-}" ]]; then
-    if [[ -n "${THYLLORE_SHARED_DATA_DIR:-}" ]] && [[ -d "${THYLLORE_SHARED_DATA_DIR}/exports/${EXPORTS_BUNDLE_DIR}/setfit-3ep-camdir" ]]; then
-        export THYLLORE_ROUTER_MODEL_DIR="${THYLLORE_SHARED_DATA_DIR}/exports/${EXPORTS_BUNDLE_DIR}/setfit-3ep-camdir"
+    if [[ -n "${THYLLORE_SHARED_DATA_DIR:-}" ]] && [[ -d "${THYLLORE_SHARED_DATA_DIR}/exports/${EXPORTS_BUNDLE_DIR}/${ROUTER_MODEL_NAME}" ]]; then
+        export THYLLORE_ROUTER_MODEL_DIR="${THYLLORE_SHARED_DATA_DIR}/exports/${EXPORTS_BUNDLE_DIR}/${ROUTER_MODEL_NAME}"
     else
-        export THYLLORE_ROUTER_MODEL_DIR="$REPO_ROOT/models/gemma/setfit-3ep-camdir"
+        export THYLLORE_ROUTER_MODEL_DIR="$REPO_ROOT/models/gemma/${ROUTER_MODEL_NAME}"
     fi
 fi
 

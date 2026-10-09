@@ -4,23 +4,38 @@
 
 helm_preflight() {
     # Bundle name SSoT: src/ecs/resource/helm_state.rs EXPORTS_BUNDLE_DIR
-    local exports_bundle_dir="helm_router_20260821"
+    local exports_bundle_dir
+    exports_bundle_dir=$(sed -n 's/^pub const EXPORTS_BUNDLE_DIR: &str = "\(.*\)";/\1/p' "$REPO_ROOT/src/ecs/resource/helm_state.rs")
+    local router_model_name
+    router_model_name=$(sed -n 's/^pub const ROUTER_MODEL_NAME: &str = "\(.*\)";/\1/p' "$REPO_ROOT/src/ecs/resource/helm_state.rs")
 
     # Resolve model_dir
     local model_dir
     if [[ -n "${THYLLORE_SHARED_DATA_DIR:-}" ]] && \
-       [[ -d "${THYLLORE_SHARED_DATA_DIR}/exports/${exports_bundle_dir}/setfit-3ep-camdir" ]]; then
-        model_dir="${THYLLORE_SHARED_DATA_DIR}/exports/${exports_bundle_dir}/setfit-3ep-camdir"
+       [[ -d "${THYLLORE_SHARED_DATA_DIR}/exports/${exports_bundle_dir}/${router_model_name}" ]]; then
+        model_dir="${THYLLORE_SHARED_DATA_DIR}/exports/${exports_bundle_dir}/${router_model_name}"
     else
-        model_dir="$REPO_ROOT/models/gemma/setfit-3ep-camdir"
+        model_dir="$REPO_ROOT/models/gemma/${router_model_name}"
     fi
 
-    # Resolve raw_dir
     local raw_dir
-    if [[ -d "$(dirname "$model_dir")/e5-raw" ]]; then
-        raw_dir="$(dirname "$model_dir")/e5-raw"
+    local encoder_json="${model_dir}/encoder.json"
+    if [[ -f "$encoder_json" ]]; then
+        local raw_encoder_name
+        raw_encoder_name=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['raw_encoder'])" "$encoder_json" 2>/dev/null || echo "")
+        if [[ -n "$raw_encoder_name" ]] && [[ -d "$(dirname "$model_dir")/${raw_encoder_name}" ]]; then
+            raw_dir="$(dirname "$model_dir")/${raw_encoder_name}"
+        elif [[ -d "$(dirname "$model_dir")/e5-raw" ]]; then
+            raw_dir="$(dirname "$model_dir")/e5-raw"
+        else
+            raw_dir="$REPO_ROOT/models/gemma/e5-raw"
+        fi
     else
-        raw_dir="$REPO_ROOT/models/gemma/e5-raw"
+        if [[ -d "$(dirname "$model_dir")/e5-raw" ]]; then
+            raw_dir="$(dirname "$model_dir")/e5-raw"
+        else
+            raw_dir="$REPO_ROOT/models/gemma/e5-raw"
+        fi
     fi
 
     # Check required files

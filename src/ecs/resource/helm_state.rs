@@ -11,10 +11,10 @@ use crate::helm::systems::polarity_tiebreak::embedded_exemplars_sha256;
 use crate::helm::systems::router::{ExemplarIndex, RouterThresholds};
 
 /// Router model bundle subdirectory name (shared by the repo-local fallback and the exports bundle).
-pub const ROUTER_MODEL_NAME: &str = "setfit-3ep-camdir";
+pub const ROUTER_MODEL_NAME: &str = "setfit-3ep-ruri310m";
 
 /// Default model directory for the helm runtime.
-pub const ROUTER_MODEL_DIR: &str = "models/gemma/setfit-3ep-camdir";
+pub const ROUTER_MODEL_DIR: &str = "models/gemma/setfit-3ep-ruri310m";
 
 /// Raw encoder model directory (for escape detection).
 pub const RAW_ENCODER_DIR: &str = "models/gemma/e5-raw";
@@ -22,7 +22,7 @@ pub const RAW_ENCODER_DIR: &str = "models/gemma/e5-raw";
 pub const DEFAULT_RAW_ENCODER_NAME: &str = "e5-raw";
 
 /// Exports bundle directory name inside SharedData/exports.
-pub const EXPORTS_BUNDLE_DIR: &str = "helm_router_20260822";
+pub const EXPORTS_BUNDLE_DIR: &str = "helm_router_20261009";
 
 /// Select the router model directory based on shared data availability.
 ///

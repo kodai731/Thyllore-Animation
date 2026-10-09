@@ -11,8 +11,8 @@
 //! raw encoder + raw index gives raw_top_score (top-1 cosine similarity).
 //!
 //! Metrics match `AnimationModelTraining scripts/helm_router/eval_router.py` summarize()
-//! with tau1=0.93, tau2=0.90: routed = expected != escape, correct = predicted == expected,
-//! escape_rejected = escape cases where NOT(top_score >= 0.93 && raw_top_score >= 0.90),
+//! with tau1=0.98, tau2=0.89: routed = expected != escape, correct = predicted == expected,
+//! escape_rejected = escape cases where NOT(top_score >= 0.98 && raw_top_score >= 0.89),
 //! retained = correct among routed, post_gate_accuracy = correct / retained.
 //!
 //! Requires `THYLLORE_ROUTER_MODEL_DIR` and `THYLLORE_HELM_HELDOUT`. Skips if either env
@@ -21,12 +21,15 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
-use thyllore_animation::ecs::resource::{load_runtime, HelmRuntime};
+use thyllore_animation::ecs::resource::{
+    apply_encoder_thresholds, load_runtime, HelmRuntime, HelmState,
+};
 use thyllore_animation::helm::components::route::HelmMode;
 use thyllore_animation::helm::systems::normalize::normalize_utterance;
 use thyllore_animation::helm::systems::router::{
-    rank_routes, route_utterance, RouterDecision, RouterThresholds, RoutingRequest,
+    rank_routes, route_utterance, RouterDecision, RoutingRequest,
 };
+use thyllore_ml_core::sentence_encoder::read_encoder_config;
 
 const MODEL_DIR_ENV_VAR: &str = "THYLLORE_ROUTER_MODEL_DIR";
 const HELDOUT_ENV_VAR: &str = "THYLLORE_HELM_HELDOUT";
@@ -157,13 +160,10 @@ fn helm_heldout_evaluation() {
     let query_vector = vec![0.0f32; runtime.index.dimensions()];
     let ranked = rank_routes(&runtime.index, &query_vector, HelmMode::AllowEdit);
     let index_route_ids: Vec<String> = ranked.into_iter().map(|(route, _)| route.id()).collect();
-    let thresholds = RouterThresholds {
-        tau_reject: 0.93,
-        delta: 0.0,
-        tau_confirm: 0.0,
-        tau_raw: 0.90,
-        tau_raw_nearmiss: 0.85,
-    };
+    let encoder_config = read_encoder_config(&model_dir)
+        .unwrap_or_else(|e| panic!("failed to read encoder config: {}", e));
+    let mut thresholds = HelmState::default().thresholds;
+    apply_encoder_thresholds(&mut thresholds, &encoder_config.thresholds);
 
     let mut correct = 0usize;
     let mut routed_count = 0usize;
@@ -222,13 +222,17 @@ fn helm_heldout_evaluation() {
         let is_correct = predicted_route == expected;
         if is_correct {
             correct += 1;
-            if top_score >= 0.93 && raw_top_score >= 0.85 && raw_top_score < 0.90 {
+            if top_score >= thresholds.tau_reject
+                && raw_top_score >= thresholds.tau_raw_nearmiss
+                && raw_top_score < thresholds.tau_raw
+            {
                 nearmiss_rescued += 1;
             }
         }
-        // Escape rejection: expected == escape AND NOT(top_score >= 0.93 && raw_top_score >= 0.90)
+        // Escape rejection: expected == escape AND NOT(top_score >= tau_reject && raw_top_score >= tau_raw)
         if is_escape {
-            let gate_passed = top_score >= 0.93 && raw_top_score >= 0.90;
+            let gate_passed =
+                top_score >= thresholds.tau_reject && raw_top_score >= thresholds.tau_raw;
             if !gate_passed {
                 escape_rejected += 1;
             }
@@ -236,7 +240,8 @@ fn helm_heldout_evaluation() {
 
         // Retained: correct among routed (non-escape) cases that pass the gate
         if !is_escape {
-            let gate_passed = top_score >= 0.93 && raw_top_score >= 0.90;
+            let gate_passed =
+                top_score >= thresholds.tau_reject && raw_top_score >= thresholds.tau_raw;
             if gate_passed {
                 retained_total += 1;
                 if is_correct {
@@ -277,22 +282,22 @@ fn helm_heldout_evaluation() {
     println!("  post-gate acc:   {:.4}", post_gate_accuracy);
     println!("  nearmiss rescued: {}/{}", nearmiss_rescued, routed_count);
 
-    // Assertions (measured on setfit-3ep-camdir, 36 routes incl. camera_direction, 2026-08-22;
-    // setfit-3ep-cam was 105 correct / 82 retained — the camera_direction retrain regressed 8)
+    // Assertions (measured on setfit-3ep-ruri310m, 36 routes incl. camera_direction, 2026-10-09;
+    // Ruri Python eval: routed 116, correct 106, escape rejected 11, retained correct 86)
     assert_eq!(
         routed_count, 116,
         "expected 116 routed samples, got {}",
         routed_count
     );
-    assert_eq!(correct, 97, "expected 97 correct routes, got {}", correct);
+    assert_eq!(correct, 106, "expected 106 correct routes, got {}", correct);
     assert_eq!(
-        escape_rejected, 9,
-        "expected 9 escape rejected, got {}",
+        escape_rejected, 11,
+        "expected 11 escape rejected, got {}",
         escape_rejected
     );
     assert_eq!(
-        retained_correct, 81,
-        "expected 81 retained correct, got {}",
+        retained_correct, 86,
+        "expected 86 retained correct, got {}",
         retained_correct
     );
 }

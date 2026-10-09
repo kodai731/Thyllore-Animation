@@ -259,3 +259,49 @@ poses = [
   { time = 0.4, set = [{ pose = "hand_open" }] },
   { time = 0.8, set = [{ pose = "hand_open" }] },
 ]
+
+[[pose]]
+name = "knees_bent_deep"
+labels = ["膝を深く曲げる", "bend the knees deeply"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -50 },
+  { role = "RightLowerLeg", axis = "x", degrees = 97 },
+  { role = "RightFoot", axis = "x", degrees = -47 },
+]
+
+[[pose]]
+name = "knees_bent_half"
+labels = ["膝を軽く曲げる", "bend the knees halfway"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -25 },
+  { role = "RightLowerLeg", axis = "x", degrees = 49 },
+  { role = "RightFoot", axis = "x", degrees = -24 },
+]
+
+[[pose]]
+name = "hips_lowered"
+labels = ["腰を落とす", "lower the hips"]
+keys = [
+  { role = "Hips", axis = "ty", offset = -0.316 },
+  { role = "Spine", axis = "x", degrees = 25 },
+]
+
+[[pose]]
+name = "hips_lowered_half"
+labels = ["腰を少し落とす", "lower the hips halfway"]
+keys = [
+  { role = "Hips", axis = "ty", offset = -0.084 },
+  { role = "Spine", axis = "x", degrees = 12 },
+]
+
+[[motion]]
+name = "crouch"
+labels = ["しゃがむ", "かがむ", "腰を落とす", "crouch", "squat down"]
+region = "full_body"
+duration = 2.0
+poses = [
+  { time = 0.3, set = [{ pose = "knees_bent_half", side = "both" }, { pose = "hips_lowered_half" }] },
+  { time = 0.6, set = [{ pose = "knees_bent_deep", side = "both" }, { pose = "hips_lowered" }] },
+  { time = 1.4, set = [{ pose = "knees_bent_deep", side = "both" }, { pose = "hips_lowered" }] },
+  { time = 1.7, set = [{ pose = "knees_bent_half", side = "both" }, { pose = "hips_lowered_half" }] },
+]

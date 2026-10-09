@@ -1,11 +1,11 @@
-//! Turns a bound `ToolCall` into either a `UIEvent` or a report.
+//! Turns a bound `ToolCall` into either a `HelmCommand` or a report.
 //!
-//! The dispatcher never mutates the world. Edits go out as `UIEvent`s so the
+//! The dispatcher never mutates the world. Edits go out as `HelmCommand`s so the
 //! existing undo/redo and event dispatch phase keep working unchanged, and no
 //! second mutation path is created.
 
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{HierarchyState, TimelineState};
+use crate::ecs::systems::helm::HelmCommand;
 use crate::ecs::world::{Entity, World};
 use crate::helm::components::tool_call::{
     FocusTarget, MotionCategory, ObjectName, ShotPreset, SpeedPreset, ToolCall, VisibilityState,
@@ -16,12 +16,9 @@ use super::name_resolver::{
     list_entity_names, read_entity_name, resolve_entity_by_name, NameResolution,
 };
 
-/// `UIEvent` is deliberately not comparable — several of its payloads come from
-/// `thyllore-anim-core` and do not implement `PartialEq` — so this type is not
-/// either. Callers match on the variant they expect.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DispatchOutcome {
-    Command(UIEvent),
+    Command(HelmCommand),
     Report(String),
     MotionRequest {
         category: MotionCategory,
@@ -53,22 +50,22 @@ pub fn dispatch_tool_call(
         ToolCall::ListObjects => report_object_list(world),
         ToolCall::DescribeSelection => report_selection(world),
         ToolCall::GetPlaybackState => report_playback_state(world),
-        ToolCall::TakeScreenshot => DispatchOutcome::Command(UIEvent::TakeScreenshot),
+        ToolCall::TakeScreenshot => DispatchOutcome::Command(HelmCommand::TakeScreenshot),
 
-        ToolCall::PlayAnimation => DispatchOutcome::Command(UIEvent::TimelinePlay),
-        ToolCall::PauseAnimation => DispatchOutcome::Command(UIEvent::TimelinePause),
-        ToolCall::StopAnimation => DispatchOutcome::Command(UIEvent::TimelineStop),
-        ToolCall::ToggleLoop => DispatchOutcome::Command(UIEvent::TimelineToggleLoop),
+        ToolCall::PlayAnimation => DispatchOutcome::Command(HelmCommand::Play),
+        ToolCall::PauseAnimation => DispatchOutcome::Command(HelmCommand::Pause),
+        ToolCall::StopAnimation => DispatchOutcome::Command(HelmCommand::Stop),
+        ToolCall::ToggleLoop => DispatchOutcome::Command(HelmCommand::ToggleLoop),
 
         ToolCall::SetPlaybackSpeed(preset) => {
-            DispatchOutcome::Command(UIEvent::TimelineSetSpeed(preset.to_multiplier()))
+            DispatchOutcome::Command(HelmCommand::SetSpeed(preset.to_multiplier()))
         }
-        ToolCall::SeekTime(position) => DispatchOutcome::Command(UIEvent::TimelineSetTime(
-            resolve_seek_time(timeline, *position),
-        )),
+        ToolCall::SeekTime(position) => {
+            DispatchOutcome::Command(HelmCommand::SetTime(resolve_seek_time(timeline, *position)))
+        }
 
         ToolCall::SelectObject(name) => {
-            dispatch_for_named_object(world, name, |entity| UIEvent::SelectEntity(entity))
+            dispatch_for_named_object(world, name, |entity| HelmCommand::SelectEntity(entity))
         }
         ToolCall::SetObjectVisibility(name, state) => {
             dispatch_visibility_change(world, name, *state)
@@ -76,9 +73,9 @@ pub fn dispatch_tool_call(
 
         ToolCall::FocusCamera(target) => dispatch_camera_focus(world, *target),
 
-        ToolCall::Undo => DispatchOutcome::Command(UIEvent::Undo),
-        ToolCall::Redo => DispatchOutcome::Command(UIEvent::Redo),
-        ToolCall::SaveScene => DispatchOutcome::Command(UIEvent::SaveScene),
+        ToolCall::Undo => DispatchOutcome::Command(HelmCommand::Undo),
+        ToolCall::Redo => DispatchOutcome::Command(HelmCommand::Redo),
+        ToolCall::SaveScene => DispatchOutcome::Command(HelmCommand::SaveScene),
 
         ToolCall::GenerateMotion(category, speed) => DispatchOutcome::MotionRequest {
             category: *category,
@@ -94,10 +91,10 @@ pub fn dispatch_tool_call(
 fn dispatch_for_named_object(
     world: &World,
     name: &ObjectName,
-    to_event: impl Fn(Entity) -> UIEvent,
+    to_command: impl Fn(Entity) -> HelmCommand,
 ) -> DispatchOutcome {
     match resolve_entity_by_name(world, name.as_str()) {
-        NameResolution::Resolved(entity) => DispatchOutcome::Command(to_event(entity)),
+        NameResolution::Resolved(entity) => DispatchOutcome::Command(to_command(entity)),
         NameResolution::NotFound => {
             DispatchOutcome::Rejected(DispatchError::ObjectNotFound(name.0.clone()))
         }
@@ -120,16 +117,16 @@ fn dispatch_visibility_change(
 ) -> DispatchOutcome {
     let visibility = state.to_visibility();
     dispatch_for_named_object(world, name, move |entity| {
-        UIEvent::SetEntityVisible(entity, visibility)
+        HelmCommand::SetEntityVisible(entity, visibility)
     })
 }
 
 fn dispatch_camera_focus(world: &World, target: FocusTarget) -> DispatchOutcome {
     match target {
-        FocusTarget::Model => DispatchOutcome::Command(UIEvent::MoveCameraToModel),
-        FocusTarget::Reset => DispatchOutcome::Command(UIEvent::ResetCamera),
+        FocusTarget::Model => DispatchOutcome::Command(HelmCommand::MoveCameraToModel),
+        FocusTarget::Reset => DispatchOutcome::Command(HelmCommand::ResetCamera),
         FocusTarget::Selection => match read_selected_entity(world) {
-            Some(entity) => DispatchOutcome::Command(UIEvent::FocusOnEntity(entity)),
+            Some(entity) => DispatchOutcome::Command(HelmCommand::FocusOnEntity(entity)),
             None => DispatchOutcome::Rejected(DispatchError::NothingSelected),
         },
     }
@@ -139,7 +136,7 @@ fn dispatch_camera_shot(world: &World, preset: ShotPreset, speed: SpeedPreset) -
     match preset {
         ShotPreset::LookAtSelection | ShotPreset::OrbitAroundSelection => {
             match read_selected_entity(world) {
-                Some(entity) => DispatchOutcome::Command(UIEvent::CameraShot {
+                Some(entity) => DispatchOutcome::Command(HelmCommand::CameraShot {
                     preset,
                     speed,
                     target: Some(entity),
@@ -150,7 +147,7 @@ fn dispatch_camera_shot(world: &World, preset: ShotPreset, speed: SpeedPreset) -
         ShotPreset::DollyIn
         | ShotPreset::DollyOut
         | ShotPreset::CraneUp
-        | ShotPreset::CraneDown => DispatchOutcome::Command(UIEvent::CameraShot {
+        | ShotPreset::CraneDown => DispatchOutcome::Command(HelmCommand::CameraShot {
             preset,
             speed,
             target: None,
@@ -238,9 +235,9 @@ mod tests {
         dispatch_tool_call(world, &empty_timeline(), &call)
     }
 
-    fn expect_command(outcome: DispatchOutcome) -> UIEvent {
+    fn expect_command(outcome: DispatchOutcome) -> HelmCommand {
         match outcome {
-            DispatchOutcome::Command(event) => event,
+            DispatchOutcome::Command(command) => command,
             other => panic!("expected a command, got {:?}", other),
         }
     }
@@ -264,19 +261,19 @@ mod tests {
         let world = World::new();
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::PlayAnimation)),
-            UIEvent::TimelinePlay
+            HelmCommand::Play
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::PauseAnimation)),
-            UIEvent::TimelinePause
+            HelmCommand::Pause
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::StopAnimation)),
-            UIEvent::TimelineStop
+            HelmCommand::Stop
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::ToggleLoop)),
-            UIEvent::TimelineToggleLoop
+            HelmCommand::ToggleLoop
         ));
     }
 
@@ -285,15 +282,15 @@ mod tests {
         let world = World::new();
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::Undo)),
-            UIEvent::Undo
+            HelmCommand::Undo
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::Redo)),
-            UIEvent::Redo
+            HelmCommand::Redo
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::SaveScene)),
-            UIEvent::SaveScene
+            HelmCommand::SaveScene
         ));
     }
 
@@ -302,11 +299,11 @@ mod tests {
         let world = World::new();
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::SetPlaybackSpeed(SpeedPreset::Slow))),
-            UIEvent::TimelineSetSpeed(multiplier) if multiplier == 0.5
+            HelmCommand::SetSpeed(multiplier) if multiplier == 0.5
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::SetPlaybackSpeed(SpeedPreset::Fast))),
-            UIEvent::TimelineSetSpeed(multiplier) if multiplier == 2.0
+            HelmCommand::SetSpeed(multiplier) if multiplier == 2.0
         ));
     }
 
@@ -322,7 +319,7 @@ mod tests {
         let to_end = dispatch_tool_call(&world, &timeline, &ToolCall::SeekTime(SeekPosition::End));
         assert!(matches!(
             expect_command(to_end),
-            UIEvent::TimelineSetTime(time) if time == 6.0
+            HelmCommand::SetTime(time) if time == 6.0
         ));
 
         let to_next = dispatch_tool_call(
@@ -332,7 +329,7 @@ mod tests {
         );
         assert!(matches!(
             expect_command(to_next),
-            UIEvent::TimelineSetTime(time) if time == 3.0
+            HelmCommand::SetTime(time) if time == 3.0
         ));
     }
 
@@ -344,7 +341,7 @@ mod tests {
         let outcome = dispatch(&world, ToolCall::SelectObject(ObjectName("Hero".into())));
         assert!(matches!(
             expect_command(outcome),
-            UIEvent::SelectEntity(entity) if entity == hero
+            HelmCommand::SelectEntity(entity) if entity == hero
         ));
     }
 
@@ -387,7 +384,7 @@ mod tests {
         );
         assert!(matches!(
             expect_command(outcome),
-            UIEvent::SetEntityVisible(entity, Visibility::Hidden) if entity == floor
+            HelmCommand::SetEntityVisible(entity, Visibility::Hidden) if entity == floor
         ));
     }
 
@@ -402,7 +399,7 @@ mod tests {
         );
         assert!(matches!(
             expect_command(outcome),
-            UIEvent::SetEntityVisible(entity, Visibility::Shown) if entity == floor
+            HelmCommand::SetEntityVisible(entity, Visibility::Shown) if entity == floor
         ));
     }
 
@@ -411,11 +408,11 @@ mod tests {
         let world = World::new();
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::FocusCamera(FocusTarget::Model))),
-            UIEvent::MoveCameraToModel
+            HelmCommand::MoveCameraToModel
         ));
         assert!(matches!(
             expect_command(dispatch(&world, ToolCall::FocusCamera(FocusTarget::Reset))),
-            UIEvent::ResetCamera
+            HelmCommand::ResetCamera
         ));
     }
 
@@ -435,7 +432,7 @@ mod tests {
         let outcome = dispatch(&world, ToolCall::FocusCamera(FocusTarget::Selection));
         assert!(matches!(
             expect_command(outcome),
-            UIEvent::FocusOnEntity(entity) if entity == hero
+            HelmCommand::FocusOnEntity(entity) if entity == hero
         ));
     }
 
@@ -536,7 +533,7 @@ mod tests {
         );
         assert!(matches!(
             outcome,
-            DispatchOutcome::Command(UIEvent::CameraShot {
+            DispatchOutcome::Command(HelmCommand::CameraShot {
                 preset: ShotPreset::DollyIn,
                 speed: SpeedPreset::Fast,
                 target: None,
@@ -566,7 +563,7 @@ mod tests {
         );
         assert!(matches!(
             expect_command(outcome),
-            UIEvent::CameraShot {
+            HelmCommand::CameraShot {
                 preset: ShotPreset::LookAtSelection,
                 speed: SpeedPreset::Normal,
                 target: Some(e)

@@ -1,7 +1,9 @@
 use crate::animation::decompose_transform;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{CameraComponent, EntityIcon};
-use crate::ecs::world::{Transform, World};
+use crate::ecs::resource::ActiveCamera;
+use crate::ecs::systems::PendingActiveCamera;
+use crate::ecs::world::{Name, Transform, World};
 use crate::hooks::model_load::LoadedModel;
 use cgmath::Deg;
 use thyllore_importer_core::gltf::CameraProjection;
@@ -57,6 +59,32 @@ pub fn camera_import_spawn_loaded(world: &mut World, _: &AssetStorage, loaded: &
             entity
         );
     }
+
+    flush_pending_active_camera(world);
+}
+
+fn flush_pending_active_camera(world: &mut World) {
+    let Some(name) = world
+        .get_resource::<PendingActiveCamera>()
+        .map(|pending| pending.0.clone())
+    else {
+        return;
+    };
+    let found = world
+        .iter_components::<CameraComponent>()
+        .map(|(entity, _)| entity)
+        .find(|&entity| {
+            world
+                .get_component::<Name>(entity)
+                .is_some_and(|camera_name| camera_name.0 == name)
+        });
+    let Some(entity) = found else {
+        return;
+    };
+    if let Some(mut active) = world.get_resource_mut::<ActiveCamera>() {
+        active.0 = Some(entity);
+    }
+    world.remove_resource::<PendingActiveCamera>();
 }
 
 crate::model_load_hook!("camera_import", Rig, camera_import_spawn_loaded);
@@ -135,5 +163,25 @@ mod tests {
             .get_component::<Parent>(*entity)
             .expect("Camera entity should have a Parent");
         assert_eq!(parent.0, loaded.entity);
+    }
+
+    #[test]
+    fn test_batch_flush_pending_active_camera() {
+        let mut world = World::new();
+        world.insert_resource(ActiveCamera(None));
+        world.insert_resource(PendingActiveCamera("Cam".into()));
+
+        let result = build_result(vec![make_perspective_camera(
+            cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.0, 0.0, 0.0)),
+        )]);
+        let loaded = build_loaded(&mut world, &result);
+        camera_import_spawn_loaded(&mut world, &AssetStorage::default(), &loaded);
+
+        let (camera_entity, _) = world
+            .iter_components::<CameraComponent>()
+            .next()
+            .expect("Expected the loaded camera entity");
+        assert_eq!(world.resource::<ActiveCamera>().0, Some(camera_entity));
+        assert!(!world.contains_resource::<PendingActiveCamera>());
     }
 }

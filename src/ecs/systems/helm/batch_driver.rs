@@ -335,11 +335,6 @@ pub fn run_after_helm(ctx: &mut EcsContext) {
 
 const DRAIN_FRAMES_AFTER_LAST_ROW: u32 = 3;
 
-fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a String> {
-    let position = args.iter().position(|arg| arg == flag)?;
-    args.get(position + 1)
-}
-
 /// Counts down the drain frames after the last row; on zero writes the optional
 /// `--batch-anim-dump` and exits. Returns true while draining.
 fn finish_if_draining(ctx: &mut EcsContext) -> bool {
@@ -356,26 +351,32 @@ fn finish_if_draining(ctx: &mut EcsContext) -> bool {
         return true;
     }
 
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(path) = flag_value(&args, "--batch-anim-dump") {
-        let include_tracks = args
-            .iter()
-            .any(|a| a == crate::ecs::systems::BATCH_ANIM_DUMP_TRACKS_FLAG);
-        if let Err(e) = crate::ecs::systems::batch_anim_dump_write(ctx.world, path, include_tracks)
-        {
+    let anim_dump = crate::ecs::systems::anim_dump_request_resolve_from_process_args()
+        .unwrap_or_else(|e| {
+            eprintln!("[helm-batch] anim dump failed: {e}");
+            std::process::exit(1);
+        });
+    if let Some(request) = anim_dump {
+        if let Err(e) = crate::ecs::systems::batch_anim_dump_write(
+            ctx.world,
+            &request.path,
+            request.include_tracks,
+        ) {
             eprintln!("[helm-batch] anim dump failed: {e}");
             std::process::exit(1);
         }
-        println!("[helm-batch] anim dump -> {path}");
+        println!("[helm-batch] anim dump -> {}", request.path);
     }
-    if let Some(path) = flag_value(&args, "--batch-export-camera") {
-        if let Err(e) =
-            crate::ecs::systems::export_active_camera_gltf(ctx.world, std::path::Path::new(path))
-        {
+    if let Some(camera_request) = ctx
+        .world
+        .get_resource::<crate::ecs::systems::CameraExportRequest>()
+    {
+        let path = &camera_request.0;
+        if let Err(e) = crate::ecs::systems::export_active_camera_gltf(ctx.world, path.as_path()) {
             eprintln!("[helm-batch] camera export failed: {e}");
             std::process::exit(1);
         }
-        println!("[helm-batch] camera export -> {path}");
+        println!("[helm-batch] camera export -> {}", path.display());
     }
     std::process::exit(exit_code);
 }

@@ -15,6 +15,8 @@ pub trait UiCommand: std::fmt::Debug {
 
 pub type UiCommandQueue = EventQueue<Box<dyn UiCommand>>;
 
+crate::startup_resource!(UiCommandQueue, Editor);
+
 pub fn apply_queued_ui_commands(
     world: &mut World,
     assets: &mut AssetStorage,

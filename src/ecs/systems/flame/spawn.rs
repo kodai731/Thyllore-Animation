@@ -1,8 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
-use crate::ecs::resource::{
-    FlameHistorySnapshotState, FlameRenderSettings, FlameUIState, HierarchyState,
-};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -80,17 +78,3 @@ pub fn resolve_selected_flame(world: &World) -> Option<Entity> {
 
     world.entities_with::<FlameEffect>().first().copied()
 }
-
-fn insert_flame_default_resources(world: &mut World) {
-    if !world.contains_resource::<FlameRenderSettings>() {
-        world.insert_resource(FlameRenderSettings::default());
-    }
-    if !world.contains_resource::<FlameHistorySnapshotState>() {
-        world.insert_resource(FlameHistorySnapshotState::default());
-    }
-    if !world.contains_resource::<FlameUIState>() {
-        world.insert_resource(FlameUIState::default());
-    }
-}
-
-crate::effect_default_resource!("flame", insert_flame_default_resources);

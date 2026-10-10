@@ -1,6 +1,6 @@
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::world::Entity;
+use crate::ecs::world::{Entity, World};
 
 #[derive(Clone, Debug)]
 pub enum EditCommand {
@@ -44,6 +44,14 @@ pub struct EditHistory {
     undo_stack: Vec<EditEntry>,
     redo_stack: Vec<EditEntry>,
     max_history: usize,
+}
+
+crate::startup_hook!("EditHistory", Editor, insert_edit_history_if_missing);
+
+fn insert_edit_history_if_missing(world: &mut World) {
+    if !world.contains_resource::<EditHistory>() {
+        world.insert_resource(EditHistory::new(100));
+    }
 }
 
 impl EditHistory {

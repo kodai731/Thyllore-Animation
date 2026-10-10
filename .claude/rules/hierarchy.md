@@ -202,7 +202,14 @@ dispatch phase therefore never names an effect.
 common logic for updating effects and applying presets across all effects (with transforms derived
 from `SceneOwner::placement`). Each effect only needs to implement the `EffectPreset` trait in its
 own directory to participate in this shared system. A hook
-file describes a contract only; it never names a concrete effect.
+file describes a contract only; it never names a concrete effect. `startup.rs` holds the `StartupHook` contract
+(`name`, `StartupPhase` enum with declaration order CoreResources / Editor / PostProcessing / Ml, and
+`run: fn(&mut World)`) and the `startup_resource!(T, Phase)` macro (inserts `T::default()` if absent) and
+`startup_hook!("Name", Phase, fn)` macro: a resource that needs a default value is inserted by writing
+`startup_resource!(T, Editor)` next to its definition (an effect's settings and UI state in
+`src/ecs/resource/<effect>/`), and `App::create` in `src/app/init/instance.rs` calls `run_startup_phase`
+per phase in name order without naming a type; feature-gated resources register with `#[cfg(feature)]` in
+their own file.
 
 ## Hook or command?
 

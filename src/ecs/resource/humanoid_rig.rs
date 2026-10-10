@@ -19,3 +19,5 @@ pub struct HumanoidRigState {
     pub revision: u64,
     pub rig: Option<HumanoidRig>,
 }
+
+crate::startup_resource!(HumanoidRigState, Editor);

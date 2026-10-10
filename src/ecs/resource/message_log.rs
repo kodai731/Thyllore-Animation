@@ -38,6 +38,8 @@ impl Default for MessageLog {
     }
 }
 
+crate::startup_resource!(MessageLog, Editor);
+
 impl MessageLog {
     pub fn sync_from_buffer(&mut self) {
         let buf = MESSAGE_BUFFER

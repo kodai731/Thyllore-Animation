@@ -23,6 +23,7 @@ enum CurveEditorKeyAction {
     SetTangentType(TangentType),
     SetInterpolation(InterpolationType),
     ToggleTangentContinuity,
+    ToggleViewMode,
 }
 
 struct CurveEditorKeyBinding {
@@ -92,6 +93,11 @@ const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
         modifier: KeyModifier::None,
         action: CurveEditorKeyAction::ToggleTangentContinuity,
     },
+    CurveEditorKeyBinding {
+        key: imgui::Key::Tab,
+        modifier: KeyModifier::Ctrl,
+        action: CurveEditorKeyAction::ToggleViewMode,
+    },
 ];
 
 pub(super) struct CurveEditorKeyboardTarget<'a> {
@@ -141,6 +147,9 @@ pub(super) fn handle_curve_editor_keyboard(
                 }
                 CurveEditorKeyAction::ToggleTangentContinuity => {
                     send_toggled_continuity(editor_state, target);
+                }
+                CurveEditorKeyAction::ToggleViewMode => {
+                    editor_state.view_mode = editor_state.view_mode.toggled();
                 }
             }
         }
@@ -249,7 +258,7 @@ pub(super) fn handle_suggestion_keyboard(
         }
     }
 
-    if ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
+    if !io.key_ctrl && ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
         world.send_command(CurveSuggestionEvent::Accept);
     }
 

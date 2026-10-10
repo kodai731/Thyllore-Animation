@@ -85,6 +85,22 @@ pub enum CurveValueDisplay {
     Normalized,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CurveViewMode {
+    #[default]
+    Curves,
+    Dopesheet,
+}
+
+impl CurveViewMode {
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Curves => Self::Dopesheet,
+            Self::Dopesheet => Self::Curves,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
@@ -108,6 +124,7 @@ pub struct CurveEditorState {
     pub needs_focus: bool,
     pub frame_request: Option<FrameRequest>,
     pub value_display: CurveValueDisplay,
+    pub view_mode: CurveViewMode,
     pub time_field: String,
     pub value_field: String,
 }
@@ -174,6 +191,7 @@ impl Default for CurveEditorState {
             needs_focus: false,
             frame_request: None,
             value_display: CurveValueDisplay::default(),
+            view_mode: CurveViewMode::default(),
             time_field: String::new(),
             value_field: String::new(),
         }

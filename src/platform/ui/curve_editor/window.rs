@@ -6,7 +6,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
-    CurveTrackRef, CurveValueDisplay, FrameRequest, PoseLibrary, TimelineState,
+    CurveTrackRef, CurveValueDisplay, CurveViewMode, FrameRequest, PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
@@ -17,6 +17,7 @@ use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
+use super::dopesheet::draw_dopesheet;
 use super::draw::*;
 use super::interaction::*;
 use super::keyboard::*;
@@ -355,17 +356,19 @@ pub(super) fn draw_curve_area(
 ) {
     let draw_list = ui.get_window_draw_list();
 
-    let y_axis_origin = [
-        cursor_pos[0],
-        cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
-    ];
-    draw_y_axis_labels(
-        &draw_list,
-        y_axis_origin,
-        Y_AXIS_WIDTH,
-        curve_area_height,
-        vt,
-    );
+    if editor_state.view_mode == CurveViewMode::Curves {
+        let y_axis_origin = [
+            cursor_pos[0],
+            cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
+        ];
+        draw_y_axis_labels(
+            &draw_list,
+            y_axis_origin,
+            Y_AXIS_WIDTH,
+            curve_area_height,
+            vt,
+        );
+    }
 
     let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
     draw_time_ruler(&draw_list, ruler_pos, curve_area_width, vt);
@@ -416,28 +419,22 @@ pub(super) fn draw_clipped_curve_content(
     track_ref: CurveTrackRef,
     pose_library: &PoseLibrary,
 ) {
-    draw_grid(draw_list, curve_area_width, curve_area_height, vt);
-    draw_normalized_range_shade(draw_list, curve_area_width, curve_area_height, vt);
-
-    let sample_count = calculate_sample_count(curve_area_width);
-    for (curve, color, _name) in curves_to_draw {
-        let curve_vt = vt.for_curve(curve);
-        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, &curve_vt, None);
-    }
-
-    if !editor_state.selected_keyframes.is_empty() {
-        draw_selected_keyframes_highlight(
+    match editor_state.view_mode {
+        CurveViewMode::Curves => draw_curves_with_selection(
+            draw_list,
+            vt,
+            curve_area_width,
+            curve_area_height,
+            editor_state,
+            curves_to_draw,
+        ),
+        CurveViewMode::Dopesheet => draw_dopesheet(
             draw_list,
             curves_to_draw,
-            &editor_state.selected_keyframes,
             vt,
-        );
-        draw_tangent_handles(
-            draw_list,
-            curves_to_draw,
             &editor_state.selected_keyframes,
-            vt,
-        );
+            curve_area_width,
+        ),
     }
 
     draw_pose_markers(draw_list, vt, curve_area_height, pose_library);
@@ -505,6 +502,39 @@ pub(super) fn draw_clipped_curve_content(
                 .thickness(1.0)
                 .build();
         }
+    }
+}
+
+fn draw_curves_with_selection(
+    draw_list: &imgui::DrawListMut,
+    vt: &ViewTransform,
+    curve_area_width: f32,
+    curve_area_height: f32,
+    editor_state: &CurveEditorState,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+) {
+    draw_grid(draw_list, curve_area_width, curve_area_height, vt);
+    draw_normalized_range_shade(draw_list, curve_area_width, curve_area_height, vt);
+
+    let sample_count = calculate_sample_count(curve_area_width);
+    for (curve, color, _name) in curves_to_draw {
+        let curve_vt = vt.for_curve(curve);
+        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, &curve_vt, None);
+    }
+
+    if !editor_state.selected_keyframes.is_empty() {
+        draw_selected_keyframes_highlight(
+            draw_list,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            vt,
+        );
+        draw_tangent_handles(
+            draw_list,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            vt,
+        );
     }
 }
 
@@ -599,6 +629,15 @@ pub(super) fn build_curve_toolbar(
         };
         editor_state.frame_request = Some(FrameRequest::All);
     }
+
+    ui.same_line_with_spacing(0.0, 20.0);
+    ui.radio_button("Curves", &mut editor_state.view_mode, CurveViewMode::Curves);
+    ui.same_line();
+    ui.radio_button(
+        "Dopesheet",
+        &mut editor_state.view_mode,
+        CurveViewMode::Dopesheet,
+    );
 }
 
 pub(super) fn build_curve_editor_window(

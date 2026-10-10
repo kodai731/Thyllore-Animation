@@ -5,6 +5,7 @@ use super::super::view::{
 };
 use super::super::window::TIME_RULER_HEIGHT;
 
+const GRID_COLOR: [f32; 4] = [0.25, 0.25, 0.28, 1.0];
 const NORMALIZED_OUTSIDE_SHADE: [f32; 4] = [0.0, 0.0, 0.0, 0.25];
 
 pub(in crate::platform::ui::curve_editor) fn draw_time_ruler(
@@ -176,28 +177,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_grid(
     height: f32,
     vt: &ViewTransform,
 ) {
-    let grid_color = [0.25, 0.25, 0.28, 1.0];
-
-    let visible_duration = vt.duration / vt.zoom_x.max(0.001);
-    let time_step = compute_nice_step(visible_duration / 8.0);
-    let view_start_t = vt.view_time_offset;
-    let view_end_t = view_start_t + visible_duration;
-    let first_t = (view_start_t / time_step).floor() * time_step;
-
-    let mut time = first_t;
-    while time <= view_end_t + time_step {
-        let x = vt.time_to_x(time);
-        if x >= vt.curve_origin[0] && x <= vt.curve_origin[0] + width {
-            draw_list
-                .add_line(
-                    [x, vt.curve_origin[1]],
-                    [x, vt.curve_origin[1] + height],
-                    grid_color,
-                )
-                .build();
-        }
-        time += time_step;
-    }
+    draw_time_grid(draw_list, width, height, vt);
 
     let visible_range = vt.val_range / vt.zoom_y.max(0.001);
     let value_step = compute_nice_step(visible_range / 6.0);
@@ -212,7 +192,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_grid(
             let line_color = if value.abs() < value_step * 0.1 {
                 [0.4, 0.4, 0.43, 1.0]
             } else {
-                grid_color
+                GRID_COLOR
             };
 
             draw_list
@@ -224,6 +204,34 @@ pub(in crate::platform::ui::curve_editor) fn draw_grid(
                 .build();
         }
         value += value_step;
+    }
+}
+
+pub(in crate::platform::ui::curve_editor) fn draw_time_grid(
+    draw_list: &imgui::DrawListMut,
+    width: f32,
+    height: f32,
+    vt: &ViewTransform,
+) {
+    let visible_duration = vt.duration / vt.zoom_x.max(0.001);
+    let time_step = compute_nice_step(visible_duration / 8.0);
+    let view_start_t = vt.view_time_offset;
+    let view_end_t = view_start_t + visible_duration;
+    let first_t = (view_start_t / time_step).floor() * time_step;
+
+    let mut time = first_t;
+    while time <= view_end_t + time_step {
+        let x = vt.time_to_x(time);
+        if x >= vt.curve_origin[0] && x <= vt.curve_origin[0] + width {
+            draw_list
+                .add_line(
+                    [x, vt.curve_origin[1]],
+                    [x, vt.curve_origin[1] + height],
+                    GRID_COLOR,
+                )
+                .build();
+        }
+        time += time_step;
     }
 }
 

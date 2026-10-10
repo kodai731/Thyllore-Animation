@@ -1,4 +1,4 @@
-use imgui::Condition;
+use imgui::{Condition, MouseButton};
 
 use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
@@ -8,7 +8,7 @@ use crate::ecs::component::{
 };
 use crate::ecs::resource::{
     ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorState,
-    TimelineInteractionState, TimelineState,
+    TimelineInteractionState, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -20,6 +20,9 @@ use crate::ecs::systems::{
     timeline_effective_duration,
 };
 use crate::ecs::world::World;
+use crate::platform::ui::pointer::{
+    read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -61,7 +64,7 @@ fn draw_timeline_window(
         .build(|| {
             build_transport_controls(ui, world, state, clip_library, curve_editor_state);
             ui.separator();
-            handle_middle_drag_pan(ui, state);
+            handle_middle_drag_pan(ui, world, state);
             build_timeline_content(
                 ui,
                 world,
@@ -357,14 +360,6 @@ fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_he
         .build();
 }
 
-/// Raw-io mouse handling below must not react while the pointer is over a
-/// window stacked above the timeline (e.g. the scene overlay panel) or while
-/// another widget is being dragged — otherwise a slider drag in the overlay
-/// falls through and scrubs the playhead underneath.
-fn timeline_pointer_available(ui: &imgui::Ui) -> bool {
-    ui.is_window_hovered() && !ui.is_any_item_active()
-}
-
 fn handle_scrub_interaction(
     ui: &imgui::Ui,
     world: &World,
@@ -375,10 +370,10 @@ fn handle_scrub_interaction(
     pixels_per_second: f32,
     ruler_start_x: f32,
 ) {
-    let mouse_pos = ui.io().mouse_pos;
-    let mouse_down = ui.io().mouse_down[0];
+    let pointer = read_ui_pointer(ui);
+    let mouse_pos = pointer.pos;
 
-    if !mouse_down {
+    if !pointer.is_down(MouseButton::Left) {
         interaction.scrubbing = false;
         return;
     }
@@ -388,7 +383,10 @@ fn handle_scrub_interaction(
         && mouse_pos[1] >= rect_min[1]
         && mouse_pos[1] <= rect_max[1];
 
-    if !interaction.scrubbing && !(is_mouse_in_ruler && timeline_pointer_available(ui)) {
+    if !interaction.scrubbing
+        && !(is_mouse_in_ruler
+            && ui_pointer_begin(ui, world, UiPointerOwnerId::Timeline, PointerRegion::Window))
+    {
         return;
     }
 
@@ -438,14 +436,14 @@ fn build_clip_tracks_section(
     timeline_width: f32,
 ) {
     let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
-    let mouse_pos = ui.io().mouse_pos;
-    let mouse_down = ui.io().mouse_down[0];
-    let pointer_available = timeline_pointer_available(ui);
-    let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left) && pointer_available;
-    let mouse_double_clicked =
-        ui.is_mouse_double_clicked(imgui::MouseButton::Left) && pointer_available;
+    let pointer = read_ui_pointer(ui);
+    let mouse_pos = pointer.pos;
+    let mouse_down = pointer.is_down(MouseButton::Left);
+    let mouse_clicked = pointer.is_clicked(MouseButton::Left)
+        && ui_pointer_begin(ui, world, UiPointerOwnerId::Timeline, PointerRegion::Window);
+    let mouse_double_clicked = mouse_clicked && pointer.is_double_clicked(MouseButton::Left);
 
-    handle_clip_drag_release(ui, world, interaction, pixels_per_second);
+    handle_clip_drag_release(world, interaction, mouse_pos, mouse_down, pixels_per_second);
 
     let mut clicked_any_block = false;
     let solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)> =
@@ -805,14 +803,14 @@ fn build_clip_length_field(
 }
 
 fn handle_clip_drag_release(
-    ui: &imgui::Ui,
     world: &World,
     interaction: &mut TimelineInteractionState,
+    mouse_pos: [f32; 2],
+    mouse_down: bool,
     pixels_per_second: f32,
 ) {
-    if !ui.is_mouse_down(imgui::MouseButton::Left) {
+    if !mouse_down {
         if let Some(drag) = interaction.dragging_clip.take() {
-            let mouse_pos = ui.io().mouse_pos;
             let delta_x = mouse_pos[0] - drag.drag_start_x;
             let delta_time = delta_x / pixels_per_second;
 
@@ -1102,8 +1100,13 @@ fn handle_mouse_wheel_zoom(
     state: &TimelineState,
     clip_duration: f32,
 ) {
-    let hovered = ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS);
-    if !hovered {
+    let available = ui_pointer_available(
+        ui,
+        world,
+        UiPointerOwnerId::Timeline,
+        PointerRegion::WindowWithChildren,
+    );
+    if !available {
         return;
     }
 
@@ -1114,7 +1117,7 @@ fn handle_mouse_wheel_zoom(
         state.snap_settings.frame_rate,
     );
 
-    let wheel = ui.io().mouse_wheel;
+    let wheel = read_ui_pointer(ui).wheel;
     if wheel > 0.0 {
         world.send_command(TimelineEvent::ZoomIn { max_zoom });
     } else if wheel < 0.0 {
@@ -1122,17 +1125,23 @@ fn handle_mouse_wheel_zoom(
     }
 }
 
-fn handle_middle_drag_pan(ui: &imgui::Ui, state: &mut TimelineState) {
-    let hovered = ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS);
-    if !hovered {
+fn handle_middle_drag_pan(ui: &imgui::Ui, world: &World, state: &mut TimelineState) {
+    let pointer = read_ui_pointer(ui);
+    if !pointer.is_down(MouseButton::Middle) {
         return;
     }
 
-    if !ui.io().mouse_down[2] {
+    let owns_pointer = ui_pointer_begin(
+        ui,
+        world,
+        UiPointerOwnerId::Timeline,
+        PointerRegion::WindowWithChildren,
+    );
+    if !owns_pointer {
         return;
     }
 
-    let delta_x = ui.io().mouse_delta[0];
+    let delta_x = pointer.delta[0];
     if delta_x.abs() < 0.01 {
         return;
     }

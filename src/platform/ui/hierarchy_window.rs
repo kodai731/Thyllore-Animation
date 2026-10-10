@@ -7,6 +7,7 @@ use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
 use crate::ecs::world::World;
+use crate::platform::ui::pointer::is_last_item_double_clicked;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -130,7 +131,7 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
             }
         }
 
-        if ui.is_item_hovered() && ui.is_mouse_double_clicked(imgui::MouseButton::Left) {
+        if is_last_item_double_clicked(ui) {
             world.send_command(HierarchyEvent::FocusOnEntity(entry.entity));
         }
     }

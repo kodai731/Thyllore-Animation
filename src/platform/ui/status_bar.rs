@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ValidationReport,
-    ViewportInput,
+    cpu_ms, wait_ms, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState,
+    ValidationReport, ViewportInput,
 };
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
@@ -15,8 +15,17 @@ const OVERLAY_PADDING: f32 = 6.0;
 const BG_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TEXT_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 
+#[derive(Debug)]
+pub struct FrameTimeValues {
+    pub cpu_ms: f32,
+    pub wait_ms: f32,
+    pub gpu_ms: Option<f32>,
+}
+
 pub struct StatusBarState {
     fps_buffer: [f32; FPS_BUFFER_SIZE],
+    cpu_buffer: [f32; FPS_BUFFER_SIZE],
+    wait_buffer: [f32; FPS_BUFFER_SIZE],
     write_index: usize,
     sample_count: usize,
     memory_mb: f32,
@@ -28,6 +37,8 @@ impl Default for StatusBarState {
     fn default() -> Self {
         Self {
             fps_buffer: [0.0; FPS_BUFFER_SIZE],
+            cpu_buffer: [0.0; FPS_BUFFER_SIZE],
+            wait_buffer: [0.0; FPS_BUFFER_SIZE],
             write_index: 0,
             sample_count: 0,
             memory_mb: 0.0,
@@ -38,9 +49,12 @@ impl Default for StatusBarState {
 }
 
 impl StatusBarState {
-    pub fn update_fps(&mut self, delta_time: f32) {
-        self.fps_buffer[self.write_index] = delta_time;
-        self.write_index = (self.write_index + 1) % FPS_BUFFER_SIZE;
+    pub fn update_frame(&mut self, delta_time: f32, cpu_ms: f32, wait_ms: f32) {
+        let i = self.write_index;
+        self.fps_buffer[i] = delta_time;
+        self.cpu_buffer[i] = cpu_ms;
+        self.wait_buffer[i] = wait_ms;
+        self.write_index = (i + 1) % FPS_BUFFER_SIZE;
         if self.sample_count < FPS_BUFFER_SIZE {
             self.sample_count += 1;
         }
@@ -59,6 +73,14 @@ impl StatusBarState {
         }
     }
 
+    pub fn average_cpu_ms(&self) -> f32 {
+        average_of(&self.cpu_buffer[..self.sample_count])
+    }
+
+    pub fn average_wait_ms(&self) -> f32 {
+        average_of(&self.wait_buffer[..self.sample_count])
+    }
+
     pub fn update_memory(&mut self) {
         self.memory_update_counter += 1;
         if self.memory_update_counter >= MEMORY_UPDATE_INTERVAL {
@@ -72,18 +94,17 @@ fn draw_status_bar(
     ui: &imgui::Ui,
     state: &mut StatusBarState,
     delta_time: f32,
-    cpu_ms: f32,
-    gpu_ms: Option<f32>,
+    times: FrameTimeValues,
     viewport: &ViewportInput,
     timeline_state: &TimelineState,
     clip_duration: f32,
     errors: usize,
     warnings: usize,
 ) -> Option<OverlayEvent> {
-    state.update_fps(delta_time);
+    state.update_frame(delta_time, times.cpu_ms, times.wait_ms);
     state.update_memory();
 
-    let gpu_ms = match gpu_ms {
+    let gpu_ms = match times.gpu_ms {
         Some(ms) => {
             state.last_gpu_ms = ms;
             ms
@@ -99,9 +120,10 @@ fn draw_status_bar(
     let playback_icon = if timeline_state.playing { ">" } else { "||" };
 
     let text = format!(
-        "FPS:{:.0}  CPU {:.1}ms  GPU {:.1}ms  F:{}/{}  {:.3}s  {}  {:.0}MB",
+        "FPS:{:.0}  CPU {:.1}ms  Wait {:.1}ms  GPU {:.1}ms  F:{}/{}  {:.3}s  {}  {:.0}MB",
         fps,
-        cpu_ms,
+        state.average_cpu_ms(),
+        state.average_wait_ms(),
         gpu_ms,
         current_frame,
         total_frames,
@@ -165,6 +187,13 @@ fn format_validation_status(errors: usize, warnings: usize) -> String {
     format!("VK E:{} W:{}", errors, warnings)
 }
 
+fn average_of(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    samples.iter().sum::<f32>() / samples.len() as f32
+}
+
 fn read_rss_mb() -> f32 {
     parse_rss_from_statm(&std::fs::read_to_string("/proc/self/statm").unwrap_or_default())
 }
@@ -196,7 +225,7 @@ mod tests {
         let mut state = StatusBarState::default();
         // 60 FPS = 1/60 delta_time
         for _ in 0..10 {
-            state.update_fps(1.0 / 60.0);
+            state.update_frame(1.0 / 60.0, 0.0, 0.0);
         }
         let fps = state.average_fps();
         assert!((fps - 60.0).abs() < 0.1);
@@ -207,11 +236,20 @@ mod tests {
         let mut state = StatusBarState::default();
         // Fill 100 samples (exceeds buffer of 60)
         for _ in 0..100 {
-            state.update_fps(1.0 / 30.0);
+            state.update_frame(1.0 / 30.0, 0.0, 0.0);
         }
         assert_eq!(state.sample_count, FPS_BUFFER_SIZE);
         let fps = state.average_fps();
         assert!((fps - 30.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_cpu_and_wait_average() {
+        let mut state = StatusBarState::default();
+        state.update_frame(1.0 / 60.0, 2.0, 1.0);
+        state.update_frame(1.0 / 60.0, 4.0, 3.0);
+        assert!((state.average_cpu_ms() - 3.0).abs() < 1e-6);
+        assert!((state.average_wait_ms() - 2.0).abs() < 1e-6);
     }
 
     #[test]
@@ -268,14 +306,19 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         return;
     }
 
-    let frame_ms = world
+    let (frame_ms, frame_cpu_ms, frame_wait_ms) = world
         .get_resource::<CpuFrameTimings>()
-        .map(|timings| timings.dt_ms)
-        .unwrap_or(0.0);
+        .map_or((0.0, 0.0, 0.0), |timings| {
+            (timings.dt_ms, cpu_ms(&timings), wait_ms(&timings))
+        });
     let delta_time = (frame_ms / 1000.0).max(0.001);
-    let gpu_ms = world
-        .get_resource::<GpuPassTimings>()
-        .and_then(|timings| timings.frame_total_ms);
+    let times = FrameTimeValues {
+        cpu_ms: frame_cpu_ms,
+        wait_ms: frame_wait_ms,
+        gpu_ms: world
+            .get_resource::<GpuPassTimings>()
+            .and_then(|timings| timings.frame_total_ms),
+    };
     let viewport = world.resource::<ViewportInput>();
     let timeline_state = world.resource::<TimelineState>();
     let clip_duration = {
@@ -292,8 +335,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         ui,
         &mut state,
         delta_time,
-        frame_ms,
-        gpu_ms,
+        times,
         &viewport,
         &timeline_state,
         clip_duration,

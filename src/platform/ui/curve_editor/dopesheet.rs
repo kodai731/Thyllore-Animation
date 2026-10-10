@@ -1,8 +1,8 @@
 use crate::animation::editable::{EditableKeyframe, PropertyCurve};
-use crate::ecs::resource::CurveSelectedKeyframe;
+use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe};
 
 use super::draw::draw_time_grid;
-use super::interaction::KEYFRAME_HIT_RADIUS;
+use super::interaction::{dragged_key_delta, dragged_key_position, TimeSnap, KEYFRAME_HIT_RADIUS};
 use super::view::ViewTransform;
 
 pub(super) const DOPESHEET_ROW_HEIGHT: f32 = 22.0;
@@ -10,6 +10,7 @@ const DIAMOND_HALF_SIZE: f32 = 6.0;
 const ROW_BAND_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.04];
 const SELECTED_KEY_FILL: [f32; 4] = [0.3, 0.6, 1.0, 1.0];
 const SELECTED_KEY_OUTLINE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const DRAG_PREVIEW_FILL: [f32; 4] = [1.0, 1.0, 0.0, 1.0];
 
 pub(super) fn dopesheet_row_center_y(curve_origin_y: f32, row_index: usize) -> f32 {
     curve_origin_y + DOPESHEET_ROW_HEIGHT * (row_index as f32 + 0.5)
@@ -137,6 +138,43 @@ fn draw_key_diamond_outline(draw_list: &imgui::DrawListMut, center: [f32; 2], co
             .add_line(*corner, next, color)
             .thickness(1.5)
             .build();
+    }
+}
+
+pub(super) fn draw_dopesheet_drag_preview(
+    draw_list: &imgui::DrawListMut,
+    mouse_pos: [f32; 2],
+    drag_start: [f32; 2],
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected_keyframes: &[CurveSelectedKeyframe],
+    axis_lock: Option<AxisLock>,
+    time_snap: TimeSnap,
+) {
+    let delta = dragged_key_delta(vt, drag_start, mouse_pos);
+
+    for (row_index, (curve, _, _)) in curves_to_draw.iter().enumerate() {
+        let row_y = dopesheet_row_center_y(vt.curve_origin[1], row_index);
+
+        for sel in selected_keyframes {
+            if sel.property_type != curve.property_type {
+                continue;
+            }
+
+            let [preview_time, _] = dragged_key_position(
+                [sel.original_time, sel.original_value],
+                delta,
+                axis_lock,
+                time_snap,
+            );
+            let preview_x = vt
+                .time_to_x(preview_time)
+                .clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
+            let preview_pos = [preview_x, row_y];
+
+            draw_key_diamond(draw_list, preview_pos, DRAG_PREVIEW_FILL);
+            draw_key_diamond_outline(draw_list, preview_pos, SELECTED_KEY_OUTLINE);
+        }
     }
 }
 

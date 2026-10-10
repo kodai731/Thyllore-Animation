@@ -8,7 +8,8 @@ use crate::animation::editable::{
 };
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
-    CurveTrackRef, DraggingTangent, TangentHandleType, TimelineState, UiPointerOwnerId,
+    CurveTrackRef, CurveViewMode, DraggingTangent, TangentHandleType, TimelineState,
+    UiPointerOwnerId,
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
@@ -36,6 +37,17 @@ pub(super) enum ReleasedButton {
 }
 
 const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
+
+#[must_use]
+pub(super) fn effective_axis_lock(
+    view_mode: CurveViewMode,
+    axis_lock: Option<AxisLock>,
+) -> Option<AxisLock> {
+    match view_mode {
+        CurveViewMode::Curves => axis_lock,
+        CurveViewMode::Dopesheet => Some(AxisLock::Time),
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum TimeSnap {
@@ -358,7 +370,7 @@ pub(super) fn handle_mouse_release(
                         let [new_time, new_value] = dragged_key_position(
                             [sel.original_time, sel.original_value],
                             delta,
-                            axis_lock,
+                            effective_axis_lock(editor_state.view_mode, axis_lock),
                             time_snap,
                         );
                         world.send_command(TimelineEvent::MoveKeyframe {
@@ -375,7 +387,17 @@ pub(super) fn handle_mouse_release(
             {
                 let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
                 let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
-                let boxed = collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max);
+                let boxed = match editor_state.view_mode {
+                    CurveViewMode::Curves => {
+                        collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max)
+                    }
+                    CurveViewMode::Dopesheet => super::dopesheet::collect_dopesheet_keys_in_rect(
+                        curves_to_draw,
+                        vt,
+                        min,
+                        max,
+                    ),
+                };
                 editor_state.selected_keyframes =
                     apply_box_selection(&editor_state.selected_keyframes, boxed, mode);
                 if mode == BoxSelectMode::Replace {
@@ -445,25 +467,39 @@ pub(super) fn handle_curve_area_click(
     vt: &ViewTransform,
     modifier: SelectionModifier,
 ) -> Option<PropertyType> {
-    if let Some((handle_type, property_type, keyframe_id, original_handle)) =
-        find_tangent_handle_at_position(
-            mouse_pos,
-            curves_to_draw,
-            &editor_state.selected_keyframes,
-            vt,
-        )
-    {
-        editor_state.interaction = CurveInteractionMode::DraggingTangent(DraggingTangent {
-            property_type,
-            keyframe_id,
-            handle_type,
-            original_handle,
-        });
-        editor_state.drag_start_mouse_pos = mouse_pos;
-        return None;
+    if editor_state.view_mode == CurveViewMode::Curves {
+        if let Some((handle_type, property_type, keyframe_id, original_handle)) =
+            find_tangent_handle_at_position(
+                mouse_pos,
+                curves_to_draw,
+                &editor_state.selected_keyframes,
+                vt,
+            )
+        {
+            editor_state.interaction = CurveInteractionMode::DraggingTangent(DraggingTangent {
+                property_type,
+                keyframe_id,
+                handle_type,
+                original_handle,
+            });
+            editor_state.drag_start_mouse_pos = mouse_pos;
+            return None;
+        }
     }
 
-    let hit_keyframe = find_keyframe_at_position(mouse_pos, curves_to_draw, vt);
+    let hit_keyframe = match editor_state.view_mode {
+        CurveViewMode::Curves => find_keyframe_at_position(mouse_pos, curves_to_draw, vt),
+        CurveViewMode::Dopesheet => {
+            super::dopesheet::find_dopesheet_key(mouse_pos, curves_to_draw, vt).map(|key| {
+                (
+                    key.property_type,
+                    key.keyframe_id,
+                    key.original_time,
+                    key.original_value,
+                )
+            })
+        }
+    };
 
     if let Some((property_type, keyframe_id, time, value)) = hit_keyframe {
         let new_selected = CurveSelectedKeyframe {
@@ -524,7 +560,8 @@ pub(super) fn handle_curve_area_click(
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
     } else {
-        if modifier == SelectionModifier::Toggle {
+        if modifier == SelectionModifier::Toggle && editor_state.view_mode == CurveViewMode::Curves
+        {
             if let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) {
                 return Some(property_type);
             }
@@ -1088,6 +1125,23 @@ mod tests {
         assert_eq!(
             dragged_key_position([0.1, 0.0], [-0.5, 0.0], None, TimeSnap::Frame(30.0)),
             [0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn effective_axis_lock_keeps_curves_lock_and_forces_time_in_dopesheet() {
+        assert_eq!(effective_axis_lock(CurveViewMode::Curves, None), None);
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Curves, Some(AxisLock::Value)),
+            Some(AxisLock::Value)
+        );
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Dopesheet, None),
+            Some(AxisLock::Time)
+        );
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Dopesheet, Some(AxisLock::Value)),
+            Some(AxisLock::Time)
         );
     }
 }

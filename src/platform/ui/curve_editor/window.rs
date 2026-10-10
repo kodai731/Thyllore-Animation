@@ -17,7 +17,7 @@ use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
-use super::dopesheet::draw_dopesheet;
+use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};
 use super::draw::*;
 use super::interaction::*;
 use super::keyboard::*;
@@ -450,16 +450,31 @@ pub(super) fn draw_clipped_curve_content(
         .build();
 
     if let CurveInteractionMode::DraggingKeyframe { axis_lock } = editor_state.interaction {
-        draw_keyframe_drag_preview(
-            draw_list,
-            read_ui_pointer(ui).pos,
-            editor_state.drag_start_mouse_pos,
-            vt,
-            curves_to_draw,
-            &editor_state.selected_keyframes,
-            axis_lock,
-            current_time_snap(ui, timeline_state.snap_settings.frame_rate),
-        );
+        let mouse_pos = read_ui_pointer(ui).pos;
+        let drag_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
+        let time_snap = current_time_snap(ui, timeline_state.snap_settings.frame_rate);
+        match editor_state.view_mode {
+            CurveViewMode::Curves => draw_keyframe_drag_preview(
+                draw_list,
+                mouse_pos,
+                editor_state.drag_start_mouse_pos,
+                vt,
+                curves_to_draw,
+                &editor_state.selected_keyframes,
+                drag_lock,
+                time_snap,
+            ),
+            CurveViewMode::Dopesheet => draw_dopesheet_drag_preview(
+                draw_list,
+                mouse_pos,
+                editor_state.drag_start_mouse_pos,
+                vt,
+                curves_to_draw,
+                &editor_state.selected_keyframes,
+                drag_lock,
+                time_snap,
+            ),
+        }
     }
 
     if let CurveInteractionMode::DraggingTangent(ref dragging) = editor_state.interaction {

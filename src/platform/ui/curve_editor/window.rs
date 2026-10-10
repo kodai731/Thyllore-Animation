@@ -397,10 +397,7 @@ pub(super) fn draw_clipped_curve_content(
         .thickness(2.0)
         .build();
 
-    if matches!(
-        editor_state.interaction,
-        CurveInteractionMode::DraggingKeyframe
-    ) {
+    if let CurveInteractionMode::DraggingKeyframe { axis_lock } = editor_state.interaction {
         draw_keyframe_drag_preview(
             draw_list,
             read_ui_pointer(ui).pos,
@@ -408,6 +405,8 @@ pub(super) fn draw_clipped_curve_content(
             vt,
             curves_to_draw,
             &editor_state.selected_keyframes,
+            axis_lock,
+            current_time_snap(ui, timeline_state.snap_settings.frame_rate),
         );
     }
 

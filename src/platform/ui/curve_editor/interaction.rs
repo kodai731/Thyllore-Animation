@@ -6,8 +6,8 @@ use crate::animation::editable::{
     BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
 use crate::ecs::resource::{
-    BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef,
-    DraggingTangent, TangentHandleType, UiPointerOwnerId,
+    AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
+    CurveTrackRef, DraggingTangent, TangentHandleType, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
@@ -31,6 +31,69 @@ pub(super) enum SelectionModifier {
 pub(super) enum ReleasedButton {
     Left,
     Middle,
+}
+
+const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum TimeSnap {
+    Frame(f32),
+    Free,
+}
+
+#[must_use]
+pub(super) fn resolve_axis_lock(
+    current: Option<AxisLock>,
+    shift_held: bool,
+    pixel_delta: [f32; 2],
+) -> Option<AxisLock> {
+    if !shift_held {
+        return None;
+    }
+    if current.is_some() {
+        return current;
+    }
+
+    let dx = pixel_delta[0].abs();
+    let dy = pixel_delta[1].abs();
+    if dx.max(dy) <= AXIS_LOCK_THRESHOLD_PX {
+        None
+    } else if dx >= dy {
+        Some(AxisLock::Time)
+    } else {
+        Some(AxisLock::Value)
+    }
+}
+
+#[must_use]
+pub(super) fn current_time_snap(ui: &imgui::Ui, frame_rate: f32) -> TimeSnap {
+    if ui.io().key_ctrl {
+        TimeSnap::Free
+    } else {
+        TimeSnap::Frame(frame_rate)
+    }
+}
+
+#[must_use]
+pub(super) fn dragged_key_position(
+    original: [f32; 2],
+    delta: [f32; 2],
+    axis_lock: Option<AxisLock>,
+    snap: TimeSnap,
+) -> [f32; 2] {
+    let locked_delta = match axis_lock {
+        Some(AxisLock::Time) => [delta[0], 0.0],
+        Some(AxisLock::Value) => [0.0, delta[1]],
+        None => delta,
+    };
+
+    let free_time = original[0] + locked_delta[0];
+    let snapped_time = match snap {
+        TimeSnap::Frame(frame_rate) => (free_time * frame_rate).round() / frame_rate,
+        TimeSnap::Free => free_time,
+    };
+
+    [snapped_time.max(0.0), original[1] + locked_delta[1]]
 }
 
 pub(super) fn handle_curve_view_interaction(
@@ -127,6 +190,10 @@ pub(super) fn handle_mouse_interaction(
     let mouse_released = pointer.is_released(MouseButton::Left);
     let middle_clicked = access.owns_press && pointer.is_clicked(MouseButton::Middle);
     let middle_released = pointer.is_released(MouseButton::Middle);
+    let time_snap = current_time_snap(
+        ui,
+        world.resource::<TimelineState>().snap_settings.frame_rate,
+    );
 
     let in_ruler_area = mouse_pos[0] >= ruler_pos[0]
         && mouse_pos[0] <= ruler_pos[0] + curve_area_width
@@ -146,6 +213,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos,
             ReleasedButton::Left,
             curves_to_draw,
+            time_snap,
         );
     }
     if middle_released {
@@ -156,6 +224,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos,
             ReleasedButton::Middle,
             curves_to_draw,
+            time_snap,
         );
     }
 
@@ -206,6 +275,14 @@ pub(super) fn handle_mouse_interaction(
         world.send_command(TimelineEvent::SetTime(time));
     }
 
+    if let CurveInteractionMode::DraggingKeyframe { ref mut axis_lock } = editor_state.interaction {
+        let pixel_delta: [f32; 2] = [
+            mouse_pos[0] - editor_state.drag_start_mouse_pos[0],
+            mouse_pos[1] - editor_state.drag_start_mouse_pos[1],
+        ];
+        *axis_lock = resolve_axis_lock(*axis_lock, ui.io().key_shift, pixel_delta);
+    }
+
     if access.accepts_wheel {
         handle_wheel_input(ui, editor_state, pointer, vt);
     }
@@ -218,6 +295,7 @@ pub(super) fn handle_mouse_release(
     mouse_pos: [f32; 2],
     button: ReleasedButton,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    time_snap: TimeSnap,
 ) {
     match button {
         ReleasedButton::Left => {
@@ -235,10 +313,9 @@ pub(super) fn handle_mouse_release(
                         out_tangent,
                     });
                 }
-            } else if matches!(
-                editor_state.interaction,
-                CurveInteractionMode::DraggingKeyframe
-            ) {
+            } else if let CurveInteractionMode::DraggingKeyframe { axis_lock } =
+                editor_state.interaction
+            {
                 if let Some(track_ref) = editor_state.selected_track_ref() {
                     let time_delta = vt.x_to_time(mouse_pos[0])
                         - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
@@ -246,12 +323,18 @@ pub(super) fn handle_mouse_release(
                         - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
 
                     for sel in &editor_state.selected_keyframes {
+                        let [new_time, new_value] = dragged_key_position(
+                            [sel.original_time, sel.original_value],
+                            [time_delta, value_delta],
+                            axis_lock,
+                            time_snap,
+                        );
                         world.send_command(TimelineEvent::MoveKeyframe {
                             track: track_ref,
                             property_type: sel.property_type.clone(),
                             keyframe_id: sel.keyframe_id,
-                            new_time: (sel.original_time + time_delta).max(0.0),
-                            new_value: sel.original_value + value_delta,
+                            new_time,
+                            new_value,
                         });
                     }
                 }
@@ -263,6 +346,9 @@ pub(super) fn handle_mouse_release(
                 let boxed = collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max);
                 editor_state.selected_keyframes =
                     apply_box_selection(&editor_state.selected_keyframes, boxed, mode);
+                if mode == BoxSelectMode::Replace {
+                    editor_state.selection_anchor = None;
+                }
             }
             editor_state.interaction = CurveInteractionMode::Idle;
         }
@@ -386,7 +472,7 @@ pub(super) fn handle_curve_area_click(
                 &mut editor_state.selected_keyframes,
                 curves_to_draw,
             );
-            editor_state.interaction = CurveInteractionMode::DraggingKeyframe;
+            editor_state.interaction = CurveInteractionMode::DraggingKeyframe { axis_lock: None };
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
     } else {
@@ -744,5 +830,83 @@ mod tests {
         let selection = apply_box_selection(&current, boxed, BoxSelectMode::Invert);
 
         assert_eq!(collect_selected_ids(&selection), vec![ids[0], ids[2]]);
+    }
+
+    #[test]
+    fn axis_lock_stays_unresolved_below_the_threshold() {
+        assert_eq!(resolve_axis_lock(None, true, [3.0, -3.0]), None);
+    }
+
+    #[test]
+    fn axis_lock_picks_time_for_a_horizontal_move() {
+        assert_eq!(
+            resolve_axis_lock(None, true, [6.0, 1.0]),
+            Some(AxisLock::Time)
+        );
+    }
+
+    #[test]
+    fn axis_lock_picks_value_for_a_vertical_move() {
+        assert_eq!(
+            resolve_axis_lock(None, true, [1.0, -6.0]),
+            Some(AxisLock::Value)
+        );
+    }
+
+    #[test]
+    fn axis_lock_keeps_the_first_direction_while_shift_is_held() {
+        assert_eq!(
+            resolve_axis_lock(Some(AxisLock::Time), true, [6.0, 40.0]),
+            Some(AxisLock::Time)
+        );
+    }
+
+    #[test]
+    fn axis_lock_is_released_with_shift() {
+        assert_eq!(
+            resolve_axis_lock(Some(AxisLock::Time), false, [6.0, 0.0]),
+            None
+        );
+    }
+
+    #[test]
+    fn dragged_key_position_time_lock_keeps_the_value() {
+        let position =
+            dragged_key_position([1.0, 2.0], [0.5, 3.0], Some(AxisLock::Time), TimeSnap::Free);
+
+        assert_eq!(position, [1.5, 2.0]);
+    }
+
+    #[test]
+    fn dragged_key_position_value_lock_keeps_the_time() {
+        let position = dragged_key_position(
+            [1.0, 2.0],
+            [0.5, 3.0],
+            Some(AxisLock::Value),
+            TimeSnap::Free,
+        );
+
+        assert_eq!(position, [1.0, 5.0]);
+    }
+
+    #[test]
+    fn dragged_key_position_snaps_time_to_30fps_frames() {
+        let [time, value] =
+            dragged_key_position([0.0, 1.0], [0.05, 0.25], None, TimeSnap::Frame(30.0));
+
+        assert!((time - 2.0 / 30.0).abs() < 1e-6);
+        assert_eq!(value, 1.25);
+    }
+
+    #[test]
+    fn dragged_key_position_free_keeps_the_raw_time_and_clamps_at_zero() {
+        assert_eq!(
+            dragged_key_position([1.0, 0.0], [0.013, 0.0], None, TimeSnap::Free),
+            [1.013, 0.0]
+        );
+        assert_eq!(
+            dragged_key_position([0.1, 0.0], [-0.5, 0.0], None, TimeSnap::Frame(30.0)),
+            [0.0, 0.0]
+        );
     }
 }

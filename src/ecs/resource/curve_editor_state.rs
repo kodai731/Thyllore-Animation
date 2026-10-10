@@ -37,7 +37,9 @@ pub struct DraggingTangent {
 #[derive(Clone, Debug)]
 pub enum CurveInteractionMode {
     Idle,
-    DraggingKeyframe,
+    DraggingKeyframe {
+        axis_lock: Option<AxisLock>,
+    },
     ScrubbingRuler,
     Panning {
         start_mouse_pos: [f32; 2],
@@ -48,6 +50,12 @@ pub enum CurveInteractionMode {
         start: [f32; 2],
         mode: BoxSelectMode,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxisLock {
+    Time,
+    Value,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

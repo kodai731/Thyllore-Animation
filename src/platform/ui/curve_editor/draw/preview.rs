@@ -2,8 +2,9 @@ use crate::animation::editable::{
     sample_bezier, segment_uses_bezier, BezierHandle, EditableKeyframe, InterpolationType,
     PropertyCurve,
 };
-use crate::ecs::resource::{CurveSelectedKeyframe, DraggingTangent, TangentHandleType};
+use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent, TangentHandleType};
 
+use super::super::interaction::{dragged_key_position, TimeSnap};
 use super::super::view::ViewTransform;
 
 pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
@@ -13,16 +14,24 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     vt: &ViewTransform,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     selected_keyframes: &[CurveSelectedKeyframe],
+    axis_lock: Option<AxisLock>,
+    time_snap: TimeSnap,
 ) {
     let time_delta = vt.x_to_time(mouse_pos[0]) - vt.x_to_time(drag_start[0]);
     let value_delta = vt.y_to_value(mouse_pos[1]) - vt.y_to_value(drag_start[1]);
 
     for sel in selected_keyframes {
+        let [preview_time, preview_value] = dragged_key_position(
+            [sel.original_time, sel.original_value],
+            [time_delta, value_delta],
+            axis_lock,
+            time_snap,
+        );
         let preview_x = vt
-            .time_to_x(sel.original_time + time_delta)
+            .time_to_x(preview_time)
             .clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
         let preview_y = vt
-            .value_to_y(sel.original_value + value_delta)
+            .value_to_y(preview_value)
             .clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
         let preview_pos = [preview_x, preview_y];
 
@@ -37,9 +46,6 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
             .add_circle(preview_pos, 7.0, [1.0, 1.0, 1.0, 1.0])
             .thickness(2.0)
             .build();
-
-        let preview_time = (sel.original_time + time_delta).max(0.0);
-        let preview_value = sel.original_value + value_delta;
 
         draw_list.add_text(
             [preview_x + 10.0, preview_y - 10.0],

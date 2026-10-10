@@ -18,6 +18,8 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
@@ -242,16 +244,22 @@ pub(super) fn send_key_button(
 }
 
 fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
-    if ui.collapsing_header("Overlay", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if section_header(ui, ecs_world, "Overlay", SectionDefault::Open) {
         if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
             let mut visible = bone_gizmo.visible;
-            if ui.checkbox("Show Bones", &mut visible) {
+            if crate::platform::ui::theme::toggle_switch(ui, ecs_world, "Show Bones", &mut visible)
+            {
                 ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(visible));
             }
         }
         if let Some(heatmap) = ecs_world.get_resource::<WeightHeatmapState>() {
             let mut enabled = heatmap.enabled;
-            if ui.checkbox("Show Weight Heatmap (selected bone)", &mut enabled) {
+            if crate::platform::ui::theme::toggle_switch(
+                ui,
+                ecs_world,
+                "Show Weight Heatmap (selected bone)",
+                &mut enabled,
+            ) {
                 ecs_world.send_command(OverlayEvent::SetWeightHeatmapEnabled(enabled));
             }
         }
@@ -265,7 +273,7 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
     let mut state_copy = state.clone();
     drop(state);
 
-    if ui.collapsing_header("Transform Gizmo", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if section_header(ui, ecs_world, "Transform Gizmo", SectionDefault::Open) {
         let translate_label = if state_copy.mode == TransformGizmoMode::Translate {
             "[W] Translate *"
         } else {
@@ -318,7 +326,12 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
         }
 
         ui.same_line();
-        ui.checkbox("Snap", &mut state_copy.snap_enabled);
+        crate::platform::ui::theme::toggle_switch(
+            ui,
+            ecs_world,
+            "Snap",
+            &mut state_copy.snap_enabled,
+        );
 
         if state_copy.snap_enabled {
             match state_copy.mode {
@@ -350,12 +363,17 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
 fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
 
-    if ui.collapsing_header("Depth of Field", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Depth of Field", SectionDefault::Closed) {
         if let Some(dof) = ecs_world.get_resource::<DepthOfField>() {
             let mut dof_copy = dof.clone();
             drop(dof);
 
-            ui.checkbox("DOF Enabled", &mut dof_copy.enabled);
+            crate::platform::ui::theme::toggle_switch(
+                ui,
+                ecs_world,
+                "DOF Enabled",
+                &mut dof_copy.enabled,
+            );
 
             ui.slider_config("Focus Distance", 0.1, 100.0)
                 .build(&mut dof_copy.focus_distance);
@@ -384,12 +402,17 @@ fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
 fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
-    if ui.collapsing_header("Auto Exposure", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Auto Exposure", SectionDefault::Closed) {
         if let Some(ae) = ecs_world.get_resource::<AutoExposure>() {
             let mut ae_copy = ae.clone();
             drop(ae);
 
-            ui.checkbox("Auto Exposure Enabled", &mut ae_copy.enabled);
+            crate::platform::ui::theme::toggle_switch(
+                ui,
+                ecs_world,
+                "Auto Exposure Enabled",
+                &mut ae_copy.enabled,
+            );
 
             ui.slider_config("Min EV", -10.0, 10.0)
                 .build(&mut ae_copy.min_ev);
@@ -422,12 +445,17 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
 fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::OnionSkinningConfig;
 
-    if ui.collapsing_header("Onion Skinning", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Onion Skinning", SectionDefault::Closed) {
         if let Some(config) = ecs_world.get_resource::<OnionSkinningConfig>() {
             let mut config_copy = config.clone();
             drop(config);
 
-            ui.checkbox("Onion Skin Enabled", &mut config_copy.enabled);
+            crate::platform::ui::theme::toggle_switch(
+                ui,
+                ecs_world,
+                "Onion Skin Enabled",
+                &mut config_copy.enabled,
+            );
 
             let mut past = config_copy.past_count as i32;
             if ui.slider_config("Past Frames", 0, 4).build(&mut past) {

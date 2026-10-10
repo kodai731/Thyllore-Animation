@@ -7,6 +7,8 @@ use crate::ecs::component::{
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::constraint_inspector::{
     build_bone_combo, build_bone_combo_with_select, build_offset_vector3, collect_bone_list,
@@ -19,7 +21,7 @@ pub fn build_spring_bone_section(
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
 ) {
-    if !ui.collapsing_header("Spring Bones", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if !section_header(ui, world, "Spring Bones", SectionDefault::Open) {
         return;
     }
 
@@ -94,7 +96,7 @@ fn build_chain_list(
             "Chain: {} (id:{})###spring_chain_{}",
             chain.name, chain.id, chain.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 
@@ -124,7 +126,7 @@ fn build_chain_detail(
             "Joint {} (bone:{})###joint_{}",
             joint_idx, joint.bone_id, joint_idx
         );
-        if !ui.collapsing_header(&joint_header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &joint_header, SectionDefault::Closed) {
             continue;
         }
 
@@ -289,7 +291,7 @@ fn build_collider_list(
             "{} (id:{}, bone:{})###collider_{}",
             shape_name, collider.id, collider.bone_id, collider.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 
@@ -477,7 +479,7 @@ fn build_collider_group_list(
             "Group: {} (id:{})###group_{}",
             group.name, group.id, group.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 

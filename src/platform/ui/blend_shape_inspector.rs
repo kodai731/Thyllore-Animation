@@ -13,6 +13,8 @@ use crate::ecs::systems::{
     find_morph_channel_names, find_morph_siblings,
 };
 use crate::ecs::world::{Children, Entity, World};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 struct ChannelView<'a> {
@@ -55,7 +57,7 @@ pub fn build_blend_shape_section(
             format_section_title(world, representative, assets, graphics),
             representative
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        if !section_header(ui, world, &header, SectionDefault::Open) {
             continue;
         }
 

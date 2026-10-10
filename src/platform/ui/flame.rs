@@ -7,6 +7,8 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::pointer::is_last_item_double_clicked;
@@ -92,7 +94,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
 pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::FlameEffect;
 
-    if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Flame", SectionDefault::Closed) {
         let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
@@ -383,6 +385,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
                     let advanced_open = draw_tiered_params(
                         ui,
+                        ecs_world,
                         &thyllore_effect_core::FLAME_UI_PARAMS,
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -449,7 +452,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                         });
                     }
 
-                    if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
+                    if section_header(ui, ecs_world, "Flame Debug", SectionDefault::Closed) {
                         draw_flame_render_settings(ui, ecs_world);
                         if ui.button("Dump Probe") {
                             ecs_world.send_command(FlameUiCommand::DumpWallProbe {

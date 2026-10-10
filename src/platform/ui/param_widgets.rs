@@ -4,6 +4,9 @@ use thyllore_effect_core::{
 };
 use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
 
+use crate::ecs::World;
+use crate::platform::ui::theme::{section_header, SectionDefault};
+
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
 
@@ -239,6 +242,7 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
 
 pub fn draw_tiered_params<C>(
     ui: &imgui::Ui,
+    world: &World,
     ui_params: &[UiParam],
     scalars: &[ScalarParam<C>],
     component: &mut C,
@@ -256,8 +260,7 @@ pub fn draw_tiered_params<C>(
     );
 
     let remaining_groups = group_remaining_params(ui_params, hidden);
-    if remaining_groups.is_empty()
-        || !ui.collapsing_header("Advanced", imgui::TreeNodeFlags::empty())
+    if remaining_groups.is_empty() || !section_header(ui, world, "Advanced", SectionDefault::Closed)
     {
         return false;
     }

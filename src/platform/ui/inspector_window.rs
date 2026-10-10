@@ -7,6 +7,8 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
@@ -41,9 +43,9 @@ fn draw_inspector_window(
 
                 build_transform_section(ui, world, &data);
 
-                build_mesh_section(ui, &data);
+                build_mesh_section(ui, world, &data);
 
-                build_material_section(ui, &data);
+                build_material_section(ui, world, &data);
 
                 build_visible_section(ui, world, &data);
 
@@ -90,7 +92,7 @@ fn build_transform_section(
         return;
     }
 
-    if ui.collapsing_header("Transform", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if section_header(ui, world, "Transform", SectionDefault::Open) {
         if let Some(translation) = data.translation {
             let mut pos = [translation.x, translation.y, translation.z];
             ui.text("Position");
@@ -125,12 +127,12 @@ fn build_transform_section(
     }
 }
 
-fn build_mesh_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorData) {
+fn build_mesh_section(ui: &imgui::Ui, world: &World, data: &crate::ecs::systems::InspectorData) {
     let Some(ref mesh) = data.mesh else {
         return;
     };
 
-    if ui.collapsing_header("Mesh", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if section_header(ui, world, "Mesh", SectionDefault::Open) {
         ui.text(&format!("Name        {}", mesh.name));
         ui.text(&format!("Vertices    {}", format_number(mesh.vertex_count)));
         ui.text(&format!(
@@ -144,12 +146,16 @@ fn build_mesh_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorData)
     }
 }
 
-fn build_material_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorData) {
+fn build_material_section(
+    ui: &imgui::Ui,
+    world: &World,
+    data: &crate::ecs::systems::InspectorData,
+) {
     let Some(ref mat) = data.material else {
         return;
     };
 
-    if ui.collapsing_header("Material", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if section_header(ui, world, "Material", SectionDefault::Open) {
         ui.text(&format!("Name        {}", mat.name));
         ui.text(&format!(
             "Base Color  ({:.2}, {:.2}, {:.2}, {:.2})",
@@ -178,9 +184,9 @@ fn format_number(n: usize) -> String {
 
 fn build_visible_section(ui: &imgui::Ui, world: &World, data: &crate::ecs::systems::InspectorData) {
     if let Some(visible) = data.visible {
-        if ui.collapsing_header("Visible", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        if section_header(ui, world, "Visible", SectionDefault::Open) {
             let mut vis = visible;
-            if ui.checkbox("Visible##checkbox", &mut vis) {
+            if crate::platform::ui::theme::toggle_switch(ui, world, "Visible##checkbox", &mut vis) {
                 world.send_command(HierarchyEvent::SetEntityVisible(
                     data.entity,
                     Visibility::from(vis),

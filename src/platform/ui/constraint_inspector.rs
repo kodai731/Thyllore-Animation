@@ -9,6 +9,8 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -21,7 +23,7 @@ pub fn build_constraint_section(
     add_type_index: &mut i32,
     bake_fps: &mut f32,
 ) {
-    if !ui.collapsing_header("Constraints", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if !section_header(ui, world, "Constraints", SectionDefault::Open) {
         return;
     }
 
@@ -118,7 +120,7 @@ fn build_constraint_entry(
         entry.priority, type_name, entry.id, entry.id
     );
 
-    let opened = ui.collapsing_header(&header_label, imgui::TreeNodeFlags::empty());
+    let opened = section_header(ui, world, &header_label, SectionDefault::Closed);
 
     if !opened {
         return;

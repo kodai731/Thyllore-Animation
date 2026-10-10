@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::animation::editable::{
-    apply_tangent_by_type, clip_add_keyframe, clip_recalculate_duration, curve_add_keyframe,
-    curve_insert_keyframe_preserving_shape, curve_recalculate_auto_tangent_at,
+    align_opposite_handle, apply_tangent_by_type, clip_add_keyframe, clip_recalculate_duration,
+    curve_add_keyframe, curve_insert_keyframe_preserving_shape, curve_recalculate_auto_tangent_at,
     curve_remove_keyframe, curve_set_keyframe_time, initialize_weighted_handle_lengths,
     EditableAnimationClip, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
-    SourceClipId, TangentWeightMode,
+    SourceClipId, TangentContinuity, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
@@ -373,6 +373,30 @@ fn dispatch_tangent_edit_events(
                             {
                                 let dt = compute_average_keyframe_interval(curve).max(0.1);
                                 initialize_weighted_handle_lengths(&mut curve.keyframes[idx], dt);
+                            }
+                        }
+                        clip_modified = true;
+                    }
+                }
+            }
+
+            TimelineEvent::SetTangentContinuity {
+                track,
+                property_type,
+                keyframe_id,
+                continuity,
+            } => {
+                if let Some(clip) = clip_library.get_mut(clip_id) {
+                    if let Some(curve) = resolve_curve_mut(clip, *track, *property_type) {
+                        if let Some(idx) = curve.keyframes.iter().position(|k| k.id == *keyframe_id)
+                        {
+                            let keyframe = &mut curve.keyframes[idx];
+                            keyframe.continuity = *continuity;
+                            if *continuity == TangentContinuity::Unified {
+                                keyframe.in_tangent = align_opposite_handle(
+                                    &keyframe.out_tangent,
+                                    &keyframe.in_tangent,
+                                );
                             }
                         }
                         clip_modified = true;

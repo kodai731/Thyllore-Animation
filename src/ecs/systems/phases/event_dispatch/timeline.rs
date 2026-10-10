@@ -4,6 +4,7 @@ use crate::animation::editable::InterpolationType;
 use crate::animation::editable::KeyframeId;
 use crate::animation::editable::PropertyType;
 use crate::animation::editable::SourceClipId;
+use crate::animation::editable::TangentContinuity;
 use crate::animation::editable::TangentType;
 use crate::animation::editable::TangentWeightMode;
 use crate::animation::BoneId;
@@ -101,6 +102,12 @@ pub enum TimelineEvent {
         property_type: PropertyType,
         keyframe_id: KeyframeId,
         weight_mode: TangentWeightMode,
+    },
+    SetTangentContinuity {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        continuity: TangentContinuity,
     },
     SetSnapToFrame(bool),
     SetSnapToKey(bool),

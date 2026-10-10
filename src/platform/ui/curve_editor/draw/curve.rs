@@ -1,5 +1,6 @@
 use crate::animation::editable::{
-    curve_sample, segment_uses_bezier, InterpolationType, PropertyCurve, TangentWeightMode,
+    curve_sample, segment_uses_bezier, EditableKeyframe, InterpolationType, PropertyCurve,
+    TangentContinuity, TangentType, TangentWeightMode,
 };
 use crate::ecs::resource::CurveSelectedKeyframe;
 
@@ -18,16 +19,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     }
 
     if curve.keyframes.len() == 1 {
-        let kf = &curve.keyframes[0];
-        let x = vt.time_to_x(kf.time);
-        let y = vt.value_to_y(kf.value);
-        draw_list
-            .add_circle([x, y], 5.0, color)
-            .filled(true)
-            .build();
-        draw_list
-            .add_circle([x, y], 5.0, [1.0, 1.0, 1.0, 0.8])
-            .build();
+        draw_keyframe_marker(draw_list, &curve.keyframes[0], color, vt);
         return;
     }
 
@@ -82,17 +74,62 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     }
 
     for kf in &curve.keyframes {
-        let x = vt.time_to_x(kf.time);
-        let y = vt.value_to_y(kf.value);
+        draw_keyframe_marker(draw_list, kf, color, vt);
+    }
+}
 
-        draw_list
-            .add_circle([x, y], 5.0, color)
-            .filled(true)
-            .build();
+const KEYFRAME_MARKER_RADIUS: f32 = 5.0;
+const KEYFRAME_OUTLINE_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.8];
 
-        draw_list
-            .add_circle([x, y], 5.0, [1.0, 1.0, 1.0, 0.8])
-            .build();
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum KeyframeMarkerShape {
+    HollowSquare,
+    FilledSquare,
+    Circle,
+}
+
+fn select_keyframe_marker_shape(kf: &EditableKeyframe) -> KeyframeMarkerShape {
+    if kf.continuity == TangentContinuity::Broken {
+        return KeyframeMarkerShape::HollowSquare;
+    }
+    match kf.tangent_type {
+        TangentType::Manual => KeyframeMarkerShape::FilledSquare,
+        TangentType::Spline
+        | TangentType::Flat
+        | TangentType::Linear
+        | TangentType::Clamped
+        | TangentType::Plateau => KeyframeMarkerShape::Circle,
+    }
+}
+
+fn draw_keyframe_marker(
+    draw_list: &imgui::DrawListMut,
+    kf: &EditableKeyframe,
+    color: [f32; 4],
+    vt: &ViewTransform,
+) {
+    let center = [vt.time_to_x(kf.time), vt.value_to_y(kf.value)];
+    let radius = KEYFRAME_MARKER_RADIUS;
+    let min = [center[0] - radius, center[1] - radius];
+    let max = [center[0] + radius, center[1] + radius];
+
+    match select_keyframe_marker_shape(kf) {
+        KeyframeMarkerShape::HollowSquare => {
+            draw_list.add_rect(min, max, color).thickness(2.0).build();
+        }
+        KeyframeMarkerShape::FilledSquare => {
+            draw_list.add_rect(min, max, color).filled(true).build();
+            draw_list.add_rect(min, max, KEYFRAME_OUTLINE_COLOR).build();
+        }
+        KeyframeMarkerShape::Circle => {
+            draw_list
+                .add_circle(center, radius, color)
+                .filled(true)
+                .build();
+            draw_list
+                .add_circle(center, radius, KEYFRAME_OUTLINE_COLOR)
+                .build();
+        }
     }
 }
 
@@ -284,6 +321,33 @@ mod tests {
                 [[4.0, 0.0], [4.0, 2.0]],
                 [[4.0, 6.0], [4.0, 8.0]],
             ]
+        );
+    }
+
+    #[test]
+    fn broken_key_is_a_hollow_square_whatever_its_tangent_type() {
+        let mut kf = EditableKeyframe::new(0, 0.0, 0.0);
+        kf.continuity = TangentContinuity::Broken;
+        kf.tangent_type = TangentType::Clamped;
+
+        assert_eq!(
+            select_keyframe_marker_shape(&kf),
+            KeyframeMarkerShape::HollowSquare
+        );
+    }
+
+    #[test]
+    fn unified_manual_key_is_a_filled_square_and_auto_key_a_circle() {
+        let mut kf = EditableKeyframe::new(0, 0.0, 0.0);
+        assert_eq!(
+            select_keyframe_marker_shape(&kf),
+            KeyframeMarkerShape::FilledSquare
+        );
+
+        kf.tangent_type = TangentType::Spline;
+        assert_eq!(
+            select_keyframe_marker_shape(&kf),
+            KeyframeMarkerShape::Circle
         );
     }
 }

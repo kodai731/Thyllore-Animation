@@ -416,6 +416,17 @@ pub fn apply_tangent_by_type(keyframes: &mut [EditableKeyframe], index: usize) {
     }
 }
 
+pub fn align_opposite_handle(dragged: &BezierHandle, opposite: &BezierHandle) -> BezierHandle {
+    let dragged_length = compute_handle_length(dragged);
+    if dragged_length < 1e-6 {
+        return BezierHandle::linear();
+    }
+    let opposite_length = compute_handle_length(opposite);
+    let scale = opposite_length / dragged_length;
+
+    BezierHandle::new(-dragged.time_offset * scale, -dragged.value_offset * scale)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -843,5 +854,80 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    #[test]
+    fn test_align_opposite_handle_symmetric_unchanged() {
+        let dragged = BezierHandle::new(1.0, 1.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            (aligned.value_offset + 1.0).abs() < 1e-6,
+            "value_offset should be -1.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_asymmetric_flips_direction() {
+        let dragged = BezierHandle::new(2.0, 1.0);
+        let opposite = BezierHandle::new(-1.0, -0.5);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            (aligned.value_offset + 0.5).abs() < 1e-6,
+            "value_offset should be -0.5"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_different_lengths() {
+        let dragged = BezierHandle::new(2.0, 0.0);
+        let opposite = BezierHandle::new(-1.0, 0.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            aligned.value_offset.abs() < 1e-6,
+            "value_offset should be ~0.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_zero_dragged() {
+        let dragged = BezierHandle::new(0.0, 0.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            aligned.time_offset.abs() < 1e-6,
+            "time_offset should be ~0.0"
+        );
+        assert!(
+            aligned.value_offset.abs() < 1e-6,
+            "value_offset should be ~0.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_preserves_length() {
+        let dragged = BezierHandle::new(3.0, 4.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        let aligned_length = compute_handle_length(&aligned);
+        let opposite_length = compute_handle_length(&opposite);
+        assert!(
+            (aligned_length - opposite_length).abs() < 1e-6,
+            "aligned length {:.4} should equal opposite length {:.4}",
+            aligned_length,
+            opposite_length
+        );
     }
 }

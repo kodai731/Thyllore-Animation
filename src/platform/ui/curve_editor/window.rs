@@ -256,7 +256,12 @@ pub(super) fn build_curve_view(
         track_ref,
     );
 
-    handle_curve_editor_keyboard(ui, editor_state, &curves_to_draw);
+    let keyboard_target = CurveEditorKeyboardTarget {
+        world,
+        curves: &curves_to_draw,
+        track_ref,
+    };
+    handle_curve_editor_keyboard(ui, editor_state, &keyboard_target);
     build_curve_extrapolation_menu(ui, world, editor_state, &curves_to_draw, track_ref);
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);

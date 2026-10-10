@@ -3,7 +3,8 @@ use imgui::MouseButton;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
 use crate::animation::editable::{
-    curve_sample, BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    align_opposite_handle, curve_sample, BezierHandle, InterpolationType, KeyframeId,
+    PropertyCurve, PropertyType, TangentContinuity,
 };
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
@@ -413,10 +414,25 @@ pub(super) fn compute_dragged_tangent(
         let value_offset = mouse_value - kf.value;
         let new_handle = BezierHandle::new(time_offset, value_offset);
 
-        return match dragging.handle_type {
+        let (in_tangent, out_tangent) = match dragging.handle_type {
             TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
             TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
         };
+
+        if kf.continuity == TangentContinuity::Unified {
+            return match dragging.handle_type {
+                TangentHandleType::In => {
+                    let aligned_out = align_opposite_handle(&in_tangent, &out_tangent);
+                    (in_tangent, aligned_out)
+                }
+                TangentHandleType::Out => {
+                    let aligned_in = align_opposite_handle(&out_tangent, &in_tangent);
+                    (aligned_in, out_tangent)
+                }
+            };
+        }
+
+        return (in_tangent, out_tangent);
     }
 
     (BezierHandle::linear(), BezierHandle::linear())

@@ -1,23 +1,96 @@
+use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
+use crate::ecs::component::ColliderShape;
+use crate::ecs::component::SpringChain;
+use crate::ecs::component::SpringChainId;
+use crate::ecs::component::SpringColliderDef;
+use crate::ecs::component::SpringColliderGroup;
+use crate::ecs::component::SpringColliderGroupId;
+use crate::ecs::component::SpringColliderId;
+use crate::ecs::component::SpringJointParam;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_spring_bone_bake_ecs_events(
-    events: &[UIEvent],
+#[derive(Clone, Debug)]
+pub enum SpringBoneEvent {
+    Bake,
+    DiscardBake,
+    Rebake,
+    ChainAdd {
+        entity: Entity,
+        root_bone_id: BoneId,
+        chain_length: u32,
+    },
+    ChainRemove {
+        entity: Entity,
+        chain_id: SpringChainId,
+    },
+    ChainUpdate {
+        entity: Entity,
+        chain_id: SpringChainId,
+        chain: SpringChain,
+    },
+    JointUpdate {
+        entity: Entity,
+        chain_id: SpringChainId,
+        joint_index: usize,
+        joint: SpringJointParam,
+    },
+    ColliderAdd {
+        entity: Entity,
+        bone_id: BoneId,
+        shape: ColliderShape,
+    },
+    ColliderRemove {
+        entity: Entity,
+        collider_id: SpringColliderId,
+    },
+    ColliderUpdate {
+        entity: Entity,
+        collider_id: SpringColliderId,
+        collider: SpringColliderDef,
+    },
+    ColliderGroupAdd {
+        entity: Entity,
+        name: String,
+    },
+    ColliderGroupRemove {
+        entity: Entity,
+        group_id: SpringColliderGroupId,
+    },
+    ColliderGroupUpdate {
+        entity: Entity,
+        group_id: SpringColliderGroupId,
+        group: SpringColliderGroup,
+    },
+    ToggleGizmo(bool),
+}
+
+impl UiCommand for SpringBoneEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        let events = [*self];
+        dispatch_spring_bone_bake_events(&events, world, assets);
+        dispatch_spring_bone_edit_events(&events, world, assets);
+    }
+}
+
+fn dispatch_spring_bone_bake_events(
+    events: &[SpringBoneEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
     for event in events {
         match event {
-            UIEvent::SpringBoneBake => {
+            SpringBoneEvent::Bake => {
                 handle_spring_bone_bake(world, assets);
             }
-            UIEvent::SpringBoneDiscardBake => {
+            SpringBoneEvent::DiscardBake => {
                 handle_spring_bone_discard(world, assets);
             }
-            UIEvent::SpringBoneRebake => {
+            SpringBoneEvent::Rebake => {
                 handle_spring_bone_discard(world, assets);
                 handle_spring_bone_bake(world, assets);
             }
@@ -228,8 +301,8 @@ pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) 
     log!("Discarded spring bone bake, restored original clip");
 }
 
-pub fn dispatch_spring_bone_edit_events(
-    events: &[UIEvent],
+fn dispatch_spring_bone_edit_events(
+    events: &[SpringBoneEvent],
     world: &mut World,
     assets: &AssetStorage,
 ) {
@@ -243,7 +316,7 @@ pub fn dispatch_spring_bone_edit_events(
 
     for event in events {
         match event {
-            UIEvent::SpringChainAdd {
+            SpringBoneEvent::ChainAdd {
                 entity,
                 root_bone_id,
                 chain_length,
@@ -253,11 +326,11 @@ pub fn dispatch_spring_bone_edit_events(
                 }
             }
 
-            UIEvent::SpringChainRemove { entity, chain_id } => {
+            SpringBoneEvent::ChainRemove { entity, chain_id } => {
                 handle_spring_chain_remove(world, *entity, *chain_id);
             }
 
-            UIEvent::SpringChainUpdate {
+            SpringBoneEvent::ChainUpdate {
                 entity,
                 chain_id,
                 chain,
@@ -265,7 +338,7 @@ pub fn dispatch_spring_bone_edit_events(
                 handle_spring_chain_update(world, *entity, *chain_id, chain.clone());
             }
 
-            UIEvent::SpringJointUpdate {
+            SpringBoneEvent::JointUpdate {
                 entity,
                 chain_id,
                 joint_index,
@@ -274,7 +347,7 @@ pub fn dispatch_spring_bone_edit_events(
                 handle_spring_joint_update(world, *entity, *chain_id, *joint_index, joint.clone());
             }
 
-            UIEvent::SpringColliderAdd {
+            SpringBoneEvent::ColliderAdd {
                 entity,
                 bone_id,
                 shape,
@@ -282,14 +355,14 @@ pub fn dispatch_spring_bone_edit_events(
                 handle_spring_collider_add(world, *entity, *bone_id, shape.clone());
             }
 
-            UIEvent::SpringColliderRemove {
+            SpringBoneEvent::ColliderRemove {
                 entity,
                 collider_id,
             } => {
                 handle_spring_collider_remove(world, *entity, *collider_id);
             }
 
-            UIEvent::SpringColliderUpdate {
+            SpringBoneEvent::ColliderUpdate {
                 entity,
                 collider_id,
                 collider,
@@ -297,15 +370,15 @@ pub fn dispatch_spring_bone_edit_events(
                 handle_spring_collider_update(world, *entity, *collider_id, collider.clone());
             }
 
-            UIEvent::SpringColliderGroupAdd { entity, name } => {
+            SpringBoneEvent::ColliderGroupAdd { entity, name } => {
                 handle_spring_collider_group_add(world, *entity, name.clone());
             }
 
-            UIEvent::SpringColliderGroupRemove { entity, group_id } => {
+            SpringBoneEvent::ColliderGroupRemove { entity, group_id } => {
                 handle_spring_collider_group_remove(world, *entity, *group_id);
             }
 
-            UIEvent::SpringColliderGroupUpdate {
+            SpringBoneEvent::ColliderGroupUpdate {
                 entity,
                 group_id,
                 group,
@@ -313,7 +386,7 @@ pub fn dispatch_spring_bone_edit_events(
                 handle_spring_collider_group_update(world, *entity, *group_id, group.clone());
             }
 
-            UIEvent::SpringBoneToggleGizmo(visible) => {
+            SpringBoneEvent::ToggleGizmo(visible) => {
                 if let Some(mut gizmo) =
                     world.get_resource_mut::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
                 {

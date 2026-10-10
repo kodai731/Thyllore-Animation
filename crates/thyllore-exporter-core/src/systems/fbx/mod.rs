@@ -3,6 +3,7 @@ pub(crate) mod blend_shape;
 pub(crate) mod build;
 pub(crate) mod connections;
 pub(crate) mod curves;
+pub(crate) mod file_identity;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;

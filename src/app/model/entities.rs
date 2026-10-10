@@ -33,7 +33,7 @@ pub(super) fn spawn_model_entities(
         .with_transform(Transform::default())
         .with_visible(true)
         .with_editor_display(EntityIcon::Model, true);
-    if first_clip_id.is_some() {
+    if first_clip_id.is_some() || animation_type == AnimationType::Skeletal {
         parent_builder = parent_builder
             .with_animator(Animator::new())
             .with_clip_schedule(initial_schedule)

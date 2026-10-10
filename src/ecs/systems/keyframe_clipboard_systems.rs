@@ -1,26 +1,26 @@
 use crate::animation::editable::{build_mirror_mapping, curve_add_keyframe, mirror_keyframes};
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
     ClipLibrary, CopiedKeyframe, CurveTrackRef, KeyframeCopyBuffer, TimelineState,
 };
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 
 pub fn process_keyframe_clipboard_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &TimelineState,
     clip_library: &mut ClipLibrary,
     copy_buffer: &mut KeyframeCopyBuffer,
 ) {
     for event in events {
         match event {
-            UIEvent::TimelineCopyKeyframes => {
+            TimelineEvent::CopyKeyframes => {
                 copy_keyframes(timeline_state, clip_library, copy_buffer);
             }
 
-            UIEvent::TimelinePasteKeyframes { paste_time } => {
+            TimelineEvent::PasteKeyframes { paste_time } => {
                 paste_keyframes(*paste_time, timeline_state, clip_library, copy_buffer);
             }
 
-            UIEvent::TimelineMirrorPaste { paste_time } => {
+            TimelineEvent::MirrorPaste { paste_time } => {
                 mirror_paste_keyframes(*paste_time, timeline_state, clip_library, copy_buffer);
             }
 

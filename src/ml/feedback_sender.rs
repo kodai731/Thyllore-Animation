@@ -10,6 +10,7 @@ use thyllore_ml_core::feedback::{
 };
 
 use crate::animation::editable::PropertyType;
+use crate::ecs::component::scalar_channel_for_property;
 
 pub const FEEDBACK_ENDPOINT_ENV: &str = "THYLLORE_FEEDBACK_ENDPOINT";
 pub const INGEST_TOKEN_ENV: &str = "THYLLORE_INGEST_TOKEN";
@@ -128,6 +129,13 @@ fn log_feedback_response(gate: &DegradeGate, response: &FeedbackResponse) {
 
 /// Builds the full-mode record for one engine inference. `ground_truth` stays
 /// `null`: a single forecast has no user-corrected curve to sample.
+fn scalar_channel_name(code: u16) -> String {
+    match scalar_channel_for_property(PropertyType::Custom(code)) {
+        Some((_, channel)) => channel.cli_name.to_string(),
+        None => format!("custom_{code}"),
+    }
+}
+
 pub fn build_engine_feedback_record(
     model_hash: &str,
     property_type: PropertyType,
@@ -141,7 +149,7 @@ pub fn build_engine_feedback_record(
         .iter()
         .map(|&value| (value + continuity_offset) as f64)
         .collect();
-    let channel = channel_for_property_type(property_type);
+    let channel = channel_for_property_type(property_type, scalar_channel_name);
 
     build_feedback_record(FeedbackRecordInputs {
         model_hash,

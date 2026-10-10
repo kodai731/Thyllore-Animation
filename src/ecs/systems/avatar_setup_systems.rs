@@ -2,11 +2,14 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
+use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+use thyllore_avatar_core::humanoid::systems::geometry_checks::check_mapping_geometry;
+use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
 use thyllore_avatar_core::humanoid::systems::mapping_io::{
-    humanoid_mapping_path, load_mapping, save_mapping,
+    humanoid_mapping_path, load_or_infer_rig, save_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::name_match::{
     collect_unresolved_roles, infer_mapping,
@@ -34,7 +37,7 @@ use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
+pub(crate) fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
         .bones
         .iter()
@@ -54,7 +57,10 @@ fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
         .collect()
 }
 
-fn compute_bone_global_transform(skeleton: &Skeleton, bone_index: usize) -> Matrix4<f32> {
+pub(crate) fn compute_bone_global_transform(
+    skeleton: &Skeleton,
+    bone_index: usize,
+) -> Matrix4<f32> {
     let bone = &skeleton.bones[bone_index];
     let mut global_transform = bone.local_transform;
     let mut parent_id = bone.parent_id;
@@ -113,7 +119,7 @@ fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
     }
 }
 
-fn find_first_skeleton(assets: &AssetStorage) -> Option<&Skeleton> {
+pub(crate) fn find_first_skeleton(assets: &AssetStorage) -> Option<&Skeleton> {
     assets
         .skeletons
         .values()
@@ -150,7 +156,9 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
-    let (mapping, missing_bone_names) = load_or_infer_mapping(Path::new(&model_path), &bones);
+    let imported = world.resource::<ModelState>().imported_humanoid.clone();
+    let (mapping, missing_bone_names) =
+        load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
     let stats = count_avatar_stats(graphics, Some(skeleton), find_spring_bone_setup(world));
 
     let mut state = world.resource_mut::<AvatarSetupState>();
@@ -162,26 +170,33 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     state.source_model_path = model_path;
 }
 
-fn load_or_infer_mapping(model_path: &Path, bones: &[BoneInput]) -> (HumanoidMapping, Vec<String>) {
-    let mapping_path = humanoid_mapping_path(model_path);
-    if mapping_path.exists() {
-        match load_mapping(&mapping_path, bones) {
-            Ok(loaded) => return loaded,
-            Err(error) => log_warn!(
-                "Failed to load humanoid mapping {}: {}",
-                mapping_path.display(),
+pub(crate) fn load_or_infer_mapping(
+    model_path: &Path,
+    bones: &[BoneInput],
+    imported: Option<&HumanoidMapping>,
+) -> (HumanoidMapping, Vec<String>) {
+    match load_or_infer_rig(model_path, bones, imported) {
+        Ok((AvatarRig::Humanoid(m), missing)) => (m, missing),
+        Ok((AvatarRig::Inferred(m), _)) => (m, Vec::new()),
+        Ok((AvatarRig::Generic, _)) => (HumanoidMapping::default(), Vec::new()),
+        Err(error) => {
+            log_warn!(
+                "Failed to load or infer humanoid mapping {}: {}",
+                model_path.display(),
                 error
-            ),
+            );
+            let (mapping, _) = infer_mapping(bones);
+            (mapping, Vec::new())
         }
     }
-
-    let (mapping, _) = infer_mapping(bones);
-    (mapping, Vec::new())
 }
 
 fn refresh_avatar_validation(state: &mut AvatarSetupState) {
     state.unresolved = collect_unresolved_roles(&state.mapping);
     state.issues = validate_mapping(&state.mapping, &state.bones);
+    state.geometry_warnings = derive_humanoid_frame(&state.mapping, &state.bones)
+        .map(|frame| check_mapping_geometry(&state.mapping, &state.bones, &frame))
+        .unwrap_or_default();
     state.rest_pose = detect_rest_pose(&state.mapping, &state.bones);
     state.rank = Some(rank_stats(
         &state.stats,
@@ -223,6 +238,14 @@ pub fn save_humanoid_mapping(world: &World) {
         return;
     };
     let state = world.resource::<AvatarSetupState>();
+
+    if !state.issues.is_empty() {
+        msg_error!(
+            "Cannot save humanoid mapping: {} structural issue(s)",
+            state.issues.len()
+        );
+        return;
+    }
 
     let mapping_path = humanoid_mapping_path(Path::new(&model_path));
     match save_mapping(&mapping_path, &state.mapping, &state.bones) {

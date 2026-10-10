@@ -165,7 +165,8 @@ fn test_no_hardcoded_asset_paths_outside_constants() {
     for rs_file in &rs_files {
         let normalized = rs_file.replace('\\', "/");
 
-        let is_allowed = allowed_files.iter().any(|a| normalized.ends_with(a));
+        let is_allowed = allowed_files.iter().any(|a| normalized.ends_with(a))
+            || normalized.ends_with("/paths.rs");
         if is_allowed {
             continue;
         }
@@ -194,7 +195,7 @@ fn test_no_hardcoded_asset_paths_outside_constants() {
     if !unexpected.is_empty() {
         let mut msg = String::from(
             "\nUnexpected asset path references found outside known files.\n\
-             Add the file to allowed_files in this test, or move the path to src/paths.rs:\n",
+             Add the file to allowed_files in this test, or move the path to src/paths.rs (generic) or an effect's paths.rs (effect-specific):\n",
         );
         for (location, line) in &unexpected {
             msg.push_str(&format!("  {} : {}\n", location, line));

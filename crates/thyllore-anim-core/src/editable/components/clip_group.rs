@@ -2,7 +2,7 @@ use super::keyframe::ClipInstanceId;
 
 pub type ClipGroupId = u64;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClipGroup {
     pub id: ClipGroupId,
     pub name: String,

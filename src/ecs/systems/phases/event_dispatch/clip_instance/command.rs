@@ -138,19 +138,15 @@ fn collect_clip_schedule_snapshots(
 }
 
 fn record_schedule_changes(snapshots: Vec<(Entity, ClipSchedule)>, world: &mut World) {
-    if snapshots.is_empty() || !world.contains_resource::<EditHistory>() {
+    let Some(mut edit_history) = world.get_resource_mut::<EditHistory>() else {
         return;
-    }
+    };
 
     for (entity, before) in snapshots {
         let Some(after) = world.get_component::<ClipSchedule>(entity).cloned() else {
             continue;
         };
-        let changed = before.instances.len() != after.instances.len()
-            || before.groups.len() != after.groups.len()
-            || format!("{:?}", before) != format!("{:?}", after);
-        if changed {
-            let mut edit_history = world.resource_mut::<EditHistory>();
+        if before != after {
             edit_history.push_schedule_edit(entity, before, after, "clip schedule edit");
         }
     }

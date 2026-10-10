@@ -62,6 +62,7 @@ pub struct GltfLoadResult {
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
     pub spring_bone_setup: Option<SpringBoneSetup>,
+    pub vrm_humanoid: Option<super::vrm_humanoid_extension::VrmHumanoid>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -195,6 +196,7 @@ struct GltfParseContext {
     has_armature: bool,
     skeleton_root_transform: Option<[[f32; 4]; 4]>,
     spring_bone_setup: Option<SpringBoneSetup>,
+    vrm_humanoid: Option<super::vrm_humanoid_extension::VrmHumanoid>,
 }
 
 impl Default for GltfParseContext {
@@ -214,6 +216,7 @@ impl Default for GltfParseContext {
             has_armature: false,
             skeleton_root_transform: None,
             spring_bone_setup: None,
+            vrm_humanoid: None,
         }
     }
 }
@@ -288,6 +291,25 @@ unsafe fn parse_gltf_imported(
 
     ctx.spring_bone_setup = extract_spring_bone_extension(gltf, &ctx.node_joint_map);
 
+    let vrmc_vrm = gltf.extension_value("VRMC_vrm");
+    let vrm0 = gltf.extension_value("VRM");
+    if let Some(vh) = super::vrm_humanoid_extension::parse_vrm_humanoid(vrmc_vrm, vrm0) {
+        let resolved: Vec<(String, u32)> = vh
+            .bones
+            .iter()
+            .filter_map(|(name, node)| {
+                ctx.node_joint_map
+                    .get_joint_index(*node as u16)
+                    .map(|joint| (name.clone(), joint as u32))
+            })
+            .collect();
+        if !resolved.is_empty() {
+            ctx.vrm_humanoid = Some(super::vrm_humanoid_extension::VrmHumanoid {
+                is_v1: vh.is_v1,
+                bones: resolved,
+            });
+        }
+    }
     log!(
         "Loaded: has_skinned_meshes={}, {} node_animations, {} joint_animations",
         ctx.has_skinned_meshes,
@@ -1245,6 +1267,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,
         spring_bone_setup: ctx.spring_bone_setup,
+        vrm_humanoid: ctx.vrm_humanoid,
     }
 }
 

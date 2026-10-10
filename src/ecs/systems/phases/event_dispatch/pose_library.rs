@@ -1,17 +1,33 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory, PoseLibrary, TimelineState};
 use crate::ecs::systems::pose_library_systems::{apply_pose_to_clip, capture_current_pose};
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_pose_library_events(
-    events: &[UIEvent],
+use thyllore_anim_core::editable::SourceClipId;
+
+#[derive(Clone, Debug)]
+pub enum PoseLibraryEvent {
+    SaveCurrent { name: String },
+    Apply(SourceClipId),
+    Delete(SourceClipId),
+}
+
+impl UiCommand for PoseLibraryEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        dispatch_pose_library_events(&[*self], world, assets);
+    }
+}
+
+fn dispatch_pose_library_events(
+    events: &[PoseLibraryEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
     for event in events {
         match event {
-            UIEvent::PoseLibrarySaveCurrent { name } => {
+            PoseLibraryEvent::SaveCurrent { name } => {
                 let clip_library = world.resource::<ClipLibrary>();
                 let timeline_state = world.resource::<TimelineState>();
                 let current_clip_id = timeline_state.current_clip_id;
@@ -53,7 +69,7 @@ pub fn dispatch_pose_library_events(
                 }
             }
 
-            UIEvent::PoseLibraryApply(pose_id) => {
+            PoseLibraryEvent::Apply(pose_id) => {
                 let timeline_state = world.resource::<TimelineState>();
                 let target_clip_id = timeline_state.current_clip_id;
                 let target_time = timeline_state.current_time;
@@ -85,7 +101,7 @@ pub fn dispatch_pose_library_events(
                 }
             }
 
-            UIEvent::PoseLibraryDelete(pose_id) => {
+            PoseLibraryEvent::Delete(pose_id) => {
                 let removed_source = {
                     let clip_library = world.resource::<ClipLibrary>();
                     clip_library.source_clips.get(pose_id).cloned()
@@ -107,8 +123,6 @@ pub fn dispatch_pose_library_events(
 
                 log!("Deleted pose (id={})", pose_id);
             }
-
-            _ => {}
         }
     }
 }

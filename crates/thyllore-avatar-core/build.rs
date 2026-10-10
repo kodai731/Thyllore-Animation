@@ -25,7 +25,11 @@ struct PartDefinition {
     paired: bool,
     #[serde(default)]
     required: bool,
+    #[serde(default)]
+    translation: bool,
     patterns: Vec<Vec<String>>,
+    #[serde(default)]
+    vrm1_part: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -186,6 +190,27 @@ fn generate_rig_rust(rig: &RigDefinition) -> String {
         &roles,
         pattern_table,
     );
+    write_role_method(
+        &mut out,
+        "allows_translation(self) -> bool",
+        &roles,
+        |role| role.part.translation.to_string(),
+    );
+    write_role_method(&mut out, "index(self) -> usize", &roles, |role| {
+        let idx = all_names.iter().position(|n| *n == role.name).unwrap();
+        idx.to_string()
+    });
+    write_from_unity_name(&mut out, &roles);
+    write_vrm_name(&mut out, &roles);
+    write_from_vrm_name(&mut out, &roles);
+    write_role_method(&mut out, "mirrored(self) -> HumanoidRole", &roles, |role| {
+        if let Some(side) = role.side {
+            let opposite_side = SIDES.iter().find(|s| **s != side).unwrap();
+            format!("Self::{}{}", opposite_side, role.part.part)
+        } else {
+            format!("Self::{}", role.name)
+        }
+    });
     out.push_str("}\n\n");
 
     let _ = writeln!(
@@ -262,4 +287,105 @@ fn pattern_table(role: &Role) -> String {
         .map(|pattern| format!("&{pattern:?}"))
         .collect();
     format!("&[{}]", patterns.join(", "))
+}
+
+fn write_from_unity_name(out: &mut String, roles: &[Role]) {
+    let _ = writeln!(
+        out,
+        "    pub fn from_unity_name(name: &str) -> Option<HumanoidRole> {{\n        match name {{"
+    );
+    for role in roles {
+        let _ = writeln!(
+            out,
+            "            {:?} => Some(Self::{name}),",
+            role.name,
+            name = role.name
+        );
+    }
+    out.push_str("            _ => None,\n        }\n    }\n\n");
+}
+
+fn write_vrm_name(out: &mut String, roles: &[Role]) {
+    let _ = writeln!(
+        out,
+        "    pub fn vrm_name(self, version: VrmVersion) -> &'static str {{\n        match (self, version) {{"
+    );
+    for role in roles {
+        let v0_name = vrm_bone_name_for_version(role, false);
+        let v1_name = vrm_bone_name_for_version(role, true);
+        if v0_name == v1_name {
+            let _ = writeln!(
+                out,
+                "            (Self::{name}, _) => {:?},",
+                v0_name,
+                name = role.name
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "            (Self::{name}, VrmVersion::V0) => {:?},",
+                v0_name,
+                name = role.name
+            );
+            let _ = writeln!(
+                out,
+                "            (Self::{name}, VrmVersion::V1) => {:?},",
+                v1_name,
+                name = role.name
+            );
+        }
+    }
+    out.push_str("        }\n    }\n\n");
+}
+
+fn write_from_vrm_name(out: &mut String, roles: &[Role]) {
+    let _ = writeln!(
+        out,
+        "    pub fn from_vrm_name(name: &str, version: VrmVersion) -> Option<HumanoidRole> {{\n        match (name, version) {{"
+    );
+    for role in roles {
+        let v0_name = vrm_bone_name_for_version(role, false);
+        let v1_name = vrm_bone_name_for_version(role, true);
+        if v0_name == v1_name {
+            let _ = writeln!(
+                out,
+                "            ({:?}, _) => Some(Self::{name}),",
+                v0_name,
+                name = role.name
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "            ({:?}, VrmVersion::V0) => Some(Self::{name}),",
+                v0_name,
+                name = role.name
+            );
+            let _ = writeln!(
+                out,
+                "            ({:?}, VrmVersion::V1) => Some(Self::{name}),",
+                v1_name,
+                name = role.name
+            );
+        }
+    }
+    out.push_str("            _ => None,\n        }\n    }\n\n");
+}
+
+fn vrm_bone_name_for_version(role: &Role, is_v1: bool) -> String {
+    let part = if is_v1 {
+        role.part.vrm1_part.as_deref().unwrap_or(&role.part.part)
+    } else {
+        &role.part.part
+    };
+    match role.side {
+        Some(side) => format!("{}{}", side.to_ascii_lowercase(), part),
+        None => {
+            let first_lower = part
+                .chars()
+                .enumerate()
+                .map(|(i, c)| if i == 0 { c.to_ascii_lowercase() } else { c })
+                .collect::<String>();
+            first_lower
+        }
+    }
 }

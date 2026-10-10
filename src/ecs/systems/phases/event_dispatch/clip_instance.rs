@@ -1,37 +1,105 @@
+use crate::animation::editable::BlendMode;
+use crate::animation::editable::ClipGroupId;
+use crate::animation::editable::ClipInstanceId;
+use crate::animation::editable::SourceClipId;
+use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::EditHistory;
 use crate::ecs::systems::process_clip_instance_events;
 use crate::ecs::world::{Entity, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub fn dispatch_clip_instance_events(events: &[UIEvent], world: &mut World) {
+#[derive(Clone, Debug)]
+pub enum ClipInstanceEvent {
+    Select {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
+    Deselect,
+    Move {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_start_time: f32,
+    },
+    TrimStart {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_clip_in: f32,
+    },
+    TrimEnd {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_clip_out: f32,
+    },
+    ToggleMute {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
+    Delete {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
+    SetWeight {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        weight: f32,
+    },
+    SetBlendMode {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        blend_mode: BlendMode,
+    },
+    GroupCreate {
+        entity: Entity,
+        name: String,
+    },
+    GroupDelete {
+        entity: Entity,
+        group_id: ClipGroupId,
+    },
+    GroupAddInstance {
+        entity: Entity,
+        group_id: ClipGroupId,
+        instance_id: ClipInstanceId,
+    },
+    GroupRemoveInstance {
+        entity: Entity,
+        group_id: ClipGroupId,
+        instance_id: ClipInstanceId,
+    },
+    GroupToggleMute {
+        entity: Entity,
+        group_id: ClipGroupId,
+    },
+    GroupSetWeight {
+        entity: Entity,
+        group_id: ClipGroupId,
+        weight: f32,
+    },
+    Add {
+        entity: Entity,
+        source_id: SourceClipId,
+        start_time: f32,
+    },
+}
+
+impl UiCommand for ClipInstanceEvent {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        dispatch_clip_instance_events(&[*self], world);
+    }
+}
+
+fn dispatch_clip_instance_events(events: &[ClipInstanceEvent], world: &mut World) {
     let schedule_snapshots = collect_clip_schedule_snapshots(events, world);
 
     process_clip_instance_events(events, world);
-
-    for event in events {
-        if let UIEvent::ClipInstanceSelect {
-            entity,
-            instance_id,
-        } = event
-        {
-            let _source_id = world
-                .get_component::<ClipSchedule>(*entity)
-                .and_then(|schedule| {
-                    schedule
-                        .instances
-                        .iter()
-                        .find(|i| i.instance_id == *instance_id)
-                        .map(|i| i.source_id)
-                });
-        }
-    }
 
     record_schedule_changes(schedule_snapshots, world);
 }
 
 fn collect_clip_schedule_snapshots(
-    events: &[UIEvent],
+    events: &[ClipInstanceEvent],
     world: &World,
 ) -> Vec<(Entity, ClipSchedule)> {
     use std::collections::HashSet;
@@ -39,19 +107,19 @@ fn collect_clip_schedule_snapshots(
     let mut entities = HashSet::new();
     for event in events {
         match event {
-            UIEvent::ClipInstanceMove { entity, .. }
-            | UIEvent::ClipInstanceTrimStart { entity, .. }
-            | UIEvent::ClipInstanceTrimEnd { entity, .. }
-            | UIEvent::ClipInstanceToggleMute { entity, .. }
-            | UIEvent::ClipInstanceDelete { entity, .. }
-            | UIEvent::ClipInstanceSetWeight { entity, .. }
-            | UIEvent::ClipInstanceSetBlendMode { entity, .. }
-            | UIEvent::ClipGroupCreate { entity, .. }
-            | UIEvent::ClipGroupDelete { entity, .. }
-            | UIEvent::ClipGroupAddInstance { entity, .. }
-            | UIEvent::ClipGroupRemoveInstance { entity, .. }
-            | UIEvent::ClipGroupToggleMute { entity, .. }
-            | UIEvent::ClipGroupSetWeight { entity, .. } => {
+            ClipInstanceEvent::Move { entity, .. }
+            | ClipInstanceEvent::TrimStart { entity, .. }
+            | ClipInstanceEvent::TrimEnd { entity, .. }
+            | ClipInstanceEvent::ToggleMute { entity, .. }
+            | ClipInstanceEvent::Delete { entity, .. }
+            | ClipInstanceEvent::SetWeight { entity, .. }
+            | ClipInstanceEvent::SetBlendMode { entity, .. }
+            | ClipInstanceEvent::GroupCreate { entity, .. }
+            | ClipInstanceEvent::GroupDelete { entity, .. }
+            | ClipInstanceEvent::GroupAddInstance { entity, .. }
+            | ClipInstanceEvent::GroupRemoveInstance { entity, .. }
+            | ClipInstanceEvent::GroupToggleMute { entity, .. }
+            | ClipInstanceEvent::GroupSetWeight { entity, .. } => {
                 entities.insert(*entity);
             }
             _ => {}

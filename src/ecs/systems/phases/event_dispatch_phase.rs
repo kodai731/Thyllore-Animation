@@ -1,107 +1,68 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::apply_queued_ui_commands;
+use crate::ecs::systems::validation_report_sync;
 use crate::ecs::world::World;
-use crate::ecs::UIEventQueue;
+use crate::hooks::dispatch_prep::run_dispatch_prep_hooks;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
-use super::event_dispatch::avatar_setup::dispatch_avatar_setup_events;
-use super::event_dispatch::camera::dispatch_camera_light_debug_events;
-use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
-use super::event_dispatch::clip_instance::dispatch_clip_instance_events;
-use super::event_dispatch::constraint::{
-    dispatch_constraint_bake_events, dispatch_constraint_edit_events,
-    dispatch_debug_constraint_events,
-};
-use super::event_dispatch::edit_history::dispatch_edit_history_events;
-use super::event_dispatch::hierarchy::dispatch_hierarchy_events;
-use super::event_dispatch::morph::dispatch_morph_weight_events;
-use super::event_dispatch::overlay::dispatch_overlay_events;
-use super::event_dispatch::pose_library::dispatch_pose_library_events;
-use super::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
-use super::event_dispatch::scene::dispatch_scene_events;
-use super::event_dispatch::spring_bone::{
-    dispatch_spring_bone_bake_ecs_events, dispatch_spring_bone_edit_events,
-};
-use super::event_dispatch::timeline::{
-    dispatch_buffer_events, dispatch_keyframe_clipboard_events, dispatch_timeline_events,
-};
 
 pub fn run_event_dispatch_phase(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
-) -> Vec<UIEvent> {
-    #[cfg(feature = "text-to-motion")]
-    super::event_dispatch::ml::drain_grpc_responses(world, assets);
-
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::poll_mesh_server_status(world);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::poll_rigging_server_status(world);
-
-    let events: Vec<UIEvent> = {
-        if let Some(mut ui_events) = world.get_resource_mut::<UIEventQueue>() {
-            ui_events.drain().collect()
-        } else {
-            return Vec::new();
-        }
-    };
-
-    if events.is_empty() {
-        return Vec::new();
+) {
+    if let Some(mut report) = world.get_resource_mut::<crate::ecs::resource::ValidationReport>() {
+        validation_report_sync(
+            &mut report,
+            thyllore_log_core::validation_stats::validation_stats_snapshot(),
+        );
     }
 
-    dispatch_hierarchy_events(&events, world, assets);
-    dispatch_timeline_events(&events, world, assets);
-    dispatch_keyframe_clipboard_events(&events, world);
-    dispatch_buffer_events(&events, world);
-    dispatch_clip_instance_events(&events, world);
-    dispatch_edit_history_events(&events, world);
-    dispatch_scalar_clip_events(&events, world, assets);
-    dispatch_scene_events(&events, world);
-    dispatch_scene_events(&events, world);
-    dispatch_overlay_events(&events, world);
-    dispatch_debug_constraint_events(&events, world, assets);
-    dispatch_constraint_edit_events(&events, world);
-    dispatch_constraint_bake_events(&events, world, assets);
-    dispatch_pose_library_events(&events, world, assets);
-    dispatch_spring_bone_bake_ecs_events(&events, world, assets);
-    dispatch_spring_bone_edit_events(&events, world, assets);
-    dispatch_morph_weight_events(&events, world, assets, graphics);
-    dispatch_avatar_setup_events(&events, world, assets, graphics);
-    #[cfg(feature = "ml")]
-    super::event_dispatch::ml::dispatch_curve_suggestion_events(&events, world, assets);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_text_to_animation_events(&events, world, assets);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_model_loaded_for_animation(&events, world);
+    run_dispatch_prep_hooks(world, assets);
 
-    dispatch_camera_light_debug_events(&events, world, graphics);
-
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_text_to_mesh_events(&events, world);
-    #[cfg(feature = "auto-rig")]
-    super::event_dispatch::ml::dispatch_auto_rig_events(&events, world);
-
-    filter_file_dialog_events(&events)
+    apply_queued_ui_commands(world, assets, graphics);
 }
 
-fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {
-    events
-        .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                UIEvent::ClipBrowserLoadFromFile
-                    | UIEvent::ClipBrowserSaveToFile(_)
-                    | UIEvent::ClipBrowserExportFbx(_)
-                    | UIEvent::ClipBrowserExportGltf(_)
-                    | UIEvent::ClipBrowserExportGltfAnimationOnly(_)
-                    | UIEvent::ExportModelGltf
-                    | UIEvent::SpringBoneSaveBake
-                    | UIEvent::PickMaterialTexture { .. }
-            )
-        })
-        .cloned()
-        .collect()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::events::{UiCommand, UiCommandQueue};
+
+    #[derive(Debug)]
+    enum ProbeUiCommand {
+        Ping,
+    }
+
+    #[derive(Default)]
+    struct ProbeDispatchCounter {
+        count: usize,
+    }
+
+    impl UiCommand for ProbeUiCommand {
+        fn apply(
+            self: Box<Self>,
+            world: &mut World,
+            _assets: &mut AssetStorage,
+            _graphics: &GraphicsResources,
+        ) {
+            let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
+                return;
+            };
+            match *self {
+                ProbeUiCommand::Ping => counter.count += 1,
+            }
+        }
+    }
+
+    #[test]
+    fn test_probe_ui_command_is_applied_by_the_dispatch_phase() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(UiCommandQueue::default());
+        world.insert_resource(ProbeDispatchCounter::default());
+
+        world.send_command(ProbeUiCommand::Ping);
+        run_event_dispatch_phase(&mut world, &mut assets, &GraphicsResources::default());
+
+        assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);
+    }
 }

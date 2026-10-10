@@ -3,6 +3,7 @@
 [[role]]
 part = "Hips"
 required = true
+translation = true
 patterns = [["hips"], ["hip"], ["pelvis"]]
 
 [[role]]
@@ -30,7 +31,7 @@ patterns = [["spine"]]
 
 [[role]]
 part = "Chest"
-patterns = [["chest"]]
+patterns = [["chest"], ["spine1"], ["spine", "02"]]
 
 [[role]]
 part = "UpperChest"
@@ -85,11 +86,13 @@ patterns = [["jaw"]]
 [[role]]
 part = "ThumbProximal"
 paired = true
+vrm1_part = "ThumbMetacarpal"
 patterns = [["thumb", "proximal"], ["thumb", "1"], ["thumb1"]]
 
 [[role]]
 part = "ThumbIntermediate"
 paired = true
+vrm1_part = "ThumbProximal"
 patterns = [["thumb", "intermediate"], ["thumb", "2"], ["thumb2"]]
 
 [[role]]

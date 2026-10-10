@@ -4,8 +4,8 @@ use crate::ecs::component::{
     ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
     SpringJointParam, WithSpringBone,
 };
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::HierarchyState;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
 
 use super::constraint_inspector::{
@@ -14,7 +14,6 @@ use super::constraint_inspector::{
 
 pub fn build_spring_bone_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     world: &World,
     _entity: Entity,
     assets: &AssetStorage,
@@ -42,7 +41,7 @@ pub fn build_spring_bone_section(
 
     build_chain_list(
         ui,
-        ui_events,
+        world,
         target_entity,
         &setup,
         &bone_list,
@@ -50,12 +49,12 @@ pub fn build_spring_bone_section(
     );
 
     ui.separator();
-    build_add_chain_row(ui, ui_events, target_entity, &bone_list, hierarchy_state);
+    build_add_chain_row(ui, world, target_entity, &bone_list, hierarchy_state);
 
     ui.separator();
     build_collider_list(
         ui,
-        ui_events,
+        world,
         target_entity,
         &setup,
         &bone_list,
@@ -63,16 +62,16 @@ pub fn build_spring_bone_section(
     );
 
     ui.separator();
-    build_add_collider_row(ui, ui_events, target_entity, &bone_list);
+    build_add_collider_row(ui, world, target_entity, &bone_list);
 
     ui.separator();
-    build_collider_group_list(ui, ui_events, target_entity, &setup);
+    build_collider_group_list(ui, world, target_entity, &setup);
 
     ui.separator();
-    build_add_collider_group_row(ui, ui_events, target_entity);
+    build_add_collider_group_row(ui, world, target_entity);
 
     ui.separator();
-    build_gizmo_toggle(ui, ui_events, world);
+    build_gizmo_toggle(ui, world);
 }
 
 fn find_spring_bone_entity(world: &World) -> Option<Entity> {
@@ -84,7 +83,7 @@ fn find_spring_bone_entity(world: &World) -> Option<Entity> {
 
 fn build_chain_list(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     setup: &SpringBoneSetup,
     bone_list: &[(BoneId, String)],
@@ -100,14 +99,14 @@ fn build_chain_list(
         }
 
         let id_token = ui.push_id_int(chain.id as i32);
-        build_chain_detail(ui, ui_events, entity, chain, bone_list, hierarchy_state);
+        build_chain_detail(ui, world, entity, chain, bone_list, hierarchy_state);
         id_token.end();
     }
 }
 
 fn build_chain_detail(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     chain: &SpringChain,
     bone_list: &[(BoneId, String)],
@@ -130,9 +129,8 @@ fn build_chain_detail(
         }
 
         let joint_token = ui.push_id_int(joint_idx as i32 + 1000);
-        if let Some(updated) = build_joint_fields(ui, ui_events, joint, bone_list, hierarchy_state)
-        {
-            ui_events.send(UIEvent::SpringJointUpdate {
+        if let Some(updated) = build_joint_fields(ui, world, joint, bone_list, hierarchy_state) {
+            world.send_command(SpringBoneEvent::JointUpdate {
                 entity,
                 chain_id: chain.id,
                 joint_index: joint_idx,
@@ -143,7 +141,7 @@ fn build_chain_detail(
     }
 
     if chain_changed {
-        ui_events.send(UIEvent::SpringChainUpdate {
+        world.send_command(SpringBoneEvent::ChainUpdate {
             entity,
             chain_id: chain.id,
             chain: modified,
@@ -151,7 +149,7 @@ fn build_chain_detail(
     }
 
     if ui.button("Remove Chain") {
-        ui_events.send(UIEvent::SpringChainRemove {
+        world.send_command(SpringBoneEvent::ChainRemove {
             entity,
             chain_id: chain.id,
         });
@@ -160,7 +158,7 @@ fn build_chain_detail(
 
 fn build_joint_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     joint: &SpringJointParam,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -170,7 +168,7 @@ fn build_joint_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Bone",
         modified.bone_id,
         bone_list,
@@ -225,7 +223,7 @@ fn build_joint_fields(
 
 fn build_add_chain_row(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -244,7 +242,7 @@ fn build_add_chain_row(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Root Bone##add_chain",
         *root_bone,
         bone_list,
@@ -261,7 +259,7 @@ fn build_add_chain_row(
 
     ui.same_line();
     if ui.button("Add Chain") {
-        ui_events.send(UIEvent::SpringChainAdd {
+        world.send_command(SpringBoneEvent::ChainAdd {
             entity,
             root_bone_id: *root_bone,
             chain_length: *chain_length as u32,
@@ -274,7 +272,7 @@ fn build_add_chain_row(
 
 fn build_collider_list(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     setup: &SpringBoneSetup,
     bone_list: &[(BoneId, String)],
@@ -297,9 +295,9 @@ fn build_collider_list(
 
         let id_token = ui.push_id_int(collider.id as i32 + 2000);
         if let Some(updated) =
-            build_collider_fields(ui, ui_events, collider, bone_list, hierarchy_state)
+            build_collider_fields(ui, world, collider, bone_list, hierarchy_state)
         {
-            ui_events.send(UIEvent::SpringColliderUpdate {
+            world.send_command(SpringBoneEvent::ColliderUpdate {
                 entity,
                 collider_id: collider.id,
                 collider: updated,
@@ -307,7 +305,7 @@ fn build_collider_list(
         }
 
         if ui.button("Remove Collider") {
-            ui_events.send(UIEvent::SpringColliderRemove {
+            world.send_command(SpringBoneEvent::ColliderRemove {
                 entity,
                 collider_id: collider.id,
             });
@@ -318,7 +316,7 @@ fn build_collider_list(
 
 fn build_collider_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     collider: &SpringColliderDef,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -328,7 +326,7 @@ fn build_collider_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Bone##collider",
         modified.bone_id,
         bone_list,
@@ -401,7 +399,7 @@ fn build_collider_fields(
 
 fn build_add_collider_row(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     bone_list: &[(BoneId, String)],
 ) {
@@ -455,7 +453,7 @@ fn build_add_collider_row(
                 tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
             },
         };
-        ui_events.send(UIEvent::SpringColliderAdd {
+        world.send_command(SpringBoneEvent::ColliderAdd {
             entity,
             bone_id: *bone,
             shape,
@@ -468,7 +466,7 @@ fn build_add_collider_row(
 
 fn build_collider_group_list(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     setup: &SpringBoneSetup,
 ) {
@@ -528,7 +526,7 @@ fn build_collider_group_list(
         }
 
         if changed {
-            ui_events.send(UIEvent::SpringColliderGroupUpdate {
+            world.send_command(SpringBoneEvent::ColliderGroupUpdate {
                 entity,
                 group_id: group.id,
                 group: modified,
@@ -536,7 +534,7 @@ fn build_collider_group_list(
         }
 
         if ui.button("Remove Group") {
-            ui_events.send(UIEvent::SpringColliderGroupRemove {
+            world.send_command(SpringBoneEvent::ColliderGroupRemove {
                 entity,
                 group_id: group.id,
             });
@@ -546,7 +544,7 @@ fn build_collider_group_list(
     }
 }
 
-fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entity: Entity) {
+fn build_add_collider_group_row(ui: &imgui::Ui, world: &World, entity: Entity) {
     thread_local! {
         static GROUP_NAME_BUF: std::cell::RefCell<String> = std::cell::RefCell::new("NewGroup".to_string());
     }
@@ -557,7 +555,7 @@ fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, en
 
         ui.same_line();
         if ui.button("Add Group") {
-            ui_events.send(UIEvent::SpringColliderGroupAdd {
+            world.send_command(SpringBoneEvent::ColliderGroupAdd {
                 entity,
                 name: name_buf.to_string(),
             });
@@ -565,7 +563,7 @@ fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, en
     });
 }
 
-fn build_gizmo_toggle(ui: &imgui::Ui, ui_events: &mut UIEventQueue, world: &World) {
+fn build_gizmo_toggle(ui: &imgui::Ui, world: &World) {
     let current = world
         .get_resource::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
         .map(|g| g.visible)
@@ -573,6 +571,6 @@ fn build_gizmo_toggle(ui: &imgui::Ui, ui_events: &mut UIEventQueue, world: &Worl
 
     let mut visible = current;
     if ui.checkbox("Show Collider Gizmos", &mut visible) {
-        ui_events.send(UIEvent::SpringBoneToggleGizmo(visible));
+        world.send_command(SpringBoneEvent::ToggleGizmo(visible));
     }
 }

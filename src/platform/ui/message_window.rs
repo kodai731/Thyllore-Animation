@@ -1,22 +1,28 @@
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{MessageFilter, MessageLog};
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::world::World;
 use crate::logger::message_buffer::MessageLevel;
 
 const COLOR_INFO: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
-const COLOR_WARNING: [f32; 4] = [1.0, 0.9, 0.3, 1.0];
-const COLOR_ERROR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
+pub(crate) const COLOR_WARNING: [f32; 4] = [1.0, 0.9, 0.3, 1.0];
+pub(crate) const COLOR_ERROR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const BUTTON_ACTIVE_COLOR: [f32; 4] = [0.3, 0.5, 0.7, 1.0];
 
-pub fn build_message_window_content(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    message_log: &mut MessageLog,
-) {
+pub fn build_message_window_content(ui: &imgui::Ui, world: &World, message_log: &mut MessageLog) {
     let total = message_log.messages.len();
     let warn_count = message_log.warning_count;
     let err_count = message_log.error_count;
+    let vk_count = crate::ecs::systems::message_log_validation_count(message_log);
 
-    build_filter_buttons(ui, ui_events, message_log, total, warn_count, err_count);
+    build_filter_buttons(
+        ui,
+        world,
+        message_log,
+        total,
+        warn_count,
+        err_count,
+        vk_count,
+    );
 
     ui.separator();
 
@@ -25,11 +31,12 @@ pub fn build_message_window_content(
 
 fn build_filter_buttons(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     message_log: &mut MessageLog,
     total: usize,
     warn_count: usize,
     err_count: usize,
+    vk_count: usize,
 ) {
     let filters = [
         (format!("All ({})", total), MessageFilter::All),
@@ -40,6 +47,10 @@ fn build_filter_buttons(
         (
             format!("Error ({})##err_filter", err_count),
             MessageFilter::ErrorOnly,
+        ),
+        (
+            format!("Vulkan ({})##vk_filter", vk_count),
+            MessageFilter::Validation,
         ),
     ];
 
@@ -61,7 +72,7 @@ fn build_filter_buttons(
 
     ui.same_line();
     if ui.button("Clear") {
-        ui_events.send(UIEvent::ClearMessageLog);
+        world.send_command(OverlayEvent::ClearMessageLog);
     }
 
     ui.same_line();

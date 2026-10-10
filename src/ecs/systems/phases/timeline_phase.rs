@@ -12,7 +12,9 @@ use crate::ecs::systems::inference_actor_systems::{
 use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
+use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
 use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
+use crate::ecs::systems::humanoid_bake_systems::refresh_baked_humanoid_clips;
 use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
@@ -58,6 +60,8 @@ fn update_timeline(ctx: &mut FrameContext) {
     sync_timeline_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
+    batch_apply_pending_anim_edits(ctx.world, ctx.assets);
+    refresh_baked_humanoid_clips(ctx.world, ctx.assets);
 }
 
 fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
@@ -84,8 +88,26 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 }
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
-    let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    clip_library_sync_dirty(&mut clip_library, ctx.assets);
+    let dirty_source_ids = {
+        let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
+        clip_library_sync_dirty(&mut clip_library, ctx.assets)
+    };
+    if dirty_source_ids.is_empty() {
+        return;
+    }
+    let mut baked_clips = ctx
+        .world
+        .resource_mut::<crate::ecs::resource::BakedHumanoidClips>();
+    let mut removed_assets: Vec<_> = Vec::new();
+    for source_id in dirty_source_ids {
+        let invalidated = baked_clips.invalidate_source(source_id);
+        removed_assets.extend(invalidated);
+    }
+    drop(baked_clips);
+    for asset_id in removed_assets {
+        ctx.assets.animation_clips.remove(&asset_id);
+    }
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(ctx.world);
 }
 
 #[cfg(feature = "ml")]

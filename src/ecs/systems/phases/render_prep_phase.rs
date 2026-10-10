@@ -11,7 +11,9 @@ use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::resource::ProjectionData;
-use crate::ecs::resource::{Camera, Exposure, GpuPassTimings, GpuTimingsSink, TransformGizmoState};
+use crate::ecs::resource::{
+    Camera, Exposure, FlashLightState, GpuPassTimings, GpuTimingsSink, TransformGizmoState,
+};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
@@ -26,6 +28,7 @@ use crate::ecs::{
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
+use thyllore_render_core::FlashLighting;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -312,6 +315,12 @@ unsafe fn update_frame_and_scene_uniforms(
         .map(|e| e.exposure_value)
         .unwrap_or(1.0);
 
+    let flash = ctx
+        .world
+        .get_resource::<FlashLightState>()
+        .map(|state| flash_lighting_from(&state))
+        .unwrap_or_default();
+
     let mut backend = ctx.create_backend();
     backend.update_scene_uniform(
         view,
@@ -322,9 +331,28 @@ unsafe fn update_frame_and_scene_uniforms(
         shadow_strength,
         distance_attenuation,
         exposure_value,
+        flash,
     )?;
 
     Ok(())
+}
+
+fn flash_lighting_from(state: &FlashLightState) -> FlashLighting {
+    let mut flash = FlashLighting::default();
+
+    if let Some(light) = state.light {
+        flash.light_position = light.position;
+        flash.light_intensity = light.intensity;
+        flash.light_color = light.color;
+    }
+
+    if let Some(impact) = state.impact {
+        flash.impact_position = impact.position;
+        flash.impact_radius = impact.radius;
+        flash.impact_strength = impact.strength;
+    }
+
+    flash
 }
 
 fn collect_gizmo_render_data(
@@ -915,4 +943,47 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::resource::{FlashLightSource, ImpactDecal};
+
+    #[test]
+    fn flash_lighting_from_empty_state_is_default() {
+        let flash = flash_lighting_from(&FlashLightState::default());
+
+        assert_eq!(flash, FlashLighting::default());
+    }
+
+    #[test]
+    fn flash_lighting_from_copies_light_and_impact() {
+        let state = FlashLightState {
+            light: Some(FlashLightSource {
+                position: [1.0, 2.0, 3.0],
+                intensity: 4.0,
+                color: [0.5, 0.6, 0.7],
+            }),
+            impact: Some(ImpactDecal {
+                position: [8.0, 0.0, -2.0],
+                strength: 0.9,
+                radius: 1.5,
+            }),
+        };
+
+        let flash = flash_lighting_from(&state);
+
+        assert_eq!(
+            flash,
+            FlashLighting {
+                light_position: [1.0, 2.0, 3.0],
+                light_intensity: 4.0,
+                light_color: [0.5, 0.6, 0.7],
+                impact_position: [8.0, 0.0, -2.0],
+                impact_radius: 1.5,
+                impact_strength: 0.9,
+            }
+        );
+    }
 }

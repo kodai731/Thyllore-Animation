@@ -8,6 +8,7 @@ mod pipeline;
 mod preset;
 mod render_targets;
 mod spawn;
+mod surround;
 mod target;
 #[cfg(test)]
 mod test_support;

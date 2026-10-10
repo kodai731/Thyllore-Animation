@@ -11,6 +11,10 @@ struct SceneData {
     float shadowStrength;
     int enableDistanceAttenuation;
     float exposureValue;
+    float4 flashLight;
+    float4 flashColor;
+    float4 impactDecal;
+    float4 impactStrength;
 };
 
 [[vk::binding(0, 0)]] [format("r32ui")] RWTexture2D<uint> causticAccumImage;

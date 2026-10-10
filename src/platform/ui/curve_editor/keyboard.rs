@@ -27,76 +27,90 @@ enum CurveEditorKeyAction {
     ToggleViewMode,
 }
 
-struct CurveEditorKeyBinding {
-    key: imgui::Key,
-    modifier: KeyModifier,
+pub(crate) struct CurveEditorKeyBinding {
+    pub(crate) key: imgui::Key,
+    pub(crate) modifier: KeyModifier,
+    pub(crate) label: &'static str,
     action: CurveEditorKeyAction,
 }
 
-const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
+pub(crate) const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
     CurveEditorKeyBinding {
         key: imgui::Key::F,
         modifier: KeyModifier::None,
+        label: "Frame selection",
         action: CurveEditorKeyAction::FrameSelected,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Home,
         modifier: KeyModifier::None,
+        label: "Frame all",
         action: CurveEditorKeyAction::FrameAll,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::A,
         modifier: KeyModifier::None,
+        label: "Select all",
         action: CurveEditorKeyAction::SelectAll,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::A,
         modifier: KeyModifier::Ctrl,
+        label: "Select all",
         action: CurveEditorKeyAction::SelectAll,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Keypad0,
         modifier: KeyModifier::None,
+        label: "Frame playhead",
         action: CurveEditorKeyAction::FramePlayhead,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::E,
         modifier: KeyModifier::Shift,
+        label: "Extrapolation menu",
         action: CurveEditorKeyAction::OpenExtrapolationMenu,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Alpha1,
         modifier: KeyModifier::None,
+        label: "Auto Clamped",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Clamped),
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Alpha2,
         modifier: KeyModifier::None,
+        label: "Auto (Spline)",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Spline),
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Alpha3,
         modifier: KeyModifier::None,
+        label: "Flat",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Flat),
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Alpha4,
         modifier: KeyModifier::None,
+        label: "Linear",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Linear),
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Alpha5,
         modifier: KeyModifier::None,
+        label: "Stepped",
         action: CurveEditorKeyAction::SetInterpolation(InterpolationType::Stepped),
     },
     CurveEditorKeyBinding {
         key: imgui::Key::B,
         modifier: KeyModifier::None,
+        label: "Break / Unify tangents",
         action: CurveEditorKeyAction::ToggleTangentContinuity,
     },
     CurveEditorKeyBinding {
         key: imgui::Key::Tab,
         modifier: KeyModifier::Ctrl,
+        label: "Toggle view mode",
         action: CurveEditorKeyAction::ToggleViewMode,
     },
 ];

@@ -11,4 +11,5 @@ pub enum PanelVisibility {
 pub struct UiWidgetState {
     pub section_open: HashMap<u32, bool>,
     pub scene_panel: PanelVisibility,
+    pub shortcuts_panel: PanelVisibility,
 }

@@ -36,6 +36,7 @@ impl ModifierKeys {
 pub struct KeyBinding {
     pub key: &'static str,
     pub modifiers: ModifierKeys,
+    pub label: &'static str,
     pub send: fn(&World),
 }
 
@@ -58,26 +59,31 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding {
             key: "z",
             modifiers: ModifierKeys::ctrl(),
+            label: "Undo",
             send: |world| world.send_command(EditHistoryEvent::Undo),
         },
         KeyBinding {
             key: "y",
             modifiers: ModifierKeys::ctrl(),
+            label: "Redo",
             send: |world| world.send_command(EditHistoryEvent::Redo),
         },
         KeyBinding {
             key: "s",
             modifiers: ModifierKeys::ctrl(),
+            label: "Save scene",
             send: |world| world.send_command(SceneEvent::SaveScene),
         },
         KeyBinding {
             key: "s",
             modifiers: ModifierKeys::none(),
+            label: "Set bone key",
             send: |world| world.send_command(TimelineEvent::BoneSetKey),
         },
         KeyBinding {
             key: "f",
             modifiers: ModifierKeys::none(),
+            label: "Frame selection",
             send: |world| world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased)),
         },
     ]

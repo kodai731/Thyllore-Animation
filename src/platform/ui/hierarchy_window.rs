@@ -17,81 +17,96 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 
-struct TreeKeyBinding {
-    key: Key,
-    modifier: KeyModifier,
+pub(crate) struct TreeKeyBinding {
+    pub(crate) key: Key,
+    pub(crate) modifier: KeyModifier,
+    pub(crate) label: &'static str,
     navigation: TreeNavigation,
 }
 
-const TREE_KEY_BINDINGS: &[TreeKeyBinding] = &[
+pub(crate) const TREE_KEY_BINDINGS: &[TreeKeyBinding] = &[
     TreeKeyBinding {
         key: Key::DownArrow,
         modifier: KeyModifier::None,
+        label: "Move selection down",
         navigation: TreeNavigation::Move(TreeMove::Next),
     },
     TreeKeyBinding {
         key: Key::UpArrow,
         modifier: KeyModifier::None,
+        label: "Move selection up",
         navigation: TreeNavigation::Move(TreeMove::Prev),
     },
     TreeKeyBinding {
         key: Key::DownArrow,
         modifier: KeyModifier::Shift,
+        label: "Extend selection down",
         navigation: TreeNavigation::Extend(TreeMove::Next),
     },
     TreeKeyBinding {
         key: Key::UpArrow,
         modifier: KeyModifier::Shift,
+        label: "Extend selection up",
         navigation: TreeNavigation::Extend(TreeMove::Prev),
     },
     TreeKeyBinding {
         key: Key::Home,
         modifier: KeyModifier::None,
+        label: "Select first item",
         navigation: TreeNavigation::Move(TreeMove::First),
     },
     TreeKeyBinding {
         key: Key::End,
         modifier: KeyModifier::None,
+        label: "Select last item",
         navigation: TreeNavigation::Move(TreeMove::Last),
     },
     TreeKeyBinding {
         key: Key::PageDown,
         modifier: KeyModifier::None,
+        label: "Page down",
         navigation: TreeNavigation::Move(TreeMove::PageDown),
     },
     TreeKeyBinding {
         key: Key::PageUp,
         modifier: KeyModifier::None,
+        label: "Page up",
         navigation: TreeNavigation::Move(TreeMove::PageUp),
     },
     TreeKeyBinding {
         key: Key::RightArrow,
         modifier: KeyModifier::None,
+        label: "Expand or descend",
         navigation: TreeNavigation::ExpandOrDescend,
     },
     TreeKeyBinding {
         key: Key::LeftArrow,
         modifier: KeyModifier::None,
+        label: "Collapse or ascend",
         navigation: TreeNavigation::CollapseOrAscend,
     },
     TreeKeyBinding {
         key: Key::RightArrow,
         modifier: KeyModifier::Shift,
+        label: "Expand all children",
         navigation: TreeNavigation::ExpandRecursive,
     },
     TreeKeyBinding {
         key: Key::LeftArrow,
         modifier: KeyModifier::Shift,
+        label: "Collapse all children",
         navigation: TreeNavigation::CollapseRecursive,
     },
     TreeKeyBinding {
         key: Key::KeypadMultiply,
         modifier: KeyModifier::None,
+        label: "Expand siblings",
         navigation: TreeNavigation::ExpandSiblings,
     },
     TreeKeyBinding {
         key: Key::A,
         modifier: KeyModifier::Ctrl,
+        label: "Select all visible",
         navigation: TreeNavigation::SelectAllVisible,
     },
 ];

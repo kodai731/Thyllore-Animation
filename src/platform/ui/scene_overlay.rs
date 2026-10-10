@@ -34,6 +34,30 @@ const TOOLBAR_HEIGHT: f32 = 28.0;
 const TOOLBAR_PADDING_X: f32 = 6.0;
 const TOOLBAR_GROUP_GAP: f32 = 12.0;
 
+pub(super) struct GizmoKeyBinding {
+    pub(super) key: imgui::Key,
+    pub(super) label: &'static str,
+    mode: TransformGizmoMode,
+}
+
+pub(super) const GIZMO_KEY_BINDINGS: &[GizmoKeyBinding] = &[
+    GizmoKeyBinding {
+        key: imgui::Key::W,
+        label: "Translate",
+        mode: TransformGizmoMode::Translate,
+    },
+    GizmoKeyBinding {
+        key: imgui::Key::E,
+        label: "Rotate",
+        mode: TransformGizmoMode::Rotate,
+    },
+    GizmoKeyBinding {
+        key: imgui::Key::R,
+        label: "Scale",
+        mode: TransformGizmoMode::Scale,
+    },
+];
+
 #[cfg(feature = "auto-rig")]
 use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 
@@ -227,14 +251,9 @@ fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
         return;
     }
 
-    let hotkeys = [
-        (imgui::Key::W, TransformGizmoMode::Translate),
-        (imgui::Key::E, TransformGizmoMode::Rotate),
-        (imgui::Key::R, TransformGizmoMode::Scale),
-    ];
-    for (key, mode) in hotkeys {
-        if ui.is_key_pressed(key) {
-            ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(mode));
+    for binding in GIZMO_KEY_BINDINGS {
+        if ui.is_key_pressed(binding.key) {
+            ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(binding.mode));
         }
     }
 }

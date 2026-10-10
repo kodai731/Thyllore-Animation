@@ -9,6 +9,7 @@ use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{entity_icon, Icon};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
@@ -38,7 +39,10 @@ fn draw_inspector_window(
             if let Some(entity) = state.selected_entity {
                 let data = collect_inspector_data(world, entity, assets, graphics);
 
-                ui.text(&format!("[{}] {}", data.icon_char, data.name));
+                match entity_icon(data.icon) {
+                    Some(icon) => ui.text(&format!("{} {}", icon.glyph(), data.name)),
+                    None => ui.text(&data.name),
+                }
                 ui.separator();
 
                 build_transform_section(ui, world, &data);

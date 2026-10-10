@@ -1,5 +1,5 @@
 use crate::animation::BoneId;
-use crate::ecs::component::EditorDisplay;
+use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Children, Entity, Name, World};
 
@@ -7,7 +7,7 @@ use crate::ecs::world::{Children, Entity, Name, World};
 pub struct HierarchyEntry {
     pub entity: Entity,
     pub name: String,
-    pub icon_char: char,
+    pub icon: EntityIcon,
     pub depth: usize,
     pub has_children: bool,
     pub expanded: bool,
@@ -43,7 +43,9 @@ fn collect_hierarchy_entries(
         .unwrap_or_else(|| format!("Entity {}", entity));
 
     let editor_display = world.get_component::<EditorDisplay>(entity);
-    let icon_char = editor_display.map(|ed| ed.icon.to_char()).unwrap_or(' ');
+    let icon = editor_display
+        .map(|ed| ed.icon)
+        .unwrap_or(EntityIcon::Empty);
 
     let expanded = editor_display.map(|ed| ed.expanded).unwrap_or(false);
 
@@ -55,7 +57,7 @@ fn collect_hierarchy_entries(
     entries.push(HierarchyEntry {
         entity,
         name,
-        icon_char,
+        icon,
         depth,
         has_children,
         expanded,

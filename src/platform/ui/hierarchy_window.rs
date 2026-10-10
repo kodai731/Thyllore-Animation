@@ -10,7 +10,9 @@ use crate::ecs::systems::{
     query_bone_rows, query_hierarchy_tree, CameraMotion, TreeMove, TreeNavigation,
 };
 use crate::ecs::world::World;
-use crate::platform::ui::theme::{search_field, tree_row, TreeRowResponse, TreeRowSpec};
+use crate::platform::ui::theme::{
+    entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -202,7 +204,7 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
         let spec = TreeRowSpec {
             id: &entry.entity.to_string(),
             label: &entry.name,
-            icon: &format!("[{}]", entry.icon_char),
+            icon: &entity_icon(entry.icon).map(Icon::glyph).unwrap_or_default(),
             depth: entry.depth,
             has_children: entry.has_children,
             expanded: entry.expanded,

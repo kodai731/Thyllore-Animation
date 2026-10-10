@@ -29,6 +29,7 @@ These libraries are directly included in the repository source tree.
 | Inter | `assets/fonts/Inter-Regular.ttf` | SIL Open Font License 1.1 (OFL-1.1) | The Inter Project Authors |
 | Inter | `assets/fonts/Inter-SemiBold.ttf` | SIL Open Font License 1.1 (OFL-1.1) | The Inter Project Authors |
 | M+ 1p | `assets/fonts/mplus-1p-regular.ttf` | SIL Open Font License 1.1 (OFL-1.1) | M+ Fonts Project |
+| Lucide | `assets/fonts/lucide.ttf` | ISC License | Lucide Icons and Contributors |
 
 ---
 

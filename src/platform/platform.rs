@@ -10,6 +10,8 @@ use winit::window::{Window, WindowBuilder};
 
 use super::clipboard;
 
+const LUCIDE_GLYPH_RANGE: &[u32] = &[0xE038, 0xE786, 0];
+
 pub struct System {
     pub event_loop: EventLoop<ExternalCommand>,
     pub window: Window,
@@ -104,6 +106,16 @@ pub fn init(title: &str, take_focus: bool) -> System {
                 ..FontConfig::default()
             }),
         },
+        FontSource::TtfData {
+            data: include_bytes!("../../assets/fonts/lucide.ttf"),
+            size_pixels: font_size,
+            config: Some(FontConfig {
+                oversample_h: 4,
+                oversample_v: 4,
+                glyph_ranges: FontGlyphRanges::from_slice(LUCIDE_GLYPH_RANGE),
+                ..FontConfig::default()
+            }),
+        },
     ]);
 
     let heading = imgui.fonts().add_font(&[
@@ -126,6 +138,16 @@ pub fn init(title: &str, take_focus: bool) -> System {
                 oversample_v: 4,
                 // Range of glyphs to rasterize
                 glyph_ranges: FontGlyphRanges::japanese(),
+                ..FontConfig::default()
+            }),
+        },
+        FontSource::TtfData {
+            data: include_bytes!("../../assets/fonts/lucide.ttf"),
+            size_pixels: 15.0,
+            config: Some(FontConfig {
+                oversample_h: 4,
+                oversample_v: 4,
+                glyph_ranges: FontGlyphRanges::from_slice(LUCIDE_GLYPH_RANGE),
                 ..FontConfig::default()
             }),
         },

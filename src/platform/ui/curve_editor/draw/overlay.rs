@@ -5,7 +5,7 @@ use crate::animation::BoneId;
 use crate::ecs::resource::CurveEditorBuffer;
 
 use super::super::view::ViewTransform;
-use super::super::{SuggestionOverlay, ALL_PROPERTY_TYPES};
+use super::super::window::{SuggestionOverlay, ALL_PROPERTY_TYPES};
 
 pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
     draw_list: &imgui::DrawListMut,

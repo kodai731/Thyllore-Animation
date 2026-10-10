@@ -3,7 +3,7 @@ use crate::ecs::resource::PoseLibrary;
 use super::super::view::{
     calculate_y_tick_count, compute_nice_step, format_value_label, ViewTransform,
 };
-use super::super::TIME_RULER_HEIGHT;
+use super::super::window::TIME_RULER_HEIGHT;
 
 pub(in crate::platform::ui::curve_editor) fn draw_time_ruler(
     draw_list: &imgui::DrawListMut,

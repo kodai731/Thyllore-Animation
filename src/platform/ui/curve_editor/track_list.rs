@@ -2,7 +2,7 @@ use imgui::Ui;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::bone_label::{format_bone_label, order_bone_ids_by_role};
-use super::{get_current_clip, ALL_PROPERTY_TYPES};
+use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
 use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
@@ -331,4 +331,95 @@ pub(super) fn draw_curve_color_swatch(ui: &imgui::Ui, color: [f32; 4]) {
         .filled(true)
         .build();
     ui.dummy([side, ui.text_line_height()]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_morph_track_name_short() {
+        assert_eq!(format_morph_track_name("mesh", "smile"), "mesh/smile");
+    }
+
+    #[test]
+    fn test_format_morph_track_name_truncated() {
+        let result = format_morph_track_name("very_long_source_mesh", "very_long_channel");
+        assert_eq!(result.len(), 20);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("channel"));
+    }
+
+    #[test]
+    fn test_format_morph_track_name_truncates_multibyte_on_char_boundary() {
+        let result = format_morph_track_name("顔メッシュ", "まばたき左目を閉じる強め表情差分");
+        assert_eq!(result.chars().count(), 20);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("表情差分"));
+    }
+
+    #[test]
+    fn mapped_bones_list_rotation_curves_before_any_key_exists() {
+        use crate::ecs::systems::{
+            build_humanoid_rig, copy_test_humanoid_fixture, find_first_skeleton,
+            test_humanoid_world,
+        };
+
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (world, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets)
+            .expect("fixture has a skeleton")
+            .clone();
+        world.resource_mut::<HumanoidRigState>().rig =
+            Some(build_humanoid_rig(&fbx_path, &skeleton, None).expect("fixture is humanoid"));
+
+        let bone_roles = collect_humanoid_bone_roles(&world);
+        let role_bone = |role: HumanoidRole| {
+            bone_roles
+                .iter()
+                .find(|(_, bone_role)| *bone_role == role)
+                .map(|(bone_id, _)| *bone_id)
+                .expect("role is mapped")
+        };
+        let hips = role_bone(HumanoidRole::Hips);
+        let head = role_bone(HumanoidRole::Head);
+        let clip = EditableAnimationClip::new(0, "empty".to_string());
+
+        assert!(collect_listed_bone_ids(&clip, &bone_roles).contains(&head));
+        assert!(is_curve_listed(
+            &clip,
+            &bone_roles,
+            head,
+            PropertyType::RotationZ
+        ));
+        assert!(!is_curve_listed(
+            &clip,
+            &bone_roles,
+            head,
+            PropertyType::TranslationY
+        ));
+        assert!(is_curve_listed(
+            &clip,
+            &bone_roles,
+            hips,
+            PropertyType::TranslationY
+        ));
+        assert!(!is_curve_listed(
+            &clip,
+            &bone_roles,
+            hips,
+            PropertyType::ScaleX
+        ));
+    }
+
+    #[test]
+    fn unmapped_bones_list_only_keyed_curves() {
+        let mut clip = EditableAnimationClip::new(0, "bone".to_string());
+        let track = clip.add_track(0, "Spine".to_string());
+        crate::animation::editable::curve_add_keyframe(&mut track.rotation_x, 0.0, 1.0);
+
+        assert!(is_curve_listed(&clip, &[], 0, PropertyType::RotationX));
+        assert!(!is_curve_listed(&clip, &[], 0, PropertyType::RotationY));
+    }
 }

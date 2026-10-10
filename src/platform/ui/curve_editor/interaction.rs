@@ -1,10 +1,7 @@
 use imgui::MouseButton;
 
 use super::view::*;
-use super::{
-    build_curve_editor_context_menu, build_keyframe_context_menu, CURVE_PADDING, TIME_RULER_HEIGHT,
-    Y_AXIS_WIDTH,
-};
+use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
 use crate::animation::editable::{
     BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
@@ -14,6 +11,9 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::curve_editor::context_menu::{
+    build_curve_editor_context_menu, build_keyframe_context_menu,
+};
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion, UiPointer,
 };

@@ -1,4 +1,4 @@
-use super::SuggestionOverlay;
+use super::window::SuggestionOverlay;
 use crate::animation::BoneId;
 use crate::ecs::resource::CurveEditorState;
 #[cfg(feature = "ml")]

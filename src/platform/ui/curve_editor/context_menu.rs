@@ -2,11 +2,11 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
 use super::view::*;
-use super::{get_current_clip, CurveEditorState, CurveTrackRef, ALL_PROPERTY_TYPES};
+use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
 use crate::animation::editable::{InterpolationType, PropertyType, TangentType, TangentWeightMode};
 use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
-use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::resource::{ClipLibrary, CurveEditorState, CurveTrackRef, TimelineState};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
@@ -192,5 +192,34 @@ pub(super) fn add_key_target_property(
             })
             .find(|property_type| editor_state.visible_curves.contains(property_type)),
         CurveTrackRef::Morph(_) => Some(PropertyType::MorphWeight),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_key_on_a_role_bone_skips_translations_left_visible_by_default() {
+        let mut editor_state = CurveEditorState::default();
+        editor_state.visible_curves.remove(&PropertyType::RotationX);
+        editor_state.visible_curves.remove(&PropertyType::RotationZ);
+
+        let property = add_key_target_property(
+            &editor_state,
+            CurveTrackRef::Bone(3),
+            Some(HumanoidRole::Neck),
+        );
+
+        assert_eq!(property, Some(PropertyType::RotationY));
+    }
+
+    #[test]
+    fn add_key_on_a_plain_bone_keeps_declaration_order() {
+        let editor_state = CurveEditorState::default();
+
+        let property = add_key_target_property(&editor_state, CurveTrackRef::Bone(3), None);
+
+        assert_eq!(property, Some(PropertyType::TranslationX));
     }
 }

@@ -1,4 +1,5 @@
 use super::clips::{build_initial_clip_schedule, register_loaded_clips};
+use crate::animation::classify_imported_animation;
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
@@ -15,7 +16,10 @@ pub(super) fn spawn_model_entities(
     scene_will_provide_clips: bool,
 ) -> Entity {
     let name = model_display_name(model_name, "model");
-    let animation_type = determine_animation_type(load_result);
+    let animation_type = classify_imported_animation(
+        load_result.has_skinned_meshes,
+        !load_result.clips.is_empty(),
+    );
     log!(
         "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}",
         animation_type,
@@ -142,14 +146,4 @@ pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or(fallback)
         .to_string()
-}
-
-fn determine_animation_type(load_result: &ModelLoadResult) -> AnimationType {
-    if load_result.has_skinned_meshes {
-        AnimationType::Skeletal
-    } else if !load_result.clips.is_empty() {
-        AnimationType::Node
-    } else {
-        AnimationType::None
-    }
 }

@@ -947,8 +947,10 @@ impl App {
             };
 
             if let Some(clip_id) = active_clip_id {
-                let schedule =
-                    crate::app::model::build_initial_clip_schedule(Some(clip_id), &data.ecs_world);
+                let schedule = crate::ecs::systems::model_load_systems::build_initial_clip_schedule(
+                    Some(clip_id),
+                    &data.ecs_world,
+                );
                 for (_, existing) in data
                     .ecs_world
                     .iter_components_mut::<crate::ecs::component::ClipSchedule>()

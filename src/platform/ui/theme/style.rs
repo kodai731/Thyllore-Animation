@@ -1,6 +1,7 @@
 use imgui::{Style, StyleColor};
 
 use super::colors::*;
+use crate::ecs::resource::{density_spacing, UiSettings};
 
 const HEADER_ALPHA: f32 = 0.18;
 const HEADER_HOVERED_ALPHA: f32 = 0.25;
@@ -131,4 +132,13 @@ pub fn apply_thyllore_style(style: &mut Style) {
         0.7,
     ];
     c[StyleColor::DockingEmptyBg as usize] = srgb_to_linear(SURFACE0);
+}
+
+pub fn apply_ui_settings(context: &mut imgui::Context, settings: &UiSettings) {
+    context.io_mut().font_global_scale = settings.scale;
+
+    let spacing = density_spacing(settings.density);
+    let style = context.style_mut();
+    style.frame_padding = spacing.frame_padding;
+    style.item_spacing = spacing.item_spacing;
 }

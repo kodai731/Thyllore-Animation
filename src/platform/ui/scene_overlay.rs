@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use imgui::{Condition, StyleVar};
 use thyllore_anim_core::editable::PropertyType;
 
@@ -10,8 +12,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
-    CoordinateSpace, PanelVisibility, TransformGizmoMode, TransformGizmoState, UiWidgetState,
-    WeightHeatmapState,
+    clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
+    TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings, UiWidgetState,
+    WeightHeatmapState, MAX_UI_SCALE, MIN_UI_SCALE, UI_SETTINGS_PATH,
 };
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
@@ -22,8 +25,9 @@ use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear, SURFACE3};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
+use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{icon_button, ButtonState, Icon, ICON_BUTTON_SIZE};
+use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
@@ -33,6 +37,11 @@ const OVERLAY_WIDTH: f32 = 420.0;
 const TOOLBAR_HEIGHT: f32 = 28.0;
 const TOOLBAR_PADDING_X: f32 = 6.0;
 const TOOLBAR_GROUP_GAP: f32 = 12.0;
+const UI_SETTINGS_POPUP: &str = "ui_settings_popup";
+const DENSITY_OPTIONS: [(UiDensity, &str); 2] = [
+    (UiDensity::Compact, "Compact"),
+    (UiDensity::Default, "Default"),
+];
 
 pub(super) struct GizmoKeyBinding {
     pub(super) key: imgui::Key,
@@ -265,10 +274,56 @@ fn build_scene_panel_toggle(ui: &imgui::Ui, ecs_world: &World) {
         PanelVisibility::Hidden => (ButtonState::Normal, PanelVisibility::Shown),
     };
 
-    let right_edge_x = ui.window_size()[0] - ui.clone_style().window_padding[0] - ICON_BUTTON_SIZE;
+    let style = ui.clone_style();
+    let right_edge_x = ui.window_size()[0] - style.window_padding[0] - ICON_BUTTON_SIZE;
+    let settings_x = right_edge_x - ICON_BUTTON_SIZE - style.item_spacing[0];
+
+    ui.same_line_with_pos(settings_x);
+    if icon_button(ui, Icon::Settings, "UI Settings", ButtonState::Normal) {
+        ui.open_popup(UI_SETTINGS_POPUP);
+    }
+    ui.popup(UI_SETTINGS_POPUP, || build_ui_settings_popup(ui, ecs_world));
+
     ui.same_line_with_pos(right_edge_x);
     if icon_button(ui, Icon::Layers, "Scene Panel", button_state) {
         ecs_world.resource_mut::<UiWidgetState>().scene_panel = toggled_visibility;
+    }
+}
+
+fn build_ui_settings_popup(ui: &imgui::Ui, ecs_world: &World) {
+    let current = *ecs_world.resource::<UiSettings>();
+    let mut edited = current;
+
+    ui.text("UI Settings");
+    ui.separator();
+
+    ui.slider_config("Scale", MIN_UI_SCALE, MAX_UI_SCALE)
+        .build(&mut edited.scale);
+    edited.scale = clamp_ui_scale(edited.scale);
+
+    let density_labels = DENSITY_OPTIONS.map(|(_, label)| label);
+    let density_selected = DENSITY_OPTIONS
+        .iter()
+        .position(|(density, _)| *density == edited.density)
+        .unwrap_or_default();
+    if let Some(index) = segmented_control(ui, "density", &density_labels, density_selected) {
+        edited.density = DENSITY_OPTIONS[index].0;
+    }
+
+    let mut reduce_motion = edited.reduced_motion == MotionPreference::Reduced;
+    if toggle_switch(ui, ecs_world, "Reduce motion", &mut reduce_motion) {
+        edited.reduced_motion = if reduce_motion {
+            MotionPreference::Reduced
+        } else {
+            MotionPreference::Full
+        };
+    }
+
+    if edited != current {
+        *ecs_world.resource_mut::<UiSettings>() = edited;
+        if let Err(e) = save_ui_settings(Path::new(UI_SETTINGS_PATH), &edited) {
+            log_warn!("Failed to save UI settings: {}", e);
+        }
     }
 }
 

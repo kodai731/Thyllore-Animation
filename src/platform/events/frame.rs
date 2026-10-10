@@ -4,7 +4,8 @@ use crate::app::frame::FrameInput;
 use crate::app::App;
 use crate::vulkanr::vulkan::*;
 
-use crate::ecs::resource::{ImGuiInputCapture, MouseInput};
+use crate::ecs::resource::{ImGuiInputCapture, MouseInput, UiSettings};
+use crate::platform::ui::theme::apply_ui_settings;
 
 pub(crate) fn handle_redraw_requested(
     imgui: &mut imgui::Context,
@@ -21,6 +22,7 @@ pub(crate) fn handle_redraw_requested(
         0.0
     };
 
+    apply_changed_ui_settings(imgui, app);
     let ui = imgui.frame();
 
     let io = ui.io();
@@ -44,6 +46,16 @@ pub(crate) fn handle_redraw_requested(
     }
 
     app.data.ecs_world.resource_mut::<MouseInput>().end_frame();
+}
+
+fn apply_changed_ui_settings(imgui: &mut imgui::Context, app: &mut App) {
+    let settings = *app.data.ecs_world.resource::<UiSettings>();
+    if app.applied_ui_settings == Some(settings) {
+        return;
+    }
+
+    apply_ui_settings(imgui, &settings);
+    app.applied_ui_settings = Some(settings);
 }
 
 unsafe fn render_frame(

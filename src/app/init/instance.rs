@@ -317,6 +317,7 @@ impl App {
             last_frame_interval: 0.0,
             gpu_timestamp_profiler,
             last_frame_instant: None,
+            applied_ui_settings: None,
         })
     }
 
@@ -723,7 +724,9 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::UiPointerOwner::default());
         data.ecs_world
-            .insert_resource(crate::ecs::resource::UiSettings::default());
+            .insert_resource(crate::ecs::resource::load_ui_settings(
+                std::path::Path::new(crate::ecs::resource::UI_SETTINGS_PATH),
+            ));
         data.ecs_world
             .insert_resource(crate::ecs::resource::UiAnimState::default());
         data.ecs_world

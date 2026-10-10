@@ -8,6 +8,7 @@ pub mod widgets;
 
 pub use fonts::UiFonts;
 pub use icons::{entity_icon, Icon};
+pub use style::apply_ui_settings;
 pub use widgets::icon_button;
 pub use widgets::property_label;
 pub use widgets::search_field;

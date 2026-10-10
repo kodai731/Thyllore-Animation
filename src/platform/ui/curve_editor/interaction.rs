@@ -6,8 +6,8 @@ use crate::animation::editable::{
     BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
 use crate::ecs::resource::{
-    CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, DraggingTangent,
-    TangentHandleType, UiPointerOwnerId,
+    BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef,
+    DraggingTangent, TangentHandleType, UiPointerOwnerId,
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
@@ -255,6 +255,14 @@ pub(super) fn handle_mouse_release(
                         });
                     }
                 }
+            } else if let CurveInteractionMode::BoxSelecting { start, mode } =
+                editor_state.interaction
+            {
+                let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
+                let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
+                let boxed = collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max);
+                editor_state.selected_keyframes =
+                    apply_box_selection(&editor_state.selected_keyframes, boxed, mode);
             }
             editor_state.interaction = CurveInteractionMode::Idle;
         }
@@ -381,9 +389,16 @@ pub(super) fn handle_curve_area_click(
             editor_state.interaction = CurveInteractionMode::DraggingKeyframe;
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
-    } else if modifier == SelectionModifier::None {
-        editor_state.selected_keyframes.clear();
-        editor_state.selection_anchor = None;
+    } else {
+        let mode = match modifier {
+            SelectionModifier::Toggle => BoxSelectMode::Invert,
+            SelectionModifier::Range => BoxSelectMode::Add,
+            SelectionModifier::None => BoxSelectMode::Replace,
+        };
+        editor_state.interaction = CurveInteractionMode::BoxSelecting {
+            start: mouse_pos,
+            mode,
+        };
     }
 }
 
@@ -567,4 +582,167 @@ pub(super) fn find_tangent_handle_at_position(
     }
 
     None
+}
+
+pub(super) fn collect_keyframes_in_screen_rect(
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+    min: [f32; 2],
+    max: [f32; 2],
+) -> Vec<CurveSelectedKeyframe> {
+    let mut result = Vec::new();
+    for (curve, _, _) in curves {
+        for kf in &curve.keyframes {
+            let x = vt.time_to_x(kf.time);
+            let y = vt.value_to_y(kf.value);
+            if x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1] {
+                result.push(CurveSelectedKeyframe {
+                    property_type: curve.property_type.clone(),
+                    keyframe_id: kf.id,
+                    original_time: kf.time,
+                    original_value: kf.value,
+                });
+            }
+        }
+    }
+    result
+}
+
+pub(super) fn apply_box_selection(
+    current: &[CurveSelectedKeyframe],
+    boxed: Vec<CurveSelectedKeyframe>,
+    mode: BoxSelectMode,
+) -> Vec<CurveSelectedKeyframe> {
+    match mode {
+        BoxSelectMode::Replace => boxed,
+        BoxSelectMode::Add => {
+            let mut result = current.to_vec();
+            for key in boxed {
+                let already_exists = result.iter().any(|s| {
+                    s.keyframe_id == key.keyframe_id && s.property_type == key.property_type
+                });
+                if !already_exists {
+                    result.push(key);
+                }
+            }
+            result
+        }
+        BoxSelectMode::Invert => {
+            let mut result = current.to_vec();
+            for key in boxed {
+                let pos = result.iter().position(|s| {
+                    s.keyframe_id == key.keyframe_id && s.property_type == key.property_type
+                });
+                if let Some(p) = pos {
+                    result.remove(p);
+                } else {
+                    result.push(key);
+                }
+            }
+            result
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::curve_add_keyframe;
+
+    fn build_unit_view() -> ViewTransform {
+        ViewTransform {
+            curve_origin: [0.0, 0.0],
+            curve_width: 1.0,
+            curve_height: 1.0,
+            duration: 1.0,
+            val_range: 1.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            view_time_offset: 0.0,
+            view_value_offset: 0.0,
+        }
+    }
+
+    fn build_curve_with_keys(keys: &[(f32, f32)]) -> (PropertyCurve, Vec<KeyframeId>) {
+        let mut curve = PropertyCurve::new(0, PropertyType::TranslationX);
+        let ids = keys
+            .iter()
+            .map(|&(time, value)| curve_add_keyframe(&mut curve, time, value))
+            .collect();
+        (curve, ids)
+    }
+
+    fn build_selection(curve: &PropertyCurve, ids: &[KeyframeId]) -> Vec<CurveSelectedKeyframe> {
+        ids.iter()
+            .map(|&keyframe_id| CurveSelectedKeyframe {
+                property_type: curve.property_type,
+                keyframe_id,
+                original_time: 0.0,
+                original_value: 0.0,
+            })
+            .collect()
+    }
+
+    fn collect_selected_ids(selection: &[CurveSelectedKeyframe]) -> Vec<KeyframeId> {
+        let mut ids: Vec<KeyframeId> = selection.iter().map(|key| key.keyframe_id).collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn box_selection_collects_only_keys_inside_the_rect() {
+        let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2), (0.4, 0.4), (0.8, 0.8)]);
+        let curves = [(&curve, [1.0; 4], "x")];
+
+        let boxed =
+            collect_keyframes_in_screen_rect(&curves, &build_unit_view(), [0.1, 0.5], [0.5, 0.9]);
+
+        assert_eq!(collect_selected_ids(&boxed), vec![ids[0], ids[1]]);
+    }
+
+    #[test]
+    fn box_selection_replace_drops_the_previous_selection() {
+        let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2), (0.4, 0.4), (0.8, 0.8)]);
+        let current = build_selection(&curve, &[ids[2]]);
+        let boxed = build_selection(&curve, &[ids[0], ids[1]]);
+
+        let selection = apply_box_selection(&current, boxed, BoxSelectMode::Replace);
+
+        assert_eq!(collect_selected_ids(&selection), vec![ids[0], ids[1]]);
+    }
+
+    #[test]
+    fn box_selection_replace_with_an_empty_rect_clears() {
+        let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2)]);
+        let current = build_selection(&curve, &[ids[0]]);
+
+        let selection = apply_box_selection(&current, Vec::new(), BoxSelectMode::Replace);
+
+        assert!(selection.is_empty());
+    }
+
+    #[test]
+    fn box_selection_add_keeps_the_previous_selection_without_duplicates() {
+        let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2), (0.4, 0.4), (0.8, 0.8)]);
+        let current = build_selection(&curve, &[ids[1], ids[2]]);
+        let boxed = build_selection(&curve, &[ids[0], ids[1]]);
+
+        let selection = apply_box_selection(&current, boxed, BoxSelectMode::Add);
+
+        assert_eq!(
+            collect_selected_ids(&selection),
+            vec![ids[0], ids[1], ids[2]]
+        );
+    }
+
+    #[test]
+    fn box_selection_invert_toggles_only_the_boxed_keys() {
+        let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2), (0.4, 0.4), (0.8, 0.8)]);
+        let current = build_selection(&curve, &[ids[1], ids[2]]);
+        let boxed = build_selection(&curve, &[ids[0], ids[1]]);
+
+        let selection = apply_box_selection(&current, boxed, BoxSelectMode::Invert);
+
+        assert_eq!(collect_selected_ids(&selection), vec![ids[0], ids[2]]);
+    }
 }

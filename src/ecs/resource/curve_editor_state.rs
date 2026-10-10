@@ -44,6 +44,17 @@ pub enum CurveInteractionMode {
         start_offset: [f32; 2],
     },
     DraggingTangent(DraggingTangent),
+    BoxSelecting {
+        start: [f32; 2],
+        mode: BoxSelectMode,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BoxSelectMode {
+    Replace,
+    Add,
+    Invert,
 }
 
 impl Default for CurveInteractionMode {

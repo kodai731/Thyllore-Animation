@@ -432,6 +432,24 @@ pub(super) fn draw_clipped_curve_content(
         &editor_state.visible_curves,
         vt,
     );
+
+    if let CurveInteractionMode::BoxSelecting { start, .. } = editor_state.interaction {
+        let mouse_pos = read_ui_pointer(ui).pos;
+        let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
+        let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
+        let width = (max[0] - min[0]).abs();
+        let height = (max[1] - min[1]).abs();
+        if width > 1.0 || height > 1.0 {
+            draw_list
+                .add_rect(min, max, [0.3, 0.6, 1.0, 0.15])
+                .filled(true)
+                .build();
+            draw_list
+                .add_rect(min, max, [0.3, 0.6, 1.0, 1.0])
+                .thickness(1.0)
+                .build();
+        }
+    }
 }
 
 pub(super) fn build_curve_toolbar(

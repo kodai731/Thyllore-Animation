@@ -160,13 +160,6 @@ impl<'a> OverlayRenderer<'a> {
 
         record_line_mesh_draw(
             ctx,
-            &light_gizmo.ray_to_model,
-            &render_info,
-            &options,
-            command_buffer,
-        )?;
-        record_line_mesh_draw(
-            ctx,
             &light_gizmo.vertical_lines,
             &render_info,
             &options,

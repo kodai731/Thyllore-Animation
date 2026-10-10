@@ -108,6 +108,8 @@ pub struct CurveEditorState {
     pub needs_focus: bool,
     pub frame_request: Option<FrameRequest>,
     pub value_display: CurveValueDisplay,
+    pub time_field: String,
+    pub value_field: String,
 }
 
 impl CurveEditorState {
@@ -172,6 +174,8 @@ impl Default for CurveEditorState {
             needs_focus: false,
             frame_request: None,
             value_display: CurveValueDisplay::default(),
+            time_field: String::new(),
+            value_field: String::new(),
         }
     }
 }

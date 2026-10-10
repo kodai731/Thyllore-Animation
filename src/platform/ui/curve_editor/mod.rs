@@ -3,6 +3,7 @@ mod context_menu;
 mod draw;
 mod interaction;
 mod keyboard;
+mod numeric_input;
 mod track_list;
 mod view;
 mod window;

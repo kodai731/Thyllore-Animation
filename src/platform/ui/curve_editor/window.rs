@@ -20,6 +20,7 @@ use super::context_menu::build_curve_extrapolation_menu;
 use super::draw::*;
 use super::interaction::*;
 use super::keyboard::*;
+use super::numeric_input::build_selected_key_fields;
 use super::track_list::*;
 use super::view::*;
 
@@ -161,9 +162,9 @@ pub(super) fn build_curve_view(
         pose_library,
         clip_library,
     );
-    ui.separator();
 
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
+        ui.separator();
         ui.text("No clip selected");
         return;
     };
@@ -177,19 +178,25 @@ pub(super) fn build_curve_view(
         Some(CurveEditorTarget::Scalars) => collect_visible_scalar_curves(clip, editor_state),
         Some(CurveEditorTarget::Morph(i)) => {
             let Some(morph_track) = clip.morph_tracks.get(i) else {
+                ui.separator();
                 ui.text("Morph track not found");
                 return;
             };
             vec![(&morph_track.curve, [1.0, 0.5, 0.2, 1.0], "Weight")]
         }
         None => {
+            ui.separator();
             ui.text("Select a track from the list");
             return;
         }
     };
     let Some(track_ref) = editor_state.selected_track_ref() else {
+        ui.separator();
         return;
     };
+
+    build_selected_key_fields(ui, world, editor_state, &curves_to_draw, track_ref);
+    ui.separator();
 
     let content_region = ui.content_region_avail();
     let curve_area_width = content_region[0] - Y_AXIS_WIDTH - CURVE_PADDING * 2.0;

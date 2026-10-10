@@ -17,6 +17,7 @@ use crate::ecs::systems::animation_debug_dump::{
     build_animation_debug_dump, resolve_animation_debug_target,
 };
 use crate::ecs::systems::batch_run_systems::batch_anim_dump_json;
+use crate::ecs::systems::phases::TRANSFORM_PROPAGATE_PHASE;
 use crate::ecs::FrameContext;
 use crate::ecs::World;
 use crate::hooks::external_command::ExternalCommandSender;
@@ -276,6 +277,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
     let phase_sub = world.get_resource::<PhaseSubTimings>();
     let render_prep = phase_sub_json(phase_sub.as_deref(), "render_prep");
     let animation = phase_sub_json(phase_sub.as_deref(), "animation");
+    let transform_propagate = phase_sub_json(phase_sub.as_deref(), TRANSFORM_PROPAGATE_PHASE);
 
     serde_json::json!({
         "frame": cpu.as_ref().map(|c| c.frame),
@@ -284,6 +286,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
         "update_phases": update_phases.as_ref().map(|u| stages_json(&u.stages)),
         "render_prep": render_prep,
         "animation": animation,
+        "transform_propagate": transform_propagate,
     })
 }
 

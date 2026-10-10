@@ -38,6 +38,10 @@ public struct FlameWarpStyle {
     public float warpFreq;
     public float riseSpeed;
     public float taperPower;
+    public float riseAccel;
+    public float pad0;
+    public float pad1;
+    public float pad2;
 };
 
 public struct FlameEdgeStyle {
@@ -45,6 +49,10 @@ public struct FlameEdgeStyle {
     public float edgeLow;
     public float edgeHigh;
     public float whiteBoost;
+    public float baseSpread;
+    public float baseSpreadHeight;
+    public float pad0;
+    public float pad1;
 };
 
 public struct FlameWindBend {
@@ -155,8 +163,9 @@ public struct FlameMixParams {
     // Wavenumber scale of the mixing eddies relative to the low erosion octave.
     public float scale;
     public float radialGain;
+    // Normalized radius below which the noise term fades out; 0 = off.
+    public float coreRadius;
     public float pad0;
-    public float pad1;
 };
 
 public struct FlameThermalParams {
@@ -271,6 +280,32 @@ public struct FlameBranchField {
     public FlameBranchElement elements[FLAME_BRANCH_MAX_ELEMENTS];
 };
 
+public static const int FLAME_PUFF_MAX_COUNT = 16;
+
+// Puff train (characteristic solution of the axial density advection): each entry
+// is (center height, lateral radius in trunk-local radial units, density, vertical radius
+// in isotropic units); count = 0 is a no-op.
+public struct FlamePuffField {
+    public float count;
+    public float gain;
+    public float aspect;
+    public float pad0;
+    public float4 puffs[FLAME_PUFF_MAX_COUNT];
+};
+
+public static const int FLAME_FLOW_MARKER_COUNT = 32;
+
+// Fluid motion of the column: marker table over height01 (i / (count - 1)),
+// each (centre offset x, centre offset z, width scale, 0) in flame-local units;
+// gain 0 is the identity.
+public struct FlameFlowField {
+    public float gain;
+    public float count;
+    public float pad0;
+    public float pad1;
+    public float4 markers[FLAME_FLOW_MARKER_COUNT];
+};
+
 public struct FlameUBO {
     public float4x4 model;
     public float4x4 inverseModel;
@@ -320,6 +355,8 @@ public struct FlameUBO {
     public FlameTwistField twistField;
     public FlameMeanderMode meanderModes[2];
     public FlameBranchField branchField;
+    public FlamePuffField puffField;
+    public FlameFlowField flowField;
     public float4 waveModes[428];
     public float4 waveJitter[96];
 };

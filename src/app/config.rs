@@ -4,10 +4,13 @@ use crate::ecs::systems::{
 };
 use crate::hooks::bootstrap::ResolvedBootstrap;
 
+pub const DEFAULT_WINDOW_SIZE: (u32, u32) = (2560, 1440);
+
 pub struct AppConfig {
     pub overrides: EngineCliOverrides,
     pub bootstrap: ResolvedBootstrap,
     pub is_batch_mode: bool,
+    pub window_size: (u32, u32),
 }
 
 pub fn from_args(args: Vec<String>) -> anyhow::Result<Option<AppConfig>> {
@@ -35,10 +38,12 @@ pub fn from_args(args: Vec<String>) -> anyhow::Result<Option<AppConfig>> {
     };
 
     let is_batch_mode = overrides.batch_run.is_some();
+    let window_size = overrides.window_size.unwrap_or(DEFAULT_WINDOW_SIZE);
 
     Ok(Some(AppConfig {
         overrides,
         bootstrap,
         is_batch_mode,
+        window_size,
     }))
 }

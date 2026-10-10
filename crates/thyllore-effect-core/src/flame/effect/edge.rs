@@ -14,6 +14,12 @@ pub struct FlameEdge {
     pub radius_tip_ratio: f32,
     #[persist]
     pub outer_sharpen: f32,
+    /// Extra radius ratio at the foot of the column (fire pool); 0 = off.
+    #[persist(ui(min = 0.0, max = 3.0, format = "%.2f", group = "body"))]
+    pub base_spread: f32,
+    /// Normalized height over which the base spread fades to the plain taper.
+    #[persist(ui(min = 0.02, max = 1.0, format = "%.2f", group = "body"))]
+    pub base_spread_height: f32,
 }
 
 impl Default for FlameEdge {
@@ -24,6 +30,8 @@ impl Default for FlameEdge {
             white_boost: 4.0,
             radius_tip_ratio: 0.10,
             outer_sharpen: 0.0,
+            base_spread: 0.0,
+            base_spread_height: 0.25,
         }
     }
 }
@@ -61,5 +69,8 @@ pub fn build_edge_style(edge: &FlameEdge, noise: &FlameNoise) -> FlameEdgeStyle 
         edge_low,
         edge_high,
         white_boost: edge.white_boost,
+        base_spread: edge.base_spread,
+        base_spread_height: edge.base_spread_height,
+        _padding: [0.0; 2],
     }
 }

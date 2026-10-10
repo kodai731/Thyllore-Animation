@@ -52,6 +52,13 @@ impl Default for CurveInteractionMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameRequest {
+    Selected,
+    All,
+    Playhead,
+}
+
 #[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
@@ -73,6 +80,7 @@ pub struct CurveEditorState {
     pub context_menu_click_time: f32,
     pub context_menu_click_value: f32,
     pub needs_focus: bool,
+    pub frame_request: Option<FrameRequest>,
 }
 
 impl CurveEditorState {
@@ -135,6 +143,7 @@ impl Default for CurveEditorState {
             context_menu_click_time: 0.0,
             context_menu_click_value: 0.0,
             needs_focus: false,
+            frame_request: None,
         }
     }
 }

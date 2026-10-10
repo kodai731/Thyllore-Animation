@@ -189,6 +189,7 @@ pub(super) fn build_curve_view(
         return;
     }
     initialize_view_range(editor_state, &curves_to_draw, clip.duration);
+    apply_frame_request(editor_state, &curves_to_draw, timeline_state.current_time);
     let cursor_pos = ui.cursor_screen_pos();
 
     let curve_origin = [

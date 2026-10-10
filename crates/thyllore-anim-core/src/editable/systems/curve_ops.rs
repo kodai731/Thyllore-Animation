@@ -1,10 +1,15 @@
 use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::{PropertyCurve, PropertyType};
+use crate::editable::components::curve::{CurveExtrapolation, PropertyCurve, PropertyType};
 use crate::editable::components::keyframe::{
     BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
 };
 use crate::editable::systems::tangent::{apply_auto_tangent, sample_bezier, split_bezier};
 use crate::BoneId;
+
+enum CurveEnd {
+    Start,
+    End,
+}
 
 pub fn curve_add_keyframe(curve: &mut PropertyCurve, time: f32, value: f32) -> KeyframeId {
     let id = curve.allocate_keyframe_id();
@@ -78,7 +83,107 @@ pub fn curve_resample_at_fps(curve: &mut PropertyCurve, duration: f32, fps: f32)
 }
 
 pub fn curve_sample(curve: &PropertyCurve, time: f32) -> Option<f32> {
-    keyframes_sample(&curve.keyframes, time)
+    let keyframes = &curve.keyframes;
+    let (Some(first), Some(last)) = (keyframes.first(), keyframes.last()) else {
+        return None;
+    };
+
+    let first_time = first.time;
+    let last_time = last.time;
+
+    if time < first_time {
+        extrapolate(keyframes, CurveEnd::Start, curve.pre_extrapolation, time)
+    } else if time > last_time {
+        extrapolate(keyframes, CurveEnd::End, curve.post_extrapolation, time)
+    } else {
+        keyframes_sample(keyframes, time)
+    }
+}
+
+fn extrapolate(
+    keyframes: &[EditableKeyframe],
+    end: CurveEnd,
+    mode: CurveExtrapolation,
+    time: f32,
+) -> Option<f32> {
+    let first = keyframes.first()?;
+    let last = keyframes.last()?;
+    match mode {
+        CurveExtrapolation::Constant => match end {
+            CurveEnd::Start => Some(first.value),
+            CurveEnd::End => Some(last.value),
+        },
+        CurveExtrapolation::Linear => {
+            let (tangent, anchor_time, anchor_value) = match end {
+                CurveEnd::Start => {
+                    let tangent = keyframes
+                        .get(1)
+                        .map(|second| compute_start_tangent(first, second))
+                        .unwrap_or(0.0);
+                    (tangent, first.time, first.value)
+                }
+                CurveEnd::End => {
+                    let tangent = keyframes
+                        .len()
+                        .checked_sub(2)
+                        .and_then(|i| keyframes.get(i))
+                        .map(|prev| compute_end_tangent(prev, last))
+                        .unwrap_or(0.0);
+                    (tangent, last.time, last.value)
+                }
+            };
+            Some(anchor_value + tangent * (time - anchor_time))
+        }
+        CurveExtrapolation::Cycle | CurveExtrapolation::CycleWithOffset => {
+            cycle_sample(keyframes, mode, time)
+        }
+    }
+}
+
+fn compute_start_tangent(first: &EditableKeyframe, second: &EditableKeyframe) -> f32 {
+    if first.interpolation == InterpolationType::Bezier {
+        let out = &first.out_tangent;
+        if out.time_offset != 0.0 {
+            return out.value_offset / out.time_offset;
+        }
+    }
+    (second.value - first.value) / (second.time - first.time)
+}
+
+fn compute_end_tangent(prev: &EditableKeyframe, last: &EditableKeyframe) -> f32 {
+    if last.interpolation == InterpolationType::Bezier {
+        let in_h = &last.in_tangent;
+        if in_h.time_offset != 0.0 {
+            return in_h.value_offset / in_h.time_offset;
+        }
+    }
+    (last.value - prev.value) / (last.time - prev.time)
+}
+
+fn cycle_sample(
+    keyframes: &[EditableKeyframe],
+    mode: CurveExtrapolation,
+    time: f32,
+) -> Option<f32> {
+    let first = keyframes.first()?;
+    let last = keyframes.last()?;
+    let range = last.time - first.time;
+    if range <= 0.0 {
+        return Some(first.value);
+    }
+    let mapped = cycle_map_time(time, first.time, range);
+    if mode == CurveExtrapolation::CycleWithOffset {
+        let cycles = ((time - first.time) / range).floor();
+        let offset = cycles * (last.value - first.value);
+        keyframes_sample(keyframes, mapped).map(|v| v + offset)
+    } else {
+        keyframes_sample(keyframes, mapped)
+    }
+}
+
+fn cycle_map_time(time: f32, first_time: f32, range: f32) -> f32 {
+    let offset = ((time - first_time) % range + range) % range;
+    first_time + offset
 }
 
 /// Sample a list of keyframes at `time`. Returns `None` if keyframes are empty.
@@ -657,5 +762,148 @@ mod tests {
                 sample_after
             );
         }
+    }
+
+    #[test]
+    fn extrapolation_constant_default() {
+        let curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        assert!(curve.pre_extrapolation == CurveExtrapolation::Constant);
+        assert!(curve.post_extrapolation == CurveExtrapolation::Constant);
+
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, 2.0).unwrap();
+        assert!((v - 10.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_linear_pre() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.pre_extrapolation = CurveExtrapolation::Linear;
+
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 0.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, -0.5).unwrap();
+        assert!((v - 2.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_linear_post() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.post_extrapolation = CurveExtrapolation::Linear;
+
+        let v = curve_sample(&curve, 2.0).unwrap();
+        assert!((v - 15.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, 1.5).unwrap();
+        assert!((v - 12.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_linear_bezier_handle() {
+        let mut curve = PropertyCurve::new(1, PropertyType::TranslationX);
+        let mut kf0 = EditableKeyframe::new(1, 0.0, 5.0);
+        kf0.interpolation = InterpolationType::Bezier;
+        kf0.out_tangent = BezierHandle::new(1.0, 3.0);
+        curve.keyframes.push(kf0);
+        curve.keyframes.push(EditableKeyframe::new(2, 1.0, 10.0));
+        curve.pre_extrapolation = CurveExtrapolation::Linear;
+
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 2.0).abs() < 1e-4);
+
+        let mut kf_last = EditableKeyframe::new(3, 2.0, 15.0);
+        kf_last.interpolation = InterpolationType::Bezier;
+        kf_last.in_tangent = BezierHandle::new(-1.0, 2.0);
+        curve.keyframes.push(kf_last);
+        curve.post_extrapolation = CurveExtrapolation::Linear;
+
+        let v = curve_sample(&curve, 3.0).unwrap();
+        assert!((v - 13.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_cycle_pre() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.pre_extrapolation = CurveExtrapolation::Cycle;
+
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, -0.5).unwrap();
+        assert!((v - 7.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_cycle_post() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.post_extrapolation = CurveExtrapolation::Cycle;
+
+        let v = curve_sample(&curve, 2.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, 1.5).unwrap();
+        assert!((v - 7.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_cycle_with_offset_pre() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.pre_extrapolation = CurveExtrapolation::CycleWithOffset;
+
+        // value at mapped=0 is 5, so 5 + (-5) = 0
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 0.0).abs() < 1e-4);
+
+        // value at mapped=0.5 is 7.5, so 7.5 + (-5) = 2.5
+        let v = curve_sample(&curve, -0.5).unwrap();
+        assert!((v - 2.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_cycle_with_offset_post() {
+        let mut curve = make_curve_with_keyframes(&[(0.0, 5.0), (1.0, 10.0)]);
+        curve.post_extrapolation = CurveExtrapolation::CycleWithOffset;
+
+        // value at mapped=0 is 5, so 5 + 10 = 15
+        let v = curve_sample(&curve, 2.0).unwrap();
+        assert!((v - 15.0).abs() < 1e-4);
+
+        // value at mapped=0.5 is 7.5, so 7.5 + 5 = 12.5
+        let v = curve_sample(&curve, 1.5).unwrap();
+        assert!((v - 12.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn extrapolation_old_format_ron_deserializes_as_constant() {
+        // Old format RON string without pre/post_extrapolation fields
+        let ron = "(
+            id: 1,
+            property_type: TranslationX,
+            keyframes: [],
+            next_keyframe_id: 1,
+        )";
+        let curve: PropertyCurve = ron::from_str(ron).unwrap();
+        assert!(curve.pre_extrapolation == CurveExtrapolation::Constant);
+        assert!(curve.post_extrapolation == CurveExtrapolation::Constant);
+    }
+
+    #[test]
+    fn extrapolation_linear_single_keyframe() {
+        let mut curve = PropertyCurve::new(1, PropertyType::TranslationX);
+        curve.pre_extrapolation = CurveExtrapolation::Linear;
+        curve.post_extrapolation = CurveExtrapolation::Linear;
+        curve.keyframes.push(EditableKeyframe::new(1, 1.0, 5.0));
+
+        let v = curve_sample(&curve, -1.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, 3.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
+
+        let v = curve_sample(&curve, 1.0).unwrap();
+        assert!((v - 5.0).abs() < 1e-4);
     }
 }

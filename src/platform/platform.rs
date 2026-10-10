@@ -45,6 +45,7 @@ pub fn init(title: &str, take_focus: bool) -> System {
     let window = builder.build(&event_loop).expect("Failed to create window");
 
     let mut imgui = Context::create();
+    super::ui::theme::style::apply_thyllore_style(imgui.style_mut());
     imgui.set_ini_filename(None);
 
     imgui.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;

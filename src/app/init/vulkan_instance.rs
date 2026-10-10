@@ -11,6 +11,8 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::os::raw::c_void;
+use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
+use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
 use winit::window::Window;
 
 impl App {
@@ -32,9 +34,19 @@ impl App {
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
             log_error!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Error, &message);
+            push_message(
+                MessageLevel::Error,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
             log_warn!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Warning, &message);
+            push_message(
+                MessageLevel::Warning,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
             log!("({:?}) {}", type_, message);

@@ -1,4 +1,6 @@
+pub mod geometry_checks;
 pub mod hierarchy;
+pub mod humanoid_frame;
 pub mod mapping_io;
 pub mod name_match;
 pub mod pose;

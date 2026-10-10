@@ -41,7 +41,7 @@ This project supports three types of animation:
 | `crates/thyllore-anim-core/src/pose.rs`           | `SkeletonPose`, `BoneLocalPose`                                         |
 | `crates/thyllore-importer-core/src/gltf/loader.rs`| Load glTF files, parse node hierarchy and animation channels            |
 | `crates/thyllore-importer-core/src/model_result.rs` | Loader output incl. `node_animation_scale`                            |
-| `src/ecs/systems/skeleton_pose_systems.rs`        | `sample_clip_to_pose`, `compute_pose_global_transforms`, `apply_skinning` |
+| `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
 | `src/app/model/`, `src/app/scene_model.rs`        | Load a model into `AssetStorage` and GPU meshes                         |

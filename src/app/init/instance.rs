@@ -244,6 +244,13 @@ impl App {
             .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::object_pick::ObjectPickHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::dispatch_prep::DispatchPrepHooks::collect()?);
+        let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;
+        ui_windows.init_window_state(&mut data.ecs_world);
+        data.ecs_world.insert_resource(ui_windows);
         Ok(())
     }
 

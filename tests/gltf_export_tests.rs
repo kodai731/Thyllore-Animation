@@ -38,6 +38,7 @@ fn test_gltf_export_preserves_structure() {
         &clip,
         &skeleton,
         &output_path,
+        &[],
     )
     .unwrap();
 
@@ -186,6 +187,7 @@ fn run_roundtrip_and_verify(
         clip,
         skeleton,
         exported_path,
+        &[],
     )
     .expect("Failed to export glTF animation");
 

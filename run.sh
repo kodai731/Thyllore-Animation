@@ -11,6 +11,16 @@ usage() {
     cat <<EOF
 Usage: ./run.sh <command> [args...]
 
+Every launch command runs in a detached tmux session named
+thyllore-<command> and returns at once, so this terminal can keep issuing
+commands such as live-dump against the running engine. Pass --no-tmux
+(or --on-terminal) before or after the command to run it here instead.
+help, live-dump and auto always run on this terminal. The session closes
+by itself when the command exits; its output is in the usual log files.
+    ./run.sh engine                 # then: ./run.sh live-dump --timings 1s
+    tmux attach -t thyllore-engine  # see the engine output (Ctrl-b d to leave)
+    ./run.sh engine --no-tmux       # stay on this terminal
+
 Commands:
   engine [private|degrade|full] [cargo args...]
       Launch the engine (cargo run) with a curve copilot mode.
@@ -85,13 +95,63 @@ Commands:
       window (unity/docker/run_gui.sh). The project persists in
       target/unity_gui; UNITY_GUI_DIR overrides it:
         ./run.sh unity --model assets/models/purchased/Shinano_ver1.02/FBX/Shinano.fbx
+  live-dump [--tracks] [--pose TIME...] [--set-time T] [--timings [1s]] [--clip NAME] [--out FILE]
+      Talk to the engine that is already running (started earlier with
+      ./run.sh engine); never launches one. Prints its clips, timeline and
+      curve editor state, sampled poses, or frame timings as JSON
+      (tools/live_dump.py). --timings 1s starts recording at the moment you
+      run it, for 1 s, so load the model and start scrubbing first. One
+      request per connection on log/live_dump/engine.sock; the engine
+      applies it as a UI command on its main thread, nothing is polled.
+        ./run.sh engine                        # once; then, at any time:
+        ./run.sh live-dump --tracks --clip "New Clip"
+        ./run.sh live-dump --timings 1s        # per-frame CPU ms from now for 1 s
   help
       Show this help.
 EOF
 }
 
+is_foreground_flag() {
+    [[ "${1:-}" == "--no-tmux" || "${1:-}" == "--on-terminal" ]]
+}
+
+foreground=0
+if is_foreground_flag "${1:-}"; then
+    foreground=1
+    shift
+fi
 command="${1:-help}"
 shift || true
+if is_foreground_flag "${1:-}"; then
+    foreground=1
+    shift
+fi
+
+runs_on_terminal() {
+    case "$1" in
+        help|-h|--help|live-dump|auto) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+run_in_tmux() {
+    local session="thyllore-$command"
+    if tmux has-session -t "$session" 2>/dev/null; then
+        echo "tmux session '$session' is already running; attach with: tmux attach -t $session" >&2
+        exit 1
+    fi
+
+    local quoted
+    quoted="$(printf ' %q' "$command" --no-tmux "$@")"
+    tmux new-session -d -s "$session" -c "$REPO_ROOT" "bash ./run.sh$quoted"
+    echo "started '$command' in tmux session '$session' (this terminal stays free)"
+    echo "  attach: tmux attach -t $session    stop: tmux kill-session -t $session"
+}
+
+if [[ "$foreground" -eq 0 ]] && ! runs_on_terminal "$command" && [[ -n "${TMUX:-}" || -t 1 ]]; then
+    run_in_tmux "$@"
+    exit 0
+fi
 
 case "$command" in
     engine)
@@ -146,6 +206,9 @@ case "$command" in
         ;;
     unity)
         exec bash "$REPO_ROOT/unity/docker/run_gui.sh" "$@"
+        ;;
+    live-dump)
+        exec python3 "$REPO_ROOT/tools/live_dump.py" "$@"
         ;;
     help|-h|--help)
         usage

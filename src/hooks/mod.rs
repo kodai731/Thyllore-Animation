@@ -1,12 +1,17 @@
 pub mod batch_capture;
 pub mod bootstrap;
+pub mod dispatch_prep;
+pub mod dropped_file;
 pub mod effect;
 pub mod effect_spawn;
+pub mod external_command;
 pub mod frame_prep;
 pub mod gpu_primitive;
 pub mod gpu_resource;
 pub mod model_load;
+pub mod object_pick;
 pub mod pass;
 pub mod scene;
 pub mod scene_resource;
 pub mod startup;
+pub mod ui_window;

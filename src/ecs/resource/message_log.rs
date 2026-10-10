@@ -5,6 +5,7 @@ pub enum MessageFilter {
     All,
     WarningAndError,
     ErrorOnly,
+    Validation,
 }
 
 impl Default for MessageFilter {
@@ -20,6 +21,7 @@ pub struct MessageLog {
     pub info_count: usize,
     pub warning_count: usize,
     pub error_count: usize,
+    pub select_tab_requested: bool,
 }
 
 impl Default for MessageLog {
@@ -31,6 +33,7 @@ impl Default for MessageLog {
             info_count: 0,
             warning_count: 0,
             error_count: 0,
+            select_tab_requested: false,
         }
     }
 }

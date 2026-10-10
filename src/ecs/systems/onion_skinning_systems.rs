@@ -208,7 +208,7 @@ fn apply_skinning_to_vertices(
     let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-    let _ = crate::ecs::apply_skinning(
+    let _ = thyllore_model_core::apply_skinning(
         skin_data,
         global_transforms,
         skeleton,

@@ -211,7 +211,7 @@ unsafe fn record_lightning_passes(
         Some(push_constants.as_bytes()),
         &[
             render.graphics.frame_set.sets[image_index],
-            descriptor.descriptor_set,
+            descriptor.descriptor_set(),
         ],
         &draws,
     )

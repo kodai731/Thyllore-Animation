@@ -1,14 +1,15 @@
 use crate::vulkanr::core::*;
 use crate::vulkanr::descriptor::pass_manifest::EFFECT_TRACE;
 use crate::vulkanr::descriptor::shader_bindings::effect_trace;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+};
 use crate::vulkanr::resource::GpuResource;
 use thyllore_vulkan_core::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct RREffectTraceDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    descriptor_sets: Vec<vk::DescriptorSet>,
+    sets: ReflectedDescriptorSets,
 }
 
 impl RREffectTraceDescriptorSet {
@@ -17,25 +18,24 @@ impl RREffectTraceDescriptorSet {
     }
 
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = layout.allocate_sets(rrdevice, frames_in_flight.max(1))?;
+        let sets =
+            ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), frames_in_flight)?;
 
-        Ok(Self {
-            layout,
-            descriptor_sets,
-        })
+        Ok(Self { sets })
+    }
+
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        self.sets.layout()
     }
 
     pub fn descriptor_set(&self, frame_slot: usize) -> Result<vk::DescriptorSet> {
-        self.descriptor_sets
-            .get(frame_slot)
-            .copied()
-            .ok_or_else(|| {
-                anyhow!(
-                    "effect trace descriptor slot {frame_slot} exceeds {} sets",
-                    self.descriptor_sets.len()
-                )
-            })
+        if frame_slot >= self.sets.len() {
+            anyhow::bail!(
+                "effect trace descriptor slot {frame_slot} exceeds {} sets",
+                self.sets.len()
+            );
+        }
+        Ok(self.sets.set(frame_slot))
     }
 
     pub unsafe fn write_all_at(
@@ -46,8 +46,8 @@ impl RREffectTraceDescriptorSet {
         trace_image_view: vk::ImageView,
         hit_table: vk::Buffer,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set(frame_slot)?)
+        self.sets
+            .writer(frame_slot)
             .acceleration_structure(effect_trace::TLAS, tlas)?
             .image(
                 effect_trace::OUT_IMAGE,
@@ -61,7 +61,7 @@ impl RREffectTraceDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
     }
 }
 

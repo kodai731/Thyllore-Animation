@@ -1,7 +1,9 @@
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::descriptor::pass_manifest::WATER_RESOLVE;
-use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::descriptor::shader_bindings::water_resolve;
+use crate::vulkanr::descriptor::{
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+};
 use crate::vulkanr::resource::gpu_resource::GpuResource;
 use crate::vulkanr::resource::uniform_buffer::UniformBuffer;
 use crate::vulkanr::vulkan::*;
@@ -11,8 +13,7 @@ const WATER_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    frames: Vec<[vk::DescriptorSet; WATER_HISTORY_SET_COUNT]>,
+    sets: ReflectedDescriptorSets,
 }
 
 impl RRWaterDescriptorSet {
@@ -23,16 +24,18 @@ impl RRWaterDescriptorSet {
         )
     }
 
+    fn index(frame_slot: usize, history_index: usize) -> usize {
+        frame_slot * WATER_HISTORY_SET_COUNT + history_index
+    }
+
+    pub fn layout(&self) -> &ReflectedSetLayout {
+        self.sets.layout()
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-
-        let mut frames = Vec::with_capacity(frames_in_flight.max(1));
-        for _ in 0..frames_in_flight.max(1) {
-            let sets = layout.allocate_sets(rrdevice, WATER_HISTORY_SET_COUNT)?;
-            frames.push([sets[0], sets[1]]);
-        }
-
-        Ok(Self { layout, frames })
+        let count = frames_in_flight.max(1) * WATER_HISTORY_SET_COUNT;
+        let sets = ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), count)?;
+        Ok(Self { sets })
     }
 
     pub fn descriptor_set(
@@ -40,15 +43,16 @@ impl RRWaterDescriptorSet {
         frame_slot: usize,
         history_index: usize,
     ) -> Result<vk::DescriptorSet> {
-        let sets = self.frames.get(frame_slot).ok_or_else(|| {
+        let idx = Self::index(frame_slot, history_index);
+        self.sets.get(idx).ok_or_else(|| {
             anyhow!(
-                "water descriptor slot {frame_slot} exceeds {} frames",
-                self.frames.len()
+                "water descriptor index {} (frame_slot={}, history_index={}) exceeds {} sets",
+                idx,
+                frame_slot,
+                history_index,
+                self.sets.len()
             )
-        })?;
-        sets.get(history_index)
-            .copied()
-            .ok_or_else(|| anyhow!("water history index {history_index} is out of range"))
+        })
     }
 
     pub unsafe fn write_all_at(
@@ -66,10 +70,10 @@ impl RRWaterDescriptorSet {
         hit_table: vk::Buffer,
     ) -> Result<()> {
         for i in 0..WATER_HISTORY_SET_COUNT {
-            let descriptor_set = self.descriptor_set(frame_slot, i)?;
             let previous_history_view = history_image_views[1 - i];
-            self.layout
-                .writer(descriptor_set)
+            let idx = Self::index(frame_slot, i);
+            self.sets
+                .writer(idx)
                 .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .image(
                     water_resolve::SCENE_COLOR_SAMPLER,
@@ -102,7 +106,7 @@ impl RRWaterDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+        self.sets.destroy(device);
     }
 }
 

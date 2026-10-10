@@ -7,3 +7,4 @@ pub mod mirror;
 pub mod morph_sample;
 pub mod snap;
 pub mod tangent;
+pub mod tween;

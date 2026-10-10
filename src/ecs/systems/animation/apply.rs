@@ -2,7 +2,6 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::ecs::apply_skinning;
 use crate::render::RenderBackend;
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
@@ -34,21 +33,17 @@ pub fn apply_skinning_to_single_mesh(
         return false;
     }
 
-    let skin_data = {
-        let mesh = &graphics.meshes[mesh_idx];
-        mesh.skin_data.clone()
-    };
-
-    let Some(skin_data) = skin_data else {
-        return false;
+    let skin_data = match &graphics.meshes[mesh_idx].skin_data {
+        Some(sd) => sd,
+        None => return false,
     };
 
     let vertex_count = skin_data.base_positions.len();
     let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-    let _ = apply_skinning(
-        &skin_data,
+    let _ = thyllore_model_core::apply_skinning(
+        skin_data,
         global_transforms,
         skeleton,
         &mut skinned_positions,

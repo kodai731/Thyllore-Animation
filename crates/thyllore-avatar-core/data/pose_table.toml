@@ -1,0 +1,146 @@
+# Motion vocabulary in the standard humanoid space (T-pose = 0, character axes, Unity Euler order).
+# Every entry is written for the RIGHT side; the composer mirrors it for the left side
+# (Left<->Right roles, Y and Z degrees negated). `labels` are the phrases helm matches against.
+
+[[pose]]
+name = "hikite"
+labels = ["引き手", "拳を腰に引く", "chamber the fist at the hip"]
+keys = [
+  { role = "RightUpperArm", axis = "y", degrees = 0 },
+  { role = "RightUpperArm", axis = "z", degrees = -80 },
+  { role = "RightLowerArm", axis = "y", degrees = -100 },
+]
+
+[[pose]]
+name = "arm_forward"
+labels = ["腕を前に伸ばす", "arm extended forward"]
+keys = [
+  { role = "RightUpperArm", axis = "y", degrees = -85 },
+  { role = "RightUpperArm", axis = "z", degrees = -10 },
+  { role = "RightLowerArm", axis = "y", degrees = 0 },
+]
+
+[[pose]]
+name = "arm_raised_side"
+labels = ["腕を横から上げる", "raise the arm sideways"]
+keys = [{ role = "RightUpperArm", axis = "z", degrees = 90 }]
+
+[[pose]]
+name = "arm_raised_forward"
+labels = ["腕を前に上げる", "raise the arm forward"]
+keys = [{ role = "RightUpperArm", axis = "y", degrees = -90 }]
+
+[[pose]]
+name = "elbow_bent"
+labels = ["肘を曲げる", "bend the elbow"]
+keys = [{ role = "RightLowerArm", axis = "y", degrees = -90 }]
+
+[[pose]]
+name = "stance"
+labels = ["足を開いて構える", "fighting stance, feet apart, knees soft"]
+keys = [
+  { role = "RightUpperLeg", axis = "x", degrees = -5 },
+  { role = "RightUpperLeg", axis = "z", degrees = 8 },
+  { role = "RightLowerLeg", axis = "x", degrees = 15 },
+]
+
+[[pose]]
+name = "hips_twist"
+labels = ["腰を右へ捻る、足は正面のまま", "twist the hips to the right, feet stay planted"]
+keys = [
+  { role = "Hips", axis = "y", degrees = 10 },
+  { role = "RightUpperLeg", axis = "y", degrees = -10 },
+  { role = "LeftUpperLeg", axis = "y", degrees = -10 },
+]
+
+[[pose]]
+name = "torso_turn"
+labels = ["上体を右へ捻る", "turn the torso to the right"]
+keys = [{ role = "Spine", axis = "y", degrees = 15 }]
+
+[[pose]]
+name = "head_nod"
+labels = ["顔を下へ向ける", "face down"]
+keys = [{ role = "Head", axis = "x", degrees = 20 }]
+
+[[pose]]
+name = "head_turn"
+labels = ["右を向く", "look to the right"]
+keys = [{ role = "Head", axis = "y", degrees = 30 }]
+
+[[pose]]
+name = "bow"
+labels = ["前屈", "bend forward at the waist"]
+keys = [
+  { role = "Spine", axis = "x", degrees = 20 },
+  { role = "Chest", axis = "x", degrees = 20 },
+  { role = "Head", axis = "x", degrees = 5 },
+]
+
+[[motion]]
+name = "punch"
+labels = ["正拳突き", "パンチ", "拳を突き出す", "straight punch", "punch"]
+region = "full_body"
+duration = 2.0
+cycle = [0.4, 1.3]
+settle = { blend = 0.3, frames = 16, min_change = 25 }
+poses = [
+  { time = 0.4, set = [{ pose = "stance", side = "both" }, { pose = "hikite", side = "both" }, { pose = "hips_twist" }, { pose = "torso_turn" }] },
+  { time = 0.55, set = [{ pose = "arm_forward" }, { role = "Spine", axis = "y", degrees = -15 }, { role = "Hips", axis = "y", degrees = -10 }, { role = "RightUpperLeg", axis = "y", degrees = 10 }, { role = "LeftUpperLeg", axis = "y", degrees = 10 }] },
+  { time = 0.9, set = [{ pose = "arm_forward" }, { role = "Spine", axis = "y", degrees = -15 }, { role = "Hips", axis = "y", degrees = -10 }, { role = "RightUpperLeg", axis = "y", degrees = 10 }, { role = "LeftUpperLeg", axis = "y", degrees = 10 }] },
+  { time = 1.3, set = [{ pose = "hikite", side = "both" }, { pose = "hips_twist" }, { pose = "torso_turn" }] },
+]
+
+[[motion]]
+name = "wave"
+labels = ["手を振る", "バイバイ", "wave the hand", "wave hello"]
+region = "upper_body"
+duration = 2.0
+cycle = [0.8, 1.6]
+poses = [
+  { time = 0.4, set = [{ role = "RightUpperArm", axis = "z", degrees = 20 }, { role = "RightLowerArm", axis = "z", degrees = 90 }] },
+  { time = 0.8, set = [{ role = "RightLowerArm", axis = "z", degrees = 110 }] },
+  { time = 1.2, set = [{ role = "RightLowerArm", axis = "z", degrees = 70 }] },
+  { time = 1.6, set = [{ role = "RightLowerArm", axis = "z", degrees = 90 }] },
+]
+
+[[motion]]
+name = "bow"
+labels = ["お辞儀", "礼をする", "bow"]
+region = "upper_body"
+duration = 1.6
+poses = [
+  { time = 0.6, set = [{ pose = "bow" }] },
+  { time = 1.0, set = [{ pose = "bow" }] },
+]
+
+[[motion]]
+name = "nod"
+labels = ["頷く", "うなずく", "nod"]
+region = "head"
+duration = 0.8
+cycle = [0.0, 0.6]
+poses = [
+  { time = 0.3, set = [{ pose = "head_nod" }] },
+  { time = 0.6, set = [{ role = "Head", axis = "x", degrees = 0 }] },
+]
+
+[[motion]]
+name = "arm_raise"
+labels = ["腕を上げる", "手を上げる", "raise the arm", "raise the hand"]
+region = "upper_body"
+duration = 1.5
+poses = [
+  { time = 0.5, set = [{ pose = "arm_raised_side" }] },
+  { time = 1.0, set = [{ pose = "arm_raised_side" }] },
+]
+
+[[motion]]
+name = "head_turn"
+labels = ["横を向く", "振り向く", "turn the head", "look sideways"]
+region = "head"
+duration = 1.3
+poses = [
+  { time = 0.4, set = [{ pose = "head_turn" }] },
+  { time = 0.9, set = [{ pose = "head_turn" }] },
+]

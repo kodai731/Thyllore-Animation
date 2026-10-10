@@ -1,0 +1,62 @@
+use std::sync::OnceLock;
+
+use thyllore_effect_core::{ScalarParam, UiParam, WIND_SCALAR_PARAMS, WIND_UI_PARAMS};
+
+use super::effect::WindTornadoEffect;
+use crate::ecs::component::{
+    build_effect_scalar_channels, effect_scalar_domain, ScalarChannel, ScalarChannelDomain,
+    ScalarDomainSource,
+};
+
+pub struct WindScalarSource;
+
+impl ScalarDomainSource for WindScalarSource {
+    type Component = WindTornadoEffect;
+
+    const NAME: &'static str = "Wind";
+
+    fn scalars() -> &'static [ScalarParam<WindTornadoEffect>] {
+        &WIND_SCALAR_PARAMS
+    }
+
+    fn ui() -> &'static [UiParam] {
+        &WIND_UI_PARAMS
+    }
+
+    fn local_time(component: &WindTornadoEffect) -> f32 {
+        component.time
+    }
+}
+
+fn wind_channels() -> &'static [ScalarChannel] {
+    static CHANNELS: OnceLock<Vec<ScalarChannel>> = OnceLock::new();
+    CHANNELS.get_or_init(build_effect_scalar_channels::<WindScalarSource>)
+}
+
+pub static WIND_DOMAIN: ScalarChannelDomain =
+    effect_scalar_domain::<WindScalarSource>(wind_channels);
+
+crate::scalar_channel_domain!(WIND_DOMAIN);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::component::find_scalar_param_for_property;
+
+    #[test]
+    fn test_every_channel_writes_and_reads_its_own_field() {
+        let mut effect = WindTornadoEffect::default();
+        for index in 0..WIND_DOMAIN.channels().len() {
+            let property_type = WIND_DOMAIN.property_type_at(index);
+            let scalar = find_scalar_param_for_property::<WindScalarSource>(property_type)
+                .expect("every wind channel resolves to a scalar");
+            let value = 10.0 + index as f32;
+            (scalar.set)(&mut effect, value);
+            assert!(
+                ((scalar.get)(&effect) - value).abs() < 1e-6,
+                "{}",
+                scalar.name
+            );
+        }
+    }
+}

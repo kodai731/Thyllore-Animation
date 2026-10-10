@@ -7,4 +7,12 @@ pub enum MappingIssue {
         child: HumanoidRole,
         expected_ancestor: HumanoidRole,
     },
+    MirroredRolesShareBone {
+        left: HumanoidRole,
+        right: HumanoidRole,
+    },
+    BoneInTwoRoles {
+        bone_index: usize,
+        roles: [HumanoidRole; 2],
+    },
 }

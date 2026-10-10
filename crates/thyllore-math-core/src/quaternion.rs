@@ -27,6 +27,21 @@ pub fn euler_degrees_to_quaternion(euler_degrees: &Vector3<f32>) -> Quaternion<f
     qz * qy * qx
 }
 
+pub fn unwrap_degrees(angle: f32, previous: f32) -> f32 {
+    previous + (angle - previous + 180.0).rem_euclid(360.0) - 180.0
+}
+
+pub fn continuous_euler(euler: Vector3<f32>, prev: Option<Vector3<f32>>) -> Vector3<f32> {
+    match prev {
+        None => euler,
+        Some(p) => Vector3::new(
+            unwrap_degrees(euler.x, p.x),
+            unwrap_degrees(euler.y, p.y),
+            unwrap_degrees(euler.z, p.z),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +75,28 @@ mod tests {
         assert!((euler.x - euler2.x).abs() < 0.01);
         assert!((euler.y - euler2.y).abs() < 0.01);
         assert!((euler.z - euler2.z).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_continuous_euler_z_170_to_190() {
+        let q1 = Quaternion::from_angle_z(Rad(170.0_f32.to_radians()));
+        let q2 = Quaternion::from_angle_z(Rad(190.0_f32.to_radians()));
+
+        let euler1 = quaternion_to_euler_degrees(&q1);
+        let continuous1 = continuous_euler(euler1, None);
+
+        let euler2 = quaternion_to_euler_degrees(&q2);
+        let continuous2 = continuous_euler(euler2, Some(continuous1));
+
+        assert!(
+            (continuous1.z - 170.0).abs() < 0.01,
+            "first key z={:.2}, expected ~170",
+            continuous1.z
+        );
+        assert!(
+            (continuous2.z - 190.0).abs() < 0.01,
+            "second key z={:.2}, expected ~190 (not -170)",
+            continuous2.z
+        );
     }
 }

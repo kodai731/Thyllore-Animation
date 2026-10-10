@@ -1,7 +1,7 @@
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{Skeleton, SkeletonPose, SkinData};
-use crate::ecs::{apply_skinning, compute_pose_global_transforms, create_pose_from_rest};
+use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::loader::LoadedNode;
 use crate::vulkanr::resource::graphics_resource::NodeData;
 
@@ -97,7 +97,7 @@ fn run_skinning(skeleton: &Skeleton, skin_data: &SkinData) -> Vector3<f32> {
     let vertex_count = skin_data.base_positions.len();
     let mut out_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut out_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
-    apply_skinning(
+    thyllore_model_core::apply_skinning(
         skin_data,
         &global_transforms,
         skeleton,

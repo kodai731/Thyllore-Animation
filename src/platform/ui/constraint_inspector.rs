@@ -4,8 +4,9 @@ use crate::animation::{
 };
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintEntry, ConstraintSet};
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::HierarchyState;
+use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
@@ -13,7 +14,6 @@ const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rot
 
 pub fn build_constraint_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     world: &World,
     _entity: Entity,
     assets: &AssetStorage,
@@ -39,7 +39,7 @@ pub fn build_constraint_section(
         }
     }
 
-    build_add_constraint_row(ui, ui_events, target_entity, add_type_index);
+    build_add_constraint_row(ui, world, target_entity, add_type_index);
 
     let constraint_set = world.get_component::<ConstraintSet>(target_entity);
     let Some(set) = constraint_set else {
@@ -49,25 +49,13 @@ pub fn build_constraint_section(
 
     let entries: Vec<_> = set.constraints.clone();
     for entry in &entries {
-        build_constraint_entry(
-            ui,
-            ui_events,
-            target_entity,
-            entry,
-            &bone_list,
-            hierarchy_state,
-        );
+        build_constraint_entry(ui, world, target_entity, entry, &bone_list, hierarchy_state);
     }
 
-    build_bake_section(ui, ui_events, target_entity, bake_fps);
+    build_bake_section(ui, world, target_entity, bake_fps);
 }
 
-fn build_bake_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    target_entity: Entity,
-    bake_fps: &mut f32,
-) {
+fn build_bake_section(ui: &imgui::Ui, world: &World, target_entity: Entity, bake_fps: &mut f32) {
     ui.separator();
 
     ui.set_next_item_width(80.0);
@@ -76,7 +64,7 @@ fn build_bake_section(
 
     ui.same_line();
     if ui.button("Bake Constraints") {
-        ui_events.send(UIEvent::ConstraintBakeToKeyframes {
+        world.send_command(ConstraintEvent::BakeToKeyframes {
             entity: target_entity,
             sample_fps: *bake_fps,
         });
@@ -89,7 +77,7 @@ fn find_animated_entity(world: &World) -> Option<Entity> {
 
 fn build_add_constraint_row(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     add_type_index: &mut i32,
 ) {
@@ -107,7 +95,7 @@ fn build_add_constraint_row(
 
     ui.same_line();
     if ui.button("Add") {
-        ui_events.send(UIEvent::ConstraintAdd {
+        world.send_command(ConstraintEvent::Add {
             entity,
             constraint_type_index: *add_type_index as u8,
         });
@@ -118,7 +106,7 @@ fn build_add_constraint_row(
 
 fn build_constraint_entry(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     entry: &ConstraintEntry,
     bone_list: &[(BoneId, String)],
@@ -139,28 +127,24 @@ fn build_constraint_entry(
     let id_token = ui.push_id_int(entry.id as i32);
 
     let changed = match &entry.constraint {
-        ConstraintType::Ik(data) => {
-            build_ik_fields(ui, ui_events, data, bone_list, hierarchy_state)
-        }
-        ConstraintType::Aim(data) => {
-            build_aim_fields(ui, ui_events, data, bone_list, hierarchy_state)
-        }
+        ConstraintType::Ik(data) => build_ik_fields(ui, world, data, bone_list, hierarchy_state),
+        ConstraintType::Aim(data) => build_aim_fields(ui, world, data, bone_list, hierarchy_state),
         ConstraintType::Parent(data) => {
-            build_parent_fields(ui, ui_events, data, bone_list, hierarchy_state)
+            build_parent_fields(ui, world, data, bone_list, hierarchy_state)
         }
         ConstraintType::Position(data) => {
-            build_position_fields(ui, ui_events, data, bone_list, hierarchy_state)
+            build_position_fields(ui, world, data, bone_list, hierarchy_state)
         }
         ConstraintType::Rotation(data) => {
-            build_rotation_fields(ui, ui_events, data, bone_list, hierarchy_state)
+            build_rotation_fields(ui, world, data, bone_list, hierarchy_state)
         }
         ConstraintType::Scale(data) => {
-            build_scale_fields(ui, ui_events, data, bone_list, hierarchy_state)
+            build_scale_fields(ui, world, data, bone_list, hierarchy_state)
         }
     };
 
     if let Some(updated_constraint) = changed {
-        ui_events.send(UIEvent::ConstraintUpdate {
+        world.send_command(ConstraintEvent::Update {
             entity,
             constraint_id: entry.id,
             constraint: updated_constraint,
@@ -168,7 +152,7 @@ fn build_constraint_entry(
     }
 
     if ui.button("Remove") {
-        ui_events.send(UIEvent::ConstraintRemove {
+        world.send_command(ConstraintEvent::Remove {
             entity,
             constraint_id: entry.id,
         });
@@ -194,7 +178,7 @@ fn build_common_fields(ui: &imgui::Ui, enabled: &mut bool, weight: &mut f32) -> 
 
 fn build_ik_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &IkConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -204,7 +188,7 @@ fn build_ik_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Effector (End Bone)",
         modified.effector_bone,
         bone_list,
@@ -216,7 +200,7 @@ fn build_ik_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Goal (Target Position)",
         modified.target_bone,
         bone_list,
@@ -261,7 +245,7 @@ fn build_ik_fields(
 
 fn build_aim_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &AimConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -271,7 +255,7 @@ fn build_aim_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Aim Bone (Rotates)",
         modified.source_bone,
         bone_list,
@@ -283,7 +267,7 @@ fn build_aim_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Look At (Target)",
         modified.target_bone,
         bone_list,
@@ -322,7 +306,7 @@ fn build_aim_fields(
 
 fn build_parent_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &ParentConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -332,7 +316,7 @@ fn build_parent_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Applied To",
         modified.constrained_bone,
         bone_list,
@@ -403,7 +387,7 @@ fn build_parent_fields(
 
 fn build_position_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &PositionConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -413,7 +397,7 @@ fn build_position_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Applied To",
         modified.constrained_bone,
         bone_list,
@@ -425,7 +409,7 @@ fn build_position_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Copy From",
         modified.target_bone,
         bone_list,
@@ -452,7 +436,7 @@ fn build_position_fields(
 
 fn build_rotation_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &RotationConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -462,7 +446,7 @@ fn build_rotation_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Applied To",
         modified.constrained_bone,
         bone_list,
@@ -474,7 +458,7 @@ fn build_rotation_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Copy From",
         modified.target_bone,
         bone_list,
@@ -510,7 +494,7 @@ fn build_rotation_fields(
 
 fn build_scale_fields(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     data: &ScaleConstraintData,
     bone_list: &[(BoneId, String)],
     hierarchy_state: &HierarchyState,
@@ -520,7 +504,7 @@ fn build_scale_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Applied To",
         modified.constrained_bone,
         bone_list,
@@ -532,7 +516,7 @@ fn build_scale_fields(
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
-        ui_events,
+        world,
         "Copy From",
         modified.target_bone,
         bone_list,
@@ -559,7 +543,7 @@ fn build_scale_fields(
 
 pub fn build_bone_combo_with_select(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     label: &str,
     current_bone: BoneId,
     bone_list: &[(BoneId, String)],
@@ -602,7 +586,7 @@ pub fn build_bone_combo_with_select(
                 .build()
             {
                 result = Some(*bone_id);
-                ui_events.send(UIEvent::SelectBone(*bone_id));
+                world.send_command(HierarchyEvent::SelectBone(*bone_id));
             }
         }
         combo_token.end();

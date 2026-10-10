@@ -1,14 +1,14 @@
-use crate::animation::editable::BlendMode;
-use crate::animation::editable::ClipGroupId;
-use crate::animation::editable::ClipInstanceId;
-use crate::animation::editable::SourceClipId;
+use std::collections::HashSet;
+
+use crate::animation::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::EditHistory;
-use crate::ecs::systems::process_clip_instance_events;
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+
+use super::apply_clip_instance_events;
 
 #[derive(Clone, Debug)]
 pub enum ClipInstanceEvent {
@@ -84,29 +84,10 @@ pub enum ClipInstanceEvent {
     },
 }
 
-impl UiCommand for ClipInstanceEvent {
-    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
-        dispatch_clip_instance_events(&[*self], world);
-    }
-}
-
-fn dispatch_clip_instance_events(events: &[ClipInstanceEvent], world: &mut World) {
-    let schedule_snapshots = collect_clip_schedule_snapshots(events, world);
-
-    process_clip_instance_events(events, world);
-
-    record_schedule_changes(schedule_snapshots, world);
-}
-
-fn collect_clip_schedule_snapshots(
-    events: &[ClipInstanceEvent],
-    world: &World,
-) -> Vec<(Entity, ClipSchedule)> {
-    use std::collections::HashSet;
-
-    let mut entities = HashSet::new();
-    for event in events {
-        match event {
+impl ClipInstanceEvent {
+    /// The entity whose schedule the event edits; selection and adds are not recorded in the history.
+    fn edited_entity(&self) -> Option<Entity> {
+        match self {
             ClipInstanceEvent::Move { entity, .. }
             | ClipInstanceEvent::TrimStart { entity, .. }
             | ClipInstanceEvent::TrimEnd { entity, .. }
@@ -119,12 +100,31 @@ fn collect_clip_schedule_snapshots(
             | ClipInstanceEvent::GroupAddInstance { entity, .. }
             | ClipInstanceEvent::GroupRemoveInstance { entity, .. }
             | ClipInstanceEvent::GroupToggleMute { entity, .. }
-            | ClipInstanceEvent::GroupSetWeight { entity, .. } => {
-                entities.insert(*entity);
-            }
-            _ => {}
+            | ClipInstanceEvent::GroupSetWeight { entity, .. } => Some(*entity),
+            ClipInstanceEvent::Select { .. }
+            | ClipInstanceEvent::Deselect
+            | ClipInstanceEvent::Add { .. } => None,
         }
     }
+}
+
+impl UiCommand for ClipInstanceEvent {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        let events = [*self];
+        let snapshots = collect_clip_schedule_snapshots(&events, world);
+        apply_clip_instance_events(&events, world);
+        record_schedule_changes(snapshots, world);
+    }
+}
+
+fn collect_clip_schedule_snapshots(
+    events: &[ClipInstanceEvent],
+    world: &World,
+) -> Vec<(Entity, ClipSchedule)> {
+    let entities: HashSet<Entity> = events
+        .iter()
+        .filter_map(ClipInstanceEvent::edited_entity)
+        .collect();
 
     entities
         .into_iter()
@@ -138,26 +138,20 @@ fn collect_clip_schedule_snapshots(
 }
 
 fn record_schedule_changes(snapshots: Vec<(Entity, ClipSchedule)>, world: &mut World) {
-    if snapshots.is_empty() {
-        return;
-    }
-
-    if !world.contains_resource::<EditHistory>() {
+    if snapshots.is_empty() || !world.contains_resource::<EditHistory>() {
         return;
     }
 
     for (entity, before) in snapshots {
-        let after = world.get_component::<ClipSchedule>(entity).cloned();
-
-        if let Some(after) = after {
-            let changed = before.instances.len() != after.instances.len()
-                || before.groups.len() != after.groups.len()
-                || format!("{:?}", before) != format!("{:?}", after);
-
-            if changed {
-                let mut edit_history = world.resource_mut::<EditHistory>();
-                edit_history.push_schedule_edit(entity, before, after, "clip schedule edit");
-            }
+        let Some(after) = world.get_component::<ClipSchedule>(entity).cloned() else {
+            continue;
+        };
+        let changed = before.instances.len() != after.instances.len()
+            || before.groups.len() != after.groups.len()
+            || format!("{:?}", before) != format!("{:?}", after);
+        if changed {
+            let mut edit_history = world.resource_mut::<EditHistory>();
+            edit_history.push_schedule_edit(entity, before, after, "clip schedule edit");
         }
     }
 }

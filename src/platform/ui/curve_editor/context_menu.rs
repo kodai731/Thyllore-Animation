@@ -145,25 +145,35 @@ pub(super) fn build_curve_editor_context_menu(
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
 
         if ui.selectable_config("Add Key").build() {
-            let bone_role = track_ref
-                .bone_id()
-                .and_then(|bone_id| find_bone_role(&collect_humanoid_bone_roles(world), bone_id));
-            if let Some(property_type) = add_key_target_property(editor_state, track_ref, bone_role)
-            {
-                if let CurveTrackRef::Bone(bone_id) = track_ref {
-                    if !current_clip_has_track(world, bone_id) {
-                        world.send_command(EnsureBoneTrack { bone_id });
-                    }
-                }
-                world.send_command(TimelineEvent::AddKeyframe {
-                    track: track_ref,
-                    property_type,
-                    time: editor_state.context_menu_click_time.max(0.0),
-                    value: editor_state.context_menu_click_value,
-                });
-            }
+            send_add_key(world, editor_state, track_ref);
         }
     });
+}
+
+fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: CurveTrackRef) {
+    let bone_role = track_ref
+        .bone_id()
+        .and_then(|bone_id| find_bone_role(&collect_humanoid_bone_roles(world), bone_id));
+    let Some(property_type) = add_key_target_property(editor_state, track_ref, bone_role) else {
+        return;
+    };
+
+    if let CurveTrackRef::Bone(bone_id) = track_ref {
+        ensure_bone_track(world, bone_id);
+    }
+    world.send_command(TimelineEvent::AddKeyframe {
+        track: track_ref,
+        property_type,
+        time: editor_state.context_menu_click_time.max(0.0),
+        value: editor_state.context_menu_click_value,
+    });
+}
+
+fn ensure_bone_track(world: &World, bone_id: BoneId) {
+    if current_clip_has_track(world, bone_id) {
+        return;
+    }
+    world.send_command(EnsureBoneTrack { bone_id });
 }
 
 pub(super) const CURVE_EXTRAPOLATION_MENU: &str = "curve_extrapolation_menu";
@@ -191,26 +201,35 @@ pub(super) fn build_curve_extrapolation_menu(
     ui.popup(CURVE_EXTRAPOLATION_MENU, || {
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
 
+        let targets = extrapolation_target_properties(&editor_state.selected_keyframes, curves);
         for (end_label, end) in EXTRAPOLATION_ENDS {
             ui.menu(end_label, || {
-                for (mode_label, mode) in EXTRAPOLATION_MODES {
-                    if ui.menu_item(mode_label) {
-                        for property_type in extrapolation_target_properties(
-                            &editor_state.selected_keyframes,
-                            curves,
-                        ) {
-                            world.send_command(TimelineEvent::SetCurveExtrapolation {
-                                track: track_ref,
-                                property_type,
-                                end,
-                                mode,
-                            });
-                        }
-                    }
-                }
+                build_extrapolation_mode_items(ui, world, track_ref, end, &targets);
             });
         }
     });
+}
+
+fn build_extrapolation_mode_items(
+    ui: &imgui::Ui,
+    world: &World,
+    track_ref: CurveTrackRef,
+    end: ExtrapolationEnd,
+    targets: &[PropertyType],
+) {
+    for (mode_label, mode) in EXTRAPOLATION_MODES {
+        if !ui.menu_item(mode_label) {
+            continue;
+        }
+        for &property_type in targets {
+            world.send_command(TimelineEvent::SetCurveExtrapolation {
+                track: track_ref,
+                property_type,
+                end,
+                mode,
+            });
+        }
+    }
 }
 
 pub(super) fn extrapolation_target_properties(

@@ -478,7 +478,7 @@ per-feature `AddPass`).
   struct of any resource or component: every persisted type registers itself (`scene_resource!`,
   `scene_owner!`, `scene_attachment!`) from its own file, and the capture / apply of a hook that needs
   `World` logic is an ECS system (`src/ecs/systems/scheduled_clip_systems.rs`,
-  `debug_primitive_systems.rs`, `timeline_systems.rs`), never a file under `src/scene/`. Tests in
+  `debug_primitive_systems.rs`, `timeline/scene_record.rs`), never a file under `src/scene/`. Tests in
   `src/scene/` use the test-only `ProbeOwner` / `ProbeLabel` of `entities.rs::test_support`; a test that
   needs a concrete effect belongs to that effect's `tests.rs`
 - `src/asset/` — CPU-side model asset storage

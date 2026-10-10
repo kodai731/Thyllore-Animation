@@ -76,7 +76,7 @@ pub mod temporal_history;
 mod text_to_animation_systems;
 #[cfg(feature = "auto-rig")]
 mod text_to_mesh_systems;
-mod timeline_systems;
+pub mod timeline;
 pub mod transform_gizmo_systems;
 mod tree_navigation;
 mod validation_report_systems;
@@ -150,7 +150,7 @@ pub use text_to_animation_systems::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_mesh_systems::*;
 pub use thyllore_model_core::apply_skinning;
-pub use timeline_systems::*;
+pub use timeline::*;
 pub use transform_gizmo_systems::*;
 pub use tree_navigation::*;
 pub use validation_report_systems::*;

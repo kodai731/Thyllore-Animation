@@ -214,6 +214,7 @@ pub(super) fn build_curve_view(
         zoom_y: editor_state.zoom_y,
         view_time_offset: editor_state.view_time_offset,
         view_value_offset: editor_state.view_value_offset,
+        value_display: editor_state.value_display,
     };
 
     draw_curve_area(
@@ -371,10 +372,12 @@ pub(super) fn draw_clipped_curve_content(
     pose_library: &PoseLibrary,
 ) {
     draw_grid(draw_list, curve_area_width, curve_area_height, vt);
+    draw_normalized_range_shade(draw_list, curve_area_width, curve_area_height, vt);
 
     let sample_count = calculate_sample_count(curve_area_width);
     for (curve, color, _name) in curves_to_draw {
-        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, vt, None);
+        let curve_vt = vt.for_curve(curve);
+        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, &curve_vt, None);
     }
 
     if !editor_state.selected_keyframes.is_empty() {
@@ -427,6 +430,7 @@ pub(super) fn draw_clipped_curve_content(
             draw_list,
             curve_buffer,
             bone_id,
+            curves_to_draw,
             &editor_state.visible_curves,
             vt,
         );
@@ -435,6 +439,7 @@ pub(super) fn draw_clipped_curve_content(
     draw_suggestion_curve_overlay(
         draw_list,
         suggestion_overlays,
+        curves_to_draw,
         &editor_state.visible_curves,
         vt,
     );

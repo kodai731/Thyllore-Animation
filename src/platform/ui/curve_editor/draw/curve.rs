@@ -121,8 +121,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_selected_keyframes_highlight(
         for (curve, _, _) in curves_to_draw {
             if curve.property_type == selected.property_type {
                 if let Some(kf) = curve.get_keyframe(selected.keyframe_id) {
-                    let x = vt.time_to_x(kf.time);
-                    let y = vt.value_to_y(kf.value);
+                    let curve_vt = vt.for_curve(curve);
+                    let x = curve_vt.time_to_x(kf.time);
+                    let y = curve_vt.value_to_y(kf.value);
 
                     draw_list
                         .add_circle([x, y], 8.0, [1.0, 1.0, 0.0, 1.0])
@@ -156,14 +157,15 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_handles(
                 break;
             }
 
-            let kf_x = vt.time_to_x(kf.time);
-            let kf_y = vt.value_to_y(kf.value);
+            let curve_vt = vt.for_curve(curve);
+            let kf_x = curve_vt.time_to_x(kf.time);
+            let kf_y = curve_vt.value_to_y(kf.value);
             let handle_color = [color[0], color[1], color[2], 0.9];
             let handle_size = 4.0;
             let is_weighted = kf.weight_mode == TangentWeightMode::Weighted;
 
-            let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
-            let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
+            let in_x = curve_vt.time_to_x(kf.time + kf.in_tangent.time_offset);
+            let in_y = curve_vt.value_to_y(kf.value + kf.in_tangent.value_offset);
             draw_list
                 .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
                 .thickness(1.0)
@@ -184,8 +186,8 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_handles(
                     .build();
             }
 
-            let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
-            let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+            let out_x = curve_vt.time_to_x(kf.time + kf.out_tangent.time_offset);
+            let out_y = curve_vt.value_to_y(kf.value + kf.out_tangent.value_offset);
             draw_list
                 .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
                 .thickness(1.0)

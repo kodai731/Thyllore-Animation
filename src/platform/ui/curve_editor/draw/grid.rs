@@ -1,9 +1,11 @@
-use crate::ecs::resource::PoseLibrary;
+use crate::ecs::resource::{CurveValueDisplay, PoseLibrary};
 
 use super::super::view::{
     calculate_y_tick_count, compute_nice_step, format_value_label, ViewTransform,
 };
 use super::super::window::TIME_RULER_HEIGHT;
+
+const NORMALIZED_OUTSIDE_SHADE: [f32; 4] = [0.0, 0.0, 0.0, 0.25];
 
 pub(in crate::platform::ui::curve_editor) fn draw_time_ruler(
     draw_list: &imgui::DrawListMut,
@@ -223,4 +225,35 @@ pub(in crate::platform::ui::curve_editor) fn draw_grid(
         }
         value += value_step;
     }
+}
+
+pub(in crate::platform::ui::curve_editor) fn draw_normalized_range_shade(
+    draw_list: &imgui::DrawListMut,
+    width: f32,
+    height: f32,
+    vt: &ViewTransform,
+) {
+    if vt.value_display != CurveValueDisplay::Normalized {
+        return;
+    }
+
+    let left = vt.curve_origin[0];
+    let right = left + width;
+    let top = vt.curve_origin[1];
+    let bottom = top + height;
+    let upper_edge_y = vt.value_to_y(1.0).clamp(top, bottom);
+    let lower_edge_y = vt.value_to_y(-1.0).clamp(top, bottom);
+
+    draw_list
+        .add_rect([left, top], [right, upper_edge_y], NORMALIZED_OUTSIDE_SHADE)
+        .filled(true)
+        .build();
+    draw_list
+        .add_rect(
+            [left, lower_edge_y],
+            [right, bottom],
+            NORMALIZED_OUTSIDE_SHADE,
+        )
+        .filled(true)
+        .build();
 }

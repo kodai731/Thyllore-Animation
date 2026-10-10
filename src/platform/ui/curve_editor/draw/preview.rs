@@ -17,25 +17,36 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     axis_lock: Option<AxisLock>,
     time_snap: TimeSnap,
 ) {
-    let time_delta = vt.x_to_time(mouse_pos[0]) - vt.x_to_time(drag_start[0]);
-    let value_delta = vt.y_to_value(mouse_pos[1]) - vt.y_to_value(drag_start[1]);
-
     for sel in selected_keyframes {
+        let curve = match curves_to_draw
+            .iter()
+            .find(|(c, _, _)| c.property_type == sel.property_type)
+        {
+            Some((curve, _, _)) => *curve,
+            None => continue,
+        };
+        let curve_vt = vt.for_curve(curve);
+
+        let time_delta = curve_vt.x_to_time(mouse_pos[0]) - curve_vt.x_to_time(drag_start[0]);
+        let value_delta = curve_vt.y_to_value(mouse_pos[1]) - curve_vt.y_to_value(drag_start[1]);
+
         let [preview_time, preview_value] = dragged_key_position(
             [sel.original_time, sel.original_value],
             [time_delta, value_delta],
             axis_lock,
             time_snap,
         );
-        let preview_x = vt
-            .time_to_x(preview_time)
-            .clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
-        let preview_y = vt
-            .value_to_y(preview_value)
-            .clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
+        let preview_x = curve_vt.time_to_x(preview_time).clamp(
+            curve_vt.curve_origin[0],
+            curve_vt.curve_origin[0] + curve_vt.curve_width,
+        );
+        let preview_y = curve_vt.value_to_y(preview_value).clamp(
+            curve_vt.curve_origin[1],
+            curve_vt.curve_origin[1] + curve_vt.curve_height,
+        );
         let preview_pos = [preview_x, preview_y];
 
-        draw_drag_neighbor_lines(draw_list, preview_pos, vt, curves_to_draw, sel);
+        draw_drag_neighbor_lines(draw_list, preview_pos, &curve_vt, curves_to_draw, sel);
 
         draw_list
             .add_circle(preview_pos, 7.0, [1.0, 1.0, 0.0, 1.0])
@@ -124,8 +135,10 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
         None => return,
     };
 
-    let mouse_time = vt.x_to_time(mouse_pos[0]);
-    let mouse_value = vt.y_to_value(mouse_pos[1]);
+    let curve_vt = vt.for_curve(curve);
+
+    let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
+    let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
     let kf = &curve.keyframes[kf_idx];
     let new_handle = BezierHandle::new(mouse_time - kf.time, mouse_value - kf.value);
 
@@ -145,11 +158,25 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
         0.9,
     ];
 
-    draw_preview_segment_before(draw_list, curve, kf_idx, &preview_in, preview_color, vt);
-    draw_preview_segment_after(draw_list, curve, kf_idx, &preview_out, preview_color, vt);
+    draw_preview_segment_before(
+        draw_list,
+        curve,
+        kf_idx,
+        &preview_in,
+        preview_color,
+        &curve_vt,
+    );
+    draw_preview_segment_after(
+        draw_list,
+        curve,
+        kf_idx,
+        &preview_out,
+        preview_color,
+        &curve_vt,
+    );
 
-    let kf_x = vt.time_to_x(kf.time);
-    let kf_y = vt.value_to_y(kf.value);
+    let kf_x = curve_vt.time_to_x(kf.time);
+    let kf_y = curve_vt.value_to_y(kf.value);
     let handle_x = mouse_pos[0];
     let handle_y = mouse_pos[1];
 

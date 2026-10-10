@@ -17,6 +17,7 @@ pub(super) struct ViewTransform {
     pub(super) zoom_y: f32,
     pub(super) view_time_offset: f32,
     pub(super) view_value_offset: f32,
+    pub(super) value_display: CurveValueDisplay,
 }
 
 impl ViewTransform {
@@ -47,22 +48,22 @@ impl ViewTransform {
             + self.view_value_offset
     }
 
-    pub(super) fn for_curve(
-        &self,
-        display: CurveValueDisplay,
-        curve: &PropertyCurve,
-    ) -> ViewTransform {
-        match display {
+    pub(super) fn for_curve(&self, curve: &PropertyCurve) -> ViewTransform {
+        match self.value_display {
             CurveValueDisplay::Actual => *self,
             CurveValueDisplay::Normalized => {
                 let Some((min, max)) = curve_value_range(curve) else {
-                    return *self;
+                    return ViewTransform {
+                        value_display: CurveValueDisplay::Actual,
+                        ..*self
+                    };
                 };
                 let center = (min + max) * 0.5;
                 let half_width = (max - min) * 0.5;
                 ViewTransform {
                     view_value_offset: center + half_width * self.view_value_offset,
                     val_range: half_width * self.val_range,
+                    value_display: CurveValueDisplay::Actual,
                     ..*self
                 }
             }
@@ -440,6 +441,14 @@ mod tests {
             zoom_y: editor_state.zoom_y,
             view_time_offset: editor_state.view_time_offset,
             view_value_offset: editor_state.view_value_offset,
+            value_display: editor_state.value_display,
+        }
+    }
+
+    fn build_normalized_editor_state() -> CurveEditorState {
+        CurveEditorState {
+            value_display: CurveValueDisplay::Normalized,
+            ..build_editor_state(FrameRequest::All)
         }
     }
 
@@ -491,9 +500,9 @@ mod tests {
     #[test]
     fn normalized_view_maps_curve_extremes_to_unit_range() {
         let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0), (2.0, 7.0)]);
-        let base = build_unit_view(&build_editor_state(FrameRequest::All));
+        let base = build_unit_view(&build_normalized_editor_state());
 
-        let normalized = base.for_curve(CurveValueDisplay::Normalized, &curve);
+        let normalized = base.for_curve(&curve);
 
         assert!((normalized.value_to_y(-5.0) - base.value_to_y(-1.0)).abs() < TOLERANCE);
         assert!((normalized.value_to_y(7.0) - base.value_to_y(1.0)).abs() < TOLERANCE);
@@ -502,9 +511,9 @@ mod tests {
     #[test]
     fn normalized_view_round_trips_values() {
         let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0), (2.0, 7.0)]);
-        let base = build_unit_view(&build_editor_state(FrameRequest::All));
+        let base = build_unit_view(&build_normalized_editor_state());
 
-        let normalized = base.for_curve(CurveValueDisplay::Normalized, &curve);
+        let normalized = base.for_curve(&curve);
 
         for value in [-5.0, 0.0, 2.5, 7.0] {
             assert!(
@@ -514,11 +523,22 @@ mod tests {
     }
 
     #[test]
+    fn normalized_view_is_not_applied_twice() {
+        let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0), (2.0, 7.0)]);
+        let base = build_unit_view(&build_normalized_editor_state());
+
+        let normalized = base.for_curve(&curve);
+        let reapplied = normalized.for_curve(&curve);
+
+        assert_eq!(reapplied.value_to_y(7.0), normalized.value_to_y(7.0));
+    }
+
+    #[test]
     fn actual_view_is_unchanged() {
         let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0)]);
         let base = build_unit_view(&build_editor_state(FrameRequest::All));
 
-        let actual = base.for_curve(CurveValueDisplay::Actual, &curve);
+        let actual = base.for_curve(&curve);
 
         assert_eq!(actual.view_value_offset, base.view_value_offset);
         assert_eq!(actual.val_range, base.val_range);

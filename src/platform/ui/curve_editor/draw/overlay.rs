@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::PropertyType;
+use crate::animation::editable::{PropertyCurve, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::resource::CurveEditorBuffer;
 
@@ -11,6 +11,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
     draw_list: &imgui::DrawListMut,
     buffer: &CurveEditorBuffer,
     bone_id: BoneId,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     visible_curves: &HashSet<PropertyType>,
     vt: &ViewTransform,
 ) {
@@ -33,15 +34,16 @@ pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
         }
 
         let ghost_color = [color[0], color[1], color[2], 0.35];
+        let curve_vt = view_for_property(vt, curves_to_draw, *prop_type);
 
         for i in 0..snapshot.len() - 1 {
             let (t0, v0) = snapshot[i];
             let (t1, v1) = snapshot[i + 1];
 
-            let x0 = vt.time_to_x(t0);
-            let y0 = vt.value_to_y(v0);
-            let x1 = vt.time_to_x(t1);
-            let y1 = vt.value_to_y(v1);
+            let x0 = curve_vt.time_to_x(t0);
+            let y0 = curve_vt.value_to_y(v0);
+            let x1 = curve_vt.time_to_x(t1);
+            let y1 = curve_vt.value_to_y(v1);
 
             draw_list
                 .add_line([x0, y0], [x1, y1], ghost_color)
@@ -54,6 +56,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
 pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
     draw_list: &imgui::DrawListMut,
     overlays: &[SuggestionOverlay],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     visible_curves: &HashSet<PropertyType>,
     vt: &ViewTransform,
 ) {
@@ -85,8 +88,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
             [1.0, 0.7, 0.3, alpha]
         };
 
-        let kf_x = vt.time_to_x(overlay.time);
-        let kf_y = vt.value_to_y(overlay.value);
+        let curve_vt = view_for_property(vt, curves_to_draw, overlay.property_type);
+        let kf_x = curve_vt.time_to_x(overlay.time);
+        let kf_y = curve_vt.value_to_y(overlay.value);
         let diamond_size = 6.0;
 
         draw_list
@@ -124,8 +128,8 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
 
         let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
 
-        let in_x = vt.time_to_x(overlay.time + overlay.tangent_in.0);
-        let in_y = vt.value_to_y(overlay.value + overlay.tangent_in.1);
+        let in_x = curve_vt.time_to_x(overlay.time + overlay.tangent_in.0);
+        let in_y = curve_vt.value_to_y(overlay.value + overlay.tangent_in.1);
         draw_list
             .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
             .thickness(1.0)
@@ -135,8 +139,8 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
             .filled(true)
             .build();
 
-        let out_x = vt.time_to_x(overlay.time + overlay.tangent_out.0);
-        let out_y = vt.value_to_y(overlay.value + overlay.tangent_out.1);
+        let out_x = curve_vt.time_to_x(overlay.time + overlay.tangent_out.0);
+        let out_y = curve_vt.value_to_y(overlay.value + overlay.tangent_out.1);
         draw_list
             .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
             .thickness(1.0)
@@ -146,4 +150,15 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
             .filled(true)
             .build();
     }
+}
+
+fn view_for_property(
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    property_type: PropertyType,
+) -> ViewTransform {
+    curves_to_draw
+        .iter()
+        .find(|(curve, _, _)| curve.property_type == property_type)
+        .map_or(*vt, |(curve, _, _)| vt.for_curve(curve))
 }

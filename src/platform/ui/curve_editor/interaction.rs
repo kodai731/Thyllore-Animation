@@ -771,6 +771,7 @@ pub(super) fn apply_box_selection(
 mod tests {
     use super::*;
     use crate::animation::editable::curve_add_keyframe;
+    use crate::ecs::resource::CurveValueDisplay;
 
     fn build_unit_view() -> ViewTransform {
         ViewTransform {
@@ -783,6 +784,7 @@ mod tests {
             zoom_y: 1.0,
             view_time_offset: 0.0,
             view_value_offset: 0.0,
+            value_display: CurveValueDisplay::Actual,
         }
     }
 

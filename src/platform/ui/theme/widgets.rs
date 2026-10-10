@@ -7,8 +7,57 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 use super::anim::ui_anim;
 use super::colors::{srgb_to_linear, ACCENT, SURFACE1, SURFACE3, TEXT, TEXT_SECONDARY};
 use super::fonts::UiFonts;
+use super::icons::Icon;
 
 const TREE_INDENT: f32 = 16.0;
+pub const ICON_BUTTON_SIZE: f32 = 24.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonState {
+    Normal,
+    Active,
+}
+
+pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bool {
+    let size = ICON_BUTTON_SIZE;
+    let glyph = icon.glyph();
+    let text_size = ui.calc_text_size(&glyph);
+    let id = ui.new_id_str(tooltip).raw();
+
+    let clicked = ui.invisible_button(format!("icon_btn_{}", id), [size, size]);
+    let hovered = ui.is_item_hovered();
+
+    if hovered {
+        ui.tooltip_text(tooltip);
+    }
+
+    let draw_list = ui.get_window_draw_list();
+    let rect_min = ui.item_rect_min();
+    let rect_max = ui.item_rect_max();
+
+    let bg_color = match state {
+        ButtonState::Active => srgb_to_linear([ACCENT[0], ACCENT[1], ACCENT[2], 0.3]),
+        ButtonState::Normal if hovered => srgb_to_linear(SURFACE3),
+        ButtonState::Normal => [0.0, 0.0, 0.0, 0.0],
+    };
+
+    draw_list
+        .add_rect(rect_min, rect_max, bg_color)
+        .rounding(6.0)
+        .filled(true)
+        .build();
+
+    let icon_color = match state {
+        ButtonState::Active => srgb_to_linear(ACCENT),
+        ButtonState::Normal => srgb_to_linear(TEXT),
+    };
+
+    let center_x = rect_min[0] + (size - text_size[0]) * 0.5;
+    let center_y = rect_min[1] + (size - text_size[1]) * 0.5;
+    draw_list.add_text([center_x, center_y], icon_color, &glyph);
+
+    clicked
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum SectionDefault {

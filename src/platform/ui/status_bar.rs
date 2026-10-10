@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState,
+    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
     ValidationReport, ViewportInput,
 };
 use crate::ecs::systems::camera_fly_speed;
@@ -76,6 +76,7 @@ fn draw_status_bar(
     cpu_ms: f32,
     gpu_ms: Option<f32>,
     viewport: &ViewportInput,
+    model: &ModelState,
     timeline_state: &TimelineState,
     clip_duration: f32,
     errors: usize,
@@ -111,9 +112,15 @@ fn draw_status_bar(
         state.memory_mb,
     );
 
+    let model_text = format!(
+        "{}  {}",
+        model_file_name(&model.model_path),
+        model.load_status
+    );
     let validation_text = format_validation_status(errors, warnings);
     let validation_color = validation_status_color(errors, warnings);
 
+    let model_text_size = ui.calc_text_size(&model_text);
     let text_size = ui.calc_text_size(&text);
     let validation_text_size = ui.calc_text_size(&validation_text);
 
@@ -121,8 +128,12 @@ fn draw_status_bar(
     let vp_bottom = viewport.position[1] + viewport.size[1];
 
     let item_spacing = ui.clone_style().item_spacing[0];
-    let window_width =
-        text_size[0] + item_spacing + validation_text_size[0] + OVERLAY_PADDING * 2.0;
+    let window_width = model_text_size[0]
+        + item_spacing
+        + text_size[0]
+        + item_spacing
+        + validation_text_size[0]
+        + OVERLAY_PADDING * 2.0;
     let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
@@ -137,6 +148,11 @@ fn draw_status_bar(
             .focus_on_appearing(false)
             .save_settings(false)
             .build(|| {
+                ui.text_colored(TEXT_COLOR, &model_text);
+                if ui.is_item_hovered() && !model.model_path.is_empty() {
+                    ui.tooltip_text(&model.model_path);
+                }
+                ui.same_line();
                 ui.text_colored(TEXT_COLOR, &text);
                 ui.same_line();
                 ui.text_colored(validation_color, &validation_text);
@@ -160,6 +176,13 @@ fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
     } else {
         TEXT_COLOR
     }
+}
+
+fn model_file_name(model_path: &str) -> String {
+    std::path::Path::new(model_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("None"))
 }
 
 fn format_validation_status(errors: usize, warnings: usize) -> String {
@@ -256,6 +279,12 @@ mod tests {
     }
 
     #[test]
+    fn model_file_name_strips_directories() {
+        assert_eq!(model_file_name("assets/models/robot.glb"), "robot.glb");
+        assert_eq!(model_file_name(""), "None");
+    }
+
+    #[test]
     fn format_validation_status_values() {
         assert_eq!(format_validation_status(0, 0), "VK E:0 W:0");
         assert_eq!(format_validation_status(3, 5), "VK E:3 W:5");
@@ -313,6 +342,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         .get_resource::<GpuPassTimings>()
         .and_then(|timings| timings.frame_total_ms);
     let viewport = world.resource::<ViewportInput>();
+    let model = world.resource::<ModelState>();
     let timeline_state = world.resource::<TimelineState>();
     let clip_duration = {
         let clip_library = world.resource::<ClipLibrary>();
@@ -331,6 +361,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         frame_ms,
         gpu_ms,
         &viewport,
+        &model,
         &timeline_state,
         clip_duration,
         errors,

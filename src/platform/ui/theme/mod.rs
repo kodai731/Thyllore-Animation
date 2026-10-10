@@ -8,10 +8,13 @@ pub mod widgets;
 
 pub use fonts::UiFonts;
 pub use icons::{entity_icon, Icon};
+pub use widgets::icon_button;
 pub use widgets::search_field;
 pub use widgets::section_header;
 pub use widgets::toggle_switch;
 pub use widgets::tree_row;
+pub use widgets::ButtonState;
 pub use widgets::SectionDefault;
 pub use widgets::TreeRowResponse;
 pub use widgets::TreeRowSpec;
+pub use widgets::ICON_BUTTON_SIZE;

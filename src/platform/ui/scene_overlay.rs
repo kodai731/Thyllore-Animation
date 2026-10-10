@@ -1,4 +1,4 @@
-use imgui::Condition;
+use imgui::{Condition, StyleVar};
 use thyllore_anim_core::editable::PropertyType;
 
 use super::pointer::read_ui_pointer;
@@ -10,7 +10,8 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
-    CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
+    CoordinateSpace, PanelVisibility, TransformGizmoMode, TransformGizmoState, UiWidgetState,
+    WeightHeatmapState,
 };
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
@@ -18,33 +19,70 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
+use crate::platform::ui::theme::colors::{srgb_to_linear, SURFACE3};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{icon_button, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
+const TOOLBAR_HEIGHT: f32 = 28.0;
+const TOOLBAR_PADDING_X: f32 = 6.0;
+const TOOLBAR_GROUP_GAP: f32 = 12.0;
 
 #[cfg(feature = "auto-rig")]
 use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 
-fn draw_scene_overlay(
-    ui: &imgui::Ui,
-    model: &mut ModelState,
-    ecs_world: &World,
-    viewport: &ViewportInput,
-) {
-    let pos_x = viewport.position[0] + OVERLAY_MARGIN;
-    let pos_y = viewport.position[1] + OVERLAY_MARGIN;
+fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
+    let _window_padding = ui.push_style_var(StyleVar::WindowPadding([
+        TOOLBAR_PADDING_X,
+        (TOOLBAR_HEIGHT - ICON_BUTTON_SIZE) * 0.5,
+    ]));
 
-    ui.window("Scene Overlay")
+    ui.window("Scene Toolbar")
+        .position(viewport.position, Condition::Always)
+        .size([viewport.size[0], TOOLBAR_HEIGHT], Condition::Always)
+        .no_decoration()
+        .bg_alpha(0.7)
+        .no_nav()
+        .focus_on_appearing(false)
+        .save_settings(false)
+        .build(|| {
+            draw_window_shadow(ui, ui.clone_style().window_rounding);
+
+            build_file_buttons(ui, ecs_world);
+            draw_toolbar_group_separator(ui);
+            build_gizmo_buttons(ui, ecs_world);
+
+            #[cfg(feature = "auto-rig")]
+            build_auto_rig_buttons(ui, ecs_world);
+
+            build_scene_panel_toggle(ui, ecs_world);
+        });
+
+    apply_gizmo_hotkeys(ui, ecs_world);
+}
+
+fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
+    if ecs_world.resource::<UiWidgetState>().scene_panel == PanelVisibility::Hidden {
+        return;
+    }
+
+    let pos_x = viewport.position[0] + viewport.size[0] - OVERLAY_WIDTH - OVERLAY_MARGIN;
+    let pos_y = viewport.position[1] + TOOLBAR_HEIGHT + OVERLAY_MARGIN;
+
+    ui.window("Scene Panel")
         .position([pos_x, pos_y], Condition::Always)
         .size_constraints(
             [OVERLAY_WIDTH, 0.0],
-            [OVERLAY_WIDTH, viewport.size[1] - 2.0 * OVERLAY_MARGIN],
+            [
+                OVERLAY_WIDTH,
+                viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN,
+            ],
         )
         .always_auto_resize(true)
         .no_decoration()
@@ -54,12 +92,6 @@ fn draw_scene_overlay(
         .save_settings(false)
         .build(|| {
             draw_window_shadow(ui, ui.clone_style().window_rounding);
-
-            build_model_section(ui, model, ecs_world);
-            ui.separator();
-
-            build_screenshot_section(ui, ecs_world);
-            ui.separator();
 
             build_overlay_section(ui, ecs_world);
 
@@ -77,8 +109,8 @@ fn draw_scene_overlay(
         });
 }
 
-fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World) {
-    if ui.button("Open FBX") {
+fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
+    if icon_button(ui, Icon::FolderOpen, "Open FBX", ButtonState::Normal) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
             .pick_file()
@@ -91,7 +123,7 @@ fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World
 
     ui.same_line();
 
-    if ui.button("Open glTF") {
+    if icon_button(ui, Icon::File, "Open glTF", ButtonState::Normal) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("glTF Files", &["gltf", "glb"])
             .pick_file()
@@ -102,7 +134,8 @@ fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World
         }
     }
 
-    if ui.button("Add GLB") {
+    ui.same_line();
+    if icon_button(ui, Icon::Plus, "Add GLB", ButtonState::Normal) {
         if let Some(paths) = rfd::FileDialog::new()
             .add_filter("GLB Files", &["glb"])
             .pick_files()
@@ -115,29 +148,125 @@ fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World
         }
     }
 
-    #[cfg(feature = "auto-rig")]
+    ui.same_line();
+    if icon_button(ui, Icon::Camera, "Screenshot", ButtonState::Normal) {
+        ecs_world.send_command(CameraEvent::TakeScreenshot);
+    }
+}
+
+fn draw_toolbar_group_separator(ui: &imgui::Ui) {
+    ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
+    let [x, y] = ui.cursor_screen_pos();
+    ui.get_window_draw_list()
+        .add_line([x, y], [x, y + ICON_BUTTON_SIZE], srgb_to_linear(SURFACE3))
+        .build();
+    ui.dummy([1.0, ICON_BUTTON_SIZE]);
+    ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
+}
+
+fn select_mode_button_state(
+    current: TransformGizmoMode,
+    button_mode: TransformGizmoMode,
+) -> ButtonState {
+    if current == button_mode {
+        ButtonState::Active
+    } else {
+        ButtonState::Normal
+    }
+}
+
+fn build_gizmo_buttons(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(state) = ecs_world.get_resource::<TransformGizmoState>() else {
+        return;
+    };
+    let mut state_copy = state.clone();
+    drop(state);
+
+    let mode_buttons = [
+        (TransformGizmoMode::Translate, Icon::Move, "Translate (W)"),
+        (TransformGizmoMode::Rotate, Icon::Rotate, "Rotate (E)"),
+        (TransformGizmoMode::Scale, Icon::Scale, "Scale (R)"),
+    ];
+    for (index, (mode, icon, tooltip)) in mode_buttons.into_iter().enumerate() {
+        if index > 0 {
+            ui.same_line();
+        }
+        let button_state = select_mode_button_state(state_copy.mode, mode);
+        if icon_button(ui, icon, tooltip, button_state) {
+            ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(mode));
+        }
+    }
+
+    let (space_tooltip, space_state, toggled_space) = match state_copy.coordinate_space {
+        CoordinateSpace::World => ("Space: World", ButtonState::Normal, CoordinateSpace::Local),
+        CoordinateSpace::Local => ("Space: Local", ButtonState::Active, CoordinateSpace::World),
+    };
+    ui.same_line();
+    if icon_button(ui, Icon::Globe, space_tooltip, space_state) {
+        ecs_world.send_command(OverlayEvent::SetTransformGizmoSpace(toggled_space));
+    }
+
+    let snap_state = if state_copy.snap_enabled {
+        ButtonState::Active
+    } else {
+        ButtonState::Normal
+    };
+    ui.same_line();
+    if icon_button(ui, Icon::Magnet, "Snap", snap_state) {
+        state_copy.snap_enabled = !state_copy.snap_enabled;
+        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
+            state_copy,
+        )));
+    }
+}
+
+fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
+    let gizmo_hotkeys_enabled =
+        !ui.io().key_ctrl && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
+    if !gizmo_hotkeys_enabled {
+        return;
+    }
+
+    let hotkeys = [
+        (imgui::Key::W, TransformGizmoMode::Translate),
+        (imgui::Key::E, TransformGizmoMode::Rotate),
+        (imgui::Key::R, TransformGizmoMode::Scale),
+    ];
+    for (key, mode) in hotkeys {
+        if ui.is_key_pressed(key) {
+            ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(mode));
+        }
+    }
+}
+
+fn build_scene_panel_toggle(ui: &imgui::Ui, ecs_world: &World) {
+    let visibility = ecs_world.resource::<UiWidgetState>().scene_panel;
+    let (button_state, toggled_visibility) = match visibility {
+        PanelVisibility::Shown => (ButtonState::Active, PanelVisibility::Hidden),
+        PanelVisibility::Hidden => (ButtonState::Normal, PanelVisibility::Shown),
+    };
+
+    let right_edge_x = ui.window_size()[0] - ui.clone_style().window_padding[0] - ICON_BUTTON_SIZE;
+    ui.same_line_with_pos(right_edge_x);
+    if icon_button(ui, Icon::Layers, "Scene Panel", button_state) {
+        ecs_world.resource_mut::<UiWidgetState>().scene_panel = toggled_visibility;
+    }
+}
+
+#[cfg(feature = "auto-rig")]
+fn build_auto_rig_buttons(ui: &imgui::Ui, ecs_world: &World) {
+    ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
     if ui.button("Generate Mesh") {
         ecs_world.resource_mut::<TextToMeshDialogState>().open = true;
     }
 
-    #[cfg(feature = "auto-rig")]
-    {
-        ui.same_line();
-        if ui.button("Generate Animation") {
-            ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
-        }
+    ui.same_line();
+    if ui.button("Generate Animation") {
+        ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
     }
 
-    #[cfg(feature = "auto-rig")]
+    ui.same_line();
     build_auto_rig_section(ui, ecs_world);
-
-    let model_name = if model.model_path.is_empty() {
-        "None"
-    } else {
-        &model.model_path
-    };
-    ui.text_wrapped(format!("Model: {}", model_name));
-    ui.text(format!("Status: {}", model.load_status));
 }
 
 #[cfg(feature = "auto-rig")]
@@ -179,6 +308,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
 
         AutoRigStatus::WaitingForServer => {
             ui.text("Rigging: waiting for server...");
+            ui.same_line();
             if ui.button("Cancel##rig") {
                 ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
@@ -186,6 +316,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
 
         AutoRigStatus::Rigging => {
             ui.text("Rigging: processing...");
+            ui.same_line();
             if ui.button("Cancel##rig") {
                 ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
@@ -199,6 +330,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
                     bone_count.unwrap_or(0),
                     gen_time / 1000.0
                 ));
+                ui.same_line();
             }
             if ui.button("Apply Rig") {
                 ecs_world.send_command(AutoRigEvent::AutoRigApply);
@@ -212,17 +344,12 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
         AutoRigStatus::Error => {
             if let Some(ref msg) = error_msg {
                 ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
+                ui.same_line();
             }
             if ui.button("Dismiss##rig") {
                 ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
-    }
-}
-
-fn build_screenshot_section(ui: &imgui::Ui, ecs_world: &World) {
-    if ui.button("Screenshot") {
-        ecs_world.send_command(CameraEvent::TakeScreenshot);
     }
 }
 
@@ -277,89 +404,29 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
     drop(state);
 
     if section_header(ui, ecs_world, "Transform Gizmo", SectionDefault::Open) {
-        let translate_label = if state_copy.mode == TransformGizmoMode::Translate {
-            "[W] Translate *"
-        } else {
-            "[W] Translate"
-        };
-        let rotate_label = if state_copy.mode == TransformGizmoMode::Rotate {
-            "[E] Rotate *"
-        } else {
-            "[E] Rotate"
-        };
-        let scale_label = if state_copy.mode == TransformGizmoMode::Scale {
-            "[R] Scale *"
-        } else {
-            "[R] Scale"
-        };
-
-        if ui.button(translate_label) {
-            state_copy.mode = TransformGizmoMode::Translate;
-        }
-        ui.same_line();
-        if ui.button(rotate_label) {
-            state_copy.mode = TransformGizmoMode::Rotate;
-        }
-        ui.same_line();
-        if ui.button(scale_label) {
-            state_copy.mode = TransformGizmoMode::Scale;
-        }
-
-        let gizmo_hotkeys_enabled =
-            !ui.io().key_ctrl && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
-        if ui.is_key_pressed(imgui::Key::W) && gizmo_hotkeys_enabled {
-            state_copy.mode = TransformGizmoMode::Translate;
-        }
-        if ui.is_key_pressed(imgui::Key::E) && gizmo_hotkeys_enabled {
-            state_copy.mode = TransformGizmoMode::Rotate;
-        }
-        if ui.is_key_pressed(imgui::Key::R) && gizmo_hotkeys_enabled {
-            state_copy.mode = TransformGizmoMode::Scale;
-        }
-
-        let space_label = match state_copy.coordinate_space {
-            CoordinateSpace::World => "World",
-            CoordinateSpace::Local => "Local",
-        };
-        if ui.button(format!("Space: {}", space_label)) {
-            state_copy.coordinate_space = match state_copy.coordinate_space {
-                CoordinateSpace::World => CoordinateSpace::Local,
-                CoordinateSpace::Local => CoordinateSpace::World,
+        let snap_edited = state_copy.snap_enabled
+            && match state_copy.mode {
+                TransformGizmoMode::Translate => ui
+                    .slider_config("Snap Value", 0.01, 10.0)
+                    .build(&mut state_copy.translate_snap_value),
+                TransformGizmoMode::Rotate => ui
+                    .slider_config("Snap Degrees", 1.0, 90.0)
+                    .build(&mut state_copy.rotate_snap_degrees),
+                TransformGizmoMode::Scale => ui
+                    .slider_config("Snap Value", 0.01, 1.0)
+                    .build(&mut state_copy.scale_snap_value),
             };
-        }
 
-        ui.same_line();
-        crate::platform::ui::theme::toggle_switch(
-            ui,
-            ecs_world,
-            "Snap",
-            &mut state_copy.snap_enabled,
-        );
-
-        if state_copy.snap_enabled {
-            match state_copy.mode {
-                TransformGizmoMode::Translate => {
-                    ui.slider_config("Snap Value", 0.01, 10.0)
-                        .build(&mut state_copy.translate_snap_value);
-                }
-                TransformGizmoMode::Rotate => {
-                    ui.slider_config("Snap Degrees", 1.0, 90.0)
-                        .build(&mut state_copy.rotate_snap_degrees);
-                }
-                TransformGizmoMode::Scale => {
-                    ui.slider_config("Snap Value", 0.01, 1.0)
-                        .build(&mut state_copy.scale_snap_value);
-                }
-            }
-        }
-
-        ui.slider_config("Gizmo Scale", 0.01, 0.3)
+        let scale_edited = ui
+            .slider_config("Gizmo Scale", 0.01, 0.3)
             .display_format("%.3f")
             .build(&mut state_copy.gizmo_scale);
 
-        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
-            state_copy,
-        )));
+        if snap_edited || scale_edited {
+            ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
+                state_copy,
+            )));
+        }
     }
 }
 
@@ -491,9 +558,9 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
-    let mut model = world.resource_mut::<ModelState>();
     let viewport = world.resource::<ViewportInput>().clone();
-    draw_scene_overlay(ui, &mut model, world, &viewport);
+    draw_scene_toolbar(ui, world, &viewport);
+    draw_scene_panel(ui, world, &viewport);
 }
 
 crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);

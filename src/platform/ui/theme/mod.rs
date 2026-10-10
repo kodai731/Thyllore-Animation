@@ -1,5 +1,6 @@
 pub mod anim;
 pub mod colors;
+pub mod shadow;
 pub mod style;
 pub mod widgets;
 

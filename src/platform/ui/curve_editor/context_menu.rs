@@ -16,6 +16,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
 use crate::ecs::world::World;
+use crate::platform::ui::theme::shadow::draw_window_shadow;
 
 pub(super) fn build_keyframe_context_menu(
     ui: &imgui::Ui,
@@ -24,6 +25,8 @@ pub(super) fn build_keyframe_context_menu(
     track_ref: CurveTrackRef,
 ) {
     ui.popup("keyframe_context_menu", || {
+        draw_window_shadow(ui, ui.clone_style().popup_rounding);
+
         let ctx_kf = match editor_state.context_menu_keyframe.clone() {
             Some(kf) => kf,
             None => return,
@@ -139,6 +142,8 @@ pub(super) fn build_curve_editor_context_menu(
     track_ref: CurveTrackRef,
 ) {
     ui.popup("curve_editor_context_menu", || {
+        draw_window_shadow(ui, ui.clone_style().popup_rounding);
+
         if ui.selectable_config("Add Key").build() {
             let bone_role = track_ref
                 .bone_id()
@@ -184,6 +189,8 @@ pub(super) fn build_curve_extrapolation_menu(
     track_ref: CurveTrackRef,
 ) {
     ui.popup(CURVE_EXTRAPOLATION_MENU, || {
+        draw_window_shadow(ui, ui.clone_style().popup_rounding);
+
         for (end_label, end) in EXTRAPOLATION_ENDS {
             ui.menu(end_label, || {
                 for (mode_label, mode) in EXTRAPOLATION_MODES {

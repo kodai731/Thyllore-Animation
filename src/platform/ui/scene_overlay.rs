@@ -19,6 +19,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::SectionDefault;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -52,6 +53,8 @@ fn draw_scene_overlay(
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
+            draw_window_shadow(ui, ui.clone_style().window_rounding);
+
             build_model_section(ui, model, ecs_world);
             ui.separator();
 

@@ -91,12 +91,14 @@ pub fn collapse_entity(world: &mut World, entity: Entity) {
 
 pub fn hierarchy_select(state: &mut HierarchyState, entity: Entity) {
     state.selected_entity = Some(entity);
+    state.selection_anchor = Some(entity);
     state.multi_selection.clear();
     state.multi_selection.insert(entity);
 }
 
 pub fn hierarchy_deselect_all(state: &mut HierarchyState) {
     state.selected_entity = None;
+    state.selection_anchor = None;
     state.multi_selection.clear();
 }
 
@@ -108,6 +110,7 @@ pub fn hierarchy_toggle_selection(state: &mut HierarchyState, entity: Entity) {
         }
     } else {
         state.multi_selection.insert(entity);
+        state.selection_anchor = Some(entity);
         if state.selected_entity.is_none() {
             state.selected_entity = Some(entity);
         }

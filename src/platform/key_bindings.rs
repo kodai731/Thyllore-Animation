@@ -1,8 +1,10 @@
 use winit::keyboard::Key;
 
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -72,6 +74,11 @@ pub fn default_bindings() -> Vec<KeyBinding> {
             key: "s",
             modifiers: ModifierKeys::none(),
             send: |world| world.send_command(TimelineEvent::BoneSetKey),
+        },
+        KeyBinding {
+            key: "f",
+            modifiers: ModifierKeys::none(),
+            send: |world| world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased)),
         },
     ]
 }

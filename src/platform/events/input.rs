@@ -3,7 +3,7 @@ use imgui::MouseButton;
 use crate::app::App;
 use crate::platform::key_bindings::{dispatch_keyboard_shortcut, ModifierKeys};
 
-use crate::ecs::resource::{CameraFlyInput, KeyboardModifiers, MouseInput};
+use crate::ecs::resource::{CameraFlyInput, FlySpeedModifier, KeyboardModifiers, MouseInput};
 
 pub(crate) fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     let io = ui.io();
@@ -32,7 +32,7 @@ fn update_camera_fly_input(world: &crate::ecs::World, ui: &imgui::Ui) {
         fly.forward = 0.0;
         fly.right = 0.0;
         fly.up = 0.0;
-        fly.boost = false;
+        fly.speed_modifier = FlySpeedModifier::Normal;
         return;
     }
 
@@ -40,7 +40,13 @@ fn update_camera_fly_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     fly.forward = axis(ui.is_key_down(imgui::Key::S), ui.is_key_down(imgui::Key::W));
     fly.right = axis(ui.is_key_down(imgui::Key::A), ui.is_key_down(imgui::Key::D));
     fly.up = axis(ui.is_key_down(imgui::Key::Q), ui.is_key_down(imgui::Key::E));
-    fly.boost = io.key_shift;
+    fly.speed_modifier = if io.key_shift {
+        FlySpeedModifier::Fast
+    } else if io.key_alt {
+        FlySpeedModifier::Slow
+    } else {
+        FlySpeedModifier::Normal
+    };
 }
 
 pub(crate) fn dispatch_keyboard_input(

@@ -13,11 +13,17 @@ pub struct ImVector<T> {
 impl<T> ImVector<T> {
     #[inline]
     pub fn as_slice(&self) -> &[T] {
+        if self.data.is_null() {
+            return &[];
+        }
         unsafe { slice::from_raw_parts(self.data, self.size as usize) }
     }
 
     #[inline]
     pub fn as_slice_mut(&mut self) -> &mut [T] {
+        if self.data.is_null() {
+            return &mut [];
+        }
         unsafe { slice::from_raw_parts_mut(self.data, self.size as usize) }
     }
 

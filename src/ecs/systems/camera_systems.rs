@@ -1,6 +1,13 @@
 use cgmath::{Deg, InnerSpace, Rad, Vector2, Vector3};
+use thyllore_math_core::BoundingSphere;
 
-use crate::ecs::resource::{Camera, CameraFlyInput};
+use crate::ecs::resource::{Camera, CameraFlyInput, CameraPose, CameraTransition};
+
+pub const CAMERA_FRAMING_MARGIN: f32 = 1.1;
+pub const CAMERA_FRAMING_SECONDS: f32 = 0.25;
+pub const FLY_SPEED_WHEEL_FACTOR: f32 = 1.08;
+pub const FLY_SPEED_INDICATOR_SECONDS: f32 = 1.5;
+const FLY_SPEED_SCALE_RANGE: (f32, f32) = (0.05, 50.0);
 
 pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
     let diff = position - target;
@@ -19,6 +26,9 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         initial_yaw: yaw,
         initial_pitch: pitch,
         initial_distance: distance,
+        transition: None,
+        fly_speed_scale: Camera::DEFAULT_FLY_SPEED_SCALE,
+        fly_speed_indicator_seconds: 0.0,
     }
 }
 
@@ -62,6 +72,17 @@ pub fn camera_input_system_inner(
     screen_size: [f32; 2],
 ) {
     let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
+    let any_input = diff.magnitude() > 0.001
+        || mouse_wheel != 0.0
+        || (is_right_clicked && fly_direction_is_active(fly));
+    if any_input {
+        camera.transition = None;
+    }
+
+    if is_right_clicked && mouse_wheel != 0.0 {
+        adjust_fly_speed(camera, mouse_wheel);
+        return;
+    }
 
     if is_right_clicked && is_alt_held {
         if diff.magnitude() > 0.001 {
@@ -103,6 +124,10 @@ pub fn camera_look(camera: &mut Camera, mouse_diff: Vector2<f32>) {
     camera.pivot = position - compute_camera_backward(camera) * camera.distance;
 }
 
+fn fly_direction_is_active(fly: &CameraFlyInput) -> bool {
+    fly.forward != 0.0 || fly.right != 0.0 || fly.up != 0.0
+}
+
 pub fn camera_fly_move(camera: &mut Camera, fly: &CameraFlyInput) {
     let movement = compute_camera_direction(camera) * fly.forward
         + compute_camera_right(camera) * fly.right
@@ -111,9 +136,88 @@ pub fn camera_fly_move(camera: &mut Camera, fly: &CameraFlyInput) {
         return;
     }
 
-    let boost = if fly.boost { 3.0 } else { 1.0 };
-    let speed = camera.distance.max(0.5) * 1.5 * boost;
+    let speed = camera_fly_speed(camera) * fly.speed_modifier.factor();
     camera.pivot += movement.normalize() * speed * fly.delta_seconds;
+}
+
+pub fn camera_fly_speed(camera: &Camera) -> f32 {
+    camera.distance.max(0.5) * camera.fly_speed_scale
+}
+
+pub fn adjust_fly_speed(camera: &mut Camera, mouse_wheel: f32) {
+    let factor = FLY_SPEED_WHEEL_FACTOR.powf(mouse_wheel);
+    camera.fly_speed_scale =
+        (camera.fly_speed_scale * factor).clamp(FLY_SPEED_SCALE_RANGE.0, FLY_SPEED_SCALE_RANGE.1);
+    camera.fly_speed_indicator_seconds = FLY_SPEED_INDICATOR_SECONDS;
+}
+
+/// Unity `GetPerspectiveCameraDistance`: the sphere fills the narrower of the two view angles.
+pub fn camera_pose_framing(camera: &Camera, bounds: BoundingSphere, aspect: f32) -> CameraPose {
+    let radius = bounds.radius.max(camera.near_plane * 4.0) * CAMERA_FRAMING_MARGIN;
+    let fov_y: Rad<f32> = camera.fov_y.into();
+    let half_fov_y = fov_y.0 * 0.5;
+    let half_fov_x = (half_fov_y.tan() * aspect.max(1e-3)).atan();
+    let half_fov = half_fov_y.min(half_fov_x);
+
+    CameraPose {
+        pivot: bounds.center,
+        yaw: camera.yaw,
+        pitch: camera.pitch,
+        distance: radius / half_fov.sin(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraMotion {
+    Eased,
+    Immediate,
+}
+
+pub fn camera_move_to_pose(camera: &mut Camera, target: CameraPose, motion: CameraMotion) {
+    match motion {
+        CameraMotion::Immediate => {
+            camera.transition = None;
+            camera.set_pose(target);
+        }
+        CameraMotion::Eased => {
+            camera.transition = Some(CameraTransition {
+                from: camera.pose(),
+                to: target,
+                elapsed_seconds: 0.0,
+                duration_seconds: CAMERA_FRAMING_SECONDS,
+            });
+        }
+    }
+}
+
+pub fn advance_camera_transition(camera: &mut Camera, delta_seconds: f32) {
+    let Some(mut transition) = camera.transition else {
+        return;
+    };
+    transition.elapsed_seconds += delta_seconds.max(0.0);
+    let progress = (transition.elapsed_seconds / transition.duration_seconds).clamp(0.0, 1.0);
+    let eased = 1.0 - (1.0 - progress).powi(3);
+
+    camera.set_pose(lerp_camera_pose(transition.from, transition.to, eased));
+    camera.transition = if progress >= 1.0 {
+        None
+    } else {
+        Some(transition)
+    };
+}
+
+fn lerp_camera_pose(from: CameraPose, to: CameraPose, t: f32) -> CameraPose {
+    CameraPose {
+        pivot: from.pivot + (to.pivot - from.pivot) * t,
+        yaw: from.yaw + (to.yaw - from.yaw) * t,
+        pitch: from.pitch + (to.pitch - from.pitch) * t,
+        distance: from.distance + (to.distance - from.distance) * t,
+    }
+}
+
+pub fn tick_fly_speed_indicator(camera: &mut Camera, delta_seconds: f32) {
+    camera.fly_speed_indicator_seconds =
+        (camera.fly_speed_indicator_seconds - delta_seconds.max(0.0)).max(0.0);
 }
 
 pub fn camera_pan(camera: &mut Camera, mouse_diff: Vector2<f32>, screen_size: Vector2<f32>) {
@@ -189,4 +293,102 @@ pub fn camera_move_to_look_at(camera: &mut Camera, target: Vector3<f32>, offset:
     camera.yaw = yaw;
     camera.pitch = pitch;
     camera.distance = distance;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-3
+    }
+
+    #[test]
+    fn framing_distance_fills_the_vertical_fov_on_a_wide_viewport() {
+        let camera = Camera::default();
+        let bounds = BoundingSphere {
+            center: Vector3::new(1.0, 2.0, 3.0),
+            radius: 0.8,
+        };
+        let pose = camera_pose_framing(&camera, bounds, 16.0 / 9.0);
+
+        let expected = 0.8 * CAMERA_FRAMING_MARGIN / (22.5f32.to_radians()).sin();
+        assert!(approx(pose.distance, expected));
+        assert_eq!(pose.pivot, bounds.center);
+        assert_eq!(pose.yaw, camera.yaw);
+    }
+
+    #[test]
+    fn framing_uses_the_horizontal_fov_on_a_tall_viewport() {
+        let camera = Camera::default();
+        let bounds = BoundingSphere {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 1.0,
+        };
+        let wide = camera_pose_framing(&camera, bounds, 2.0);
+        let tall = camera_pose_framing(&camera, bounds, 0.5);
+        assert!(tall.distance > wide.distance);
+    }
+
+    #[test]
+    fn eased_transition_reaches_the_target_and_clears_itself() {
+        let mut camera = Camera::default();
+        let target = CameraPose {
+            pivot: Vector3::new(1.0, 1.0, 1.0),
+            yaw: 0.3,
+            pitch: 0.2,
+            distance: 2.0,
+        };
+        camera_move_to_pose(&mut camera, target, CameraMotion::Eased);
+        advance_camera_transition(&mut camera, CAMERA_FRAMING_SECONDS * 0.5);
+        assert!(camera.transition.is_some());
+        assert!(camera.distance > target.distance);
+
+        advance_camera_transition(&mut camera, CAMERA_FRAMING_SECONDS);
+        assert!(camera.transition.is_none());
+        assert!(approx(camera.distance, target.distance));
+        assert_eq!(camera.pivot, target.pivot);
+    }
+
+    #[test]
+    fn wheel_scales_fly_speed_multiplicatively_and_shows_the_indicator() {
+        let mut camera = Camera::default();
+        adjust_fly_speed(&mut camera, 1.0);
+        assert!(approx(
+            camera.fly_speed_scale,
+            Camera::DEFAULT_FLY_SPEED_SCALE * FLY_SPEED_WHEEL_FACTOR
+        ));
+        adjust_fly_speed(&mut camera, -1.0);
+        assert!(approx(
+            camera.fly_speed_scale,
+            Camera::DEFAULT_FLY_SPEED_SCALE
+        ));
+        assert_eq!(
+            camera.fly_speed_indicator_seconds,
+            FLY_SPEED_INDICATOR_SECONDS
+        );
+
+        tick_fly_speed_indicator(&mut camera, 10.0);
+        assert_eq!(camera.fly_speed_indicator_seconds, 0.0);
+    }
+
+    #[test]
+    fn input_cancels_a_running_transition() {
+        let mut camera = Camera::default();
+        let current_pose = camera.pose();
+        camera_move_to_pose(&mut camera, current_pose, CameraMotion::Eased);
+        let fly = CameraFlyInput::default();
+        camera_input_system_inner(
+            &mut camera,
+            false,
+            false,
+            false,
+            &fly,
+            1.0,
+            [0.0, 0.0],
+            [10.0, 10.0],
+            [100.0, 100.0],
+        );
+        assert!(camera.transition.is_none());
+    }
 }

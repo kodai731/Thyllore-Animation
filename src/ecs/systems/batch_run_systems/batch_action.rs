@@ -7,6 +7,7 @@ use crate::ecs::events::DebugPrimitiveKind;
 use crate::ecs::resource::{BatchRun, DebugViewMode, DebugViewState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::BatchCapture;
 
@@ -109,6 +110,9 @@ pub struct ResetCameraUp;
 #[derive(Debug, Default)]
 pub struct CameraToModel;
 
+#[derive(Debug, Default)]
+pub struct FrameSelection;
+
 impl BatchAction for ResetCamera {
     fn name(&self) -> &'static str {
         "reset_camera"
@@ -136,9 +140,19 @@ impl BatchAction for CameraToModel {
     }
 }
 
+impl BatchAction for FrameSelection {
+    fn name(&self) -> &'static str {
+        "frame_selection"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(CameraEvent::FrameSelection(CameraMotion::Immediate));
+    }
+}
+
 crate::batch_action!("reset_camera", unit_action_parse::<ResetCamera>);
 crate::batch_action!("reset_camera_up", unit_action_parse::<ResetCameraUp>);
 crate::batch_action!("camera_to_model", unit_action_parse::<CameraToModel>);
+crate::batch_action!("frame_selection", unit_action_parse::<FrameSelection>);
 
 #[derive(Debug)]
 pub struct ViewMode(pub DebugViewMode);

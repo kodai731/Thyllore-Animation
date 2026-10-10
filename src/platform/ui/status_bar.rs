@@ -1,8 +1,9 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ValidationReport,
-    ViewportInput,
+    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState,
+    ValidationReport, ViewportInput,
 };
+use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
@@ -263,10 +264,45 @@ mod tests {
 }
 
 /// Wall-clock values (FPS, memory) are skipped under a fixed step so a reproducible frame stays identical.
+fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &Camera) {
+    if camera.fly_speed_indicator_seconds <= 0.0 {
+        return;
+    }
+    let text = format!(
+        "Fly speed x{:.2}  ({:.2} m/s)",
+        camera.fly_speed_scale,
+        camera_fly_speed(camera)
+    );
+    let text_size = ui.calc_text_size(&text);
+    let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
+    let window_pos = [
+        viewport.position[0],
+        viewport.position[1] + viewport.size[1] - window_height,
+    ];
+
+    ui.window("##fly_speed_indicator")
+        .position(window_pos, imgui::Condition::Always)
+        .size(
+            [text_size[0] + OVERLAY_PADDING * 2.0, window_height],
+            imgui::Condition::Always,
+        )
+        .no_decoration()
+        .no_inputs()
+        .bg_alpha(BG_COLOR[3])
+        .focus_on_appearing(false)
+        .save_settings(false)
+        .build(|| ui.text_colored(TEXT_COLOR, &text));
+}
+
 fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     if world.resource::<FrameClock>().is_fixed() {
         return;
     }
+    draw_fly_speed_indicator(
+        ui,
+        &world.resource::<ViewportInput>(),
+        &world.resource::<Camera>(),
+    );
 
     let frame_ms = world
         .get_resource::<CpuFrameTimings>()

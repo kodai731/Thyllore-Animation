@@ -112,7 +112,9 @@ cargo build --features text-to-motion
 
 #### Building without ML
 
-The `ml` feature requires ONNX Runtime (`onnxruntime.dll` on Windows). If you do not need
+The `ml` feature requires ONNX Runtime. Extract the release archive for your OS under `vendor/onnxruntime/`
+(e.g. `onnxruntime-win-x64-1.23.2/`, `onnxruntime-linux-x64-1.23.2/`, `onnxruntime-osx-universal2-1.23.2/`);
+the engine loads the matching library automatically, and `ORT_DYLIB_PATH` overrides it. If you do not need
 the ML curve copilot, build without it:
 
 ```bash

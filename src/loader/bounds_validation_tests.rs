@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::ecs::systems::{
-    apply_pose_overrides, apply_skinning, compute_local_override_from_global_translation,
+    apply_pose_overrides, compute_local_override_from_global_translation,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::resource::graphics_resource::NodeData;
+use thyllore_model_core::apply_skinning;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -124,7 +125,7 @@ fn compute_skinned_bounds(
         let mut out_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
         let mut out_normals = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
 
-        apply_skinning(
+        thyllore_model_core::apply_skinning(
             skin_data,
             &global_transforms,
             skeleton,

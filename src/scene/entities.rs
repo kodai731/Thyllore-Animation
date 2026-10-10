@@ -175,7 +175,7 @@ pub(crate) mod test_support {
     }
 
     crate::scene_owner!(ProbeOwner {
-        icon: Empty,
+        icon: crate::ecs::component::EntityIcon::Empty,
         placement: |p| (p.position.into(), Quaternion::new(1.0, 0.0, 0.0, 0.0)),
     });
 

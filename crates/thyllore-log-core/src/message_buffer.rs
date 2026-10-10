@@ -5,6 +5,8 @@ use std::sync::Mutex;
 
 const MAX_MESSAGES: usize = 256;
 
+pub const VALIDATION_MESSAGE_PREFIX: &str = "[Vulkan]";
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MessageLevel {
     Info,

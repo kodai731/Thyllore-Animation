@@ -1,37 +1,35 @@
 use std::path::PathBuf;
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::{ClipExportFormat, DialogRequest, EventQueue};
 use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, ModelState, OutputCommand,
     SpringBoneState,
 };
 
-pub(super) fn queue_file_dialog_commands(events: &[UIEvent], app: &App) {
-    for event in events {
-        match event {
-            UIEvent::ClipBrowserLoadFromFile => queue_command(app, open_clip_load_dialog()),
-            UIEvent::ClipBrowserSaveToFile(source_id) => {
-                queue_command(app, open_clip_save_dialog(app, *source_id))
+pub(super) fn queue_file_dialog_commands(app: &App) {
+    let requests: Vec<DialogRequest> = app
+        .data
+        .ecs_world
+        .resource_mut::<EventQueue<DialogRequest>>()
+        .drain()
+        .collect();
+    for request in requests {
+        match request {
+            DialogRequest::LoadClip => queue_command(app, open_clip_load_dialog()),
+            DialogRequest::SaveClip(source_id) => {
+                queue_command(app, open_clip_save_dialog(app, source_id))
             }
-            UIEvent::ClipBrowserExportFbx(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Fbx),
-            ),
-            UIEvent::ClipBrowserExportGltf(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::Gltf),
-            ),
-            UIEvent::ClipBrowserExportGltfAnimationOnly(source_id) => queue_command(
-                app,
-                open_clip_export_dialog(app, *source_id, ClipExportFormat::GltfAnimationOnly),
-            ),
-            UIEvent::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
-            UIEvent::SpringBoneSaveBake => queue_command(app, open_spring_bone_save_dialog(app)),
-            UIEvent::PickMaterialTexture { material } => {
-                queue_command(app, open_material_texture_dialog(app, material))
+            DialogRequest::ExportClip { source_id, format } => {
+                queue_command(app, open_clip_export_dialog(app, source_id, format))
             }
-            _ => {}
+            DialogRequest::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
+            DialogRequest::SaveSpringBoneBake => {
+                queue_command(app, open_spring_bone_save_dialog(app))
+            }
+            DialogRequest::PickMaterialTexture { material } => {
+                queue_command(app, open_material_texture_dialog(app, &material))
+            }
         }
     }
 }
@@ -45,10 +43,26 @@ fn queue_command<C: 'static>(app: &App, command: Option<C>) {
     }
 }
 
+/// GTK dialogs hide dot-directories, so a worktree under `.worktrees/` cannot
+/// be browsed into; starting from the absolute templates directory sidesteps it.
+fn clip_templates_dir() -> Option<PathBuf> {
+    let dir = std::env::current_dir()
+        .ok()?
+        .join("assets")
+        .join("templates");
+    dir.is_dir().then_some(dir)
+}
+
+fn clip_dialog() -> rfd::FileDialog {
+    let dialog = rfd::FileDialog::new().add_filter("Animation RON", &["anim.ron", "ron"]);
+    match clip_templates_dir() {
+        Some(dir) => dialog.set_directory(dir),
+        None => dialog,
+    }
+}
+
 fn open_clip_load_dialog() -> Option<AssetEditCommand> {
-    let path = rfd::FileDialog::new()
-        .add_filter("Animation RON", &["anim.ron", "ron"])
-        .pick_file()?;
+    let path = clip_dialog().pick_file()?;
 
     Some(AssetEditCommand::LoadClipFromFile { path })
 }
@@ -56,19 +70,11 @@ fn open_clip_load_dialog() -> Option<AssetEditCommand> {
 fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<OutputCommand> {
     let current_name = clip_name(app, source_id).unwrap_or_else(|| "clip".to_string());
 
-    let path = rfd::FileDialog::new()
-        .add_filter("Animation RON", &["anim.ron", "ron"])
+    let path = clip_dialog()
         .set_file_name(format!("{}.anim.ron", current_name))
         .save_file()?;
 
     Some(OutputCommand::SaveClipToFile { source_id, path })
-}
-
-#[derive(Clone, Copy)]
-enum ClipExportFormat {
-    Fbx,
-    Gltf,
-    GltfAnimationOnly,
 }
 
 fn open_clip_export_dialog(

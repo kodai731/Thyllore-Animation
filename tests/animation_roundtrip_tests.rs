@@ -280,6 +280,7 @@ fn test_fbx_to_gltf_roundtrip() -> anyhow::Result<()> {
         &editable_clip,
         skeleton,
         &gltf_output_path,
+        &[],
     )?;
 
     // Re-import the glTF

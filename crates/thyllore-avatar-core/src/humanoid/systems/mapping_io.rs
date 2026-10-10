@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::humanoid::components::mapping::{HumanoidMapping, StoredHumanoidMapping};
+use crate::humanoid::components::avatar_rig::AvatarRig;
+use crate::humanoid::components::mapping::{HumanoidMapping, StoredHumanoidMapping, StoredRig};
 use crate::humanoid::components::skeleton_input::BoneInput;
 
 pub fn humanoid_mapping_path(model_path: &Path) -> PathBuf {
@@ -25,19 +26,53 @@ pub fn save_mapping(
         let bone_name = &bones[*index].name;
         roles.insert(*role, bone_name.clone());
     }
-    let stored = StoredHumanoidMapping { roles };
+    let stored = StoredHumanoidMapping {
+        roles,
+        rig: StoredRig::Humanoid,
+    };
     let content = ron::ser::to_string_pretty(&stored, ron::ser::PrettyConfig::new())?;
     fs::write(path, content)?;
     Ok(())
 }
 
-pub fn load_mapping(
-    path: &Path,
-    bones: &[BoneInput],
-) -> anyhow::Result<(HumanoidMapping, Vec<String>)> {
-    let data = fs::read_to_string(path)?;
-    let stored: StoredHumanoidMapping = ron::from_str(&data)?;
+pub fn save_generic_rig(path: &Path) -> anyhow::Result<()> {
+    let stored = StoredHumanoidMapping {
+        roles: BTreeMap::new(),
+        rig: StoredRig::Generic,
+    };
+    let content = ron::ser::to_string_pretty(&stored, ron::ser::PrettyConfig::new())?;
+    fs::write(path, content)?;
+    Ok(())
+}
 
+pub fn load_or_infer_rig(
+    model_path: &Path,
+    bones: &[BoneInput],
+    imported: Option<&HumanoidMapping>,
+) -> anyhow::Result<(AvatarRig, Vec<String>)> {
+    let mapping_path = humanoid_mapping_path(model_path);
+    if mapping_path.exists() {
+        let data = fs::read_to_string(&mapping_path)?;
+        let stored: StoredHumanoidMapping = ron::from_str(&data)?;
+        match stored.rig {
+            StoredRig::Generic => Ok((AvatarRig::Generic, Vec::new())),
+            StoredRig::Humanoid => {
+                let (mapping, missing) = resolve_stored(&stored, bones);
+                Ok((AvatarRig::Humanoid(mapping), missing))
+            }
+        }
+    } else if let Some(imported) = imported {
+        Ok((AvatarRig::Inferred(imported.clone()), Vec::new()))
+    } else {
+        let (mapping, _) = crate::humanoid::systems::name_match::infer_mapping(bones);
+        Ok((AvatarRig::Inferred(mapping), Vec::new()))
+    }
+}
+
+fn resolve_stored(
+    stored: &StoredHumanoidMapping,
+    bones: &[BoneInput],
+) -> (HumanoidMapping, Vec<String>) {
     let mut by_role = BTreeMap::new();
     let mut missing = Vec::new();
 
@@ -53,6 +88,16 @@ pub fn load_mapping(
     }
 
     let mapping = HumanoidMapping { by_role };
+    (mapping, missing)
+}
+
+pub fn load_mapping(
+    path: &Path,
+    bones: &[BoneInput],
+) -> anyhow::Result<(HumanoidMapping, Vec<String>)> {
+    let data = fs::read_to_string(path)?;
+    let stored: StoredHumanoidMapping = ron::from_str(&data)?;
+    let (mapping, missing) = resolve_stored(&stored, bones);
     Ok((mapping, missing))
 }
 
@@ -140,5 +185,131 @@ mod tests {
             mapping_path,
             PathBuf::from("/assets/models/character.humanoid.ron")
         );
+    }
+
+    #[test]
+    fn test_old_ron_without_rig_field_reads_as_confirmed() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        let old_content = "(
+            roles: {
+                Hips: \"Hips\",
+                Spine: \"Spine\",
+            },
+        )";
+        fs::write(&sidecar_path, old_content).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        match rig {
+            AvatarRig::Humanoid(mapping) => {
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), Some(&1));
+            }
+            other => panic!("expected Humanoid, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_save_generic_rig_and_load() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        save_generic_rig(&sidecar_path).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Generic));
+    }
+
+    #[test]
+    fn test_legacy_nothumanoid_value_reads_as_generic() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        fs::write(&sidecar_path, r#"(roles: {}, rig: nothumanoid)"#).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Generic));
+    }
+
+    #[test]
+    fn test_legacy_confirmed_value_reads_as_humanoid() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        fs::write(&sidecar_path, r#"(roles: {}, rig: confirmed)"#).unwrap();
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Humanoid(_)));
+    }
+
+    #[test]
+    fn test_no_sidecar_returns_inferred() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, None).unwrap();
+        assert!(missing.is_empty());
+        assert!(matches!(rig, AvatarRig::Inferred(_)), "expected Inferred");
+    }
+
+    #[test]
+    fn test_no_sidecar_with_imported_returns_imported_as_inferred() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+
+        let bones = make_bones(&["Hips", "Spine"]);
+        let mut imported = HumanoidMapping::default();
+        imported.by_role.insert(HumanoidRole::Hips, 0);
+        imported.by_role.insert(HumanoidRole::Spine, 1);
+
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, Some(&imported)).unwrap();
+        assert!(missing.is_empty());
+        match rig {
+            AvatarRig::Inferred(mapping) => {
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), Some(&1));
+            }
+            other => panic!("expected Inferred, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_sidecar_takes_priority_over_imported() {
+        let dir = tempdir().unwrap();
+        let model_path = dir.path().join("model.fbx");
+        let sidecar_path = humanoid_mapping_path(&model_path);
+
+        let bones = make_bones(&["Hips", "Spine"]);
+
+        let mut sidecar_mapping = HumanoidMapping::default();
+        sidecar_mapping.by_role.insert(HumanoidRole::Hips, 0);
+        save_mapping(&sidecar_path, &sidecar_mapping, &bones).unwrap();
+
+        let mut imported = HumanoidMapping::default();
+        imported.by_role.insert(HumanoidRole::Spine, 1);
+
+        let (rig, missing) = load_or_infer_rig(&model_path, &bones, Some(&imported)).unwrap();
+        assert!(missing.is_empty());
+        match rig {
+            AvatarRig::Humanoid(mapping) => {
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
+                assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), None);
+            }
+            other => panic!("expected Humanoid, got {:?}", other),
+        }
     }
 }

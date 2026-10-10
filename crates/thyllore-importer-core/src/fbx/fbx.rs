@@ -11,7 +11,7 @@ pub use thyllore_file_format_core::fbx::{
     LoadedConstraint, MeshPart,
 };
 
-fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
+fn convert_coordinate_axis(axis: ufbx::CoordinateAxis, default: (i32, i32)) -> (i32, i32) {
     match axis {
         ufbx::CoordinateAxis::PositiveX => (0, 1),
         ufbx::CoordinateAxis::NegativeX => (0, -1),
@@ -19,14 +19,22 @@ fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
         ufbx::CoordinateAxis::NegativeY => (1, -1),
         ufbx::CoordinateAxis::PositiveZ => (2, 1),
         ufbx::CoordinateAxis::NegativeZ => (2, -1),
-        ufbx::CoordinateAxis::Unknown => (1, 1),
+        ufbx::CoordinateAxis::Unknown => default,
     }
 }
 
-fn read_axes_from_scene(settings: &ufbx::SceneSettings) -> FbxAxesInfo {
-    let (up_axis, up_axis_sign) = convert_coordinate_axis(settings.axes.up);
-    let (front_axis, front_axis_sign) = convert_coordinate_axis(settings.axes.front);
-    let (coord_axis, coord_axis_sign) = convert_coordinate_axis(settings.axes.right);
+fn read_axes_from_scene(axes: &ufbx::CoordinateAxes) -> FbxAxesInfo {
+    let default_axes = FbxAxesInfo::default();
+    let (up_axis, up_axis_sign) =
+        convert_coordinate_axis(axes.up, (default_axes.up_axis, default_axes.up_axis_sign));
+    let (front_axis, front_axis_sign) = convert_coordinate_axis(
+        axes.front,
+        (default_axes.front_axis, default_axes.front_axis_sign),
+    );
+    let (coord_axis, coord_axis_sign) = convert_coordinate_axis(
+        axes.right,
+        (default_axes.coord_axis, default_axes.coord_axis_sign),
+    );
 
     FbxAxesInfo {
         up_axis,
@@ -132,7 +140,7 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         );
     }
 
-    let axes = read_axes_from_scene(&scene.settings);
+    let axes = read_axes_from_scene(&scene.settings.axes);
     log!(
         "FBX axes: up={}(sign={}), front={}(sign={}), coord={}(sign={})",
         axes.up_axis,
@@ -1046,5 +1054,25 @@ mod tests {
         model.fbx_data.push(data);
 
         assert_eq!(model.fbx_data.len(), 1);
+    }
+
+    #[test]
+    fn unknown_axes_fall_back_to_default_axes() {
+        let axes = read_axes_from_scene(&ufbx::CoordinateAxes {
+            right: ufbx::CoordinateAxis::Unknown,
+            up: ufbx::CoordinateAxis::NegativeZ,
+            front: ufbx::CoordinateAxis::Unknown,
+        });
+        let default_axes = FbxAxesInfo::default();
+
+        assert_eq!((axes.up_axis, axes.up_axis_sign), (2, -1));
+        assert_eq!(
+            (axes.front_axis, axes.front_axis_sign),
+            (default_axes.front_axis, default_axes.front_axis_sign)
+        );
+        assert_eq!(
+            (axes.coord_axis, axes.coord_axis_sign),
+            (default_axes.coord_axis, default_axes.coord_axis_sign)
+        );
     }
 }

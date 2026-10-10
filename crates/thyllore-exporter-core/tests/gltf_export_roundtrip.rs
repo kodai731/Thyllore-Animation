@@ -39,7 +39,7 @@ fn test_export_gltf_animation_only_creates_file() {
     let clip = create_test_clip();
 
     let output_path = temp_path("test_export_gltf_animation_only.glb");
-    export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     assert!(
         output_path.exists(),
@@ -57,7 +57,7 @@ fn test_export_gltf_animation_only_node_count_matches_bone_count() {
     let clip = create_test_clip();
 
     let output_path = temp_path("test_node_count.glb");
-    export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
     let glb = Glb::from_slice(&bytes).unwrap();
@@ -77,7 +77,7 @@ fn test_export_gltf_animation_only_has_animation_channels() {
     let clip = create_test_clip();
 
     let output_path = temp_path("test_channels.glb");
-    export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
     let glb = Glb::from_slice(&bytes).unwrap();
@@ -97,7 +97,7 @@ fn test_export_gltf_animation_only_node_hierarchy_matches_skeleton() {
     let clip = create_test_clip();
 
     let output_path = temp_path("test_hierarchy.glb");
-    export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
     let glb = Glb::from_slice(&bytes).unwrap();
@@ -145,7 +145,7 @@ fn test_export_gltf_animation_only_scene_contains_root_bones() {
     let clip = create_test_clip();
 
     let output_path = temp_path("test_scene.glb");
-    export_gltf_animation_only(&clip, &skeleton, &output_path).unwrap();
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
     let glb = Glb::from_slice(&bytes).unwrap();
@@ -171,5 +171,39 @@ fn test_export_gltf_animation_only_scene_contains_root_bones() {
         );
     }
 
+    fs::remove_file(output_path).ok();
+}
+
+#[test]
+fn test_export_gltf_animation_only_writes_vrm_humanoid() {
+    let skeleton = create_test_skeleton();
+    let clip = create_test_clip();
+    let humanoid_bones = [("hips".to_string(), 0), ("spine".to_string(), 1)];
+
+    let output_path = temp_path("test_vrm_humanoid.glb");
+    export_gltf_animation_only(&clip, &skeleton, &output_path, &humanoid_bones).unwrap();
+
+    let bytes = fs::read(&output_path).unwrap();
+    let glb = Glb::from_slice(&bytes).unwrap();
+    let json_value: serde_json::Value = serde_json::from_slice(&glb.json).unwrap();
+    let root: json::Root = json::Root::from_slice(&glb.json).unwrap();
+    let vrm = thyllore_importer_core::gltf::vrm_humanoid_extension::parse_vrm_humanoid(
+        json_value.pointer("/extensions/VRMC_vrm"),
+        None,
+    )
+    .unwrap();
+
+    assert!(vrm.is_v1);
+    assert_eq!(vrm.bones.len(), 2);
+    for (vrm_name, bone_index) in &humanoid_bones {
+        let bone_name = &skeleton.bones[*bone_index].name;
+        let expected_node = root
+            .nodes
+            .iter()
+            .position(|node| node.name.as_deref() == Some(bone_name.as_str()))
+            .unwrap() as u32;
+        assert!(vrm.bones.contains(&(vrm_name.clone(), expected_node)));
+    }
+    assert!(root.extensions_used.contains(&"VRMC_vrm".to_string()));
     fs::remove_file(output_path).ok();
 }

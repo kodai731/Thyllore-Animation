@@ -9,6 +9,7 @@ pub enum SceneError {
     ModelNotFound(PathBuf),
     AnimationNotFound(PathBuf),
     VersionMismatch { expected: u32, found: u32 },
+    ClipFile(thyllore_anim_core::editable::ClipFileError),
 }
 
 impl std::fmt::Display for SceneError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for SceneError {
                     expected, found
                 )
             }
+            SceneError::ClipFile(e) => write!(f, "Clip file error: {}", e),
         }
     }
 }

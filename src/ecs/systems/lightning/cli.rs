@@ -8,9 +8,9 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::LightningRenderSettings;
-use crate::ecs::systems::cli_args::scalar_assignment_parse;
 use crate::ecs::world::World;
 use crate::hooks::bootstrap::BootstrapOverrides;
+use thyllore_cli_core::scalar_assignment_parse;
 
 #[derive(Args, Debug)]
 pub struct LightningOverrides {

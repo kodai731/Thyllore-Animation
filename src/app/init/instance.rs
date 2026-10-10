@@ -722,6 +722,10 @@ impl App {
             .insert_resource(crate::ecs::resource::PointerCapture::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::UiPointerOwner::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::UiSettings::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::UiAnimState::default());
 
         let billboard_data = Self::initialize_billboard(
             instance,

@@ -11,7 +11,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     color: [f32; 4],
     _sample_count: usize,
     vt: &ViewTransform,
-    handle_times: Option<&[f32]>,
+    _handle_times: Option<&[f32]>,
 ) {
     if curve.keyframes.is_empty() {
         return;

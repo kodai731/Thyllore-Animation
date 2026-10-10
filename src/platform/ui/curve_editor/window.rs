@@ -1,17 +1,11 @@
-use crate::animation::editable::{
-    EditableAnimationClip, InterpolationType, PropertyCurve, PropertyType, TangentType,
-    TangentWeightMode,
-};
+use crate::animation::editable::{EditableAnimationClip, PropertyCurve, PropertyType};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
+use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
-    CurveTrackRef, HumanoidRigState, PoseLibrary, TimelineState,
+    CurveTrackRef, PoseLibrary, TimelineState,
 };
-use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
-#[cfg(feature = "ml")]
-use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;

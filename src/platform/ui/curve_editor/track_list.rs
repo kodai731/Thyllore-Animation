@@ -1,4 +1,3 @@
-use imgui::Ui;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::bone_label::{format_bone_label, order_bone_ids_by_role};
@@ -7,11 +6,9 @@ use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
-    ClipLibrary, CurveEditorState, CurveEditorTarget, CurveSelectedKeyframe, HumanoidRigState,
-    TimelineState,
+    ClipLibrary, CurveEditorState, CurveEditorTarget, HumanoidRigState, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 
 pub(super) fn collect_humanoid_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {

@@ -25,7 +25,6 @@ mod water;
 mod wind;
 pub use blend_shape_inspector::*;
 pub use constraint_inspector::*;
-pub use curve_editor::*;
 pub use message_window::*;
 pub use spring_bone_inspector::*;
 pub use status_bar::*;

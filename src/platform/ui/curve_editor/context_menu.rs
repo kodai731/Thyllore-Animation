@@ -1,7 +1,6 @@
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
-use super::view::*;
 use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
 use crate::animation::editable::{InterpolationType, PropertyType, TangentType, TangentWeightMode};
 use crate::animation::BoneId;

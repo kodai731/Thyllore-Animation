@@ -297,6 +297,11 @@ impl Ui {
 pub struct Id(pub(crate) u32);
 
 impl Id {
+    #[must_use]
+    pub fn raw(&self) -> u32 {
+        self.0
+    }
+
     #[deprecated(since = "0.8.0", note = "Use ui.new_id_int(...)")]
     #[allow(non_snake_case)]
     pub fn Int(input: i32, ui: &Ui) -> Self {

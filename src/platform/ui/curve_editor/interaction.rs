@@ -97,6 +97,18 @@ pub(super) fn dragged_key_position(
     [snapped_time.max(0.0), original[1] + locked_delta[1]]
 }
 
+#[must_use]
+pub(super) fn dragged_key_delta(
+    curve_vt: &ViewTransform,
+    drag_start: [f32; 2],
+    mouse_pos: [f32; 2],
+) -> [f32; 2] {
+    [
+        curve_vt.x_to_time(mouse_pos[0]) - curve_vt.x_to_time(drag_start[0]),
+        curve_vt.y_to_value(mouse_pos[1]) - curve_vt.y_to_value(drag_start[1]),
+    ]
+}
+
 pub(super) fn handle_curve_view_interaction(
     ui: &imgui::Ui,
     world: &World,
@@ -158,7 +170,13 @@ pub(super) fn handle_curve_view_interaction(
             ui.open_popup("keyframe_context_menu");
         } else {
             editor_state.context_menu_click_time = vt.x_to_time(mouse_pos[0]);
-            editor_state.context_menu_click_value = vt.y_to_value(mouse_pos[1]);
+            let click_vt = match find_curve_at_position(mouse_pos, curves_to_draw, vt) {
+                Some(property_type) => vt.for_property(property_type, curves_to_draw),
+                None => curves_to_draw
+                    .first()
+                    .map_or(*vt, |(curve, _, _)| vt.for_curve(curve)),
+            };
+            editor_state.context_menu_click_value = click_vt.y_to_value(mouse_pos[1]);
             ui.open_popup("curve_editor_context_menu");
         }
     }
@@ -328,15 +346,17 @@ pub(super) fn handle_mouse_release(
                 editor_state.interaction
             {
                 if let Some(track_ref) = editor_state.selected_track_ref() {
-                    let time_delta = vt.x_to_time(mouse_pos[0])
-                        - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
-                    let value_delta = vt.y_to_value(mouse_pos[1])
-                        - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
-
                     for sel in &editor_state.selected_keyframes {
+                        let curve_vt = vt.for_property(sel.property_type, curves_to_draw);
+                        let delta = dragged_key_delta(
+                            &curve_vt,
+                            editor_state.drag_start_mouse_pos,
+                            mouse_pos,
+                        );
+
                         let [new_time, new_value] = dragged_key_position(
                             [sel.original_time, sel.original_value],
-                            [time_delta, value_delta],
+                            delta,
                             axis_lock,
                             time_snap,
                         );
@@ -386,8 +406,9 @@ pub(super) fn compute_dragged_tangent(
             None => break,
         };
 
-        let mouse_time = vt.x_to_time(mouse_pos[0]);
-        let mouse_value = vt.y_to_value(mouse_pos[1]);
+        let curve_vt = vt.for_curve(curve);
+        let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
+        let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
         let time_offset = mouse_time - kf.time;
         let value_offset = mouse_value - kf.value;
         let new_handle = BezierHandle::new(time_offset, value_offset);
@@ -616,9 +637,10 @@ pub(super) fn find_keyframe_at_position(
     vt: &ViewTransform,
 ) -> Option<(PropertyType, KeyframeId, f32, f32)> {
     for (curve, _, _) in curves {
+        let curve_vt = vt.for_curve(curve);
         for kf in &curve.keyframes {
-            let x = vt.time_to_x(kf.time);
-            let y = vt.value_to_y(kf.value);
+            let x = curve_vt.time_to_x(kf.time);
+            let y = curve_vt.value_to_y(kf.value);
 
             let dx = mouse_pos[0] - x;
             let dy = mouse_pos[1] - y;
@@ -644,7 +666,7 @@ pub(super) fn find_curve_at_position(
         .iter()
         .filter_map(|(curve, _, _)| {
             let value = curve_sample(curve, mouse_time)?;
-            let distance = (vt.value_to_y(value) - mouse_pos[1]).abs();
+            let distance = (vt.for_curve(curve).value_to_y(value) - mouse_pos[1]).abs();
             (distance <= CURVE_HIT_RADIUS_PX).then_some((curve.property_type, distance))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -674,8 +696,9 @@ pub(super) fn find_tangent_handle_at_position(
                 break;
             }
 
-            let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
-            let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
+            let curve_vt = vt.for_curve(curve);
+            let in_x = curve_vt.time_to_x(kf.time + kf.in_tangent.time_offset);
+            let in_y = curve_vt.value_to_y(kf.value + kf.in_tangent.value_offset);
             let dx = mouse_pos[0] - in_x;
             let dy = mouse_pos[1] - in_y;
             if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
@@ -687,8 +710,8 @@ pub(super) fn find_tangent_handle_at_position(
                 ));
             }
 
-            let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
-            let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+            let out_x = curve_vt.time_to_x(kf.time + kf.out_tangent.time_offset);
+            let out_y = curve_vt.value_to_y(kf.value + kf.out_tangent.value_offset);
             let dx = mouse_pos[0] - out_x;
             let dy = mouse_pos[1] - out_y;
             if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
@@ -715,9 +738,10 @@ pub(super) fn collect_keyframes_in_screen_rect(
 ) -> Vec<CurveSelectedKeyframe> {
     let mut result = Vec::new();
     for (curve, _, _) in curves {
+        let curve_vt = vt.for_curve(curve);
         for kf in &curve.keyframes {
-            let x = vt.time_to_x(kf.time);
-            let y = vt.value_to_y(kf.value);
+            let x = curve_vt.time_to_x(kf.time);
+            let y = curve_vt.value_to_y(kf.value);
             if x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1] {
                 result.push(CurveSelectedKeyframe {
                     property_type: curve.property_type.clone(),
@@ -909,6 +933,68 @@ mod tests {
         );
 
         assert_eq!(hit, None);
+    }
+
+    fn build_normalized_pixel_view() -> ViewTransform {
+        ViewTransform {
+            val_range: 2.0,
+            view_value_offset: -1.0,
+            value_display: CurveValueDisplay::Normalized,
+            ..build_pixel_view()
+        }
+    }
+
+    fn build_two_point_curve(property_type: PropertyType, values: [f32; 2]) -> PropertyCurve {
+        let mut curve = PropertyCurve::new(0, property_type);
+        curve_add_keyframe(&mut curve, 0.0, values[0]);
+        curve_add_keyframe(&mut curve, 1.0, values[1]);
+        curve
+    }
+
+    #[test]
+    fn normalized_keyframe_hit_uses_each_curve_range() {
+        let small = build_two_point_curve(PropertyType::TranslationX, [0.0, 10.0]);
+        let large = build_two_point_curve(PropertyType::TranslationY, [100.0, -100.0]);
+        let curves = [(&small, [1.0; 4], "x"), (&large, [1.0; 4], "y")];
+        let vt = build_normalized_pixel_view();
+
+        let bottom_hit = find_keyframe_at_position([0.0, 100.0], &curves, &vt);
+        let top_hit = find_keyframe_at_position([0.0, 0.0], &curves, &vt);
+
+        assert_eq!(
+            bottom_hit.map(|hit| (hit.0, hit.3)),
+            Some((PropertyType::TranslationX, 0.0))
+        );
+        assert_eq!(
+            top_hit.map(|hit| (hit.0, hit.3)),
+            Some((PropertyType::TranslationY, 100.0))
+        );
+    }
+
+    #[test]
+    fn normalized_drag_value_delta_scales_with_each_curve_half_width() {
+        let small = build_two_point_curve(PropertyType::TranslationX, [0.0, 10.0]);
+        let large = build_two_point_curve(PropertyType::TranslationY, [100.0, -100.0]);
+        let curves = [(&small, [1.0; 4], "x"), (&large, [1.0; 4], "y")];
+        let vt = build_normalized_pixel_view();
+        let drag_start = [50.0, 50.0];
+        let mouse_pos = [50.0, 40.0];
+        let normalized_delta = 0.2;
+
+        let small_delta = dragged_key_delta(
+            &vt.for_property(PropertyType::TranslationX, &curves),
+            drag_start,
+            mouse_pos,
+        );
+        let large_delta = dragged_key_delta(
+            &vt.for_property(PropertyType::TranslationY, &curves),
+            drag_start,
+            mouse_pos,
+        );
+
+        assert!((small_delta[1] - normalized_delta * 5.0).abs() < 1e-4);
+        assert!((large_delta[1] - normalized_delta * 100.0).abs() < 1e-3);
+        assert_eq!(small_delta[0], large_delta[0]);
     }
 
     #[test]

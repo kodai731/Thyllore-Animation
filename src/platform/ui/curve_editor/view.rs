@@ -1,4 +1,4 @@
-use crate::animation::editable::PropertyCurve;
+use crate::animation::editable::{PropertyCurve, PropertyType};
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveValueDisplay, FrameRequest,
 };
@@ -68,6 +68,17 @@ impl ViewTransform {
                 }
             }
         }
+    }
+
+    pub(super) fn for_property(
+        &self,
+        property_type: PropertyType,
+        curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    ) -> ViewTransform {
+        curves_to_draw
+            .iter()
+            .find(|(curve, _, _)| curve.property_type == property_type)
+            .map_or(*self, |(curve, _, _)| self.for_curve(curve))
     }
 }
 

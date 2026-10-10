@@ -1,4 +1,6 @@
-use crate::animation::editable::{EditableAnimationClip, PropertyCurve, PropertyType};
+use crate::animation::editable::{
+    curve_sample, EditableAnimationClip, PropertyCurve, PropertyType,
+};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ScalarChannelDomain;
@@ -237,6 +239,9 @@ pub(super) fn build_curve_view(
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1]]);
     ui.invisible_button("curve_interaction_area", [total_width, total_height]);
+    if ui.is_item_hovered() {
+        draw_normalized_value_tooltip(ui, &vt, &curves_to_draw);
+    }
 
     handle_curve_view_interaction(
         ui,
@@ -258,6 +263,32 @@ pub(super) fn build_curve_view(
     if let Some(bone_id) = track_ref.bone_id() {
         handle_suggestion_keyboard(ui, world, bone_id, editor_state, suggestion_overlays);
     }
+}
+
+pub(super) fn draw_normalized_value_tooltip(
+    ui: &imgui::Ui,
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+) {
+    if vt.value_display != CurveValueDisplay::Normalized {
+        return;
+    }
+
+    let mouse_pos = read_ui_pointer(ui).pos;
+    let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) else {
+        return;
+    };
+    let Some((curve, color, _)) = curves_to_draw
+        .iter()
+        .find(|(curve, _, _)| curve.property_type == property_type)
+    else {
+        return;
+    };
+    let Some(value) = curve_sample(curve, vt.x_to_time(mouse_pos[0])) else {
+        return;
+    };
+
+    ui.tooltip(|| ui.text_colored(*color, format_value_label(value)));
 }
 
 pub(super) fn collect_visible_scalar_curves<'a>(

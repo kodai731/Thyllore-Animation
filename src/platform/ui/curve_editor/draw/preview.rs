@@ -4,7 +4,7 @@ use crate::animation::editable::{
 };
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent, TangentHandleType};
 
-use super::super::interaction::{dragged_key_position, TimeSnap};
+use super::super::interaction::{dragged_key_delta, dragged_key_position, TimeSnap};
 use super::super::view::ViewTransform;
 
 pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
@@ -27,12 +27,11 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
         };
         let curve_vt = vt.for_curve(curve);
 
-        let time_delta = curve_vt.x_to_time(mouse_pos[0]) - curve_vt.x_to_time(drag_start[0]);
-        let value_delta = curve_vt.y_to_value(mouse_pos[1]) - curve_vt.y_to_value(drag_start[1]);
+        let delta = dragged_key_delta(&curve_vt, drag_start, mouse_pos);
 
         let [preview_time, preview_value] = dragged_key_position(
             [sel.original_time, sel.original_value],
-            [time_delta, value_delta],
+            delta,
             axis_lock,
             time_snap,
         );

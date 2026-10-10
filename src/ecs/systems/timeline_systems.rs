@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use crate::animation::editable::{
     apply_tangent_by_type, clip_add_keyframe, clip_recalculate_duration, curve_add_keyframe,
-    curve_recalculate_auto_tangent_at, curve_remove_keyframe, curve_set_keyframe_time,
-    initialize_weighted_handle_lengths, EditableAnimationClip, InterpolationType, KeyframeId,
-    PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
+    curve_insert_keyframe_preserving_shape, curve_recalculate_auto_tangent_at,
+    curve_remove_keyframe, curve_set_keyframe_time, initialize_weighted_handle_lengths,
+    EditableAnimationClip, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    SourceClipId, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
@@ -179,6 +180,21 @@ fn dispatch_keyframe_edit_events(
                     }
                     clip_recalculate_duration(clip);
                     clip_modified = true;
+                }
+            }
+
+            TimelineEvent::InsertKeyframeOnCurve {
+                track,
+                property_type,
+                time,
+            } => {
+                if let Some(clip) = clip_library.get_mut(clip_id) {
+                    if let Some(curve) = resolve_curve_mut(clip, *track, *property_type) {
+                        if curve_insert_keyframe_preserving_shape(curve, *time).is_some() {
+                            clip_recalculate_duration(clip);
+                            clip_modified = true;
+                        }
+                    }
                 }
             }
 
@@ -874,7 +890,7 @@ pub fn process_bone_set_key(
 mod tests {
     use super::*;
     use crate::animation::editable::{
-        EditableAnimationClip, PropertyType, SourceClip, SourceClipId,
+        curve_sample, EditableAnimationClip, PropertyType, SourceClip, SourceClipId,
     };
     use crate::ecs::resource::{SelectedKeyframe, SelectionModifier};
 
@@ -1381,6 +1397,42 @@ mod tests {
             1,
             "a clip with unresolved roles should still be scheduled"
         );
+    }
+
+    #[test]
+    fn insert_keyframe_on_curve_preserves_shape() {
+        let (mut state, mut library) = setup_test_clip();
+        let clip_id = state.current_clip_id.unwrap();
+        let bone_id: BoneId = 0;
+        let sample_times = [0.6, 0.7, 0.8, 0.9];
+        let read_curve = |library: &ClipLibrary| {
+            library.get(clip_id).unwrap().tracks[&bone_id]
+                .get_curve(PropertyType::TranslationX)
+                .clone()
+        };
+
+        let curve_before = read_curve(&library);
+
+        let events = [TimelineEvent::InsertKeyframeOnCurve {
+            track: CurveTrackRef::Bone(bone_id),
+            property_type: PropertyType::TranslationX,
+            time: 0.75,
+        }];
+        assert!(timeline_process_events(&events, &mut state, &mut library));
+
+        let curve_after = read_curve(&library);
+        assert_eq!(
+            curve_after.keyframe_count(),
+            curve_before.keyframe_count() + 1
+        );
+        for time in sample_times {
+            let before = curve_sample(&curve_before, time).unwrap();
+            let after = curve_sample(&curve_after, time).unwrap();
+            assert!(
+                (before - after).abs() < 1e-5,
+                "t={time}: {before} -> {after}"
+            );
+        }
     }
 }
 

@@ -51,6 +51,11 @@ pub enum TimelineEvent {
         time: f32,
         value: f32,
     },
+    InsertKeyframeOnCurve {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        time: f32,
+    },
     DeleteSelectedKeyframes,
     MoveSelectedKeyframes {
         time_delta: f32,

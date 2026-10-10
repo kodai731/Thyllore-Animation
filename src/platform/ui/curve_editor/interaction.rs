@@ -3,7 +3,7 @@ use imgui::MouseButton;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
 use crate::animation::editable::{
-    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    curve_sample, BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
@@ -19,6 +19,7 @@ use crate::platform::ui::pointer::{
 };
 
 pub(super) const KEYFRAME_HIT_RADIUS: f32 = 8.0;
+pub(super) const CURVE_HIT_RADIUS_PX: f32 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SelectionModifier {
@@ -245,7 +246,17 @@ pub(super) fn handle_mouse_interaction(
         } else {
             SelectionModifier::None
         };
-        handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
+        let curve_to_insert_on =
+            handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
+        if let (Some(property_type), Some(track)) =
+            (curve_to_insert_on, editor_state.selected_track_ref())
+        {
+            world.send_command(TimelineEvent::InsertKeyframeOnCurve {
+                track,
+                property_type,
+                time: vt.x_to_time(mouse_pos[0]).max(0.0),
+            });
+        }
     }
 
     if middle_clicked && in_curve_area {
@@ -396,7 +407,7 @@ pub(super) fn handle_curve_area_click(
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     vt: &ViewTransform,
     modifier: SelectionModifier,
-) {
+) -> Option<PropertyType> {
     if let Some((handle_type, property_type, keyframe_id, original_handle)) =
         find_tangent_handle_at_position(
             mouse_pos,
@@ -412,7 +423,7 @@ pub(super) fn handle_curve_area_click(
             original_handle,
         });
         editor_state.drag_start_mouse_pos = mouse_pos;
-        return;
+        return None;
     }
 
     let hit_keyframe = find_keyframe_at_position(mouse_pos, curves_to_draw, vt);
@@ -476,6 +487,12 @@ pub(super) fn handle_curve_area_click(
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
     } else {
+        if modifier == SelectionModifier::Toggle {
+            if let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) {
+                return Some(property_type);
+            }
+        }
+
         let mode = match modifier {
             SelectionModifier::Toggle => BoxSelectMode::Invert,
             SelectionModifier::Range => BoxSelectMode::Add,
@@ -486,6 +503,8 @@ pub(super) fn handle_curve_area_click(
             mode,
         };
     }
+
+    None
 }
 
 pub(super) fn refresh_selected_keyframe_positions(
@@ -612,6 +631,24 @@ pub(super) fn find_keyframe_at_position(
     }
 
     None
+}
+
+pub(super) fn find_curve_at_position(
+    mouse_pos: [f32; 2],
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+) -> Option<PropertyType> {
+    let mouse_time = vt.x_to_time(mouse_pos[0]);
+
+    curves
+        .iter()
+        .filter_map(|(curve, _, _)| {
+            let value = curve_sample(curve, mouse_time)?;
+            let distance = (vt.value_to_y(value) - mouse_pos[1]).abs();
+            (distance <= CURVE_HIT_RADIUS_PX).then_some((curve.property_type, distance))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(property_type, _)| property_type)
 }
 
 pub(super) const TANGENT_HANDLE_HIT_RADIUS: f32 = 10.0;
@@ -830,6 +867,46 @@ mod tests {
         let selection = apply_box_selection(&current, boxed, BoxSelectMode::Invert);
 
         assert_eq!(collect_selected_ids(&selection), vec![ids[0], ids[2]]);
+    }
+
+    fn build_pixel_view() -> ViewTransform {
+        ViewTransform {
+            curve_width: 100.0,
+            curve_height: 100.0,
+            ..build_unit_view()
+        }
+    }
+
+    fn build_flat_curve(property_type: PropertyType, value: f32) -> PropertyCurve {
+        let mut curve = PropertyCurve::new(0, property_type);
+        curve_add_keyframe(&mut curve, 0.0, value);
+        curve_add_keyframe(&mut curve, 1.0, value);
+        curve
+    }
+
+    #[test]
+    fn find_curve_at_position_picks_the_nearest_curve_within_the_radius() {
+        let lower = build_flat_curve(PropertyType::TranslationX, 0.2);
+        let upper = build_flat_curve(PropertyType::TranslationY, 0.25);
+        let curves = [(&lower, [1.0; 4], "x"), (&upper, [1.0; 4], "y")];
+
+        let hit = find_curve_at_position([50.0, 78.0], &curves, &build_pixel_view());
+
+        assert_eq!(hit, Some(PropertyType::TranslationX));
+    }
+
+    #[test]
+    fn find_curve_at_position_misses_beyond_the_radius() {
+        let curve = build_flat_curve(PropertyType::TranslationX, 0.2);
+        let curves = [(&curve, [1.0; 4], "x")];
+
+        let hit = find_curve_at_position(
+            [50.0, 80.0 - CURVE_HIT_RADIUS_PX - 1.0],
+            &curves,
+            &build_pixel_view(),
+        );
+
+        assert_eq!(hit, None);
     }
 
     #[test]

@@ -2,6 +2,7 @@ mod avatar_setup_window;
 mod blend_shape_inspector;
 mod bottom_panel;
 mod clip_browser_window;
+mod command_palette;
 mod constraint_inspector;
 mod curve_editor;
 mod debug_window;

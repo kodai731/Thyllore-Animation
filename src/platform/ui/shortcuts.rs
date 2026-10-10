@@ -4,6 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
 use crate::platform::key_bindings::{default_bindings, ModifierKeys};
+use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
 use crate::platform::ui::key_modifier::KeyModifier;
@@ -53,7 +54,7 @@ pub(crate) fn format_chord(modifier: KeyModifier, key_name: &str) -> String {
     }
 }
 
-fn format_global_chord(modifiers: ModifierKeys, key: &str) -> String {
+pub(crate) fn format_global_chord(modifiers: ModifierKeys, key: &str) -> String {
     let upper = key.to_uppercase();
     match (modifiers.ctrl, modifiers.shift) {
         (false, false) => upper,
@@ -144,6 +145,15 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         label: binding.label,
     });
 
+    let command_palette = std::iter::once(ShortcutEntry {
+        scope: ShortcutScope::Global,
+        chord: format_chord(
+            PALETTE_KEY_BINDING.modifier,
+            imgui_key_name(PALETTE_KEY_BINDING.key),
+        ),
+        label: PALETTE_KEY_BINDING.label,
+    });
+
     let hierarchy = TREE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Hierarchy,
         chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
@@ -165,6 +175,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     });
 
     global
+        .chain(command_palette)
         .chain(hierarchy)
         .chain(curve_editor)
         .chain(scene_gizmo)
@@ -262,6 +273,16 @@ mod tests {
                 scope
             );
         }
+    }
+
+    #[test]
+    fn test_command_palette_hotkey_is_listed_as_global() {
+        let shortcuts = collect_shortcuts();
+        assert!(shortcuts
+            .iter()
+            .any(|entry| entry.scope == ShortcutScope::Global
+                && entry.chord == "Ctrl+K"
+                && entry.label == PALETTE_KEY_BINDING.label));
     }
 
     #[test]

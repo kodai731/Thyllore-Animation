@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::timeline_state::CurveTrackRef;
+use super::timeline::CurveTrackRef;
 use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType};
 use crate::animation::BoneId;
 

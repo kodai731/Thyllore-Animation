@@ -124,6 +124,45 @@ per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload
 `World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
 only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`.
 
+`src/ecs/resource/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
+| `editor/` | Timeline, curves, clips, hierarchy, layout and its per-frame snapshot, history, keyframes, poses, constraints, avatar setup, blend shape inspector, expression library |
+| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
+| `timing/` | Frame clock, CPU and GPU frame timing, update phase, per-phase sub-steps |
+| `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui and trace |
+| `batch/` | Batch run schedule, scheduled actions, pick and orbit capture, pending anim edits |
+| `gizmo/` | Bone, constraint, grid, light, spring bone and transform gizmo state |
+| `flame/` | Flame effect data, render targets, history snapshot, SDF source, UI state, batch capture |
+| `lightning/` | Lightning GPU state, render targets, batch debug capture |
+| `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
+| `wind/` | Wind effect data, render targets, batch capture |
+| `app/` | App command and exit, message log, scene state, Vulkan validation report |
+| `model/` | FBX and glTF model caches, material texture slots, humanoid rig |
+| `animation/` | Bone pose override, pose apply cache, spring bone state, morph track playback, baked humanoid clips |
+| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
+
+`mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
+
+`src/ecs/component/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and the effect scalar domain registry, spring bone |
+| `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
+| `render/` | camera state, render handles, field-driven look |
+| `model/` | GLB source, morph weights |
+| `ml/` | inference actor |
+| `mesh/` | GPU mesh types and vertex attribute presets |
+| `flame/` | Flame effect components |
+| `lightning/` | Lightning effect components |
+| `water/` | Water effect components |
+| `wind/` | Wind effect components |
+
+Subdirectory modules are private and re-exported, so `crate::ecs::component::X` paths stay unchanged.
+
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
@@ -314,9 +353,9 @@ Concretely:
   `src/app/frame.rs`) waits for the GPU, runs every registered request that is present
   and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name
   `BatchRun`: what a reproducible run changes about a frame is expressed by `FrameClock`
-  (`src/ecs/resource/frame_clock.rs`: the frame counter and a wall-clock or fixed step; a fixed step means
+  (`src/ecs/resource/timing/frame_clock.rs`: the frame counter and a wall-clock or fixed step; a fixed step means
   fixed delta, GPU readbacks synced to the previous frame, wall-clock UI skipped) and by `AppExit`
-  (`src/ecs/resource/app_exit.rs`: the event loop stops when a system requested it). The batch run inserts
+  (`src/ecs/resource/app/exit.rs`: the event loop stops when a system requested it). The batch run inserts
   a fixed `FrameClock` and requests `AppExit` when it completes; effect systems read `FrameClock` for their
   fixed-step time and never look for `BatchRun` either.
 - `src/ecs/systems/phases/` orders work; it never calls an effect's system. Per-frame effect work reaches
@@ -326,7 +365,7 @@ Concretely:
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
 - Animatable scalar fields reach the curve editor, timeline, batch CLI and clip files through
-  `ScalarDomainSource` (`src/ecs/component/effect_scalar_domain.rs`): each effect writes
+  `ScalarDomainSource` (`src/ecs/component/animation/effect_scalar_domain.rs`): each effect writes
   `scalar_channel_domain!(MY_DOMAIN)` next to its static domain and `scalar_channel_domains()` collects
   them at link time. A field becomes a channel with `#[persist(curve)]` in effect-core (every component of
   a `[f32; N]` exposed with `scalars` / `ui`); nothing carries a number. The `PropertyType::Custom` code
@@ -345,7 +384,7 @@ Concretely:
   (built on the `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
   never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
-  (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
+  (`src/ecs/resource/render/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
 - Components and resources of an effect live in `src/ecs/component/<effect>/` and
   `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `scalar_domain.rs`, `render_targets.rs`,
   `batch.rs`, ...), never as `<effect>_*.rs` files in the shared directory.

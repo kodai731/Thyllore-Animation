@@ -6,8 +6,8 @@ use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
 };
-use crate::ecs::resource::gizmo::grid_gizmo::GridGizmoData;
-use crate::ecs::resource::gizmo::light_gizmo::LightGizmoData;
+use crate::ecs::resource::gizmo::grid::GridGizmoData;
+use crate::ecs::resource::gizmo::light::LightGizmoData;
 use crate::math::{
     coordinate_system::perspective_infinite_reverse, is_point_in_rect,
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,

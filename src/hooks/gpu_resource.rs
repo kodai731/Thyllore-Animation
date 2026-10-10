@@ -94,18 +94,25 @@ mod tests {
 
     fn resource_sources() -> Vec<(String, String)> {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ecs/resource");
-        let mut sources: Vec<(String, String)> = std::fs::read_dir(&dir)
-            .expect("src/ecs/resource exists")
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-            .map(|path| {
-                let source = std::fs::read_to_string(&path).expect("resource file is readable");
-                (path.display().to_string(), source)
-            })
-            .collect();
+        let mut sources = Vec::new();
+        collect_resource_sources(&dir, &mut sources);
         sources.sort();
         sources
+    }
+
+    fn collect_resource_sources(dir: &Path, sources: &mut Vec<(String, String)>) {
+        let entries = std::fs::read_dir(dir).expect("src/ecs/resource exists");
+        for path in entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+        {
+            if path.is_dir() {
+                collect_resource_sources(&path, sources);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let source = std::fs::read_to_string(&path).expect("resource file is readable");
+                sources.push((path.display().to_string(), source));
+            }
+        }
     }
 
     fn field_type_tokens(line: &str) -> Vec<&str> {

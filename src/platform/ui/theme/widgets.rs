@@ -5,12 +5,18 @@ use crate::ecs::World;
 use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer};
 
 use super::anim::ui_anim;
-use super::colors::{srgb_to_linear, ACCENT, SURFACE1, SURFACE3, TEXT, TEXT_SECONDARY};
+use super::colors::{
+    srgb_to_linear, ACCENT, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
+};
 use super::fonts::UiFonts;
 use super::icons::Icon;
 
 const TREE_INDENT: f32 = 16.0;
 pub const ICON_BUTTON_SIZE: f32 = 24.0;
+const TOOLBAR_DIVIDER_WIDTH: f32 = 12.0;
+const TOOLBAR_DIVIDER_HEIGHT: f32 = 18.0;
+const SEGMENT_PADDING_X: f32 = 8.0;
+const SEGMENT_ROUNDING: f32 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonState {
@@ -55,6 +61,82 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     let center_x = rect_min[0] + (size - text_size[0]) * 0.5;
     let center_y = rect_min[1] + (size - text_size[1]) * 0.5;
     draw_list.add_text([center_x, center_y], icon_color, &glyph);
+
+    clicked
+}
+
+pub fn toolbar_divider(ui: &Ui) {
+    ui.same_line_with_spacing(0.0, 0.0);
+    let [x, y] = ui.cursor_screen_pos();
+    let line_x = x + TOOLBAR_DIVIDER_WIDTH * 0.5;
+    let line_top = y + (ICON_BUTTON_SIZE - TOOLBAR_DIVIDER_HEIGHT) * 0.5;
+    ui.get_window_draw_list()
+        .add_line(
+            [line_x, line_top],
+            [line_x, line_top + TOOLBAR_DIVIDER_HEIGHT],
+            srgb_to_linear(OUTLINE),
+        )
+        .thickness(1.0)
+        .build();
+
+    ui.dummy([TOOLBAR_DIVIDER_WIDTH, ICON_BUTTON_SIZE]);
+    ui.same_line_with_spacing(0.0, 0.0);
+}
+
+fn segment_width(text_size: [f32; 2], padding: f32) -> f32 {
+    text_size[0] + 2.0 * padding
+}
+
+pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -> Option<usize> {
+    let _id_token = ui.push_id(id);
+    let last_index = options.len().saturating_sub(1);
+    let mut clicked = None;
+
+    for (i, option) in options.iter().enumerate() {
+        if i > 0 {
+            ui.same_line_with_spacing(0.0, 0.0);
+        }
+
+        let text_size = ui.calc_text_size(option);
+        let width = segment_width(text_size, SEGMENT_PADDING_X);
+        if ui.invisible_button(option, [width, ICON_BUTTON_SIZE]) {
+            clicked = Some(i);
+        }
+        let hovered = ui.is_item_hovered();
+        let rect_min = ui.item_rect_min();
+        let rect_max = ui.item_rect_max();
+
+        let fill = if i == selected {
+            ACCENT
+        } else if hovered {
+            SURFACE3
+        } else {
+            SURFACE2
+        };
+        let is_first = i == 0;
+        let is_last = i == last_index;
+        let rounding = if is_first || is_last {
+            SEGMENT_ROUNDING
+        } else {
+            0.0
+        };
+
+        let draw_list = ui.get_window_draw_list();
+        draw_list
+            .add_rect(rect_min, rect_max, srgb_to_linear(fill))
+            .rounding(rounding)
+            .round_top_left(is_first)
+            .round_bot_left(is_first)
+            .round_top_right(is_last)
+            .round_bot_right(is_last)
+            .filled(true)
+            .build();
+        let text_pos = [
+            rect_min[0] + SEGMENT_PADDING_X,
+            rect_min[1] + (ICON_BUTTON_SIZE - text_size[1]) * 0.5,
+        ];
+        draw_list.add_text(text_pos, srgb_to_linear(TEXT), option);
+    }
 
     clicked
 }
@@ -510,5 +592,22 @@ mod tests {
         assert!(!is_in_expand_hit(9.9, row_left, 0));
         assert!(is_in_expand_hit(10.0, row_left, 0));
         assert!(!is_in_expand_hit(26.0, row_left, 0));
+    }
+
+    #[test]
+    fn test_segment_width() {
+        let text_size = [50.0, 14.0];
+        let width = segment_width(text_size, 8.0);
+        assert!(
+            (width - 66.0).abs() < 1e-6,
+            "width = text_width + 2*padding"
+        );
+    }
+
+    #[test]
+    fn test_segment_width_zero_text() {
+        let text_size = [0.0, 14.0];
+        let width = segment_width(text_size, 8.0);
+        assert!((width - 16.0).abs() < 1e-6, "empty text still has padding");
     }
 }

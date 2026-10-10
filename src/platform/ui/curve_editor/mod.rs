@@ -6,6 +6,7 @@ mod interaction;
 mod keyboard;
 mod numeric_input;
 mod track_list;
+mod tween;
 mod view;
 mod window;
 

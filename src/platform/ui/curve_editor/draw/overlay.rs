@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{PropertyCurve, PropertyType};
+use crate::animation::editable::{curve_sample, PropertyCurve, PropertyType};
 use crate::animation::BoneId;
-use crate::ecs::resource::CurveEditorBuffer;
+use crate::ecs::resource::{CurveEditorBuffer, CurveSelectedKeyframe, TweenSession};
 
+use super::super::tween::{compute_curve_tween, curve_with_values};
 use super::super::view::ViewTransform;
 use super::super::window::{SuggestionOverlay, ALL_PROPERTY_TYPES};
 
@@ -149,6 +150,48 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
             .add_circle([out_x, out_y], 3.0, handle_color)
             .filled(true)
             .build();
+    }
+}
+
+pub(in crate::platform::ui::curve_editor) fn draw_tween_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    session: &TweenSession,
+    selected_keyframes: &[CurveSelectedKeyframe],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+    sample_count: usize,
+) {
+    for (curve, color, _) in curves_to_draw {
+        let tweened_values = compute_curve_tween(curve, selected_keyframes, session);
+        if tweened_values.is_empty() {
+            continue;
+        }
+
+        let preview_curve = curve_with_values(curve, &tweened_values);
+        let (Some(first), Some(last)) = (
+            preview_curve.keyframes.first(),
+            preview_curve.keyframes.last(),
+        ) else {
+            continue;
+        };
+
+        let ghost_color = [color[0], color[1], color[2], 0.35];
+        let curve_vt = vt.for_curve(curve);
+        let time_step = (last.time - first.time) / sample_count.max(1) as f32;
+        let points: Vec<[f32; 2]> = (0..=sample_count)
+            .filter_map(|index| {
+                let time = first.time + time_step * index as f32;
+                curve_sample(&preview_curve, time)
+                    .map(|value| [curve_vt.time_to_x(time), curve_vt.value_to_y(value)])
+            })
+            .collect();
+
+        for segment in points.windows(2) {
+            draw_list
+                .add_line(segment[0], segment[1], ghost_color)
+                .thickness(1.5)
+                .build();
+        }
     }
 }
 

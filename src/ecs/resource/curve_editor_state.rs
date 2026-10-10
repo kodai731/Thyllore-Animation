@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::timeline_state::CurveTrackRef;
-use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType};
+use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType, TweenKind};
 use crate::animation::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,6 +24,12 @@ pub struct CurveSelectedKeyframe {
 pub enum TangentHandleType {
     In,
     Out,
+}
+
+#[derive(Clone, Debug)]
+pub struct TweenSession {
+    pub kind: TweenKind,
+    pub factor: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -127,6 +133,7 @@ pub struct CurveEditorState {
     pub view_mode: CurveViewMode,
     pub time_field: String,
     pub value_field: String,
+    pub tween: Option<TweenSession>,
 }
 
 impl CurveEditorState {
@@ -194,6 +201,7 @@ impl Default for CurveEditorState {
             view_mode: CurveViewMode::default(),
             time_field: String::new(),
             value_field: String::new(),
+            tween: None,
         }
     }
 }

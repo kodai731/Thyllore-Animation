@@ -1,4 +1,5 @@
 use super::context_menu::CURVE_EXTRAPOLATION_MENU;
+use super::tween::apply_tween;
 use super::window::SuggestionOverlay;
 use crate::animation::editable::{
     InterpolationType, PropertyCurve, TangentContinuity, TangentType,
@@ -118,6 +119,16 @@ pub(super) fn handle_curve_editor_keyboard(
     }
 
     let modifier = current_key_modifier(ui);
+
+    if editor_state.tween.is_some() {
+        let accept_pressed = (modifier == KeyModifier::None && ui.is_key_pressed(imgui::Key::Tab))
+            || ui.is_key_pressed(imgui::Key::Enter);
+        if ui.is_key_pressed(imgui::Key::Escape) {
+            editor_state.tween = None;
+        } else if accept_pressed {
+            apply_tween(target.world, editor_state, target.curves, target.track_ref);
+        }
+    }
 
     for binding in CURVE_EDITOR_KEY_BINDINGS {
         if modifier == binding.modifier && ui.is_key_pressed(binding.key) {

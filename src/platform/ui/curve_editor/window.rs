@@ -23,6 +23,9 @@ use super::interaction::*;
 use super::keyboard::*;
 use super::numeric_input::build_selected_key_fields;
 use super::track_list::*;
+use super::tween::{
+    build_tween_controls, collect_selected_key_ids, discard_tween_on_selection_change,
+};
 use super::view::*;
 
 pub(super) struct SuggestionOverlay {
@@ -93,6 +96,7 @@ pub(super) fn draw_curve_editor_window(
         window = window.focused(true);
     }
 
+    let selection_before = collect_selected_key_ids(editor_state);
     window.build(|| {
         editor_state.window_size = ui.window_size();
 
@@ -132,6 +136,7 @@ pub(super) fn draw_curve_editor_window(
                 );
             });
     });
+    discard_tween_on_selection_change(editor_state, &selection_before);
 
     editor_state.is_open = is_open;
 }
@@ -196,6 +201,7 @@ pub(super) fn build_curve_view(
         return;
     };
 
+    build_tween_controls(ui, world, editor_state, &curves_to_draw, track_ref);
     build_selected_key_fields(ui, world, editor_state, &curves_to_draw, track_ref);
     ui.separator();
 
@@ -264,6 +270,9 @@ pub(super) fn build_curve_view(
         track_ref,
     );
 
+    #[cfg(feature = "ml")]
+    let has_tween_session = editor_state.tween.is_some();
+
     let keyboard_target = CurveEditorKeyboardTarget {
         world,
         curves: &curves_to_draw,
@@ -275,7 +284,7 @@ pub(super) fn build_curve_view(
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
     #[cfg(feature = "ml")]
-    if let Some(bone_id) = track_ref.bone_id() {
+    if let (Some(bone_id), false) = (track_ref.bone_id(), has_tween_session) {
         handle_suggestion_keyboard(ui, world, bone_id, editor_state, suggestion_overlays);
     }
 }
@@ -490,6 +499,17 @@ pub(super) fn draw_clipped_curve_content(
             curves_to_draw,
             &editor_state.visible_curves,
             vt,
+        );
+    }
+
+    if let Some(session) = &editor_state.tween {
+        draw_tween_curve_overlay(
+            draw_list,
+            session,
+            &editor_state.selected_keyframes,
+            curves_to_draw,
+            vt,
+            calculate_sample_count(curve_area_width),
         );
     }
 

@@ -1,13 +1,20 @@
+use std::collections::HashSet;
+
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
 use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
-use crate::animation::editable::{InterpolationType, PropertyType, TangentType, TangentWeightMode};
+use crate::animation::editable::{
+    CurveExtrapolation, InterpolationType, PropertyCurve, PropertyType, TangentType,
+    TangentWeightMode,
+};
 use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
-use crate::ecs::resource::{ClipLibrary, CurveEditorState, CurveTrackRef, TimelineState};
+use crate::ecs::resource::{
+    ClipLibrary, CurveEditorState, CurveSelectedKeyframe, CurveTrackRef, TimelineState,
+};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
-use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
 use crate::ecs::world::World;
 
 pub(super) fn build_keyframe_context_menu(
@@ -154,6 +161,71 @@ pub(super) fn build_curve_editor_context_menu(
     });
 }
 
+pub(super) const CURVE_EXTRAPOLATION_MENU: &str = "curve_extrapolation_menu";
+
+const EXTRAPOLATION_ENDS: [(&str, ExtrapolationEnd); 3] = [
+    ("Pre", ExtrapolationEnd::Pre),
+    ("Post", ExtrapolationEnd::Post),
+    ("Both", ExtrapolationEnd::Both),
+];
+
+const EXTRAPOLATION_MODES: [(&str, CurveExtrapolation); 4] = [
+    ("Constant", CurveExtrapolation::Constant),
+    ("Linear", CurveExtrapolation::Linear),
+    ("Cycle", CurveExtrapolation::Cycle),
+    ("Cycle with Offset", CurveExtrapolation::CycleWithOffset),
+];
+
+pub(super) fn build_curve_extrapolation_menu(
+    ui: &imgui::Ui,
+    world: &World,
+    editor_state: &CurveEditorState,
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    track_ref: CurveTrackRef,
+) {
+    ui.popup(CURVE_EXTRAPOLATION_MENU, || {
+        for (end_label, end) in EXTRAPOLATION_ENDS {
+            ui.menu(end_label, || {
+                for (mode_label, mode) in EXTRAPOLATION_MODES {
+                    if ui.menu_item(mode_label) {
+                        for property_type in extrapolation_target_properties(
+                            &editor_state.selected_keyframes,
+                            curves,
+                        ) {
+                            world.send_command(TimelineEvent::SetCurveExtrapolation {
+                                track: track_ref,
+                                property_type,
+                                end,
+                                mode,
+                            });
+                        }
+                    }
+                }
+            });
+        }
+    });
+}
+
+pub(super) fn extrapolation_target_properties(
+    selected_keyframes: &[CurveSelectedKeyframe],
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+) -> Vec<PropertyType> {
+    let mut targets: Vec<PropertyType> = if selected_keyframes.is_empty() {
+        curves
+            .iter()
+            .map(|(curve, _, _)| curve.property_type)
+            .collect()
+    } else {
+        selected_keyframes
+            .iter()
+            .map(|selected| selected.property_type)
+            .collect()
+    };
+    let mut seen = HashSet::new();
+    targets.retain(|property_type| seen.insert(*property_type));
+    targets
+}
+
 pub(super) fn current_clip_has_track(world: &World, bone_id: BoneId) -> bool {
     let timeline_state = world.resource::<TimelineState>();
     let clip_library = world.resource::<ClipLibrary>();
@@ -220,5 +292,31 @@ mod tests {
         let property = add_key_target_property(&editor_state, CurveTrackRef::Bone(3), None);
 
         assert_eq!(property, Some(PropertyType::TranslationX));
+    }
+
+    #[test]
+    fn extrapolation_targets_selected_curves_or_every_visible_curve() {
+        let curve_x = PropertyCurve::new(0, PropertyType::TranslationX);
+        let curve_y = PropertyCurve::new(1, PropertyType::TranslationY);
+        let curves = [
+            (&curve_x, [1.0, 0.0, 0.0, 1.0], "x"),
+            (&curve_y, [0.0, 1.0, 0.0, 1.0], "y"),
+        ];
+        let selected_on_y = |keyframe_id| CurveSelectedKeyframe {
+            property_type: PropertyType::TranslationY,
+            keyframe_id,
+            original_time: 0.0,
+            original_value: 0.0,
+        };
+
+        let without_selection = extrapolation_target_properties(&[], &curves);
+        let with_selection =
+            extrapolation_target_properties(&[selected_on_y(0), selected_on_y(1)], &curves);
+
+        assert_eq!(
+            without_selection,
+            vec![PropertyType::TranslationX, PropertyType::TranslationY]
+        );
+        assert_eq!(with_selection, vec![PropertyType::TranslationY]);
     }
 }

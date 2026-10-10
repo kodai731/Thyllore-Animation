@@ -9,7 +9,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     draw_list: &imgui::DrawListMut,
     curve: &PropertyCurve,
     color: [f32; 4],
-    _sample_count: usize,
+    sample_count: usize,
     vt: &ViewTransform,
     _handle_times: Option<&[f32]>,
 ) {
@@ -31,16 +31,13 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
         return;
     }
 
-    if let Some(first) = curve.keyframes.first() {
-        let first_x = vt.time_to_x(first.time);
-        let start_x = vt.time_to_x(0.0);
-        if start_x < first_x {
-            let y = vt.value_to_y(first.value);
-            draw_list
-                .add_line([start_x, y], [first_x, y], color)
-                .thickness(1.5)
-                .build();
-        }
+    let visible_start = vt.x_to_time(vt.curve_origin[0]);
+    let visible_end = vt.x_to_time(vt.curve_origin[0] + vt.curve_width);
+    if let (Some(first), Some(last)) = (curve.keyframes.first(), curve.keyframes.last()) {
+        let pre_range = (visible_start, first.time.min(visible_end));
+        let post_range = (last.time.max(visible_start), visible_end);
+        draw_extrapolation(draw_list, curve, color, sample_count, vt, pre_range);
+        draw_extrapolation(draw_list, curve, color, sample_count, vt, post_range);
     }
 
     for i in 0..curve.keyframes.len() - 1 {
@@ -84,18 +81,6 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
         }
     }
 
-    if let Some(last) = curve.keyframes.last() {
-        let last_x = vt.time_to_x(last.time);
-        let end_x = vt.time_to_x(vt.duration);
-        if end_x > last_x {
-            let y = vt.value_to_y(last.value);
-            draw_list
-                .add_line([last_x, y], [end_x, y], color)
-                .thickness(1.5)
-                .build();
-        }
-    }
-
     for kf in &curve.keyframes {
         let x = vt.time_to_x(kf.time);
         let y = vt.value_to_y(kf.value);
@@ -109,6 +94,67 @@ pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
             .add_circle([x, y], 5.0, [1.0, 1.0, 1.0, 0.8])
             .build();
     }
+}
+
+const EXTRAPOLATION_DASH: f32 = 6.0;
+const EXTRAPOLATION_GAP: f32 = 4.0;
+
+fn draw_extrapolation(
+    draw_list: &imgui::DrawListMut,
+    curve: &PropertyCurve,
+    color: [f32; 4],
+    sample_count: usize,
+    vt: &ViewTransform,
+    (start_time, end_time): (f32, f32),
+) {
+    if end_time <= start_time || sample_count < 2 {
+        return;
+    }
+
+    let points: Vec<[f32; 2]> = (0..sample_count)
+        .filter_map(|s| {
+            let time = start_time + (end_time - start_time) * s as f32 / (sample_count - 1) as f32;
+            curve_sample(curve, time).map(|value| [vt.time_to_x(time), vt.value_to_y(value)])
+        })
+        .collect();
+
+    for [from, to] in dashed_segments(&points, EXTRAPOLATION_DASH, EXTRAPOLATION_GAP) {
+        draw_list.add_line(from, to, color).thickness(1.5).build();
+    }
+}
+
+fn dashed_segments(points: &[[f32; 2]], dash: f32, gap: f32) -> Vec<[[f32; 2]; 2]> {
+    let period = dash + gap;
+    let mut segments = Vec::new();
+    let mut phase = 0.0;
+
+    for pair in points.windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        let length = (end[0] - start[0]).hypot(end[1] - start[1]);
+        let point_at = |along: f32| {
+            let t = along / length;
+            [
+                start[0] + (end[0] - start[0]) * t,
+                start[1] + (end[1] - start[1]) * t,
+            ]
+        };
+
+        let mut along = 0.0;
+        while along < length {
+            let drawing = phase < dash;
+            let phase_end = if drawing { dash } else { period };
+            let step = (phase_end - phase).min(length - along);
+            if drawing {
+                segments.push([point_at(along), point_at(along + step)]);
+            }
+            along += step;
+            phase += step;
+            if phase >= period {
+                phase -= period;
+            }
+        }
+    }
+    segments
 }
 
 pub(in crate::platform::ui::curve_editor) fn draw_selected_keyframes_highlight(
@@ -210,5 +256,34 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_handles(
 
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dashes_restart_after_each_gap() {
+        let segments = dashed_segments(&[[0.0, 0.0], [20.0, 0.0]], 6.0, 4.0);
+
+        assert_eq!(
+            segments,
+            vec![[[0.0, 0.0], [6.0, 0.0]], [[10.0, 0.0], [16.0, 0.0]]]
+        );
+    }
+
+    #[test]
+    fn a_dash_continues_across_a_corner() {
+        let segments = dashed_segments(&[[0.0, 0.0], [4.0, 0.0], [4.0, 8.0]], 6.0, 4.0);
+
+        assert_eq!(
+            segments,
+            vec![
+                [[0.0, 0.0], [4.0, 0.0]],
+                [[4.0, 0.0], [4.0, 2.0]],
+                [[4.0, 6.0], [4.0, 8.0]],
+            ]
+        );
     }
 }

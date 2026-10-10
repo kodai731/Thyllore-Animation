@@ -1,4 +1,5 @@
 use crate::animation::editable::BezierHandle;
+use crate::animation::editable::CurveExtrapolation;
 use crate::animation::editable::InterpolationType;
 use crate::animation::editable::KeyframeId;
 use crate::animation::editable::PropertyType;
@@ -121,6 +122,19 @@ pub enum TimelineEvent {
         min_zoom: f32,
     },
     SetPreview(ClipPreview),
+    SetCurveExtrapolation {
+        track: CurveTrackRef,
+        property_type: PropertyType,
+        end: ExtrapolationEnd,
+        mode: CurveExtrapolation,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExtrapolationEnd {
+    Pre,
+    Post,
+    Both,
 }
 
 impl UiCommand for TimelineEvent {

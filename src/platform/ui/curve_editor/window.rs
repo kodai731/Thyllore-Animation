@@ -16,6 +16,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
+use super::context_menu::build_curve_extrapolation_menu;
 use super::draw::*;
 use super::interaction::*;
 use super::keyboard::*;
@@ -256,6 +257,7 @@ pub(super) fn build_curve_view(
     );
 
     handle_curve_editor_keyboard(ui, editor_state, &curves_to_draw);
+    build_curve_extrapolation_menu(ui, world, editor_state, &curves_to_draw, track_ref);
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 

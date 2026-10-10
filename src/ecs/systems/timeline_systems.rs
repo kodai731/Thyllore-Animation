@@ -12,7 +12,7 @@ use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{ClipLibrary, CurveTrackRef, HumanoidRig, TimelineState};
 use crate::ecs::systems::humanoid_import_systems::local_pose_to_standard;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
-use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
 use crate::ecs::world::{Entity, World};
 
 fn ensure_bezier_for_tangent(curve: &mut PropertyCurve, keyframe_id: KeyframeId) {
@@ -260,6 +260,27 @@ fn dispatch_keyframe_edit_events(
                     }
                     clip_recalculate_duration(clip);
                     clip_modified = true;
+                }
+            }
+
+            TimelineEvent::SetCurveExtrapolation {
+                track,
+                property_type,
+                end,
+                mode,
+            } => {
+                if let Some(clip) = clip_library.get_mut(clip_id) {
+                    if let Some(curve) = resolve_curve_mut(clip, *track, *property_type) {
+                        match end {
+                            ExtrapolationEnd::Pre => curve.pre_extrapolation = *mode,
+                            ExtrapolationEnd::Post => curve.post_extrapolation = *mode,
+                            ExtrapolationEnd::Both => {
+                                curve.pre_extrapolation = *mode;
+                                curve.post_extrapolation = *mode;
+                            }
+                        }
+                        clip_modified = true;
+                    }
                 }
             }
 
@@ -1433,6 +1454,41 @@ mod tests {
                 "t={time}: {before} -> {after}"
             );
         }
+    }
+
+    #[test]
+    fn set_curve_extrapolation_event() {
+        use crate::animation::editable::{curve_add_keyframe, CurveExtrapolation};
+        let mut timeline_state = TimelineState::default();
+        let mut clip_library = ClipLibrary::new();
+        let mut clip = EditableAnimationClip::new(1, "test".to_string());
+        let curve = clip.get_or_add_scalar_curve(PropertyType::Custom(7));
+        curve_add_keyframe(curve, 0.5, 2.0);
+        assert_eq!(curve.pre_extrapolation, CurveExtrapolation::Constant);
+        assert_eq!(curve.post_extrapolation, CurveExtrapolation::Constant);
+
+        clip_library
+            .source_clips
+            .insert(1, SourceClip::new(1, clip));
+        timeline_state.current_clip_id = Some(1);
+
+        let events: Vec<TimelineEvent> = vec![TimelineEvent::SetCurveExtrapolation {
+            track: CurveTrackRef::Scalar,
+            property_type: PropertyType::Custom(7),
+            end: ExtrapolationEnd::Pre,
+            mode: CurveExtrapolation::Cycle,
+        }];
+
+        let modified = timeline_process_events(&events, &mut timeline_state, &mut clip_library);
+        assert!(modified);
+
+        let curve = clip_library
+            .get(1)
+            .unwrap()
+            .get_scalar_curve(PropertyType::Custom(7))
+            .unwrap();
+        assert_eq!(curve.pre_extrapolation, CurveExtrapolation::Cycle);
+        assert_eq!(curve.post_extrapolation, CurveExtrapolation::Constant);
     }
 }
 

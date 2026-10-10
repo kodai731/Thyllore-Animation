@@ -1,3 +1,4 @@
+use super::context_menu::CURVE_EXTRAPOLATION_MENU;
 use super::window::SuggestionOverlay;
 use crate::animation::editable::PropertyCurve;
 use crate::animation::BoneId;
@@ -15,6 +16,7 @@ enum CurveEditorKeyAction {
     FrameAll,
     FramePlayhead,
     SelectAll,
+    OpenExtrapolationMenu,
 }
 
 struct CurveEditorKeyBinding {
@@ -49,6 +51,11 @@ const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
         modifier: KeyModifier::None,
         action: CurveEditorKeyAction::FramePlayhead,
     },
+    CurveEditorKeyBinding {
+        key: imgui::Key::E,
+        modifier: KeyModifier::Shift,
+        action: CurveEditorKeyAction::OpenExtrapolationMenu,
+    },
 ];
 
 pub(super) fn handle_curve_editor_keyboard(
@@ -80,6 +87,9 @@ pub(super) fn handle_curve_editor_keyboard(
                     let selected = select_all_keyframes(curves);
                     editor_state.selected_keyframes = selected;
                     editor_state.interaction = CurveInteractionMode::Idle;
+                }
+                CurveEditorKeyAction::OpenExtrapolationMenu => {
+                    ui.open_popup(CURVE_EXTRAPOLATION_MENU);
                 }
             }
         }

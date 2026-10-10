@@ -11,6 +11,7 @@ pub mod overlay_scale;
 pub mod pass_target;
 pub mod push_constants;
 pub mod rayquery;
+pub mod shadow_volume;
 pub mod storage_image;
 pub mod tonemap;
 pub mod trace_push;
@@ -44,6 +45,10 @@ pub use pass_target::{
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
+pub use shadow_volume::{
+    create_shadow_volume, record_shadow_volume_bake, shadow_volume_extent, ShadowVolumeBake,
+    ShadowVolumeSpec,
+};
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use trace_push::TracePush;

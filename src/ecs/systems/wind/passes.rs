@@ -286,7 +286,7 @@ unsafe fn record_wind_passes(
             &draws,
             image_index,
             command_buffer,
-        )?;
+        );
     }
 
     let resolve_sets = [

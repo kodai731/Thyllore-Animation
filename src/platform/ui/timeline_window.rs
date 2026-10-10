@@ -7,8 +7,8 @@ use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorState,
-    TimelineInteractionState, TimelineState, UiPointerOwnerId,
+    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorState,
+    PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -50,6 +50,8 @@ fn draw_timeline_window(
     curve_editor_state: &mut CurveEditorState,
     clip_track_snapshot: &ClipTrackSnapshot,
     layout: &LayoutSnapshot,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
 ) {
     ui.window("Timeline")
         .position([0.0, layout.timeline_y], Condition::Always)
@@ -64,19 +66,47 @@ fn draw_timeline_window(
         .build(|| {
             build_transport_controls(ui, world, state, clip_library, curve_editor_state);
             ui.separator();
-            handle_middle_drag_pan(ui, world, state);
-            build_timeline_content(
-                ui,
-                world,
-                state,
-                interaction,
-                clip_library,
-                curve_editor_state,
-                clip_track_snapshot,
-            );
-            let clip_duration = timeline_effective_duration(state, clip_library);
-            handle_timeline_shortcuts(ui, world, state);
-            handle_mouse_wheel_zoom(ui, world, state, clip_duration);
+
+            let mut curves_tab_active = curve_editor_state.is_open;
+            if let Some(_tab_bar) = ui.tab_bar("timeline_tabs") {
+                let curves_flags = if curve_editor_state.needs_focus {
+                    imgui::TabItemFlags::SET_SELECTED
+                } else {
+                    imgui::TabItemFlags::empty()
+                };
+                curve_editor_state.needs_focus = false;
+
+                if let Some(_tab) = ui.tab_item("Timeline") {
+                    curves_tab_active = false;
+                    handle_middle_drag_pan(ui, world, state);
+                    build_timeline_content(
+                        ui,
+                        world,
+                        state,
+                        interaction,
+                        clip_library,
+                        curve_editor_state,
+                        clip_track_snapshot,
+                    );
+
+                    let clip_duration = timeline_effective_duration(state, clip_library);
+                    handle_timeline_shortcuts(ui, world, state);
+                    handle_mouse_wheel_zoom(ui, world, state, clip_duration);
+                }
+                if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
+                    curves_tab_active = true;
+                    crate::platform::ui::curve_editor::build_curve_editor_tab(
+                        ui,
+                        world,
+                        state,
+                        clip_library,
+                        curve_editor_state,
+                        curve_buffer,
+                        pose_library,
+                    );
+                }
+            }
+            curve_editor_state.is_open = curves_tab_active;
         });
 }
 
@@ -1252,6 +1282,8 @@ fn build_timeline_window(
     let clip_library = world.resource::<ClipLibrary>();
     let mut curve_editor = world.resource_mut::<CurveEditorState>();
     let layout = world.resource::<LayoutSnapshot>();
+    let curve_buffer = world.resource::<CurveEditorBuffer>();
+    let mut pose_library = world.resource_mut::<PoseLibrary>();
     draw_timeline_window(
         ui,
         world,
@@ -1261,6 +1293,8 @@ fn build_timeline_window(
         &mut curve_editor,
         &clip_track_snapshot,
         &layout,
+        &curve_buffer,
+        &mut pose_library,
     );
 }
 

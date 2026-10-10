@@ -10,9 +10,4 @@ mod tween;
 mod view;
 mod window;
 
-crate::ui_window!(
-    "curve_editor",
-    Floating,
-    0,
-    window::build_curve_editor_window
-);
+pub(crate) use window::build_curve_editor_tab;

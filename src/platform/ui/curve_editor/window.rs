@@ -2,7 +2,6 @@ use crate::animation::editable::{
     curve_sample, EditableAnimationClip, PropertyCurve, PropertyType,
 };
 use crate::animation::BoneId;
-use crate::asset::AssetStorage;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
@@ -12,8 +11,6 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
@@ -37,8 +34,6 @@ pub(super) struct SuggestionOverlay {
     pub confidence: f32,
 }
 
-const MIN_WINDOW_WIDTH: f32 = 400.0;
-const MIN_WINDOW_HEIGHT: f32 = 300.0;
 const TRACK_LIST_WIDTH: f32 = 180.0;
 pub(super) const TIME_RULER_HEIGHT: f32 = 30.0;
 pub(super) const CURVE_PADDING: f32 = 10.0;
@@ -56,7 +51,7 @@ pub(super) const ALL_PROPERTY_TYPES: &[(PropertyType, [f32; 4], &str)] = &[
     (PropertyType::ScaleZ, [0.4, 0.8, 1.0, 1.0], "Scl.Z"),
 ];
 
-pub(super) fn draw_curve_editor_window(
+pub(crate) fn draw_curve_editor_contents(
     ui: &imgui::Ui,
     world: &World,
     timeline_state: &TimelineState,
@@ -68,77 +63,45 @@ pub(super) fn draw_curve_editor_window(
     scalar_domain: Option<&'static ScalarChannelDomain>,
     bone_roles: &[(BoneId, HumanoidRole)],
 ) {
-    if !editor_state.is_open {
-        return;
-    }
-
-    let display_size = ui.io().display_size;
-    let initial_pos = [
-        (display_size[0] - editor_state.window_size[0]) * 0.5,
-        (display_size[1] - editor_state.window_size[1]) * 0.5,
-    ];
-
-    let mut is_open = editor_state.is_open;
-    let should_focus = editor_state.needs_focus;
-
-    let mut window = ui
-        .window("Curve Editor")
-        .position(initial_pos, Condition::FirstUseEver)
-        .size(editor_state.window_size, Condition::FirstUseEver)
-        .size_constraints(
-            [MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT],
-            [display_size[0], display_size[1]],
-        )
-        .bg_alpha(1.0)
-        .opened(&mut is_open);
-
-    if should_focus {
-        window = window.focused(true);
-    }
+    let content_region = ui.content_region_avail();
 
     let selection_before = collect_selected_key_ids(editor_state);
-    window.build(|| {
-        editor_state.window_size = ui.window_size();
 
-        let content_region = ui.content_region_avail();
+    ui.child_window("left_panel")
+        .size([TRACK_LIST_WIDTH, content_region[1]])
+        .border(true)
+        .build(|| {
+            build_track_list(
+                ui,
+                world,
+                timeline_state,
+                clip_library,
+                editor_state,
+                scalar_domain,
+                bone_roles,
+            );
+        });
 
-        ui.child_window("left_panel")
-            .size([TRACK_LIST_WIDTH, content_region[1]])
-            .border(true)
-            .build(|| {
-                build_track_list(
-                    ui,
-                    world,
-                    timeline_state,
-                    clip_library,
-                    editor_state,
-                    scalar_domain,
-                    bone_roles,
-                );
-            });
+    ui.same_line();
 
-        ui.same_line();
+    let curve_view_width = content_region[0] - TRACK_LIST_WIDTH - 10.0;
+    ui.child_window("curve_view")
+        .size([curve_view_width, content_region[1]])
+        .border(true)
+        .build(|| {
+            build_curve_view(
+                ui,
+                world,
+                timeline_state,
+                clip_library,
+                editor_state,
+                curve_buffer,
+                suggestion_overlays,
+                pose_library,
+            );
+        });
 
-        let curve_view_width = content_region[0] - TRACK_LIST_WIDTH - 10.0;
-        ui.child_window("curve_view")
-            .size([curve_view_width, content_region[1]])
-            .border(true)
-            .build(|| {
-                build_curve_view(
-                    ui,
-                    world,
-                    timeline_state,
-                    clip_library,
-                    editor_state,
-                    curve_buffer,
-                    suggestion_overlays,
-                    pose_library,
-                );
-            });
-    });
     discard_tween_on_selection_change(editor_state, &selection_before);
-
-    editor_state.is_open = is_open;
 }
 
 pub(super) fn get_current_clip<'a>(
@@ -675,14 +638,17 @@ pub(super) fn build_curve_toolbar(
     );
 }
 
-pub(super) fn build_curve_editor_window(
+pub(crate) fn build_curve_editor_tab(
     ui: &imgui::Ui,
     world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
+    timeline_state: &TimelineState,
+    clip_library: &ClipLibrary,
+    editor_state: &mut CurveEditorState,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
 ) {
     let scalar_domain = {
-        let current = world.resource::<TimelineState>().current_clip_id;
+        let current = timeline_state.current_clip_id;
         current.and_then(|_| {
             crate::ecs::component::scalar_channel_domains()
                 .iter()
@@ -698,24 +664,18 @@ pub(super) fn build_curve_editor_window(
     let suggestion_overlays = collect_suggestion_overlays(world);
     let bone_roles = collect_humanoid_bone_roles(world);
 
-    let timeline_state = world.resource::<TimelineState>();
-    let clip_library = world.resource::<ClipLibrary>();
-    let mut curve_editor = world.resource_mut::<CurveEditorState>();
-    let curve_buffer = world.resource::<CurveEditorBuffer>();
-    let mut pose_library = world.resource_mut::<PoseLibrary>();
-    draw_curve_editor_window(
+    draw_curve_editor_contents(
         ui,
         world,
-        &timeline_state,
-        &clip_library,
-        &mut curve_editor,
-        &curve_buffer,
+        timeline_state,
+        clip_library,
+        editor_state,
+        curve_buffer,
         &suggestion_overlays,
-        &mut pose_library,
+        pose_library,
         scalar_domain,
         &bone_roles,
     );
-    curve_editor.needs_focus = false;
 }
 
 #[cfg(feature = "ml")]

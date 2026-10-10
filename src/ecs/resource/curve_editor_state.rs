@@ -112,7 +112,6 @@ pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_target: Option<CurveEditorTarget>,
     pub visible_curves: HashSet<PropertyType>,
-    pub window_size: [f32; 2],
     pub selected_keyframes: Vec<CurveSelectedKeyframe>,
     pub selection_anchor: Option<(PropertyType, KeyframeId)>,
     pub interaction: CurveInteractionMode,
@@ -180,7 +179,6 @@ impl Default for CurveEditorState {
             is_open: false,
             selected_target: None,
             visible_curves,
-            window_size: [800.0, 500.0],
             selected_keyframes: Vec::new(),
             selection_anchor: None,
             interaction: CurveInteractionMode::Idle,
@@ -219,7 +217,13 @@ thyllore_scene_core::declare_scene_format! {
         overwrite: overwrite_curve_editor_persisted_fields,
     },
     persisted {
-        is_open: bool { get: |e| e.is_open, set: |e, v| e.is_open = v },
+        is_open: bool {
+            get: |e| e.is_open,
+            set: |e, v| {
+                e.is_open = v;
+                e.needs_focus = v;
+            },
+        },
         selected_bone: SelectedBone {
             get: |e| e.selected_bone_id(),
             set: |e, v| {

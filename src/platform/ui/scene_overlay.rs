@@ -1,6 +1,7 @@
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
+use super::pointer::read_ui_pointer;
 #[cfg(feature = "auto-rig")]
 use super::text_to_animation_dialog::TextToAnimationDialogState;
 #[cfg(feature = "auto-rig")]
@@ -294,7 +295,7 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
         }
 
         let gizmo_hotkeys_enabled =
-            !ui.io().key_ctrl && !ui.is_mouse_down(imgui::MouseButton::Right);
+            !ui.io().key_ctrl && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
         if ui.is_key_pressed(imgui::Key::W) && gizmo_hotkeys_enabled {
             state_copy.mode = TransformGizmoMode::Translate;
         }

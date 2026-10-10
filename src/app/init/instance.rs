@@ -720,6 +720,8 @@ impl App {
             .insert_resource(crate::ecs::resource::PointerState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::PointerCapture::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::UiPointerOwner::default());
 
         let billboard_data = Self::initialize_billboard(
             instance,

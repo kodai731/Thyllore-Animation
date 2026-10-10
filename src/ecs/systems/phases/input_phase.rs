@@ -12,7 +12,7 @@ use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     BonePoseOverride, CameraFlyInput, ClipLibrary, HierarchyDisplayMode, ImGuiInputCapture,
     KeyboardModifiers, MeshAssets, MouseInput, TimelineState, TransformGizmoMode,
-    TransformGizmoState, ViewportInput,
+    TransformGizmoState, UiPointerOwner, ViewportInput,
 };
 use crate::ecs::systems::{
     apply_mesh_selection, compute_local_override_from_global_rotation,
@@ -34,7 +34,8 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     ctx.pointer_capture_mut().active = false;
     let wants_pointer = ctx.pointer_state().imgui_wants_pointer;
     let viewport_hovered = ctx.pointer_state().viewport_hovered;
-    if wants_pointer && !viewport_hovered {
+    let ui_handler_owns_pointer = ctx.world.resource::<UiPointerOwner>().owner().is_some();
+    if (wants_pointer && !viewport_hovered) || ui_handler_owns_pointer {
         ctx.pointer_capture_mut().active = true;
     }
 

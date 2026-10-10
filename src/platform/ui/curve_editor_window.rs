@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use imgui::Condition;
+use imgui::{Condition, MouseButton};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::curve_editor_bone_label::{format_bone_label, order_bone_ids_by_role};
@@ -16,7 +16,7 @@ use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
     CurveSelectedKeyframe, CurveTrackRef, DraggingTangent, HumanoidRigState, PoseLibrary,
-    TangentHandleType, TimelineState,
+    TangentHandleType, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 #[cfg(feature = "ml")]
@@ -25,6 +25,9 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::pointer::{
+    read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion, UiPointer,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct SuggestionOverlay {
@@ -809,7 +812,7 @@ fn draw_clipped_curve_content(
     ) {
         draw_keyframe_drag_preview(
             draw_list,
-            ui.io().mouse_pos,
+            read_ui_pointer(ui).pos,
             editor_state.drag_start_mouse_pos,
             vt,
             curves_to_draw,
@@ -818,7 +821,8 @@ fn draw_clipped_curve_content(
     }
 
     if let CurveInteractionMode::DraggingTangent(ref dragging) = editor_state.interaction {
-        draw_tangent_drag_curve_preview(draw_list, dragging, ui.io().mouse_pos, curves_to_draw, vt);
+        let mouse_pos = read_ui_pointer(ui).pos;
+        draw_tangent_drag_curve_preview(draw_list, dragging, mouse_pos, curves_to_draw, vt);
     }
 
     if let Some(bone_id) = track_ref.bone_id() {
@@ -851,6 +855,26 @@ fn handle_curve_view_interaction(
     track_ref: CurveTrackRef,
 ) {
     let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
+    let pointer = read_ui_pointer(ui);
+    let is_hovered = ui.is_item_hovered();
+    let any_button_pressed = [MouseButton::Left, MouseButton::Middle, MouseButton::Right]
+        .into_iter()
+        .any(|button| pointer.is_clicked(button));
+    let owns_press = any_button_pressed
+        && is_hovered
+        && ui_pointer_begin(
+            ui,
+            world,
+            UiPointerOwnerId::CurveEditor,
+            PointerRegion::LastItem,
+        );
+    let accepts_wheel = is_hovered
+        && ui_pointer_available(
+            ui,
+            world,
+            UiPointerOwnerId::CurveEditor,
+            PointerRegion::LastItem,
+        );
 
     handle_mouse_interaction(
         ui,
@@ -858,13 +882,18 @@ fn handle_curve_view_interaction(
         editor_state,
         vt,
         curves_to_draw,
+        &pointer,
+        CurvePointerAccess {
+            owns_press,
+            accepts_wheel,
+        },
         ruler_pos,
         curve_area_width,
         clip_duration,
     );
 
-    if ui.is_item_hovered() && ui.is_mouse_clicked(imgui::MouseButton::Right) {
-        let mouse_pos = ui.io().mouse_pos;
+    if owns_press && pointer.is_clicked(MouseButton::Right) {
+        let mouse_pos = pointer.pos;
         if let Some(hit) = find_keyframe_at_position(mouse_pos, curves_to_draw, vt) {
             editor_state.context_menu_keyframe = Some(CurveSelectedKeyframe {
                 property_type: hit.0,
@@ -1068,23 +1097,30 @@ fn add_key_target_property(
     }
 }
 
+#[derive(Clone, Copy)]
+struct CurvePointerAccess {
+    owns_press: bool,
+    accepts_wheel: bool,
+}
+
 fn handle_mouse_interaction(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    pointer: &UiPointer,
+    access: CurvePointerAccess,
     ruler_pos: [f32; 2],
     curve_area_width: f32,
     duration: f32,
 ) {
-    let is_hovered = ui.is_item_hovered();
-    let mouse_pos = ui.io().mouse_pos;
-    let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
-    let mouse_down = ui.io().mouse_down[0];
-    let mouse_released = ui.is_mouse_released(imgui::MouseButton::Left);
-    let middle_clicked = ui.is_mouse_clicked(imgui::MouseButton::Middle);
-    let middle_released = ui.is_mouse_released(imgui::MouseButton::Middle);
+    let mouse_pos = pointer.pos;
+    let mouse_clicked = access.owns_press && pointer.is_clicked(MouseButton::Left);
+    let mouse_down = pointer.is_down(MouseButton::Left);
+    let mouse_released = pointer.is_released(MouseButton::Left);
+    let middle_clicked = access.owns_press && pointer.is_clicked(MouseButton::Middle);
+    let middle_released = pointer.is_released(MouseButton::Middle);
 
     let in_ruler_area = mouse_pos[0] >= ruler_pos[0]
         && mouse_pos[0] <= ruler_pos[0] + curve_area_width
@@ -1117,14 +1153,13 @@ fn handle_mouse_interaction(
         );
     }
 
-    if is_hovered && mouse_clicked && in_ruler_area {
+    if mouse_clicked && in_ruler_area {
         editor_state.interaction = CurveInteractionMode::ScrubbingRuler;
         let time = vt.x_to_time(mouse_pos[0]).clamp(0.0, duration);
         world.send_command(TimelineEvent::SetTime(time));
     }
 
-    if is_hovered
-        && mouse_clicked
+    if mouse_clicked
         && in_curve_area
         && matches!(editor_state.interaction, CurveInteractionMode::Idle)
     {
@@ -1138,7 +1173,7 @@ fn handle_mouse_interaction(
         handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
     }
 
-    if is_hovered && middle_clicked && in_curve_area {
+    if middle_clicked && in_curve_area {
         editor_state.interaction = CurveInteractionMode::Panning {
             start_mouse_pos: mouse_pos,
             start_offset: [
@@ -1151,7 +1186,7 @@ fn handle_mouse_interaction(
     if matches!(
         editor_state.interaction,
         CurveInteractionMode::Panning { .. }
-    ) && ui.io().mouse_down[2]
+    ) && pointer.is_down(MouseButton::Middle)
     {
         handle_panning(editor_state, mouse_pos, vt);
     }
@@ -1165,8 +1200,8 @@ fn handle_mouse_interaction(
         world.send_command(TimelineEvent::SetTime(time));
     }
 
-    if is_hovered {
-        handle_wheel_input(ui, editor_state, mouse_pos, vt);
+    if access.accepts_wheel {
+        handle_wheel_input(ui, editor_state, pointer, vt);
     }
 }
 
@@ -1471,10 +1506,11 @@ fn handle_panning(editor_state: &mut CurveEditorState, mouse_pos: [f32; 2], vt: 
 fn handle_wheel_input(
     ui: &imgui::Ui,
     editor_state: &mut CurveEditorState,
-    mouse_pos: [f32; 2],
+    pointer: &UiPointer,
     vt: &ViewTransform,
 ) {
-    let wheel = ui.io().mouse_wheel;
+    let mouse_pos = pointer.pos;
+    let wheel = pointer.wheel;
     if wheel == 0.0 {
         return;
     }

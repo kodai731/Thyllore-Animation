@@ -9,6 +9,7 @@ use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
+use super::pointer::is_last_item_double_clicked;
 use super::scene_overlay::send_key_button;
 
 fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
@@ -670,8 +671,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                         }
                         let selected = !is_dir && *name == flame_ui.texture_fit_browser_selected;
                         let clicked = ui.selectable_config(&label).selected(selected).build();
-                        let double_clicked = ui.is_item_hovered()
-                            && ui.is_mouse_double_clicked(imgui::MouseButton::Left);
+                        let double_clicked = is_last_item_double_clicked(ui);
                         if *is_dir {
                             if double_clicked {
                                 jump = Some(format!("{}/{}", dir_now.trim_end_matches('/'), name));

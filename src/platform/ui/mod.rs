@@ -14,6 +14,7 @@ mod lightning;
 mod message_window;
 mod panel_splitter;
 mod param_widgets;
+pub(crate) mod pointer;
 mod scene_overlay;
 mod spring_bone_inspector;
 mod status_bar;

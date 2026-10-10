@@ -128,7 +128,8 @@ see `CLAUDE.md`):
 
 - `ecs_tests.rs` — ECS world, systems and scene round trips
 - `gltf_export_tests.rs`, `animation_roundtrip_tests.rs` — export / re-import parity
-- `asset_dependency_tests.rs`, `closed_form_guard.rs` — invariants over assets and the analytic core
+- `asset_dependency_tests.rs`, `closed_form_guard.rs`, `ui_raw_pointer_reads.rs` — invariants over assets, the
+  analytic core and the UI pointer accessor
 - `integration_tests.rs`, `model_loading_tests.rs`, `shader_tests.rs` — project structure, model files,
   compiled SPIR-V
 - `compare_fbx_dom.rs`, `compare_fbx_structure.rs`, `inspect_fbx_binary.rs` — FBX inspection helpers

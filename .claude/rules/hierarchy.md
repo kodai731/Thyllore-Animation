@@ -389,6 +389,9 @@ Each window in `src/platform/ui/` registers itself with `ui_window!` and keeps i
 resource it inserts through the hook's `init`; `src/platform/events/` never lists windows, states or
 `cfg` branches for them (a window behind a cargo feature or `debug_assertions` puts the `#![cfg]` at the top of
 its own file).
+A window that interprets the mouse itself (scrub, drag, pan, wheel) reads it through `src/platform/ui/pointer.rs`
+and starts the drag with `ui_pointer_begin`, which resolves hover, active widgets and the `UiPointerOwner` held by
+another drag; it never reads `ui.io().mouse_*` / `ui.is_mouse_*` (`tests/ui_raw_pointer_reads.rs`).
 
 ## src/vulkanr/
 

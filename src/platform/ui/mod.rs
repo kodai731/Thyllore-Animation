@@ -13,6 +13,7 @@ mod inspector_window;
 mod key_modifier;
 mod lightning;
 mod message_window;
+mod numeric_format;
 mod panel_splitter;
 mod param_widgets;
 pub(crate) mod pointer;

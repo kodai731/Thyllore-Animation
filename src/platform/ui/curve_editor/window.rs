@@ -70,7 +70,7 @@ pub(crate) fn draw_curve_editor_contents(
     ui.child_window("left_panel")
         .size([TRACK_LIST_WIDTH, content_region[1]])
         .border(true)
-        .build(|| {
+        .build(ui, || {
             build_track_list(
                 ui,
                 world,
@@ -88,7 +88,7 @@ pub(crate) fn draw_curve_editor_contents(
     ui.child_window("curve_view")
         .size([curve_view_width, content_region[1]])
         .border(true)
-        .build(|| {
+        .build(ui, || {
             build_curve_view(
                 ui,
                 world,
@@ -355,25 +355,24 @@ pub(super) fn draw_curve_area(
         .filled(true)
         .build();
 
-    draw_list.with_clip_rect_intersect(
+    let _clip = draw_list.push_clip_rect(
         co,
         [co[0] + curve_area_width, co[1] + curve_area_height],
-        || {
-            draw_clipped_curve_content(
-                ui,
-                &draw_list,
-                vt,
-                curve_area_width,
-                curve_area_height,
-                timeline_state,
-                editor_state,
-                curves_to_draw,
-                curve_buffer,
-                suggestion_overlays,
-                track_ref,
-                pose_library,
-            );
-        },
+        true,
+    );
+    draw_clipped_curve_content(
+        ui,
+        &draw_list,
+        vt,
+        curve_area_width,
+        curve_area_height,
+        timeline_state,
+        editor_state,
+        curves_to_draw,
+        curve_buffer,
+        suggestion_overlays,
+        track_ref,
+        pose_library,
     );
 }
 
@@ -629,13 +628,16 @@ pub(super) fn build_curve_toolbar(
     }
 
     ui.same_line_with_spacing(0.0, 20.0);
-    ui.radio_button("Curves", &mut editor_state.view_mode, CurveViewMode::Curves);
+    if ui.radio_button("Curves", editor_state.view_mode == CurveViewMode::Curves) {
+        editor_state.view_mode = CurveViewMode::Curves;
+    }
     ui.same_line();
-    ui.radio_button(
+    if ui.radio_button(
         "Dopesheet",
-        &mut editor_state.view_mode,
-        CurveViewMode::Dopesheet,
-    );
+        editor_state.view_mode == CurveViewMode::Dopesheet,
+    ) {
+        editor_state.view_mode = CurveViewMode::Dopesheet;
+    }
 }
 
 pub(crate) fn build_curve_editor_tab(

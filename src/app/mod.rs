@@ -9,6 +9,7 @@ pub mod data;
 pub mod effect_hooks;
 pub(crate) mod features;
 pub mod frame;
+mod imgui_textures;
 pub mod init;
 pub mod model;
 mod pass_targets;

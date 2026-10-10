@@ -1,0 +1,65 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::as_conversions,
+    clippy::unnecessary_cast
+)]
+//! Docking space functionality for Dear ImGui
+//!
+//! This module provides high-level Rust bindings for Dear ImGui's docking system,
+//! allowing you to create dockable windows and manage dock spaces.
+//!
+//! # Notes
+//!
+//! Docking support is always compiled into this crate; no Cargo feature is required. Set
+//! [`ConfigFlags::DOCKING_ENABLE`](crate::ConfigFlags::DOCKING_ENABLE) before the first frame when
+//! the Context will use docking. The setting is intentionally stable for that Context's lifetime
+//! because Dear ImGui destroys live dock nodes when it is disabled at runtime.
+//!
+//! # Basic Usage
+//!
+//! ```no_run
+//! # use dear_imgui_rs::*;
+//! # let mut ctx = Context::create();
+//! # ctx.io_mut().set_display_size([1280.0, 720.0]);
+//! # let flags = ctx.io().config_flags() | ConfigFlags::DOCKING_ENABLE;
+//! # ctx.io_mut().set_config_flags(flags);
+//! # ctx.font_atlas()
+//! #     .try_claim_legacy_renderer()
+//! #     .expect("legacy renderer font atlas should be available")
+//! #     .build();
+//! # let ui = ctx.frame();
+//! let tools = WindowKey::new("tools", "Tools")?;
+//! let layout = DockLayout::tabs([&tools]);
+//! ui.dockspace()
+//!     .layout(&layout, DockLayoutApply::IfMissing)
+//!     .build()?;
+//!
+//! ui.window(&tools).build(|| {
+//!     ui.text("This window is docked!");
+//! });
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! The old parallel convenience methods are intentionally absent:
+//!
+//! ```compile_fail
+//! # use dear_imgui_rs::{Context, Id};
+//! # let mut context = Context::create();
+//! # let ui = context.frame();
+//! let _ = ui.dock_space(Id::from(1_u32), [400.0, 300.0]);
+//! ```
+
+mod builder;
+mod flags;
+mod ui;
+mod validation;
+mod window_class;
+
+pub use builder::DockspaceBuilder;
+pub use flags::{DockNodeFlags, WindowClassDockNodeFlags};
+pub(crate) use validation::{
+    MAX_DOCKSPACE_HOST_NAME_BYTES, claim_dockspace_submission, current_dockspace_host_name_len,
+    is_valid_dockspace_size_component,
+};
+pub use window_class::{WindowClass, WindowClassError, WindowClassParentViewport};

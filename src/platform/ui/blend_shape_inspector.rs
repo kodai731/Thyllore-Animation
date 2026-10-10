@@ -61,7 +61,7 @@ pub fn build_blend_shape_section(
             continue;
         }
 
-        let id_token = ui.push_id_int(representative as i32);
+        let id_token = ui.push_id(representative as i32);
         build_blend_shape_toolbar(ui, world, representative, &mut inspector_state);
         build_channel_groups(
             ui,
@@ -74,7 +74,7 @@ pub fn build_blend_shape_section(
             },
             &mut inspector_state,
         );
-        id_token.end();
+        id_token.pop();
     }
 
     if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
@@ -184,7 +184,7 @@ fn build_channel_groups(
                 view.weights,
             );
         }
-        tree_token.end();
+        tree_token.pop();
     }
 }
 
@@ -267,5 +267,5 @@ fn build_presets_section(ui: &imgui::Ui, world: &World, entity: Entity) {
         world.send_command(MorphEvent::SaveExpressionLibrary);
     }
 
-    tree_token.end();
+    tree_token.pop();
 }

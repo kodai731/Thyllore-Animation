@@ -1,0 +1,1002 @@
+use super::*;
+
+fn new_platform_io() -> sys::ImGuiPlatformIO {
+    unsafe {
+        let p = sys::ImGuiPlatformIO_ImGuiPlatformIO();
+        assert!(
+            !p.is_null(),
+            "ImGuiPlatformIO_ImGuiPlatformIO() returned null"
+        );
+        let v = *p;
+        sys::ImGuiPlatformIO_destroy(p);
+        v
+    }
+}
+
+unsafe extern "C" fn draw_callback_marker(
+    _parent_list: *const sys::ImDrawList,
+    _cmd: *const sys::ImDrawCmd,
+) {
+}
+
+#[test]
+fn platform_io_from_raw_matches_mut_wrapper() {
+    let mut raw: sys::ImGuiPlatformIO = new_platform_io();
+    let raw_ptr = (&mut raw) as *mut sys::ImGuiPlatformIO;
+
+    let shared_ptr = unsafe { PlatformIo::from_raw(raw_ptr.cast_const()) }.as_raw();
+    let mutable_ptr = unsafe { PlatformIo::from_raw_mut(raw_ptr) }.as_raw();
+
+    assert_eq!(shared_ptr, mutable_ptr);
+}
+
+#[test]
+fn platform_io_standard_draw_callback_accessors_roundtrip() {
+    let mut raw: sys::ImGuiPlatformIO = new_platform_io();
+    let pio = unsafe { PlatformIo::from_raw_mut((&mut raw) as *mut sys::ImGuiPlatformIO) };
+
+    unsafe {
+        pio.set_draw_callback_reset_render_state_raw(Some(draw_callback_marker));
+        pio.set_draw_callback_set_sampler_linear_raw(Some(draw_callback_marker));
+        pio.set_draw_callback_set_sampler_nearest_raw(Some(draw_callback_marker));
+    }
+
+    assert_eq!(
+        pio.draw_callback_reset_render_state_raw()
+            .map(|f| f as usize),
+        Some(draw_callback_marker as *const () as usize)
+    );
+    assert_eq!(
+        pio.draw_callback_set_sampler_linear_raw()
+            .map(|f| f as usize),
+        Some(draw_callback_marker as *const () as usize)
+    );
+    assert_eq!(
+        pio.draw_callback_set_sampler_nearest_raw()
+            .map(|f| f as usize),
+        Some(draw_callback_marker as *const () as usize)
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn platform_io_clear_handlers_resets_platform_and_renderer_callbacks() {
+    unsafe extern "C" fn platform_cb(_viewport: *mut sys::ImGuiViewport) {}
+    unsafe extern "C" fn renderer_cb(_viewport: *mut sys::ImGuiViewport) {}
+    unsafe extern "C" fn platform_dpi_scale_cb(_viewport: *mut sys::ImGuiViewport) -> f32 {
+        1.0
+    }
+
+    let mut raw: sys::ImGuiPlatformIO = new_platform_io();
+    raw.Platform_CreateWindow = Some(platform_cb);
+    raw.Platform_DestroyWindow = Some(platform_cb);
+    raw.Platform_GetWindowDpiScale = Some(platform_dpi_scale_cb);
+    raw.Platform_OnChangedViewport = Some(platform_cb);
+    raw.Renderer_CreateWindow = Some(renderer_cb);
+    raw.Renderer_DestroyWindow = Some(renderer_cb);
+
+    let pio = unsafe { PlatformIo::from_raw_mut((&mut raw) as *mut sys::ImGuiPlatformIO) };
+    unsafe {
+        pio.clear_platform_handlers();
+        pio.clear_renderer_handlers();
+    }
+
+    assert!(raw.Platform_CreateWindow.is_none());
+    assert!(raw.Platform_DestroyWindow.is_none());
+    assert!(raw.Platform_GetWindowDpiScale.is_none());
+    assert!(raw.Platform_OnChangedViewport.is_none());
+    assert!(raw.Renderer_CreateWindow.is_none());
+    assert!(raw.Renderer_DestroyWindow.is_none());
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn clear_platform_handlers_clears_typed_get_window_callbacks() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn get_pos(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 41.0, y: 42.0 };
+        }
+    }
+    unsafe extern "C" fn get_size(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 43.0, y: 44.0 };
+        }
+    }
+    unsafe extern "C" fn get_scale(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 45.0, y: 46.0 };
+        }
+    }
+    unsafe extern "C" fn get_insets(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec4) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec4::new(1.0, 2.0, 3.0, 4.0);
+        }
+    }
+    unsafe extern "C" fn set_pos(_viewport: *mut sys::ImGuiViewport, _pos: *const sys::ImVec2) {}
+    unsafe extern "C" fn set_size(_viewport: *mut sys::ImGuiViewport, _size: *const sys::ImVec2) {}
+
+    let mut ctx = crate::Context::create();
+    let pio = ctx.platform_io_mut();
+    unsafe {
+        pio.set_platform_set_window_pos_raw(Some(set_pos));
+        pio.set_platform_get_window_pos_raw(Some(get_pos));
+        pio.set_platform_set_window_size_raw(Some(set_size));
+        pio.set_platform_get_window_size_raw(Some(get_size));
+        pio.set_platform_get_window_framebuffer_scale_raw(Some(get_scale));
+        pio.set_platform_get_window_work_area_insets_raw(Some(get_insets));
+        pio.clear_platform_handlers();
+    }
+
+    let raw = unsafe { &*pio.as_raw() };
+    assert!(raw.Platform_GetWindowPos.is_none());
+    assert!(raw.Platform_SetWindowPos.is_none());
+    assert!(raw.Platform_GetWindowSize.is_none());
+    assert!(raw.Platform_SetWindowSize.is_none());
+    assert!(raw.Platform_GetWindowFramebufferScale.is_none());
+    assert!(raw.Platform_GetWindowWorkAreaInsets.is_none());
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        0
+    );
+
+    let viewport = std::ptr::NonNull::<sys::ImGuiViewport>::dangling().as_ptr();
+    let mut pos = sys::ImVec2 { x: 1.0, y: 1.0 };
+    let mut size = sys::ImVec2 { x: 1.0, y: 1.0 };
+    let mut scale = sys::ImVec2 { x: 2.0, y: 2.0 };
+    let mut insets = sys::ImVec4::new(9.0, 9.0, 9.0, 9.0);
+    unsafe {
+        trampolines::platform_get_window_pos_out(viewport, &mut pos);
+        trampolines::platform_get_window_size_out(viewport, &mut size);
+        trampolines::platform_get_window_framebuffer_scale_out(viewport, &mut scale);
+        trampolines::platform_get_window_work_area_insets_out(viewport, &mut insets);
+    }
+
+    assert_eq!((pos.x, pos.y), (0.0, 0.0));
+    assert_eq!((size.x, size.y), (0.0, 0.0));
+    assert_eq!((scale.x, scale.y), (1.0, 1.0));
+    assert_eq!(
+        (insets.x, insets.y, insets.z, insets.w),
+        (0.0, 0.0, 0.0, 0.0)
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn clear_renderer_handlers_clears_renderer_aggregate_callback_storage_only() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn platform_set_pos(
+        _viewport: *mut sys::ImGuiViewport,
+        _pos: *const sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn renderer_set_size(
+        _viewport: *mut sys::ImGuiViewport,
+        _size: *const sys::ImVec2,
+    ) {
+    }
+
+    let mut ctx = crate::Context::create();
+    let pio = ctx.platform_io_mut();
+    unsafe {
+        pio.set_platform_set_window_pos_raw(Some(platform_set_pos));
+        pio.set_renderer_set_window_size_raw(Some(renderer_set_size));
+    }
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        1
+    );
+
+    unsafe { pio.clear_renderer_handlers() };
+
+    let raw = unsafe { &*pio.as_raw() };
+    assert!(raw.Platform_SetWindowPos.is_some());
+    assert!(raw.Renderer_SetWindowSize.is_none());
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        1
+    );
+
+    unsafe { pio.clear_platform_handlers() };
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        0
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn conditional_renderer_clear_releases_owned_storage_but_preserves_replacement_slot() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn owned_pointer_callback(
+        _viewport: *mut sys::ImGuiViewport,
+        _size: *const sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn foreign_direct_callback(
+        _viewport: *mut sys::ImGuiViewport,
+        _size: sys::ImVec2,
+    ) {
+    }
+
+    let storage_count_before = unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() };
+    let mut ctx = crate::Context::create();
+    let platform_io = ctx.platform_io_mut();
+    unsafe { platform_io.set_renderer_set_window_size_raw(Some(owned_pointer_callback)) };
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before + 1
+    );
+
+    unsafe {
+        (*platform_io.as_raw_mut()).Renderer_SetWindowSize = Some(foreign_direct_callback);
+    }
+    // The test owns the callback table and no native call can run while it is mutated here.
+    assert!(unsafe {
+        platform_io.clear_renderer_set_window_size_if_pointer_callback(owned_pointer_callback)
+    });
+    assert_eq!(
+        unsafe { (*platform_io.as_raw()).Renderer_SetWindowSize }.map(|callback| callback as usize),
+        Some(foreign_direct_callback as *const () as usize)
+    );
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before
+    );
+
+    unsafe {
+        (*platform_io.as_raw_mut()).Renderer_SetWindowSize = None;
+    }
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn conditional_platform_aggregate_clear_preserves_same_thunk_replacements() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn owned_vec2(_viewport: *mut sys::ImGuiViewport, _out: *mut sys::ImVec2) {}
+    unsafe extern "C" fn replacement_vec2(
+        _viewport: *mut sys::ImGuiViewport,
+        _out: *mut sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn owned_vec4(_viewport: *mut sys::ImGuiViewport, _out: *mut sys::ImVec4) {}
+    unsafe extern "C" fn owned_const_vec2(
+        _viewport: *mut sys::ImGuiViewport,
+        _value: *const sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn replacement_const_vec2(
+        _viewport: *mut sys::ImGuiViewport,
+        _value: *const sys::ImVec2,
+    ) {
+    }
+
+    let storage_count_before = unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() };
+    let mut ctx = crate::Context::create();
+    let platform_io = ctx.platform_io_mut();
+    unsafe {
+        platform_io.set_platform_get_window_pos_raw(Some(owned_vec2));
+        platform_io.set_platform_get_window_size_raw(Some(owned_vec2));
+        platform_io.set_platform_get_window_framebuffer_scale_raw(Some(owned_vec2));
+        platform_io.set_platform_get_window_work_area_insets_raw(Some(owned_vec4));
+        platform_io.set_platform_set_window_pos_raw(Some(owned_const_vec2));
+        platform_io.set_platform_set_window_size_raw(Some(owned_const_vec2));
+
+        platform_io.set_platform_get_window_pos_raw(Some(replacement_vec2));
+        platform_io.set_platform_set_window_pos_raw(Some(replacement_const_vec2));
+    }
+    // The test owns the callback table and no native call can run while it is mutated here.
+    assert!(unsafe { !platform_io.clear_platform_get_window_pos_if_raw_callback(owned_vec2) });
+    assert!(unsafe {
+        !platform_io.clear_platform_set_window_pos_if_pointer_callback(owned_const_vec2)
+    });
+    let installed = super::trampolines::load_cb_for_platform_io(
+        platform_io.as_raw(),
+        &super::trampolines::PLATFORM_GET_WINDOW_POS_RAW_CB,
+    )
+    .unwrap();
+    assert!(std::ptr::fn_addr_eq(
+        installed,
+        replacement_vec2 as unsafe extern "C" fn(*mut sys::ImGuiViewport, *mut sys::ImVec2)
+    ));
+
+    unsafe {
+        assert!(platform_io.clear_platform_get_window_pos_if_raw_callback(replacement_vec2));
+        assert!(
+            platform_io.clear_platform_set_window_pos_if_pointer_callback(replacement_const_vec2)
+        );
+        assert!(platform_io.clear_platform_set_window_size_if_pointer_callback(owned_const_vec2));
+        assert!(platform_io.clear_platform_get_window_size_if_raw_callback(owned_vec2));
+        assert!(
+            platform_io.clear_platform_get_window_framebuffer_scale_if_raw_callback(owned_vec2)
+        );
+        assert!(platform_io.clear_platform_get_window_work_area_insets_if_raw_callback(owned_vec4));
+    }
+    assert!(unsafe { (*platform_io.as_raw()).Platform_GetWindowPos }.is_none());
+    assert!(unsafe { (*platform_io.as_raw()).Platform_GetWindowSize }.is_none());
+    assert!(unsafe { (*platform_io.as_raw()).Platform_GetWindowFramebufferScale }.is_none());
+    assert!(unsafe { (*platform_io.as_raw()).Platform_GetWindowWorkAreaInsets }.is_none());
+    assert!(unsafe { (*platform_io.as_raw()).Platform_SetWindowPos }.is_none());
+    assert!(unsafe { (*platform_io.as_raw()).Platform_SetWindowSize }.is_none());
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn conditional_aggregate_setter_clear_targets_its_receiver_context() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn platform_set(
+        _viewport: *mut sys::ImGuiViewport,
+        _value: *const sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn renderer_set(
+        _viewport: *mut sys::ImGuiViewport,
+        _value: *const sys::ImVec2,
+    ) {
+    }
+
+    let storage_count_before = unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() };
+    let mut first = crate::Context::create();
+    let first_platform_io = {
+        let platform_io = first.platform_io_mut();
+        unsafe {
+            platform_io.set_platform_set_window_pos_raw(Some(platform_set));
+            platform_io.set_platform_set_window_size_raw(Some(platform_set));
+            platform_io.set_renderer_set_window_size_raw(Some(renderer_set));
+        }
+        platform_io.as_raw_mut()
+    };
+    let first = first.suspend_or_panic();
+    let second = crate::Context::create();
+    let second_platform_io = second.platform_io().as_raw();
+
+    let first_platform_io = unsafe { PlatformIo::from_raw_mut(first_platform_io) };
+    unsafe {
+        assert!(first_platform_io.clear_platform_set_window_pos_if_pointer_callback(platform_set));
+        assert!(first_platform_io.clear_platform_set_window_size_if_pointer_callback(platform_set));
+        assert!(first_platform_io.clear_renderer_set_window_size_if_pointer_callback(renderer_set));
+    }
+
+    assert!(unsafe { (*first_platform_io.as_raw()).Platform_SetWindowPos }.is_none());
+    assert!(unsafe { (*first_platform_io.as_raw()).Platform_SetWindowSize }.is_none());
+    assert!(unsafe { (*first_platform_io.as_raw()).Renderer_SetWindowSize }.is_none());
+    assert!(unsafe { (*second_platform_io).Platform_SetWindowPos }.is_none());
+    assert!(unsafe { (*second_platform_io).Platform_SetWindowSize }.is_none());
+    assert!(unsafe { (*second_platform_io).Renderer_SetWindowSize }.is_none());
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before
+    );
+
+    drop(second);
+    drop(first);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn conditional_platform_aggregate_clear_reports_direct_slot_replacements() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn owned_get(_viewport: *mut sys::ImGuiViewport, _out: *mut sys::ImVec2) {}
+    unsafe extern "C" fn owned_set(_viewport: *mut sys::ImGuiViewport, _value: *const sys::ImVec2) {
+    }
+    unsafe extern "C" fn foreign_get(_viewport: *mut sys::ImGuiViewport) -> sys::ImVec2 {
+        sys::ImVec2::zero()
+    }
+    unsafe extern "C" fn foreign_set(_viewport: *mut sys::ImGuiViewport, _value: sys::ImVec2) {}
+
+    let storage_count_before = unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() };
+    let mut ctx = crate::Context::create();
+    let platform_io = ctx.platform_io_mut();
+    unsafe {
+        platform_io.set_platform_get_window_pos_raw(Some(owned_get));
+        platform_io.set_platform_set_window_pos_raw(Some(owned_set));
+    }
+
+    unsafe {
+        let raw = platform_io.as_raw_mut();
+        (*raw).Platform_GetWindowPos = Some(foreign_get);
+        (*raw).Platform_SetWindowPos = Some(foreign_set);
+    }
+
+    // The test owns the callback table and no native call can run while it is mutated here.
+    assert!(unsafe { !platform_io.clear_platform_get_window_pos_if_raw_callback(owned_get) });
+    assert!(unsafe { !platform_io.clear_platform_set_window_pos_if_pointer_callback(owned_set) });
+    let raw = unsafe { &*platform_io.as_raw() };
+    assert!(std::ptr::fn_addr_eq(
+        raw.Platform_GetWindowPos.unwrap(),
+        foreign_get as unsafe extern "C" fn(*mut sys::ImGuiViewport) -> sys::ImVec2
+    ));
+    assert!(std::ptr::fn_addr_eq(
+        raw.Platform_SetWindowPos.unwrap(),
+        foreign_set as unsafe extern "C" fn(*mut sys::ImGuiViewport, sys::ImVec2)
+    ));
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before
+    );
+
+    unsafe {
+        let raw = platform_io.as_raw_mut();
+        (*raw).Platform_GetWindowPos = None;
+        (*raw).Platform_SetWindowPos = None;
+    }
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn context_drop_clears_aggregate_callback_storage() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn platform_set_pos(
+        _viewport: *mut sys::ImGuiViewport,
+        _pos: *const sys::ImVec2,
+    ) {
+    }
+    unsafe extern "C" fn renderer_set_size(
+        _viewport: *mut sys::ImGuiViewport,
+        _size: *const sys::ImVec2,
+    ) {
+    }
+
+    let storage_count_before = unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() };
+    {
+        let mut ctx = crate::Context::create();
+        let pio = ctx.platform_io_mut();
+        unsafe {
+            pio.set_platform_set_window_pos_raw(Some(platform_set_pos));
+            pio.set_renderer_set_window_size_raw(Some(renderer_set_size));
+        }
+        assert_eq!(
+            unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+            storage_count_before + 1
+        );
+    }
+
+    // The PlatformIO pointer was destroyed with the context. Only query shim-owned storage.
+    assert_eq!(
+        unsafe { sys::ImGuiPlatformIO_AggregateCallbackStorageCount() },
+        storage_count_before
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn get_window_pos_and_size_callbacks_are_context_local() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn get_pos_a(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 11.0, y: 12.0 };
+        }
+    }
+    unsafe extern "C" fn get_size_a(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 13.0, y: 14.0 };
+        }
+    }
+    unsafe extern "C" fn get_pos_b(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 21.0, y: 22.0 };
+        }
+    }
+    unsafe extern "C" fn get_size_b(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 23.0, y: 24.0 };
+        }
+    }
+    unsafe extern "C" fn get_scale_a(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 1.0, y: 2.0 };
+        }
+    }
+    unsafe extern "C" fn get_scale_b(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 3.0, y: 4.0 };
+        }
+    }
+    unsafe extern "C" fn get_insets_a(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec4) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec4::new(1.0, 2.0, 3.0, 4.0);
+        }
+    }
+    unsafe extern "C" fn get_insets_b(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec4) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec4::new(5.0, 6.0, 7.0, 8.0);
+        }
+    }
+
+    let mut ctx_a = crate::Context::create();
+    let language_user_data_a = std::ptr::NonNull::<u8>::dangling().as_ptr().cast();
+    unsafe {
+        // These dangling values are identity markers only; no language backend dereferences them.
+        ctx_a
+            .io_mut()
+            .set_backend_language_user_data(language_user_data_a);
+        ctx_a
+            .platform_io_mut()
+            .set_platform_get_window_pos_raw(Some(get_pos_a));
+        ctx_a
+            .platform_io_mut()
+            .set_platform_get_window_size_raw(Some(get_size_a));
+        ctx_a
+            .platform_io_mut()
+            .set_platform_get_window_framebuffer_scale_raw(Some(get_scale_a));
+        ctx_a
+            .platform_io_mut()
+            .set_platform_get_window_work_area_insets_raw(Some(get_insets_a));
+    }
+    assert_eq!(
+        ctx_a.io().backend_language_user_data(),
+        language_user_data_a
+    );
+
+    let suspended_a = ctx_a.suspend_or_panic();
+
+    let mut ctx_b = crate::Context::create();
+    let language_user_data_b = std::ptr::NonNull::<u16>::dangling().as_ptr().cast();
+    unsafe {
+        // These dangling values are identity markers only; no language backend dereferences them.
+        ctx_b
+            .io_mut()
+            .set_backend_language_user_data(language_user_data_b);
+        ctx_b
+            .platform_io_mut()
+            .set_platform_get_window_pos_raw(Some(get_pos_b));
+        ctx_b
+            .platform_io_mut()
+            .set_platform_get_window_size_raw(Some(get_size_b));
+        ctx_b
+            .platform_io_mut()
+            .set_platform_get_window_framebuffer_scale_raw(Some(get_scale_b));
+        ctx_b
+            .platform_io_mut()
+            .set_platform_get_window_work_area_insets_raw(Some(get_insets_b));
+    }
+    assert_eq!(
+        ctx_b.io().backend_language_user_data(),
+        language_user_data_b
+    );
+
+    let mut b_pos = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut b_size = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut b_scale = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut b_insets = sys::ImVec4::new(9.0, 9.0, 9.0, 9.0);
+    unsafe {
+        trampolines::platform_get_window_pos_out(std::ptr::null_mut(), &mut b_pos);
+        trampolines::platform_get_window_size_out(std::ptr::null_mut(), &mut b_size);
+        trampolines::platform_get_window_framebuffer_scale_out(std::ptr::null_mut(), &mut b_scale);
+        trampolines::platform_get_window_work_area_insets_out(std::ptr::null_mut(), &mut b_insets);
+    }
+    assert_eq!((b_pos.x, b_pos.y), (0.0, 0.0));
+    assert_eq!((b_size.x, b_size.y), (0.0, 0.0));
+    assert_eq!((b_scale.x, b_scale.y), (1.0, 1.0));
+    assert_eq!(
+        (b_insets.x, b_insets.y, b_insets.z, b_insets.w),
+        (0.0, 0.0, 0.0, 0.0)
+    );
+
+    let viewport_b = std::ptr::NonNull::<sys::ImGuiViewport>::dangling().as_ptr();
+    unsafe {
+        trampolines::platform_get_window_pos_out(viewport_b, &mut b_pos);
+        trampolines::platform_get_window_size_out(viewport_b, &mut b_size);
+        trampolines::platform_get_window_framebuffer_scale_out(viewport_b, &mut b_scale);
+        trampolines::platform_get_window_work_area_insets_out(viewport_b, &mut b_insets);
+    }
+    assert_eq!((b_pos.x, b_pos.y), (21.0, 22.0));
+    assert_eq!((b_size.x, b_size.y), (23.0, 24.0));
+    assert_eq!((b_scale.x, b_scale.y), (3.0, 4.0));
+    assert_eq!(
+        (b_insets.x, b_insets.y, b_insets.z, b_insets.w),
+        (5.0, 6.0, 7.0, 8.0)
+    );
+
+    let suspended_b = ctx_b.suspend_or_panic();
+    let ctx_a = suspended_a.activate().expect("ctx_a should activate");
+
+    let mut a_pos = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut a_size = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut a_scale = sys::ImVec2 { x: 0.0, y: 0.0 };
+    let mut a_insets = sys::ImVec4::zero();
+    let viewport_a = std::ptr::NonNull::<sys::ImGuiViewport>::dangling().as_ptr();
+    unsafe {
+        trampolines::platform_get_window_pos_out(viewport_a, &mut a_pos);
+        trampolines::platform_get_window_size_out(viewport_a, &mut a_size);
+        trampolines::platform_get_window_framebuffer_scale_out(viewport_a, &mut a_scale);
+        trampolines::platform_get_window_work_area_insets_out(viewport_a, &mut a_insets);
+    }
+    assert_eq!((a_pos.x, a_pos.y), (11.0, 12.0));
+    assert_eq!((a_size.x, a_size.y), (13.0, 14.0));
+    assert_eq!((a_scale.x, a_scale.y), (1.0, 2.0));
+    assert_eq!(
+        (a_insets.x, a_insets.y, a_insets.z, a_insets.w),
+        (1.0, 2.0, 3.0, 4.0)
+    );
+
+    drop(ctx_a);
+    drop(suspended_b);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn typed_platform_callbacks_can_queue_engine_viewport_intent_via_backend_user_data() {
+    let _guard = crate::test_support::imgui_context_guard();
+    #[derive(Debug, PartialEq)]
+    enum Command {
+        Create {
+            id: crate::Id,
+            pos: [f32; 2],
+            size: [f32; 2],
+        },
+        Move {
+            id: crate::Id,
+            pos: [f32; 2],
+        },
+    }
+
+    #[derive(Default)]
+    struct Queue {
+        commands: Vec<Command>,
+    }
+
+    unsafe fn queue_from_current_io() -> &'static mut Queue {
+        let io = unsafe { sys::igGetIO_Nil() };
+        assert!(!io.is_null(), "test requires an active ImGui context");
+        let user_data = unsafe { (*io).BackendPlatformUserData };
+        assert!(
+            !user_data.is_null(),
+            "backend platform user data should point at the engine queue"
+        );
+        unsafe { &mut *(user_data as *mut Queue) }
+    }
+
+    unsafe extern "C" fn create_window(viewport: *mut Viewport) {
+        let viewport = unsafe { viewport.as_ref() }.expect("viewport should be non-null");
+        let queue = unsafe { queue_from_current_io() };
+        queue.commands.push(Command::Create {
+            id: viewport.id(),
+            pos: viewport.pos(),
+            size: viewport.size(),
+        });
+    }
+
+    unsafe extern "C" fn set_window_pos(viewport: *mut Viewport, pos: sys::ImVec2) {
+        let viewport = unsafe { viewport.as_ref() }.expect("viewport should be non-null");
+        let queue = unsafe { queue_from_current_io() };
+        queue.commands.push(Command::Move {
+            id: viewport.id(),
+            pos: [pos.x, pos.y],
+        });
+    }
+
+    let mut ctx = crate::Context::create();
+    let mut queue = Queue::default();
+    unsafe {
+        // `queue` outlives every callback invocation below and is cleared before the test returns.
+        ctx.io_mut()
+            .set_backend_platform_user_data((&mut queue as *mut Queue).cast());
+        ctx.platform_io_mut()
+            .set_platform_create_window(Some(create_window));
+        ctx.platform_io_mut()
+            .set_platform_set_window_pos(Some(set_window_pos));
+    }
+
+    let raw_viewport = unsafe { sys::ImGuiViewport_ImGuiViewport() };
+    assert!(
+        !raw_viewport.is_null(),
+        "ImGuiViewport_ImGuiViewport() returned null"
+    );
+    unsafe {
+        let viewport = Viewport::from_raw_mut(raw_viewport);
+        viewport.set_pos([32.0, 48.0]);
+        viewport.set_size([640.0, 360.0]);
+        (*raw_viewport).ID = 0xDEAD_BEEF;
+
+        trampolines::platform_create_window(raw_viewport);
+        let pos = sys::ImVec2 { x: 80.0, y: 96.0 };
+        trampolines::platform_set_window_pos(raw_viewport, &pos);
+
+        sys::ImGuiViewport_destroy(raw_viewport);
+    }
+
+    assert_eq!(
+        queue.commands,
+        [
+            Command::Create {
+                id: crate::Id::from(0xDEAD_BEEF),
+                pos: [32.0, 48.0],
+                size: [640.0, 360.0],
+            },
+            Command::Move {
+                id: crate::Id::from(0xDEAD_BEEF),
+                pos: [80.0, 96.0],
+            },
+        ]
+    );
+
+    unsafe {
+        // No callback is invoked after this point.
+        ctx.io_mut()
+            .set_backend_platform_user_data(std::ptr::null_mut());
+    }
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn typed_callback_setters_reject_non_current_platform_io() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn create_window(_viewport: *mut Viewport) {}
+
+    let mut ctx_a = crate::Context::create();
+    let pio_a = ctx_a.platform_io_mut().as_raw_mut();
+    let suspended_a = ctx_a.suspend_or_panic();
+
+    let ctx_b = crate::Context::create();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        PlatformIo::from_raw_mut(pio_a).set_platform_create_window(Some(create_window));
+    }));
+
+    assert!(result.is_err());
+
+    drop(ctx_b);
+    drop(suspended_a);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn out_param_callback_setters_reject_non_current_platform_io() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn get_pos(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 41.0, y: 42.0 };
+        }
+    }
+
+    let mut ctx_a = crate::Context::create();
+    let pio_a = ctx_a.platform_io_mut().as_raw_mut();
+    let suspended_a = ctx_a.suspend_or_panic();
+
+    let ctx_b = crate::Context::create();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        PlatformIo::from_raw_mut(pio_a).set_platform_get_window_pos_raw(Some(get_pos));
+    }));
+
+    assert!(result.is_err());
+
+    drop(ctx_b);
+    drop(suspended_a);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn clear_handlers_target_receiver_platform_io_not_current_context() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn get_pos(_viewport: *mut sys::ImGuiViewport, out: *mut sys::ImVec2) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = sys::ImVec2 { x: 41.0, y: 42.0 };
+        }
+    }
+    unsafe extern "C" fn create_window(_viewport: *mut Viewport) {}
+    unsafe extern "C" fn renderer_window(_viewport: *mut Viewport) {}
+
+    let mut ctx_a = crate::Context::create();
+    let raw_a = ctx_a.as_raw();
+    let pio_a = ctx_a.platform_io_mut().as_raw_mut();
+    unsafe {
+        ctx_a
+            .platform_io_mut()
+            .set_platform_get_window_pos_raw(Some(get_pos));
+    }
+    unsafe {
+        ctx_a
+            .platform_io_mut()
+            .set_platform_create_window(Some(create_window));
+        ctx_a
+            .platform_io_mut()
+            .set_renderer_create_window(Some(renderer_window));
+    }
+    let suspended_a = ctx_a.suspend_or_panic();
+
+    let ctx_b = crate::Context::create();
+    let raw_b = ctx_b.as_raw();
+
+    unsafe {
+        PlatformIo::from_raw_mut(pio_a).clear_platform_handlers();
+        PlatformIo::from_raw_mut(pio_a).clear_renderer_handlers();
+    }
+
+    unsafe {
+        assert_eq!(sys::igGetCurrentContext(), raw_b);
+
+        let raw = &*pio_a;
+        assert!(raw.Platform_GetWindowPos.is_none());
+        assert!(raw.Platform_CreateWindow.is_none());
+        assert!(raw.Renderer_CreateWindow.is_none());
+
+        sys::igSetCurrentContext(raw_a);
+    }
+
+    let viewport = std::ptr::NonNull::<sys::ImGuiViewport>::dangling().as_ptr();
+    let mut pos = sys::ImVec2 { x: 1.0, y: 1.0 };
+    unsafe {
+        trampolines::platform_get_window_pos_out(viewport, &mut pos);
+        trampolines::platform_create_window(viewport);
+        trampolines::renderer_create_window(viewport);
+    }
+
+    assert_eq!((pos.x, pos.y), (0.0, 0.0));
+
+    unsafe {
+        sys::igSetCurrentContext(raw_b);
+    }
+    drop(ctx_b);
+    drop(suspended_a);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn raw_setters_clear_receiver_typed_callback_slots() {
+    let _guard = crate::test_support::imgui_context_guard();
+    unsafe extern "C" fn create_window(_viewport: *mut Viewport) {
+        CREATE_WINDOW_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    unsafe extern "C" fn renderer_window(_viewport: *mut Viewport) {
+        RENDERER_WINDOW_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    static CREATE_WINDOW_CALLS: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+    static RENDERER_WINDOW_CALLS: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+
+    CREATE_WINDOW_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+    RENDERER_WINDOW_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+
+    let mut ctx_a = crate::Context::create();
+    let raw_a = ctx_a.as_raw();
+    let pio_a = ctx_a.platform_io_mut().as_raw_mut();
+    unsafe {
+        ctx_a
+            .platform_io_mut()
+            .set_platform_create_window(Some(create_window));
+        ctx_a
+            .platform_io_mut()
+            .set_renderer_create_window(Some(renderer_window));
+    }
+
+    let viewport = std::ptr::NonNull::<sys::ImGuiViewport>::dangling().as_ptr();
+    unsafe {
+        trampolines::platform_create_window(viewport);
+        trampolines::renderer_create_window(viewport);
+    }
+    assert_eq!(
+        CREATE_WINDOW_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+    assert_eq!(
+        RENDERER_WINDOW_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+
+    let suspended_a = ctx_a.suspend_or_panic();
+    let ctx_b = crate::Context::create();
+    let raw_b = ctx_b.as_raw();
+
+    unsafe {
+        PlatformIo::from_raw_mut(pio_a).set_platform_create_window_raw(None);
+        PlatformIo::from_raw_mut(pio_a).set_renderer_create_window_raw(None);
+        assert_eq!(sys::igGetCurrentContext(), raw_b);
+        sys::igSetCurrentContext(raw_a);
+    }
+
+    unsafe {
+        trampolines::platform_create_window(viewport);
+        trampolines::renderer_create_window(viewport);
+    }
+    assert_eq!(
+        CREATE_WINDOW_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+    assert_eq!(
+        RENDERER_WINDOW_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+
+    unsafe {
+        sys::igSetCurrentContext(raw_b);
+    }
+    drop(ctx_b);
+    drop(suspended_a);
+}
+
+#[cfg(feature = "multi-viewport")]
+#[test]
+fn cpp_platform_io_probe_round_trips_all_aggregate_slots() {
+    let _guard = crate::test_support::imgui_context_guard();
+
+    unsafe extern "C" fn set_pos(_viewport: *mut Viewport, pos: sys::ImVec2) {
+        assert_eq!((pos.x, pos.y), (1.0, 2.0));
+    }
+
+    unsafe extern "C" fn set_size(_viewport: *mut Viewport, size: sys::ImVec2) {
+        assert_eq!((size.x, size.y), (3.0, 4.0));
+    }
+
+    unsafe extern "C" fn get_pos(_viewport: *mut Viewport, out: *mut sys::ImVec2) {
+        unsafe { *out = sys::ImVec2 { x: 5.0, y: 6.0 } };
+    }
+
+    unsafe extern "C" fn get_size(_viewport: *mut Viewport, out: *mut sys::ImVec2) {
+        unsafe { *out = sys::ImVec2 { x: 7.0, y: 8.0 } };
+    }
+
+    unsafe extern "C" fn get_framebuffer_scale(_viewport: *mut Viewport, out: *mut sys::ImVec2) {
+        unsafe { *out = sys::ImVec2 { x: 9.0, y: 10.0 } };
+    }
+
+    unsafe extern "C" fn get_work_area_insets(_viewport: *mut Viewport, out: *mut sys::ImVec4) {
+        unsafe { *out = sys::ImVec4::new(11.0, 12.0, 13.0, 14.0) };
+    }
+
+    unsafe extern "C" fn renderer_set_size(_viewport: *mut Viewport, size: sys::ImVec2) {
+        assert_eq!((size.x, size.y), (15.0, 16.0));
+    }
+
+    let mut ctx = crate::Context::create();
+    let platform_io = ctx.platform_io_mut();
+    unsafe {
+        platform_io.set_platform_set_window_pos(Some(set_pos));
+        platform_io.set_platform_set_window_size(Some(set_size));
+        platform_io.set_platform_get_window_pos(Some(get_pos));
+        platform_io.set_platform_get_window_size(Some(get_size));
+        platform_io.set_platform_get_window_framebuffer_scale(Some(get_framebuffer_scale));
+        platform_io.set_platform_get_window_work_area_insets(Some(get_work_area_insets));
+        platform_io.set_renderer_set_window_size(Some(renderer_set_size));
+    }
+    let stored_renderer_size_callback = unsafe {
+        sys::ImGuiPlatformIO_RendererSetWindowSizePointerParam(platform_io.as_raw_mut())
+            .expect("safe renderer setter must retain its pointer callback")
+    };
+    assert!(std::ptr::fn_addr_eq(
+        stored_renderer_size_callback,
+        trampolines::renderer_set_window_size
+            as unsafe extern "C" fn(*mut sys::ImGuiViewport, *const sys::ImVec2),
+    ));
+
+    let mut result = sys::DearImguiRsPlatformIoAggregateProbeResult::default();
+    unsafe {
+        assert!(sys::ImGuiPlatformIO_ProbeAggregateCallbacks(
+            platform_io.as_raw_mut(),
+            &mut result,
+        ));
+    }
+
+    assert_eq!(
+        (result.PlatformGetWindowPos.x, result.PlatformGetWindowPos.y),
+        (5.0, 6.0)
+    );
+    assert_eq!(
+        (
+            result.PlatformGetWindowSize.x,
+            result.PlatformGetWindowSize.y
+        ),
+        (7.0, 8.0)
+    );
+    assert_eq!(
+        (
+            result.PlatformGetWindowFramebufferScale.x,
+            result.PlatformGetWindowFramebufferScale.y,
+        ),
+        (9.0, 10.0)
+    );
+    assert_eq!(
+        (
+            result.PlatformGetWindowWorkAreaInsets.x,
+            result.PlatformGetWindowWorkAreaInsets.y,
+            result.PlatformGetWindowWorkAreaInsets.z,
+            result.PlatformGetWindowWorkAreaInsets.w,
+        ),
+        (11.0, 12.0, 13.0, 14.0)
+    );
+}

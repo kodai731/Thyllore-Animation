@@ -46,8 +46,8 @@ impl App {
                 ("update".to_string(), update_ms),
                 ("render_cpu".to_string(), render_cpu_ms),
             ],
-            imgui_vtx: input.draw_data.total_vtx_count as u32,
-            imgui_idx: input.draw_data.total_idx_count as u32,
+            imgui_vtx: input.draw_data.total_vtx_count() as u32,
+            imgui_idx: input.draw_data.total_idx_count() as u32,
         });
         Ok(())
     }

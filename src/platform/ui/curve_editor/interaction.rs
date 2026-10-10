@@ -81,7 +81,7 @@ pub(super) fn resolve_axis_lock(
 
 #[must_use]
 pub(super) fn current_time_snap(ui: &imgui::Ui, frame_rate: f32) -> TimeSnap {
-    if ui.io().key_ctrl {
+    if ui.io().key_ctrl() {
         TimeSnap::Free
     } else {
         TimeSnap::Frame(frame_rate)
@@ -270,9 +270,9 @@ pub(super) fn handle_mouse_interaction(
         && in_curve_area
         && matches!(editor_state.interaction, CurveInteractionMode::Idle)
     {
-        let modifier = if ui.io().key_ctrl {
+        let modifier = if ui.io().key_ctrl() {
             SelectionModifier::Toggle
-        } else if ui.io().key_shift {
+        } else if ui.io().key_shift() {
             SelectionModifier::Range
         } else {
             SelectionModifier::None
@@ -322,7 +322,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos[0] - editor_state.drag_start_mouse_pos[0],
             mouse_pos[1] - editor_state.drag_start_mouse_pos[1],
         ];
-        *axis_lock = resolve_axis_lock(*axis_lock, ui.io().key_shift, pixel_delta);
+        *axis_lock = resolve_axis_lock(*axis_lock, ui.io().key_shift(), pixel_delta);
     }
 
     if access.accepts_wheel {

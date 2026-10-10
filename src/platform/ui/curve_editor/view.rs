@@ -156,12 +156,12 @@ pub(super) fn handle_wheel_input(
         return;
     }
 
-    let ctrl = ui.io().key_ctrl;
+    let ctrl = ui.io().key_ctrl();
 
     if ctrl {
         zoom_at_mouse(editor_state, mouse_pos, wheel, vt);
     } else {
-        let shift = ui.io().key_shift;
+        let shift = ui.io().key_shift();
         pan_with_wheel(editor_state, wheel, shift, vt);
     }
 }

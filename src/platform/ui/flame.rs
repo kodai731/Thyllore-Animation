@@ -1,3 +1,4 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FLAME_DOMAIN;
@@ -31,7 +32,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale);
     if ui
         .slider_config("Noise Sharpness", 0.0, 1.0)
-        .display_format("%.2f")
+        .display_format(numeric_format("%.2f"))
         .build(&mut noise_sharpness)
     {
         effect.noise.shaping_scale =
@@ -70,7 +71,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
     if ui
         .slider_config("Vortex", 0.0, 1.0)
-        .display_format("%.2f")
+        .display_format(numeric_format("%.2f"))
         .build(&mut vortex)
     {
         let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
@@ -86,7 +87,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
     }
 
     let mut branch_seed = effect.branch.seed as i32;
-    if ui.input_int("Branch Seed", &mut branch_seed).build() {
+    if ui.input_int("Branch Seed", &mut branch_seed) {
         effect.branch.seed = branch_seed.max(0) as u32;
     }
 }
@@ -221,7 +222,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             ui.checkbox("Silhouette", &mut flame_ui.texture_fit_groups[0]);
             ui.checkbox("Color", &mut flame_ui.texture_fit_groups[1]);
             {
-                let _disabled = ui.begin_disabled(flame_ui.texture_fit_profile);
+                let _disabled = ui.begin_disabled_with_cond(flame_ui.texture_fit_profile);
                 ui.checkbox("Turbulence", &mut flame_ui.texture_fit_groups[2]);
             }
             if flame_ui.texture_fit_profile && ui.is_item_hovered() {
@@ -233,13 +234,11 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             }
             ui.checkbox("Tilt", &mut flame_ui.texture_fit_groups[3]);
 
-            // Fidelity radio button
-            let mut fidelity_mode: i32 = if flame_ui.texture_fit_profile { 1 } else { 0 };
-            if ui.radio_button("statistics (projection)", &mut fidelity_mode, 0) {
+            if ui.radio_button("statistics (projection)", !flame_ui.texture_fit_profile) {
                 flame_ui.texture_fit_profile = false;
             }
             ui.same_line();
-            if ui.radio_button("profile (reproduction)", &mut fidelity_mode, 1) {
+            if ui.radio_button("profile (reproduction)", flame_ui.texture_fit_profile) {
                 flame_ui.texture_fit_profile = true;
             }
 
@@ -372,12 +371,12 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
 
                     if effect_copy.emitter.kind == 1 {
                         ui.slider_config("Ring Radius", 0.2, 5.0)
-                            .display_format("%.2f")
+                            .display_format(numeric_format("%.2f"))
                             .build(&mut effect_copy.emitter.ring_major_radius);
                         ui.same_line();
                         let mut ring_speed = effect_copy.emitter.ring_angular_speed;
                         ui.slider_config("Ring Speed", 0.0, 6.28)
-                            .display_format("%.2f")
+                            .display_format(numeric_format("%.2f"))
                             .build(&mut ring_speed);
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
@@ -624,7 +623,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
 
             ui.child_window("##fit_browser_list")
                 .size([0.0, -34.0])
-                .build(|| {
+                .build(ui, || {
                     let read = match std::fs::read_dir(&dir_now) {
                         Ok(read) => read,
                         Err(error) => {
@@ -698,7 +697,8 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                 });
 
             let has_selection = !flame_ui.texture_fit_browser_selected.is_empty();
-            ui.enabled(has_selection, || {
+            {
+                let _enabled_scope = ui.begin_disabled_with_cond(!has_selection);
                 if ui.button("Open") {
                     confirmed = Some(format!(
                         "{}/{}",
@@ -706,7 +706,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                         flame_ui.texture_fit_browser_selected
                     ));
                 }
-            });
+            }
             ui.same_line();
             if ui.button("Cancel") {
                 flame_ui.texture_fit_browser_open = false;

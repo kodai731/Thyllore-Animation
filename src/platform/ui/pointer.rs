@@ -10,11 +10,19 @@ pub struct UiPointer {
     pub pos: [f32; 2],
     pub delta: [f32; 2],
     pub wheel: f32,
-    down: [bool; MouseButton::COUNT],
-    clicked: [bool; MouseButton::COUNT],
-    double_clicked: [bool; MouseButton::COUNT],
-    released: [bool; MouseButton::COUNT],
+    down: [bool; MOUSE_BUTTONS.len()],
+    clicked: [bool; MOUSE_BUTTONS.len()],
+    double_clicked: [bool; MOUSE_BUTTONS.len()],
+    released: [bool; MOUSE_BUTTONS.len()],
 }
+
+const MOUSE_BUTTONS: [MouseButton; 5] = [
+    MouseButton::Left,
+    MouseButton::Right,
+    MouseButton::Middle,
+    MouseButton::Extra1,
+    MouseButton::Extra2,
+];
 
 impl UiPointer {
     pub fn is_down(&self, button: MouseButton) -> bool {
@@ -50,12 +58,12 @@ pub enum PointerRegion {
 pub fn read_ui_pointer(ui: &imgui::Ui) -> UiPointer {
     let io = ui.io();
     let mut pointer = UiPointer {
-        pos: io.mouse_pos,
-        delta: io.mouse_delta,
-        wheel: io.mouse_wheel,
+        pos: io.mouse_pos(),
+        delta: io.mouse_delta(),
+        wheel: io.mouse_wheel(),
         ..UiPointer::default()
     };
-    for button in MouseButton::VARIANTS {
+    for button in MOUSE_BUTTONS {
         let index = button as usize;
         pointer.down[index] = ui.is_mouse_down(button);
         pointer.clicked[index] = ui.is_mouse_clicked(button);
@@ -94,9 +102,7 @@ pub fn is_last_item_double_clicked(ui: &imgui::Ui) -> bool {
 
 /// Run once per frame before the windows are built.
 pub fn release_idle_ui_pointer(ui: &imgui::Ui, world: &World) {
-    let any_button_down = MouseButton::VARIANTS
-        .iter()
-        .any(|button| ui.is_mouse_down(*button));
+    let any_button_down = MOUSE_BUTTONS.iter().any(|button| ui.is_mouse_down(*button));
     world
         .resource_mut::<UiPointerOwner>()
         .release_when_buttons_up(any_button_down);

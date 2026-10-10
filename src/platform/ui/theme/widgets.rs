@@ -1,6 +1,7 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use std::borrow::Cow;
 
-use imgui::{DrawListMut, StyleVar, Ui};
+use imgui::{DrawCornerFlags, DrawListMut, StyleVar, Ui};
 
 use crate::ecs::resource::UiWidgetState;
 use crate::ecs::World;
@@ -32,7 +33,7 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     let size = ICON_BUTTON_SIZE;
     let glyph = icon.glyph();
     let text_size = ui.calc_text_size(&glyph);
-    let id = ui.new_id_str(tooltip).raw();
+    let id = ui.get_id(tooltip).raw();
 
     let clicked = ui.invisible_button(format!("icon_btn_{}", id), [size, size]);
     let hovered = ui.is_item_hovered();
@@ -122,7 +123,7 @@ pub fn vector3_field(ui: &Ui, id: &str, values: &mut [f32; 3], speed: f32, forma
         ui.set_next_item_width(component_width - label_width);
         changed |= imgui::Drag::new(format!("##{id}_{suffix}"))
             .speed(speed)
-            .display_format(format)
+            .display_format(numeric_format(format))
             .build(ui, &mut values[index]);
     }
     changed
@@ -192,10 +193,7 @@ pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -
         draw_list
             .add_rect(rect_min, rect_max, srgb_to_linear(fill))
             .rounding(rounding)
-            .round_top_left(is_first)
-            .round_bot_left(is_first)
-            .round_top_right(is_last)
-            .round_bot_right(is_last)
+            .flags(segment_corner_flags(is_first, is_last))
             .filled(true)
             .build();
         let text_pos = [
@@ -250,7 +248,7 @@ fn toggle_knob_x(left: f32, width: f32, knob_radius: f32, t: f32) -> f32 {
 
 pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefault) -> bool {
     let display_label = strip_display_suffix(label);
-    let id = ui.new_id_str(label).raw();
+    let id = ui.get_id(label).raw();
     let default_open = matches!(default, SectionDefault::Open);
 
     let row_height = ui.frame_height();
@@ -287,7 +285,7 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
         .filled(true)
         .build();
 
-    let frame_padding = ui.clone_style().frame_padding;
+    let frame_padding = ui.clone_style().frame_padding();
     let font_height = ui.text_line_height();
     let triangle_size = font_height * 0.5;
     let triangle_center = [
@@ -315,7 +313,7 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
 }
 
 pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> bool {
-    let id = ui.new_id_str(label).raw();
+    let id = ui.get_id(label).raw();
     let display_label = strip_display_suffix(label);
 
     let pill_width = 28.0;
@@ -323,7 +321,7 @@ pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> b
     let knob_radius = 5.0;
 
     let label_width = ui.calc_text_size(display_label)[0];
-    let spacing = ui.clone_style().item_spacing[0];
+    let spacing = ui.clone_style().item_spacing()[0];
     let font_height = ui.text_line_height();
     let row_height = font_height.max(pill_height);
     let total_width = pill_width + spacing + label_width;
@@ -425,14 +423,14 @@ pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
     let input_width = if text.is_empty() {
         available_width
     } else {
-        available_width - field_height - style.item_spacing[0]
+        available_width - field_height - style.item_spacing()[0]
     };
 
     ui.set_next_item_width(input_width);
     let mut changed = {
         let _padding = ui.push_style_var(StyleVar::FramePadding([
             icon_gutter,
-            style.frame_padding[1],
+            style.frame_padding()[1],
         ]));
         ui.input_text(format!("##{}", id), text).hint(hint).build()
     };
@@ -492,7 +490,7 @@ pub enum TreeRowResponse {
 }
 
 pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
-    let id = ui.new_id_str(spec.id).raw();
+    let id = ui.get_id(spec.id).raw();
     let row_height = ui.frame_height();
     let row_width = ui.content_region_avail()[0];
 
@@ -559,7 +557,7 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
             .build();
     }
 
-    let text_y = rect_min[1] + ui.clone_style().frame_padding[1];
+    let text_y = rect_min[1] + ui.clone_style().frame_padding()[1];
     let icon_x = indent_x + TREE_INDENT;
     draw_list.add_text([icon_x, text_y], srgb_to_linear(TEXT), spec.icon);
 
@@ -707,4 +705,11 @@ mod tests {
         assert!((vector3_component_width(300.0) - 100.0).abs() < 1e-6);
         assert!((vector3_component_width(96.0) - 32.0).abs() < 1e-6);
     }
+}
+
+fn segment_corner_flags(is_first: bool, is_last: bool) -> DrawCornerFlags {
+    let mut flags = DrawCornerFlags::NO_ROUNDING;
+    flags.set(DrawCornerFlags::LEFT, is_first);
+    flags.set(DrawCornerFlags::RIGHT, is_last);
+    flags
 }

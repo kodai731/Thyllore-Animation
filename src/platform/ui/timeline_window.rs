@@ -1,3 +1,4 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use imgui::{Condition, MouseButton};
 
 use crate::animation::editable::{BlendMode, SourceClipId};
@@ -265,7 +266,7 @@ fn build_timeline_content(
         .size([content_region[0], ruler_child_height])
         .scroll_bar(false)
         .horizontal_scrollbar(true)
-        .build(|| {
+        .build(ui, || {
             ui.set_scroll_x(synced_scroll_x);
             build_time_ruler_with_scrub(ui, world, state, interaction, timeline_width, duration);
         });
@@ -275,7 +276,7 @@ fn build_timeline_content(
     ui.child_window("timeline_tracks")
         .size(remaining)
         .horizontal_scrollbar(true)
-        .build(|| {
+        .build(ui, || {
             if state.pan_pending_delta_x.abs() >= 0.01 {
                 let new_scroll = (ui.scroll_x() + state.pan_pending_delta_x).max(0.0);
                 ui.set_scroll_x(new_scroll);
@@ -619,8 +620,10 @@ fn build_clip_tracks_section(
         total_track_rows += track_height;
 
         if let Some(target) = ui.drag_drop_target() {
-            let accepted = target
-                .accept_payload::<SourceClipId, _>("CLIP_SOURCE", imgui::DragDropFlags::empty());
+            let accepted = target.accept_payload::<SourceClipId, _>(
+                "CLIP_SOURCE",
+                imgui::DragDropTargetFlags::empty(),
+            );
             if let Some(Ok(payload)) = accepted {
                 let source_id = payload.data;
                 let drop_x = mouse_pos[0] - track_origin[0];
@@ -687,7 +690,7 @@ fn build_single_group_header(
     if imgui::Drag::new(&slider_id)
         .range(0.0, 1.0)
         .speed(0.01)
-        .display_format("%.2f")
+        .display_format(numeric_format("%.2f"))
         .build(ui, &mut weight)
     {
         world.send_command(ClipInstanceEvent::GroupSetWeight {
@@ -737,7 +740,7 @@ fn build_clip_instance_properties(
     if imgui::Drag::new("##inst_weight")
         .range(0.0, 1.0)
         .speed(0.01)
-        .display_format("W:%.2f")
+        .display_format(numeric_format("W:%.2f"))
         .build(ui, &mut weight)
     {
         world.send_command(ClipInstanceEvent::SetWeight {
@@ -831,7 +834,7 @@ fn build_clip_length_field(
     if imgui::Drag::new("##clip_length")
         .range(0.0, 3600.0)
         .speed(0.05)
-        .display_format("Len:%.2fs")
+        .display_format(numeric_format("Len:%.2fs"))
         .build(ui, &mut seconds)
     {
         world.send_command(ScalarCurveEvent::ClipSetMinDuration { source_id, seconds });
@@ -1099,17 +1102,17 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineStat
         return;
     }
 
-    if io.key_ctrl && ui.is_key_pressed(imgui::Key::C) {
+    if io.key_ctrl() && ui.is_key_pressed(imgui::Key::C) {
         world.send_command(TimelineEvent::CopyKeyframes);
     }
 
-    if io.key_ctrl && !io.key_shift && ui.is_key_pressed(imgui::Key::V) {
+    if io.key_ctrl() && !io.key_shift() && ui.is_key_pressed(imgui::Key::V) {
         world.send_command(TimelineEvent::PasteKeyframes {
             paste_time: state.current_time,
         });
     }
 
-    if io.key_ctrl && io.key_shift && ui.is_key_pressed(imgui::Key::V) {
+    if io.key_ctrl() && io.key_shift() && ui.is_key_pressed(imgui::Key::V) {
         world.send_command(TimelineEvent::MirrorPaste {
             paste_time: state.current_time,
         });

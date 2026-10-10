@@ -61,7 +61,7 @@ fn build_bake_section(ui: &imgui::Ui, world: &World, target_entity: Entity, bake
     ui.separator();
 
     ui.set_next_item_width(80.0);
-    ui.input_float("Sample FPS", bake_fps).build();
+    ui.input_float("Sample FPS", bake_fps);
     *bake_fps = bake_fps.clamp(1.0, 120.0);
 
     ui.same_line();
@@ -126,7 +126,7 @@ fn build_constraint_entry(
         return;
     }
 
-    let id_token = ui.push_id_int(entry.id as i32);
+    let id_token = ui.push_id(entry.id as i32);
 
     let changed = match &entry.constraint {
         ConstraintType::Ik(data) => build_ik_fields(ui, world, data, bone_list, hierarchy_state),
@@ -214,7 +214,11 @@ fn build_ik_fields(
 
     let mut chain = modified.chain_length as i32;
     ui.set_next_item_width(-1.0);
-    if ui.input_int("Chain Length", &mut chain).step(1).build() {
+    if ui
+        .input_int_config("Chain Length")
+        .step(1)
+        .build(&mut chain)
+    {
         modified.chain_length = chain.max(1) as u32;
         changed = true;
     }
@@ -341,7 +345,7 @@ fn build_parent_fields(
     let mut new_sources = modified.sources.clone();
 
     for (i, (bone_id, weight)) in modified.sources.iter().enumerate() {
-        let source_token = ui.push_id_int(i as i32);
+        let source_token = ui.push_id(i as i32);
         let mut current_weight = *weight;
 
         if let Some(bone) = build_bone_combo(ui, &format!("Src {}", i), *bone_id, bone_list) {

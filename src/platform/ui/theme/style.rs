@@ -8,137 +8,155 @@ const HEADER_HOVERED_ALPHA: f32 = 0.25;
 const HEADER_ACTIVE_ALPHA: f32 = 0.32;
 
 pub fn apply_thyllore_style(style: &mut Style) {
-    style.window_rounding = 10.0;
-    style.child_rounding = 10.0;
-    style.popup_rounding = 10.0;
-    style.frame_rounding = 6.0;
-    style.grab_rounding = 6.0;
-    style.tab_rounding = 6.0;
-    style.scrollbar_rounding = 9.0;
-    style.scrollbar_size = 10.0;
-    style.window_padding = [12.0, 12.0];
-    style.frame_padding = [10.0, 5.0];
-    style.item_spacing = [8.0, 6.0];
-    style.item_inner_spacing = [6.0, 4.0];
-    style.window_border_size = 0.0;
-    style.frame_border_size = 0.0;
-    style.tab_border_size = 0.0;
-    style.circle_tesselation_max_error = 0.15;
-    style.anti_aliased_lines = true;
-    style.anti_aliased_fill = true;
+    style.set_window_rounding(10.0);
+    style.set_child_rounding(10.0);
+    style.set_popup_rounding(10.0);
+    style.set_frame_rounding(6.0);
+    style.set_grab_rounding(6.0);
+    style.set_tab_rounding(6.0);
+    style.set_scrollbar_rounding(9.0);
+    style.set_scrollbar_size(10.0);
+    style.set_window_padding([12.0, 12.0]);
+    style.set_frame_padding([10.0, 5.0]);
+    style.set_item_spacing([8.0, 6.0]);
+    style.set_item_inner_spacing([6.0, 4.0]);
+    style.set_window_border_size(0.0);
+    style.set_frame_border_size(0.0);
+    style.set_tab_border_size(0.0);
+    style.set_circle_tessellation_max_error(0.15);
+    style.set_anti_aliased_lines(true);
+    style.set_anti_aliased_fill(true);
 
-    let c = &mut style.colors;
+    style.set_color(StyleColor::Text, srgb_to_linear(TEXT));
+    style.set_color(StyleColor::TextDisabled, srgb_to_linear(TEXT_SECONDARY));
+    style.set_color(StyleColor::WindowBg, srgb_to_linear(SURFACE0));
+    style.set_color(StyleColor::ChildBg, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::PopupBg, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::MenuBarBg, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::Border, srgb_to_linear(OUTLINE));
+    style.set_color(StyleColor::FrameBg, srgb_to_linear(SURFACE2));
+    style.set_color(StyleColor::FrameBgHovered, srgb_to_linear(SURFACE3));
+    style.set_color(StyleColor::Button, srgb_to_linear(SURFACE2));
+    style.set_color(StyleColor::ButtonHovered, srgb_to_linear(SURFACE3));
+    style.set_color(StyleColor::ButtonActive, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::CheckMark, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::SliderGrab, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::SliderGrabActive, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::TabSelected, srgb_to_linear(ACCENT));
+    style.set_color(
+        StyleColor::TextSelectedBg,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            0.25,
+        ],
+    );
 
-    c[StyleColor::Text as usize] = srgb_to_linear(TEXT);
-    c[StyleColor::TextDisabled as usize] = srgb_to_linear(TEXT_SECONDARY);
-    c[StyleColor::WindowBg as usize] = srgb_to_linear(SURFACE0);
-    c[StyleColor::ChildBg as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::PopupBg as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::MenuBarBg as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::Border as usize] = srgb_to_linear(OUTLINE);
-    c[StyleColor::FrameBg as usize] = srgb_to_linear(SURFACE2);
-    c[StyleColor::FrameBgHovered as usize] = srgb_to_linear(SURFACE3);
-    c[StyleColor::Button as usize] = srgb_to_linear(SURFACE2);
-    c[StyleColor::ButtonHovered as usize] = srgb_to_linear(SURFACE3);
-    c[StyleColor::ButtonActive as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::CheckMark as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::SliderGrab as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::SliderGrabActive as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::TabActive as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::TextSelectedBg as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        0.25,
-    ];
+    style.set_color(
+        StyleColor::Header,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            HEADER_ALPHA,
+        ],
+    );
+    style.set_color(
+        StyleColor::HeaderHovered,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            HEADER_HOVERED_ALPHA,
+        ],
+    );
+    style.set_color(
+        StyleColor::HeaderActive,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            HEADER_ACTIVE_ALPHA,
+        ],
+    );
 
-    c[StyleColor::Header as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        HEADER_ALPHA,
-    ];
-    c[StyleColor::HeaderHovered as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        HEADER_HOVERED_ALPHA,
-    ];
-    c[StyleColor::HeaderActive as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        HEADER_ACTIVE_ALPHA,
-    ];
+    style.set_color(StyleColor::TitleBg, srgb_to_linear(SURFACE0));
+    style.set_color(StyleColor::TitleBgActive, srgb_to_linear(SURFACE0));
+    style.set_color(StyleColor::TitleBgCollapsed, srgb_to_linear(SURFACE0));
 
-    c[StyleColor::TitleBg as usize] = srgb_to_linear(SURFACE0);
-    c[StyleColor::TitleBgActive as usize] = srgb_to_linear(SURFACE0);
-    c[StyleColor::TitleBgCollapsed as usize] = srgb_to_linear(SURFACE0);
+    style.set_color(StyleColor::Tab, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::TabHovered, srgb_to_linear(SURFACE3));
 
-    c[StyleColor::Tab as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::TabHovered as usize] = srgb_to_linear(SURFACE3);
+    style.set_color(StyleColor::ScrollbarBg, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::ScrollbarGrab, srgb_to_linear(SURFACE2));
+    style.set_color(StyleColor::ScrollbarGrabHovered, srgb_to_linear(SURFACE3));
+    style.set_color(StyleColor::ScrollbarGrabActive, srgb_to_linear(ACCENT));
 
-    c[StyleColor::ScrollbarBg as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::ScrollbarGrab as usize] = srgb_to_linear(SURFACE2);
-    c[StyleColor::ScrollbarGrabHovered as usize] = srgb_to_linear(SURFACE3);
-    c[StyleColor::ScrollbarGrabActive as usize] = srgb_to_linear(ACCENT);
+    style.set_color(StyleColor::Separator, srgb_to_linear(OUTLINE));
+    style.set_color(StyleColor::SeparatorHovered, srgb_to_linear(SURFACE3));
+    style.set_color(StyleColor::SeparatorActive, srgb_to_linear(ACCENT));
 
-    c[StyleColor::Separator as usize] = srgb_to_linear(OUTLINE);
-    c[StyleColor::SeparatorHovered as usize] = srgb_to_linear(SURFACE3);
-    c[StyleColor::SeparatorActive as usize] = srgb_to_linear(ACCENT);
+    style.set_color(StyleColor::ResizeGrip, srgb_to_linear(OUTLINE));
+    style.set_color(StyleColor::ResizeGripHovered, srgb_to_linear(SURFACE3));
+    style.set_color(StyleColor::ResizeGripActive, srgb_to_linear(ACCENT));
 
-    c[StyleColor::ResizeGrip as usize] = srgb_to_linear(OUTLINE);
-    c[StyleColor::ResizeGripHovered as usize] = srgb_to_linear(SURFACE3);
-    c[StyleColor::ResizeGripActive as usize] = srgb_to_linear(ACCENT);
+    style.set_color(StyleColor::TabDimmed, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::TabDimmedSelected, srgb_to_linear(SURFACE2));
 
-    c[StyleColor::TabUnfocused as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::TabUnfocusedActive as usize] = srgb_to_linear(SURFACE2);
+    style.set_color(StyleColor::ModalWindowDimBg, [0.0, 0.0, 0.0, 0.5]);
 
-    c[StyleColor::ModalWindowDimBg as usize] = [0.0, 0.0, 0.0, 0.5];
+    style.set_color(StyleColor::NavCursor, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::NavWindowingHighlight, [0.0, 0.0, 0.0, 0.7]);
+    style.set_color(StyleColor::NavWindowingDimBg, [0.0, 0.0, 0.0, 0.5]);
 
-    c[StyleColor::NavHighlight as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::NavWindowingHighlight as usize] = [0.0, 0.0, 0.0, 0.7];
-    c[StyleColor::NavWindowingDimBg as usize] = [0.0, 0.0, 0.0, 0.5];
+    style.set_color(
+        StyleColor::DragDropTarget,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            0.9,
+        ],
+    );
 
-    c[StyleColor::DragDropTarget as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        0.9,
-    ];
+    style.set_color(StyleColor::PlotLines, srgb_to_linear(TEXT_SECONDARY));
+    style.set_color(StyleColor::PlotLinesHovered, srgb_to_linear(ACCENT));
+    style.set_color(StyleColor::PlotHistogram, srgb_to_linear(TEXT_SECONDARY));
+    style.set_color(StyleColor::PlotHistogramHovered, srgb_to_linear(ACCENT));
 
-    c[StyleColor::PlotLines as usize] = srgb_to_linear(TEXT_SECONDARY);
-    c[StyleColor::PlotLinesHovered as usize] = srgb_to_linear(ACCENT);
-    c[StyleColor::PlotHistogram as usize] = srgb_to_linear(TEXT_SECONDARY);
-    c[StyleColor::PlotHistogramHovered as usize] = srgb_to_linear(ACCENT);
+    style.set_color(StyleColor::TableHeaderBg, srgb_to_linear(SURFACE2));
+    style.set_color(StyleColor::TableBorderStrong, srgb_to_linear(OUTLINE));
+    style.set_color(
+        StyleColor::TableBorderLight,
+        [
+            srgb_to_linear(OUTLINE)[0],
+            srgb_to_linear(OUTLINE)[1],
+            srgb_to_linear(OUTLINE)[2],
+            srgb_to_linear(OUTLINE)[3] * 0.5,
+        ],
+    );
+    style.set_color(StyleColor::TableRowBg, srgb_to_linear(SURFACE1));
+    style.set_color(StyleColor::TableRowBgAlt, srgb_to_linear(SURFACE0));
 
-    c[StyleColor::TableHeaderBg as usize] = srgb_to_linear(SURFACE2);
-    c[StyleColor::TableBorderStrong as usize] = srgb_to_linear(OUTLINE);
-    c[StyleColor::TableBorderLight as usize] = [
-        srgb_to_linear(OUTLINE)[0],
-        srgb_to_linear(OUTLINE)[1],
-        srgb_to_linear(OUTLINE)[2],
-        srgb_to_linear(OUTLINE)[3] * 0.5,
-    ];
-    c[StyleColor::TableRowBg as usize] = srgb_to_linear(SURFACE1);
-    c[StyleColor::TableRowBgAlt as usize] = srgb_to_linear(SURFACE0);
+    style.set_color(StyleColor::BorderShadow, [0.0, 0.0, 0.0, 0.0]);
 
-    c[StyleColor::BorderShadow as usize] = [0.0, 0.0, 0.0, 0.0];
-
-    c[StyleColor::DockingPreview as usize] = [
-        srgb_to_linear(ACCENT)[0],
-        srgb_to_linear(ACCENT)[1],
-        srgb_to_linear(ACCENT)[2],
-        0.7,
-    ];
-    c[StyleColor::DockingEmptyBg as usize] = srgb_to_linear(SURFACE0);
+    style.set_color(
+        StyleColor::DockingPreview,
+        [
+            srgb_to_linear(ACCENT)[0],
+            srgb_to_linear(ACCENT)[1],
+            srgb_to_linear(ACCENT)[2],
+            0.7,
+        ],
+    );
+    style.set_color(StyleColor::DockingEmptyBg, srgb_to_linear(SURFACE0));
 }
 
 pub fn apply_ui_settings(context: &mut imgui::Context, settings: &UiSettings) {
-    context.io_mut().font_global_scale = settings.scale;
-
     let spacing = density_spacing(settings.density);
     let style = context.style_mut();
-    style.frame_padding = spacing.frame_padding;
-    style.item_spacing = spacing.item_spacing;
+    style.set_font_scale_main(settings.scale);
+    style.set_frame_padding(spacing.frame_padding);
+    style.set_item_spacing(spacing.item_spacing);
 }

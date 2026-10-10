@@ -72,31 +72,31 @@ pub(crate) const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
         action: CurveEditorKeyAction::OpenExtrapolationMenu,
     },
     CurveEditorKeyBinding {
-        key: imgui::Key::Alpha1,
+        key: imgui::Key::Key1,
         modifier: KeyModifier::None,
         label: "Auto Clamped",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Clamped),
     },
     CurveEditorKeyBinding {
-        key: imgui::Key::Alpha2,
+        key: imgui::Key::Key2,
         modifier: KeyModifier::None,
         label: "Auto (Spline)",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Spline),
     },
     CurveEditorKeyBinding {
-        key: imgui::Key::Alpha3,
+        key: imgui::Key::Key3,
         modifier: KeyModifier::None,
         label: "Flat",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Flat),
     },
     CurveEditorKeyBinding {
-        key: imgui::Key::Alpha4,
+        key: imgui::Key::Key4,
         modifier: KeyModifier::None,
         label: "Linear",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Linear),
     },
     CurveEditorKeyBinding {
-        key: imgui::Key::Alpha5,
+        key: imgui::Key::Key5,
         modifier: KeyModifier::None,
         label: "Stepped",
         action: CurveEditorKeyAction::SetInterpolation(InterpolationType::Stepped),
@@ -126,8 +126,7 @@ pub(super) fn handle_curve_editor_keyboard(
     editor_state: &mut CurveEditorState,
     target: &CurveEditorKeyboardTarget,
 ) {
-    let focused =
-        ui.is_window_focused_with_flags(imgui::WindowFocusedFlags::ROOT_AND_CHILD_WINDOWS);
+    let focused = ui.is_window_focused_with_flags(imgui::FocusedFlags::ROOT_AND_CHILD_WINDOWS);
     if !focused || ui.is_any_item_active() {
         return;
     }
@@ -272,7 +271,7 @@ pub(super) fn handle_suggestion_keyboard(
     suggestion_overlays: &[SuggestionOverlay],
 ) {
     let io = ui.io();
-    let shift = io.key_shift;
+    let shift = io.key_shift();
 
     if shift && ui.is_key_pressed(imgui::Key::C) {
         for property_type in &editor_state.visible_curves {
@@ -283,7 +282,7 @@ pub(super) fn handle_suggestion_keyboard(
         }
     }
 
-    if !io.key_ctrl && ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
+    if !io.key_ctrl() && ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
         world.send_command(CurveSuggestionEvent::Accept);
     }
 

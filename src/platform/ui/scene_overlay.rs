@@ -1,3 +1,4 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use std::path::Path;
 
 use imgui::{Condition, StyleVar};
@@ -85,7 +86,7 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding);
+            draw_window_shadow(ui, ui.clone_style().window_rounding());
 
             build_file_buttons(ui, ecs_world);
             draw_toolbar_group_separator(ui);
@@ -124,7 +125,7 @@ fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput)
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding);
+            draw_window_shadow(ui, ui.clone_style().window_rounding());
 
             build_overlay_section(ui, ecs_world);
 
@@ -255,7 +256,7 @@ fn build_gizmo_buttons(ui: &imgui::Ui, ecs_world: &World) {
 
 fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
     let gizmo_hotkeys_enabled =
-        !ui.io().key_ctrl && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
+        !ui.io().key_ctrl() && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
     if !gizmo_hotkeys_enabled {
         return;
     }
@@ -275,8 +276,8 @@ fn build_scene_panel_toggle(ui: &imgui::Ui, ecs_world: &World) {
     };
 
     let style = ui.clone_style();
-    let right_edge_x = ui.window_size()[0] - style.window_padding[0] - ICON_BUTTON_SIZE;
-    let settings_x = right_edge_x - ICON_BUTTON_SIZE - style.item_spacing[0];
+    let right_edge_x = ui.window_size()[0] - style.window_padding()[0] - ICON_BUTTON_SIZE;
+    let settings_x = right_edge_x - ICON_BUTTON_SIZE - style.item_spacing()[0];
 
     ui.same_line_with_pos(settings_x);
     if icon_button(ui, Icon::Settings, "UI Settings", ButtonState::Normal) {
@@ -493,7 +494,7 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
 
         let scale_edited = ui
             .slider_config("Gizmo Scale", 0.01, 0.3)
-            .display_format("%.3f")
+            .display_format(numeric_format("%.3f"))
             .build(&mut state_copy.gizmo_scale);
 
         if snap_edited || scale_edited {
@@ -612,7 +613,7 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
             }
 
             ui.slider_config("Frame Step", 0.001, 0.2)
-                .display_format("%.3f")
+                .display_format(numeric_format("%.3f"))
                 .build(&mut config_copy.frame_step);
 
             ui.slider_config("Ghost Opacity", 0.0, 1.0)

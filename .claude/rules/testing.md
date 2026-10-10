@@ -16,13 +16,14 @@ not depend on the main `thyllore-animation` crate).
 
 ### Reason
 
-The workspace root crate (`thyllore-animation`) depends on `vendor/imgui-sys`, whose
-`build.rs` is intentionally NOT tracked in git (covered by `vendor/` in `.gitignore`).
+The workspace root crate (`thyllore-animation`) depends on `vendor/dear-imgui-sys`, whose
+`build.rs` is intentionally NOT tracked in git (covered by `vendor/` in `.gitignore`; copy it
+from the `dear-imgui-sys` 0.18.0 crate on a fresh clone).
 GitHub Actions runners therefore CANNOT compile the root crate — any `cargo test` that
 forces the root crate to build will fail with:
 
 ```
-error: couldn't read `vendor/imgui-sys/build.rs`: No such file or directory
+error: couldn't read `vendor/dear-imgui-sys/build.rs`: No such file or directory
 ```
 
 Tests placed under `tests/` at the workspace root require the root crate to compile and
@@ -56,7 +57,7 @@ When adding a new integration test that should run in CI:
 
 `tests/` at the workspace root is for tests that intentionally exercise the full main
 crate (e.g., `gltf_export_tests.rs`, `ecs_tests.rs`). These can ONLY run on developer
-machines where `vendor/imgui-sys/build.rs` exists locally. They must NOT be wired into
+machines where `vendor/dear-imgui-sys/build.rs` exists locally. They must NOT be wired into
 GitHub Actions workflows.
 
 ## CI Reproduction — Run `scripts/collect_wheels.sh` Before Pushing

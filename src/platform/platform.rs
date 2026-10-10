@@ -1,4 +1,4 @@
-use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
+use imgui::{Context, FontConfig, FontSource, StbTrueTypeFontData};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::Path;
 use winit::dpi::LogicalSize;
@@ -10,7 +10,18 @@ use winit::window::{Window, WindowBuilder};
 
 use super::clipboard;
 
-const LUCIDE_GLYPH_RANGE: &[u32] = &[0xE038, 0xE786, 0];
+const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
+const INTER_SEMI_BOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-SemiBold.ttf");
+const MPLUS_1P_REGULAR: &[u8] = include_bytes!("../../assets/fonts/mplus-1p-regular.ttf");
+const LUCIDE: &[u8] = include_bytes!("../../assets/fonts/lucide.ttf");
+
+// Sizes are winit logical pixels; winit applies the display scale factor.
+const BODY_FONT_SIZE: f32 = 13.0;
+const HEADING_FONT_SIZE: f32 = 15.0;
+const FONT_OVERSAMPLE: i8 = 4;
+
+// Inter maps 745 of its own glyphs into the private-use area that the Lucide icons occupy.
+const LUCIDE_GLYPH_RANGE: (u32, u32) = (0xE038, 0xE786);
 
 pub struct System {
     pub event_loop: EventLoop<ExternalCommand>,
@@ -50,10 +61,17 @@ pub fn init(title: &str, take_focus: bool) -> System {
 
     let mut imgui = Context::create();
     super::ui::theme::style::apply_thyllore_style(imgui.style_mut());
-    imgui.set_ini_filename(None);
+    imgui
+        .set_ini_filename(None::<&Path>)
+        .expect("no ini filename to validate");
 
-    imgui.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
-    imgui.io_mut().backend_flags |= imgui::BackendFlags::RENDERER_HAS_VTX_OFFSET;
+    let io = imgui.io_mut();
+    io.set_config_flags(io.config_flags() | imgui::ConfigFlags::DOCKING_ENABLE);
+    io.set_backend_flags(
+        io.backend_flags()
+            | imgui::BackendFlags::RENDERER_HAS_VTX_OFFSET
+            | imgui::BackendFlags::RENDERER_HAS_TEXTURES,
+    );
 
     if let Some(backend) = clipboard::init() {
         imgui.set_clipboard_backend(backend);
@@ -79,85 +97,18 @@ pub fn init(title: &str, take_focus: bool) -> System {
         platform.attach_window(imgui.io_mut(), &window, dpi_mode);
     }
 
-    // Fixed font size. Note imgui_winit_support uses "logical
-    // pixels", which are physical pixels scaled by the devices
-    // scaling factor. Meaning, 13.0 pixels should look the same size
-    // on two different screens, and thus we do not need to scale this
-    // value (as the scaling is handled by winit)
-    let font_size = 13.0;
-
-    let body = imgui.fonts().add_font(&[
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
-            size_pixels: font_size,
-            config: Some(FontConfig {
-                oversample_h: 4,
-                oversample_v: 4,
-                ..FontConfig::default()
-            }),
-        },
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/mplus-1p-regular.ttf"),
-            size_pixels: font_size,
-            config: Some(FontConfig {
-                oversample_h: 4,
-                oversample_v: 4,
-                glyph_ranges: FontGlyphRanges::japanese(),
-                ..FontConfig::default()
-            }),
-        },
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/lucide.ttf"),
-            size_pixels: font_size,
-            config: Some(FontConfig {
-                oversample_h: 4,
-                oversample_v: 4,
-                glyph_ranges: FontGlyphRanges::from_slice(LUCIDE_GLYPH_RANGE),
-                ..FontConfig::default()
-            }),
-        },
+    let atlas = imgui.font_atlas();
+    let body = atlas.add_font(&[
+        text_font_source(INTER_REGULAR, BODY_FONT_SIZE),
+        ttf_source(MPLUS_1P_REGULAR, BODY_FONT_SIZE),
+        ttf_source(LUCIDE, BODY_FONT_SIZE),
     ]);
-
-    let heading = imgui.fonts().add_font(&[
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
-            size_pixels: 15.0,
-            config: Some(FontConfig {
-                oversample_h: 4,
-                oversample_v: 4,
-                ..FontConfig::default()
-            }),
-        },
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/mplus-1p-regular.ttf"),
-            size_pixels: 15.0,
-            config: Some(FontConfig {
-                // Oversampling font helps improve text rendering at
-                // expense of larger font atlas texture.
-                oversample_h: 4,
-                oversample_v: 4,
-                // Range of glyphs to rasterize
-                glyph_ranges: FontGlyphRanges::japanese(),
-                ..FontConfig::default()
-            }),
-        },
-        FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/lucide.ttf"),
-            size_pixels: 15.0,
-            config: Some(FontConfig {
-                oversample_h: 4,
-                oversample_v: 4,
-                glyph_ranges: FontGlyphRanges::from_slice(LUCIDE_GLYPH_RANGE),
-                ..FontConfig::default()
-            }),
-        },
+    let heading = atlas.add_font(&[
+        text_font_source(INTER_SEMI_BOLD, HEADING_FONT_SIZE),
+        ttf_source(MPLUS_1P_REGULAR, HEADING_FONT_SIZE),
+        ttf_source(LUCIDE, HEADING_FONT_SIZE),
     ]);
-
     let ui_fonts = UiFonts { body, heading };
-
-    // Build the font atlas to generate texture data
-    // This is required before any ImGui rendering can occur
-    let _font_texture = imgui.fonts().build_rgba32_texture();
 
     System {
         event_loop,
@@ -166,4 +117,25 @@ pub fn init(title: &str, take_focus: bool) -> System {
         platform,
         ui_fonts,
     }
+}
+
+fn text_font_source(data: &[u8], size_pixels: f32) -> FontSource<'static> {
+    font_source(
+        data,
+        size_pixels,
+        FontConfig::new().glyph_exclude_ranges(&[LUCIDE_GLYPH_RANGE]),
+    )
+}
+
+fn ttf_source(data: &[u8], size_pixels: f32) -> FontSource<'static> {
+    font_source(data, size_pixels, FontConfig::new())
+}
+
+fn font_source(data: &[u8], size_pixels: f32, config: FontConfig) -> FontSource<'static> {
+    let data =
+        StbTrueTypeFontData::from_slice(data).expect("embedded font is a valid TrueType file");
+    let config = config
+        .oversample_h(FONT_OVERSAMPLE)
+        .oversample_v(FONT_OVERSAMPLE);
+    FontSource::stb_truetype_with_size(data, size_pixels).with_config(config)
 }

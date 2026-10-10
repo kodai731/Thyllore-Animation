@@ -127,7 +127,7 @@ fn draw_status_bar(
     let vp_right = viewport.position[0] + viewport.size[0];
     let vp_bottom = viewport.position[1] + viewport.size[1];
 
-    let item_spacing = ui.clone_style().item_spacing[0];
+    let item_spacing = ui.clone_style().item_spacing()[0];
     let window_width = model_text_size[0]
         + item_spacing
         + text_size[0]

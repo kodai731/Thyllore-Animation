@@ -1,3 +1,4 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use imgui::{Condition, Key};
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
@@ -232,7 +233,7 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
 
         let response = tree_row(ui, world, &spec);
         if follow_scroll {
-            ui.set_scroll_here_y_with_ratio(0.5);
+            ui.set_scroll_here_y(0.5);
         }
 
         match resolve_tree_response(response, ui) {
@@ -299,7 +300,7 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
 
         let response = tree_row(ui, world, &spec);
         if follow_scroll {
-            ui.set_scroll_here_y_with_ratio(0.5);
+            ui.set_scroll_here_y(0.5);
         }
 
         match resolve_tree_response(response, ui) {
@@ -354,8 +355,9 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
     if bone_gizmo.distance_scaling_enabled {
         let mut factor = bone_gizmo.distance_scaling_factor;
         ui.set_next_item_width(-1.0);
-        if imgui::Slider::new(ui, "Factor", 0.01f32, 0.1f32)
-            .display_format("%.3f")
+        if ui
+            .slider_config("Factor", 0.01f32, 0.1f32)
+            .display_format(numeric_format("%.3f"))
             .build(&mut factor)
         {
             world.send_command(HierarchyEvent::SetBoneDistanceScaleFactor(factor));

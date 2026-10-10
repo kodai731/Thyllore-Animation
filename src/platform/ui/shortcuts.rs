@@ -124,16 +124,16 @@ fn imgui_key_name(key: imgui::Key) -> &'static str {
         imgui::Key::X => "X",
         imgui::Key::Y => "Y",
         imgui::Key::Z => "Z",
-        imgui::Key::Alpha1 => "1",
-        imgui::Key::Alpha2 => "2",
-        imgui::Key::Alpha3 => "3",
-        imgui::Key::Alpha4 => "4",
-        imgui::Key::Alpha5 => "5",
-        imgui::Key::Alpha6 => "6",
-        imgui::Key::Alpha7 => "7",
-        imgui::Key::Alpha8 => "8",
-        imgui::Key::Alpha9 => "9",
-        imgui::Key::Alpha0 => "0",
+        imgui::Key::Key1 => "1",
+        imgui::Key::Key2 => "2",
+        imgui::Key::Key3 => "3",
+        imgui::Key::Key4 => "4",
+        imgui::Key::Key5 => "5",
+        imgui::Key::Key6 => "6",
+        imgui::Key::Key7 => "7",
+        imgui::Key::Key8 => "8",
+        imgui::Key::Key9 => "9",
+        imgui::Key::Key0 => "0",
         _ => "?",
     }
 }
@@ -184,8 +184,8 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 
 fn toggle_shortcuts_panel_on_hotkey(ui: &imgui::Ui, world: &World) {
     let io = ui.io();
-    let toggle_pressed = !io.want_text_input
-        && (io.key_shift || io.key_ctrl)
+    let toggle_pressed = !io.want_text_input()
+        && (io.key_shift() || io.key_ctrl())
         && ui.is_key_pressed(imgui::Key::Slash);
     if !toggle_pressed {
         return;
@@ -222,7 +222,7 @@ fn build_shortcuts_window(
         return;
     }
 
-    let display_size = ui.io().display_size;
+    let display_size = ui.io().display_size();
     let mut is_open = true;
     ui.window(SHORTCUTS_WINDOW_TITLE)
         .position(

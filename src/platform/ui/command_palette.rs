@@ -148,7 +148,7 @@ fn execute_palette_item(world: &World, item: &PaletteItem) {
 fn toggle_command_palette_on_hotkey(ui: &imgui::Ui, world: &World) {
     let mut state = world.resource_mut::<UiWidgetState>();
     let palette_is_open = matches!(state.command_palette, CommandPaletteState::Open(_));
-    let hotkey_available = !ui.io().want_text_input || palette_is_open;
+    let hotkey_available = !ui.io().want_text_input() || palette_is_open;
     let hotkey_pressed = current_key_modifier(ui) == PALETTE_KEY_BINDING.modifier
         && ui.is_key_pressed(PALETTE_KEY_BINDING.key);
     if !hotkey_available || !hotkey_pressed {
@@ -286,7 +286,7 @@ fn build_command_palette_window(
         return;
     };
 
-    let display_size = ui.io().display_size;
+    let display_size = ui.io().display_size();
     let outcome = ui
         .window(PALETTE_WINDOW_TITLE)
         .position(
@@ -301,7 +301,7 @@ fn build_command_palette_window(
         .no_decoration()
         .save_settings(false)
         .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding);
+            draw_window_shadow(ui, ui.clone_style().window_rounding());
             draw_palette_contents(ui, world, &mut session)
         })
         .unwrap_or(PaletteOutcome::KeepOpen);

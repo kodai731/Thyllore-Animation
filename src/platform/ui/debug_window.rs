@@ -367,7 +367,7 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static IMGUI_SIZE_LOGGED: AtomicBool = AtomicBool::new(false);
     if !IMGUI_SIZE_LOGGED.load(Ordering::Relaxed) {
-        let display_size = ui.io().display_size;
+        let display_size = ui.io().display_size();
         log!(
             "ImGui display size: {:.1} x {:.1}",
             display_size[0],

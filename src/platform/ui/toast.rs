@@ -67,7 +67,7 @@ fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMess
 fn build_toast_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     let message = {
         let mut toast = world.resource_mut::<UiToast>();
-        toast.message = advance_toast(toast.message.take(), ui.io().delta_time);
+        toast.message = advance_toast(toast.message.take(), ui.io().delta_time());
         toast.message.clone()
     };
     let Some(message) = message else {

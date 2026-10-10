@@ -63,14 +63,14 @@ impl App {
         draw_data: &imgui::DrawData,
         frame_slot: usize,
     ) -> Result<()> {
-        if draw_data.total_vtx_count == 0 || draw_data.total_idx_count == 0 {
+        if draw_data.total_vtx_count() == 0 || draw_data.total_idx_count() == 0 {
             return Ok(());
         }
 
-        let vtx_buffer_size = (draw_data.total_vtx_count as usize
+        let vtx_buffer_size = (draw_data.total_vtx_count() as usize
             * std::mem::size_of::<imgui::DrawVert>())
             as vk::DeviceSize;
-        let idx_buffer_size = (draw_data.total_idx_count as usize
+        let idx_buffer_size = (draw_data.total_idx_count() as usize
             * std::mem::size_of::<imgui::DrawIdx>())
             as vk::DeviceSize;
 

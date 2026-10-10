@@ -14,11 +14,15 @@ These libraries are directly included in the repository source tree.
 ### Dear ImGui (C++)
 
 - **License:** MIT
-- **Copyright:** (c) 2014-2023 Omar Cornut
-- **Source:** https://github.com/ocornut/imgui
-- **Vendored at:** `vendor/imgui`, `vendor/imgui-sys`, `vendor/imgui-winit-support`
+- **Copyright:** (c) 2014-2025 Omar Cornut
+- **Source:** https://github.com/ocornut/imgui (v1.92.9b, docking branch) via cimgui (MIT)
+- **Vendored at:** `vendor/dear-imgui-sys/third-party/cimgui`
 - **Usage:** Immediate-mode GUI for debugging and editor UI
-- **Rust bindings:** imgui-rs (MIT OR Apache-2.0)
+- **Rust bindings:** dear-imgui-rs 0.18.0 (MIT OR Apache-2.0, https://github.com/Latias94/dear-imgui-rs),
+  vendored at `vendor/dear-imgui-rs`, `vendor/dear-imgui-sys`, `vendor/dear-imgui-build-support`
+  with local patches listed in each crate's `THYLLORE_PATCHES.md`
+- **winit backend:** `vendor/imgui-winit-support` (imgui-rs 0.11 winit backend, MIT OR Apache-2.0,
+  ported to the dear-imgui-rs `Io` API)
 
 ---
 

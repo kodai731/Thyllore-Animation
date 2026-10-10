@@ -100,7 +100,7 @@ fn build_chain_list(
             continue;
         }
 
-        let id_token = ui.push_id_int(chain.id as i32);
+        let id_token = ui.push_id(chain.id as i32);
         build_chain_detail(ui, world, entity, chain, bone_list, hierarchy_state);
         id_token.end();
     }
@@ -130,7 +130,7 @@ fn build_chain_detail(
             continue;
         }
 
-        let joint_token = ui.push_id_int(joint_idx as i32 + 1000);
+        let joint_token = ui.push_id(joint_idx as i32 + 1000);
         if let Some(updated) = build_joint_fields(ui, world, joint, bone_list, hierarchy_state) {
             world.send_command(SpringBoneEvent::JointUpdate {
                 entity,
@@ -254,9 +254,9 @@ fn build_add_chain_row(
     }
 
     ui.set_next_item_width(100.0);
-    ui.input_int("Chain Length##add", chain_length)
+    ui.input_int_config("Chain Length##add")
         .step(1)
-        .build();
+        .build(chain_length);
     *chain_length = (*chain_length).max(1);
 
     ui.same_line();
@@ -295,7 +295,7 @@ fn build_collider_list(
             continue;
         }
 
-        let id_token = ui.push_id_int(collider.id as i32 + 2000);
+        let id_token = ui.push_id(collider.id as i32 + 2000);
         if let Some(updated) =
             build_collider_fields(ui, world, collider, bone_list, hierarchy_state)
         {
@@ -483,7 +483,7 @@ fn build_collider_group_list(
             continue;
         }
 
-        let id_token = ui.push_id_int(group.id as i32 + 3000);
+        let id_token = ui.push_id(group.id as i32 + 3000);
 
         let mut modified = group.clone();
         let mut changed = false;

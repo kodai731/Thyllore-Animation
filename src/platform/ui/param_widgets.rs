@@ -1,4 +1,5 @@
-use imgui::ColorEditFlags;
+use crate::platform::ui::numeric_format::numeric_format;
+use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
 use thyllore_effect_core::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
 };
@@ -61,7 +62,7 @@ fn draw_scalar<C>(
     property_label(ui, &meta.display_label());
     if ui
         .slider_config(format!("##{}", meta.name), meta.min, meta.max)
-        .display_format(meta.format)
+        .display_format(numeric_format(meta.format))
         .build(&mut value)
     {
         (scalar.set)(component, value);
@@ -123,7 +124,11 @@ fn draw_color<C>(
     property_label(ui, &meta.display_label());
     let changed = ui
         .color_picker3_config(format!("##{}", meta.name), &mut picked)
-        .flags(ColorEditFlags::FLOAT | ColorEditFlags::NO_ALPHA | ColorEditFlags::NO_INPUTS)
+        .flags(ColorPickerOptions {
+            flags: ColorPickerFlags::NO_ALPHA | ColorPickerFlags::NO_INPUTS,
+            data_type: Some(ColorDataType::Float),
+            ..ColorPickerOptions::default()
+        })
         .build();
     show_tooltip(ui, &mapping.tooltip(meta.tooltip));
 

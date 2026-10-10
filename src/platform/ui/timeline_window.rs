@@ -2,17 +2,27 @@ use imgui::Condition;
 
 use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
-    ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
+    ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, CurveEditorState, TimelineInteractionState,
-    TimelineState,
+    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorState,
+    TimelineInteractionState, TimelineState,
 };
-use crate::ecs::systems::{clip_drag_preview_times, timeline_effective_duration};
+use crate::ecs::systems::clip_track_systems::query_clip_tracks;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::{
+    clip_drag_preview_times, clip_schedule_assign_lanes, find_preview_owner,
+    timeline_effective_duration,
+};
+use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::ecs::resource::LayoutSnapshot;
 
 pub(crate) const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
@@ -28,9 +38,9 @@ const CLIP_BLOCK_COLORS: [[f32; 4]; 4] = [
     [0.7, 0.5, 0.7, 0.9],
 ];
 
-pub fn build_timeline_window(
+fn draw_timeline_window(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &mut TimelineState,
     interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
@@ -49,12 +59,12 @@ pub fn build_timeline_window(
         .collapsible(false)
         .bring_to_front_on_focus(false)
         .build(|| {
-            build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
+            build_transport_controls(ui, world, state, clip_library, curve_editor_state);
             ui.separator();
             handle_middle_drag_pan(ui, state);
             build_timeline_content(
                 ui,
-                ui_events,
+                world,
                 state,
                 interaction,
                 clip_library,
@@ -62,35 +72,44 @@ pub fn build_timeline_window(
                 clip_track_snapshot,
             );
             let clip_duration = timeline_effective_duration(state, clip_library);
-            handle_timeline_shortcuts(ui, ui_events, state);
-            handle_mouse_wheel_zoom(ui, ui_events, state, clip_duration);
+            handle_timeline_shortcuts(ui, world, state);
+            handle_mouse_wheel_zoom(ui, world, state, clip_duration);
         });
 }
 
 fn build_transport_controls(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &mut TimelineState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
 ) {
     if state.playing {
         if ui.button("||") {
-            ui_events.send(UIEvent::TimelinePause);
+            world.send_command(TimelineEvent::Pause);
         }
     } else if ui.button(">") {
-        ui_events.send(UIEvent::TimelinePlay);
+        world.send_command(TimelineEvent::Play);
     }
 
     ui.same_line();
     if ui.button("[]") {
-        ui_events.send(UIEvent::TimelineStop);
+        world.send_command(TimelineEvent::Stop);
     }
 
     ui.same_line();
     let mut looping = state.looping;
     if ui.checkbox("Loop", &mut looping) {
-        ui_events.send(UIEvent::TimelineToggleLoop);
+        world.send_command(TimelineEvent::ToggleLoop);
+    }
+
+    ui.same_line();
+    if ui.radio_button_bool("Solo", state.preview == ClipPreview::Solo) {
+        world.send_command(TimelineEvent::SetPreview(ClipPreview::Solo));
+    }
+    ui.same_line();
+    if ui.radio_button_bool("Mix", state.preview == ClipPreview::Mix) {
+        world.send_command(TimelineEvent::SetPreview(ClipPreview::Mix));
     }
 
     ui.same_line();
@@ -111,11 +130,11 @@ fn build_transport_controls(
 
     ui.same_line();
     if ui.button("-") {
-        ui_events.send(UIEvent::TimelineZoomOut { min_zoom });
+        world.send_command(TimelineEvent::ZoomOut { min_zoom });
     }
     ui.same_line();
     if ui.button("+") {
-        ui_events.send(UIEvent::TimelineZoomIn { max_zoom });
+        world.send_command(TimelineEvent::ZoomIn { max_zoom });
     }
     ui.same_line();
     ui.text(format!("Zoom: {:.1}x", state.zoom_level));
@@ -136,14 +155,14 @@ fn build_transport_controls(
         curve_editor_state.view_initialized = false;
     }
 
-    build_clip_selector(ui, ui_events, state, clip_library);
+    build_clip_selector(ui, world, state, clip_library);
 
-    build_snap_controls(ui, ui_events, state);
+    build_snap_controls(ui, world, state);
 }
 
 fn build_clip_selector(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &TimelineState,
     clip_library: &ClipLibrary,
 ) {
@@ -171,7 +190,7 @@ fn build_clip_selector(
             let display = build_clip_display_name(name, source_path.as_deref());
             let label = format!("{}##clip_select_{}", display, id);
             if ui.selectable_config(&label).selected(is_selected).build() {
-                ui_events.send(UIEvent::TimelineSelectClip(*id));
+                world.send_command(TimelineEvent::SelectClip(*id));
             }
         }
     }
@@ -179,7 +198,7 @@ fn build_clip_selector(
 
 fn build_timeline_content(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &mut TimelineState,
     interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
@@ -203,14 +222,7 @@ fn build_timeline_content(
         .horizontal_scrollbar(true)
         .build(|| {
             ui.set_scroll_x(synced_scroll_x);
-            build_time_ruler_with_scrub(
-                ui,
-                ui_events,
-                state,
-                interaction,
-                timeline_width,
-                duration,
-            );
+            build_time_ruler_with_scrub(ui, world, state, interaction, timeline_width, duration);
         });
     ui.separator();
 
@@ -227,7 +239,7 @@ fn build_timeline_content(
             if !clip_track_snapshot.entries.is_empty() {
                 build_clip_tracks_section(
                     ui,
-                    ui_events,
+                    world,
                     state,
                     interaction,
                     clip_library,
@@ -241,7 +253,7 @@ fn build_timeline_content(
 
 fn build_time_ruler_with_scrub(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &mut TimelineState,
     interaction: &mut TimelineInteractionState,
     timeline_width: f32,
@@ -312,7 +324,7 @@ fn build_time_ruler_with_scrub(
 
     handle_scrub_interaction(
         ui,
-        ui_events,
+        world,
         interaction,
         ruler_rect_min,
         ruler_rect_max,
@@ -355,7 +367,7 @@ fn timeline_pointer_available(ui: &imgui::Ui) -> bool {
 
 fn handle_scrub_interaction(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     interaction: &mut TimelineInteractionState,
     rect_min: [f32; 2],
     rect_max: [f32; 2],
@@ -383,7 +395,7 @@ fn handle_scrub_interaction(
     interaction.scrubbing = true;
     let relative_x = mouse_pos[0] - ruler_start_x;
     let new_time = (relative_x / pixels_per_second).clamp(0.0, duration);
-    ui_events.send(UIEvent::TimelineSetTime(new_time));
+    world.send_command(TimelineEvent::SetTime(new_time));
 }
 
 fn calculate_tick_interval(pixels_per_second: f32) -> f32 {
@@ -417,7 +429,7 @@ fn nice_round_step(raw: f32) -> f32 {
 
 fn build_clip_tracks_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &mut TimelineState,
     interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
@@ -433,12 +445,18 @@ fn build_clip_tracks_section(
     let mouse_double_clicked =
         ui.is_mouse_double_clicked(imgui::MouseButton::Left) && pointer_available;
 
-    handle_clip_drag_release(ui, ui_events, interaction, pixels_per_second);
+    handle_clip_drag_release(ui, world, interaction, pixels_per_second);
 
     let mut clicked_any_block = false;
+    let solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)> =
+        (state.preview == ClipPreview::Solo && state.current_clip_id.is_some())
+            .then(|| find_preview_owner(world))
+            .flatten()
+            .zip(state.current_clip_id);
+    let mut total_track_rows: f32 = 0.0;
 
     for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
-        build_group_headers(ui, ui_events, entry);
+        build_group_headers(ui, world, entry);
 
         let cursor_pos = ui.cursor_screen_pos();
         ui.text(&truncate_label(&entry.entity_name, 15));
@@ -447,12 +465,29 @@ fn build_clip_tracks_section(
         let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
         let draw_list = ui.get_window_draw_list();
 
+        let solo_clip_for_row = solo_preview
+            .filter(|(owner, _)| *owner == entry.entity)
+            .map(|(_, clip_id)| clip_id);
+        let is_solo_owner = solo_clip_for_row.is_some();
+
+        let lanes = world
+            .get_component::<ClipSchedule>(entry.entity)
+            .map(|schedule| clip_schedule_assign_lanes(&schedule.instances))
+            .unwrap_or_else(|| vec![0; entry.instances.len()]);
+        let mut lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
+
+        if is_solo_owner {
+            lane_count += 1;
+        }
+
+        let track_height = (lane_count as f32) * CLIP_TRACK_HEIGHT;
+
         draw_list
             .add_rect(
                 track_origin,
                 [
                     track_origin[0] + timeline_width,
-                    track_origin[1] + CLIP_TRACK_HEIGHT,
+                    track_origin[1] + track_height,
                 ],
                 [0.15, 0.15, 0.2, 1.0],
             )
@@ -460,6 +495,9 @@ fn build_clip_tracks_section(
             .build();
 
         for (inst_idx, inst) in entry.instances.iter().enumerate() {
+            let lane = lanes[inst_idx];
+            let lane_y = track_origin[1] + (lane as f32) * CLIP_TRACK_HEIGHT;
+
             let (draw_start, draw_end) = clip_block_display_times(
                 interaction,
                 entry.entity,
@@ -470,11 +508,16 @@ fn build_clip_tracks_section(
             );
             let block_x = track_origin[0] + draw_start * pixels_per_second;
             let block_w = ((draw_end - draw_start) * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
-            let block_min = [block_x, track_origin[1] + 2.0];
-            let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
+            let block_min = [block_x, lane_y + 2.0];
+            let block_max = [block_x + block_w, lane_y + CLIP_TRACK_HEIGHT - 2.0];
 
             let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
-            let color = compute_block_color(base_color, inst, interaction, entry.entity);
+            let mut color = compute_block_color(base_color, inst, interaction, entry.entity);
+
+            if is_solo_owner {
+                color[3] *= 0.4;
+            }
+
             let border_color = compute_border_color(inst, state, entry.entity);
 
             draw_clip_block(&draw_list, block_min, block_max, color, border_color, inst);
@@ -483,8 +526,8 @@ fn build_clip_tracks_section(
 
             if mouse_double_clicked && hit_block {
                 clicked_any_block = true;
-                ui_events.send(UIEvent::SelectEntity(entry.entity));
-                ui_events.send(UIEvent::TimelineSelectClip(inst.source_id));
+                world.send_command(HierarchyEvent::SelectEntity(entry.entity));
+                world.send_command(TimelineEvent::SelectClip(inst.source_id));
                 open_curve_editor_for_clip(
                     curve_editor_state,
                     clip_library,
@@ -493,8 +536,8 @@ fn build_clip_tracks_section(
                 );
             } else if mouse_clicked && hit_block {
                 clicked_any_block = true;
-                ui_events.send(UIEvent::SelectEntity(entry.entity));
-                ui_events.send(UIEvent::ClipInstanceSelect {
+                world.send_command(HierarchyEvent::SelectEntity(entry.entity));
+                world.send_command(ClipInstanceEvent::Select {
                     entity: entry.entity,
                     instance_id: inst.instance_id,
                 });
@@ -509,10 +552,31 @@ fn build_clip_tracks_section(
                 );
             }
 
-            handle_clip_mute_button(ui, ui_events, entry.entity, inst, inst_idx, entry_idx);
+            handle_clip_mute_button(ui, world, entry.entity, inst, inst_idx, entry_idx);
         }
 
-        ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
+        if let Some(solo_source_id) = solo_clip_for_row {
+            let solo_lane_y = track_origin[1] + (lane_count as f32 - 1.0) * CLIP_TRACK_HEIGHT;
+
+            if let Some(clip) = clip_library.get(solo_source_id) {
+                let clip_duration = clip.duration;
+                let block_x = track_origin[0];
+                let block_w = (clip_duration * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
+                let block_min = [block_x, solo_lane_y + 2.0];
+                let block_max = [block_x + block_w, solo_lane_y + CLIP_TRACK_HEIGHT - 2.0];
+
+                draw_list
+                    .add_rect(block_min, block_max, [1.0, 1.0, 1.0, 1.0])
+                    .filled(false)
+                    .build();
+
+                let label_pos = [block_min[0] + 4.0, block_min[1] + 2.0];
+                draw_list.add_text(label_pos, [1.0, 1.0, 1.0, 1.0], &clip.name);
+            }
+        }
+
+        ui.dummy([timeline_width, track_height]);
+        total_track_rows += track_height;
 
         if let Some(target) = ui.drag_drop_target() {
             let accepted = target
@@ -521,7 +585,7 @@ fn build_clip_tracks_section(
                 let source_id = payload.data;
                 let drop_x = mouse_pos[0] - track_origin[0];
                 let start_time = (drop_x / pixels_per_second).max(0.0);
-                ui_events.send(UIEvent::ClipInstanceAdd {
+                world.send_command(ClipInstanceEvent::Add {
                     entity: entry.entity,
                     source_id,
                     start_time,
@@ -529,31 +593,31 @@ fn build_clip_tracks_section(
             }
         }
 
-        build_clip_instance_properties(ui, ui_events, state, clip_library, entry);
+        build_clip_instance_properties(ui, world, state, clip_library, entry);
     }
 
     if mouse_clicked && !clicked_any_block {
         let section_start_y = ui.cursor_screen_pos()[1]
-            - (snapshot.entries.len() as f32
-                * (CLIP_TRACK_HEIGHT + ui.text_line_height_with_spacing()));
+            - (total_track_rows
+                + snapshot.entries.len() as f32 * ui.text_line_height_with_spacing());
 
         if mouse_pos[1] >= section_start_y {
-            ui_events.send(UIEvent::ClipInstanceDeselect);
+            world.send_command(ClipInstanceEvent::Deselect);
         }
     }
 
-    handle_delete_key(ui, ui_events, state);
+    handle_delete_key(ui, world, state);
 }
 
-fn build_group_headers(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entry: &ClipTrackEntry) {
+fn build_group_headers(ui: &imgui::Ui, world: &World, entry: &ClipTrackEntry) {
     for group in &entry.groups {
-        build_single_group_header(ui, ui_events, entry.entity, group);
+        build_single_group_header(ui, world, entry.entity, group);
     }
 }
 
 fn build_single_group_header(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: crate::ecs::world::Entity,
     group: &ClipGroupSnapshot,
 ) {
@@ -570,7 +634,7 @@ fn build_single_group_header(
     ui.same_line();
     let mute_btn_id = format!("Mute##grp_{}", group.id);
     if ui.small_button(&mute_btn_id) {
-        ui_events.send(UIEvent::ClipGroupToggleMute {
+        world.send_command(ClipInstanceEvent::GroupToggleMute {
             entity,
             group_id: group.id,
         });
@@ -586,7 +650,7 @@ fn build_single_group_header(
         .display_format("%.2f")
         .build(ui, &mut weight)
     {
-        ui_events.send(UIEvent::ClipGroupSetWeight {
+        world.send_command(ClipInstanceEvent::GroupSetWeight {
             entity,
             group_id: group.id,
             weight,
@@ -596,7 +660,7 @@ fn build_single_group_header(
     ui.same_line();
     let del_btn_id = format!("X##grp_del_{}", group.id);
     if ui.small_button(&del_btn_id) {
-        ui_events.send(UIEvent::ClipGroupDelete {
+        world.send_command(ClipInstanceEvent::GroupDelete {
             entity,
             group_id: group.id,
         });
@@ -605,7 +669,7 @@ fn build_single_group_header(
 
 fn build_clip_instance_properties(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &TimelineState,
     clip_library: &ClipLibrary,
     entry: &ClipTrackEntry,
@@ -625,7 +689,7 @@ fn build_clip_instance_properties(
     ui.text("  Properties:");
     ui.same_line();
 
-    build_clip_length_field(ui, ui_events, clip_library, inst.source_id);
+    build_clip_length_field(ui, world, clip_library, inst.source_id);
     ui.same_line();
 
     ui.set_next_item_width(60.0);
@@ -636,7 +700,7 @@ fn build_clip_instance_properties(
         .display_format("W:%.2f")
         .build(ui, &mut weight)
     {
-        ui_events.send(UIEvent::ClipInstanceSetWeight {
+        world.send_command(ClipInstanceEvent::SetWeight {
             entity: entry.entity,
             instance_id: inst.instance_id,
             weight,
@@ -660,7 +724,7 @@ fn build_clip_instance_properties(
                     1 => BlendMode::Additive,
                     _ => continue,
                 };
-                ui_events.send(UIEvent::ClipInstanceSetBlendMode {
+                world.send_command(ClipInstanceEvent::SetBlendMode {
                     entity: entry.entity,
                     instance_id: inst.instance_id,
                     blend_mode: new_mode,
@@ -685,7 +749,7 @@ fn build_clip_instance_properties(
                 .build()
             {
                 if let Some(gid) = inst.group_id {
-                    ui_events.send(UIEvent::ClipGroupRemoveInstance {
+                    world.send_command(ClipInstanceEvent::GroupRemoveInstance {
                         entity: entry.entity,
                         group_id: gid,
                         instance_id: inst.instance_id,
@@ -700,7 +764,7 @@ fn build_clip_instance_properties(
                     .selected(is_selected)
                     .build()
                 {
-                    ui_events.send(UIEvent::ClipGroupAddInstance {
+                    world.send_command(ClipInstanceEvent::GroupAddInstance {
                         entity: entry.entity,
                         group_id: group.id,
                         instance_id: inst.instance_id,
@@ -715,7 +779,7 @@ fn build_clip_instance_properties(
 /// authored floor `min_duration` is what makes an unkeyed clip loop longer.
 fn build_clip_length_field(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     clip_library: &ClipLibrary,
     source_id: SourceClipId,
 ) {
@@ -730,7 +794,7 @@ fn build_clip_length_field(
         .display_format("Len:%.2fs")
         .build(ui, &mut seconds)
     {
-        ui_events.send(UIEvent::ClipSetMinDuration { source_id, seconds });
+        world.send_command(ScalarCurveEvent::ClipSetMinDuration { source_id, seconds });
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -742,7 +806,7 @@ fn build_clip_length_field(
 
 fn handle_clip_drag_release(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     interaction: &mut TimelineInteractionState,
     pixels_per_second: f32,
 ) {
@@ -755,7 +819,7 @@ fn handle_clip_drag_release(
             match drag.drag_type {
                 ClipDragType::Move => {
                     let new_start = (drag.original_value + delta_time).max(0.0);
-                    ui_events.send(UIEvent::ClipInstanceMove {
+                    world.send_command(ClipInstanceEvent::Move {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
                         new_start_time: new_start,
@@ -763,7 +827,7 @@ fn handle_clip_drag_release(
                 }
                 ClipDragType::TrimStart => {
                     let new_clip_in = (drag.original_value + delta_time).max(0.0);
-                    ui_events.send(UIEvent::ClipInstanceTrimStart {
+                    world.send_command(ClipInstanceEvent::TrimStart {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
                         new_clip_in,
@@ -771,7 +835,7 @@ fn handle_clip_drag_release(
                 }
                 ClipDragType::TrimEnd => {
                     let new_clip_out = (drag.original_value + delta_time).max(0.0);
-                    ui_events.send(UIEvent::ClipInstanceTrimEnd {
+                    world.send_command(ClipInstanceEvent::TrimEnd {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
                         new_clip_out,
@@ -858,7 +922,7 @@ fn clip_block_display_times(
 
 fn handle_clip_mute_button(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: crate::ecs::world::Entity,
     inst: &ClipInstanceSnapshot,
     inst_idx: usize,
@@ -871,23 +935,23 @@ fn handle_clip_mute_button(
     if inst.muted {
         let _color_token = ui.push_style_color(imgui::StyleColor::Button, [0.5, 0.2, 0.2, 1.0]);
         if ui.small_button(&button_id) {
-            ui_events.send(UIEvent::ClipInstanceToggleMute {
+            world.send_command(ClipInstanceEvent::ToggleMute {
                 entity,
                 instance_id: inst.instance_id,
             });
         }
     } else if ui.small_button(&button_id) {
-        ui_events.send(UIEvent::ClipInstanceToggleMute {
+        world.send_command(ClipInstanceEvent::ToggleMute {
             entity,
             instance_id: inst.instance_id,
         });
     }
 }
 
-fn handle_delete_key(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
+fn handle_delete_key(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     if ui.is_key_pressed(imgui::Key::Delete) {
         if let Some((entity, instance_id)) = state.selected_clip_instance {
-            ui_events.send(UIEvent::ClipInstanceDelete {
+            world.send_command(ClipInstanceEvent::Delete {
                 entity,
                 instance_id,
             });
@@ -989,31 +1053,31 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
         && point[1] <= rect_max[1]
 }
 
-fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
+fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     let io = ui.io();
     if !ui.is_window_focused() {
         return;
     }
 
     if io.key_ctrl && ui.is_key_pressed(imgui::Key::C) {
-        ui_events.send(UIEvent::TimelineCopyKeyframes);
+        world.send_command(TimelineEvent::CopyKeyframes);
     }
 
     if io.key_ctrl && !io.key_shift && ui.is_key_pressed(imgui::Key::V) {
-        ui_events.send(UIEvent::TimelinePasteKeyframes {
+        world.send_command(TimelineEvent::PasteKeyframes {
             paste_time: state.current_time,
         });
     }
 
     if io.key_ctrl && io.key_shift && ui.is_key_pressed(imgui::Key::V) {
-        ui_events.send(UIEvent::TimelineMirrorPaste {
+        world.send_command(TimelineEvent::MirrorPaste {
             paste_time: state.current_time,
         });
     }
 
     if ui.is_key_pressed(imgui::Key::Delete) {
         if !state.selected_keyframes.is_empty() {
-            ui_events.send(UIEvent::TimelineDeleteSelectedKeyframes);
+            world.send_command(TimelineEvent::DeleteSelectedKeyframes);
         }
     }
 }
@@ -1034,7 +1098,7 @@ fn compute_zoom_limits(available_width: f32, clip_duration: f32, frame_rate: f32
 
 fn handle_mouse_wheel_zoom(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     state: &TimelineState,
     clip_duration: f32,
 ) {
@@ -1052,9 +1116,9 @@ fn handle_mouse_wheel_zoom(
 
     let wheel = ui.io().mouse_wheel;
     if wheel > 0.0 {
-        ui_events.send(UIEvent::TimelineZoomIn { max_zoom });
+        world.send_command(TimelineEvent::ZoomIn { max_zoom });
     } else if wheel < 0.0 {
-        ui_events.send(UIEvent::TimelineZoomOut { min_zoom });
+        world.send_command(TimelineEvent::ZoomOut { min_zoom });
     }
 }
 
@@ -1076,7 +1140,7 @@ fn handle_middle_drag_pan(ui: &imgui::Ui, state: &mut TimelineState) {
     state.pan_pending_delta_x -= delta_x;
 }
 
-fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
+fn build_snap_controls(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     let snap = &state.snap_settings;
 
     let frame_label = if snap.snap_to_frame {
@@ -1086,7 +1150,7 @@ fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &Tim
     };
 
     if ui.small_button(frame_label) {
-        ui_events.send(UIEvent::TimelineSetSnapToFrame(!snap.snap_to_frame));
+        world.send_command(TimelineEvent::SetSnapToFrame(!snap.snap_to_frame));
     }
 
     ui.same_line();
@@ -1098,7 +1162,7 @@ fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &Tim
     };
 
     if ui.small_button(key_label) {
-        ui_events.send(UIEvent::TimelineSetSnapToKey(!snap.snap_to_key));
+        world.send_command(TimelineEvent::SetSnapToKey(!snap.snap_to_key));
     }
 
     ui.same_line();
@@ -1112,7 +1176,7 @@ fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &Tim
             let label = format!("{}fps", *fps as u32);
             let is_selected = (snap.frame_rate - fps).abs() < 0.1;
             if ui.selectable_config(&label).selected(is_selected).build() {
-                ui_events.send(UIEvent::TimelineSetFrameRate(*fps));
+                world.send_command(TimelineEvent::SetFrameRate(*fps));
             }
         }
     }
@@ -1162,3 +1226,33 @@ fn open_curve_editor_for_clip(
         curve_editor_state.view_initialized = false;
     }
 }
+
+fn build_timeline_window(
+    ui: &imgui::Ui,
+    world: &World,
+    assets: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let clip_track_snapshot = {
+        let clip_library = world.resource::<ClipLibrary>();
+        query_clip_tracks(world, &clip_library, assets)
+    };
+
+    let mut timeline_state = world.resource_mut::<TimelineState>();
+    let mut interaction = world.resource_mut::<TimelineInteractionState>();
+    let clip_library = world.resource::<ClipLibrary>();
+    let mut curve_editor = world.resource_mut::<CurveEditorState>();
+    let layout = world.resource::<LayoutSnapshot>();
+    draw_timeline_window(
+        ui,
+        world,
+        &mut timeline_state,
+        &mut interaction,
+        &clip_library,
+        &mut curve_editor,
+        &clip_track_snapshot,
+        &layout,
+    );
+}
+
+crate::ui_window!("timeline", Bottom, 0, build_timeline_window);

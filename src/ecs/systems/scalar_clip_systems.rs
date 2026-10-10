@@ -196,7 +196,7 @@ pub fn scalar_clip_insert_debug_keys(
     };
 
     let key_count = DEBUG_KEYS_PER_CURVE;
-    for (index, channel) in domain.channels.iter().enumerate() {
+    for (index, channel) in domain.channels().iter().enumerate() {
         let property_type = domain.property_type_at(index);
         let (lo, hi) = channel.debug_value_range;
         for i in 0..key_count {
@@ -220,24 +220,24 @@ pub(crate) mod test_support {
     use crate::scene::test_support::ProbeOwner;
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
-    /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
+    /// dispatch code never depend on a concrete effect.
     pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
         display_name: "Level",
         cli_name: "probe_level",
-        scene_name: "ProbeLevel",
         debug_value_range: (0.0, 1.0),
+        renamed_from: &[],
     };
 
     pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
         display_name: "Height",
         cli_name: "probe_height",
-        scene_name: "ProbeHeight",
         debug_value_range: (0.5, 4.0),
+        renamed_from: &[],
     };
 
     pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
         name: "Probe",
-        channels: &[PROBE_LEVEL, PROBE_HEIGHT],
+        channel_table: || &[PROBE_LEVEL, PROBE_HEIGHT],
         has_component: probe_has_component,
         entities: probe_entities,
         read: probe_read,
@@ -353,8 +353,8 @@ mod tests {
         let mut clip = EditableAnimationClip::new(1, PROBE_DOMAIN.name.to_string());
         scalar_clip_insert_debug_keys(&mut clip, &PROBE_DOMAIN, 42, 5.0);
 
-        assert_eq!(clip.scalar_curves.len(), PROBE_DOMAIN.channels.len());
-        for channel in PROBE_DOMAIN.channels {
+        assert_eq!(clip.scalar_curves.len(), PROBE_DOMAIN.channels().len());
+        for channel in PROBE_DOMAIN.channels() {
             let curve = clip.get_scalar_curve(probe_property(channel)).unwrap();
             assert_eq!(curve.keyframes.len(), DEBUG_KEYS_PER_CURVE);
             let (lo, hi) = channel.debug_value_range;
@@ -378,7 +378,7 @@ mod tests {
         scalar_clip_insert_debug_keys(&mut a, &PROBE_DOMAIN, 7, 5.0);
         scalar_clip_insert_debug_keys(&mut b, &PROBE_DOMAIN, 7, 5.0);
 
-        for channel in PROBE_DOMAIN.channels {
+        for channel in PROBE_DOMAIN.channels() {
             let ka = &a
                 .get_scalar_curve(probe_property(channel))
                 .unwrap()

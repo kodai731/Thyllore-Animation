@@ -4,7 +4,7 @@ use thyllore_scene_core::SceneComponent;
 use crate::asset::AssetStorage;
 use crate::ecs::component::DebugPrimitiveTag;
 use crate::ecs::events::DebugPrimitiveKind;
-use crate::ecs::world::{Entity, GlobalTransform, MeshRef, Transform, World};
+use crate::ecs::world::{Children, Entity, GlobalTransform, MeshRef, Transform, World};
 use crate::hooks::scene::{
     decode_component, encode_scene_value, entities_with, SceneComponentHook, SceneComponentRole,
     SceneValue,
@@ -75,11 +75,11 @@ fn apply_debug_primitive(
     Ok(())
 }
 
-/// Removes every tagged entity that has no mesh yet and returns what to spawn in its place.
+/// Removes every tagged entity whose tree carries no mesh yet and returns what to spawn in its place.
 pub fn take_debug_primitives_awaiting_mesh(world: &mut World) -> Vec<DebugPrimitiveRecord> {
     let awaiting: Vec<(Entity, DebugPrimitiveRecord)> = entities_with::<DebugPrimitiveTag>(world)
         .into_iter()
-        .filter(|entity| !world.has_component::<MeshRef>(*entity))
+        .filter(|entity| !has_mesh_in_tree(world, *entity))
         .filter_map(|entity| {
             let record: DebugPrimitiveRecord =
                 decode_component(&capture_debug_primitive(world, entity)?).ok()?;
@@ -94,4 +94,16 @@ pub fn take_debug_primitives_awaiting_mesh(world: &mut World) -> Vec<DebugPrimit
             record
         })
         .collect()
+}
+
+fn has_mesh_in_tree(world: &World, entity: Entity) -> bool {
+    if world.has_component::<MeshRef>(entity) {
+        return true;
+    }
+    world
+        .get_component::<Children>(entity)
+        .map(|children| children.0.clone())
+        .unwrap_or_default()
+        .into_iter()
+        .any(|child| has_mesh_in_tree(world, child))
 }

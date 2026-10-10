@@ -31,6 +31,7 @@ path = "src/bin/flame_sdf_bake.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+thyllore-cli-core = { path = "crates/thyllore-cli-core" }
 thyllore-log-core = { path = "crates/thyllore-log-core" }
 thyllore-math-core = { path = "crates/thyllore-math-core" }
 thyllore-model-core = { path = "crates/thyllore-model-core" }
@@ -91,3 +92,6 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.dev.package.thyllore-model-core]
+opt-level = 3

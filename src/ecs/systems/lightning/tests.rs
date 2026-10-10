@@ -1,12 +1,14 @@
 use super::passes::compute_lightning_scissor;
+use super::test_support::{lightning_inside_first_burst, orthographic_projection};
 use super::*;
 use crate::ecs::component::{
     EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
-use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
+use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
+use crate::ecs::systems::effect_edit::apply_effect_preset;
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
+use cgmath::{Matrix4, SquareMatrix, Vector3};
 use thyllore_effect_core::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
     LightningShape,
@@ -30,7 +32,7 @@ fn spawned_lightning_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<LightningEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Lightning);
+    assert_eq!(display.icon, EntityIcon::Effect('Z'));
 }
 
 #[test]
@@ -77,7 +79,9 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         .shape
         .core_radius = 0.9;
 
-    apply_lightning_preset_to_selected(&mut world, "no_such_preset");
+    if let Some(target) = resolve_selected_lightning(&world) {
+        apply_effect_preset::<LightningEffect>(&mut world, target, "no_such_preset");
+    }
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
@@ -92,7 +96,9 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         preset_name
     ));
 
-    apply_lightning_preset_to_selected(&mut world, preset_name);
+    if let Some(target) = resolve_selected_lightning(&world) {
+        apply_effect_preset::<LightningEffect>(&mut world, target, preset_name);
+    }
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
@@ -126,22 +132,6 @@ fn lightning_effect_hook_is_subscribed_after_wind() {
         matches!((wind, lightning), (Some(wind), Some(lightning)) if lightning > wind),
         "hook order {names:?}"
     );
-}
-
-fn lightning_inside_first_burst() -> LightningEffect {
-    let mut effect = LightningEffect::default();
-    effect.time =
-        burst_start_time(&effect, 0) + effect.timing.attack_time + effect.timing.sustain_time * 0.5;
-    effect
-}
-
-fn orthographic_projection(half_size: f32) -> ProjectionData {
-    ProjectionData {
-        view: Matrix4::identity(),
-        proj: cgmath::ortho(-half_size, half_size, -half_size, half_size, -100.0, 100.0),
-        screen_size: Vector2::new(200.0, 200.0),
-        aspect: 1.0,
-    }
 }
 
 #[test]

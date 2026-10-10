@@ -3,7 +3,6 @@ use std::time::Instant;
 use anyhow::Result;
 
 use crate::app::App;
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
     CpuFrameTimings, STAGE_EVENT_DISPATCH, STAGE_GPU_WAIT, STAGE_IMGUI_BUILD, STAGE_PRESENT,
     STAGE_RENDER_CPU, STAGE_UPDATE,
@@ -21,7 +20,7 @@ impl App {
     pub unsafe fn drive_frame(
         &mut self,
         input: FrameInput<'_>,
-        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
+        queue_file_dialog_commands: impl FnOnce(&App),
     ) -> Result<()> {
         let event_dispatch_ms = self.dispatch_ui_events(queue_file_dialog_commands);
 
@@ -58,17 +57,14 @@ impl App {
         Ok(())
     }
 
-    unsafe fn dispatch_ui_events(
-        &mut self,
-        queue_file_dialog_commands: impl FnOnce(&[UIEvent], &App),
-    ) -> f32 {
+    unsafe fn dispatch_ui_events(&mut self, queue_file_dialog_commands: impl FnOnce(&App)) -> f32 {
         let start = Instant::now();
-        let file_dialog_events = run_event_dispatch_phase(
+        run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
             &self.data.graphics_resources,
         );
-        queue_file_dialog_commands(&file_dialog_events, self);
+        queue_file_dialog_commands(self);
 
         self.apply_app_commands();
         start.elapsed().as_secs_f32() * 1000.0

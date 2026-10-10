@@ -127,6 +127,10 @@ impl RayTracingData {
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         log!("Building acceleration structures...");
+        if let Some(mut previous) = self.acceleration_structure.take() {
+            rrdevice.device.device_wait_idle()?;
+            previous.destroy(&rrdevice.device);
+        }
 
         let mut acceleration_structure = RRAccelerationStructure::new();
 

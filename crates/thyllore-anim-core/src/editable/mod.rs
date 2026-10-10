@@ -3,7 +3,9 @@ pub mod systems;
 
 pub use components::blend::*;
 pub use components::clip::*;
-pub use components::clip_file::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
+pub use components::clip_file::{
+    AnimationClipFile, ClipFileError, NamedScalarCurve, ANIMATION_FORMAT_VERSION,
+};
 pub use components::clip_group::*;
 pub use components::clip_instance::*;
 pub use components::curve::*;

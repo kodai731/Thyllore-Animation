@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use cgmath::Matrix4;
 
@@ -29,9 +30,14 @@ pub fn run_animation_pipeline(
     dt: f32,
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
     pose_apply_cache: &mut PoseApplyCache,
+    sub: &mut HashMap<String, f32>,
 ) -> AnimationEvalResult {
+    let t = Instant::now();
     let entity_infos = collect_animated_entities(world, graphics, clip_library, assets);
-
+    sub.insert(
+        "pipeline.collect".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
     if entity_infos.is_empty() {
         return AnimationEvalResult {
             updated_meshes: Vec::new(),
@@ -48,6 +54,7 @@ pub fn run_animation_pipeline(
         dt,
         pose_overrides,
         pose_apply_cache,
+        sub,
     );
 
     AnimationEvalResult {
@@ -65,6 +72,7 @@ fn apply_blended_animations(
     dt: f32,
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
     pose_apply_cache: &mut PoseApplyCache,
+    sub: &mut HashMap<String, f32>,
 ) -> (
     Vec<usize>,
     Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
@@ -74,6 +82,7 @@ fn apply_blended_animations(
 
     let shared_constraints = find_shared_constraints(entities, world);
 
+    let t = Instant::now();
     let spring_result = compute_spring_bone_result(
         entities,
         world,
@@ -81,6 +90,10 @@ fn apply_blended_animations(
         &shared_constraints,
         pose_overrides,
         dt,
+    );
+    sub.insert(
+        "pipeline.spring".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
     );
 
     let pose_inputs = SharedPoseInputs {
@@ -97,11 +110,19 @@ fn apply_blended_animations(
             continue;
         };
 
-        let Some(globals) = evaluated_globals
-            .entry((info.entity, info.skeleton_id))
-            .or_insert_with(|| evaluate_skeleton_globals(info, skeleton, nodes, &pose_inputs))
-            .as_ref()
-        else {
+        let key = (info.entity, info.skeleton_id);
+        let globals: &Option<Vec<Matrix4<f32>>> = if evaluated_globals.contains_key(&key) {
+            evaluated_globals.get(&key).unwrap()
+        } else {
+            let t = Instant::now();
+            let result = evaluate_skeleton_globals(info, skeleton, nodes, &pose_inputs);
+            sub.entry("pipeline.pose".to_string())
+                .and_modify(|v| *v += t.elapsed().as_secs_f32() * 1000.0)
+                .or_insert(t.elapsed().as_secs_f32() * 1000.0);
+            evaluated_globals.insert(key, result);
+            evaluated_globals.get(&key).unwrap()
+        };
+        let Some(globals) = globals else {
             continue;
         };
 
@@ -133,12 +154,17 @@ fn apply_blended_animations(
                         .node_cache
                         .insert(info.mesh_idx, current_value);
                 }
-                apply_node_animation_to_single_mesh(
+                let t = Instant::now();
+                let updated = apply_node_animation_to_single_mesh(
                     graphics,
                     info.mesh_idx,
                     nodes,
                     info.node_animation_scale,
-                )
+                );
+                sub.entry("pipeline.node_apply".to_string())
+                    .and_modify(|v| *v += t.elapsed().as_secs_f32() * 1000.0)
+                    .or_insert(t.elapsed().as_secs_f32() * 1000.0);
+                updated
             }
             _ => {
                 if should_skip_skinned(pose_apply_cache, info.mesh_idx, globals) {
@@ -147,7 +173,13 @@ fn apply_blended_animations(
                 pose_apply_cache
                     .skinned_cache
                     .insert(info.mesh_idx, globals.clone());
-                apply_skinning_to_single_mesh(graphics, info.mesh_idx, globals, skeleton)
+                let t = Instant::now();
+                let updated =
+                    apply_skinning_to_single_mesh(graphics, info.mesh_idx, globals, skeleton);
+                sub.entry("pipeline.skinning".to_string())
+                    .and_modify(|v| *v += t.elapsed().as_secs_f32() * 1000.0)
+                    .or_insert(t.elapsed().as_secs_f32() * 1000.0);
+                updated
             }
         };
 

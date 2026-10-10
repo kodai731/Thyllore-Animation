@@ -1,5 +1,6 @@
+use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
-use crate::ecs::events::UIEvent;
+use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, CurveEditorState, EditHistory, TimelineState};
 use crate::ecs::systems::scalar_clip_systems::{
     ensure_entity_clip, resolve_selected_scalar_entity, scalar_clip_clear_keys,
@@ -7,22 +8,50 @@ use crate::ecs::systems::scalar_clip_systems::{
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::spawn_effect_instance;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::editable::SourceClipId;
+
+#[derive(Clone, Debug)]
+pub enum ScalarCurveEvent {
+    AddEffect(&'static str),
+    InsertScalarKey {
+        property_type: PropertyType,
+        value: f32,
+    },
+    InsertScalarKeyAtPlayhead {
+        property_type: PropertyType,
+    },
+    ClearScalarKeys,
+    InsertScalarDebugKeys {
+        seed: u64,
+    },
+    ClipSetMinDuration {
+        source_id: SourceClipId,
+        seconds: f32,
+    },
+    OpenScalarCurveEditor,
+}
+
+impl UiCommand for ScalarCurveEvent {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        dispatch_scalar_clip_events(&[*self], world, assets);
+    }
+}
 
 /// Scalar keyframe events, applied to the resolved domain entity's clip. Undo
 /// goes through the shared `ClipModified` path, so scalar edits merge and
 /// revert exactly like bone clip edits.
 pub fn dispatch_scalar_clip_events(
-    events: &[UIEvent],
+    events: &[ScalarCurveEvent],
     world: &mut World,
     assets: &mut AssetStorage,
 ) {
     for event in events {
         match event {
-            UIEvent::AddEffect(key) => {
+            ScalarCurveEvent::AddEffect(key) => {
                 spawn_effect_instance(world, assets, key);
             }
-            UIEvent::InsertScalarKey {
+            ScalarCurveEvent::InsertScalarKey {
                 property_type,
                 value,
             } => {
@@ -37,7 +66,7 @@ pub fn dispatch_scalar_clip_events(
                     scalar_clip_insert_key(clip, *property_type, current_time, *value);
                 });
             }
-            UIEvent::InsertScalarKeyAtPlayhead { property_type } => {
+            ScalarCurveEvent::InsertScalarKeyAtPlayhead { property_type } => {
                 let Some((clip_id, entity, domain)) = resolve_scalar_clip(world, assets) else {
                     continue;
                 };
@@ -52,7 +81,7 @@ pub fn dispatch_scalar_clip_events(
                     scalar_clip_insert_key(clip, *property_type, current_time, value);
                 });
             }
-            UIEvent::InsertScalarDebugKeys { seed } => {
+            ScalarCurveEvent::InsertScalarDebugKeys { seed } => {
                 let Some((clip_id, entity, domain)) = resolve_scalar_clip(world, assets) else {
                     continue;
                 };
@@ -66,7 +95,7 @@ pub fn dispatch_scalar_clip_events(
                 });
                 extend_instance_to_clip_duration(world, entity, clip_id);
             }
-            UIEvent::ClearScalarKeys => {
+            ScalarCurveEvent::ClearScalarKeys => {
                 let Some(clip_id) = existing_scalar_clip(world) else {
                     continue;
                 };
@@ -74,7 +103,7 @@ pub fn dispatch_scalar_clip_events(
                     scalar_clip_clear_keys(clip);
                 });
             }
-            UIEvent::ClipSetMinDuration { source_id, seconds } => {
+            ScalarCurveEvent::ClipSetMinDuration { source_id, seconds } => {
                 let seconds = seconds.max(0.0);
                 edit_clip(world, *source_id, "Clip length edit", |clip| {
                     clip.min_duration = seconds;
@@ -82,7 +111,7 @@ pub fn dispatch_scalar_clip_events(
                 });
                 sync_instances_to_clip_duration(world, *source_id);
             }
-            UIEvent::OpenScalarCurveEditor => {
+            ScalarCurveEvent::OpenScalarCurveEditor => {
                 let Some((clip_id, _, _)) = resolve_scalar_clip(world, assets) else {
                     continue;
                 };
@@ -108,7 +137,6 @@ pub fn dispatch_scalar_clip_events(
                     editor.view_initialized = false;
                 }
             }
-            _ => continue,
         }
     }
 }
@@ -218,8 +246,7 @@ fn edit_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::component::{FlameEffect, FlameParam};
-    use crate::ecs::systems::phases::event_dispatch::edit_history::dispatch_edit_history_events;
+    use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
     use crate::ecs::systems::scalar_clip_systems::test_support::{
         probe_property, spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
@@ -234,6 +261,9 @@ mod tests {
         world.insert_resource(TimelineState::new());
         world.insert_resource(EditHistory::new(10));
         world.insert_resource(EffectSpawnHooks::collect().expect("spawn hooks"));
+        world.insert_resource(
+            crate::hooks::object_pick::ObjectPickHooks::collect().expect("pick hooks"),
+        );
         (world, AssetStorage::new())
     }
 
@@ -243,7 +273,7 @@ mod tests {
         let entity = world.entities_with::<ProbeOwner>()[0];
 
         dispatch_scalar_clip_events(
-            &[UIEvent::InsertScalarKey {
+            &[ScalarCurveEvent::InsertScalarKey {
                 property_type: probe_property(&PROBE_LEVEL),
                 value: 2.5,
             }],
@@ -267,7 +297,7 @@ mod tests {
         let entity = world.entities_with::<ProbeOwner>()[0];
 
         dispatch_scalar_clip_events(
-            &[UIEvent::InsertScalarKey {
+            &[ScalarCurveEvent::InsertScalarKey {
                 property_type: probe_property(&PROBE_LEVEL),
                 value: 2.5,
             }],
@@ -276,13 +306,21 @@ mod tests {
         );
         let clip_id = find_entity_clip_id(&world, entity).unwrap();
 
-        dispatch_edit_history_events(&[UIEvent::Undo], &mut world);
+        Box::new(EditHistoryEvent::Undo).apply(
+            &mut world,
+            &mut assets,
+            &GraphicsResources::default(),
+        );
         {
             let lib = world.get_resource::<ClipLibrary>().unwrap();
             assert!(lib.get(clip_id).unwrap().scalar_curves.is_empty());
         }
 
-        dispatch_edit_history_events(&[UIEvent::Redo], &mut world);
+        Box::new(EditHistoryEvent::Redo).apply(
+            &mut world,
+            &mut assets,
+            &GraphicsResources::default(),
+        );
         let lib = world.get_resource::<ClipLibrary>().unwrap();
         let clip = lib.get(clip_id).unwrap();
         assert_eq!(clip.scalar_curves.len(), 1);
@@ -300,7 +338,7 @@ mod tests {
             .position[1] = 4.25;
 
         dispatch_scalar_clip_events(
-            &[UIEvent::InsertScalarKeyAtPlayhead {
+            &[ScalarCurveEvent::InsertScalarKeyAtPlayhead {
                 property_type: probe_property(&PROBE_HEIGHT),
             }],
             &mut world,
@@ -323,7 +361,11 @@ mod tests {
     fn test_add_effect_creates_clip_and_schedule_by_default() {
         let (mut world, mut assets) = make_world_with_probe();
 
-        dispatch_scalar_clip_events(&[UIEvent::AddEffect("probe")], &mut world, &mut assets);
+        dispatch_scalar_clip_events(
+            &[ScalarCurveEvent::AddEffect("probe")],
+            &mut world,
+            &mut assets,
+        );
 
         let probes = world.entities_with::<ProbeOwner>();
         assert_eq!(probes.len(), 2);
@@ -339,12 +381,16 @@ mod tests {
     #[test]
     fn test_set_min_duration_lengthens_unkeyed_clip_and_its_instance() {
         let (mut world, mut assets) = make_world_with_probe();
-        dispatch_scalar_clip_events(&[UIEvent::AddEffect("probe")], &mut world, &mut assets);
+        dispatch_scalar_clip_events(
+            &[ScalarCurveEvent::AddEffect("probe")],
+            &mut world,
+            &mut assets,
+        );
         let probe = world.entities_with::<ProbeOwner>()[1];
         let clip_id = find_entity_clip_id(&world, probe).expect("clip scheduled");
 
         dispatch_scalar_clip_events(
-            &[UIEvent::ClipSetMinDuration {
+            &[ScalarCurveEvent::ClipSetMinDuration {
                 source_id: clip_id,
                 seconds: 12.0,
             }],

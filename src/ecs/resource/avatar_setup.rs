@@ -1,3 +1,4 @@
+use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping::{HumanoidMapping, UnresolvedRole};
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
@@ -13,6 +14,7 @@ pub struct AvatarSetupState {
     pub mapping: HumanoidMapping,
     pub unresolved: Vec<UnresolvedRole>,
     pub issues: Vec<MappingIssue>,
+    pub geometry_warnings: Vec<GeometryWarning>,
     pub rest_pose: RestPose,
     pub missing_bone_names: Vec<String>,
     pub stats: AvatarStats,

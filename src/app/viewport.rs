@@ -25,10 +25,6 @@ pub struct ViewportState {
     #[gpu_resource(skip)]
     pub height: u32,
     #[gpu_resource(skip)]
-    pub focused: bool,
-    #[gpu_resource(skip)]
-    pub hovered: bool,
-    #[gpu_resource(skip)]
     pub hdr_grid_pipeline_id: Option<usize>,
 }
 
@@ -78,8 +74,6 @@ impl ViewportState {
             descriptor_set,
             width,
             height,
-            focused: false,
-            hovered: false,
             hdr_grid_pipeline_id: None,
         })
     }

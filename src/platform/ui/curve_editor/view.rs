@@ -1,11 +1,12 @@
 use crate::animation::editable::PropertyCurve;
 use crate::ecs::resource::{
-    CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, FrameRequest,
+    CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveValueDisplay, FrameRequest,
 };
 use crate::platform::ui::pointer::UiPointer;
 
 const PAN_SPEED: f32 = 30.0;
 
+#[derive(Clone, Copy)]
 pub(super) struct ViewTransform {
     pub(super) curve_origin: [f32; 2],
     pub(super) curve_width: f32,
@@ -45,6 +46,46 @@ impl ViewTransform {
             * self.val_range.max(0.001)
             + self.view_value_offset
     }
+
+    pub(super) fn for_curve(
+        &self,
+        display: CurveValueDisplay,
+        curve: &PropertyCurve,
+    ) -> ViewTransform {
+        match display {
+            CurveValueDisplay::Actual => *self,
+            CurveValueDisplay::Normalized => {
+                let Some((min, max)) = curve_value_range(curve) else {
+                    return *self;
+                };
+                let center = (min + max) * 0.5;
+                let half_width = (max - min) * 0.5;
+                ViewTransform {
+                    view_value_offset: center + half_width * self.view_value_offset,
+                    val_range: half_width * self.val_range,
+                    ..*self
+                }
+            }
+        }
+    }
+}
+
+const MIN_NORMALIZED_HALF_WIDTH: f32 = 1e-6;
+
+pub(super) fn curve_value_range(curve: &PropertyCurve) -> Option<(f32, f32)> {
+    let (min, max) = curve.keyframes.iter().map(|keyframe| keyframe.value).fold(
+        None,
+        |range, value| match range {
+            Some((min, max)) => Some((f32::min(min, value), f32::max(max, value))),
+            None => Some((value, value)),
+        },
+    )?;
+
+    let center = (min + max) * 0.5;
+    if (max - min) * 0.5 < MIN_NORMALIZED_HALF_WIDTH {
+        return Some((center - 1.0, center + 1.0));
+    }
+    Some((min, max))
 }
 
 pub(super) fn initialize_view_range(
@@ -344,6 +385,14 @@ pub(super) fn apply_frame_request(
     let Some(bounds) = bounds else {
         return;
     };
+    let bounds = match editor_state.value_display {
+        CurveValueDisplay::Actual => bounds,
+        CurveValueDisplay::Normalized => FrameBounds {
+            value_min: -1.0,
+            value_max: 1.0,
+            ..bounds
+        },
+    };
 
     let frame_view = compute_frame_view(
         bounds,
@@ -437,5 +486,42 @@ mod tests {
 
         assert_eq!(editor_state.zoom_x, 3.0);
         assert!((view.time_to_x(1.7) - 0.5).abs() < TOLERANCE);
+    }
+
+    #[test]
+    fn normalized_view_maps_curve_extremes_to_unit_range() {
+        let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0), (2.0, 7.0)]);
+        let base = build_unit_view(&build_editor_state(FrameRequest::All));
+
+        let normalized = base.for_curve(CurveValueDisplay::Normalized, &curve);
+
+        assert!((normalized.value_to_y(-5.0) - base.value_to_y(-1.0)).abs() < TOLERANCE);
+        assert!((normalized.value_to_y(7.0) - base.value_to_y(1.0)).abs() < TOLERANCE);
+    }
+
+    #[test]
+    fn normalized_view_round_trips_values() {
+        let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0), (2.0, 7.0)]);
+        let base = build_unit_view(&build_editor_state(FrameRequest::All));
+
+        let normalized = base.for_curve(CurveValueDisplay::Normalized, &curve);
+
+        for value in [-5.0, 0.0, 2.5, 7.0] {
+            assert!(
+                (normalized.y_to_value(normalized.value_to_y(value)) - value).abs() < TOLERANCE
+            );
+        }
+    }
+
+    #[test]
+    fn actual_view_is_unchanged() {
+        let curve = build_curve(&[(0.0, 3.0), (1.0, -5.0)]);
+        let base = build_unit_view(&build_editor_state(FrameRequest::All));
+
+        let actual = base.for_curve(CurveValueDisplay::Actual, &curve);
+
+        assert_eq!(actual.view_value_offset, base.view_value_offset);
+        assert_eq!(actual.val_range, base.val_range);
+        assert_eq!(actual.value_to_y(7.0), base.value_to_y(7.0));
     }
 }

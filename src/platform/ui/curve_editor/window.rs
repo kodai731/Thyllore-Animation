@@ -4,7 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
-    CurveTrackRef, PoseLibrary, TimelineState,
+    CurveTrackRef, CurveValueDisplay, FrameRequest, PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
@@ -150,7 +150,14 @@ pub(super) fn build_curve_view(
     suggestion_overlays: &[SuggestionOverlay],
     pose_library: &mut PoseLibrary,
 ) {
-    build_curve_toolbar(ui, world, curve_buffer, pose_library, clip_library);
+    build_curve_toolbar(
+        ui,
+        world,
+        editor_state,
+        curve_buffer,
+        pose_library,
+        clip_library,
+    );
     ui.separator();
 
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
@@ -454,6 +461,7 @@ pub(super) fn draw_clipped_curve_content(
 pub(super) fn build_curve_toolbar(
     ui: &imgui::Ui,
     world: &World,
+    editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
     pose_library: &mut PoseLibrary,
     clip_library: &ClipLibrary,
@@ -529,6 +537,17 @@ pub(super) fn build_curve_toolbar(
         ui.text_disabled("Apply");
         ui.same_line();
         ui.text_disabled("Del");
+    }
+
+    ui.same_line_with_spacing(0.0, 20.0);
+    let mut is_normalized = editor_state.value_display == CurveValueDisplay::Normalized;
+    if ui.checkbox("Normalize", &mut is_normalized) {
+        editor_state.value_display = if is_normalized {
+            CurveValueDisplay::Normalized
+        } else {
+            CurveValueDisplay::Actual
+        };
+        editor_state.frame_request = Some(FrameRequest::All);
     }
 }
 

@@ -78,6 +78,13 @@ pub enum FrameRequest {
     Playhead,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CurveValueDisplay {
+    #[default]
+    Actual,
+    Normalized,
+}
+
 #[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
@@ -100,6 +107,7 @@ pub struct CurveEditorState {
     pub context_menu_click_value: f32,
     pub needs_focus: bool,
     pub frame_request: Option<FrameRequest>,
+    pub value_display: CurveValueDisplay,
 }
 
 impl CurveEditorState {
@@ -163,6 +171,7 @@ impl Default for CurveEditorState {
             context_menu_click_value: 0.0,
             needs_focus: false,
             frame_request: None,
+            value_display: CurveValueDisplay::default(),
         }
     }
 }

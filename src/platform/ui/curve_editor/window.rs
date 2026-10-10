@@ -242,6 +242,8 @@ pub(super) fn build_curve_view(
         track_ref,
     );
 
+    handle_curve_editor_keyboard(ui, editor_state, &curves_to_draw);
+
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
     #[cfg(feature = "ml")]

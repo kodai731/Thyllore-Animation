@@ -9,6 +9,7 @@ mod effect_sections;
 mod flame;
 mod hierarchy_window;
 mod inspector_window;
+mod key_modifier;
 mod lightning;
 mod message_window;
 mod panel_splitter;

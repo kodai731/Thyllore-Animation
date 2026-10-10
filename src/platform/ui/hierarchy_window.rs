@@ -1,5 +1,6 @@
 use imgui::{Condition, Key};
 
+use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
@@ -16,13 +17,6 @@ use crate::ecs::resource::LayoutSnapshot;
 
 const TREE_INDENT_PER_DEPTH: f32 = 16.0;
 const EXPAND_BUTTON_WIDTH: f32 = 16.0;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum KeyModifier {
-    None,
-    Shift,
-    Ctrl,
-}
 
 struct TreeKeyBinding {
     key: Key,
@@ -380,17 +374,6 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
         {
             world.send_command(HierarchyEvent::SetBoneDistanceScaleFactor(factor));
         }
-    }
-}
-
-fn current_key_modifier(ui: &imgui::Ui) -> KeyModifier {
-    let io = ui.io();
-    if io.key_ctrl {
-        KeyModifier::Ctrl
-    } else if io.key_shift {
-        KeyModifier::Shift
-    } else {
-        KeyModifier::None
     }
 }
 

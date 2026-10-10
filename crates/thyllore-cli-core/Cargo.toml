@@ -1,0 +1,8 @@
+[package]
+name = "thyllore-cli-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure CLI argument parsing functions for ThylloreAnimation. Depends on nothing in the workspace"
+
+[dependencies]
+anyhow = "1"

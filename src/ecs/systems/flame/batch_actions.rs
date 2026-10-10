@@ -2,14 +2,16 @@ use anyhow::{bail, Result};
 use thyllore_effect_core::TextureFitGroups;
 
 use crate::ecs::component::{ClipSchedule, FlameBaked, FlameEffect};
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionState};
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline_systems::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
 use crate::ecs::world::{Entity, World};
 
 use super::apply_texture_fit_from_path;
+use super::FlameUiCommand;
 
 #[derive(Debug, Default)]
 pub struct AddFlame;
@@ -44,9 +46,7 @@ impl BatchAction for AddFlame {
         "add_flame"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::AddEffect(super::FLAME_SPAWN_HOOK.key));
+        world.send_command(ScalarCurveEvent::AddEffect(super::FLAME_SPAWN_HOOK.key));
     }
 }
 
@@ -55,9 +55,7 @@ impl BatchAction for OpenFlameCurves {
         "open_flame_curves"
     }
     fn apply(&self, world: &mut World) {
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::OpenScalarCurveEditor);
+        world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
 }
 
@@ -71,9 +69,7 @@ impl BatchAction for TimelineSelectFlameClip {
             .first()
             .and_then(|&flame| find_entity_clip_id(world, flame));
         if let Some(clip_id) = clip_id {
-            world
-                .resource_mut::<UIEventQueue>()
-                .send(UIEvent::TimelineSelectClip(clip_id));
+            world.send_command(TimelineEvent::SelectClip(clip_id));
         }
     }
 }
@@ -106,15 +102,11 @@ impl BatchAction for ApplyTextureFitRoundtrip {
             return;
         };
         apply_texture_fit_to_first_flame(world, &self.path, self.blend, self.profile);
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::UpdateFlameEffect {
-                entity: flame,
-                effect: Box::new(original_effect),
-            });
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::UpdateFlameBaked(Box::new(original_baked)));
+        world.send_command(FlameUiCommand::UpdateEffect {
+            entity: flame,
+            effect: Box::new(original_effect),
+        });
+        world.send_command(FlameUiCommand::UpdateBaked(Box::new(original_baked)));
     }
 }
 
@@ -172,15 +164,11 @@ fn apply_texture_fit_to_first_flame(world: &World, path: &str, blend: f32, profi
         profile,
         "debug_action",
     );
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::UpdateFlameEffect {
-            entity: flame,
-            effect: Box::new(effect),
-        });
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::UpdateFlameBaked(Box::new(baked)));
+    world.send_command(FlameUiCommand::UpdateEffect {
+        entity: flame,
+        effect: Box::new(effect),
+    });
+    world.send_command(FlameUiCommand::UpdateBaked(Box::new(baked)));
 }
 
 fn clip_preview_seconds_parse(text: &str) -> Result<f32> {
@@ -354,7 +342,7 @@ mod tests {
             "preview must not commit the trim"
         );
 
-        let dump = batch_anim_dump_json(&world);
+        let dump = batch_anim_dump_json(&world, false);
         assert!(
             (dump["timeline"]["drag_preview"]["end_time"]
                 .as_f64()

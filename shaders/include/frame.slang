@@ -7,6 +7,7 @@ public struct FrameUBO {
     public float4 camera_pos;
     public float4 light_pos;
     public float4 light_color;
+    public float4 lighting;
 };
 
 [[vk::binding(0, 0)]] public ConstantBuffer<FrameUBO> frame;

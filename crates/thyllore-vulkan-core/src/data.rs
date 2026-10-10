@@ -165,12 +165,15 @@ declare_gpu_block! {
         pub shadow_strength: f32,
         pub enable_distance_attenuation: i32,
         pub exposure_value: f32,
+        pub lighting: Vec4,
+        pub camera_position: Vec4,
     }
 }
 
 impl Default for SceneUniformData {
     fn default() -> Self {
         let identity = Mat4::identity();
+        let lighting = thyllore_render_core::LightingParams::default().to_vec4();
         Self {
             light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
             light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
@@ -180,6 +183,8 @@ impl Default for SceneUniformData {
             shadow_strength: 1.0,
             enable_distance_attenuation: 0,
             exposure_value: 1.0,
+            lighting: Vec4::new(lighting.x, lighting.y, lighting.z, lighting.w),
+            camera_position: Vec4::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 }

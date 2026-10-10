@@ -1,5 +1,7 @@
 import "include/outline.slang";
 import "include/ray.slang";
+import "include/lighting.slang";
+import "include/scene.slang";
 
 struct Varyings {
     float4 position : SV_Position;
@@ -20,17 +22,6 @@ Varyings vertexMain(uint vertexIndex : SV_VertexID) {
 [[vk::binding(1, 0)]] Sampler2D normalSampler;
 [[vk::binding(2, 0)]] Sampler2D shadowMaskSampler;
 [[vk::binding(3, 0)]] Sampler2D albedoSampler;
-
-struct SceneData {
-    float4 lightPosition;
-    float4 lightColor;
-    float4x4 view;
-    float4x4 proj;
-    int debugMode;
-    float shadowStrength;
-    int enableDistanceAttenuation;
-    float exposureValue;
-};
 
 [[vk::binding(4, 0)]] ConstantBuffer<SceneData> sceneData;
 
@@ -182,26 +173,25 @@ float4 fragmentMain(Varyings input, out float fragDepth : SV_Depth) : SV_Target0
 
     float3 lightVector = sceneData.lightPosition.xyz - worldPosition;
     float lightDistance = length(lightVector);
-    float3 lightDir = lightVector / lightDistance;
-
-    float diffuse = max(dot(worldNormal, lightDir), 0.0);
-
-    float attenuation = 1.0;
-    if (sceneData.enableDistanceAttenuation != 0) {
-        attenuation = 1.0 / (1.0 + 0.01 * lightDistance + 0.001 * lightDistance * lightDistance);
-    }
-
-    float ambient = 0.3;
+    float3 lightDir = normalize(lightVector);
+    float3 viewDir = normalize(sceneData.cameraPosition.xyz - worldPosition);
 
     float shadowFactor = lerp(1.0, shadowMask, sceneData.shadowStrength);
 
     float3 baseColor = albedo.rgb;
+    float metallic = albedo.a;
+    float roughness = normalSampler.Sample(fragTexCoord).w;
 
-    float3 ambientLight = ambient * float3(1.0);
-    float3 diffuseLight = diffuse * attenuation * sceneData.lightColor.rgb;
+    SurfaceSample surface;
+    surface.baseColor = baseColor;
+    surface.metallic = metallic;
+    surface.roughness = roughness;
+    surface.normal = worldNormal;
 
-    float3 lighting = ambientLight + diffuseLight * shadowFactor;
-    float3 finalColor = baseColor * lighting;
+    float attenuation = sceneData.enableDistanceAttenuation != 0 ? distanceAttenuation(lightDistance, sceneData.lighting.y, sceneData.lighting.z) : 1.0;
+    float3 radiance = sceneData.lightColor.rgb * attenuation * shadowFactor;
+
+    float3 finalColor = shadeSurface(surface, lightDir, viewDir, radiance, sceneData.lighting.x);
 
     if (selection.selectedCount > 0u && onSelectionOutline(fragTexCoord)) {
         return float4(OUTLINE_COLOR, 1.0);

@@ -1,20 +1,10 @@
 import "include/torus_intersect.slang";
+import "include/scene.slang";
 import "water/include/caustic.slang";
 import "water/include/component.slang";
 import "water/include/flow.slang";
 import "water/include/surface.slang";
 import "water/include/lb.slang";
-
-struct SceneData {
-    float4 lightPosition;
-    float4 lightColor;
-    float4x4 view;
-    float4x4 proj;
-    int debugMode;
-    float shadowStrength;
-    int enableDistanceAttenuation;
-    float exposureValue;
-};
 
 [[vk::binding(0, 0)]] [format("r32ui")] RWTexture2D<uint> causticAccumImage;
 [[vk::binding(1, 0)]] [format("rgba32f")] RWTexture2D<float4> positionImage;

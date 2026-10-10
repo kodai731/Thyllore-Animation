@@ -1,7 +1,9 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::{BufferMemoryType, DistanceAttenuation, LineMesh, MeshId, ProjectionData};
+use crate::{
+    BufferMemoryType, DistanceAttenuation, LightingParams, LineMesh, MeshId, ProjectionData,
+};
 
 pub trait RenderBackend {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()>;
@@ -35,6 +37,7 @@ pub trait RenderBackend {
         camera_pos: Vector3<f32>,
         light_pos: Vector3<f32>,
         light_color: Vector3<f32>,
+        lighting: LightingParams,
         image_index: usize,
     ) -> Result<()>;
 
@@ -55,5 +58,7 @@ pub trait RenderBackend {
         shadow_strength: f32,
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
+        lighting: LightingParams,
+        camera_position: Vector3<f32>,
     ) -> Result<()>;
 }

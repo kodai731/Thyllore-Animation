@@ -6,7 +6,6 @@ mod gpu;
 mod initial_pose;
 mod load;
 mod nodes;
-mod texture;
 
 pub use clips::build_initial_clip_schedule;
 pub(crate) use load::append_model_to_scene;

@@ -181,7 +181,7 @@ shader only through that address, never through an extra descriptor set or push 
 `model_load.rs` holds the `ModelLoadHook` contract (name, stage, apply) and the `model_load_hook!` macro:
 a domain that needs to react once a model replaced the scene model (attach loaded constraints or spring
 bones, reset a gizmo) registers its handler from its own system file at link time (`inventory`), rig
-handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks` generically without
+handlers run before display handlers, and `src/ecs/systems/model_load_systems/` runs `ModelLoadHooks` generically without
 naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, max instances, spawn
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends

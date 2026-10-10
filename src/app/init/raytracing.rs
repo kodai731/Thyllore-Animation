@@ -43,8 +43,7 @@ impl App {
         data: &mut AppData,
         rrcommand_pool: &Rc<RRCommandPool>,
     ) -> Result<()> {
-        let procedural_primitives =
-            crate::app::raytracing::scene_build::collect_procedural_primitives(&data.ecs_world);
+        let procedural_primitives = crate::hooks::gpu_primitive::collect_all(&data.ecs_world);
         let mesh_transforms =
             crate::ecs::systems::collect_mesh_transforms(&data.ecs_world, &data.ecs_assets);
         data.raytracing.build_acceleration_structures(

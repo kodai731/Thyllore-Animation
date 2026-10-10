@@ -1,4 +1,6 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
+use crate::animation::editable::{
+    is_user_clip_selected, select_kept_clip_id, EditableAnimationClip, SourceClipId,
+};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
@@ -67,12 +69,13 @@ pub(super) fn register_loaded_clips(
 
 fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
     let kept_clip_id = {
-        let library = world.resource::<ClipLibrary>();
-        let selected = world
-            .resource::<TimelineState>()
-            .current_clip_id
-            .filter(|id| library.get(*id).is_some());
-        selected.or_else(|| library.all_clip_ids().min().copied())?
+        let loaded_ids: Vec<SourceClipId> = world
+            .resource::<ClipLibrary>()
+            .all_clip_ids()
+            .copied()
+            .collect();
+        let selected = world.resource::<TimelineState>().current_clip_id;
+        select_kept_clip_id(selected, &loaded_ids)?
     };
 
     let clip_duration = world
@@ -247,18 +250,17 @@ pub fn build_initial_clip_schedule(
 }
 
 pub fn keeps_selected_user_clip(world: &World) -> bool {
-    let timeline = match world.get_resource::<TimelineState>() {
-        Some(t) => t,
-        None => return false,
-    };
-    let Some(current_id) = timeline.current_clip_id else {
+    let (Some(timeline), Some(library)) = (
+        world.get_resource::<TimelineState>(),
+        world.get_resource::<ClipLibrary>(),
+    ) else {
         return false;
     };
-    let library = match world.get_resource::<ClipLibrary>() {
-        Some(l) => l,
-        None => return false,
-    };
-    library.get(current_id).is_some() && !library.model_clip_ids.contains(&current_id)
+    is_user_clip_selected(
+        timeline.current_clip_id,
+        |id| library.get(id).is_some(),
+        |id| library.model_clip_ids.contains(&id),
+    )
 }
 
 #[cfg(test)]

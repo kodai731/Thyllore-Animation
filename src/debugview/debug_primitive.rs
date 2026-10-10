@@ -40,7 +40,7 @@ impl App {
                 "Floor",
             ),
         };
-        let parent_entity = crate::app::model::append_model_to_scene(
+        let parent_entity = crate::ecs::systems::model_load_systems::append_model_to_scene(
             &load_result,
             part_name,
             &self.instance,
@@ -123,22 +123,14 @@ impl App {
         }
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        let procedural_primitives =
-            crate::app::raytracing::scene_build::collect_procedural_primitives(
-                &self.data.ecs_world,
-            );
-        let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
-            &self.data.ecs_world,
-            &self.data.ecs_assets,
-        );
-        crate::app::raytracing::scene_build::rebuild_acceleration_structures(
+        crate::ecs::systems::rebuild_scene_acceleration(
             &self.instance,
             &self.rrdevice,
             &command_pool,
             &self.data.graphics_resources,
             &mut self.data.raytracing,
-            &procedural_primitives,
-            &mesh_transforms,
+            &self.data.ecs_world,
+            &self.data.ecs_assets,
         )?;
 
         log!("Deleted {} entities with GPU cleanup", entities.len());

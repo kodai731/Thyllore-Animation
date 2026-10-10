@@ -1,30 +1,34 @@
+use std::collections::HashMap;
+use std::time::Instant;
+
 use cgmath::Matrix4;
 
 use crate::animation::SkeletonId;
 use crate::ecs::resource::gizmo::BoneGizmoData;
-use crate::ecs::resource::AnimationType;
+use crate::ecs::resource::{AnimationType, PhaseSubTimings};
 use crate::ecs::transform_propagation_system;
 use crate::ecs::FrameContext;
+
+pub const TRANSFORM_PROPAGATE_PHASE: &str = "transform_propagate";
 
 pub fn run_transform_propagate_phase(
     ctx: &mut FrameContext,
     bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
 ) {
-    transform_propagation_system(ctx.world);
+    let mut sub: HashMap<String, f32> = HashMap::new();
 
+    let t = Instant::now();
+    transform_propagation_system(ctx.world);
+    sub.insert(
+        "transform_propagation_system".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    let t = Instant::now();
     if let Some((skel_id, transforms, anim_type)) = bone_transforms {
         if ctx.world.contains_resource::<BoneGizmoData>() {
             let entity_transform = find_skin_entity_transform(ctx.world);
             let final_transforms = apply_entity_transform(&transforms, &entity_transform);
-
-            log!(
-                "BoneGizmo: type={:?}, bones={}, head_pos=[{:.3},{:.3},{:.3}]",
-                anim_type,
-                final_transforms.len(),
-                final_transforms.first().map_or(0.0, |t| t[3][0]),
-                final_transforms.first().map_or(0.0, |t| t[3][1]),
-                final_transforms.first().map_or(0.0, |t| t[3][2]),
-            );
 
             let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
             bone_gizmo.cached_skeleton_id = Some(skel_id);
@@ -32,6 +36,15 @@ pub fn run_transform_propagate_phase(
             bone_gizmo.cached_global_transforms = final_transforms;
         }
     }
+    sub.insert(
+        "bone_gizmo_cache".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    ctx.world
+        .resource_mut::<PhaseSubTimings>()
+        .phases
+        .insert(TRANSFORM_PROPAGATE_PHASE, sub);
 }
 
 fn find_skin_entity_transform(world: &crate::ecs::World) -> Matrix4<f32> {

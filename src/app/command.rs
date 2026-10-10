@@ -1,12 +1,10 @@
 use crate::app::{features::export_actions, App};
-#[cfg(feature = "auto-rig")]
-use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand,
     SceneLoadCommand,
 };
 #[cfg(feature = "auto-rig")]
-use crate::ecs::UIEventQueue;
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -62,8 +60,9 @@ unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
                         "SceneLoadCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
                         source
                     );
-                    let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                    ui_events.send(UIEvent::ModelLoadedFromMemory { source });
+                    app.data
+                        .ecs_world
+                        .send_command(AutoRigEvent::ModelLoadedFromMemory { source });
                 }
                 Err(e) => {
                     log_error!("Failed to load generated mesh: {}", e);
@@ -88,13 +87,10 @@ unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
 unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
     match command {
         AssetEditCommand::LoadClipFromFile { path } => {
-            let bone_name_to_id = app
-                .data
-                .ecs_assets
-                .skeletons
-                .values()
-                .next()
-                .map(|sa| sa.skeleton.bone_name_to_id.clone());
+            let bone_name_to_id = crate::ecs::systems::engine_bone_name_to_id(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+            );
 
             let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
             match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
@@ -155,11 +151,9 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::DumpAnimationDebug => {
-            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
                 &app.data.ecs_world,
                 &app.data.ecs_assets,
-                &*clip_library,
             ) {
                 log_warn!("Animation debug dump failed: {:?}", e);
             }

@@ -8,13 +8,13 @@ pub struct FlameEffect {
     pub position: Vector3<f32>,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quaternion<f32>,
-    #[persist(ui(primary, min = 0.05, max = 10.0, group = "body"))]
+    #[persist(curve, debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
-    #[persist(ui(primary, min = 0.05, max = 10.0, group = "body"))]
+    #[persist(curve, debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub radius: f32,
-    #[persist(owner = Style)]
+    #[persist(curve, owner = Style, debug_range = (0.5, 5.0))]
     pub sigma_t: f32,
-    #[persist(owner = Style, ui(primary, min = 0.0, max = 10.0, group = "body"))]
+    #[persist(curve, owner = Style, debug_range = (0.5, 5.0), ui(primary, min = 0.0, max = 10.0, group = "body"))]
     pub intensity: f32,
     #[nested]
     pub color: FlameColor,

@@ -1,10 +1,10 @@
 use crate::asset::AssetStorage;
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
-    GpuTimingsSink, ModelState, ScheduledBatchActions, TimelineState,
+    GpuTimingsSink, ModelState, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::world::World;
 
 use super::anim_edits::batch_apply_anim_edits;
@@ -37,7 +37,13 @@ pub fn apply_engine_overrides(
         world.insert_resource(BatchPickRequest::new(pixel));
     }
     if !overrides.anim_edits.is_empty() {
-        batch_apply_anim_edits(world, assets, &overrides.anim_edits);
+        if overrides.scene_path.is_some() {
+            world.insert_resource(PendingBatchAnimEdits {
+                edits: overrides.anim_edits.clone(),
+            });
+        } else {
+            batch_apply_anim_edits(world, assets, &overrides.anim_edits);
+        }
     }
 
     let actions: Vec<&dyn BatchAction> = overrides.debug_actions.iter().map(Box::as_ref).collect();
@@ -46,6 +52,10 @@ pub fn apply_engine_overrides(
         world.insert_resource(ScheduledBatchActions {
             pending: overrides.scheduled_actions.clone(),
         });
+    }
+
+    if let Some(preview) = overrides.preview {
+        world.resource_mut::<TimelineState>().preview = preview;
     }
 
     if overrides.batch_play {
@@ -69,9 +79,7 @@ fn request_scene_model_load(world: &mut World) {
     if model_path.is_empty() || model_path == "Generated Mesh" {
         return;
     }
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::LoadModel { path: model_path });
+    world.send_command(CameraEvent::LoadModel { path: model_path });
 }
 
 /// Prefers a clip with bone tracks so an empty default clip never shadows the model animation.

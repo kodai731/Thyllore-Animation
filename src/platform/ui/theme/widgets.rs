@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use imgui::{DrawListMut, StyleVar, Ui};
 
 use crate::ecs::resource::UiWidgetState;
@@ -6,13 +8,15 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 
 use super::anim::ui_anim;
 use super::colors::{
-    srgb_to_linear, ACCENT, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
+    srgb_to_linear, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT,
+    TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
 use super::icons::Icon;
 
 const TREE_INDENT: f32 = 16.0;
 pub const ICON_BUTTON_SIZE: f32 = 24.0;
+pub const PROPERTY_LABEL_WIDTH: f32 = 96.0;
 const TOOLBAR_DIVIDER_WIDTH: f32 = 12.0;
 const TOOLBAR_DIVIDER_HEIGHT: f32 = 18.0;
 const SEGMENT_PADDING_X: f32 = 8.0;
@@ -63,6 +67,69 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     draw_list.add_text([center_x, center_y], icon_color, &glyph);
 
     clicked
+}
+
+const ELLIPSIS: char = '…';
+const AXIS_LABEL_GAP: f32 = 2.0;
+
+pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
+    if text.chars().count() <= max_chars {
+        return Cow::Borrowed(text);
+    }
+
+    let mut truncated: String = text.chars().take(max_chars).collect();
+    truncated.push(ELLIPSIS);
+    Cow::Owned(truncated)
+}
+
+pub fn property_label(ui: &Ui, label: &str) {
+    let display = fit_label_to_column(ui, label);
+    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), &display);
+    if matches!(display, Cow::Owned(_)) && ui.is_item_hovered() {
+        ui.tooltip_text(label);
+    }
+
+    ui.same_line_with_pos(PROPERTY_LABEL_WIDTH);
+    ui.set_next_item_width(-1.0);
+}
+
+fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {
+    let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= PROPERTY_LABEL_WIDTH;
+    if fits(label) {
+        return Cow::Borrowed(label);
+    }
+
+    let fitting_chars = (0..label.chars().count())
+        .rev()
+        .find(|&max_chars| fits(&truncate_label(label, max_chars)))
+        .unwrap_or(0);
+    truncate_label(label, fitting_chars)
+}
+
+pub fn vector3_field(ui: &Ui, id: &str, values: &mut [f32; 3], speed: f32, format: &str) -> bool {
+    let component_width = vector3_component_width(ui.content_region_avail()[0]);
+    let axes = [("X", AXIS_X, "x"), ("Y", AXIS_Y, "y"), ("Z", AXIS_Z, "z")];
+
+    let mut changed = false;
+    for (index, (axis_label, axis_color, suffix)) in axes.into_iter().enumerate() {
+        if index > 0 {
+            ui.same_line_with_spacing(0.0, 0.0);
+        }
+        ui.text_colored(srgb_to_linear(axis_color), axis_label);
+        ui.same_line_with_spacing(0.0, AXIS_LABEL_GAP);
+
+        let label_width = ui.calc_text_size(axis_label)[0] + AXIS_LABEL_GAP;
+        ui.set_next_item_width(component_width - label_width);
+        changed |= imgui::Drag::new(format!("##{id}_{suffix}"))
+            .speed(speed)
+            .display_format(format)
+            .build(ui, &mut values[index]);
+    }
+    changed
+}
+
+pub fn vector3_component_width(available: f32) -> f32 {
+    available / 3.0
 }
 
 pub fn toolbar_divider(ui: &Ui) {
@@ -609,5 +676,35 @@ mod tests {
         let text_size = [0.0, 14.0];
         let width = segment_width(text_size, 8.0);
         assert!((width - 16.0).abs() < 1e-6, "empty text still has padding");
+    }
+
+    #[test]
+    fn test_truncate_label_short() {
+        let result = truncate_label("Hello", 10);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_label_exact() {
+        let result = truncate_label("Hello", 5);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_label_long() {
+        let result = truncate_label("Hello World", 5);
+        assert_eq!(result, "Hello…");
+    }
+
+    #[test]
+    fn test_truncate_label_empty() {
+        let result = truncate_label("", 5);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_vector3_component_width() {
+        assert!((vector3_component_width(300.0) - 100.0).abs() < 1e-6);
+        assert!((vector3_component_width(96.0) - 32.0).abs() < 1e-6);
     }
 }

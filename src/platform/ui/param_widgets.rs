@@ -5,7 +5,7 @@ use thyllore_effect_core::{
 use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
 
 use crate::ecs::World;
-use crate::platform::ui::theme::{section_header, SectionDefault};
+use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
 
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
@@ -58,8 +58,9 @@ fn draw_scalar<C>(
     };
 
     let mut value = (scalar.get)(component);
+    property_label(ui, &meta.display_label());
     if ui
-        .slider_config(meta.display_label(), meta.min, meta.max)
+        .slider_config(format!("##{}", meta.name), meta.min, meta.max)
         .display_format(meta.format)
         .build(&mut value)
     {
@@ -119,8 +120,9 @@ fn draw_color<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut picked = mapping.to_picker(stored);
+    property_label(ui, &meta.display_label());
     let changed = ui
-        .color_picker3_config(meta.display_label(), &mut picked)
+        .color_picker3_config(format!("##{}", meta.name), &mut picked)
         .flags(ColorEditFlags::FLOAT | ColorEditFlags::NO_ALPHA | ColorEditFlags::NO_INPUTS)
         .build();
     show_tooltip(ui, &mapping.tooltip(meta.tooltip));
@@ -170,10 +172,8 @@ fn draw_offset<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut dragged = stored;
-    let changed = imgui::Drag::new(meta.display_label())
-        .range(meta.min, meta.max)
-        .display_format(meta.format)
-        .build_array(ui, &mut dragged);
+    property_label(ui, &meta.display_label());
+    let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
     show_tooltip(ui, meta.tooltip);
 
     let written = if changed {

@@ -10,6 +10,7 @@ use crate::math::euler_degrees_to_quaternion;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{entity_icon, Icon};
+use crate::platform::ui::theme::{property_label, vector3_field};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
@@ -99,8 +100,8 @@ fn build_transform_section(
     if section_header(ui, world, "Transform", SectionDefault::Open) {
         if let Some(translation) = data.translation {
             let mut pos = [translation.x, translation.y, translation.z];
-            ui.text("Position");
-            if ui.input_float3("##position", &mut pos).build() {
+            property_label(ui, "Position");
+            if vector3_field(ui, "position", &mut pos, 0.1, "%.2f") {
                 world.send_command(HierarchyEvent::SetEntityTranslation(
                     data.entity,
                     cgmath::Vector3::new(pos[0], pos[1], pos[2]),
@@ -110,8 +111,8 @@ fn build_transform_section(
 
         if let Some(rotation) = data.rotation_euler {
             let mut rot = [rotation.x, rotation.y, rotation.z];
-            ui.text("Rotation");
-            if ui.input_float3("##rotation", &mut rot).build() {
+            property_label(ui, "Rotation");
+            if vector3_field(ui, "rotation", &mut rot, 1.0, "%.1f") {
                 let euler = cgmath::Vector3::new(rot[0], rot[1], rot[2]);
                 let quat = euler_degrees_to_quaternion(&euler);
                 world.send_command(HierarchyEvent::SetEntityRotation(data.entity, quat));
@@ -120,8 +121,8 @@ fn build_transform_section(
 
         if let Some(scale) = data.scale {
             let mut scl = [scale.x, scale.y, scale.z];
-            ui.text("Scale");
-            if ui.input_float3("##scale", &mut scl).build() {
+            property_label(ui, "Scale");
+            if vector3_field(ui, "scale", &mut scl, 0.01, "%.2f") {
                 world.send_command(HierarchyEvent::SetEntityScale(
                     data.entity,
                     cgmath::Vector3::new(scl[0], scl[1], scl[2]),

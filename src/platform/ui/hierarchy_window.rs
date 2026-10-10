@@ -10,13 +10,10 @@ use crate::ecs::systems::{
     query_bone_rows, query_hierarchy_tree, CameraMotion, TreeMove, TreeNavigation,
 };
 use crate::ecs::world::World;
-use crate::platform::ui::pointer::is_last_item_double_clicked;
+use crate::platform::ui::theme::{search_field, tree_row, TreeRowResponse, TreeRowSpec};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
-
-const TREE_INDENT_PER_DEPTH: f32 = 16.0;
-const EXPAND_BUTTON_WIDTH: f32 = 16.0;
 
 struct TreeKeyBinding {
     key: Key,
@@ -168,24 +165,9 @@ fn build_mode_tabs(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
 
 fn build_search_bar(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
     let mut search_text = state.search_filter.clone();
-    ui.set_next_item_width(-1.0);
-    if ui
-        .input_text("##search", &mut search_text)
-        .hint("Search...")
-        .build()
-    {
+    if search_field(ui, "hierarchy_search", "Search...", &mut search_text) {
         world.send_command(HierarchyEvent::SetSearchFilter(search_text));
     }
-}
-
-struct TreeRowView<'a> {
-    id: String,
-    label: &'a str,
-    icon: String,
-    depth: usize,
-    has_children: bool,
-    expanded: bool,
-    selected: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -197,53 +179,30 @@ enum RowClick {
     Activate,
 }
 
-fn draw_tree_row(ui: &imgui::Ui, row: &TreeRowView, follow_scroll: bool) -> RowClick {
-    let cursor_pos = ui.cursor_pos();
-    ui.set_cursor_pos([
-        cursor_pos[0] + row.depth as f32 * TREE_INDENT_PER_DEPTH,
-        cursor_pos[1],
-    ]);
-
-    let mut click = RowClick::None;
-    if row.has_children {
-        let expand_symbol = if row.expanded { "v" } else { ">" };
-        if ui.small_button(&format!("{}##expand_{}", expand_symbol, row.id)) {
-            click = RowClick::ToggleExpand;
+fn resolve_tree_response(response: TreeRowResponse, ui: &imgui::Ui) -> RowClick {
+    match response {
+        TreeRowResponse::None => RowClick::None,
+        TreeRowResponse::Clicked => {
+            let ctrl = current_key_modifier(ui) == KeyModifier::Ctrl;
+            if ctrl {
+                RowClick::ToggleSelect
+            } else {
+                RowClick::Select
+            }
         }
-        ui.same_line();
-    } else {
-        let cursor = ui.cursor_pos();
-        ui.set_cursor_pos([cursor[0] + EXPAND_BUTTON_WIDTH, cursor[1]]);
+        TreeRowResponse::ExpandToggled => RowClick::ToggleExpand,
+        TreeRowResponse::DoubleClicked => RowClick::Activate,
     }
-
-    ui.text(&row.icon);
-    ui.same_line();
-
-    let label = format!("{}##{}", row.label, row.id);
-    if ui.selectable_config(&label).selected(row.selected).build() {
-        click = if ui.io().key_ctrl {
-            RowClick::ToggleSelect
-        } else {
-            RowClick::Select
-        };
-    }
-    if follow_scroll {
-        ui.set_scroll_here_y_with_ratio(0.5);
-    }
-    if is_last_item_double_clicked(ui) {
-        click = RowClick::Activate;
-    }
-    click
 }
 
 fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
     let entries = query_hierarchy_tree(world, state);
 
     for entry in entries {
-        let row = TreeRowView {
-            id: entry.entity.to_string(),
+        let spec = TreeRowSpec {
+            id: &entry.entity.to_string(),
             label: &entry.name,
-            icon: format!("[{}]", entry.icon_char),
+            icon: &format!("[{}]", entry.icon_char),
             depth: entry.depth,
             has_children: entry.has_children,
             expanded: entry.expanded,
@@ -254,7 +213,12 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
             world.send_command(HierarchyEvent::ScrollToSelectionDone);
         }
 
-        match draw_tree_row(ui, &row, follow_scroll) {
+        let response = tree_row(ui, world, &spec);
+        if follow_scroll {
+            ui.set_scroll_here_y_with_ratio(0.5);
+        }
+
+        match resolve_tree_response(response, ui) {
             RowClick::None => {}
             RowClick::Select => world.send_command(HierarchyEvent::SelectEntity(entry.entity)),
             RowClick::ToggleSelect => {
@@ -302,10 +266,10 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
     ui.separator();
 
     for bone_row in query_bone_rows(skeleton, state) {
-        let row = TreeRowView {
-            id: format!("bone_{}", bone_row.bone_id),
+        let spec = TreeRowSpec {
+            id: &format!("bone_{}", bone_row.bone_id),
             label: &bone_row.name,
-            icon: "[B]".to_string(),
+            icon: "[B]",
             depth: bone_row.depth,
             has_children: bone_row.has_children,
             expanded: bone_row.expanded,
@@ -316,7 +280,12 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
             world.send_command(HierarchyEvent::ScrollToSelectionDone);
         }
 
-        match draw_tree_row(ui, &row, follow_scroll) {
+        let response = tree_row(ui, world, &spec);
+        if follow_scroll {
+            ui.set_scroll_here_y_with_ratio(0.5);
+        }
+
+        match resolve_tree_response(response, ui) {
             RowClick::None => {}
             RowClick::Select | RowClick::ToggleSelect => {
                 world.send_command(HierarchyEvent::SelectBone(bone_row.bone_id))

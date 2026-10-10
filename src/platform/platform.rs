@@ -5,6 +5,7 @@ use winit::dpi::LogicalSize;
 use winit::event_loop::{EventLoop, EventLoopBuilder};
 
 use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
+use crate::platform::ui::theme::UiFonts;
 use winit::window::{Window, WindowBuilder};
 
 use super::clipboard;
@@ -14,6 +15,7 @@ pub struct System {
     pub window: Window,
     pub imgui: Context,
     pub platform: WinitPlatform,
+    pub ui_fonts: UiFonts,
 }
 
 pub fn init(title: &str, take_focus: bool) -> System {
@@ -82,13 +84,11 @@ pub fn init(title: &str, take_focus: bool) -> System {
     // value (as the scaling is handled by winit)
     let font_size = 13.0;
 
-    imgui.fonts().add_font(&[
+    let body = imgui.fonts().add_font(&[
         FontSource::TtfData {
-            data: include_bytes!("../../assets/fonts/Roboto-Regular.ttf"),
+            data: include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
-                // Oversampling font helps improve text rendering at
-                // expense of larger font atlas texture.
                 oversample_h: 4,
                 oversample_v: 4,
                 ..FontConfig::default()
@@ -97,6 +97,28 @@ pub fn init(title: &str, take_focus: bool) -> System {
         FontSource::TtfData {
             data: include_bytes!("../../assets/fonts/mplus-1p-regular.ttf"),
             size_pixels: font_size,
+            config: Some(FontConfig {
+                oversample_h: 4,
+                oversample_v: 4,
+                glyph_ranges: FontGlyphRanges::japanese(),
+                ..FontConfig::default()
+            }),
+        },
+    ]);
+
+    let heading = imgui.fonts().add_font(&[
+        FontSource::TtfData {
+            data: include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
+            size_pixels: 15.0,
+            config: Some(FontConfig {
+                oversample_h: 4,
+                oversample_v: 4,
+                ..FontConfig::default()
+            }),
+        },
+        FontSource::TtfData {
+            data: include_bytes!("../../assets/fonts/mplus-1p-regular.ttf"),
+            size_pixels: 15.0,
             config: Some(FontConfig {
                 // Oversampling font helps improve text rendering at
                 // expense of larger font atlas texture.
@@ -109,6 +131,8 @@ pub fn init(title: &str, take_focus: bool) -> System {
         },
     ]);
 
+    let ui_fonts = UiFonts { body, heading };
+
     // Build the font atlas to generate texture data
     // This is required before any ImGui rendering can occur
     let _font_texture = imgui.fonts().build_rgba32_texture();
@@ -118,5 +142,6 @@ pub fn init(title: &str, take_focus: bool) -> System {
         window,
         imgui,
         platform,
+        ui_fonts,
     }
 }

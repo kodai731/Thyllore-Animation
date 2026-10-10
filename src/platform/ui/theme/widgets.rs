@@ -6,6 +6,7 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 
 use super::anim::ui_anim;
 use super::colors::{srgb_to_linear, ACCENT, SURFACE1, SURFACE3, TEXT, TEXT_SECONDARY};
+use super::fonts::UiFonts;
 
 const TREE_INDENT: f32 = 16.0;
 
@@ -105,7 +106,12 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
         rect_min[0] + frame_padding[0] * 2.0 + triangle_size,
         rect_min[1] + frame_padding[1],
     ];
-    draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+    if let Some(fonts) = world.get_resource::<UiFonts>() {
+        let _font_stack = ui.push_font(fonts.heading);
+        draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+    } else {
+        draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+    }
 
     is_open
 }

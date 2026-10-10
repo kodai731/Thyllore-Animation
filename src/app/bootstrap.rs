@@ -28,6 +28,8 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
         &system.external_command_sender(),
     );
 
+    app.data.ecs_world.insert_resource(system.ui_fonts);
+
     let command_pool = app.resource::<CommandState>().pool.clone();
     let rrrender = app.resource::<RenderTargets>().render.clone();
 

@@ -1,9 +1,11 @@
 pub mod anim;
 pub mod colors;
+pub mod fonts;
 pub mod shadow;
 pub mod style;
 pub mod widgets;
 
+pub use fonts::UiFonts;
 pub use widgets::search_field;
 pub use widgets::section_header;
 pub use widgets::toggle_switch;

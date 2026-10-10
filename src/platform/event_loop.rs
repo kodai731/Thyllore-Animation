@@ -19,6 +19,7 @@ impl System {
             window,
             mut imgui,
             mut platform,
+            ui_fonts: _ui_fonts,
         } = self;
         let mut last_frame = Instant::now();
         let bindings = default_bindings();

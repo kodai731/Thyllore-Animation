@@ -8,7 +8,7 @@ mod motion_path_format;
 mod scene_io;
 mod transform_format;
 
-pub use clip_io::{load_animation_clip, save_animation_clip};
+pub use clip_io::{load_animation_clip, parse_animation_clip, save_animation_clip};
 #[cfg(test)]
 pub(crate) use entities::world_with_scene_hooks;
 pub use entities::{

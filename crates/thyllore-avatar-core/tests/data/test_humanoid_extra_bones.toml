@@ -1,0 +1,213 @@
+[[entry]]
+base = "Neck_Scarf"
+parent = { role = "Neck" }
+position = [0.0, 1.43, 0.0]
+tip = [0.0, -0.03, 0.07]
+rest_euler_degrees = [0.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Front_1"
+parent = { row = 0 }
+position = [0.0, 1.40, 0.07]
+tip = [0.0, -0.10, 0.01]
+rest_euler_degrees = [10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Front_2"
+parent = { row = 1 }
+position = [0.0, 1.30, 0.08]
+tip = [0.0, -0.10, 0.0]
+rest_euler_degrees = [10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Front_3"
+parent = { row = 2 }
+position = [0.0, 1.20, 0.08]
+tip = [0.0, -0.10, 0.0]
+rest_euler_degrees = [10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Back_1"
+parent = { row = 0 }
+position = [0.0, 1.40, -0.07]
+tip = [0.0, -0.10, -0.02]
+rest_euler_degrees = [-10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Back_2"
+parent = { row = 4 }
+position = [0.0, 1.30, -0.09]
+tip = [0.0, -0.10, -0.02]
+rest_euler_degrees = [-10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Scarf_Back_3"
+parent = { row = 5 }
+position = [0.0, 1.20, -0.11]
+tip = [0.0, -0.10, 0.0]
+rest_euler_degrees = [-10.0, 0.0, 0.0]
+
+[[entry]]
+base = "Skirt_Front_1"
+parent = { role = "Hips" }
+position = [0.0, 0.90, 0.10]
+tip = [0.0, -0.15, 0.04]
+rest_euler_degrees = [-15.0, 0.0, 0.0]
+
+[[entry]]
+base = "Skirt_Front_2"
+parent = { row = 7 }
+position = [0.0, 0.75, 0.14]
+tip = [0.0, -0.15, 0.04]
+rest_euler_degrees = [-15.0, 0.0, 0.0]
+
+[[entry]]
+base = "Skirt_Back_1"
+parent = { role = "Hips" }
+position = [0.0, 0.90, -0.10]
+tip = [0.0, -0.15, -0.04]
+rest_euler_degrees = [15.0, 0.0, 0.0]
+
+[[entry]]
+base = "Skirt_Back_2"
+parent = { row = 9 }
+position = [0.0, 0.75, -0.14]
+tip = [0.0, -0.15, -0.04]
+rest_euler_degrees = [15.0, 0.0, 0.0]
+
+[[entry]]
+base = "Hair_Back_1"
+parent = { role = "Head" }
+position = [0.0, 1.68, -0.08]
+tip = [0.0, -0.10, -0.04]
+rest_euler_degrees = [20.0, 0.0, 0.0]
+
+[[entry]]
+base = "Hair_Back_2"
+parent = { row = 11 }
+position = [0.0, 1.58, -0.12]
+tip = [0.0, -0.10, -0.01]
+rest_euler_degrees = [20.0, 0.0, 0.0]
+
+[[entry]]
+base = "Hair_Back_3"
+parent = { row = 12 }
+position = [0.0, 1.48, -0.13]
+tip = [0.0, -0.10, 0.0]
+rest_euler_degrees = [20.0, 0.0, 0.0]
+
+[[entry]]
+base = "Head_Hat"
+parent = { role = "Head" }
+position = [0.0, 1.76, 0.0]
+tip = [0.0, 0.08, 0.0]
+rest_euler_degrees = [0.0, 0.0, 0.0]
+
+[[entry]]
+base = "Tail_1"
+parent = { role = "Hips" }
+position = [0.0, 0.92, -0.10]
+tip = [0.0, -0.07, -0.12]
+rest_euler_degrees = [30.0, 0.0, 0.0]
+
+[[entry]]
+base = "Tail_2"
+parent = { row = 15 }
+position = [0.0, 0.85, -0.22]
+tip = [0.0, -0.07, -0.10]
+rest_euler_degrees = [30.0, 0.0, 0.0]
+
+[[entry]]
+base = "Tail_3"
+parent = { row = 16 }
+position = [0.0, 0.78, -0.32]
+tip = [0.0, -0.05, -0.10]
+rest_euler_degrees = [30.0, 0.0, 0.0]
+
+[[entry]]
+base = "Skirt_FrontSide_1"
+side = "Left"
+parent = { role = "Hips" }
+position = [0.08, 0.90, 0.08]
+tip = [0.03, -0.15, 0.03]
+rest_euler_degrees = [-10.0, 0.0, 10.0]
+
+[[entry]]
+base = "Skirt_FrontSide_2"
+side = "Left"
+parent = { row = 18 }
+position = [0.11, 0.75, 0.11]
+tip = [0.03, -0.15, 0.03]
+rest_euler_degrees = [-10.0, 0.0, 10.0]
+
+[[entry]]
+base = "Skirt_Side_1"
+side = "Left"
+parent = { role = "Hips" }
+position = [0.12, 0.90, 0.0]
+tip = [0.04, -0.15, 0.0]
+rest_euler_degrees = [0.0, 0.0, 15.0]
+
+[[entry]]
+base = "Skirt_Side_2"
+side = "Left"
+parent = { row = 20 }
+position = [0.16, 0.75, 0.0]
+tip = [0.04, -0.15, 0.0]
+rest_euler_degrees = [0.0, 0.0, 15.0]
+
+[[entry]]
+base = "Skirt_BackSide_1"
+side = "Left"
+parent = { role = "Hips" }
+position = [0.08, 0.90, -0.08]
+tip = [0.03, -0.15, -0.03]
+rest_euler_degrees = [10.0, 0.0, 10.0]
+
+[[entry]]
+base = "Skirt_BackSide_2"
+side = "Left"
+parent = { row = 22 }
+position = [0.11, 0.75, -0.11]
+tip = [0.03, -0.15, -0.03]
+rest_euler_degrees = [10.0, 0.0, 10.0]
+
+[[entry]]
+base = "UpperArm_Sleeve"
+side = "Left"
+parent = { role = "LeftUpperArm" }
+position = [0.25, 1.40, 0.0]
+tip = [0.08, 0.0, 0.0]
+rest_euler_degrees = [0.0, 0.0, 5.0]
+
+[[entry]]
+base = "LowerArm_Cuff"
+side = "Left"
+parent = { role = "LeftLowerArm" }
+position = [0.62, 1.40, 0.0]
+tip = [0.05, 0.0, 0.0]
+rest_euler_degrees = [0.0, 0.0, 5.0]
+
+[[entry]]
+base = "Shoe"
+side = "Left"
+parent = { role = "LeftFoot" }
+position = [0.09, 0.04, 0.04]
+tip = [0.0, -0.02, -0.08]
+rest_euler_degrees = [0.0, 0.0, 0.0]
+
+[[entry]]
+base = "Shoe_Heel"
+side = "Left"
+parent = { row = 26 }
+position = [0.09, 0.02, -0.04]
+tip = [0.0, 0.0, -0.03]
+rest_euler_degrees = [0.0, 0.0, 0.0]
+
+[[entry]]
+base = "Hand_Prop_R"
+side = "Right"
+parent = { role = "RightHand" }
+position = [-0.80, 1.40, 0.05]
+tip = [0.0, -0.05, 0.15]
+rest_euler_degrees = [0.0, 0.0, 0.0]

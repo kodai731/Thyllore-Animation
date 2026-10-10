@@ -7,6 +7,7 @@ use thyllore_model_core::MeshMorph;
 
 use crate::fbx::{self, LoadedConstraint};
 use crate::gltf;
+use crate::gltf::vrm_humanoid_extension::VrmHumanoid;
 
 #[derive(Clone, Debug)]
 pub struct TextureData {
@@ -73,6 +74,7 @@ pub struct ModelLoadResult {
     pub node_animation_scale: f32,
     pub constraints: Vec<LoadedConstraint>,
     pub spring_bone_setup: Option<SpringBoneSetup>,
+    pub vrm_humanoid: Option<VrmHumanoid>,
 }
 
 impl ModelLoadResult {
@@ -125,6 +127,7 @@ impl ModelLoadResult {
             node_animation_scale,
             constraints: Vec::new(),
             spring_bone_setup: result.spring_bone_setup,
+            vrm_humanoid: result.vrm_humanoid,
         }
     }
 
@@ -171,6 +174,7 @@ impl ModelLoadResult {
             node_animation_scale: 1.0,
             constraints: result.constraints,
             spring_bone_setup: None,
+            vrm_humanoid: None,
         }
     }
 }

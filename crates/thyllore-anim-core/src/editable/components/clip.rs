@@ -19,7 +19,8 @@ pub struct EditableAnimationClip {
     #[serde(default)]
     pub min_duration: f32,
     pub tracks: HashMap<BoneId, BoneTrack>,
-    #[serde(default)]
+    /// Keyed by process-local `PropertyType::Custom` codes; `AnimationClipFile` persists them by name.
+    #[serde(skip)]
     pub scalar_curves: Vec<PropertyCurve>,
     #[serde(default)]
     pub morph_tracks: Vec<MorphTrack>,
@@ -167,35 +168,19 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_ron_without_scalar_curves_deserializes() {
-        let clip = EditableAnimationClip::new(5, "legacy".to_string());
-        let ron = ron::to_string(&clip).expect("serialize");
-        // Simulate a pre-scalar_curves file by stripping the field
-        let legacy = ron
-            .replace("scalar_curves:[],", "")
-            .replace("scalar_curves: [],", "");
-        assert_ne!(ron, legacy, "field must have been present to strip");
-        let parsed: EditableAnimationClip = ron::from_str(&legacy).expect("legacy deserialize");
-        assert!(parsed.scalar_curves.is_empty());
-        assert_eq!(parsed.name, "legacy");
-    }
-
-    #[test]
-    fn test_scalar_curves_ron_roundtrip() {
+    fn test_scalar_curves_stay_out_of_the_clip_serde() {
         let mut clip = EditableAnimationClip::new(2, "fx".to_string());
         let curve = clip.get_or_add_scalar_curve(PropertyType::Custom(4));
         let id = curve.allocate_keyframe_id();
         curve
             .keyframes
             .push(crate::editable::EditableKeyframe::new(id, 1.5, 2.5));
+
         let ron = ron::to_string(&clip).expect("serialize");
+        assert!(!ron.contains("scalar_curves"), "{ron}");
         let parsed: EditableAnimationClip = ron::from_str(&ron).expect("deserialize");
-        let restored = parsed
-            .get_scalar_curve(PropertyType::Custom(4))
-            .expect("scalar curve");
-        assert_eq!(restored.keyframes.len(), 1);
-        assert!((restored.keyframes[0].time - 1.5).abs() < 1e-6);
-        assert!((restored.keyframes[0].value - 2.5).abs() < 1e-6);
+        assert!(parsed.scalar_curves.is_empty());
+        assert_eq!(parsed.name, "fx");
     }
 
     #[test]

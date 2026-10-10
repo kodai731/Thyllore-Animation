@@ -3787,6 +3787,7 @@ dependencies = [
  "thiserror 1.0.69",
  "thyllore-anim-core",
  "thyllore-avatar-core",
+ "thyllore-cli-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
  "thyllore-grpc-client",
@@ -3810,11 +3811,22 @@ name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "cgmath",
  "ron",
  "serde",
  "serde_json",
  "tempfile",
+ "thyllore-anim-core",
+ "thyllore-importer-core",
+ "thyllore-math-core",
  "toml",
+]
+
+[[package]]
+name = "thyllore-cli-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

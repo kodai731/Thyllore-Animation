@@ -24,7 +24,7 @@ use crate::ecs::systems::inference_actor_systems::{
     inference_actor_submit, inference_actor_take_results,
 };
 
-fn resolve_anchor_time(curve: &PropertyCurve, current_time: f32) -> Option<f32> {
+pub(crate) fn resolve_anchor_time(curve: &PropertyCurve, current_time: f32) -> Option<f32> {
     let times: Vec<f32> = curve.keyframes.iter().map(|kf| kf.time).collect();
     forecast::resolve_origin_time(&times, current_time)
 }
@@ -37,13 +37,17 @@ fn find_nearest_keyframe(curve: &PropertyCurve, time: f32) -> Option<&EditableKe
     })
 }
 
-fn sample_or_hold(curve: &PropertyCurve, time: f32) -> f32 {
+pub(crate) fn sample_or_hold(curve: &PropertyCurve, time: f32) -> f32 {
     curve_sample(curve, time)
         .or_else(|| find_nearest_keyframe(curve, time).map(|kf| kf.value))
         .unwrap_or(0.0)
 }
 
-fn build_v2_curve_copilot_context(curve: &PropertyCurve, origin_time: f32, dt: f32) -> Vec<f32> {
+pub(crate) fn build_v2_curve_copilot_context(
+    curve: &PropertyCurve,
+    origin_time: f32,
+    dt: f32,
+) -> Vec<f32> {
     forecast::context_sample_offsets()
         .iter()
         .map(|&offset| sample_or_hold(curve, origin_time + offset as f32 * dt))
@@ -193,7 +197,7 @@ pub fn curve_suggestion_poll_results(
     }
 }
 
-fn build_suggestions_from_curve(
+pub(crate) fn build_suggestions_from_curve(
     mean_curve: &[f32],
     origin_value: f32,
     anchor_time: f32,

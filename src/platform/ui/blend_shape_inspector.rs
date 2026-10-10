@@ -6,8 +6,8 @@ use thyllore_avatar_core::expression::systems::grouping::group_channels;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
-use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
+use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::{
     find_deforming_morph_channels, find_expression_morph_entity, find_mesh_morph,
     find_morph_channel_names, find_morph_siblings,
@@ -23,7 +23,6 @@ struct ChannelView<'a> {
 
 pub fn build_blend_shape_section(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
     world: &World,
     entity: Entity,
     assets: &AssetStorage,
@@ -61,10 +60,10 @@ pub fn build_blend_shape_section(
         }
 
         let id_token = ui.push_id_int(representative as i32);
-        build_blend_shape_toolbar(ui, ui_events, representative, &mut inspector_state);
+        build_blend_shape_toolbar(ui, world, representative, &mut inspector_state);
         build_channel_groups(
             ui,
-            ui_events,
+            world,
             representative,
             &ChannelView {
                 names: &channel_names,
@@ -77,7 +76,7 @@ pub fn build_blend_shape_section(
     }
 
     if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
-        build_presets_section(ui, ui_events, world, expression_entity);
+        build_presets_section(ui, world, expression_entity);
     }
 }
 
@@ -125,7 +124,7 @@ fn format_section_title(
 
 fn build_blend_shape_toolbar(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     inspector_state: &mut BlendShapeInspectorState,
 ) {
@@ -137,17 +136,17 @@ fn build_blend_shape_toolbar(
     ui.checkbox("Mirror L/R", &mut inspector_state.mirror_edit);
     ui.same_line();
     if ui.button("Reset") {
-        ui_events.send(UIEvent::ResetMorphWeights { entity });
+        world.send_command(MorphEvent::ResetMorphWeights { entity });
     }
     ui.same_line();
     if ui.button("Key") {
-        ui_events.send(UIEvent::KeyMorphWeights { entity });
+        world.send_command(MorphEvent::KeyMorphWeights { entity });
     }
 }
 
 fn build_channel_groups(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     view: &ChannelView,
     inspector_state: &mut BlendShapeInspectorState,
@@ -176,7 +175,7 @@ fn build_channel_groups(
         for channel in visible_channels {
             build_channel_slider(
                 ui,
-                ui_events,
+                world,
                 entity,
                 channel,
                 &view.names[channel],
@@ -200,7 +199,7 @@ fn filter_channels(group: &ChannelGroup, view: &ChannelView, search: &str) -> Ve
 
 fn build_channel_slider(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    world: &World,
     entity: Entity,
     channel: usize,
     channel_name: &str,
@@ -213,7 +212,7 @@ fn build_channel_slider(
     let mut weight = current_weight;
     let label = format!("{}##channel_{}", channel_name, channel);
     if ui.slider(&label, 0.0f32, 1.0f32, &mut weight) {
-        ui_events.send(UIEvent::SetMorphWeight {
+        world.send_command(MorphEvent::SetMorphWeight {
             entity,
             channel: channel_name.to_string(),
             weight,
@@ -221,12 +220,7 @@ fn build_channel_slider(
     }
 }
 
-fn build_presets_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    world: &World,
-    entity: Entity,
-) {
+fn build_presets_section(ui: &imgui::Ui, world: &World, entity: Entity) {
     let Some(mut library_state) = world.get_resource_mut::<ExpressionLibraryState>() else {
         return;
     };
@@ -243,14 +237,14 @@ fn build_presets_section(
         ui.text(format!("{} {}", preset.name, weights_label));
         ui.same_line();
         if ui.small_button(format!("Apply##preset_{}", index)) {
-            ui_events.send(UIEvent::ApplyExpressionPreset {
+            world.send_command(MorphEvent::ApplyExpressionPreset {
                 entity,
                 preset_index: index,
             });
         }
         ui.same_line();
         if ui.small_button(format!("Remove##preset_{}", index)) {
-            ui_events.send(UIEvent::RemoveExpressionPreset {
+            world.send_command(MorphEvent::RemoveExpressionPreset {
                 preset_index: index,
             });
         }
@@ -262,13 +256,13 @@ fn build_presets_section(
         .build();
     ui.same_line();
     if ui.button("Capture") && !library_state.capture_name.is_empty() {
-        ui_events.send(UIEvent::CaptureExpressionPreset {
+        world.send_command(MorphEvent::CaptureExpressionPreset {
             entity,
             name: library_state.capture_name.clone(),
         });
     }
     if ui.button("Save presets") {
-        ui_events.send(UIEvent::SaveExpressionLibrary);
+        world.send_command(MorphEvent::SaveExpressionLibrary);
     }
 
     tree_token.end();

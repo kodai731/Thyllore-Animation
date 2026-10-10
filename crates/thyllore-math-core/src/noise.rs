@@ -1,4 +1,4 @@
-//! Hash and lattice noise mirrored by `shaders/include/noise.glsl`.
+//! Hash and lattice noise mirrored by `shaders/include/noise.slang`.
 
 use crate::smooth_step::mix;
 

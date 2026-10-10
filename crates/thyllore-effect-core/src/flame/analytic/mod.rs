@@ -12,3 +12,4 @@ pub use pick::*;
 pub use radial::*;
 pub use shadow::*;
 pub use shell::*;
+pub mod slang;

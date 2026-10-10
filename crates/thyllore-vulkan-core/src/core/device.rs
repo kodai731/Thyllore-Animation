@@ -288,6 +288,8 @@ unsafe fn create_device_common(
     let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder().ray_query(true);
     let mut ray_tracing_pipeline_features =
         vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder().ray_tracing_pipeline(true);
+    let mut vulkan_11_features =
+        vk::PhysicalDeviceVulkan11Features::builder().shader_draw_parameters(true);
     let mut vulkan_12_features =
         vk::PhysicalDeviceVulkan12Features::builder().buffer_device_address(true);
 
@@ -296,6 +298,7 @@ unsafe fn create_device_common(
         .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions)
         .enabled_features(&features)
+        .push_next(&mut vulkan_11_features)
         .push_next(&mut vulkan_12_features)
         .push_next(&mut accel_features)
         .push_next(&mut ray_query_features)

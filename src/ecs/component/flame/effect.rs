@@ -5,7 +5,7 @@ pub use thyllore_effect_core::flame_plume::HeatPlume;
 pub use thyllore_effect_core::{FlameBaked, FlameEffect, FlameTemporalAccum};
 
 crate::scene_owner!(FlameEffect {
-    icon: Flame,
+    icon: crate::ecs::component::EntityIcon::Effect('F'),
     placement: |e| (e.position, e.rotation),
     prepare_loaded: |e| thyllore_effect_core::refresh_flame_coefficients(e, &FlameBaked::default()),
 });
@@ -25,3 +25,15 @@ impl SceneComponent for AppliedFlameStyle {
 }
 
 crate::scene_attachment!(AppliedFlameStyle);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppliedFlamePreset {
+    pub name: String,
+}
+
+impl SceneComponent for AppliedFlamePreset {
+    const TYPE_KEY: &'static str = "flame_preset";
+    const PERSISTED_FIELDS: &'static [&'static str] = &["name"];
+}
+
+crate::scene_attachment!(AppliedFlamePreset);

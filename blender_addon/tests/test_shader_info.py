@@ -147,6 +147,24 @@ void foo() {
     assert const_pos < struct_pos, "const must appear before struct in typedef"
 
 
+def test_row_major_default_leads_the_typedef():
+    """The Slang export's `layout(row_major) uniform;` must precede every struct so it
+    also covers the uniform blocks Blender declares after the typedef."""
+    glsl = """
+struct Foo {
+    mat4 m;
+};
+layout(row_major) uniform;
+
+void bar() {
+}
+"""
+    typedef, body = split_typedef_and_body(glsl)
+
+    assert typedef.split("\n")[0] == "layout(row_major) uniform;"
+    assert "row_major" not in body
+
+
 def test_value_error_no_structs():
     """Input with no struct definitions must raise ValueError."""
     glsl = """

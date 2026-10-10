@@ -1,21 +1,23 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use super::anim_edit_spec::anim_edits_resolve_from_args;
+use super::flags::DEFAULT_SCREENSHOT_FRAME;
+use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{FlameEffect, MotionPath};
-use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::component::MotionPath;
+use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
+    BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
+    DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction, ScheduledBatchActions,
+    TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
-    spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
+    probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
-
-fn args(list: &[&str]) -> Vec<String> {
-    list.iter().map(|s| s.to_string()).collect()
-}
+use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::scene::test_support::ProbeOwner;
 
 #[test]
 fn pick_pixel_is_absent_without_the_flag() {
@@ -204,25 +206,7 @@ fn resolve_rejects_invalid_camera_pose() {
 }
 
 #[test]
-fn engine_overrides_carry_no_subsystem_flags() {
-    let overrides = resolve_engine_cli_overrides(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "/tmp/out.png",
-        "--batch-flame-mode",
-        "raymarch",
-        "--batch-water-probe",
-        "/tmp/probe.json",
-        "--batch-play",
-    ]))
-    .unwrap();
-    assert!(overrides.batch_run.is_some());
-    assert!(overrides.batch_play);
-    assert!(overrides.debug_actions.is_empty());
-}
-
-#[test]
-fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_actions() {
+fn apply_engine_overrides_inserts_the_batch_run_and_applies_registered_actions() {
     let overrides = resolve_engine_cli_overrides(&args(&[
         "bin",
         "--batch-screenshot",
@@ -230,41 +214,34 @@ fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_a
         "--batch-frames",
         "7",
         "--batch-debug-action",
-        "dump_wall_probe",
+        "black_background",
     ]))
     .unwrap();
     let mut world = World::new();
+    world.insert_resource(DebugViewState::default());
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
 
     assert_eq!(world.resource::<BatchRun>().capture.first_frame, 7);
-    assert!(world.contains_resource::<FlameWallProbeCapture>());
-}
-
-#[test]
-fn apply_engine_overrides_without_a_batch_run_captures_through_the_event_queue() {
-    let overrides =
-        resolve_engine_cli_overrides(&args(&["bin", "--batch-debug-action", "dump_wall_probe"]))
-            .unwrap();
-    let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
-    apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
-    assert!(world.get_resource::<BatchRun>().is_none());
-    assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
-
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+    assert!(world.resource::<DebugViewState>().black_background);
 }
 
 #[test]
 fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
+    world.insert_resource(EffectSpawnHooks::collect().expect("unique effect keys"));
     let e = world.spawn();
-    world.insert_component(e, FlameEffect::default());
+    world.insert_component(
+        e,
+        ProbeOwner {
+            position: [0.0, 0.0, 0.0],
+            level: 0.5,
+        },
+    );
     world.insert_resource(FrameClock {
         frame: 1,
         ..FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS)
     });
-    world.insert_resource(BatchFlameOrbit {
+    world.insert_resource(BatchEffectOrbit {
         radius: 2.0,
         period_seconds: 4.0,
         initial: None,
@@ -278,7 +255,6 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     assert_eq!(motion_path.center, cgmath::Vector3::new(0.0, 0.0, 0.0));
     assert!((motion_path.radius - 2.0).abs() < 1e-5);
     assert!((motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5);
-    drop(motion_path);
 
     crate::ecs::systems::sync_motion_paths(&mut world);
 
@@ -336,7 +312,7 @@ fn anim_edit_specs_parse_all_forms() {
     assert_eq!(
         edits[1],
         BatchAnimEdit::Key {
-            property_type: PROBE_LEVEL.property_type(),
+            property_type: probe_property(&PROBE_LEVEL),
             time: 1.5,
             value: 2.25
         }
@@ -423,7 +399,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         &[
             BatchAnimEdit::DebugKeys { seed: 7 },
             BatchAnimEdit::Key {
-                property_type: PROBE_LEVEL.property_type(),
+                property_type: probe_property(&PROBE_LEVEL),
                 time: 9.0,
                 value: 3.5,
             },
@@ -434,7 +410,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         "key edit must restore timeline time"
     );
 
-    let dump = batch_anim_dump_json(&world);
+    let dump = batch_anim_dump_json(&world, false);
     let entities = dump["entities"].as_array().unwrap();
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0]["domain"], PROBE_DOMAIN.name);
@@ -447,7 +423,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         .find(|c| c["id"].as_u64() == Some(clip_id))
         .expect("clip in dump");
     let curves = clip["scalar_curves"].as_array().unwrap();
-    assert_eq!(curves.len(), PROBE_DOMAIN.channels.len());
+    assert_eq!(curves.len(), PROBE_DOMAIN.channels().len());
     let level = curves
         .iter()
         .find(|c| c["property"] == PROBE_LEVEL.cli_name)
@@ -468,7 +444,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
 fn debug_actions_apply_sets_view_mode_and_queues_events() {
     let mut world = World::new();
     world.insert_resource(DebugViewState::default());
-    world.insert_resource(UIEventQueue::new());
+    world.insert_resource(UiCommandQueue::default());
     batch_apply_debug_actions(
         &mut world,
         &[
@@ -480,8 +456,7 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
         world.resource::<DebugViewState>().debug_view_mode,
         DebugViewMode::Normal
     );
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::ResetCamera));
+    assert_eq!(drained_command_names(&world), vec!["ResetCamera"]);
 }
 
 #[test]
@@ -654,14 +629,530 @@ fn sequence_analyze_jpg_error() {
     assert!(err_msg.contains("JPG") || err_msg.contains("jpg"));
 }
 
-fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
-    let file = std::fs::File::create(path).unwrap();
-    let writer = std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(writer, width, height);
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().unwrap();
-    let pixels = vec![value; (width * height * 3) as usize];
-    writer.write_image_data(&pixels).unwrap();
-    writer.finish().unwrap();
+#[test]
+fn scheduled_actions_parse_frame_and_action() {
+    let scheduled = scheduled_actions_resolve_from_args(&args(&[
+        "bin",
+        "--batch-debug-action-at",
+        "12:timeline_time=0.5",
+        "--batch-debug-action-at",
+        "3:reset_camera",
+    ]))
+    .unwrap();
+
+    assert_eq!(
+        scheduled,
+        vec![
+            ScheduledBatchAction {
+                frame: 12,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 3,
+                action: "reset_camera".to_string(),
+            },
+        ]
+    );
+}
+
+#[test]
+fn scheduled_actions_reject_malformed_specs() {
+    for spec in ["reset_camera", "x:reset_camera", "5:bogus", "5:"] {
+        assert!(
+            scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at", spec]))
+                .is_err(),
+            "{spec} must be rejected"
+        );
+    }
+    assert!(
+        scheduled_actions_resolve_from_args(&args(&["bin", "--batch-debug-action-at"])).is_err()
+    );
+}
+
+#[test]
+fn scheduled_actions_apply_once_their_frame_is_reached() {
+    let mut world = World::new();
+    world.insert_resource(UiCommandQueue::default());
+    world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
+    world.insert_resource(ScheduledBatchActions {
+        pending: vec![
+            ScheduledBatchAction {
+                frame: 2,
+                action: "timeline_time=0.5".to_string(),
+            },
+            ScheduledBatchAction {
+                frame: 1,
+                action: "reset_camera".to_string(),
+            },
+        ],
+    });
+
+    world.resource_mut::<FrameClock>().frame = 1;
+    batch_apply_scheduled_actions(&mut world);
+    let first_frame_commands = drained_command_names(&world);
+
+    world.resource_mut::<FrameClock>().frame = 2;
+    batch_apply_scheduled_actions(&mut world);
+    batch_apply_scheduled_actions(&mut world);
+    let second_frame_commands = drained_command_names(&world);
+
+    assert_eq!(first_frame_commands, vec!["ResetCamera"]);
+    assert_eq!(second_frame_commands, vec!["SetTime(0.5)"]);
+    assert!(world.resource::<ScheduledBatchActions>().pending.is_empty());
+}
+
+#[test]
+fn dump_includes_bone_tracks_when_requested() {
+    use crate::ecs::systems::clip_library_register_and_activate;
+    use tempfile::tempdir;
+    use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
+
+    let tmp = tempdir().unwrap();
+    let (world, mut assets) = humanoid_rig_world(tmp.path());
+
+    let mut clip = EditableAnimationClip::new(0, "t".into());
+    let track = clip.add_track(
+        role_track_bone(&world, "RightUpperArm"),
+        "RightUpperArm".into(),
+    );
+    curve_add_keyframe(&mut track.rotation_z, 0.0, 0.0);
+    curve_add_keyframe(&mut track.rotation_z, 1.0, 45.0);
+
+    clip_library_register_and_activate(&mut world.resource_mut::<ClipLibrary>(), &mut assets, clip);
+
+    let dump = batch_anim_dump_json(&world, true);
+    let bone_track = &dump["clips"][0]["bone_tracks"][0];
+    assert_eq!(bone_track["role"], "RightUpperArm");
+    assert_eq!(
+        bone_track["curves"]["rot_z"].as_array().map(Vec::len),
+        Some(2)
+    );
+
+    let dump = batch_anim_dump_json(&world, false);
+    assert!(dump["clips"][0].get("bone_tracks").is_none());
+}
+
+#[test]
+fn anim_edit_parses_clip_specs() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let edit = anim_edit_parse_spec("new_clip=walk").unwrap();
+    match edit {
+        BatchAnimEdit::NewClip { name } => assert_eq!(name, "walk"),
+        other => panic!("expected NewClip, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("template=/tmp/a.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Template { path } => assert_eq!(path.to_str().unwrap(), "/tmp/a.anim.json"),
+        other => panic!("expected Template, got {:?}", other),
+    }
+
+    let edit = anim_edit_parse_spec("save=/tmp/b.anim.json").unwrap();
+    match edit {
+        BatchAnimEdit::Save { path } => assert_eq!(path.to_str().unwrap(), "/tmp/b.anim.json"),
+        other => panic!("expected Save, got {:?}", other),
+    }
+}
+
+#[test]
+fn copilot_extend_parses_role_axis_time_frames() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use super::BoneAxis;
+
+    let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
+    match edit {
+        BatchAnimEdit::CopilotExtend {
+            bone_name,
+            axis,
+            time,
+            frames,
+        } => {
+            assert_eq!(bone_name, "Hips");
+            assert_eq!(axis, BoneAxis::RotationY);
+            assert_eq!(time, 1.5);
+            assert_eq!(frames, 30);
+        }
+        other => panic!("expected CopilotExtend, got {:?}", other),
+    }
+
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.tx@1.0,30").is_err());
+    assert!(anim_edit_parse_spec("copilot_extend=Hips.x@1.0").is_err());
+}
+
+#[test]
+fn template_then_save_round_trips_a_clip() {
+    use crate::ecs::systems::humanoid_bake_systems::new_empty_clip;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    let template_path = tmp.path().join("template.anim.json");
+    let save_path = tmp.path().join("saved.anim.json");
+
+    let clip = new_empty_clip("walk");
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    let current_id = world.resource::<TimelineState>().current_clip_id;
+    assert!(current_id.is_some());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Save {
+            path: save_path.clone(),
+        }],
+    );
+
+    let loaded_template = crate::scene::load_animation_clip(&template_path).unwrap();
+    let loaded_saved = crate::scene::load_animation_clip(&save_path).unwrap();
+
+    assert_eq!(loaded_template.tracks.len(), loaded_saved.tracks.len());
+}
+
+#[test]
+fn template_replaces_a_same_named_bone_clip_with_a_playable_asset() {
+    use tempfile::tempdir;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+    let tmp = tempdir().unwrap();
+
+    let template_path = tmp.path().join("template.anim.json");
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(99, "walk".to_string());
+    crate::scene::save_animation_clip(&template_path, &clip).unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[BatchAnimEdit::Template {
+            path: template_path.clone(),
+        }],
+    );
+
+    {
+        let lib = world.resource::<ClipLibrary>();
+        assert_eq!(lib.source_clips.len(), 1);
+        let names: Vec<_> = lib.source_clips.values().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["walk"]);
+
+        let source_id = *lib.source_clips.keys().next().unwrap();
+        let asset_id = *lib.source_to_asset_id.get(&source_id).unwrap();
+        assert!(assets.animation_clips.contains_key(&asset_id));
+    }
+}
+
+fn humanoid_rig_world(dir: &std::path::Path) -> (World, AssetStorage) {
+    use crate::ecs::resource::HumanoidRigState;
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+
+    let (fbx_path, _) = copy_test_humanoid_fixture(dir);
+    let (mut world, assets) = test_humanoid_world(&fbx_path);
+    let skeleton = &assets.skeletons.values().next().unwrap().skeleton;
+    let rig = build_humanoid_rig(&fbx_path, skeleton, None).expect("test humanoid has no rig");
+    world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+    (world, assets)
+}
+
+fn role_track_bone(world: &World, role_name: &str) -> thyllore_anim_core::BoneId {
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    rig.track_bones[role_name]
+}
+
+#[test]
+fn key_edit_addresses_role_curve() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+
+    let track = clip.get_track(role_track_bone(&world, "Head")).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 0.5).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
+
+    let lib = world.resource::<ClipLibrary>();
+    assert!(lib.dirty_sources.contains(&clip_id));
+}
+
+#[test]
+fn key_edit_rejects_role_on_bone_clip() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    let mut assets = AssetStorage::new();
+
+    let clip = thyllore_anim_core::editable::EditableAnimationClip::new(1, "bone".to_string());
+    let id = crate::ecs::systems::clip_library_register_and_activate(
+        &mut world.resource_mut::<ClipLibrary>(),
+        &mut assets,
+        clip,
+    );
+    world.resource_mut::<TimelineState>().current_clip_id = Some(id);
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@0.5=20").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(id).unwrap();
+    assert_eq!(clip.tracks.len(), 0);
+}
+
+#[test]
+fn role_key_rejects_translation_on_non_hips() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    let result = anim_edit_parse_spec("key=Head.tx@0=1");
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("tx"));
+}
+
+#[test]
+fn bone_key_rejects_translation_on_a_non_hips_role() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+
+    assert!(anim_edit_parse_spec("key=Head.tx@0=1").is_err());
+    assert!(anim_edit_parse_spec("key=Skirt_Front_1.tx@0=1").is_ok());
+}
+
+#[test]
+fn bone_key_addresses_an_unmapped_bone() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Skirt_Front_1.x@1=45").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip
+        .get_track(role_track_bone(&world, "Skirt_Front_1"))
+        .unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 1.0).abs() < f32::EPSILON);
+    assert!((kf.value - 45.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_extends_duration() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Hips.ty@3=0.1").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert!((clip.duration - 3.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_keeps_earlier_keys_on_the_same_curve() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@0=0").unwrap()],
+    );
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=LeftUpperArm.z@1=-90").unwrap()],
+    );
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
+    assert_eq!(track.rotation_z.keyframes.len(), 2);
+    assert!((track.rotation_z.keyframes[0].time - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[0].value - 0.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].time - 1.0).abs() < f32::EPSILON);
+    assert!((track.rotation_z.keyframes[1].value - (-90.0)).abs() < f32::EPSILON);
+}
+
+#[test]
+fn role_key_builds_the_rig_before_resolving_names() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use crate::ecs::systems::humanoid_rig_systems::{
+        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+    };
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (fbx_path, _) = copy_test_humanoid_fixture(tmp.path());
+    let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::default());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("new_clip=t").unwrap()],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[anim_edit_parse_spec("key=Head.x@1=20").unwrap()],
+    );
+
+    let state = world.resource::<crate::ecs::resource::HumanoidRigState>();
+    let rig = state.rig.as_ref().unwrap();
+    let bone_id = rig.track_bones["Head"];
+
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    let track = clip.get_track(bone_id).unwrap();
+    assert_eq!(track.rotation_x.keyframes.len(), 1);
+    let kf = &track.rotation_x.keyframes[0];
+    assert!((kf.time - 1.0).abs() < f32::EPSILON);
+    assert!((kf.value - 20.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn compose_edit_keys_every_touched_role_from_the_pose_table() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let (mut world, mut assets) = humanoid_rig_world(tmp.path());
+
+    batch_apply_anim_edits(
+        &mut world,
+        &mut assets,
+        &[
+            anim_edit_parse_spec("new_clip=p").unwrap(),
+            anim_edit_parse_spec("compose=punch,side=left").unwrap(),
+        ],
+    );
+
+    let clip_id = world.resource::<TimelineState>().current_clip_id.unwrap();
+    let lib = world.resource::<ClipLibrary>();
+    let clip = lib.get(clip_id).unwrap();
+    assert_eq!(clip.tracks.len(), 10);
+    assert!((clip.duration - 2.0).abs() < 1e-6);
+
+    let left_upper = clip
+        .get_track(role_track_bone(&world, "LeftUpperArm"))
+        .unwrap();
+    let punch_key = &left_upper.rotation_y.keyframes[2];
+    assert!((punch_key.time - 0.55).abs() < 1e-6);
+    assert!((punch_key.value - 85.0).abs() < 1e-6);
+}
+
+#[test]
+fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
+    use super::anim_edit_spec::anim_edit_parse_spec;
+    assert!(anim_edit_parse_spec("compose=").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=0").is_err());
+    assert!(anim_edit_parse_spec("compose=punch,count=2").is_ok());
 }

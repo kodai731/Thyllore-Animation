@@ -7,9 +7,9 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::cli_args::scalar_assignment_parse;
 use crate::ecs::world::World;
 use crate::hooks::bootstrap::BootstrapOverrides;
+use thyllore_cli_core::scalar_assignment_parse;
 
 #[derive(Args, Debug)]
 pub struct WindOverrides {
@@ -82,7 +82,7 @@ fn wind_set_entry_parse(text: &str) -> Result<(String, f32), String> {
 
 pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
     for (key, value) in overrides {
-        let param = find_scalar_param(WIND_SCALAR_PARAMS, key)
+        let param = find_scalar_param(&WIND_SCALAR_PARAMS, key)
             .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -132,6 +132,11 @@ mod tests {
             WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "full"])).unwrap();
         assert_eq!(full.resolve_scale, Some(WindResolveScale::Full));
 
+        let quarter =
+            WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "quarter"]))
+                .unwrap();
+        assert_eq!(quarter.resolve_scale, Some(WindResolveScale::Quarter));
+
         assert!(
             WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "x"])).is_err()
         );
@@ -177,7 +182,7 @@ mod tests {
             apply_wind_overrides(&mut effect, &[(key.to_string(), 1.0)]);
 
             let param =
-                find_scalar_param(WIND_SCALAR_PARAMS, key).expect("valid key is registered");
+                find_scalar_param(&WIND_SCALAR_PARAMS, key).expect("valid key is registered");
             assert_eq!((param.get)(&effect), 1.0, "{key}");
         }
     }

@@ -1,4 +1,4 @@
-"""Extract the wind tornado reference sequences for scripts/flame_ref_match.py style gates.
+"""Extract the wind tornado reference sequences for the scripts/wind_ref_match.py gates.
 
 usage:
   python scripts/wind_ref_extract.py castle [--video /tmp/thyllore_wind_ref/castle_src.mp4]
@@ -25,12 +25,12 @@ Re-running overwrites the same files.
 
 import argparse
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+from ref_match.extract import download, read_link
 
 CASTLE = {
     "source": "youtube xFR4gWP8g98 (MH4G Kushala Daora intro, 32.45-34.30 s, one shot)",
@@ -75,21 +75,6 @@ MASK_SEQUENCES = [
     ("storm", Path("assets/textures/wind/storm_ref_seq/shot_18_41.78s")),
     ("castle", Path("assets/textures/wind/castle_ref_seq")),
 ]
-
-
-def read_link(out_dir):
-    for line in (out_dir / "link.txt").read_text().splitlines():
-        if line.startswith("http"):
-            return line.strip()
-    raise SystemExit("link.txt has no http line")
-
-
-def download(url, video_path, format_id):
-    video_path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [sys.executable, "-m", "yt_dlp", "-q", "-f", format_id, "-o", str(video_path), "--force-overwrites", url],
-        check=True,
-    )
 
 
 def read_frames(video_path, start_seconds, end_seconds):

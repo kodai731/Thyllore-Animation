@@ -1,6 +1,6 @@
 use super::clips::{build_initial_clip_schedule, register_loaded_clips};
 use crate::asset::{AssetStorage, MeshAsset};
-use crate::ecs::component::{AnimationMeta, EntityIcon};
+use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
 use crate::ecs::world::{Animator, Entity, Transform, World};
 use crate::loader::ModelLoadResult;
@@ -33,7 +33,7 @@ pub(super) fn spawn_model_entities(
         .with_transform(Transform::default())
         .with_visible(true)
         .with_editor_display(EntityIcon::Model, true);
-    if first_clip_id.is_some() {
+    if first_clip_id.is_some() || animation_type == AnimationType::Skeletal {
         parent_builder = parent_builder
             .with_animator(Animator::new())
             .with_clip_schedule(initial_schedule)
@@ -119,6 +119,11 @@ pub(super) fn spawn_mesh_entities(
             .with_editor_display(EntityIcon::Mesh, false)
             .with_mesh(asset_id, mesh.object_index)
             .build();
+
+        let morph = &graphics.meshes[mesh_idx].morph;
+        if !morph.channels.is_empty() {
+            world.insert_component(entity, MorphWeights::from_defaults(morph));
+        }
 
         log!(
             "Created mesh entity {} (asset_id={}) for mesh {}: entity_id={}, parent={}",

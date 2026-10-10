@@ -1,5 +1,5 @@
 /// Texel counts of the baked shadow volume along radius, height and angle for one instance.
-/// Mirrored in shaders/wind/include/shadow_volume.glsl.
+/// Mirrored in shaders/wind/include/shadow_volume.slang.
 pub const WIND_SHADOW_VOLUME_RADIAL: u32 = 48;
 pub const WIND_SHADOW_VOLUME_HEIGHT: u32 = 48;
 pub const WIND_SHADOW_VOLUME_THETA: u32 = 64;

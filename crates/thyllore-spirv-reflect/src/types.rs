@@ -54,7 +54,30 @@ pub struct ReflectedBlock {
     pub members: Vec<ReflectedMember>,
 }
 
+impl ReflectedMember {
+    fn has_same_layout(&self, other: &ReflectedMember) -> bool {
+        self.offset == other.offset
+            && self.size == other.size
+            && members_have_same_layout(&self.members, &other.members)
+    }
+}
+
+fn members_have_same_layout(left: &[ReflectedMember], right: &[ReflectedMember]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(member, other)| member.has_same_layout(other))
+}
+
 impl ReflectedBlock {
+    /// Same bytes at the same offsets. Block and member names are not part of the descriptor
+    /// contract: a GLSL `buffer Table { T records[]; }` and a Slang `StructuredBuffer<T>` bind the
+    /// same buffer while naming the block differently.
+    pub fn has_same_layout(&self, other: &ReflectedBlock) -> bool {
+        self.size == other.size && members_have_same_layout(&self.members, &other.members)
+    }
+
     /// The struct a block wraps when its only member is one struct filling the block, so a GLSL
     /// `uniform Block { Payload payload; }` and a `buffer_reference` to the same struct reflect alike.
     pub fn single_struct_payload(&self) -> Option<ReflectedBlock> {

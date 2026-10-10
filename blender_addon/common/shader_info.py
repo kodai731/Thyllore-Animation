@@ -1,9 +1,11 @@
 """Shared shader helper functions for GPUShaderCreateInfo construction.
 
-Provides split_typedef_and_body, push_prelude, and specialize_body used by both
-flame and water effect shaders to correctly construct Blender GPU shaders."""
+Provides split_typedef_and_body, push_prelude and specialize_body used by
+the effect shaders to construct Blender GPU shaders from the exported GLSL."""
 
 import re
+
+ROW_MAJOR_DEFAULT = "layout(row_major) uniform;"
 
 
 def split_typedef_and_body(glsl_text: str) -> tuple[str, str]:
@@ -13,6 +15,8 @@ def split_typedef_and_body(glsl_text: str) -> tuple[str, str]:
     `};`, goes to the typedef string in order of appearance. Top-level const
     declarations (lines starting with `const`) are also extracted into the typedef
     string, including multi-line declarations that span until a terminating `;`.
+    The `layout(row_major) uniform;` default the Slang export relies on goes first, so
+    it also covers the uniform blocks Blender declares from the create info.
     Every other line goes to the body string in its original order. GLSL structs
     never nest, so a single in-struct flag is enough.
 
@@ -36,7 +40,9 @@ def split_typedef_and_body(glsl_text: str) -> tuple[str, str]:
         stripped = line.strip()
         code = _code_without_comment(stripped)
 
-        if in_struct:
+        if stripped == ROW_MAJOR_DEFAULT:
+            typedef_lines.insert(0, line)
+        elif in_struct:
             typedef_lines.append(line)
             in_struct = not code.endswith("};")
         elif in_const:
@@ -60,17 +66,13 @@ def split_typedef_and_body(glsl_text: str) -> tuple[str, str]:
     return "\n".join(typedef_lines), "\n".join(body_lines)
 
 
-def push_prelude(struct_name: str, members: list[str]) -> str:
-    """Return GLSL prelude declaring a const push constant struct.
+def push_prelude(push: dict) -> str:
+    """Return GLSL prelude declaring the push constant block as a const instance.
 
-    The values are placeholder zeros — specialize_body replaces references with
-    actual specialization constants at compile time."""
-    member_defs = "; ".join(members)
-    zero_args = ", ".join("0" for _ in members)
-    return (
-        f"struct {struct_name} {{ {member_defs}; }};\n"
-        f"const {struct_name} push = {struct_name}({zero_args});\n"
-    )
+    The struct itself comes from the typedef source; the values are placeholder zeros
+    and specialize_body replaces references with actual specialization constants."""
+    zero_args = ", ".join("0" for _ in push["members"])
+    return f"const {push['type']} {push['name']} = {push['type']}({zero_args});\n"
 
 
 def specialize_body(body: str, specialization: dict[str, float]) -> str:

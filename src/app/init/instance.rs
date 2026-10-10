@@ -32,8 +32,6 @@ use crate::vulkanr::VulkanBackend;
 use crate::ecs::resource::Camera;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use vulkanalia::Device as VkDevice;
-
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
@@ -41,6 +39,9 @@ use std::os::raw::c_void;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
+use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
+use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
+use vulkanalia::Device as VkDevice;
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
@@ -327,6 +328,8 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::PostProcessFrameTargets::default());
         data.ecs_world
+            .insert_resource(crate::ecs::resource::PhaseSubTimings::default());
+        data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
@@ -336,6 +339,15 @@ impl App {
             .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::object_pick::ObjectPickHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::dispatch_prep::DispatchPrepHooks::collect()?);
+        let ui_windows = crate::hooks::ui_window::UiWindows::collect()?;
+        ui_windows.init_window_state(&mut data.ecs_world);
+        data.ecs_world.insert_resource(ui_windows);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ValidationReport::default());
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -423,8 +435,8 @@ impl App {
                 .msaa_samples(vk::SampleCountFlags::_1)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully
-                // covered", which the tonemap needs to keep the grid color. The flame
-                // composites over it afterwards with premultiplied blending.
+                // covered", which the tonemap needs to keep the grid color. Effects
+                // composite over it afterwards with premultiplied blending.
                 .blend(BlendConfig {
                     enable: true,
                     src_color_factor: vk::BlendFactor::SRC_ALPHA,
@@ -774,6 +786,16 @@ impl App {
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
             .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::MorphTrackPlayback::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::AvatarSetupState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::MaterialTextureState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
@@ -826,13 +848,11 @@ impl App {
             .allocate_descriptor_sets(rrdevice, rrswapchain)
             .context("Failed to allocate billboard descriptor sets")?;
 
-        if let Some(ref billboard_texture) = billboard_data.render_state.texture {
-            billboard_data
-                .render_state
-                .descriptor_set
-                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)
-                .context("Failed to update billboard descriptor sets")?;
-        }
+        billboard_data
+            .render_state
+            .descriptor_set
+            .update_descriptor_sets(rrdevice, rrswapchain)
+            .context("Failed to update billboard descriptor sets")?;
 
         let billboard_pipeline = RRPipeline::new_billboard(
             rrdevice,
@@ -1002,9 +1022,19 @@ impl App {
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
             log_error!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Error, &message);
+            push_message(
+                MessageLevel::Error,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
             log_warn!("({:?}) {}", type_, message);
+            record_validation(ValidationSeverity::Warning, &message);
+            push_message(
+                MessageLevel::Warning,
+                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
+            );
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
             log!("({:?}) {}", type_, message);
@@ -1169,8 +1199,14 @@ impl App {
     }
 
     fn register_editor_resources(data: &mut AppData) {
-        Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::AppCommandQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::events::UiCommandQueue>(data);
+        Self::insert_default_if_missing::<
+            crate::ecs::events::EventQueue<crate::ecs::events::DialogRequest>,
+        >(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::EntityRemovalQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::CameraFlyInput>(data);
@@ -1191,6 +1227,8 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FrameClock>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AppExit>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::BakedHumanoidClips>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::HumanoidRigState>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());
@@ -1214,11 +1252,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::BloomSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
-        Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
+        crate::hooks::effect_defaults::apply_effect_default_resources(&mut data.ecs_world);
     }
 
     #[cfg(feature = "ml")]

@@ -177,7 +177,7 @@ class WindViewportRenderer:
             self.upsample_batch = batch_for_shader(shader, "TRIS", {"pos": [(-1.0, -1.0), (3.0, -1.0), (-1.0, 3.0)]})
         with self.fb_resolved.bind():
             shader.bind()
-            shader.uniform_sampler("windColorSampler", self.color)
+            shader.uniform_sampler("reducedColorSampler", self.color)
             shader.uniform_sampler("sceneDepthSampler", depth_tex)
             self.upsample_batch.draw(shader)
         return self.resolved
@@ -285,21 +285,21 @@ def draw_wind():
     light_pos = find_light_position(scene)
     wind_objects = find_wind_objects(scene)
 
-    last_color = None
+    rendered_colors = []
     render_started = time.perf_counter()
     for obj in wind_objects:
         renderer = _renderers.setdefault(obj.name, WindViewportRenderer())
         params = wind_render_params(obj.thyllore_wind)
         position = coordinates.blender_to_engine_point(obj.matrix_world.translation)
         rotation = coordinates.blender_to_engine_quaternion(obj.matrix_world.to_quaternion())
-        last_color = renderer.render(
+        rendered_colors.append(renderer.render(
             view, proj, camera_pos, light_pos, params, scene_time, position, rotation, w, h, depth_tex=_scene_depth
-        )
+        ))
 
     report_first_draw(w, h, camera_pos, wind_objects, time.perf_counter() - render_started)
 
-    if last_color is not None:
-        composite_tonemapped(last_color, w, h)
+    for color in rendered_colors:
+        composite_tonemapped(color, w, h)
 
 
 def composite_tonemapped(color_tex, w, h):

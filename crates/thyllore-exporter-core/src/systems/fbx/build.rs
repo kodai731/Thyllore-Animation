@@ -2,8 +2,9 @@ use std::path::Path;
 
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::Skeleton;
-use thyllore_importer_core::fbx::fbx::FbxModel;
+use thyllore_file_format_core::fbx::FbxModel;
 
+use super::blend_shape::build_blend_shape_exports;
 use super::connections::{
     generate_animation_connections, generate_bone_connections, generate_mesh_connections,
 };
@@ -25,7 +26,7 @@ pub(crate) fn build_full_export_data(
     export_path: &Path,
 ) -> anyhow::Result<FullFbxExportData> {
     let inv_unit_scale = 1.0_f32 / fbx_model.unit_scale;
-    let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
+    let has_skinned_meshes = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
 
     let mesh_node_names: std::collections::HashSet<String> = fbx_model
         .fbx_data
@@ -39,7 +40,7 @@ pub(crate) fn build_full_export_data(
         &mut uid_alloc,
         &mesh_node_names,
         inv_unit_scale,
-        needs_coord_conversion,
+        has_skinned_meshes,
     );
 
     let stack_uid = uid_alloc.allocate();
@@ -53,7 +54,7 @@ pub(crate) fn build_full_export_data(
         .map(|b| (b.name.clone(), b.model_uid))
         .collect();
 
-    let (geometries, mesh_models, materials, textures, skins) = build_mesh_assets(
+    let (geometries, mesh_models, materials, textures, skins, blend_shapes) = build_mesh_assets(
         fbx_model,
         &mut name_to_model_uid,
         &mut uid_alloc,
@@ -61,8 +62,13 @@ pub(crate) fn build_full_export_data(
         export_path,
     );
 
-    let (curve_nodes, curves) =
-        build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc, inv_unit_scale);
+    let (curve_nodes, curves) = build_animation_curves(
+        clip,
+        &name_to_model_uid,
+        &blend_shapes,
+        &mut uid_alloc,
+        inv_unit_scale,
+    );
 
     let connections = build_all_connections(
         &bones,
@@ -71,6 +77,7 @@ pub(crate) fn build_full_export_data(
         &materials,
         &textures,
         &skins,
+        &blend_shapes,
         stack_uid,
         layer_uid,
         &curve_nodes,
@@ -79,7 +86,6 @@ pub(crate) fn build_full_export_data(
     let anim_data = FbxExportData {
         clip_name,
         duration_ktime,
-        needs_coord_conversion,
         axes: fbx_model.axes.clone(),
         fps: fbx_model.fps,
         bones,
@@ -98,6 +104,7 @@ pub(crate) fn build_full_export_data(
         materials,
         textures,
         skins,
+        blend_shapes,
         unit_scale: fbx_model.unit_scale,
     })
 }
@@ -135,6 +142,7 @@ pub(crate) fn build_mesh_assets(
     Vec<FbxMaterialExport>,
     Vec<FbxTextureExport>,
     Vec<FbxSkinExport>,
+    Vec<FbxBlendShapeExport>,
 ) {
     let geometries = build_geometry_exports(&fbx_model.fbx_data, uid_alloc, inv_unit_scale);
 
@@ -169,7 +177,17 @@ pub(crate) fn build_mesh_assets(
         inv_unit_scale,
     );
 
-    (geometries, mesh_models, materials, textures, skins)
+    let blend_shapes =
+        build_blend_shape_exports(&fbx_model.fbx_data, &geometries, uid_alloc, inv_unit_scale);
+
+    (
+        geometries,
+        mesh_models,
+        materials,
+        textures,
+        skins,
+        blend_shapes,
+    )
 }
 
 pub(crate) fn build_all_connections(
@@ -179,6 +197,7 @@ pub(crate) fn build_all_connections(
     materials: &[FbxMaterialExport],
     textures: &[FbxTextureExport],
     skins: &[FbxSkinExport],
+    blend_shapes: &[FbxBlendShapeExport],
     stack_uid: i64,
     layer_uid: i64,
     curve_nodes: &[FbxCurveNodeExport],
@@ -191,6 +210,7 @@ pub(crate) fn build_all_connections(
         materials,
         textures,
         skins,
+        blend_shapes,
         &mut connections,
     );
     generate_animation_connections(stack_uid, layer_uid, curve_nodes, &mut connections);

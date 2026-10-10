@@ -1,8 +1,7 @@
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
-use crate::animation::{compose_transform, MorphAnimationSystem, Skeleton, SkeletonPose};
-use crate::ecs::apply_skinning;
+use crate::animation::{compose_transform, Skeleton, SkeletonPose};
 use crate::render::RenderBackend;
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
@@ -34,21 +33,17 @@ pub fn apply_skinning_to_single_mesh(
         return false;
     }
 
-    let skin_data = {
-        let mesh = &graphics.meshes[mesh_idx];
-        mesh.skin_data.clone()
-    };
-
-    let Some(skin_data) = skin_data else {
-        return false;
+    let skin_data = match &graphics.meshes[mesh_idx].skin_data {
+        Some(sd) => sd,
+        None => return false,
     };
 
     let vertex_count = skin_data.base_positions.len();
     let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-    let _ = apply_skinning(
-        &skin_data,
+    let _ = thyllore_model_core::apply_skinning(
+        skin_data,
         global_transforms,
         skeleton,
         &mut skinned_positions,
@@ -175,59 +170,6 @@ pub fn compute_node_global_transforms(
     }
 }
 
-pub fn apply_morph_animation(
-    graphics: &mut GraphicsResources,
-    morph_animation: &MorphAnimationSystem,
-    time: f32,
-) -> Vec<usize> {
-    if morph_animation.is_empty() {
-        return Vec::new();
-    }
-
-    let animation_index = morph_animation.get_animation_index(time);
-    let mesh_count = morph_animation.targets.len().min(graphics.meshes.len());
-    let mut updated_mesh_indices = Vec::new();
-
-    for mesh_idx in 0..mesh_count {
-        let morph_targets = &morph_animation.targets[mesh_idx];
-        if morph_targets.is_empty() {
-            continue;
-        }
-
-        let base_vertices = &morph_animation.base_vertices[mesh_idx];
-        let vertices = &mut graphics.meshes[mesh_idx].vertex_data.vertices;
-
-        for (i, v) in vertices.iter_mut().enumerate() {
-            if i < base_vertices.len() {
-                let base = base_vertices[i];
-                v.pos.x = base[0];
-                v.pos.y = base[1];
-                v.pos.z = base[2];
-            }
-        }
-
-        let morph_anim = &morph_animation.animations[animation_index];
-        let scale_factor = morph_animation.scale_factor;
-        for (weight_idx, &weight) in morph_anim.weights.iter().enumerate() {
-            if weight_idx >= morph_targets.len() {
-                break;
-            }
-            let morph_target = &morph_targets[weight_idx];
-            for (j, delta_pos) in morph_target.positions.iter().enumerate() {
-                if j < vertices.len() {
-                    vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
-                    vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
-                    vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
-                }
-            }
-        }
-
-        updated_mesh_indices.push(mesh_idx);
-    }
-
-    updated_mesh_indices
-}
-
 pub unsafe fn upload_animations(
     backend: &mut dyn RenderBackend,
     updated_meshes: &[usize],
@@ -242,16 +184,6 @@ pub unsafe fn upload_animations(
     }
 
     Ok(())
-}
-
-pub(crate) fn merge_updated_indices(morph: Vec<usize>, anim: Vec<usize>) -> Vec<usize> {
-    let mut all = morph;
-    for idx in anim {
-        if !all.contains(&idx) {
-            all.push(idx);
-        }
-    }
-    all
 }
 
 pub fn prepare_node_animation(

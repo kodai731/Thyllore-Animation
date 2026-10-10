@@ -87,9 +87,9 @@ def test_pack_frame_ubo_column_major():
 
 
 def test_push_prelude_fixes_mode_zero_at_compile_time():
-    prelude = push_prelude("FlamePush", ["int mode", "int stepCount", "int debugView"])
-    assert "const FlamePush push = FlamePush(0, 0, 0);" in prelude
-    assert "#define" not in prelude
+    prelude = push_prelude({"type": "FlamePush", "name": "push", "members": ["int mode", "int stepCount", "int debugView"]})
+    assert prelude == "const FlamePush push = FlamePush(0, 0, 0);\n"
+    assert "struct" not in prelude
 
 
 def test_specialize_body_replaces_every_reference():

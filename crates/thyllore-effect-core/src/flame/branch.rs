@@ -2,7 +2,9 @@ use super::*;
 use crate::flame_radial::{
     flame_radial_radius_scale, flame_radial_support_radius, FlameRadialTaper,
 };
+#[cfg(test)]
 use std::f32::consts::TAU;
+#[cfg(test)]
 use thyllore_math_core::{dot3, smoothstep};
 
 /// Proxy widening (radial and above the top) that keeps transported density inside
@@ -32,6 +34,7 @@ pub struct VortexElement {
 }
 
 /// Isotropic offset of `p` from the element center (y scaled by aspect).
+#[cfg(test)]
 fn vortex_isotropic_offset(element: &VortexElement, p: [f32; 3]) -> [f32; 3] {
     [
         p[0] - element.center[0],
@@ -41,6 +44,7 @@ fn vortex_isotropic_offset(element: &VortexElement, p: [f32; 3]) -> [f32; 3] {
 }
 
 /// (u, along, v) frame coordinates of an isotropic offset.
+#[cfg(test)]
 fn vortex_frame_coordinates(element: &VortexElement, q: [f32; 3]) -> (f32, f32, f32) {
     (
         dot3(q, element.outward),
@@ -167,6 +171,7 @@ pub fn branch_rise_rate(effect: &FlameEffect) -> f32 {
 
 /// Circulation that turns the core by `gain` radians: gain is the peak rotation
 /// angle, independent of the core radius.
+#[cfg(test)]
 pub fn branch_circulation(gain: f32, core_radius: f32) -> f32 {
     gain * TAU * core_radius * core_radius
 }
@@ -176,6 +181,7 @@ pub fn branch_circulation(gain: f32, core_radius: f32) -> f32 {
 /// holds, then unwinds over `envelope_time` so the map is the identity at death.
 /// The unwind is hidden outside the trunk by the burnout mask, so only the trunk
 /// gap is seen healing.
+#[cfg(test)]
 pub fn branch_envelope(age: f32, life: f32, envelope_time: f32) -> f32 {
     let winding_time = (BRANCH_WIND_FRACTION * life).max(1e-3);
     let t = (age / winding_time).clamp(0.0, 1.0);
@@ -186,6 +192,7 @@ pub fn branch_envelope(age: f32, life: f32, envelope_time: f32) -> f32 {
 /// Burnout strength: rises from `BRANCH_BURNOUT_START_FRACTION` of the life to 1
 /// when the unwind starts, and releases in the last part of the unwind, when the
 /// remaining rotation is negligible, so the mask never jumps at death.
+#[cfg(test)]
 pub fn branch_burnout(age: f32, life: f32, envelope_time: f32) -> f32 {
     let unwind_start = life - envelope_time;
     let release_start = life - BRANCH_BURNOUT_RELEASE_FRACTION * envelope_time;
@@ -197,6 +204,7 @@ pub fn branch_burnout(age: f32, life: f32, envelope_time: f32) -> f32 {
 /// plateau over the element's disc that only bites the medium outside the
 /// trunk (`r > BRANCH_BURNOUT_TRUNK_INNER * S`), so the tongue dims away in place
 /// while the trunk keeps its material.
+#[cfg(test)]
 pub fn vortex_burnout_mask(
     element: &VortexElement,
     burnout: f32,
@@ -215,6 +223,7 @@ pub fn vortex_burnout_mask(
 }
 
 /// Product of the burnout masks of every live element at trunk-local `p`.
+#[cfg(test)]
 pub fn branch_burnout_mask(field: &FlameBranchField, p: [f32; 3], time: f32) -> f32 {
     let count = (field.count as usize).min(BRANCH_MAX_ELEMENTS);
     field.elements[..count]
@@ -231,6 +240,7 @@ pub fn branch_burnout_mask(field: &FlameBranchField, p: [f32; 3], time: f32) -> 
 
 /// Lamb-Oseen angular displacement per unit circulation and its derivative in
 /// rho^2: (1 - exp(-rho^2 / rc^2)) / (2 pi rho^2), finite at the core.
+#[cfg(test)]
 fn lamb_oseen(rho_sq: f32, core_radius: f32) -> (f32, f32) {
     let core_sq = core_radius * core_radius;
     let x = rho_sq / core_sq;
@@ -246,6 +256,7 @@ fn lamb_oseen(rho_sq: f32, core_radius: f32) -> (f32, f32) {
     (value, derivative)
 }
 
+#[cfg(test)]
 pub fn vortex_element_at(
     field: &FlameBranchField,
     element: &FlameBranchElement,
@@ -300,6 +311,7 @@ pub fn vortex_element_at(
 /// Lamb-Oseen angle gated by a ball `rho^2 + along^2 < reach^2` around the
 /// element center (a per-slice rotation, so the map is a bijection with unit
 /// determinant; the ball keeps the tongue's boundary round from every view).
+#[cfg(test)]
 pub fn vortex_pull_back_jvp(
     element: &VortexElement,
     p: [f32; 3],
@@ -339,11 +351,16 @@ pub fn vortex_pull_back_jvp(
     let [ex, ey, ez] = element.outward;
     let [lx, ly, lz] = element.line;
     let [vx, vy, vz] = element.up;
+    let moved = [
+        u1 * ex + along_total * lx + v1 * vx,
+        u1 * ey + along_total * ly + v1 * vy,
+        u1 * ez + along_total * lz + v1 * vz,
+    ];
     (
         [
-            element.center[0] + u1 * ex + along_total * lx + v1 * vx,
-            element.center[1] + (u1 * ey + along_total * ly + v1 * vy) / aspect,
-            element.center[2] + u1 * ez + along_total * lz + v1 * vz,
+            element.center[0] + moved[0],
+            element.center[1] + moved[1] / aspect,
+            element.center[2] + moved[2],
         ],
         [
             du1 * ex + d_along * lx + dv1 * vx,
@@ -353,11 +370,13 @@ pub fn vortex_pull_back_jvp(
     )
 }
 
+#[cfg(test)]
 pub fn vortex_pull_back(element: &VortexElement, p: [f32; 3]) -> [f32; 3] {
     vortex_pull_back_jvp(element, p, [0.0; 3]).0
 }
 
 /// Composite pull-back through every live element, newest first, with the JVP.
+#[cfg(test)]
 pub fn branch_pull_back_jvp(
     field: &FlameBranchField,
     p: [f32; 3],
@@ -373,6 +392,7 @@ pub fn branch_pull_back_jvp(
         })
 }
 
+#[cfg(test)]
 pub fn branch_pull_back(field: &FlameBranchField, p: [f32; 3], time: f32) -> [f32; 3] {
     branch_pull_back_jvp(field, p, [0.0; 3], time).0
 }
@@ -460,6 +480,11 @@ pub fn build_branch_field(effect: &FlameEffect, baked: &FlameBaked) -> FlameBran
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::flame::analytic::slang::{
+        flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang,
+        flame_branch_pull_back_slang,
+    };
+    use crate::test_support::BitwiseAgreement;
 
     fn unit_trunk(_height01: f32) -> f32 {
         1.0
@@ -532,6 +557,22 @@ mod tests {
 
     fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
         ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    }
+
+    fn branch_grid_points() -> Vec<[f32; 3]> {
+        let mut points = Vec::new();
+        for i in 0..5 {
+            for j in 0..5 {
+                for k in 0..5 {
+                    points.push([
+                        -1.2 + 0.6 * i as f32,
+                        0.9 + 0.4 * j as f32,
+                        -1.2 + 0.6 * k as f32,
+                    ]);
+                }
+            }
+        }
+        points
     }
 
     #[test]
@@ -822,5 +863,46 @@ mod tests {
         assert!((0.0..=1.0).contains(&mask));
         let after_life = effect.time + field.life + 1.0;
         assert_eq!(branch_burnout_mask(&field, p, after_life), 1.0);
+    }
+
+    #[test]
+    fn test_branch_slang_matches_rust() {
+        let effect = effect_with_branches();
+        let baked = FlameBaked::default();
+        let field = build_branch_field(&effect, &baked);
+        assert!(field.count > 0.0, "the field must hold live elements");
+
+        let ubo = build_flame_ubo(&effect, &baked, &FlameTemporalAccum::default());
+        assert_eq!(ubo.time, effect.time);
+
+        let dir = [0.3, 0.8, -0.5];
+        let mut pull_back = BitwiseAgreement::default();
+        let mut jvp_point = BitwiseAgreement::default();
+        let mut jvp_direction = BitwiseAgreement::default();
+        let mut burnout = BitwiseAgreement::default();
+        let mut burnout_bites = false;
+
+        for point in branch_grid_points() {
+            pull_back.record_vector(
+                branch_pull_back(&field, point, effect.time),
+                flame_branch_pull_back_slang(&ubo, point),
+            );
+
+            let (rust_point, rust_direction) =
+                branch_pull_back_jvp(&field, point, dir, effect.time);
+            let (slang_point, slang_direction) = flame_branch_pull_back_jvp_slang(&ubo, point, dir);
+            jvp_point.record_vector(rust_point, slang_point);
+            jvp_direction.record_vector(rust_direction, slang_direction);
+
+            let rust_burnout = branch_burnout_mask(&field, point, effect.time);
+            burnout_bites |= rust_burnout != 1.0;
+            burnout.record(rust_burnout, flame_branch_burnout_mask_slang(&ubo, point));
+        }
+
+        assert!(burnout_bites, "no sampled point sees a burning element");
+        pull_back.assert_identical("branch pull back");
+        jvp_point.assert_identical("branch pull back jvp point");
+        jvp_direction.assert_identical("branch pull back jvp direction");
+        burnout.assert_identical("branch burnout mask");
     }
 }

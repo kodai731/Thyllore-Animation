@@ -1,36 +1,18 @@
 use super::effect::{
     build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes,
-    inverse_view_proj_from_column_major, PyEffect,
+    inverse_view_proj_from_column_major, ParameterOwnerName,
 };
 use crate::wind::{
-    apply_wind_preset, build_wind_model_matrix, build_wind_ubo, overwrite_wind_persisted_fields,
-    wind_local_bounds_corners, WindRenderSettings, WindShadowSlot, WindShellParams,
-    WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET, WIND_PRESET_NAMES, WIND_UI_PARAMS,
+    build_wind_model_matrix, build_wind_ubo, wind_local_bounds_corners, WindRenderSettings,
+    WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
 };
-use cgmath::{Quaternion, Vector3, Vector4};
+use crate::WindParameterOwner;
+use cgmath::Vector4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use thyllore_scene_core::UiParam;
 
-impl PyEffect for WindTornadoEffect {
-    const PRESET_NAMES: &'static [&'static str] = WIND_PRESET_NAMES;
-    const UI_PARAMS: &'static [UiParam] = WIND_UI_PARAMS;
-
-    fn apply_preset(&mut self, name: &str) -> bool {
-        apply_wind_preset(self, name)
-    }
-
-    fn overwrite_persisted_fields(&mut self, source: &Self) {
-        overwrite_wind_persisted_fields(self, source);
-    }
-
-    fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
-        self.time = time;
-        self.position = Vector3::new(position[0], position[1], position[2]);
-        self.rotation = Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3]);
-    }
-
-    fn parameter_owner_name(_name: &str) -> &'static str {
+impl ParameterOwnerName for WindParameterOwner {
+    fn owner_name(self) -> &'static str {
         "frame"
     }
 }
@@ -39,6 +21,7 @@ declare_effect_pyfunctions! {
     effect: WindTornadoEffect,
     preset_names: wind_preset_names,
     ui_params: wind_ui_params,
+    parameter_paths: wind_parameter_paths,
     preset_params: wind_preset_params,
     extra: [
         wind_default_preset,
@@ -84,9 +67,9 @@ pub fn wind_bounds_corners(
     let effect: WindTornadoEffect = build_effect_from_params(py, params, time, position, rotation)?;
 
     let model = build_wind_model_matrix(&effect);
-    let shell_params = WindShellParams::from_effect(&effect);
+    let ubo = build_wind_ubo(&effect, WindShadowSlot(0));
 
-    Ok(wind_local_bounds_corners(&shell_params)
+    Ok(wind_local_bounds_corners(&ubo)
         .iter()
         .map(|corner| {
             let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);

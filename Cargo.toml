@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/*"]
+members = [
+    "crates/*",
+    "crates/thyllore-scene-core/derive",
+    "crates/thyllore-effect-core/derive",
+]
 
 [package]
 name = "thyllore-animation"
@@ -27,6 +31,7 @@ path = "src/bin/flame_sdf_bake.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+thyllore-cli-core = { path = "crates/thyllore-cli-core" }
 thyllore-log-core = { path = "crates/thyllore-log-core" }
 thyllore-math-core = { path = "crates/thyllore-math-core" }
 thyllore-model-core = { path = "crates/thyllore-model-core" }
@@ -35,6 +40,7 @@ thyllore-ml-core = { path = "crates/thyllore-ml-core", optional = true }
 thyllore-importer-core = { path = "crates/thyllore-importer-core" }
 thyllore-exporter-core = { path = "crates/thyllore-exporter-core" }
 thyllore-effect-core = { path = "crates/thyllore-effect-core" }
+thyllore-avatar-core = { path = "crates/thyllore-avatar-core" }
 thyllore-scene-core = { path = "crates/thyllore-scene-core" }
 thyllore-texture-fit-core = { path = "crates/thyllore-texture-fit-core" }
 thyllore-render-core = { path = "crates/thyllore-render-core" }
@@ -86,3 +92,6 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.dev.package.thyllore-model-core]
+opt-level = 3

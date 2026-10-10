@@ -1,0 +1,11 @@
+{
+  "name": "com.thyllore.avatar",
+  "displayName": "Thyllore Avatar",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Applies the avatar sidecar JSON written by the Thyllore engine (Humanoid mapping, visemes, blink, spring chains) to a VRChat avatar.",
+  "dependencies": {
+    "com.vrchat.avatars": "3.10.5",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

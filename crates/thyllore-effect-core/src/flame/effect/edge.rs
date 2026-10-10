@@ -1,16 +1,24 @@
 use crate::flame::*;
 
 /// Erosion edge window and the tip silhouette of the medium.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = ParameterOwner, owner = Style)]
 pub struct FlameEdge {
+    #[persist(curve, debug_range = (0.0, 0.4))]
     pub low: f32,
+    #[persist(curve, debug_range = (0.6, 1.0))]
     pub high: f32,
+    #[persist(curve, debug_range = (0.0, 4.0))]
     pub white_boost: f32,
+    #[persist(owner = Shape)]
     pub radius_tip_ratio: f32,
+    #[persist]
     pub outer_sharpen: f32,
     /// Extra radius ratio at the foot of the column (fire pool); 0 = off.
+    #[persist(ui(min = 0.0, max = 3.0, format = "%.2f", group = "body"))]
     pub base_spread: f32,
     /// Normalized height over which the base spread fades to the plain taper.
+    #[persist(ui(min = 0.02, max = 1.0, format = "%.2f", group = "body"))]
     pub base_spread_height: f32,
 }
 

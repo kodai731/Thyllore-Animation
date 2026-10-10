@@ -8,9 +8,11 @@ use crate::animation::editable::{
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{ClipLibrary, CurveTrackRef, TimelineState};
-use crate::ecs::world::World;
+use crate::ecs::resource::{ClipLibrary, CurveTrackRef, HumanoidRig, TimelineState};
+use crate::ecs::systems::humanoid_import_systems::local_pose_to_standard;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::{Entity, World};
 
 fn ensure_bezier_for_tangent(curve: &mut PropertyCurve, keyframe_id: KeyframeId) {
     if let Some(idx) = curve.keyframes.iter().position(|k| k.id == keyframe_id) {
@@ -29,11 +31,12 @@ fn resolve_curve_mut(
             .get_mut(&bone_id)
             .map(|t| t.get_curve_mut(property_type)),
         CurveTrackRef::Scalar => clip.get_scalar_curve_mut(property_type),
+        CurveTrackRef::Morph(i) => clip.morph_tracks.get_mut(i).map(|mt| &mut mt.curve),
     }
 }
 
 pub fn timeline_process_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &mut TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -41,27 +44,27 @@ pub fn timeline_process_events(
 
     for event in events {
         match event {
-            UIEvent::TimelinePlay => timeline_state.playing = true,
-            UIEvent::TimelinePause => timeline_state.playing = false,
-            UIEvent::TimelineStop => {
+            TimelineEvent::Play => timeline_state.playing = true,
+            TimelineEvent::Pause => timeline_state.playing = false,
+            TimelineEvent::Stop => {
                 timeline_state.playing = false;
                 timeline_state.current_time = 0.0;
             }
-            UIEvent::TimelineSetTime(time) => {
+            TimelineEvent::SetTime(time) => {
                 timeline_state.playing = false;
                 timeline_state.set_time(*time);
             }
-            UIEvent::TimelineSetSpeed(speed) => timeline_state.speed = *speed,
-            UIEvent::TimelineToggleLoop => timeline_state.looping = !timeline_state.looping,
-            UIEvent::TimelineSelectClip(clip_id) => {
+            TimelineEvent::SetSpeed(speed) => timeline_state.speed = *speed,
+            TimelineEvent::ToggleLoop => timeline_state.looping = !timeline_state.looping,
+            TimelineEvent::SelectClip(clip_id) => {
                 timeline_select_clip(timeline_state, clip_library, *clip_id);
             }
-            UIEvent::TimelineToggleTrack(bone_id) => {
+            TimelineEvent::ToggleTrack(bone_id) => {
                 timeline_toggle_track_expanded(timeline_state, *bone_id);
             }
-            UIEvent::TimelineExpandTrack(bone_id) => timeline_state.expand_track(*bone_id),
-            UIEvent::TimelineCollapseTrack(bone_id) => timeline_state.collapse_track(*bone_id),
-            UIEvent::TimelineSelectKeyframe {
+            TimelineEvent::ExpandTrack(bone_id) => timeline_state.expand_track(*bone_id),
+            TimelineEvent::CollapseTrack(bone_id) => timeline_state.collapse_track(*bone_id),
+            TimelineEvent::SelectKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -71,26 +74,29 @@ pub fn timeline_process_events(
                 let selected = SelectedKeyframe::new(*track, *property_type, *keyframe_id);
                 timeline_apply_selection(timeline_state, selected, *modifier);
             }
-            UIEvent::TimelineSetKeyframeSelection {
+            TimelineEvent::SetKeyframeSelection {
                 keyframes,
                 modifier,
             } => {
                 dispatch_set_keyframe_selection(timeline_state, keyframes, *modifier);
             }
-            UIEvent::TimelineSetSnapToFrame(enabled) => {
+            TimelineEvent::SetSnapToFrame(enabled) => {
                 timeline_state.snap_settings.snap_to_frame = *enabled;
             }
-            UIEvent::TimelineSetSnapToKey(enabled) => {
+            TimelineEvent::SetSnapToKey(enabled) => {
                 timeline_state.snap_settings.snap_to_key = *enabled;
             }
-            UIEvent::TimelineSetFrameRate(rate) => {
+            TimelineEvent::SetFrameRate(rate) => {
                 timeline_state.snap_settings.frame_rate = *rate;
             }
-            UIEvent::TimelineZoomIn { max_zoom } => {
+            TimelineEvent::ZoomIn { max_zoom } => {
                 timeline_zoom_in(timeline_state, *max_zoom);
             }
-            UIEvent::TimelineZoomOut { min_zoom } => {
+            TimelineEvent::ZoomOut { min_zoom } => {
                 timeline_zoom_out(timeline_state, *min_zoom);
+            }
+            TimelineEvent::SetPreview(preview) => {
+                timeline_state.preview = *preview;
             }
             _ => {}
         }
@@ -133,7 +139,7 @@ fn dispatch_set_keyframe_selection(
 }
 
 fn dispatch_keyframe_edit_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &mut TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -144,7 +150,7 @@ fn dispatch_keyframe_edit_events(
 
     for event in events {
         match event {
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track,
                 property_type,
                 time,
@@ -165,13 +171,18 @@ fn dispatch_keyframe_edit_events(
                             let curve = clip.get_or_add_scalar_curve(*property_type);
                             curve_add_keyframe(curve, *time, *value);
                         }
+                        CurveTrackRef::Morph(i) => {
+                            if let Some(mt) = clip.morph_tracks.get_mut(*i) {
+                                curve_add_keyframe(&mut mt.curve, *time, *value);
+                            }
+                        }
                     }
                     clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
             }
 
-            UIEvent::TimelineMoveSelectedKeyframes { time_delta } => {
+            TimelineEvent::MoveSelectedKeyframes { time_delta } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     for sel in &timeline_state.selected_keyframes {
                         if let Some(curve) = resolve_curve_mut(clip, sel.track, sel.property_type) {
@@ -187,7 +198,7 @@ fn dispatch_keyframe_edit_events(
                 }
             }
 
-            UIEvent::TimelineDeleteSelectedKeyframes => {
+            TimelineEvent::DeleteSelectedKeyframes => {
                 let selected: Vec<_> = timeline_state.selected_keyframes.iter().cloned().collect();
                 if !selected.is_empty() {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
@@ -205,7 +216,7 @@ fn dispatch_keyframe_edit_events(
                 timeline_state.clear_selection();
             }
 
-            UIEvent::TimelineMoveKeyframe {
+            TimelineEvent::MoveKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -222,7 +233,7 @@ fn dispatch_keyframe_edit_events(
                 }
             }
 
-            UIEvent::TimelineDeleteKeyframe {
+            TimelineEvent::DeleteKeyframe {
                 track,
                 property_type,
                 keyframe_id,
@@ -244,7 +255,7 @@ fn dispatch_keyframe_edit_events(
 }
 
 fn dispatch_tangent_edit_events(
-    events: &[UIEvent],
+    events: &[TimelineEvent],
     timeline_state: &TimelineState,
     clip_library: &mut ClipLibrary,
 ) -> bool {
@@ -255,7 +266,7 @@ fn dispatch_tangent_edit_events(
 
     for event in events {
         match event {
-            UIEvent::TimelineSetKeyframeInterpolation {
+            TimelineEvent::SetKeyframeInterpolation {
                 track,
                 property_type,
                 keyframe_id,
@@ -269,7 +280,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetKeyframeTangent {
+            TimelineEvent::SetKeyframeTangent {
                 track,
                 property_type,
                 keyframe_id,
@@ -291,7 +302,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetTangentType {
+            TimelineEvent::SetTangentType {
                 track,
                 property_type,
                 keyframe_id,
@@ -310,7 +321,7 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineSetTangentWeightMode {
+            TimelineEvent::SetTangentWeightMode {
                 track,
                 property_type,
                 keyframe_id,
@@ -353,6 +364,10 @@ fn timeline_select_clip(
     clip_library: &ClipLibrary,
     clip_id: SourceClipId,
 ) {
+    if timeline_state.current_clip_id == Some(clip_id) {
+        return;
+    }
+
     if let Some(clip) = clip_library.get(clip_id) {
         timeline_state.current_clip_id = Some(clip_id);
         timeline_state.current_time = 0.0;
@@ -532,7 +547,7 @@ pub fn timeline_update(
     }
 }
 
-pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
+pub fn process_clip_instance_events(events: &[ClipInstanceEvent], world: &mut World) {
     let mut deselect_after: Option<(
         crate::ecs::world::Entity,
         crate::animation::editable::ClipInstanceId,
@@ -540,18 +555,23 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
 
     for event in events {
         match event {
-            UIEvent::ClipInstanceSelect {
+            ClipInstanceEvent::Add {
+                entity,
+                source_id,
+                start_time,
+            } => add_clip_instance(world, *entity, *source_id, *start_time),
+            ClipInstanceEvent::Select {
                 entity,
                 instance_id,
             } => {
                 dispatch_clip_instance_select(world, *entity, *instance_id);
             }
 
-            UIEvent::ClipInstanceDeselect => {
+            ClipInstanceEvent::Deselect => {
                 world.resource_mut::<TimelineState>().selected_clip_instance = None;
             }
 
-            UIEvent::ClipInstanceMove {
+            ClipInstanceEvent::Move {
                 entity,
                 instance_id,
                 new_start_time,
@@ -561,7 +581,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id,
                 new_clip_in,
@@ -571,7 +591,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id,
                 new_clip_out,
@@ -581,7 +601,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceToggleMute {
+            ClipInstanceEvent::ToggleMute {
                 entity,
                 instance_id,
             } => {
@@ -590,7 +610,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceDelete {
+            ClipInstanceEvent::Delete {
                 entity,
                 instance_id,
             } => {
@@ -603,7 +623,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 deselect_after = Some((*entity, *instance_id));
             }
 
-            UIEvent::ClipInstanceSetWeight {
+            ClipInstanceEvent::SetWeight {
                 entity,
                 instance_id,
                 weight,
@@ -613,7 +633,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 });
             }
 
-            UIEvent::ClipInstanceSetBlendMode {
+            ClipInstanceEvent::SetBlendMode {
                 entity,
                 instance_id,
                 blend_mode,
@@ -628,6 +648,8 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
     }
 
     dispatch_clip_group_events(events, world);
+
+    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
 
     if let Some((entity, instance_id)) = deselect_after {
         let mut ts = world.resource_mut::<TimelineState>();
@@ -677,10 +699,10 @@ fn dispatch_clip_instance_select(
     }
 }
 
-fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_clip_group_events(events: &[ClipInstanceEvent], world: &mut World) {
     for event in events {
         match event {
-            UIEvent::ClipGroupCreate { entity, name } => {
+            ClipInstanceEvent::GroupCreate { entity, name } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     super::clip_schedule_systems::clip_schedule_create_group(
                         schedule,
@@ -689,13 +711,13 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupDelete { entity, group_id } => {
+            ClipInstanceEvent::GroupDelete { entity, group_id } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     super::clip_schedule_systems::clip_schedule_remove_group(schedule, *group_id);
                 }
             }
 
-            UIEvent::ClipGroupAddInstance {
+            ClipInstanceEvent::GroupAddInstance {
                 entity,
                 group_id,
                 instance_id,
@@ -709,7 +731,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupRemoveInstance {
+            ClipInstanceEvent::GroupRemoveInstance {
                 entity,
                 group_id,
                 instance_id,
@@ -723,7 +745,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupToggleMute { entity, group_id } => {
+            ClipInstanceEvent::GroupToggleMute { entity, group_id } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     if let Some(group) = schedule.groups.iter_mut().find(|g| g.id == *group_id) {
                         group.muted = !group.muted;
@@ -731,7 +753,7 @@ fn dispatch_clip_group_events(events: &[UIEvent], world: &mut World) {
                 }
             }
 
-            UIEvent::ClipGroupSetWeight {
+            ClipInstanceEvent::GroupSetWeight {
                 entity,
                 group_id,
                 weight,
@@ -770,6 +792,7 @@ pub fn process_bone_set_key(
     clip_library: &mut ClipLibrary,
     timeline_state: &TimelineState,
     skeleton: &crate::animation::Skeleton,
+    rig: Option<&HumanoidRig>,
 ) -> bool {
     let Some(clip_id) = timeline_state.current_clip_id else {
         return false;
@@ -785,28 +808,62 @@ pub fn process_bone_set_key(
     let time = timeline_state.current_time;
 
     for (&bone_id, local_pose) in overrides {
-        let bone_name = skeleton
-            .get_bone(bone_id)
-            .map(|b| b.name.clone())
-            .unwrap_or_else(|| format!("bone_{}", bone_id));
+        let standard = rig.and_then(|rig| {
+            local_pose_to_standard(
+                rig,
+                skeleton,
+                bone_id,
+                local_pose.rotation,
+                local_pose.translation,
+            )
+        });
+        if let Some(standard) = standard {
+            let track_name = standard.role.unity_name().to_string();
+            match clip.tracks.get_mut(&bone_id) {
+                Some(track) => track.bone_name = track_name,
+                None => {
+                    clip.add_track(bone_id, track_name);
+                }
+            }
 
-        if !clip.tracks.contains_key(&bone_id) {
-            clip.add_track(bone_id, bone_name.clone());
+            let [x_degrees, y_degrees, z_degrees] = standard.euler_degrees;
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, x_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, y_degrees);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, z_degrees);
+
+            if let Some([x, y, z]) = standard.hips_translation {
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, x);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, y);
+                clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, z);
+            }
+        } else {
+            let bone_name = rig
+                .and_then(|r| r.track_names.get(&bone_id).cloned())
+                .unwrap_or_else(|| {
+                    skeleton
+                        .get_bone(bone_id)
+                        .map(|b| b.name.clone())
+                        .unwrap_or_else(|| format!("bone_{}", bone_id))
+                });
+
+            if !clip.tracks.contains_key(&bone_id) {
+                clip.add_track(bone_id, bone_name.clone());
+            }
+
+            let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
+
+            let t = &local_pose.translation;
+            let s = &local_pose.scale;
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
+            clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
         }
-
-        let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
-
-        let t = &local_pose.translation;
-        let s = &local_pose.scale;
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
-        clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
     }
 
     clip_recalculate_duration(clip);
@@ -975,7 +1032,7 @@ mod tests {
     #[test]
     fn move_selected_keyframes_shifts_time() {
         let (mut state, mut library) = setup_test_clip();
-        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: 0.25 }];
+        let events = vec![TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 }];
 
         let modified = timeline_process_events(&events, &mut state, &mut library);
         assert!(modified);
@@ -1008,7 +1065,7 @@ mod tests {
     #[test]
     fn move_selected_keyframes_clamps_at_zero() {
         let (mut state, mut library) = setup_test_clip();
-        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: -2.0 }];
+        let events = vec![TimelineEvent::MoveSelectedKeyframes { time_delta: -2.0 }];
 
         timeline_process_events(&events, &mut state, &mut library);
 
@@ -1026,7 +1083,7 @@ mod tests {
         let (mut state, mut library) = setup_test_clip();
 
         let new_sel = vec![SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999)];
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: new_sel,
             modifier: SelectionModifier::Replace,
         }];
@@ -1045,7 +1102,7 @@ mod tests {
         let original_count = state.selected_keyframes.len();
 
         let new_sel = vec![SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999)];
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: new_sel,
             modifier: SelectionModifier::Add,
         }];
@@ -1062,7 +1119,7 @@ mod tests {
         // Toggle off an existing keyframe, toggle on a new one
         let existing = state.selected_keyframes.iter().next().unwrap().clone();
         let new_kf = SelectedKeyframe::for_bone(0, PropertyType::ScaleX, 999);
-        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+        let events = vec![TimelineEvent::SetKeyframeSelection {
             keyframes: vec![existing.clone(), new_kf.clone()],
             modifier: SelectionModifier::Toggle,
         }];
@@ -1081,13 +1138,13 @@ mod tests {
         let (mut state, mut library) = setup_test_clip();
 
         let events = vec![
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track: CurveTrackRef::Scalar,
                 property_type: PropertyType::TranslationX,
                 time: 0.5,
                 value: 1.0,
             },
-            UIEvent::TimelineAddKeyframe {
+            TimelineEvent::AddKeyframe {
                 track: CurveTrackRef::Scalar,
                 property_type: PropertyType::Custom(0),
                 time: 0.5,
@@ -1126,7 +1183,7 @@ mod tests {
         let mut world = World::new();
         let entity = spawn_zero_length_clip_instance(&mut world);
 
-        let events = vec![UIEvent::ClipInstanceTrimEnd {
+        let events = vec![ClipInstanceEvent::TrimEnd {
             entity,
             instance_id: 1,
             new_clip_out: 3.0,
@@ -1144,12 +1201,12 @@ mod tests {
         let entity = spawn_zero_length_clip_instance(&mut world);
 
         let events = vec![
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id: 1,
                 new_clip_in: 0.0,
             },
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id: 1,
                 new_clip_out: -2.0,
@@ -1167,12 +1224,12 @@ mod tests {
         let entity = spawn_zero_length_clip_instance(&mut world);
 
         let events = vec![
-            UIEvent::ClipInstanceTrimEnd {
+            ClipInstanceEvent::TrimEnd {
                 entity,
                 instance_id: 1,
                 new_clip_out: 2.0,
             },
-            UIEvent::ClipInstanceTrimStart {
+            ClipInstanceEvent::TrimStart {
                 entity,
                 instance_id: 1,
                 new_clip_in: 5.0,
@@ -1225,6 +1282,105 @@ mod tests {
             clip_drag_preview_times(&ClipDragType::TrimEnd, 1.0, 1.0, 1.0, 3.0, 0.0, 1.0);
         assert!((start - 1.0).abs() < 1e-6);
         assert!((end - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn select_same_clip_keeps_time() {
+        let (mut state, mut library) = setup_test_clip();
+        let clip_id = state.current_clip_id.unwrap();
+        state.current_time = 0.7;
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert!((state.current_time - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn select_clip_does_not_touch_schedule() {
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+
+        let (mut state, mut library) = setup_test_clip();
+        let first_clip_id = state.current_clip_id.unwrap();
+
+        let other_clip_id: SourceClipId = 99;
+        let mut other_clip = EditableAnimationClip::new(other_clip_id, "other".to_string());
+        other_clip.add_track(0, "bone0".to_string());
+        library
+            .source_clips
+            .insert(other_clip_id, SourceClip::new(other_clip_id, other_clip));
+
+        let mut schedule = ClipSchedule::new();
+        clip_schedule_add_instance(&mut schedule, first_clip_id, 1.0);
+
+        timeline_process_events(
+            &[TimelineEvent::SelectClip(other_clip_id)],
+            &mut state,
+            &mut library,
+        );
+
+        assert_eq!(state.current_clip_id, Some(other_clip_id));
+        assert_eq!(schedule.instances.len(), 1);
+        assert_eq!(schedule.instances[0].source_id, first_clip_id);
+    }
+
+    #[test]
+    fn clip_with_unresolved_roles_is_scheduled() {
+        use crate::animation::editable::SourceClip;
+        use crate::ecs::component::ClipSchedule;
+        use crate::ecs::resource::HumanoidRigState;
+        use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
+        use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
+        use crate::ecs::systems::humanoid_rig_systems::{
+            build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+        };
+        use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+        use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+        use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        let skeleton = find_first_skeleton(&assets).expect("no skeleton").clone();
+        let mut rig =
+            build_humanoid_rig(&fbx_path, &skeleton, None).expect("test humanoid has no rig");
+        let mut library = ClipLibrary::default();
+
+        let clip_id: SourceClipId = 1;
+        let mut clip = EditableAnimationClip::new(clip_id, "role".to_string());
+        let track = clip.add_track(rig.track_bones["Hips"], "Hips".to_string());
+        curve_add_keyframe(&mut track.rotation_x, 0.0, 0.0);
+
+        rig.mapping.by_role.remove(&HumanoidRole::Hips);
+        assert!(!unresolved_clip_roles(&clip, Some(&rig.mapping)).is_empty());
+        world.resource_mut::<HumanoidRigState>().rig = Some(rig);
+
+        library
+            .source_clips
+            .insert(clip_id, SourceClip::new(clip_id, clip));
+        world.insert_resource(library);
+        let entity = world.spawn();
+        world.insert_component(entity, ClipSchedule::default());
+
+        process_clip_instance_events(
+            &[ClipInstanceEvent::Add {
+                entity,
+                source_id: clip_id,
+                start_time: 0.0,
+            }],
+            &mut world,
+        );
+
+        let schedule = world.get_component::<ClipSchedule>(entity).unwrap();
+        assert_eq!(
+            schedule.instances.len(),
+            1,
+            "a clip with unresolved roles should still be scheduled"
+        );
     }
 }
 
@@ -1301,4 +1457,41 @@ fn apply_timeline_scene_record(
         timeline.current_clip_id = current_clip_id;
     }
     Ok(())
+}
+
+fn add_clip_instance(world: &mut World, entity: Entity, source_id: SourceClipId, start_time: f32) {
+    let duration;
+    {
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id);
+
+        if let Some(clip) = clip {
+            let rig_state = world.get_resource::<crate::ecs::resource::HumanoidRigState>();
+            if let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) {
+                let unresolved = crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles(
+                    clip,
+                    Some(&rig.mapping),
+                );
+                if !unresolved.is_empty() {
+                    log_warn!(
+                        "clip '{}' has unresolved roles: {:?}",
+                        clip.name,
+                        unresolved
+                    );
+                }
+            }
+        }
+
+        duration = library.get(source_id).map(|c| c.duration).unwrap_or(1.0);
+    }
+
+    let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) else {
+        return;
+    };
+    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(
+        schedule, source_id, duration,
+    );
+    if let Some(last) = schedule.instances.last_mut() {
+        last.start_time = start_time;
+    }
 }

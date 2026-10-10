@@ -6,6 +6,7 @@ use crate::BoneId;
 
 use super::curve::{PropertyCurve, PropertyType};
 use super::keyframe::SourceClipId;
+use super::morph_track::MorphTrack;
 use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -18,8 +19,11 @@ pub struct EditableAnimationClip {
     #[serde(default)]
     pub min_duration: f32,
     pub tracks: HashMap<BoneId, BoneTrack>,
-    #[serde(default)]
+    /// Keyed by process-local `PropertyType::Custom` codes; `AnimationClipFile` persists them by name.
+    #[serde(skip)]
     pub scalar_curves: Vec<PropertyCurve>,
+    #[serde(default)]
+    pub morph_tracks: Vec<MorphTrack>,
     pub source_path: Option<String>,
     next_curve_id: u64,
 }
@@ -33,6 +37,7 @@ impl EditableAnimationClip {
             min_duration: 0.0,
             tracks: HashMap::new(),
             scalar_curves: Vec::new(),
+            morph_tracks: Vec::new(),
             source_path: None,
             next_curve_id: 1,
         }
@@ -68,7 +73,12 @@ impl EditableAnimationClip {
     pub fn total_keyframe_count(&self) -> usize {
         let bone_keys: usize = self.tracks.values().map(|t| t.total_keyframe_count()).sum();
         let scalar_keys: usize = self.scalar_curves.iter().map(|c| c.keyframe_count()).sum();
-        bone_keys + scalar_keys
+        let morph_keys: usize = self
+            .morph_tracks
+            .iter()
+            .map(|m| m.curve.keyframe_count())
+            .sum();
+        bone_keys + scalar_keys + morph_keys
     }
 
     pub fn get_scalar_curve(&self, property_type: PropertyType) -> Option<&PropertyCurve> {
@@ -108,6 +118,36 @@ impl EditableAnimationClip {
     pub fn has_scalar_keyframes(&self) -> bool {
         self.scalar_curves.iter().any(|c| !c.is_empty())
     }
+
+    pub fn get_morph_track(&self, source_mesh: &str, channel: &str) -> Option<&MorphTrack> {
+        self.morph_tracks
+            .iter()
+            .find(|m| m.source_mesh == source_mesh && m.channel == channel)
+    }
+
+    pub fn get_or_add_morph_track(&mut self, source_mesh: &str, channel: &str) -> &mut MorphTrack {
+        if let Some(idx) = self
+            .morph_tracks
+            .iter()
+            .position(|m| m.source_mesh == source_mesh && m.channel == channel)
+        {
+            return &mut self.morph_tracks[idx];
+        }
+        let id = self.next_curve_id;
+        self.next_curve_id += 1;
+        self.morph_tracks.push(MorphTrack {
+            source_mesh: source_mesh.to_string(),
+            channel: channel.to_string(),
+            curve: PropertyCurve::new(id, PropertyType::MorphWeight),
+        });
+        self.morph_tracks
+            .last_mut()
+            .expect("morph track just pushed")
+    }
+
+    pub fn remove_empty_morph_tracks(&mut self) {
+        self.morph_tracks.retain(|m| !m.curve.is_empty());
+    }
 }
 
 #[cfg(test)]
@@ -128,35 +168,66 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_ron_without_scalar_curves_deserializes() {
-        let clip = EditableAnimationClip::new(5, "legacy".to_string());
-        let ron = ron::to_string(&clip).expect("serialize");
-        // Simulate a pre-scalar_curves file by stripping the field
-        let legacy = ron
-            .replace("scalar_curves:[],", "")
-            .replace("scalar_curves: [],", "");
-        assert_ne!(ron, legacy, "field must have been present to strip");
-        let parsed: EditableAnimationClip = ron::from_str(&legacy).expect("legacy deserialize");
-        assert!(parsed.scalar_curves.is_empty());
-        assert_eq!(parsed.name, "legacy");
-    }
-
-    #[test]
-    fn test_scalar_curves_ron_roundtrip() {
+    fn test_scalar_curves_stay_out_of_the_clip_serde() {
         let mut clip = EditableAnimationClip::new(2, "fx".to_string());
         let curve = clip.get_or_add_scalar_curve(PropertyType::Custom(4));
         let id = curve.allocate_keyframe_id();
         curve
             .keyframes
             .push(crate::editable::EditableKeyframe::new(id, 1.5, 2.5));
+
+        let ron = ron::to_string(&clip).expect("serialize");
+        assert!(!ron.contains("scalar_curves"), "{ron}");
+        let parsed: EditableAnimationClip = ron::from_str(&ron).expect("deserialize");
+        assert!(parsed.scalar_curves.is_empty());
+        assert_eq!(parsed.name, "fx");
+    }
+
+    #[test]
+    fn test_morph_track_id_allocation_and_lookup() {
+        let mut clip = EditableAnimationClip::new(1, "morph".to_string());
+        let a = clip.get_or_add_morph_track("mesh_a", "eye_blink").curve.id;
+        let b = clip.get_or_add_morph_track("mesh_a", "smile").curve.id;
+        assert_ne!(a, b);
+        assert_eq!(
+            clip.get_or_add_morph_track("mesh_a", "eye_blink").curve.id,
+            a
+        );
+        assert_eq!(clip.morph_tracks.len(), 2);
+        assert!(clip.get_morph_track("mesh_a", "smile").is_some());
+        assert!(clip.get_morph_track("mesh_a", "frown").is_none());
+    }
+
+    #[test]
+    fn test_legacy_ron_without_morph_tracks_deserializes() {
+        let clip = EditableAnimationClip::new(5, "legacy".to_string());
+        let ron = ron::to_string(&clip).expect("serialize");
+        let legacy = ron
+            .replace("morph_tracks:[],", "")
+            .replace("morph_tracks: [],", "");
+        assert_ne!(ron, legacy, "field must have been present to strip");
+        let parsed: EditableAnimationClip = ron::from_str(&legacy).expect("legacy deserialize");
+        assert!(parsed.morph_tracks.is_empty());
+        assert_eq!(parsed.name, "legacy");
+    }
+
+    #[test]
+    fn test_morph_tracks_ron_roundtrip() {
+        let mut clip = EditableAnimationClip::new(2, "morph".to_string());
+        let track = clip.get_or_add_morph_track("face", "eye_blink");
+        let id = track.curve.allocate_keyframe_id();
+        track
+            .curve
+            .keyframes
+            .push(crate::editable::EditableKeyframe::new(id, 1.5, 0.8));
         let ron = ron::to_string(&clip).expect("serialize");
         let parsed: EditableAnimationClip = ron::from_str(&ron).expect("deserialize");
         let restored = parsed
-            .get_scalar_curve(PropertyType::Custom(4))
-            .expect("scalar curve");
-        assert_eq!(restored.keyframes.len(), 1);
-        assert!((restored.keyframes[0].time - 1.5).abs() < 1e-6);
-        assert!((restored.keyframes[0].value - 2.5).abs() < 1e-6);
+            .get_morph_track("face", "eye_blink")
+            .expect("morph track");
+        assert_eq!(restored.curve.keyframes.len(), 1);
+        assert!((restored.curve.keyframes[0].time - 1.5).abs() < 1e-6);
+        assert!((restored.curve.keyframes[0].value - 0.8).abs() < 1e-6);
     }
 }
 
@@ -169,6 +240,7 @@ impl Default for EditableAnimationClip {
             min_duration: 0.0,
             tracks: HashMap::new(),
             scalar_curves: Vec::new(),
+            morph_tracks: Vec::new(),
             source_path: None,
             next_curve_id: 1,
         }

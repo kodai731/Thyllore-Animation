@@ -2,7 +2,10 @@ use imgui::MouseButton;
 
 use crate::ecs::resource::{ActiveSplitter, DragState, PanelLayout};
 
-use super::layout_snapshot::LayoutSnapshot;
+use crate::asset::AssetStorage;
+use crate::ecs::resource::LayoutSnapshot;
+use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SPLITTER_THICKNESS: f32 = 6.0;
 const SPLITTER_VISUAL_THICKNESS: f32 = 2.0;
@@ -20,7 +23,7 @@ struct SplitterRect {
     is_horizontal: bool,
 }
 
-pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutSnapshot) {
+fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutSnapshot) {
     let rects = compute_splitter_rects(snap);
     let mouse_pos = ui.io().mouse_pos;
     let mouse_down = ui.is_mouse_down(MouseButton::Left);
@@ -192,3 +195,11 @@ fn reset_to_default(layout: &mut PanelLayout, splitter: ActiveSplitter) {
         ActiveSplitter::Lower => layout.debug_height = default,
     }
 }
+
+fn build_panel_splitters(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+    let snapshot = world.resource::<LayoutSnapshot>().clone();
+    let mut layout = world.resource_mut::<PanelLayout>();
+    handle_splitters(ui, &mut layout, &snapshot);
+}
+
+crate::ui_window!("panel_splitters", Bottom, 2, build_panel_splitters);

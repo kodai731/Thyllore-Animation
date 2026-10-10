@@ -27,6 +27,7 @@ mcp = FastMCP("thyllore", log_level="WARNING")
 
 _BATCH_TIMEOUT_SECONDS = 300
 _WATER_SCRIPT_TIMEOUT_SECONDS = 900
+_TEMPLATE_CHECK_TIMEOUT_SECONDS = 1800
 
 
 def _repo_root() -> Path:
@@ -43,6 +44,12 @@ def _engine_path() -> Path | None:
 
 def _error(message: str) -> str:
     return json.dumps({"ok": False, "error": message}, ensure_ascii=False)
+
+
+def find_last_validation_summary(text: str) -> str | None:
+    """Return the last line starting with 'validation errors:' from engine log text, or None."""
+    matches = [line.strip() for line in text.splitlines() if "validation errors:" in line]
+    return matches[-1] if matches else None
 
 
 def _engine_env() -> dict[str, str]:
@@ -88,6 +95,8 @@ def screenshot(
     flame_mode: str = "",
     flame_steps: int = 0,
     camera: str = "",
+    sequence: str = "",
+    scene: str = "",
 ) -> str:
     """Launch Thyllore, render `frames` frames, save a viewport PNG, and exit.
 
@@ -98,18 +107,50 @@ def screenshot(
     `flame_mode` optionally overrides the flame integrator
     (analytic|raymarch|thickness|noise); `flame_steps` > 0 overrides the
     raymarch step count; `camera` = "yaw_deg,pitch_deg,distance" orbits the
-    camera around the origin. Each call pays a full engine startup (seconds)."""
+    camera around the origin. `scene` = "<path>" loads the given scene file
+    before rendering. `sequence` = "<count>,<stride>" renders multiple frames
+    spaced by stride and returns {"ok": true, "paths": [<sorted PNG paths in the sequence dir>]}.
+    Each call pays a full engine startup (seconds)."""
     default_dir = Path(tempfile.gettempdir()) / "thyllore_screenshots"
     default_dir.mkdir(parents=True, exist_ok=True)
-    out = output or str(default_dir / f"screenshot_batch_{int(time.time())}.png")
-    args = ["--batch-screenshot", out, "--batch-frames", str(frames)]
+
+    if sequence:
+        parts = sequence.split(",")
+        if len(parts) != 2:
+            return _error("sequence must be '<count>,<stride>'")
+        try:
+            count, stride = int(parts[0]), int(parts[1])
+        except ValueError:
+            return _error("sequence count and stride must be integers")
+        seq_dir = Path(output) if output else (default_dir / f"sequence_{int(time.time())}")
+        seq_dir.mkdir(parents=True, exist_ok=True)
+        args = ["--batch-screenshot-sequence", f"{seq_dir},{count},{stride}", "--batch-frames", str(frames)]
+    else:
+        out = output or str(default_dir / f"screenshot_batch_{int(time.time())}.png")
+        args = ["--batch-screenshot", out, "--batch-frames", str(frames)]
+
     if flame_mode:
         args += ["--batch-flame-mode", flame_mode]
     if flame_steps > 0:
         args += ["--batch-flame-steps", str(flame_steps)]
     if camera:
         args += ["--batch-camera", camera]
-    return _run_batch(args)
+    if scene:
+        args += ["--batch-scene", scene]
+
+    result = _run_batch(args)
+    if sequence:
+        try:
+            obj = json.loads(result)
+            if obj.get("ok"):
+                paths = sorted(str(p) for p in seq_dir.glob("*.png"))
+                out = {"ok": True, "paths": paths}
+                if obj.get("validation") is not None:
+                    out["validation"] = obj["validation"]
+                return json.dumps(out, ensure_ascii=False)
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return result
 
 
 def _read_json_file(path: str) -> dict | None:
@@ -135,6 +176,8 @@ def _run_batch_with_dump(args: list[str], keep_png: bool, png_path: str) -> str:
         if dump is None:
             return _error("engine succeeded but wrote no readable anim dump")
         out = {"ok": True, "anim": dump}
+        if data.get("validation") is not None:
+            out["validation"] = data["validation"]
         if keep_png:
             out["path"] = data.get("path")
         return json.dumps(out, ensure_ascii=False)
@@ -174,6 +217,8 @@ def anim_edit(
     screenshot: bool = False,
     camera: str = "",
     flame_mode: str = "",
+    scene: str = "",
+    play: bool = False,
 ) -> str:
     """Apply scalar animation edits through the engine's production event path,
     render `frames` frames (batch time advances 1/60s per frame, so keyframed
@@ -186,21 +231,45 @@ def anim_edit(
       4 deterministic random keys inside safe ranges (same as the UI
       "Random Keys (Debug)" button)
     - `key=<param>@<time>=<value>`: insert one key (param = snake_case channel
-      name, e.g. height, intensity, temperature_base_k, wind_x)
+      name, e.g. height, intensity, color_temperature_base_k, wind_direction_x)
     - `key_at_playhead=<param>`: insert a key at the current playhead with the
       component's current value (the Curve Editor's per-property `+` button
       path; creates the curve when the clip is empty)
     - `trim_end=<seconds>`: set the entity's clip instance clip_out through the
       real ClipInstanceTrimEnd event (what releasing a right-edge drag sends)
+    - `new_clip=<name>`: create an empty clip and make it the current clip
+    - `template=<path.anim.ron>`: load a clip file, replace any clip with
+      the same name in the library and make it the current clip
+    - `save=<path>`: write the current clip to `path`
+    - `compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>]`:
+      key the current clip from the pose table
+      (`crates/thyllore-avatar-core/data/pose_table.toml`): the motion's poses
+      are expanded to role keys, mirrored for `side=left`, the cycle repeated
+      `count` times, degrees scaled by `amount`, times divided by `speed`. A
+      motion with `settle` then gets Curve Copilot follow-through on the curves
+      that just arrived into a hold. This is the deterministic text-to-motion
+      path; add a motion to the table instead of keying by hand
+    - `key=<bone>.<x|y|z|tx|ty|tz>@<t>=<deg>`: insert a bone key into the current
+      clip (bone = bone name; standard name for humanoid model, i.e. Unity role
+      name; own bone name for unmapped bones; x/y/z rotation in degrees,
+      tx/ty/tz translation for Hips and unmapped bones only). For fine
+      adjustment after `compose=`, not for authoring from scratch
     - `clear`: remove all scalar curves
 
     Returns {"ok": true, "anim": {entities, clips, timeline}} —
     `anim.clips[].scalar_curves` holds every curve's keyframes,
     `anim.entities[].params` the sampled values at the final rendered frame
-    (time ≈ frames/60) with the owning `domain` name. Set `screenshot` to also
-    keep a PNG (path in result). `camera` and `flame_mode` work like in the
-    screenshot tool."""
+    (time ≈ frames/60) with the owning `domain` name. `anim.models[]` lists
+    skinned models on the schedule. Set `screenshot` to also keep a PNG (path in
+    result). `camera` and `flame_mode` work like in the screenshot tool.
+    `scene` = "<path>" loads the given scene file before rendering. `play`
+    starts timeline playback so the screenshot shows the current clip at
+    frames/60 s (needed for bone clips; without it the pose stays at t=0)."""
     args, png_path = _batch_base_args(frames, camera, flame_mode, screenshot)
+    if scene:
+        args += ["--batch-scene", scene]
+    if play:
+        args.append("--batch-play")
     specs = [s.strip() for s in edits.split(";") if s.strip()]
     if not specs:
         return _error("edits must contain at least one spec")
@@ -210,15 +279,24 @@ def anim_edit(
 
 
 @mcp.tool()
-def anim_state(frames: int = 2, camera: str = "") -> str:
+def anim_state(frames: int = 2, camera: str = "", include: str = "", scene: str = "") -> str:
     """Read the engine's animation state without editing anything: launch,
     render `frames` frames, and return {"ok": true, "anim": {entities, clips,
     timeline}}. `anim.entities[]` lists each scalar-channel entity (flame, ...)
     with its domain, clip schedule and current param values; `anim.clips[]`
-    lists every clip with duration, bone track count, and scalar curves. Use a
-    small `frames` (default 2) for a fast state peek, or larger to see values
-    mid-animation."""
+    lists every clip with duration, bone track count, and scalar curves.
+    `anim.models[]` lists skinned models on the schedule. When include="tracks",
+    `anim.clips[].bone_tracks[]` is also included with each track's role and
+    curves (rot_x/rot_y/rot_z/pos_x/pos_y/pos_z). Use a small `frames` (default
+    2) for a fast state peek, or larger to see values mid-animation.
+    `scene` = "<path>" loads the given scene file before rendering."""
     args, png_path = _batch_base_args(frames, camera, "", False)
+    if include == "tracks":
+        args.append("--batch-anim-dump-tracks")
+    elif include:
+        return _error(f"include must be empty or 'tracks', got '{include}'")
+    if scene:
+        args += ["--batch-scene", scene]
     return _run_batch_with_dump(args, False, png_path)
 
 
@@ -277,10 +355,19 @@ def status() -> str:
     engine = _engine_path()
     if engine is None:
         return _error("engine not built: cargo build --bin thyllore-animation")
-    return json.dumps(
-        {"ok": True, "engine": str(engine), "built_at": int(engine.stat().st_mtime)},
-        ensure_ascii=False,
-    )
+    out = {"ok": True, "engine": str(engine), "built_at": int(engine.stat().st_mtime)}
+    log_dir = _repo_root() / "log"
+    if log_dir.is_dir():
+        latest_log = max(
+            (p for p in log_dir.glob("log_*.txt") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            default=None,
+        )
+        if latest_log is not None:
+            summary = find_last_validation_summary(latest_log.read_text())
+            if summary is not None:
+                out["last_validation"] = {"log": str(latest_log.relative_to(_repo_root())), "summary": summary}
+    return json.dumps(out, ensure_ascii=False)
 
 
 @mcp.tool()
@@ -494,11 +581,11 @@ def _import_engine_harness():
     return dood_wrap, engine_env, engine_path
 
 
-def _run_water_script(command: list[str]) -> str:
+def _run_water_script(command: list[str], timeout: int = _WATER_SCRIPT_TIMEOUT_SECONDS) -> str:
     """Run a tools/water_*.py helper and return its final stdout line (JSON)."""
     try:
         result = subprocess.run(command, capture_output=True, text=True,
-                                cwd=str(_repo_root()), timeout=_WATER_SCRIPT_TIMEOUT_SECONDS)
+                                cwd=str(_repo_root()), timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as failure:
         return _error(str(failure))
     if result.returncode != 0:
@@ -619,6 +706,19 @@ def water_depth_mask(camera: str = "80,10,6,0,0,0", frames: int = 30, dood: bool
         cmd.extend(["--out-dir", out_dir])
     cmd.extend(["--threshold", str(threshold)])
     return _run_water_script(cmd)
+
+
+@mcp.tool()
+def template_check(dood: bool = True) -> str:
+    """Run the clip template smoke test (tools/template_smoke.py) and return its JSON.
+
+    Keys bones on the test humanoid, checks them against the identity-rig
+    oracle and an FBX round trip. Returns the script's one-line JSON:
+    {"ok": bool, "oracle_violations": [...], "roundtrip_max_diff": float}."""
+    cmd = ["uv", "run", "python3", "tools/template_smoke.py"]
+    if dood:
+        cmd.append("--dood")
+    return _run_water_script(cmd, timeout=_TEMPLATE_CHECK_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

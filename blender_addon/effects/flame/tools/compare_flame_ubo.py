@@ -26,8 +26,14 @@ def _unpack_wheel():
 
 
 def _read_generated_rs():
-    path = REPO_ROOT / "crates" / "thyllore-effect-core" / "src" / "flame" / "gpu" / "components" / "generated.rs"
-    return path.read_text()
+    candidates = sorted(
+        REPO_ROOT.glob("target/*/build/thyllore-effect-core-*/out/flame_gpu_blocks.rs"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    if not candidates:
+        print("flame_gpu_blocks.rs not generated yet; run cargo build -p thyllore-effect-core", file=sys.stderr)
+        sys.exit(1)
+    return candidates[-1].read_text()
 
 
 def _parse_nested_struct_sizes(source):

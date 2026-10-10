@@ -44,7 +44,6 @@ impl RRBillboardDescriptorSet {
         &mut self,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
-        billboard_texture: &crate::resource::image::RRImage,
     ) -> Result<()> {
         let swapchain_images_len = rrswapchain.swapchain_images.len();
 
@@ -59,12 +58,6 @@ impl RRBillboardDescriptorSet {
                         rrdata.rruniform_buffers[image_index].buffer,
                         0,
                         std::mem::size_of::<UniformBufferObject>() as u64,
-                    )?
-                    .image(
-                        billboard::TEX_SAMPLER,
-                        billboard_texture.image_view,
-                        billboard_texture.sampler,
-                        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                     )?
                     .apply(rrdevice);
             }

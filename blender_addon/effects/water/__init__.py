@@ -23,6 +23,8 @@ def register():
     bpy.utils.register_class(operators.THYLLORE_OT_water_add)
     debug_tools.register()
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_water)
+    bpy.utils.register_class(panels.VIEW3D_PT_thyllore_water_advanced)
+    bpy.utils.register_class(panels.VIEW3D_PT_thyllore_water_debug)
     viewport_recording.register()
 
     draw_handler.register_draw_handler()
@@ -38,6 +40,8 @@ def unregister():
 
     draw_handler.unregister_draw_handler()
     viewport_recording.unregister()
+    bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_water_debug)
+    bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_water_advanced)
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_water)
     debug_tools.unregister()
     bpy.utils.unregister_class(operators.THYLLORE_OT_water_add)

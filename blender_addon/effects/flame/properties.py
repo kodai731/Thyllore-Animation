@@ -18,7 +18,7 @@ def resolve_preset_values(preset_values: dict, effective_optical_depth: float) -
 def flame_render_params(props) -> dict:
     import thyllore_effect_core as fx
 
-    return effect_properties.render_params(props, fx.flame_preset_params)
+    return effect_properties.render_params(props, fx.flame_preset_params, fx.flame_parameter_paths)
 
 
 def build_flame_property_group():

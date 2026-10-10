@@ -2,13 +2,15 @@ use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::Path;
 use winit::dpi::LogicalSize;
-use winit::event_loop::EventLoop;
+use winit::event_loop::{EventLoop, EventLoopBuilder};
+
+use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
 use winit::window::{Window, WindowBuilder};
 
 use super::clipboard;
 
 pub struct System {
-    pub event_loop: EventLoop<()>,
+    pub event_loop: EventLoop<ExternalCommand>,
     pub window: Window,
     pub imgui: Context,
     pub platform: WinitPlatform,
@@ -19,7 +21,9 @@ pub fn init(title: &str, take_focus: bool, window_size: (u32, u32)) -> System {
         Some(file_name) => file_name.to_str().unwrap_or(title),
         None => title,
     };
-    let event_loop = EventLoop::new().expect("Failed to create EventLoop");
+    let event_loop = EventLoopBuilder::<ExternalCommand>::with_user_event()
+        .build()
+        .expect("Failed to create EventLoop");
 
     #[allow(unused_mut)]
     let mut builder = WindowBuilder::new()

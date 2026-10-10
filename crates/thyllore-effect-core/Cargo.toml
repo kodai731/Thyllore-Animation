@@ -24,8 +24,13 @@ serde = { version = "1", features = ["derive"] }
 thyllore-color-core = { path = "../thyllore-color-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-scene-core = { path = "../thyllore-scene-core" }
+thyllore-effect-derive = { path = "derive" }
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
 thyllore-texture-fit-core = { path = "../thyllore-texture-fit-core" }
+
+[build-dependencies]
+cc = "1.2"
+thyllore-shader-manifest = { path = "../thyllore-shader-manifest" }
 
 [dev-dependencies]
 fastrand = "2"

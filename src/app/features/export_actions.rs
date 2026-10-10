@@ -1,20 +1,25 @@
 use std::path::Path;
 
+use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
+
 use crate::animation::editable::EditableAnimationClip;
 use crate::animation::Skeleton;
 use crate::app::App;
-use crate::ecs::resource::{ClipLibrary, FbxModelCache, GltfModelCache};
+use crate::ecs::resource::{
+    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
+};
+use crate::ecs::systems::{humanoid_bake_systems, vrm_humanoid_bones};
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
         return;
     };
 
-    let (fbx_model, needs_coord_conversion) = app
+    let (fbx_model, has_skinned_meshes) = app
         .data
         .ecs_world
         .get_resource::<FbxModelCache>()
-        .map(|cache| (cache.fbx_model().cloned(), cache.needs_coord_conversion()))
+        .map(|cache| (cache.fbx_model().cloned(), cache.has_skinned_meshes()))
         .unwrap_or((None, false));
 
     let result = match fbx_model {
@@ -25,15 +30,60 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
             &clip,
             &skeleton,
             path,
-            needs_coord_conversion,
+            has_skinned_meshes,
             crate::loader::fbx::fbx::FbxAxesInfo::default(),
             24.0,
         ),
     };
 
     match result {
-        Ok(()) => msg_info!("FBX exported: {:?}", path),
+        Ok(()) => {
+            msg_info!("FBX exported: {:?}", path);
+            copy_humanoid_sidecar(app, path);
+        }
         Err(e) => msg_error!("FBX export failed: {:?}", e),
+    }
+}
+
+fn copy_humanoid_sidecar(app: &App, output_path: &Path) {
+    let model_path = app
+        .data
+        .ecs_world
+        .resource::<ModelState>()
+        .model_path
+        .clone();
+    let sidecar_path = humanoid_mapping_path(Path::new(&model_path));
+    if !sidecar_path.exists() {
+        return;
+    }
+
+    let output_sidecar_path = humanoid_mapping_path(output_path);
+    if let Err(e) = std::fs::copy(&sidecar_path, &output_sidecar_path) {
+        msg_warn!(
+            "Humanoid sidecar copy to {:?} failed: {:?}",
+            output_sidecar_path,
+            e
+        );
+    }
+}
+
+fn current_vrm_humanoid_bones(app: &App) -> Vec<(String, usize)> {
+    app.data
+        .ecs_world
+        .get_resource::<HumanoidRigState>()
+        .and_then(|state| state.rig.as_ref().map(vrm_humanoid_bones))
+        .unwrap_or_default()
+}
+
+pub(crate) fn export_current_clip_fbx(app: &App, path: &Path) {
+    let timeline_state = app
+        .data
+        .ecs_world
+        .resource::<crate::ecs::resource::TimelineState>();
+    let clip_id = timeline_state.current_clip_id;
+    drop(timeline_state);
+    if let Some(source_id) = clip_id {
+        export_clip_fbx(app, source_id, path);
     }
 }
 
@@ -57,6 +107,7 @@ pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
         &clip,
         &skeleton,
         path,
+        &current_vrm_humanoid_bones(app),
     ) {
         Ok(()) => msg_info!("glTF exported: {:?}", path),
         Err(e) => msg_error!("glTF export failed: {:?}", e),
@@ -68,7 +119,12 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_only(&clip, &skeleton, path) {
+    match crate::exporter::gltf::export_gltf_animation_only(
+        &clip,
+        &skeleton,
+        path,
+        &current_vrm_humanoid_bones(app),
+    ) {
         Ok(()) => msg_info!("Animation-only glTF exported: {:?}", path),
         Err(e) => msg_error!("Animation-only glTF export failed: {:?}", e),
     }
@@ -91,13 +147,11 @@ pub(crate) fn export_model_gltf(app: &App, path: &Path) {
     }
 }
 
-fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
-    let clip = app
-        .data
-        .ecs_world
-        .resource::<ClipLibrary>()
-        .get(source_id)
-        .cloned()?;
+pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
+    let library = app.data.ecs_world.resource::<ClipLibrary>();
+    let clip = library.get(source_id).cloned()?;
+    drop(library);
+
     let skeleton = app
         .data
         .ecs_assets
@@ -106,7 +160,25 @@ fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationCli
         .next()
         .map(|sa| sa.skeleton.clone())?;
 
-    Some((clip, skeleton))
+    let rig_state = app.data.ecs_world.get_resource::<HumanoidRigState>();
+    let Some(rig) = rig_state.as_ref().and_then(|state| state.rig.as_ref()) else {
+        return Some((clip, skeleton));
+    };
+
+    let fps = app
+        .data
+        .ecs_world
+        .resource::<TimelineState>()
+        .snap_settings
+        .frame_rate
+        .round() as u32;
+    match humanoid_bake_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
+        Ok(baked) => Some((baked, skeleton)),
+        Err(e) => {
+            msg_error!("Role clip bake failed: {:?}", e);
+            None
+        }
+    }
 }
 
 fn resolve_glb_bytes(cache: &GltfModelCache) -> Option<Vec<u8>> {

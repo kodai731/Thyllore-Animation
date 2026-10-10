@@ -1,53 +1,46 @@
-use std::rc::Rc;
-
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::ecs::component::{FlameParam, WaterParam, WindParam};
-use crate::ecs::events::{UIEvent, UIEventQueue};
+#[cfg(feature = "auto-rig")]
+use super::text_to_animation_dialog::TextToAnimationDialogState;
+#[cfg(feature = "auto-rig")]
+use super::text_to_mesh_dialog::TextToMeshDialogState;
+use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
-    CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
-    WeightHeatmapState, WindDebugCapture,
+    CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
 };
-use crate::ecs::systems::{FLAME_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+#[cfg(feature = "auto-rig")]
+use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::flame_param_groups::flame_group_param_names;
-use super::param_widgets::{draw_params, EditedScalars};
-use super::viewport_window::ViewportInfo;
+use super::param_widgets::EditedScalars;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
 
-pub struct SceneOverlayState {
-    pub model: ModelState,
-    pub water_preset_index: usize,
-    pub wind_preset_index: usize,
-    #[cfg(feature = "auto-rig")]
-    pub open_text_to_mesh_dialog: bool,
-    #[cfg(feature = "auto-rig")]
-    pub open_text_to_animation_dialog: bool,
-}
-
 #[cfg(feature = "auto-rig")]
 use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 
-pub fn build_scene_overlay(
+fn draw_scene_overlay(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
+    model: &mut ModelState,
     ecs_world: &World,
-    viewport_info: &ViewportInfo,
+    viewport: &ViewportInput,
 ) {
-    let pos_x = viewport_info.position[0] + OVERLAY_MARGIN;
-    let pos_y = viewport_info.position[1] + OVERLAY_MARGIN;
+    let pos_x = viewport.position[0] + OVERLAY_MARGIN;
+    let pos_y = viewport.position[1] + OVERLAY_MARGIN;
 
     ui.window("Scene Overlay")
         .position([pos_x, pos_y], Condition::Always)
         .size_constraints(
             [OVERLAY_WIDTH, 0.0],
-            [OVERLAY_WIDTH, viewport_info.size[1] - 2.0 * OVERLAY_MARGIN],
+            [OVERLAY_WIDTH, viewport.size[1] - 2.0 * OVERLAY_MARGIN],
         )
         .always_auto_resize(true)
         .no_decoration()
@@ -56,36 +49,29 @@ pub fn build_scene_overlay(
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            build_model_section(ui, ui_events, overlay_state, ecs_world);
+            build_model_section(ui, model, ecs_world);
             ui.separator();
 
-            build_screenshot_section(ui, ui_events);
+            build_screenshot_section(ui, ecs_world);
             ui.separator();
 
-            build_overlay_section(ui, ui_events, ecs_world);
+            build_overlay_section(ui, ecs_world);
 
-            build_transform_gizmo_section(ui, ui_events, ecs_world);
+            build_transform_gizmo_section(ui, ecs_world);
 
-            build_dof_section(ui, ui_events, ecs_world);
+            build_dof_section(ui, ecs_world);
 
-            build_auto_exposure_section(ui, ui_events, ecs_world);
+            build_auto_exposure_section(ui, ecs_world);
 
-            build_onion_skinning_section(ui, ui_events, ecs_world);
+            build_onion_skinning_section(ui, ecs_world);
 
-            build_water_section(ui, ui_events, overlay_state, ecs_world);
-
-            build_wind_section(ui, ui_events, overlay_state, ecs_world);
-
-            build_flame_section(ui, ui_events, overlay_state, ecs_world, viewport_info);
+            for section in crate::platform::ui::effect_sections::collect_effect_sections() {
+                (section.draw)(ui, ecs_world);
+            }
         });
 }
 
-fn build_model_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut SceneOverlayState,
-    _ecs_world: &World,
-) {
+fn build_model_section(ui: &imgui::Ui, model: &mut ModelState, ecs_world: &World) {
     if ui.button("Open FBX") {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
@@ -93,7 +79,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected FBX file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -106,7 +92,7 @@ fn build_model_section(
         {
             let path_str = path.to_string_lossy().to_string();
             log!("Selected glTF file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
+            ecs_world.send_command(CameraEvent::LoadModel { path: path_str });
         }
     }
 
@@ -118,38 +104,38 @@ fn build_model_section(
             for path in paths {
                 let path_str = path.to_string_lossy().to_string();
                 log!("Adding GLB file: {}", path_str);
-                ui_events.send(UIEvent::LoadModelAdditive { path: path_str });
+                ecs_world.send_command(CameraEvent::LoadModelAdditive { path: path_str });
             }
         }
     }
 
     #[cfg(feature = "auto-rig")]
     if ui.button("Generate Mesh") {
-        state.open_text_to_mesh_dialog = true;
+        ecs_world.resource_mut::<TextToMeshDialogState>().open = true;
     }
 
     #[cfg(feature = "auto-rig")]
     {
         ui.same_line();
         if ui.button("Generate Animation") {
-            state.open_text_to_animation_dialog = true;
+            ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
         }
     }
 
     #[cfg(feature = "auto-rig")]
-    build_auto_rig_section(ui, ui_events, _ecs_world);
+    build_auto_rig_section(ui, ecs_world);
 
-    let model_name = if state.model.model_path.is_empty() {
+    let model_name = if model.model_path.is_empty() {
         "None"
     } else {
-        &state.model.model_path
+        &model.model_path
     };
     ui.text_wrapped(format!("Model: {}", model_name));
-    ui.text(format!("Status: {}", state.model.load_status));
+    ui.text(format!("Status: {}", model.load_status));
 }
 
 #[cfg(feature = "auto-rig")]
-fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::GlbSource;
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::world::Parent;
@@ -179,7 +165,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
             });
 
             if has_glb_source && ui.button("Auto Rig") {
-                ui_events.send(UIEvent::AutoRigGenerate {
+                ecs_world.send_command(AutoRigEvent::AutoRigGenerate {
                     num_sample_points: 65536,
                 });
             }
@@ -188,14 +174,14 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
         AutoRigStatus::WaitingForServer => {
             ui.text("Rigging: waiting for server...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
         AutoRigStatus::Rigging => {
             ui.text("Rigging: processing...");
             if ui.button("Cancel##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -209,11 +195,11 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ));
             }
             if ui.button("Apply Rig") {
-                ui_events.send(UIEvent::AutoRigApply);
+                ecs_world.send_command(AutoRigEvent::AutoRigApply);
             }
             ui.same_line();
             if ui.button("Discard##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
 
@@ -222,51 +208,21 @@ fn build_auto_rig_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_worl
                 ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
             }
             if ui.button("Dismiss##rig") {
-                ui_events.send(UIEvent::AutoRigDiscard);
+                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
         }
     }
 }
 
-fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+fn build_screenshot_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Screenshot") {
-        ui_events.send(UIEvent::TakeScreenshot);
+        ecs_world.send_command(CameraEvent::TakeScreenshot);
     }
 }
 
-fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
-        })
-        .collect();
-    send_key_button(ui, ui_events, edited, keys);
-}
-
-fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WaterParam::from_cli_name(name).map(|param| (param.property_type(), *value))
-        })
-        .collect();
-    send_key_button(ui, ui_events, edited, keys);
-}
-
-fn wind_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WindParam::from_cli_name(name).map(|param| (param.property_type(), *value))
-        })
-        .collect();
-    send_key_button(ui, ui_events, edited, keys);
-}
-
-fn send_key_button(
+pub(super) fn send_key_button(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
     edited: EditedScalars,
     keys: Vec<(PropertyType, f32)>,
 ) {
@@ -276,7 +232,7 @@ fn send_key_button(
     ui.same_line();
     if ui.small_button(format!("K##{first_name}")) {
         for (property_type, value) in keys {
-            ui_events.send(UIEvent::InsertScalarKey {
+            ecs_world.send_command(ScalarCurveEvent::InsertScalarKey {
                 property_type,
                 value,
             });
@@ -284,24 +240,24 @@ fn send_key_button(
     }
 }
 
-fn build_overlay_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.collapsing_header("Overlay", imgui::TreeNodeFlags::DEFAULT_OPEN) {
         if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
             let mut visible = bone_gizmo.visible;
             if ui.checkbox("Show Bones", &mut visible) {
-                ui_events.send(UIEvent::SetBoneGizmoVisible(visible));
+                ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(visible));
             }
         }
         if let Some(heatmap) = ecs_world.get_resource::<WeightHeatmapState>() {
             let mut enabled = heatmap.enabled;
             if ui.checkbox("Show Weight Heatmap (selected bone)", &mut enabled) {
-                ui_events.send(UIEvent::SetWeightHeatmapEnabled(enabled));
+                ecs_world.send_command(OverlayEvent::SetWeightHeatmapEnabled(enabled));
             }
         }
     }
 }
 
-fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
     let Some(state) = ecs_world.get_resource::<TransformGizmoState>() else {
         return;
     };
@@ -384,11 +340,13 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, e
             .display_format("%.3f")
             .build(&mut state_copy.gizmo_scale);
 
-        ui_events.send(UIEvent::UpdateTransformGizmoState(Box::new(state_copy)));
+        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
+            state_copy,
+        )));
     }
 }
 
-fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
 
     if ui.collapsing_header("Depth of Field", imgui::TreeNodeFlags::empty()) {
@@ -404,7 +362,7 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Max Blur Radius", 1.0, 32.0)
                 .build(&mut dof_copy.max_blur_radius);
 
-            ui_events.send(UIEvent::UpdateDepthOfField(dof_copy));
+            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(dof_copy));
         }
 
         if let Some(params) = ecs_world.get_resource::<PhysicalCameraParameters>() {
@@ -417,12 +375,12 @@ fn build_dof_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &W
             ui.slider_config("Focal Length (mm)", 10.0, 200.0)
                 .build(&mut params_copy.focal_length_mm);
 
-            ui_events.send(UIEvent::UpdatePhysicalCamera(params_copy));
+            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(params_copy));
         }
     }
 }
 
-fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
     if ui.collapsing_header("Auto Exposure", imgui::TreeNodeFlags::empty()) {
@@ -450,7 +408,7 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs
             ui.slider_config("High Percent", 0.5, 1.0)
                 .build(&mut ae_copy.high_percent);
 
-            ui_events.send(UIEvent::UpdateAutoExposure(ae_copy));
+            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(ae_copy));
         }
 
         if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
@@ -460,7 +418,7 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs
     }
 }
 
-fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::OnionSkinningConfig;
 
     if ui.collapsing_header("Onion Skinning", imgui::TreeNodeFlags::empty()) {
@@ -495,1148 +453,15 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
                 crate::ecs::compute_total_ghost_count(&config_copy)
             ));
 
-            ui_events.send(UIEvent::UpdateOnionSkinning(config_copy));
+            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(config_copy));
         }
     }
 }
 
-fn build_wind_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
-    use crate::ecs::component::WindTornadoEffect;
-    use crate::ecs::resource::{WindDebugView, WindRenderSettings, WindShadingMode};
-
-    if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
-        return;
-    }
-
-    if let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() {
-        let mut settings_copy = *settings;
-        drop(settings);
-
-        if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-            for mode in WindShadingMode::ALL {
-                if ui
-                    .selectable_config(mode.label())
-                    .selected(mode == settings_copy.shading_mode)
-                    .build()
-                {
-                    settings_copy.shading_mode = mode;
-                }
-            }
-        }
-        if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-            for view in WindDebugView::ALL {
-                if ui
-                    .selectable_config(view.label())
-                    .selected(view == settings_copy.debug_view)
-                    .build()
-                {
-                    settings_copy.debug_view = view;
-                }
-            }
-        }
-        let mut step_count = settings_copy.reference_step_count as i32;
-        if ui
-            .slider_config("Reference Steps", 16, 2048)
-            .build(&mut step_count)
-        {
-            settings_copy.reference_step_count = step_count.max(1) as u32;
-        }
-        ui.checkbox(
-            "Animate when paused",
-            &mut settings_copy.free_run_when_paused,
-        );
-        ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
-    }
-
-    if ui.button("Add Wind") {
-        ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
-    }
-
-    let winds = ecs_world.entities_with::<WindTornadoEffect>();
-    let selected_wind_entity = crate::ecs::systems::resolve_selected_wind(ecs_world);
-    if winds.len() > 1 {
-        let mut current = selected_wind_entity
-            .and_then(|entity| winds.iter().position(|&e| e == entity))
-            .unwrap_or(0);
-        let items: Vec<String> = winds
-            .iter()
-            .enumerate()
-            .map(|(i, &entity)| {
-                ecs_world
-                    .get_component::<crate::ecs::world::Name>(entity)
-                    .map(|n| n.0.clone())
-                    .unwrap_or_else(|| format!("Wind {}", i + 1))
-            })
-            .collect();
-        if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectEffectInstance {
-                key: WIND_SPAWN_HOOK.key,
-                index: current,
-            });
-        }
-    }
-
-    let presets: Vec<String> = thyllore_effect_core::WIND_PRESET_NAMES
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let mut preset_index = overlay_state.wind_preset_index;
-    let preset_changed = ui.combo_simple_string("Wind Preset", &mut preset_index, &presets);
-    overlay_state.wind_preset_index = preset_index;
-    let mut effect_applied_this_frame = false;
-    if preset_changed && selected_wind_entity.is_some() {
-        ui_events.send(UIEvent::ClearScalarKeys);
-        ui_events.send(UIEvent::ApplyWindPreset(presets[preset_index].clone()));
-        effect_applied_this_frame = true;
-    }
-
-    let Some(selected_wind) = selected_wind_entity else {
-        return;
-    };
-    let Some(effect) = ecs_world.get_component::<WindTornadoEffect>(selected_wind) else {
-        return;
-    };
-    let mut effect_copy = effect.clone();
-    let mut drawn_groups: Vec<&str> = Vec::new();
-    for group in thyllore_effect_core::WIND_UI_PARAMS
-        .iter()
-        .map(|param| param.group)
-        .filter(|group| !group.is_empty())
-    {
-        if drawn_groups.contains(&group) {
-            continue;
-        }
-        drawn_groups.push(group);
-
-        let names: Vec<&str> = thyllore_effect_core::WIND_UI_PARAMS
-            .iter()
-            .filter(|param| param.group == group)
-            .map(|param| param.name)
-            .collect();
-        draw_params(
-            ui,
-            &names,
-            thyllore_effect_core::WIND_UI_PARAMS,
-            thyllore_effect_core::WIND_SCALAR_PARAMS,
-            &mut effect_copy,
-            |ui, edited| wind_key_button(ui, ui_events, edited),
-        );
-    }
-    if !effect_applied_this_frame {
-        ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
-    }
-    if ui.button("Curves") {
-        ui_events.send(UIEvent::OpenScalarCurveEditor);
-    }
-    ui.same_line();
-    if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
-    }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
-        );
-    }
+fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+    let mut model = world.resource_mut::<ModelState>();
+    let viewport = world.resource::<ViewportInput>().clone();
+    draw_scene_overlay(ui, &mut model, world, &viewport);
 }
 
-fn build_water_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
-    use crate::ecs::component::WaterTorusEffect;
-    use crate::ecs::resource::WaterRenderSettings;
-
-    if ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
-        // WaterRenderSettings: secondary_rays combo and debug_view slider
-        if let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) =
-                ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label())
-            {
-                for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
-                    let selected = mode == settings_copy.secondary_rays;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.secondary_rays = mode;
-                    }
-                }
-            }
-
-            let mut debug_view = settings_copy.debug_view as f32;
-            if ui
-                .slider_config("Debug View", 0.0f32, 1.0f32)
-                .build(&mut debug_view)
-            {
-                settings_copy.debug_view = debug_view as i32;
-            }
-
-            ui.checkbox(
-                "Animate when paused",
-                &mut settings_copy.free_run_when_paused,
-            );
-
-            ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
-        }
-
-        // Add Water button (before instance selector, accessible even when no water exists)
-        if ui.button("Add Water") {
-            ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
-        }
-        ui.same_line();
-        if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
-        }
-        if ui.is_item_hovered() {
-            ui.tooltip_text(
-                "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
-            );
-        }
-
-        // Instance selector
-        let waters = ecs_world.entities_with::<WaterTorusEffect>();
-        let selected_water_entity = crate::ecs::systems::resolve_selected_water(ecs_world);
-        let clamped_index = selected_water_entity
-            .and_then(|entity| waters.iter().position(|&e| e == entity))
-            .unwrap_or(0);
-
-        if waters.len() > 1 {
-            let mut current = clamped_index;
-            let items: Vec<String> = waters
-                .iter()
-                .enumerate()
-                .map(|(i, &entity)| {
-                    ecs_world
-                        .get_component::<crate::ecs::world::Name>(entity)
-                        .map(|n| n.0.clone())
-                        .unwrap_or_else(|| format!("Water {}", i + 1))
-                })
-                .collect();
-            if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectEffectInstance {
-                    key: WATER_SPAWN_HOOK.key,
-                    index: current,
-                });
-            }
-        }
-
-        // Preset combo
-        let presets: Vec<String> = thyllore_effect_core::WATER_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let mut effect_applied_this_frame = false;
-        {
-            let mut preset_index = overlay_state.water_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Water Preset", &mut preset_index, &presets);
-            overlay_state.water_preset_index = preset_index;
-            if preset_changed {
-                if selected_water_entity.is_some() {
-                    ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyWaterPreset(presets[preset_index].clone()));
-                    effect_applied_this_frame = true;
-                }
-            }
-
-            // Scalar parameters
-            if let Some(selected_water) = selected_water_entity {
-                if let Some(effect) = ecs_world.get_component::<WaterTorusEffect>(selected_water) {
-                    let mut effect_copy = effect.clone();
-
-                    let mut drawn_groups: Vec<&str> = Vec::new();
-                    for group in thyllore_effect_core::WATER_UI_PARAMS
-                        .iter()
-                        .map(|param| param.group)
-                        .filter(|group| !group.is_empty())
-                    {
-                        if drawn_groups.contains(&group) {
-                            continue;
-                        }
-                        drawn_groups.push(group);
-
-                        let names: Vec<&str> = thyllore_effect_core::WATER_UI_PARAMS
-                            .iter()
-                            .filter(|param| param.group == group)
-                            .map(|param| param.name)
-                            .collect();
-                        draw_params(
-                            ui,
-                            &names,
-                            thyllore_effect_core::WATER_UI_PARAMS,
-                            thyllore_effect_core::WATER_SCALAR_PARAMS,
-                            &mut effect_copy,
-                            |ui, edited| water_key_button(ui, ui_events, edited),
-                        );
-                    }
-
-                    if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));
-                    }
-
-                    if ui.button("Curves") {
-                        ui_events.send(UIEvent::OpenScalarCurveEditor);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn build_flame_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-    viewport_info: &ViewportInfo,
-) {
-    use crate::ecs::component::FlameEffect;
-    use crate::ecs::resource::{FlameRenderSettings, FlameShadingMode};
-
-    if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
-        if let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label())
-            {
-                for mode in FlameShadingMode::ALL {
-                    let selected = mode == settings_copy.shading_mode;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.shading_mode = mode;
-                    }
-                }
-            }
-
-            {
-                use crate::ecs::resource::FlameDebugView;
-                if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label())
-                {
-                    for view in FlameDebugView::ALL {
-                        let selected = view == settings_copy.debug_view;
-                        if ui
-                            .selectable_config(view.label())
-                            .selected(selected)
-                            .build()
-                        {
-                            settings_copy.debug_view = view;
-                        }
-                    }
-                }
-            }
-
-            {
-                use thyllore_effect_core::flame_wave::{
-                    read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter,
-                    set_wave_jitter_freq,
-                };
-                let mut jitter = read_env_wave_jitter();
-                if ui
-                    .slider_config("Jitter Depth", 0.0f32, 2.0f32)
-                    .build(&mut jitter)
-                {
-                    set_wave_jitter(jitter);
-                }
-                let mut jitter_freq = read_env_wave_jitter_freq();
-                if ui
-                    .slider_config("Jitter Freq", 0.25f32, 6.0f32)
-                    .build(&mut jitter_freq)
-                {
-                    set_wave_jitter_freq(jitter_freq);
-                }
-            }
-
-            match settings_copy.shading_mode {
-                FlameShadingMode::ReferenceRaymarch => {
-                    let mut steps = settings_copy.reference_step_count as i32;
-                    ui.slider_config("Reference Steps", 8, 512)
-                        .build(&mut steps);
-                    settings_copy.reference_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::NoiseRaymarch => {
-                    let mut steps = settings_copy.noise_step_count as i32;
-                    ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
-                    settings_copy.noise_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::Analytic
-                | FlameShadingMode::DebugThickness
-                | FlameShadingMode::DebugDepthClamp => {}
-            }
-
-            ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
-        }
-
-        let flames = ecs_world.entities_with::<FlameEffect>();
-        let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
-        let clamped_index = selected_flame_entity
-            .and_then(|entity| flames.iter().position(|&e| e == entity))
-            .unwrap_or(0);
-
-        // Instance selector combo (when >1 flame)
-        if flames.len() > 1 {
-            let mut current = clamped_index;
-            let items: Vec<String> = flames
-                .iter()
-                .enumerate()
-                .map(|(i, &entity)| {
-                    ecs_world
-                        .get_component::<crate::ecs::world::Name>(entity)
-                        .map(|n| n.0.clone())
-                        .unwrap_or_else(|| format!("Flame {}", i + 1))
-                })
-                .collect();
-            if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectEffectInstance {
-                    key: FLAME_SPAWN_HOOK.key,
-                    index: current,
-                });
-            }
-        }
-
-        // Flame Preset selector
-        let presets: Vec<String> = thyllore_effect_core::FLAME_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        // The slider block below re-sends the (pre-apply) effect every frame;
-        // that send must be skipped on the frame an Apply button fires or it
-        // overwrites the applied preset/fit in the same dispatch.
-        let mut effect_applied_this_frame = false;
-        {
-            let mut preset_index = overlay_state.model.flame_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Flame Preset", &mut preset_index, &presets);
-            overlay_state.model.flame_preset_index = preset_index;
-            if preset_changed {
-                if selected_flame_entity.is_some() {
-                    // Keyed scalar curves re-stamp their channels every
-                    // frame and would silently pin the old look, so a
-                    // preset stamp also clears them (undo restores).
-                    ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyFlamePreset(presets[preset_index].clone()));
-                    effect_applied_this_frame = true;
-                }
-            }
-
-            ui.separator();
-            ui.text("Texture Fit");
-
-            // Scan textures on first frame
-            if !overlay_state.model.texture_fit_scan_done {
-                let scan_dir = std::path::Path::new(crate::paths::FLAMES_TEXTURE_DIR);
-                if let Ok(entries) = std::fs::read_dir(scan_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(ext) = entry.path().extension() {
-                            if ext == "png" {
-                                if let Some(name) = entry.file_name().to_str() {
-                                    overlay_state.model.texture_fit_scan.push(name.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-                overlay_state.model.texture_fit_scan_done = true;
-            }
-
-            // Combo box for texture selection
-            let mut scan_items: Vec<String> = vec!["(custom path)".to_string()];
-            scan_items.extend(overlay_state.model.texture_fit_scan.iter().cloned());
-            let mut scan_selected = 0usize;
-            if ui.combo_simple_string("Fit Texture", &mut scan_selected, &scan_items) {
-                if scan_selected > 0 {
-                    let name = &overlay_state.model.texture_fit_scan[scan_selected - 1];
-                    overlay_state.model.texture_fit_path =
-                        format!("{}/{}", crate::paths::FLAMES_TEXTURE_DIR, name);
-                } else {
-                    overlay_state.model.texture_fit_path.clear();
-                }
-            }
-            ui.same_line();
-            if ui.small_button("Rescan") {
-                overlay_state.model.texture_fit_scan_done = false;
-                overlay_state.model.texture_fit_scan.clear();
-            }
-
-            ui.input_text("Fit Image (png)", &mut overlay_state.model.texture_fit_path)
-                .build();
-            if ui.small_button("Browse...") {
-                overlay_state.model.texture_fit_browser_open = true;
-                if overlay_state.model.texture_fit_browser_dir.is_empty() {
-                    overlay_state.model.texture_fit_browser_dir =
-                        crate::paths::FLAMES_TEXTURE_DIR.to_string();
-                }
-                overlay_state.model.texture_fit_browser_dir =
-                    canonical_dir_or(&overlay_state.model.texture_fit_browser_dir);
-            }
-            ui.same_line();
-
-            // Validation indicator: existence plus a lightweight PNG header read,
-            // cached per path so the header is only parsed when the path changes.
-            if overlay_state.model.texture_fit_path
-                != overlay_state.model.texture_fit_path_validated
-            {
-                overlay_state.model.texture_fit_path_info =
-                    validate_texture_fit_path(&overlay_state.model.texture_fit_path);
-                overlay_state.model.texture_fit_path_validated =
-                    overlay_state.model.texture_fit_path.clone();
-            }
-            if overlay_state.model.texture_fit_path.is_empty() {
-                ui.text_disabled("enter a texture path");
-            } else if overlay_state.model.texture_fit_path_info.starts_with("ok:") {
-                ui.text_colored(
-                    [0.3, 0.9, 0.3, 1.0],
-                    &overlay_state.model.texture_fit_path_info,
-                );
-            } else {
-                ui.text_colored(
-                    [0.9, 0.3, 0.3, 1.0],
-                    &overlay_state.model.texture_fit_path_info,
-                );
-            }
-
-            build_texture_fit_browser(ui, overlay_state);
-
-            ui.slider(
-                "Fit Blend",
-                0.0,
-                1.0,
-                &mut overlay_state.model.texture_fit_blend,
-            );
-            ui.checkbox("Silhouette", &mut overlay_state.model.texture_fit_groups[0]);
-            ui.checkbox("Color", &mut overlay_state.model.texture_fit_groups[1]);
-            {
-                let _disabled = ui.begin_disabled(overlay_state.model.texture_fit_profile);
-                ui.checkbox("Turbulence", &mut overlay_state.model.texture_fit_groups[2]);
-            }
-            if overlay_state.model.texture_fit_profile && ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Ignored in profile (reproduction) mode: the turbulence \
-                     estimate is far below the calibrated pattern amplitude \
-                     and would crush the noise",
-                );
-            }
-            ui.checkbox("Tilt", &mut overlay_state.model.texture_fit_groups[3]);
-
-            // Fidelity radio button
-            let mut fidelity_mode: i32 = if overlay_state.model.texture_fit_profile {
-                1
-            } else {
-                0
-            };
-            if ui.radio_button("statistics (projection)", &mut fidelity_mode, 0) {
-                overlay_state.model.texture_fit_profile = false;
-            }
-            ui.same_line();
-            if ui.radio_button("profile (reproduction)", &mut fidelity_mode, 1) {
-                overlay_state.model.texture_fit_profile = true;
-            }
-
-            if ui.button("Apply Texture Fit") {
-                let path = overlay_state.model.texture_fit_path.clone();
-                let blend = overlay_state.model.texture_fit_blend;
-                let groups = thyllore_effect_core::TextureFitGroups {
-                    silhouette: overlay_state.model.texture_fit_groups[0],
-                    color: overlay_state.model.texture_fit_groups[1],
-                    turbulence: overlay_state.model.texture_fit_groups[2],
-                    tilt: overlay_state.model.texture_fit_groups[3],
-                };
-                if selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::ApplyFlameTextureFit {
-                        path: path.clone(),
-                        blend,
-                        groups: [
-                            groups.silhouette,
-                            groups.color,
-                            groups.turbulence,
-                            groups.tilt,
-                        ],
-                        profile: overlay_state.model.texture_fit_profile,
-                    });
-                    effect_applied_this_frame = true;
-                }
-            }
-
-            ui.separator();
-            ui.text("Style");
-
-            if !overlay_state.model.flame_style_scan_done {
-                let scan_dir = std::path::Path::new(crate::paths::FLAMES_STYLE_DIR);
-                if let Ok(entries) = std::fs::read_dir(scan_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if name.ends_with(".style.ron") {
-                                overlay_state.model.flame_style_scan.push(name.to_string());
-                            }
-                        }
-                    }
-                    overlay_state.model.flame_style_scan.sort();
-                }
-                overlay_state.model.flame_style_scan_done = true;
-            }
-
-            if overlay_state.model.flame_style_scan.is_empty() {
-                ui.text_disabled(format!("no styles in {}", crate::paths::FLAMES_STYLE_DIR));
-            } else {
-                let mut style_index = overlay_state
-                    .model
-                    .flame_style_index
-                    .min(overlay_state.model.flame_style_scan.len() - 1);
-                ui.combo_simple_string(
-                    "Style File",
-                    &mut style_index,
-                    &overlay_state.model.flame_style_scan,
-                );
-                overlay_state.model.flame_style_index = style_index;
-            }
-            ui.same_line();
-            if ui.small_button("Rescan##style") {
-                overlay_state.model.flame_style_scan_done = false;
-                overlay_state.model.flame_style_scan.clear();
-            }
-
-            ui.checkbox(
-                "Motion##style",
-                &mut overlay_state.model.flame_style_groups[0],
-            );
-            ui.same_line();
-            ui.checkbox(
-                "Texture##style",
-                &mut overlay_state.model.flame_style_groups[1],
-            );
-            ui.same_line();
-            ui.checkbox(
-                "Optics##style",
-                &mut overlay_state.model.flame_style_groups[2],
-            );
-
-            if ui.button("Apply Style") {
-                if let Some(name) = overlay_state
-                    .model
-                    .flame_style_scan
-                    .get(overlay_state.model.flame_style_index)
-                {
-                    if selected_flame_entity.is_some() {
-                        ui_events.send(UIEvent::ApplyFlameStyle {
-                            path: format!("{}/{}", crate::paths::FLAMES_STYLE_DIR, name),
-                            groups: overlay_state.model.flame_style_groups,
-                        });
-                        effect_applied_this_frame = true;
-                    }
-                }
-            }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Apply the selected style file's parameters (Style-owned only, \
-                     dimensionless: lengths scale with the flame's radius, opacity \
-                     via tau0). Fields the style leaves unset keep their current \
-                     values",
-                );
-            }
-            if let Some(selected_flame) = selected_flame_entity {
-                if let Some(applied) = ecs_world
-                    .get_component::<crate::ecs::component::AppliedFlameStyle>(selected_flame)
-                {
-                    ui.same_line();
-                    ui.text_disabled(format!("applied: {} v{}", applied.name, applied.version));
-                }
-            }
-
-            ui.input_text(
-                "Save As##style",
-                &mut overlay_state.model.flame_style_save_name,
-            )
-            .build();
-            ui.same_line();
-            if ui.small_button("Save Style") {
-                let name = overlay_state.model.flame_style_save_name.trim().to_string();
-                if !name.is_empty() && selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::SaveFlameStyle { name });
-                }
-            }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Save the selected flame's current look as \
-                     assets/flames/styles/<name>.style.ron (all Style-owned \
-                     parameters, lengths over r0, opacity as tau0)",
-                );
-            }
-
-            if let Some(selected_flame) = selected_flame_entity {
-                if let Some(effect) = ecs_world.get_component::<FlameEffect>(selected_flame) {
-                    let mut effect_copy = effect.clone();
-
-                    let mut position = [
-                        effect_copy.position.x,
-                        effect_copy.position.y,
-                        effect_copy.position.z,
-                    ];
-                    if ui.input_float3("Position", &mut position).build() {
-                        effect_copy.position =
-                            cgmath::Vector3::new(position[0], position[1], position[2]);
-                    }
-
-                    let emitter_labels: [&str; 3] = ["Cylinder", "Ring", "Mesh SDF"];
-                    let mut emitter_selected = effect_copy.emitter.kind as usize;
-                    if ui.combo_simple_string("Emitter", &mut emitter_selected, &emitter_labels) {
-                        effect_copy.emitter.kind = emitter_selected as u32;
-                    }
-
-                    if effect_copy.emitter.kind == 1 {
-                        ui.slider_config("Ring Radius", 0.2, 5.0)
-                            .display_format("%.2f")
-                            .build(&mut effect_copy.emitter.ring_major_radius);
-                        ui.same_line();
-                        let mut ring_speed = effect_copy.emitter.ring_angular_speed;
-                        ui.slider_config("Ring Speed", 0.0, 6.28)
-                            .display_format("%.2f")
-                            .build(&mut ring_speed);
-                        effect_copy.emitter.ring_angular_speed = ring_speed;
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("body"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("color"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-                    if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
-                        effect_copy.color.use_blackbody = false;
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("noise"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut noise_sharpness =
-                        thyllore_effect_core::shaping_scale_to_noise_sharpness(
-                            effect_copy.noise.shaping_scale,
-                        );
-                    if ui
-                        .slider_config("Noise Sharpness", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut noise_sharpness)
-                    {
-                        effect_copy.noise.shaping_scale =
-                            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Crispness of the noise pattern: log remap of the tanh shaping \
-                             scale, harder edges to the right (small scale saturates the \
-                             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
-                             perceptual sweet spot). Stateless — noise_shaping_scale stays \
-                             the source of truth (0 = built-in 0.6)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("mix"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut wave_segments = effect_copy.wave_segments as i32;
-                    if ui
-                        .slider_config(
-                            "Noise Segments",
-                            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
-                            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
-                        )
-                        .build(&mut wave_segments)
-                    {
-                        effect_copy.wave_segments = wave_segments as u32;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Closed-form segments per ray: the noise grid aliases into a \
-                             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-                             frequency ~4 at twice the cost",
-                        );
-                    }
-
-                    let mut vortex = (effect_copy.twist.gain
-                        / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN)
-                        .clamp(0.0, 1.0);
-                    if ui
-                        .slider_config("Vortex", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut vortex)
-                    {
-                        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
-                        effect_copy.twist.gain = gain;
-                        effect_copy.twist.speed = speed;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Vortex macro: one knob writing both twist parameters along a \
-                             faster-and-deeper curve (stateless; the fine sliders below \
-                             stay the source of truth)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("motion"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Branches");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("branch"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut branch_seed = effect_copy.branch.seed as i32;
-                    if ui.input_int("Branch Seed", &mut branch_seed).build() {
-                        effect_copy.branch.seed = branch_seed.max(0) as u32;
-                    }
-
-                    ui.separator();
-                    ui.text("Puffs");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("puff"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Flow");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("flow"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Lobe");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("lobe"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("footer"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    if ui.button("Clear Flame Keys") {
-                        ui_events.send(UIEvent::ClearScalarKeys);
-                    }
-                    ui.same_line();
-                    if ui.button("Random Keys (Debug)") {
-                        let seed = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_millis() as u64)
-                            .unwrap_or(0);
-                        ui_events.send(UIEvent::InsertScalarDebugKeys { seed });
-                    }
-                    if ui.button("Curves") {
-                        ui_events.send(UIEvent::OpenScalarCurveEditor);
-                    }
-                    if ui.button("Add Flame") {
-                        ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
-                    }
-                    ui.same_line();
-                    if ui.button("Dump Probe") {
-                        ui_events.send(UIEvent::DumpFlameWallProbe {
-                            viewport_size: viewport_info.size,
-                        });
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-                        );
-                    }
-
-                    // Trail checkbox and slider
-                    let trail_state = ecs_world
-                        .get_component::<crate::ecs::component::FlameTrail>(selected_flame)
-                        .map(|t| (t.state.enabled, t.state.fade_seconds))
-                        .unwrap_or((false, 0.8));
-                    let mut trail_enabled = trail_state.0;
-                    let mut trail_fade = trail_state.1;
-                    if ui.checkbox("Trail", &mut trail_enabled) {
-                        ui_events.send(UIEvent::UpdateFlameTrailEnabled(trail_enabled));
-                    }
-                    ui.slider_config("Trail Fade", 0.1, 5.0)
-                        .build(&mut trail_fade);
-                    if (trail_fade - trail_state.1).abs() > 0.01 {
-                        ui_events.send(UIEvent::UpdateFlameTrailFade(trail_fade));
-                    }
-
-                    // GPU Timings section (read-only)
-                    let timings = ecs_world.get_resource::<crate::ecs::resource::GpuPassTimings>();
-                    if let Some(timings) = timings {
-                        if !timings.passes.is_empty() {
-                            ui.separator();
-                            ui.text("GPU Timings");
-                            for (label, ms) in &timings.passes {
-                                ui.text(format!("  {} {:.3} ms", label, ms));
-                            }
-                        }
-                    }
-
-                    if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateFlameEffect(Box::new(effect_copy)));
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Canonicalized directory, falling back to the typed text when the path
-/// cannot be resolved (broken symlink, permissions, not yet existing).
-fn canonical_dir_or(dir: &str) -> String {
-    std::fs::canonicalize(dir)
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| dir.to_string())
-}
-
-/// Lightweight validation for the fit path indicator: existence plus a PNG
-/// header read (no pixel decode). "ok: ..." prefixed on success.
-fn validate_texture_fit_path(path: &str) -> String {
-    if path.is_empty() {
-        return String::new();
-    }
-    if !std::path::Path::new(path).is_file() {
-        return String::from("file not found");
-    }
-    match std::fs::File::open(path)
-        .map_err(|e| e.to_string())
-        .and_then(|file| {
-            png::Decoder::new(file)
-                .read_info()
-                .map_err(|e| e.to_string())
-        }) {
-        Ok(reader) => {
-            let info = reader.info();
-            format!("ok: {}x{} {:?}", info.width, info.height, info.color_type)
-        }
-        Err(error) => format!("not a readable png: {error}"),
-    }
-}
-
-const TEXTURE_FIT_BROWSER_MAX_ENTRIES: usize = 2000;
-
-/// In-app file browser for the fit texture (G9): breadcrumb + direct path
-/// input, png filter, directory-first listing, double-click to descend /
-/// confirm. Selection only fills the path field — applying stays on the
-/// explicit Apply button. Unreadable entries render disabled instead of
-/// failing the listing.
-fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlayState) {
-    if !overlay_state.model.texture_fit_browser_open {
-        return;
-    }
-    let mut open = true;
-    let mut confirmed: Option<String> = None;
-    ui.window("Select Fit Texture")
-        .size([560.0, 430.0], imgui::Condition::FirstUseEver)
-        .opened(&mut open)
-        .build(|| {
-            let dir_now = overlay_state.model.texture_fit_browser_dir.clone();
-            let mut jump: Option<String> = None;
-
-            if ui.small_button("/") {
-                jump = Some(String::from("/"));
-            }
-            let mut accumulated = String::new();
-            for (index, part) in dir_now.split('/').filter(|p| !p.is_empty()).enumerate() {
-                accumulated.push('/');
-                accumulated.push_str(part);
-                ui.same_line();
-                if ui.small_button(format!("{part}##crumb{index}")) {
-                    jump = Some(accumulated.clone());
-                }
-            }
-
-            ui.input_text(
-                "##fit_browser_dir",
-                &mut overlay_state.model.texture_fit_browser_dir,
-            )
-            .build();
-            ui.same_line();
-            if ui.small_button("Go") {
-                jump = Some(overlay_state.model.texture_fit_browser_dir.clone());
-            }
-            ui.checkbox(
-                "all files",
-                &mut overlay_state.model.texture_fit_browser_show_all,
-            );
-            ui.same_line();
-            ui.checkbox(
-                "hidden",
-                &mut overlay_state.model.texture_fit_browser_show_hidden,
-            );
-            ui.same_line();
-            if ui.small_button("Up") {
-                if let Some(parent) = std::path::Path::new(&dir_now).parent() {
-                    jump = Some(parent.display().to_string());
-                }
-            }
-
-            ui.child_window("##fit_browser_list")
-                .size([0.0, -34.0])
-                .build(|| {
-                    let read = match std::fs::read_dir(&dir_now) {
-                        Ok(read) => read,
-                        Err(error) => {
-                            ui.text_colored(
-                                [0.9, 0.3, 0.3, 1.0],
-                                format!("cannot read directory: {error}"),
-                            );
-                            return;
-                        }
-                    };
-                    let mut rows: Vec<(String, bool, Option<u64>)> = Vec::new();
-                    let mut truncated = false;
-                    for entry in read.flatten() {
-                        let name = match entry.file_name().into_string() {
-                            Ok(name) => name,
-                            Err(_) => continue,
-                        };
-                        if !overlay_state.model.texture_fit_browser_show_hidden
-                            && name.starts_with('.')
-                        {
-                            continue;
-                        }
-                        let metadata = entry.metadata().ok();
-                        let is_dir = metadata.as_ref().is_some_and(|m| m.is_dir());
-                        if !is_dir
-                            && !overlay_state.model.texture_fit_browser_show_all
-                            && !name.to_ascii_lowercase().ends_with(".png")
-                        {
-                            continue;
-                        }
-                        if rows.len() >= TEXTURE_FIT_BROWSER_MAX_ENTRIES {
-                            truncated = true;
-                            break;
-                        }
-                        rows.push((name, is_dir, metadata.map(|m| m.len())));
-                    }
-                    rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-                    for (name, is_dir, size) in &rows {
-                        let label = if *is_dir {
-                            format!("{name}/")
-                        } else if let Some(size) = size {
-                            format!("{name}  ({:.1} KB)", *size as f64 / 1024.0)
-                        } else {
-                            format!("{name}  (unreadable)")
-                        };
-                        if size.is_none() && !is_dir {
-                            ui.text_disabled(label);
-                            continue;
-                        }
-                        let selected =
-                            !is_dir && *name == overlay_state.model.texture_fit_browser_selected;
-                        let clicked = ui.selectable_config(&label).selected(selected).build();
-                        let double_clicked = ui.is_item_hovered()
-                            && ui.is_mouse_double_clicked(imgui::MouseButton::Left);
-                        if *is_dir {
-                            if double_clicked {
-                                jump = Some(format!("{}/{}", dir_now.trim_end_matches('/'), name));
-                            }
-                        } else {
-                            if clicked {
-                                overlay_state.model.texture_fit_browser_selected = name.clone();
-                            }
-                            if double_clicked {
-                                confirmed =
-                                    Some(format!("{}/{}", dir_now.trim_end_matches('/'), name));
-                            }
-                        }
-                    }
-                    if truncated {
-                        ui.text_colored(
-                            [0.9, 0.7, 0.3, 1.0],
-                            format!("listing capped at {TEXTURE_FIT_BROWSER_MAX_ENTRIES} entries"),
-                        );
-                    }
-                });
-
-            let has_selection = !overlay_state.model.texture_fit_browser_selected.is_empty();
-            ui.enabled(has_selection, || {
-                if ui.button("Open") {
-                    confirmed = Some(format!(
-                        "{}/{}",
-                        dir_now.trim_end_matches('/'),
-                        overlay_state.model.texture_fit_browser_selected
-                    ));
-                }
-            });
-            ui.same_line();
-            if ui.button("Cancel") {
-                overlay_state.model.texture_fit_browser_open = false;
-            }
-
-            if let Some(target) = jump {
-                overlay_state.model.texture_fit_browser_dir = canonical_dir_or(&target);
-                overlay_state.model.texture_fit_browser_selected.clear();
-            }
-        });
-    if let Some(path) = confirmed {
-        overlay_state.model.texture_fit_path = path;
-        overlay_state.model.texture_fit_browser_open = false;
-    }
-    if !open {
-        overlay_state.model.texture_fit_browser_open = false;
-    }
-}
+crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);

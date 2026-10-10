@@ -3,12 +3,16 @@ use cgmath::{InnerSpace, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::FlameEffect;
+use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
 };
-use crate::vulkanr::renderer::deferred::full_extent_scissor;
+use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use thyllore_vulkan_core::renderer::{
+    OverlayAttachmentLoad, OverlayInstanceDraw, ShadingPushConstants,
+};
 use thyllore_vulkan_core::resource::RenderTargetKey;
 
 const HISTORY_KEYS: [RenderTargetKey; 2] = [
@@ -149,10 +153,7 @@ fn instance_scissor(
         ubo.emitter_params.ring_major_ratio,
         ubo.support_motion.support_margin,
     );
-    compute_flame_scissor(
-        ctx,
-        extent,
-        &ubo.model,
+    let bounds = thyllore_effect_core::flame_local_bounds(
         bend_offset,
         support_scale,
         ubo.support_motion.support_margin,
@@ -163,6 +164,12 @@ fn instance_scissor(
             ),
             top: ubo.branch_field.bounding_pad_y,
         },
+    );
+    compute_bounds_scissor(
+        ctx.world,
+        extent,
+        &ubo.model,
+        thyllore_effect_core::flame_local_bounds_corners(&bounds),
     )
 }
 
@@ -248,108 +255,55 @@ unsafe fn record_flame_passes(
     ) else {
         return Ok(());
     };
-    let flame_history = &flame_targets.history;
     let render = ctx.frame_render_context(image_index);
+    let device = &render.device.device;
 
     let settings = ctx
         .world
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
-    let push_constants = crate::ecs::systems::flame::FlamePushConstants::new(
+    let push_constants = ShadingPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.resolved_step_count() as i32,
         settings.debug_view.as_shader_value(),
     );
 
-    for (i, (ubo, scissor)) in frame.ubos.iter().zip(&frame.scissors).enumerate() {
+    let mut draws = Vec::with_capacity(frame.ubos.len());
+    for (slot, (ubo, scissor)) in frame.ubos.iter().zip(&frame.scissors).enumerate() {
         let Some(scissor) = *scissor else {
             continue;
         };
-        let ubo_dynamic_offset = flame_ubo.slot_offset(i)? as u32;
         flame_ubo.record_update(
-            &render.device.device,
+            device,
             command_buffer,
-            i,
+            slot,
             ubo,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
-
-        crate::ecs::systems::flame::record_flame_shading_pass(
-            &render,
-            flame_history,
-            shading_pipeline,
-            descriptor,
-            frame.history_index,
-            ubo_dynamic_offset,
+        draws.push(OverlayInstanceDraw {
+            dynamic_offsets: vec![flame_ubo.slot_offset(slot)? as u32],
             scissor,
-            push_constants,
-            image_index,
-            command_buffer,
-        )?;
+        });
+    }
+    if draws.is_empty() {
+        return Ok(());
     }
 
-    Ok(())
-}
-
-fn compute_flame_scissor(
-    ctx: &PassContext,
-    extent: vk::Extent2D,
-    model: &cgmath::Matrix4<f32>,
-    bend_offset: [f32; 2],
-    support_scale: f32,
-    support_margin: f32,
-    proxy_pad: thyllore_effect_core::FlameProxyPad,
-) -> Option<vk::Rect2D> {
-    use crate::ecs::resource::ProjectionData;
-    const SCISSOR_MARGIN_PX: f32 = 2.0;
-
-    let Some(projection) = ctx.world.get_resource::<ProjectionData>() else {
-        return Some(full_extent_scissor(extent));
-    };
-    let view_proj = projection.proj * projection.view;
-
-    let mut min_x = f32::MAX;
-    let mut min_y = f32::MAX;
-    let mut max_x = f32::MIN;
-    let mut max_y = f32::MIN;
-    let bounds = thyllore_effect_core::flame_local_bounds(
-        bend_offset,
-        support_scale,
-        support_margin,
-        proxy_pad,
-    );
-    for corner in thyllore_effect_core::flame_local_bounds_corners(&bounds) {
-        let clip = view_proj * model * cgmath::vec4(corner.x, corner.y, corner.z, 1.0);
-        if clip.w <= 0.0 {
-            return Some(full_extent_scissor(extent));
-        }
-        let screen_x = (clip.x / clip.w + 1.0) * 0.5 * extent.width as f32;
-        let screen_y = (clip.y / clip.w + 1.0) * 0.5 * extent.height as f32;
-        min_x = min_x.min(screen_x);
-        min_y = min_y.min(screen_y);
-        max_x = max_x.max(screen_x);
-        max_y = max_y.max(screen_y);
-    }
-
-    let min_x = (min_x - SCISSOR_MARGIN_PX).clamp(0.0, extent.width as f32);
-    let min_y = (min_y - SCISSOR_MARGIN_PX).clamp(0.0, extent.height as f32);
-    let max_x = (max_x + SCISSOR_MARGIN_PX).clamp(0.0, extent.width as f32);
-    let max_y = (max_y + SCISSOR_MARGIN_PX).clamp(0.0, extent.height as f32);
-    if max_x - min_x < 1.0 || max_y - min_y < 1.0 {
-        return None;
-    }
-
-    Some(
-        vk::Rect2D::builder()
-            .offset(vk::Offset2D {
-                x: min_x as i32,
-                y: min_y as i32,
-            })
-            .extent(vk::Extent2D {
-                width: (max_x - min_x).ceil() as u32,
-                height: (max_y - min_y).ceil() as u32,
-            })
-            .build(),
+    let pass = flame_targets
+        .history
+        .overlay_pass(frame.history_index, OverlayAttachmentLoad::Clear([0.0; 4]));
+    FLAME_OVERLAY.record(
+        device,
+        command_buffer,
+        &pass,
+        pass.full_area(),
+        shading_pipeline,
+        Some(push_constants.as_bytes()),
+        &[
+            render.graphics.frame_set.sets[image_index],
+            descriptor.descriptor_sets[frame.history_index],
+        ],
+        &draws,
     )
 }

@@ -1,13 +1,13 @@
 use cgmath::Matrix4;
 
 use thyllore_anim_core::spring_bone::SpringBoneSetup;
-use thyllore_anim_core::{
-    AnimationClip, AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
-};
+use thyllore_anim_core::{AnimationClip, AnimationSystem, Skeleton, SkeletonId, SkinData};
 use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::MeshMorph;
 
 use crate::fbx::{self, LoadedConstraint};
 use crate::gltf;
+use crate::gltf::vrm_humanoid_extension::VrmHumanoid;
 
 #[derive(Clone, Debug)]
 pub struct TextureData {
@@ -24,7 +24,9 @@ pub struct LoadedMesh {
     pub node_index: Option<usize>,
     pub local_vertices: Vec<Vertex>,
     pub texture: Option<TextureSource>,
+    pub material_name: String,
     pub base_color_factor: [f32; 4],
+    pub morph: MeshMorph,
 }
 
 impl Default for LoadedMesh {
@@ -36,9 +38,15 @@ impl Default for LoadedMesh {
             node_index: None,
             local_vertices: Vec::new(),
             texture: None,
+            material_name: name_unnamed_material(0),
             base_color_factor: [1.0, 1.0, 1.0, 1.0],
+            morph: MeshMorph::default(),
         }
     }
+}
+
+pub fn name_unnamed_material(mesh_index: usize) -> String {
+    format!("material_{}", mesh_index)
 }
 
 #[derive(Clone, Debug)]
@@ -62,11 +70,11 @@ pub struct ModelLoadResult {
     pub skeletons: Vec<Skeleton>,
     pub animation_system: AnimationSystem,
     pub clips: Vec<AnimationClip>,
-    pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub node_animation_scale: f32,
     pub constraints: Vec<LoadedConstraint>,
     pub spring_bone_setup: Option<SpringBoneSetup>,
+    pub vrm_humanoid: Option<VrmHumanoid>,
 }
 
 impl ModelLoadResult {
@@ -74,12 +82,14 @@ impl ModelLoadResult {
         let meshes = result
             .meshes
             .into_iter()
-            .map(|m| LoadedMesh {
+            .enumerate()
+            .map(|(mesh_index, m)| LoadedMesh {
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,
                 node_index: m.node_index,
                 local_vertices: m.local_vertices,
+                material_name: name_unnamed_material(mesh_index),
                 texture: m.image_data.first().map(|img| {
                     TextureSource::Embedded(TextureData {
                         data: img.data.clone(),
@@ -88,6 +98,7 @@ impl ModelLoadResult {
                     })
                 }),
                 base_color_factor: m.base_color_factor,
+                morph: m.morph,
             })
             .collect();
 
@@ -112,11 +123,11 @@ impl ModelLoadResult {
             skeletons,
             animation_system: result.animation_system,
             clips: result.clips,
-            morph_animation: result.morph_animation,
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale,
             constraints: Vec::new(),
             spring_bone_setup: result.spring_bone_setup,
+            vrm_humanoid: result.vrm_humanoid,
         }
     }
 
@@ -124,14 +135,19 @@ impl ModelLoadResult {
         let meshes = result
             .meshes
             .into_iter()
-            .map(|m| LoadedMesh {
+            .enumerate()
+            .map(|(mesh_index, m)| LoadedMesh {
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,
                 node_index: m.node_index,
                 local_vertices: m.local_vertices,
                 texture: m.texture_path.map(TextureSource::File),
+                material_name: m
+                    .material_name
+                    .unwrap_or_else(|| name_unnamed_material(mesh_index)),
                 base_color_factor: [1.0, 1.0, 1.0, 1.0],
+                morph: m.morph,
             })
             .collect();
 
@@ -154,11 +170,11 @@ impl ModelLoadResult {
             skeletons,
             animation_system: result.animation_system,
             clips: result.clips,
-            morph_animation: MorphAnimationSystem::default(),
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale: 1.0,
             constraints: result.constraints,
             spring_bone_setup: None,
+            vrm_humanoid: None,
         }
     }
 }

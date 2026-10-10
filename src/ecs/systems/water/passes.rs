@@ -7,16 +7,18 @@ use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{
     EffectTraceGpuState, WaterBindingKey, WaterGpuState, WaterRenderTargets,
 };
+use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
     TransientRequest, TransientSlot,
 };
-use crate::vulkanr::renderer::deferred::full_extent_scissor;
+use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
 use thyllore_vulkan_core::renderer::TracePush;
+use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
@@ -42,7 +44,7 @@ const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(3),
 ];
 
-/// Must match CAUSTIC_GRID_SIZE and local_size in causticSplat.comp
+/// Must match CAUSTIC_GRID_SIZE and numthreads in causticSplatCompute.slang
 const CAUSTIC_GRID_SIZE: u32 = 512;
 const CAUSTIC_WORKGROUP_SIZE: u32 = 16;
 
@@ -118,12 +120,14 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rec
                 .map(|accum| accum.frame_index as u32)
                 .unwrap_or(0);
             let model = thyllore_effect_core::build_water_ubo(&effect, frame_index).model;
-            compute_water_scissor(
-                ctx,
+            compute_bounds_scissor(
+                ctx.world,
                 extent,
                 &model,
-                effect.major_radius,
-                effect.minor_radius,
+                thyllore_math_core::torus_local_bounds_corners(
+                    effect.major_radius,
+                    effect.minor_radius,
+                ),
             )
         })
         .collect()
@@ -831,31 +835,35 @@ impl RenderPassNode for WaterShadingNode {
         ) else {
             return Ok(());
         };
-        let water_history = &targets.history;
         let render = ctx.frame_render_context(image_index);
+        let pass = targets
+            .history
+            .overlay_pass(frame.history_index, OverlayAttachmentLoad::Keep);
+        let descriptor_sets = [
+            render.graphics.frame_set.sets[image_index],
+            descriptor.descriptor_set(frame_slot, frame.history_index)?,
+        ];
+        let push_constants = super::WaterPushConstants::new(
+            frame.secondary_rays(ctx).as_shader_value(),
+            frame.settings.debug_view,
+        );
 
         for (i, (_, ubo_dynamic_offset)) in targets.frame_instances.iter().enumerate() {
             let Some(scissor) = frame.scissors.get(i).copied().flatten() else {
                 continue;
             };
-
-            let push_constants = super::WaterPushConstants::new(
-                frame.secondary_rays(ctx).as_shader_value(),
-                frame.settings.debug_view,
-            );
-
-            super::record_water_shading_pass(
-                &render,
-                water_history,
-                shading_pipeline,
-                descriptor,
-                *ubo_dynamic_offset,
-                scissor,
-                push_constants,
-                image_index,
-                frame_slot,
-                frame.history_index,
+            WATER_OVERLAY.record(
+                &render.device.device,
                 command_buffer,
+                &pass,
+                scissor,
+                shading_pipeline,
+                Some(push_constants.as_bytes()),
+                &descriptor_sets,
+                &[OverlayInstanceDraw {
+                    dynamic_offsets: vec![*ubo_dynamic_offset],
+                    scissor,
+                }],
             )?;
         }
         Ok(())
@@ -905,68 +913,4 @@ unsafe fn record_water_ubo_updates(
         instance_ubos.push((ubo, water_ubo.slot_offset(i)? as u32));
     }
     Ok(instance_ubos)
-}
-
-fn compute_water_scissor(
-    ctx: &PassContext,
-    extent: vk::Extent2D,
-    model: &cgmath::Matrix4<f32>,
-    major_radius: f32,
-    minor_radius: f32,
-) -> Option<vk::Rect2D> {
-    use crate::ecs::resource::ProjectionData;
-    const SCISSOR_MARGIN_PX: f32 = 2.0;
-
-    let Some(projection) = ctx.world.get_resource::<ProjectionData>() else {
-        return Some(full_extent_scissor(extent));
-    };
-    let view_proj = projection.proj * projection.view;
-
-    let mut min_x = f32::MAX;
-    let mut min_y = f32::MAX;
-    let mut max_x = f32::MIN;
-    let mut max_y = f32::MIN;
-    let corners = thyllore_math_core::torus_local_bounds_corners(major_radius, minor_radius);
-    let corners_behind_camera = corners
-        .iter()
-        .filter(|corner| {
-            (view_proj * model * cgmath::vec4(corner.x, corner.y, corner.z, 1.0)).w <= 0.0
-        })
-        .count();
-    if corners_behind_camera == corners.len() {
-        return None;
-    }
-    if corners_behind_camera > 0 {
-        return Some(full_extent_scissor(extent));
-    }
-    for corner in corners {
-        let clip = view_proj * model * cgmath::vec4(corner.x, corner.y, corner.z, 1.0);
-        let screen_x = (clip.x / clip.w + 1.0) * 0.5 * extent.width as f32;
-        let screen_y = (clip.y / clip.w + 1.0) * 0.5 * extent.height as f32;
-        min_x = min_x.min(screen_x);
-        min_y = min_y.min(screen_y);
-        max_x = max_x.max(screen_x);
-        max_y = max_y.max(screen_y);
-    }
-
-    let min_x = (min_x - SCISSOR_MARGIN_PX).clamp(0.0, extent.width as f32);
-    let min_y = (min_y - SCISSOR_MARGIN_PX).clamp(0.0, extent.height as f32);
-    let max_x = (max_x + SCISSOR_MARGIN_PX).clamp(0.0, extent.width as f32);
-    let max_y = (max_y + SCISSOR_MARGIN_PX).clamp(0.0, extent.height as f32);
-    if max_x - min_x < 1.0 || max_y - min_y < 1.0 {
-        return None;
-    }
-
-    Some(
-        vk::Rect2D::builder()
-            .offset(vk::Offset2D {
-                x: min_x as i32,
-                y: min_y as i32,
-            })
-            .extent(vk::Extent2D {
-                width: (max_x - min_x).ceil() as u32,
-                height: (max_y - min_y).ceil() as u32,
-            })
-            .build(),
-    )
 }

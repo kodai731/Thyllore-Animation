@@ -1,4 +1,4 @@
-use crate::ecs::component::{apply_water_param_value, WaterParam, WaterTorusEffect};
+use crate::ecs::component::{find_scalar_param_for_property, WaterScalarSource, WaterTorusEffect};
 use crate::ecs::resource::WaterRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
@@ -46,8 +46,8 @@ impl TimedEffect for WaterTorusEffect {
     }
 
     fn apply_scalar(&mut self, property_type: PropertyType, value: f32) {
-        if let Some(param) = WaterParam::from_property_type(property_type) {
-            apply_water_param_value(self, param, value);
+        if let Some(scalar) = find_scalar_param_for_property::<WaterScalarSource>(property_type) {
+            (scalar.set)(self, value);
         }
     }
 }

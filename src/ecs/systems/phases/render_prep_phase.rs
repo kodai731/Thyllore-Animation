@@ -133,7 +133,11 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     );
 
     ctx.world
-        .insert_resource(crate::ecs::resource::RenderPrepSubTimings { timings: sub });
+        .resource_mut::<crate::ecs::resource::PhaseSubTimings>()
+        .phases
+        .insert("render_prep", sub);
+
+    crate::ecs::systems::raytracing_systems::refresh_tlas_mesh_transforms(ctx)?;
 
     Ok(())
 }
@@ -207,16 +211,17 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
             serde_json::Value::Object(up_map),
         );
     }
-    if let Some(rps) = world.get_resource::<crate::ecs::resource::RenderPrepSubTimings>() {
-        let rps_map: serde_json::Map<String, serde_json::Value> = rps
-            .timings
-            .iter()
-            .map(|(label, ms)| (label.clone(), serde_json::json!(ms)))
-            .collect();
-        obj.insert(
-            "render_prep_sub".to_string(),
-            serde_json::Value::Object(rps_map),
-        );
+    if let Some(phase_timings) = world.get_resource::<crate::ecs::resource::PhaseSubTimings>() {
+        for (phase_name, timings) in &phase_timings.phases {
+            let map: serde_json::Map<String, serde_json::Value> = timings
+                .iter()
+                .map(|(label, ms)| (label.clone(), serde_json::json!(ms)))
+                .collect();
+            obj.insert(
+                format!("{}_sub", phase_name),
+                serde_json::Value::Object(map),
+            );
+        }
     }
 
     let line = serde_json::Value::Object(obj);

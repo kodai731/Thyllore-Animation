@@ -26,9 +26,45 @@ Effect-specific pass recording, resize and descriptor updates live in `src/ecs/s
 `src/app/render.rs` or `src/vulkanr/renderer/deferred/`; a new pass is a node that declares its transients,
 reads and writes, and a declaration must hold whenever `record()` would emit the commands.
 
+### Fullscreen Overlay Passes
+
+- An effect declares its overlay pass once as a `const OverlayNodeSpec` in
+  `src/ecs/systems/<effect>/pipeline.rs` (`thyllore_vulkan_core::renderer::OverlayNodeSpec`: shaders, one
+  `OverlayBlend` per color attachment, optional `DepthTestConfig`, `OverlayPushConstants`). Blend
+  definitions live only in vulkan-core.
+- `spec.build_pipeline(rrdevice, rrrender, render_pass, &[layouts], extent)` builds the pipeline at effect
+  setup (no vertex input, fullscreen triangle, dynamic viewport / scissor, so a resize never rebuilds it).
+- `spec.record(device, cmd, &OverlayPass, render_area, pipeline, push_constants, &[sets],
+  &[OverlayInstanceDraw])` records one render pass: every instance draw binds the same sets with its own
+  dynamic offsets inside its scissor. `OverlayPass` (render pass, framebuffer, extent,
+  `OverlayAttachmentLoad`) comes from the target: `HistoryTargets::overlay_pass(history_index, load)`, or
+  the effect resource's `overlay_pass()` for an HDR pass built with `create_color_overlay_render_pass`.
+- The shading settings block `ShadingPushConstants { mode, step_count, debug_view }` is shared; an effect
+  with a different block declares its own `#[repr(C)]` struct.
+- Instance scissors come from `src/vulkanr/renderer/deferred/scissor.rs::compute_bounds_scissor` (local
+  bound corners projected with the model matrix; full extent when a corner is behind the camera, `None`
+  when all are or the bounds are empty). Effects never project corners themselves.
+- Temporal history reuse is `src/ecs/systems/temporal_history.rs`: an effect implements `TemporalHistory`
+  (snapshot, accumulator) and calls `accumulate_temporal_history::<E>(world)` from its `Accumulate` frame
+  prep hook; the previous snapshot is the generic `HistorySnapshotState<S>` resource.
+- Render passes are created once during effect setup (`create_color_overlay_render_pass`), only the
+  resolution-dependent framebuffers are recreated on viewport resize.
+- Resolving at a reduced resolution is generic: `OverlayResolveScale { Half, Quarter }` reduces the extent
+  and the instance scissors, `ReducedResolveTarget` (vulkan-core `renderer/overlay_scale.rs`) owns the
+  cleared transient render pass and gives its `TransientDesc` and `OverlayPass` for the scale chosen this
+  frame, and the depth-aware upsample onto the full target is the shared `pass.overlay_upsample`
+  (`shaders/overlay/upsampleFragment.slang`, `UPSAMPLE_OVERLAY` spec, `OverlayUpsampleDescriptorSet` with
+  one set per frame slot). The effect maps its own scale setting to `OverlayResolveScale`, requests the
+  reduced image via `RenderPassNode::transients`, binds it in `prepare` (framebuffer from
+  `ctx.transient.framebuffer`, descriptor rewritten only when the generation changes) and records
+  resolve then upsample (`src/ecs/systems/wind/passes.rs`).
+- Everything around the overlay pass stays in the effect: the order of its nodes, compute passes (wind
+  shadow bake, water caustic), ray tracing (water trace) and the history ping-pong index.
+
 ## Frame flow
 
-`src/platform/events/frame.rs::render_frame` calls three `App` methods in order, then `after_present`:
+`App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI
+events and applies the queued commands, then calls three `App` methods in order and closes with Last:
 
 1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
    effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`
@@ -39,7 +75,7 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
    `record_command_buffer`, submit, present, `FrameSync::advance`.
-4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_batch_capture_phase`: only when the
+4. `run_last_phase` (`src/ecs/systems/phases/last_phase.rs`): only when the
    batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
    the screenshot.
 

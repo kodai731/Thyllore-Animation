@@ -87,9 +87,13 @@ impl DescriptorSetTable {
             }
             std::collections::btree_map::Entry::Occupied(mut occupied) => {
                 let existing = occupied.get_mut();
-                let is_same_resource = existing.kind == binding.kind
-                    && existing.count == binding.count
-                    && existing.block == binding.block;
+                let same_block = match (&existing.block, &binding.block) {
+                    (Some(existing_block), Some(block)) => existing_block.has_same_layout(block),
+                    (None, None) => true,
+                    _ => false,
+                };
+                let is_same_resource =
+                    existing.kind == binding.kind && existing.count == binding.count && same_block;
                 if !is_same_resource {
                     return Err(ReflectError::ConflictingBinding {
                         set: binding.set,
@@ -280,6 +284,7 @@ pub fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_spirv_reflect::ReflectedMember;
 
     fn binding(set: u32, index: u32, kind: DescriptorKind) -> ReflectedBinding {
         ReflectedBinding {
@@ -350,6 +355,56 @@ mod tests {
         assert_eq!(
             DescriptorSetTable::from_reflections(&[vertex, fragment]),
             Err(ReflectError::ConflictingBinding { set: 0, binding: 0 })
+        );
+    }
+
+    fn block(type_name: &str, member_name: &str, offset: u32) -> ReflectedBlock {
+        ReflectedBlock {
+            type_name: type_name.to_string(),
+            size: offset + 16,
+            members: vec![ReflectedMember {
+                name: member_name.to_string(),
+                offset,
+                size: 16,
+                type_name: "vec4".to_string(),
+                members: Vec::new(),
+            }],
+        }
+    }
+
+    fn storage_reflection(stage: ShaderStage, block: ReflectedBlock) -> ShaderReflection {
+        ShaderReflection {
+            stages: vec![stage],
+            bindings: vec![ReflectedBinding {
+                block: Some(block),
+                ..binding(0, 3, DescriptorKind::StorageBuffer)
+            }],
+            push_constant: None,
+        }
+    }
+
+    #[test]
+    fn merges_blocks_that_differ_only_by_names() {
+        let glsl = storage_reflection(
+            ShaderStage::ClosestHit,
+            block("HitShadingTable", "records", 0),
+        );
+        let slang =
+            storage_reflection(ShaderStage::Miss, block("StructuredBuffer", "__member0", 0));
+        let table = DescriptorSetTable::from_reflections(&[glsl, slang]).unwrap();
+        assert_eq!(
+            table.binding(0, 3).unwrap().stages,
+            vk::ShaderStageFlags::CLOSEST_HIT_KHR | vk::ShaderStageFlags::MISS_KHR
+        );
+    }
+
+    #[test]
+    fn rejects_blocks_whose_layout_differs() {
+        let glsl = storage_reflection(ShaderStage::ClosestHit, block("Table", "records", 0));
+        let shifted = storage_reflection(ShaderStage::Miss, block("Table", "records", 16));
+        assert_eq!(
+            DescriptorSetTable::from_reflections(&[glsl, shifted]),
+            Err(ReflectError::ConflictingBinding { set: 0, binding: 3 })
         );
     }
 

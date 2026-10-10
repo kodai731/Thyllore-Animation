@@ -24,6 +24,7 @@ mod text_to_animation_dialog;
 mod text_to_mesh_dialog;
 pub(crate) mod theme;
 pub(crate) mod timeline_window;
+mod toast;
 mod viewport_window;
 mod water;
 mod wind;

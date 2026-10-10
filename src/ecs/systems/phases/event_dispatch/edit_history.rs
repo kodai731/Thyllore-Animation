@@ -2,7 +2,9 @@ use crate::animation::editable::{EditableAnimationClip, SourceClip};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory};
+use crate::ecs::resource::{
+    ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory, ToastMessage, UiToast,
+};
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -132,6 +134,8 @@ fn dispatch_undo(world: &mut World) {
             log!("Undo: {}", description);
         }
     }
+
+    show_history_toast(world, "Undo", entry.command.description());
 }
 
 fn dispatch_redo(world: &mut World) {
@@ -188,8 +192,15 @@ fn dispatch_redo(world: &mut World) {
             redo_clip_removed(world, *clip_id, removed, description);
         }
 
-        _ => {}
+        _ => return,
     }
+
+    show_history_toast(world, "Redo", entry.command.description());
+}
+
+fn show_history_toast(world: &World, action: &str, description: &str) {
+    world.resource_mut::<UiToast>().message =
+        Some(ToastMessage::new(format!("{action}: {description}")));
 }
 
 fn redo_clip_modified(

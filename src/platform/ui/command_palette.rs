@@ -312,7 +312,7 @@ fn build_command_palette_window(
     };
 }
 
-crate::ui_window!("command_palette", Floating, 3, build_command_palette_window);
+crate::ui_window!("command_palette", Floating, 6, build_command_palette_window);
 
 #[cfg(test)]
 mod tests {

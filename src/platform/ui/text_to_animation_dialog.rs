@@ -5,6 +5,7 @@ use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
+use crate::platform::ui::numeric_format::numeric_format;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToAnimationDialogState {
@@ -110,7 +111,7 @@ fn build_input_section(
     imgui::Drag::new("##duration")
         .range(0.5, 10.0)
         .speed(0.1)
-        .display_format("%.1f")
+        .display_format(numeric_format("%.1f"))
         .build(ui, duration);
 
     let can_generate = !in_progress && !prompt_buf.trim().is_empty();
@@ -119,7 +120,7 @@ fn build_input_section(
     if in_progress {
         ui.text("Working...");
     } else {
-        let _disabled = ui.begin_disabled(!can_generate);
+        let _disabled = ui.begin_disabled_with_cond(!can_generate);
         if ui.button("Generate") {
             world.send_command(AutoRigEvent::TextToAnimationGenerate {
                 prompt: prompt_buf.trim().to_string(),

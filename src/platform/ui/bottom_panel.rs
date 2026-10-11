@@ -30,18 +30,22 @@ fn draw_bottom_panel(
             let msg_tab_label = build_message_tab_label(message_log);
 
             imgui::TabBar::new("bottom_tabs").build(ui, || {
-                #[cfg(debug_assertions)]
-                imgui::TabItem::new("Debug").build(ui, || {
-                    build_debug_panel_content(ui, ecs_world);
-                });
-
                 let mut tab = imgui::TabItem::new(&msg_tab_label);
                 if message_log.select_tab_requested {
                     tab = tab.flags(imgui::TabItemFlags::SET_SELECTED);
                     message_log.select_tab_requested = false;
                 }
                 tab.build(ui, || {
-                    build_message_window_content(ui, ecs_world, message_log);
+                    ui.child_window("messages_content").build(ui, || {
+                        build_message_window_content(ui, ecs_world, message_log);
+                    });
+                });
+
+                #[cfg(debug_assertions)]
+                imgui::TabItem::new("Debug").build(ui, || {
+                    ui.child_window("debug_content").build(ui, || {
+                        build_debug_panel_content(ui, ecs_world);
+                    });
                 });
             });
         });

@@ -1,7 +1,7 @@
 use super::blend::{BlendMode, EaseType};
 use super::keyframe::{ClipInstanceId, SourceClipId};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClipInstance {
     pub instance_id: ClipInstanceId,
     pub source_id: SourceClipId,

@@ -155,7 +155,7 @@ fn build_input_section(
             _ => ui.text("Generating..."),
         }
     } else {
-        let _disabled = ui.begin_disabled(!can_generate);
+        let _disabled = ui.begin_disabled_with_cond(!can_generate);
         if ui.button("Generate") {
             world.send_command(AutoRigEvent::TextToMeshGenerate {
                 prompt: dialog.prompt_buf.trim().to_string(),

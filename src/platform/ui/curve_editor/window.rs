@@ -15,6 +15,7 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
 use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};
+use super::drag::{current_time_snap, effective_axis_lock};
 use super::draw::*;
 use super::interaction::*;
 use super::keyboard::*;

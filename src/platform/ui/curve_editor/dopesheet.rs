@@ -1,8 +1,9 @@
 use crate::animation::editable::{EditableKeyframe, PropertyCurve};
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe};
 
+use super::drag::{dragged_key_delta, dragged_key_position, TimeSnap};
 use super::draw::draw_time_grid;
-use super::interaction::{dragged_key_delta, dragged_key_position, TimeSnap, KEYFRAME_HIT_RADIUS};
+use super::interaction::KEYFRAME_HIT_RADIUS;
 use super::view::ViewTransform;
 
 pub(super) const DOPESHEET_ROW_HEIGHT: f32 = 22.0;

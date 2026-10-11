@@ -1,0 +1,306 @@
+use crate::animation::editable::{
+    align_opposite_handle, BezierHandle, PropertyCurve, TangentContinuity,
+};
+use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
+
+use super::view::ViewTransform;
+
+const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
+
+#[must_use]
+pub(super) fn effective_axis_lock(
+    view_mode: CurveViewMode,
+    axis_lock: Option<AxisLock>,
+) -> Option<AxisLock> {
+    match view_mode {
+        CurveViewMode::Curves => axis_lock,
+        CurveViewMode::Dopesheet => Some(AxisLock::Time),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum TimeSnap {
+    Frame(f32),
+    Free,
+}
+
+#[must_use]
+pub(super) fn resolve_axis_lock(
+    current: Option<AxisLock>,
+    shift_held: bool,
+    pixel_delta: [f32; 2],
+) -> Option<AxisLock> {
+    if !shift_held {
+        return None;
+    }
+    if current.is_some() {
+        return current;
+    }
+
+    let dx = pixel_delta[0].abs();
+    let dy = pixel_delta[1].abs();
+    if dx.max(dy) <= AXIS_LOCK_THRESHOLD_PX {
+        None
+    } else if dx >= dy {
+        Some(AxisLock::Time)
+    } else {
+        Some(AxisLock::Value)
+    }
+}
+
+#[must_use]
+pub(super) fn current_time_snap(ui: &imgui::Ui, frame_rate: f32) -> TimeSnap {
+    if ui.io().key_ctrl() {
+        TimeSnap::Free
+    } else {
+        TimeSnap::Frame(frame_rate)
+    }
+}
+
+#[must_use]
+pub(super) fn dragged_key_position(
+    original: [f32; 2],
+    delta: [f32; 2],
+    axis_lock: Option<AxisLock>,
+    snap: TimeSnap,
+) -> [f32; 2] {
+    let locked_delta = match axis_lock {
+        Some(AxisLock::Time) => [delta[0], 0.0],
+        Some(AxisLock::Value) => [0.0, delta[1]],
+        None => delta,
+    };
+
+    let free_time = original[0] + locked_delta[0];
+    let snapped_time = match snap {
+        TimeSnap::Frame(frame_rate) => (free_time * frame_rate).round() / frame_rate,
+        TimeSnap::Free => free_time,
+    };
+
+    [snapped_time.max(0.0), original[1] + locked_delta[1]]
+}
+
+#[must_use]
+pub(super) fn dragged_key_delta(
+    curve_vt: &ViewTransform,
+    drag_start: [f32; 2],
+    mouse_pos: [f32; 2],
+) -> [f32; 2] {
+    [
+        curve_vt.x_to_time(mouse_pos[0]) - curve_vt.x_to_time(drag_start[0]),
+        curve_vt.y_to_value(mouse_pos[1]) - curve_vt.y_to_value(drag_start[1]),
+    ]
+}
+
+pub(super) fn compute_dragged_tangent(
+    dragging: &DraggingTangent,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+) -> (BezierHandle, BezierHandle) {
+    for (curve, _, _) in curves_to_draw {
+        if curve.property_type != dragging.property_type {
+            continue;
+        }
+
+        let kf = match curve.get_keyframe(dragging.keyframe_id) {
+            Some(kf) => kf,
+            None => break,
+        };
+
+        let curve_vt = vt.for_curve(curve);
+        let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
+        let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
+        let time_offset = mouse_time - kf.time;
+        let value_offset = mouse_value - kf.value;
+        let new_handle = BezierHandle::new(time_offset, value_offset);
+
+        let (in_tangent, out_tangent) = match dragging.handle_type {
+            TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
+            TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
+        };
+
+        if kf.continuity == TangentContinuity::Unified {
+            return match dragging.handle_type {
+                TangentHandleType::In => {
+                    let aligned_out = align_opposite_handle(&in_tangent, &out_tangent);
+                    (in_tangent, aligned_out)
+                }
+                TangentHandleType::Out => {
+                    let aligned_in = align_opposite_handle(&out_tangent, &in_tangent);
+                    (aligned_in, out_tangent)
+                }
+            };
+        }
+
+        return (in_tangent, out_tangent);
+    }
+
+    (BezierHandle::linear(), BezierHandle::linear())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::{curve_add_keyframe, PropertyType};
+    use crate::ecs::resource::CurveValueDisplay;
+
+    fn build_unit_view() -> ViewTransform {
+        ViewTransform {
+            curve_origin: [0.0, 0.0],
+            curve_width: 1.0,
+            curve_height: 1.0,
+            duration: 1.0,
+            val_range: 1.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            view_time_offset: 0.0,
+            view_value_offset: 0.0,
+            value_display: CurveValueDisplay::Actual,
+        }
+    }
+
+    fn build_pixel_view() -> ViewTransform {
+        ViewTransform {
+            curve_width: 100.0,
+            curve_height: 100.0,
+            ..build_unit_view()
+        }
+    }
+
+    fn build_normalized_pixel_view() -> ViewTransform {
+        ViewTransform {
+            val_range: 2.0,
+            view_value_offset: -1.0,
+            value_display: CurveValueDisplay::Normalized,
+            ..build_pixel_view()
+        }
+    }
+
+    fn build_two_point_curve(property_type: PropertyType, values: [f32; 2]) -> PropertyCurve {
+        let mut curve = PropertyCurve::new(0, property_type);
+        curve_add_keyframe(&mut curve, 0.0, values[0]);
+        curve_add_keyframe(&mut curve, 1.0, values[1]);
+        curve
+    }
+
+    #[test]
+    fn normalized_drag_value_delta_scales_with_each_curve_half_width() {
+        let small = build_two_point_curve(PropertyType::TranslationX, [0.0, 10.0]);
+        let large = build_two_point_curve(PropertyType::TranslationY, [100.0, -100.0]);
+        let curves = [(&small, [1.0; 4], "x"), (&large, [1.0; 4], "y")];
+        let vt = build_normalized_pixel_view();
+        let drag_start = [50.0, 50.0];
+        let mouse_pos = [50.0, 40.0];
+        let normalized_delta = 0.2;
+
+        let small_delta = dragged_key_delta(
+            &vt.for_property(PropertyType::TranslationX, &curves),
+            drag_start,
+            mouse_pos,
+        );
+        let large_delta = dragged_key_delta(
+            &vt.for_property(PropertyType::TranslationY, &curves),
+            drag_start,
+            mouse_pos,
+        );
+
+        assert!((small_delta[1] - normalized_delta * 5.0).abs() < 1e-4);
+        assert!((large_delta[1] - normalized_delta * 100.0).abs() < 1e-3);
+        assert_eq!(small_delta[0], large_delta[0]);
+    }
+
+    #[test]
+    fn axis_lock_stays_unresolved_below_the_threshold() {
+        assert_eq!(resolve_axis_lock(None, true, [3.0, -3.0]), None);
+    }
+
+    #[test]
+    fn axis_lock_picks_time_for_a_horizontal_move() {
+        assert_eq!(
+            resolve_axis_lock(None, true, [6.0, 1.0]),
+            Some(AxisLock::Time)
+        );
+    }
+
+    #[test]
+    fn axis_lock_picks_value_for_a_vertical_move() {
+        assert_eq!(
+            resolve_axis_lock(None, true, [1.0, -6.0]),
+            Some(AxisLock::Value)
+        );
+    }
+
+    #[test]
+    fn axis_lock_keeps_the_first_direction_while_shift_is_held() {
+        assert_eq!(
+            resolve_axis_lock(Some(AxisLock::Time), true, [6.0, 40.0]),
+            Some(AxisLock::Time)
+        );
+    }
+
+    #[test]
+    fn axis_lock_is_released_with_shift() {
+        assert_eq!(
+            resolve_axis_lock(Some(AxisLock::Time), false, [6.0, 0.0]),
+            None
+        );
+    }
+
+    #[test]
+    fn dragged_key_position_time_lock_keeps_the_value() {
+        let position =
+            dragged_key_position([1.0, 2.0], [0.5, 3.0], Some(AxisLock::Time), TimeSnap::Free);
+
+        assert_eq!(position, [1.5, 2.0]);
+    }
+
+    #[test]
+    fn dragged_key_position_value_lock_keeps_the_time() {
+        let position = dragged_key_position(
+            [1.0, 2.0],
+            [0.5, 3.0],
+            Some(AxisLock::Value),
+            TimeSnap::Free,
+        );
+
+        assert_eq!(position, [1.0, 5.0]);
+    }
+
+    #[test]
+    fn dragged_key_position_snaps_time_to_30fps_frames() {
+        let [time, value] =
+            dragged_key_position([0.0, 1.0], [0.05, 0.25], None, TimeSnap::Frame(30.0));
+
+        assert!((time - 2.0 / 30.0).abs() < 1e-6);
+        assert_eq!(value, 1.25);
+    }
+
+    #[test]
+    fn dragged_key_position_free_keeps_the_raw_time_and_clamps_at_zero() {
+        assert_eq!(
+            dragged_key_position([1.0, 0.0], [0.013, 0.0], None, TimeSnap::Free),
+            [1.013, 0.0]
+        );
+        assert_eq!(
+            dragged_key_position([0.1, 0.0], [-0.5, 0.0], None, TimeSnap::Frame(30.0)),
+            [0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn effective_axis_lock_keeps_curves_lock_and_forces_time_in_dopesheet() {
+        assert_eq!(effective_axis_lock(CurveViewMode::Curves, None), None);
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Curves, Some(AxisLock::Value)),
+            Some(AxisLock::Value)
+        );
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Dopesheet, None),
+            Some(AxisLock::Time)
+        );
+        assert_eq!(
+            effective_axis_lock(CurveViewMode::Dopesheet, Some(AxisLock::Value)),
+            Some(AxisLock::Time)
+        );
+    }
+}

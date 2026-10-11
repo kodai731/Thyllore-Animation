@@ -1,6 +1,7 @@
 mod bone_label;
 mod context_menu;
 mod dopesheet;
+mod drag;
 mod draw;
 mod interaction;
 mod keyboard;

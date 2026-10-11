@@ -193,4 +193,8 @@ impl GpuResource for AutoExposureBuffers {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.histogram_buffer.is_destroyed()
+    }
 }

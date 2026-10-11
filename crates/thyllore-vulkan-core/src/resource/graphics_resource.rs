@@ -350,4 +350,11 @@ impl GpuResource for GraphicsResources {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.meshes.is_empty()
+            && self.frame_set.layout.is_destroyed()
+            && self.materials.layout.is_destroyed()
+            && self.objects.layout.is_destroyed()
+    }
 }

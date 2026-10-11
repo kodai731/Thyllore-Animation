@@ -153,6 +153,10 @@ impl GpuResource for HistoryTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        !self.holds_pass_objects()
+    }
 }
 
 unsafe fn clear_to_shader_read_only(

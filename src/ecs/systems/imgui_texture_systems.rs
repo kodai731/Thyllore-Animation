@@ -5,7 +5,7 @@ use crate::ecs::resource::ImguiTextures;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{shader_bindings, ReflectedSetLayout};
-use crate::vulkanr::resource::{PixelRegion, SampledTexture};
+use crate::vulkanr::resource::{GpuResource, PixelRegion, SampledTexture};
 use crate::vulkanr::vulkan::*;
 
 fn pixel_region(rect: &TextureUploadRect) -> PixelRegion<'_> {
@@ -79,7 +79,7 @@ pub unsafe fn imgui_texture_destroy(
         .textures
         .remove(&id)
         .ok_or_else(|| anyhow!("ImGui destroy for unknown texture {id:?}"))?;
-    texture.destroy(rrdevice);
+    texture.destroy_gpu(rrdevice);
     Ok(())
 }
 

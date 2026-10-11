@@ -11,6 +11,7 @@ pub fn derive_gpu_resource(input: TokenStream) -> TokenStream {
 }
 
 fn expand_gpu_resource(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    require_must_use(input)?;
     let fields = collect_destroyed_fields(input)?;
     let name = &input.ident;
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
@@ -20,14 +21,43 @@ fn expand_gpu_resource(input: &DeriveInput) -> Result<proc_macro2::TokenStream> 
             ::thyllore_vulkan_core::resource::GpuResource::destroy_gpu(&mut self.#field, rrdevice);
         }
     });
+    let destroyed_checks = fields.iter().map(|field| {
+        quote! {
+            && ::thyllore_vulkan_core::resource::GpuResource::is_destroyed(&self.#field)
+        }
+    });
 
     Ok(quote! {
         impl #impl_generics ::thyllore_vulkan_core::resource::GpuResource for #name #type_generics #where_clause {
             unsafe fn destroy_gpu(&mut self, rrdevice: &::thyllore_vulkan_core::core::device::RRDevice) {
                 #(#destroy_calls)*
             }
+
+            fn is_destroyed(&self) -> bool {
+                true #(#destroyed_checks)*
+            }
+        }
+
+        impl #impl_generics ::core::ops::Drop for #name #type_generics #where_clause {
+            fn drop(&mut self) {
+                if !::thyllore_vulkan_core::resource::GpuResource::is_destroyed(self) {
+                    ::thyllore_vulkan_core::resource::gpu_resource::warn_dropped_live(
+                        ::thyllore_vulkan_core::resource::GpuResource::resource_name(self),
+                    );
+                }
+            }
         }
     })
+}
+
+fn require_must_use(input: &DeriveInput) -> Result<()> {
+    if input.attrs.iter().any(|a| a.path().is_ident("must_use")) {
+        return Ok(());
+    }
+    Err(Error::new_spanned(
+        &input.ident,
+        "a GpuResource is a #[must_use] type: a value that is never bound leaks its Vulkan objects",
+    ))
 }
 
 fn collect_destroyed_fields(input: &DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> {
@@ -97,7 +127,7 @@ mod tests {
 
     #[test]
     fn destroys_fields_in_reverse_declaration_order() {
-        let expanded = expand("struct Owner { first: A, second: B, third: C }");
+        let expanded = expand("#[must_use] struct Owner { first: A, second: B, third: C }");
 
         let first = destroy_call_position(&expanded, "first");
         let second = destroy_call_position(&expanded, "second");
@@ -107,8 +137,9 @@ mod tests {
 
     #[test]
     fn skips_fields_marked_with_gpu_resource_skip() {
-        let expanded =
-            expand("struct Owner { owned: A, #[gpu_resource(skip)] borrowed: B, last: C }");
+        let expanded = expand(
+            "#[must_use] struct Owner { owned: A, #[gpu_resource(skip)] borrowed: B, last: C }",
+        );
 
         assert!(!expanded.contains("self . borrowed"), "{expanded}");
         destroy_call_position(&expanded, "owned");
@@ -117,18 +148,40 @@ mod tests {
 
     #[test]
     fn supports_tuple_structs() {
-        let expanded = expand("struct Owner(A, B);");
+        let expanded = expand("#[must_use] struct Owner(A, B);");
 
         assert!(destroy_call_position(&expanded, "1") < destroy_call_position(&expanded, "0"));
     }
 
     #[test]
+    fn rejects_a_struct_without_must_use() {
+        let input: DeriveInput = syn::parse_str("struct Owner { a: A }").expect("valid struct");
+        let error = expand_gpu_resource(&input).expect_err("must_use is required");
+        assert!(error.to_string().contains("must_use"));
+    }
+
+    #[test]
+    fn checks_every_owned_field_and_warns_from_drop() {
+        let expanded = expand("#[must_use] struct Owner { a: A, #[gpu_resource(skip)] b: B }");
+
+        assert!(expanded.contains("is_destroyed (& self . a)"), "{expanded}");
+        assert!(
+            !expanded.contains("is_destroyed (& self . b)"),
+            "{expanded}"
+        );
+        assert!(expanded.contains("Drop for Owner"), "{expanded}");
+        assert!(expanded.contains("warn_dropped_live"), "{expanded}");
+    }
+
+    #[test]
     fn rejects_enums_and_unknown_attributes() {
-        let input: DeriveInput = syn::parse_str("enum Owner { A }").expect("valid enum");
+        let input: DeriveInput =
+            syn::parse_str("#[must_use] enum Owner { A }").expect("valid enum");
         assert!(expand_gpu_resource(&input).is_err());
 
         let input: DeriveInput =
-            syn::parse_str("struct Owner { #[gpu_resource(other)] a: A }").expect("valid struct");
+            syn::parse_str("#[must_use] struct Owner { #[gpu_resource(other)] a: A }")
+                .expect("valid struct");
         assert!(expand_gpu_resource(&input).is_err());
     }
 }

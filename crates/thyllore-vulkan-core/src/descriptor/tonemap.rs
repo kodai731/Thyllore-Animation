@@ -160,4 +160,8 @@ impl GpuResource for RRToneMapDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.layout.is_destroyed()
+    }
 }

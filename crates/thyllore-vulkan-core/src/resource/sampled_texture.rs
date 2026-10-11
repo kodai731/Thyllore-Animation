@@ -7,7 +7,7 @@ use crate::command::{begin_single_time_commands, end_single_time_commands, RRCom
 use crate::core::device::RRDevice;
 use crate::descriptor::ReflectedSetLayout;
 use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
 use crate::resource::image::{create_image, create_image_view};
 use thyllore_spirv_reflect::ShaderBinding;
 
@@ -31,13 +31,13 @@ impl PixelRegion<'_> {
 }
 
 /// A 2D RGBA8 texture with its view and the descriptor set that samples it.
-#[derive(Clone, Copy, Debug)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct SampledTexture {
-    image: vk::Image,
     memory: vk::DeviceMemory,
+    image: vk::Image,
     view: vk::ImageView,
-    descriptor_set: vk::DescriptorSet,
-    layout: vk::DescriptorSetLayout,
+    descriptor_set: OwnedDescriptorSet,
 }
 
 impl SampledTexture {
@@ -82,11 +82,10 @@ impl SampledTexture {
             .apply(rrdevice);
 
         let texture = Self {
-            image,
             memory,
+            image,
             view,
-            descriptor_set,
-            layout: layout.handle,
+            descriptor_set: OwnedDescriptorSet::new(descriptor_set, layout.handle),
         };
         texture.copy_regions(
             instance,
@@ -99,7 +98,7 @@ impl SampledTexture {
     }
 
     pub fn descriptor_set(&self) -> vk::DescriptorSet {
-        self.descriptor_set
+        self.descriptor_set.handle()
     }
 
     pub unsafe fn upload_regions(
@@ -162,26 +161,6 @@ impl SampledTexture {
         device.destroy_buffer(staging_buffer, None);
         device.free_memory(staging_memory, None);
         Ok(())
-    }
-
-    /// The caller guarantees no pending command buffer samples the texture.
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        device.destroy_image_view(self.view, None);
-        device.destroy_image(self.image, None);
-        device.free_memory(self.memory, None);
-        rrdevice.release_descriptor_sets(self.layout, [self.descriptor_set]);
-
-        self.view = vk::ImageView::null();
-        self.image = vk::Image::null();
-        self.memory = vk::DeviceMemory::null();
-        self.descriptor_set = vk::DescriptorSet::null();
-    }
-}
-
-impl GpuResource for SampledTexture {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
     }
 }
 

@@ -66,15 +66,20 @@ impl OverlayUpsampleDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
         self.layout.destroy(rrdevice);
-        device.destroy_sampler(self.reduced_color_sampler, None);
-        device.destroy_sampler(self.scene_depth_sampler, None);
+        self.reduced_color_sampler.destroy_gpu(rrdevice);
+        self.scene_depth_sampler.destroy_gpu(rrdevice);
     }
 }
 
 impl GpuResource for OverlayUpsampleDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.layout.is_destroyed()
+            && self.reduced_color_sampler.is_destroyed()
+            && self.scene_depth_sampler.is_destroyed()
     }
 }

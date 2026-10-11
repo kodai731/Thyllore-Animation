@@ -142,4 +142,8 @@ impl GpuResource for RRWaterCausticDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.splat_layout.is_destroyed() && self.apply_layout.is_destroyed()
+    }
 }

@@ -17,6 +17,7 @@ use super::context_menu::build_curve_extrapolation_menu;
 use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};
 use super::drag::{current_time_snap, effective_axis_lock};
 use super::draw::*;
+use super::hit_test::*;
 use super::interaction::*;
 use super::keyboard::*;
 use super::numeric_input::build_selected_key_fields;

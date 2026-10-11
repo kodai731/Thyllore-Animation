@@ -209,3 +209,72 @@ explicit `hasX` flag (GLSL), not `u32::MAX` / `-1`.
 
 *Source: C++ Core Guidelines ES.20 / F.60 (no magic sentinels), Rust API
 Guidelines (`Option<T>` over in-band signalling)*
+
+## 14. Keep Nesting Shallow — Two Levels Inside a Function
+
+A block nested three or more levels deep (`if` in `if let` in `for`) hides the
+main path at the right margin and makes every reader re-derive which conditions
+hold. Keep the main path at the left edge with the techniques below, picked by
+what the nesting expresses.
+
+| The nesting is... | Technique |
+|---|---|
+| a guard ("only continue when") | early `return` / `continue`, `let .. else` |
+| a separate job | extract a named function |
+| the same lookup repeated in several places | a helper taking a closure |
+| a `match` arm that grows a body | make each arm an expression that returns the value |
+| a chain of `Option` / `Result` | `?`, `and_then`, or one `if let (Some(a), Some(b))` |
+| a value recomputed inside a loop | compute it once before the loop |
+| two flags that describe one state | one `match` on a tuple or an enum |
+| a borrow scope wrapping logic | read what is needed, `drop` the borrow, then branch |
+
+```rust
+// Bad: three levels, the command send sits at the right margin
+if let Some(property_type) = add_key_target_property(editor_state, track_ref, bone_role) {
+    if let CurveTrackRef::Bone(bone_id) = track_ref {
+        if !current_clip_has_track(world, bone_id) {
+            world.send_command(EnsureBoneTrack { bone_id });
+        }
+    }
+    world.send_command(TimelineEvent::AddKeyframe { track: track_ref, property_type, .. });
+}
+
+// Good: a guard, then a named step, then the main path at the left edge
+let Some(property_type) = add_key_target_property(editor_state, track_ref, bone_role) else {
+    return;
+};
+if let CurveTrackRef::Bone(bone_id) = track_ref {
+    ensure_bone_track(world, bone_id);
+}
+world.send_command(TimelineEvent::AddKeyframe { track: track_ref, property_type, .. });
+```
+
+```rust
+// Bad: every arm repeats "find the clip, find the curve, then edit"
+TimelineEvent::SetTangentType { track, property_type, keyframe_id, tangent_type } => {
+    if let Some(clip) = clip_library.get_mut(clip_id) {
+        if let Some(curve) = resolve_curve_mut(clip, *track, *property_type) {
+            set_tangent_type(curve, *keyframe_id, *tangent_type);
+            clip_modified = true;
+        }
+    }
+}
+
+// Good: the lookup is one helper, the arm is an expression that yields "modified"
+clip_modified |= match event {
+    TimelineEvent::SetTangentType { track, property_type, keyframe_id, tangent_type } => {
+        edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            set_tangent_type(curve, *keyframe_id, *tangent_type)
+        })
+    }
+    ..
+};
+```
+
+Inside a UI closure (`ui.popup`, `ui.menu`, `build(|| ..)`) the same rules
+apply: `return` leaves the closure, and a loop body that grows beyond a few
+lines becomes a function that takes `ui` and the loop variable.
+
+*Source: Google C++ Style Guide (prefer early returns), C++ Core Guidelines
+F.3 / ES.70, Rust `let .. else` RFC 3137, Unreal Engine Coding Standard
+(avoid deep nesting)*

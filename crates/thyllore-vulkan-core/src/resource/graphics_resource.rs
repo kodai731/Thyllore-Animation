@@ -306,9 +306,9 @@ impl GraphicsResources {
         self.meshes.clear();
         self.mesh_material_ids.clear();
 
-        self.frame_set.destroy(&rrdevice.device);
-        self.materials.destroy(&rrdevice.device);
-        self.objects.destroy(&rrdevice.device);
+        self.frame_set.destroy(rrdevice);
+        self.materials.destroy(rrdevice);
+        self.objects.destroy(rrdevice);
     }
 
     pub unsafe fn clear_meshes(&mut self, rrdevice: &RRDevice) {

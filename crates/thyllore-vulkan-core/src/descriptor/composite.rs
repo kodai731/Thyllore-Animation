@@ -150,14 +150,15 @@ impl RRCompositeDescriptorSet {
         self.selection.write_slot(rrdevice, 0, &ubo)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         self.selection.destroy(device);
-        self.layout.destroy(device);
+        self.layout.destroy(rrdevice);
     }
 }
 
 impl GpuResource for RRCompositeDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 }

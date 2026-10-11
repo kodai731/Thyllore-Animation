@@ -92,14 +92,15 @@ impl RRFlameDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
+        self.layout.destroy(rrdevice);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }
 }
 
 impl GpuResource for RRFlameDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 }

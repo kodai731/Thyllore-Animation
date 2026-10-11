@@ -20,6 +20,7 @@ pub mod pipeline_storage;
 pub mod raytracing_data;
 pub mod render_target_storage;
 pub mod render_target_transient;
+pub mod sampled_texture;
 pub mod uniform_buffer;
 pub mod volume_image;
 
@@ -47,5 +48,6 @@ pub use render_target_storage::{RenderTargetEntry, RenderTargetKey, RenderTarget
 pub use render_target_transient::{
     RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,
 };
+pub use sampled_texture::{PixelRegion, SampledTexture};
 pub use uniform_buffer::{Placement, UniformBuffer};
 pub use volume_image::VolumeImage;

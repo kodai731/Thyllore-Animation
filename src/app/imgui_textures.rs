@@ -4,9 +4,10 @@ use imgui::{TextureFeedback, TextureOp, TextureRequest};
 use crate::app::App;
 use crate::ecs::resource::ImguiTextures;
 use crate::ecs::systems::{
-    ensure_rgba32, imgui_texture_create, imgui_texture_destroy, imgui_texture_update, PixelRegion,
+    ensure_rgba32, imgui_texture_create, imgui_texture_destroy, imgui_texture_update,
 };
 use crate::vulkanr::context::CommandState;
+use crate::vulkanr::resource::PixelRegion;
 
 impl App {
     /// Answer every texture request of the frame Dear ImGui just rendered.

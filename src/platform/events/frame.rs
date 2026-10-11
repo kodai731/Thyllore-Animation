@@ -4,7 +4,8 @@ use crate::app::frame::FrameInput;
 use crate::app::App;
 use crate::vulkanr::vulkan::*;
 
-use crate::ecs::resource::{ImGuiInputCapture, MouseInput};
+use crate::ecs::resource::{ImGuiInputCapture, MouseInput, UiSettings};
+use crate::platform::ui::theme::apply_ui_settings;
 
 pub(crate) fn handle_redraw_requested(
     imgui: &mut imgui::Context,
@@ -21,12 +22,13 @@ pub(crate) fn handle_redraw_requested(
         0.0
     };
 
+    apply_changed_ui_settings(imgui, app);
     let ui = imgui.frame();
 
     let io = ui.io();
     {
         let mut capture = app.data.ecs_world.resource_mut::<ImGuiInputCapture>();
-        capture.wants_mouse = io.want_capture_mouse;
+        capture.wants_mouse = io.want_capture_mouse();
     }
 
     super::input::update_mouse_input(&app.data.ecs_world, ui);
@@ -35,15 +37,47 @@ pub(crate) fn handle_redraw_requested(
 
     platform.prepare_render(ui, window);
 
-    let imgui_build_start = Instant::now();
-    let draw_data = imgui.render();
-    let imgui_build_ms = imgui_build_start.elapsed().as_secs_f32() * 1000.0;
-
-    unsafe {
-        render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
+    if let Err(error) = render_ui_frame(imgui, window, app, dt_ms) {
+        log_error!("ImGui frame failed: {error:?}");
     }
 
     app.data.ecs_world.resource_mut::<MouseInput>().end_frame();
+}
+
+/// Renders the frame Dear ImGui built: its texture requests are answered before the draw
+/// data is recorded.
+fn render_ui_frame(
+    imgui: &mut imgui::Context,
+    window: &winit::window::Window,
+    app: &mut App,
+    dt_ms: f32,
+) -> anyhow::Result<()> {
+    let imgui_build_start = Instant::now();
+    let consumer = app
+        .data
+        .imgui
+        .renderer_consumer
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("ImGui renderer consumer is not initialized"))?;
+    let pending = imgui.render(consumer);
+    let feedback = unsafe { app.apply_imgui_texture_requests(pending.texture_requests())? };
+    let frame = pending.reconcile_texture_feedback(feedback)?;
+    let imgui_build_ms = imgui_build_start.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        render_frame(app, window, &frame, dt_ms, imgui_build_ms);
+    }
+    Ok(())
+}
+
+fn apply_changed_ui_settings(imgui: &mut imgui::Context, app: &mut App) {
+    let settings = *app.data.ecs_world.resource::<UiSettings>();
+    if app.applied_ui_settings == Some(settings) {
+        return;
+    }
+
+    apply_ui_settings(imgui, &settings);
+    app.applied_ui_settings = Some(settings);
 }
 
 unsafe fn render_frame(

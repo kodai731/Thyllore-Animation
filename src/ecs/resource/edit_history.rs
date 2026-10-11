@@ -162,15 +162,17 @@ impl EditHistory {
     }
 
     pub fn undo_description(&self) -> Option<&str> {
-        self.undo_stack.last().map(|e| Self::entry_description(e))
+        self.undo_stack.last().map(|e| e.command.description())
     }
 
     pub fn redo_description(&self) -> Option<&str> {
-        self.redo_stack.last().map(|e| Self::entry_description(e))
+        self.redo_stack.last().map(|e| e.command.description())
     }
+}
 
-    fn entry_description(entry: &EditEntry) -> &str {
-        match &entry.command {
+impl EditCommand {
+    pub fn description(&self) -> &'static str {
+        match self {
             EditCommand::ClipModified { description, .. } => description,
             EditCommand::ScheduleModified { description, .. } => description,
             EditCommand::ClipAdded { description, .. } => description,
@@ -279,5 +281,36 @@ mod tests {
     fn test_last_undo_mut_empty() {
         let mut history = EditHistory::new(100);
         assert!(history.last_undo_mut().is_none());
+    }
+
+    #[test]
+    fn test_description_returns_each_variant_description() {
+        let commands = [
+            EditCommand::ClipModified {
+                clip_id: 1,
+                before: make_dummy_clip("before"),
+                description: "Move keyframe",
+            },
+            EditCommand::ScheduleModified {
+                entity: 1,
+                before: ClipSchedule::new(),
+                description: "Move clip",
+            },
+            EditCommand::ClipAdded {
+                clip_id: 1,
+                description: "Add clip",
+            },
+            EditCommand::ClipRemoved {
+                clip_id: 1,
+                removed: SourceClip::new(1, make_dummy_clip("removed")),
+                description: "Remove clip",
+            },
+        ];
+
+        let descriptions: Vec<&str> = commands.iter().map(EditCommand::description).collect();
+        assert_eq!(
+            descriptions,
+            ["Move keyframe", "Move clip", "Add clip", "Remove clip"]
+        );
     }
 }

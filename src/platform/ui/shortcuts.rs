@@ -240,7 +240,7 @@ fn build_shortcuts_window(
     }
 }
 
-crate::ui_window!("keyboard_shortcuts", Floating, 2, build_shortcuts_window);
+crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
 
 #[cfg(test)]
 mod tests {

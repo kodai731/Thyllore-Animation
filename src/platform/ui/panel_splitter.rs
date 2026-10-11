@@ -1,10 +1,11 @@
 use imgui::MouseButton;
 
-use crate::ecs::resource::{ActiveSplitter, DragState, PanelLayout};
+use crate::ecs::resource::{ActiveSplitter, DragState, PanelLayout, UiPointerOwnerId};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::LayoutSnapshot;
 use crate::ecs::world::World;
+use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SPLITTER_THICKNESS: f32 = 6.0;
@@ -23,17 +24,29 @@ struct SplitterRect {
     is_horizontal: bool,
 }
 
-fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutSnapshot) {
+fn handle_splitters(
+    ui: &imgui::Ui,
+    world: &World,
+    layout: &mut PanelLayout,
+    snap: &LayoutSnapshot,
+) {
     let rects = compute_splitter_rects(snap);
-    let mouse_pos = ui.io().mouse_pos;
-    let mouse_down = ui.is_mouse_down(MouseButton::Left);
-    let mouse_clicked = ui.is_mouse_clicked(MouseButton::Left);
-    let mouse_released = ui.is_mouse_released(MouseButton::Left);
-    let mouse_double_clicked = ui.is_mouse_double_clicked(MouseButton::Left);
+    let pointer = read_ui_pointer(ui);
+    let mouse_pos = pointer.pos;
+    let mouse_down = pointer.is_down(MouseButton::Left);
+    let mouse_released = pointer.is_released(MouseButton::Left);
 
     let hovered_splitter = rects.iter().find(|r| hit_test(r, mouse_pos));
+    let owns_press = pointer.is_clicked(MouseButton::Left)
+        && hovered_splitter.is_some()
+        && ui_pointer_begin(
+            ui,
+            world,
+            UiPointerOwnerId::PanelSplitter,
+            PointerRegion::Screen,
+        );
 
-    if mouse_double_clicked {
+    if owns_press && pointer.is_double_clicked(MouseButton::Left) {
         if let Some(rect) = &hovered_splitter {
             reset_to_default(layout, rect.kind);
             layout.drag = None;
@@ -41,7 +54,7 @@ fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutSnaps
         }
     }
 
-    if mouse_clicked && layout.drag.is_none() {
+    if owns_press && layout.drag.is_none() {
         if let Some(rect) = &hovered_splitter {
             layout.drag = Some(DragState {
                 splitter: rect.kind,
@@ -199,7 +212,7 @@ fn reset_to_default(layout: &mut PanelLayout, splitter: ActiveSplitter) {
 fn build_panel_splitters(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     let snapshot = world.resource::<LayoutSnapshot>().clone();
     let mut layout = world.resource_mut::<PanelLayout>();
-    handle_splitters(ui, &mut layout, &snapshot);
+    handle_splitters(ui, world, &mut layout, &snapshot);
 }
 
 crate::ui_window!("panel_splitters", Bottom, 2, build_panel_splitters);

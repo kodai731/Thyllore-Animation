@@ -1,0 +1,357 @@
+//! Internal low-level types
+//!
+//! Exposes helpers mirroring Dear ImGui internals (e.g. `ImVector`, data type
+//! markers). These are primarily for advanced integrations; APIs may change.
+//!
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::as_conversions
+)]
+use crate::sys;
+use std::ffi::c_int;
+use std::slice;
+
+/// A primary data type
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum DataType {
+    I8 = sys::ImGuiDataType_S8 as i32,
+    U8 = sys::ImGuiDataType_U8 as i32,
+    I16 = sys::ImGuiDataType_S16 as i32,
+    U16 = sys::ImGuiDataType_U16 as i32,
+    I32 = sys::ImGuiDataType_S32 as i32,
+    U32 = sys::ImGuiDataType_U32 as i32,
+    I64 = sys::ImGuiDataType_S64 as i32,
+    U64 = sys::ImGuiDataType_U64 as i32,
+    F32 = sys::ImGuiDataType_Float as i32,
+    F64 = sys::ImGuiDataType_Double as i32,
+}
+
+/// Primitive type marker.
+///
+/// If this trait is implemented for a type, it is assumed to have *exactly* the same
+/// representation in memory as the primitive value described by the associated `KIND` constant.
+///
+/// # Safety
+///
+/// Implementors must have the same size, alignment, valid bit patterns, and
+/// in-memory representation as the primitive value identified by `KIND`.
+/// Dear ImGui may read and write a pointer to the implementor as that primitive,
+/// and numeric formatting selects its exact C variadic carrier from `KIND`.
+pub unsafe trait DataTypeKind: Copy {
+    const KIND: DataType;
+}
+
+pub(crate) fn component_count_i32(caller: &str, len: usize) -> i32 {
+    assert!(len > 0, "{caller} requires at least one component");
+    i32::try_from(len).unwrap_or_else(|_| {
+        panic!("{caller} supports at most i32::MAX components");
+    })
+}
+
+pub(crate) fn plot_value_count_i32(caller: &str, len: usize) -> i32 {
+    i32::try_from(len).unwrap_or_else(|_| {
+        panic!("{caller} supports at most i32::MAX values");
+    })
+}
+
+pub(crate) fn len_i32(caller: &str, what: &str, len: usize) -> i32 {
+    i32::try_from(len).unwrap_or_else(|_| {
+        panic!("{caller} supports at most i32::MAX {what}");
+    })
+}
+
+unsafe impl DataTypeKind for i8 {
+    const KIND: DataType = DataType::I8;
+}
+unsafe impl DataTypeKind for u8 {
+    const KIND: DataType = DataType::U8;
+}
+unsafe impl DataTypeKind for i16 {
+    const KIND: DataType = DataType::I16;
+}
+unsafe impl DataTypeKind for u16 {
+    const KIND: DataType = DataType::U16;
+}
+unsafe impl DataTypeKind for i32 {
+    const KIND: DataType = DataType::I32;
+}
+unsafe impl DataTypeKind for u32 {
+    const KIND: DataType = DataType::U32;
+}
+unsafe impl DataTypeKind for i64 {
+    const KIND: DataType = DataType::I64;
+}
+unsafe impl DataTypeKind for u64 {
+    const KIND: DataType = DataType::U64;
+}
+unsafe impl DataTypeKind for f32 {
+    const KIND: DataType = DataType::F32;
+}
+unsafe impl DataTypeKind for f64 {
+    const KIND: DataType = DataType::F64;
+}
+
+unsafe impl DataTypeKind for usize {
+    #[cfg(target_pointer_width = "16")]
+    const KIND: DataType = DataType::U16;
+
+    #[cfg(target_pointer_width = "32")]
+    const KIND: DataType = DataType::U32;
+
+    #[cfg(target_pointer_width = "64")]
+    const KIND: DataType = DataType::U64;
+
+    // Fallback for when we are on a weird system width
+    //
+    #[cfg(not(any(
+        target_pointer_width = "16",
+        target_pointer_width = "32",
+        target_pointer_width = "64"
+    )))]
+    compile_error!(
+        "cannot impl DataTypeKind for usize: unsupported target pointer width. supported values are 16, 32, 64"
+    );
+}
+
+unsafe impl DataTypeKind for isize {
+    #[cfg(target_pointer_width = "16")]
+    const KIND: DataType = DataType::I16;
+
+    #[cfg(target_pointer_width = "32")]
+    const KIND: DataType = DataType::I32;
+
+    #[cfg(target_pointer_width = "64")]
+    const KIND: DataType = DataType::I64;
+
+    // Fallback for when we are on a weird system width
+    //
+    #[cfg(not(any(
+        target_pointer_width = "16",
+        target_pointer_width = "32",
+        target_pointer_width = "64"
+    )))]
+    compile_error!(
+        "cannot impl DataTypeKind for isize: unsupported target pointer width. supported values are 16, 32, 64"
+    );
+}
+
+/// A generic version of the raw imgui-sys ImVector struct types
+///
+/// This provides a safe Rust interface to Dear ImGui's vector type.
+#[repr(C)]
+pub struct ImVector<T> {
+    pub(crate) size: c_int,
+    pub(crate) capacity: c_int,
+    pub(crate) data: *mut T,
+}
+
+impl<T> ImVector<T> {
+    /// Returns the vector as a slice
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        if self.size <= 0 || self.data.is_null() {
+            return &[];
+        }
+        let len = match usize::try_from(self.size) {
+            Ok(len) => len,
+            Err(_) => return &[],
+        };
+        unsafe { slice::from_raw_parts(self.data, len) }
+    }
+
+    /// Returns the vector as a mutable slice
+    #[inline]
+    pub fn as_slice_mut(&mut self) -> &mut [T] {
+        if self.size <= 0 || self.data.is_null() {
+            return &mut [];
+        }
+        let len = match usize::try_from(self.size) {
+            Ok(len) => len,
+            Err(_) => return &mut [],
+        };
+        unsafe { slice::from_raw_parts_mut(self.data, len) }
+    }
+
+    /// Returns the number of elements in the vector
+    #[inline]
+    pub fn len(&self) -> usize {
+        if self.size <= 0 {
+            return 0;
+        }
+        usize::try_from(self.size).unwrap_or(0)
+    }
+
+    /// Returns true if the vector is empty
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.size <= 0
+    }
+}
+
+impl<T> Default for ImVector<T> {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            data: std::ptr::null_mut(),
+        }
+    }
+}
+
+impl<T> ImVector<T> {
+    /// Returns an iterator over the elements
+    #[inline]
+    pub fn iter(&self) -> slice::Iter<'_, T> {
+        self.as_slice().iter()
+    }
+
+    /// Returns a mutable iterator over the elements
+    #[inline]
+    pub fn iter_mut(&mut self) -> slice::IterMut<'_, T> {
+        self.as_slice_mut().iter_mut()
+    }
+}
+
+/// Cast a bindgen-generated `ImVector_*` to our generic `ImVector<T>` view.
+///
+/// # Safety
+/// `raw` must be a pointer/reference to a C `ImVector` instantiated with the same element type
+/// `T` (layout-compatible). Only use with bindgen-generated `ImVector_*` structs from
+/// `dear-imgui-sys`.
+#[inline]
+pub unsafe fn imvector_cast_ref<T, R>(raw: &R) -> &ImVector<T> {
+    unsafe { &*(raw as *const R as *const ImVector<T>) }
+}
+
+/// Mutable variant of [`imvector_cast_ref`]. See its safety contract.
+///
+/// # Safety
+/// Same as [`imvector_cast_ref`], but additionally the caller must ensure the `ImVector` is
+/// uniquely borrowed for the duration of the returned `&mut` reference.
+#[inline]
+pub unsafe fn imvector_cast_mut<T, R>(raw: &mut R) -> &mut ImVector<T> {
+    unsafe { &mut *(raw as *mut R as *mut ImVector<T>) }
+}
+
+/// Update internal hovered window and input capture flags.
+///
+/// This is a thin wrapper around Dear ImGui's internal
+/// `UpdateHoveredWindowAndCaptureFlags()` helper. It is intended for advanced
+/// platform backends that need to drive ImGui's hovering/capture logic
+/// manually (e.g. when aggregating input from multiple sources).
+///
+/// Most applications and backends do **not** need to call this directly.
+#[doc(alias = "UpdateHoveredWindowAndCaptureFlags")]
+pub fn update_hovered_window_and_capture_flags(mouse_pos: [f32; 2]) {
+    unsafe {
+        let pos = sys::ImVec2 {
+            x: mouse_pos[0],
+            y: mouse_pos[1],
+        };
+        sys::igUpdateHoveredWindowAndCaptureFlags(pos.into());
+    }
+}
+
+/// Marks a type as a transparent wrapper over a raw type
+pub trait RawWrapper {
+    /// Wrapped raw type
+    type Raw;
+    /// Returns an immutable reference to the wrapped raw value
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to use the returned raw reference without causing undefined
+    /// behaviour or breaking safety rules.
+    unsafe fn raw(&self) -> &Self::Raw;
+    /// Returns a mutable reference to the wrapped raw value
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to use the returned mutable raw reference without causing undefined
+    /// behaviour or breaking safety rules.
+    unsafe fn raw_mut(&mut self) -> &mut Self::Raw;
+}
+
+/// Casting from/to a raw type that has the same layout and alignment as the target type
+///
+/// # Safety
+///
+/// Each function outlines its own safety contract, which generally is
+/// that the cast from `T` to `Self` is valid.
+pub unsafe trait RawCast<T>: Sized {
+    /// Casts an immutable reference from the raw type
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee the cast is valid.
+    #[inline]
+    unsafe fn from_raw(raw: &T) -> &Self {
+        unsafe { &*(raw as *const _ as *const Self) }
+    }
+
+    /// Casts a mutable reference from the raw type
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee the cast is valid.
+    #[inline]
+    unsafe fn from_raw_mut(raw: &mut T) -> &mut Self {
+        unsafe { &mut *(raw as *mut _ as *mut Self) }
+    }
+
+    /// Casts an immutable reference to the raw type
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee the cast is valid.
+    #[inline]
+    unsafe fn raw(&self) -> &T {
+        unsafe { &*(self as *const _ as *const T) }
+    }
+
+    /// Casts a mutable reference to the raw type
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee the cast is valid.
+    #[inline]
+    unsafe fn raw_mut(&mut self) -> &mut T {
+        unsafe { &mut *(self as *mut _ as *mut T) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{component_count_i32, len_i32, plot_value_count_i32};
+
+    #[test]
+    fn component_count_rejects_zero_and_overflow() {
+        assert_eq!(component_count_i32("test", 1), 1);
+        assert!(std::panic::catch_unwind(|| component_count_i32("test", 0)).is_err());
+        assert!(
+            std::panic::catch_unwind(|| component_count_i32("test", (i32::MAX as usize) + 1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn plot_value_count_allows_zero_but_rejects_overflow() {
+        assert_eq!(plot_value_count_i32("test", 0), 0);
+        assert_eq!(plot_value_count_i32("test", 1), 1);
+        assert!(
+            std::panic::catch_unwind(|| plot_value_count_i32("test", (i32::MAX as usize) + 1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn len_i32_rejects_overflow() {
+        assert_eq!(len_i32("test", "items", 0), 0);
+        assert_eq!(len_i32("test", "items", 1), 1);
+        assert!(
+            std::panic::catch_unwind(|| len_i32("test", "items", (i32::MAX as usize) + 1)).is_err()
+        );
+    }
+}

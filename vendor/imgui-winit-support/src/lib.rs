@@ -1,77 +1,5 @@
-//! This crate provides a winit-based backend platform for imgui-rs.
-//!
-//! A backend platform handles window/input device events and manages their
-//! state.
-//!
-//! # Using the library
-//!
-//! There are five things you need to do to use this library correctly:
-//!
-//! 1. Initialize a `WinitPlatform` instance
-//! 2. Attach it to a winit `Window`
-//! 3. Pass events to the platform (every frame)
-//! 4. Call frame preparation callback (every frame)
-//! 5. Call render preparation callback (every frame)
-//!
-//! ## Complete example (without a renderer)
-//!
-//! ```no_run
-//! use imgui::Context;
-//! use imgui_winit_support::{HiDpiMode, WinitPlatform};
-//! use std::time::Instant;
-//! use winit::event::{Event, WindowEvent};
-//! use winit::event_loop::{ControlFlow, EventLoop};
-//! use winit::window::Window;
-//!
-//! let mut event_loop = EventLoop::new().expect("Failed to create EventLoop");
-//! let mut window = Window::new(&event_loop).unwrap();
-//!
-//! let mut imgui = Context::create();
-//! // configure imgui-rs Context if necessary
-//!
-//! let mut platform = WinitPlatform::init(&mut imgui); // step 1
-//! platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default); // step 2
-//!
-//! let mut last_frame = Instant::now();
-//! let mut run = true;
-//! event_loop.run(move |event, window_target| {
-//!     match event {
-//!         Event::NewEvents(_) => {
-//!             // other application-specific logic
-//!             let now = Instant::now();
-//!             imgui.io_mut().update_delta_time(now - last_frame);
-//!             last_frame = now;
-//!         },
-//!         Event::AboutToWait => {
-//!             // other application-specific logic
-//!             platform.prepare_frame(imgui.io_mut(), &window) // step 4
-//!                 .expect("Failed to prepare frame");
-//!             window.request_redraw();
-//!         }
-//!         Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
-//!             let ui = imgui.frame();
-//!             // application-specific rendering *under the UI*
-//!
-//!             // construct the UI
-//!
-//!             platform.prepare_render(&ui, &window); // step 5
-//!             // render the UI with a renderer
-//!             let draw_data = imgui.render();
-//!             // renderer.render(..., draw_data).expect("UI rendering failed");
-//!
-//!             // application-specific rendering *over the UI*
-//!         },
-//!         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-//!             window_target.exit();
-//!         }
-//!         // other application-specific event handling
-//!         event => {
-//!             platform.handle_event(imgui.io_mut(), &window, &event); // step 3
-//!             // other application-specific event handling
-//!         }
-//!     }
-//! }).expect("EventLoop error");
-//! ```
+//! winit 0.29 backend platform for dear-imgui-rs: window and input events are
+//! translated into the imgui `Io` event queue.
 
 use imgui::{self, BackendFlags, ConfigFlags, Context, Io, Key, Ui};
 use std::cmp::Ordering;
@@ -106,7 +34,7 @@ struct CursorSettings {
 
 fn to_winit_cursor(cursor: imgui::MouseCursor) -> MouseCursor {
     match cursor {
-        imgui::MouseCursor::Arrow => MouseCursor::Default,
+        imgui::MouseCursor::None | imgui::MouseCursor::Arrow => MouseCursor::Default,
         imgui::MouseCursor::TextInput => MouseCursor::Text,
         imgui::MouseCursor::ResizeAll => MouseCursor::Move,
         imgui::MouseCursor::ResizeNS => MouseCursor::NsResize,
@@ -225,16 +153,16 @@ fn to_imgui_key(key: winit::keyboard::Key, location: KeyLocation) -> Option<Key>
         (WinitKey::Named(NamedKey::NumLock), _) => Some(Key::NumLock),
         (WinitKey::Named(NamedKey::PrintScreen), _) => Some(Key::PrintScreen),
         (WinitKey::Named(NamedKey::Pause), _) => Some(Key::Pause),
-        (WinitKey::Character("0"), KeyLocation::Standard) => Some(Key::Alpha0),
-        (WinitKey::Character("1"), KeyLocation::Standard) => Some(Key::Alpha1),
-        (WinitKey::Character("2"), KeyLocation::Standard) => Some(Key::Alpha2),
-        (WinitKey::Character("3"), KeyLocation::Standard) => Some(Key::Alpha3),
-        (WinitKey::Character("4"), KeyLocation::Standard) => Some(Key::Alpha4),
-        (WinitKey::Character("5"), KeyLocation::Standard) => Some(Key::Alpha5),
-        (WinitKey::Character("6"), KeyLocation::Standard) => Some(Key::Alpha6),
-        (WinitKey::Character("7"), KeyLocation::Standard) => Some(Key::Alpha7),
-        (WinitKey::Character("8"), KeyLocation::Standard) => Some(Key::Alpha8),
-        (WinitKey::Character("9"), KeyLocation::Standard) => Some(Key::Alpha9),
+        (WinitKey::Character("0"), KeyLocation::Standard) => Some(Key::Key0),
+        (WinitKey::Character("1"), KeyLocation::Standard) => Some(Key::Key1),
+        (WinitKey::Character("2"), KeyLocation::Standard) => Some(Key::Key2),
+        (WinitKey::Character("3"), KeyLocation::Standard) => Some(Key::Key3),
+        (WinitKey::Character("4"), KeyLocation::Standard) => Some(Key::Key4),
+        (WinitKey::Character("5"), KeyLocation::Standard) => Some(Key::Key5),
+        (WinitKey::Character("6"), KeyLocation::Standard) => Some(Key::Key6),
+        (WinitKey::Character("7"), KeyLocation::Standard) => Some(Key::Key7),
+        (WinitKey::Character("8"), KeyLocation::Standard) => Some(Key::Key8),
+        (WinitKey::Character("9"), KeyLocation::Standard) => Some(Key::Key9),
         (WinitKey::Character("0"), KeyLocation::Numpad) => Some(Key::Keypad0),
         (WinitKey::Character("1"), KeyLocation::Numpad) => Some(Key::Keypad1),
         (WinitKey::Character("2"), KeyLocation::Numpad) => Some(Key::Keypad2),
@@ -312,12 +240,15 @@ impl WinitPlatform {
     /// * platform name is set
     pub fn init(imgui: &mut Context) -> WinitPlatform {
         let io = imgui.io_mut();
-        io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
-        io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
-        imgui.set_platform_name(Some(format!(
-            "imgui-winit-system {}",
-            env!("CARGO_PKG_VERSION")
-        )));
+        let backend_flags =
+            io.backend_flags() | BackendFlags::HAS_MOUSE_CURSORS | BackendFlags::HAS_SET_MOUSE_POS;
+        io.set_backend_flags(backend_flags);
+        imgui
+            .set_platform_name(Some(format!(
+                "imgui-winit-system {}",
+                env!("CARGO_PKG_VERSION")
+            )))
+            .expect("platform name contains no NUL byte");
         WinitPlatform {
             hidpi_mode: ActiveHiDpiMode::Default,
             hidpi_factor: 1.0,
@@ -334,10 +265,10 @@ impl WinitPlatform {
         let (hidpi_mode, hidpi_factor) = hidpi_mode.apply(window.scale_factor());
         self.hidpi_mode = hidpi_mode;
         self.hidpi_factor = hidpi_factor;
-        io.display_framebuffer_scale = [hidpi_factor as f32, hidpi_factor as f32];
+        io.set_display_framebuffer_scale([hidpi_factor as f32, hidpi_factor as f32]);
         let logical_size = window.inner_size().to_logical(hidpi_factor);
         let logical_size = self.scale_size_from_winit(window, logical_size);
-        io.display_size = [logical_size.width as f32, logical_size.height as f32];
+        io.set_display_size([logical_size.width as f32, logical_size.height as f32]);
     }
     /// Returns the current DPI factor.
     ///
@@ -430,7 +361,7 @@ impl WinitPlatform {
             WindowEvent::Resized(physical_size) => {
                 let logical_size = physical_size.to_logical(window.scale_factor());
                 let logical_size = self.scale_size_from_winit(window, logical_size);
-                io.display_size = [logical_size.width as f32, logical_size.height as f32];
+                io.set_display_size([logical_size.width as f32, logical_size.height as f32]);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 let hidpi_factor = match self.hidpi_mode {
@@ -440,18 +371,17 @@ impl WinitPlatform {
                 };
                 // Mouse position needs to be changed while we still have both the old and the new
                 // values
-                if io.mouse_pos[0].is_finite() && io.mouse_pos[1].is_finite() {
-                    io.mouse_pos = [
-                        io.mouse_pos[0] * (hidpi_factor / self.hidpi_factor) as f32,
-                        io.mouse_pos[1] * (hidpi_factor / self.hidpi_factor) as f32,
-                    ];
+                let mouse_pos = io.mouse_pos();
+                if mouse_pos[0].is_finite() && mouse_pos[1].is_finite() {
+                    let ratio = (hidpi_factor / self.hidpi_factor) as f32;
+                    io.set_mouse_pos([mouse_pos[0] * ratio, mouse_pos[1] * ratio]);
                 }
                 self.hidpi_factor = hidpi_factor;
-                io.display_framebuffer_scale = [hidpi_factor as f32, hidpi_factor as f32];
+                io.set_display_framebuffer_scale([hidpi_factor as f32, hidpi_factor as f32]);
                 // Window size might change too if we are using DPI rounding
                 let logical_size = window.inner_size().to_logical(scale_factor);
                 let logical_size = self.scale_size_from_winit(window, logical_size);
-                io.display_size = [logical_size.width as f32, logical_size.height as f32];
+                io.set_display_size([logical_size.width as f32, logical_size.height as f32]);
             }
             WindowEvent::ModifiersChanged(modifiers) => {
                 let state = modifiers.state();
@@ -525,11 +455,7 @@ impl WinitPlatform {
                 }
             }
             WindowEvent::Focused(newly_focused) => {
-                if !newly_focused {
-                    // Set focus-lost to avoid stuck keys (like 'alt'
-                    // when alt-tabbing)
-                    io.app_focus_lost = true;
-                }
+                io.add_focus_event(newly_focused);
             }
             _ => (),
         }
@@ -541,10 +467,11 @@ impl WinitPlatform {
     ///
     /// * mouse cursor is repositioned (if requested by imgui-rs)
     pub fn prepare_frame(&self, io: &mut Io, window: &Window) -> Result<(), ExternalError> {
-        if io.want_set_mouse_pos {
+        if io.want_set_mouse_pos() {
+            let mouse_pos = io.mouse_pos();
             let logical_pos = self.scale_pos_for_winit(
                 window,
-                LogicalPosition::new(f64::from(io.mouse_pos[0]), f64::from(io.mouse_pos[1])),
+                LogicalPosition::new(f64::from(mouse_pos[0]), f64::from(mouse_pos[1])),
             );
             window.set_cursor_position(logical_pos)
         } else {
@@ -561,12 +488,12 @@ impl WinitPlatform {
     pub fn prepare_render(&mut self, ui: &Ui, window: &Window) {
         let io = ui.io();
         if !io
-            .config_flags
+            .config_flags()
             .contains(ConfigFlags::NO_MOUSE_CURSOR_CHANGE)
         {
             let cursor = CursorSettings {
                 cursor: ui.mouse_cursor(),
-                draw_cursor: io.mouse_draw_cursor,
+                draw_cursor: io.mouse_draw_cursor(),
             };
             if self.cursor_cache != Some(cursor) {
                 cursor.apply(window);

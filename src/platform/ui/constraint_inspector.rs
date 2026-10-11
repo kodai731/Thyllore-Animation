@@ -9,6 +9,8 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -21,7 +23,7 @@ pub fn build_constraint_section(
     add_type_index: &mut i32,
     bake_fps: &mut f32,
 ) {
-    if !ui.collapsing_header("Constraints", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if !section_header(ui, world, "Constraints", SectionDefault::Open) {
         return;
     }
 
@@ -59,7 +61,7 @@ fn build_bake_section(ui: &imgui::Ui, world: &World, target_entity: Entity, bake
     ui.separator();
 
     ui.set_next_item_width(80.0);
-    ui.input_float("Sample FPS", bake_fps).build();
+    ui.input_float("Sample FPS", bake_fps);
     *bake_fps = bake_fps.clamp(1.0, 120.0);
 
     ui.same_line();
@@ -118,13 +120,13 @@ fn build_constraint_entry(
         entry.priority, type_name, entry.id, entry.id
     );
 
-    let opened = ui.collapsing_header(&header_label, imgui::TreeNodeFlags::empty());
+    let opened = section_header(ui, world, &header_label, SectionDefault::Closed);
 
     if !opened {
         return;
     }
 
-    let id_token = ui.push_id_int(entry.id as i32);
+    let id_token = ui.push_id(entry.id as i32);
 
     let changed = match &entry.constraint {
         ConstraintType::Ik(data) => build_ik_fields(ui, world, data, bone_list, hierarchy_state),
@@ -212,7 +214,11 @@ fn build_ik_fields(
 
     let mut chain = modified.chain_length as i32;
     ui.set_next_item_width(-1.0);
-    if ui.input_int("Chain Length", &mut chain).step(1).build() {
+    if ui
+        .input_int_config("Chain Length")
+        .step(1)
+        .build(&mut chain)
+    {
         modified.chain_length = chain.max(1) as u32;
         changed = true;
     }
@@ -339,7 +345,7 @@ fn build_parent_fields(
     let mut new_sources = modified.sources.clone();
 
     for (i, (bone_id, weight)) in modified.sources.iter().enumerate() {
-        let source_token = ui.push_id_int(i as i32);
+        let source_token = ui.push_id(i as i32);
         let mut current_weight = *weight;
 
         if let Some(bone) = build_bone_combo(ui, &format!("Src {}", i), *bone_id, bone_list) {

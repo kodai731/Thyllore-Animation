@@ -13,6 +13,8 @@ use crate::ecs::systems::{
     find_morph_channel_names, find_morph_siblings,
 };
 use crate::ecs::world::{Children, Entity, World};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 struct ChannelView<'a> {
@@ -55,11 +57,11 @@ pub fn build_blend_shape_section(
             format_section_title(world, representative, assets, graphics),
             representative
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        if !section_header(ui, world, &header, SectionDefault::Open) {
             continue;
         }
 
-        let id_token = ui.push_id_int(representative as i32);
+        let id_token = ui.push_id(representative as i32);
         build_blend_shape_toolbar(ui, world, representative, &mut inspector_state);
         build_channel_groups(
             ui,
@@ -72,7 +74,7 @@ pub fn build_blend_shape_section(
             },
             &mut inspector_state,
         );
-        id_token.end();
+        id_token.pop();
     }
 
     if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
@@ -182,7 +184,7 @@ fn build_channel_groups(
                 view.weights,
             );
         }
-        tree_token.end();
+        tree_token.pop();
     }
 }
 
@@ -265,5 +267,5 @@ fn build_presets_section(ui: &imgui::Ui, world: &World, entity: Entity) {
         world.send_command(MorphEvent::SaveExpressionLibrary);
     }
 
-    tree_token.end();
+    tree_token.pop();
 }

@@ -1,3 +1,4 @@
+use crate::platform::ui::numeric_format::numeric_format;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FLAME_DOMAIN;
@@ -7,8 +8,11 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
+use super::pointer::is_last_item_double_clicked;
 use super::scene_overlay::send_key_button;
 
 fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
@@ -28,7 +32,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale);
     if ui
         .slider_config("Noise Sharpness", 0.0, 1.0)
-        .display_format("%.2f")
+        .display_format(numeric_format("%.2f"))
         .build(&mut noise_sharpness)
     {
         effect.noise.shaping_scale =
@@ -67,7 +71,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
     if ui
         .slider_config("Vortex", 0.0, 1.0)
-        .display_format("%.2f")
+        .display_format(numeric_format("%.2f"))
         .build(&mut vortex)
     {
         let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
@@ -83,7 +87,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
     }
 
     let mut branch_seed = effect.branch.seed as i32;
-    if ui.input_int("Branch Seed", &mut branch_seed).build() {
+    if ui.input_int("Branch Seed", &mut branch_seed) {
         effect.branch.seed = branch_seed.max(0) as u32;
     }
 }
@@ -91,7 +95,7 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
 pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::component::FlameEffect;
 
-    if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Flame", SectionDefault::Closed) {
         let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
@@ -218,7 +222,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             ui.checkbox("Silhouette", &mut flame_ui.texture_fit_groups[0]);
             ui.checkbox("Color", &mut flame_ui.texture_fit_groups[1]);
             {
-                let _disabled = ui.begin_disabled(flame_ui.texture_fit_profile);
+                let _disabled = ui.begin_disabled_with_cond(flame_ui.texture_fit_profile);
                 ui.checkbox("Turbulence", &mut flame_ui.texture_fit_groups[2]);
             }
             if flame_ui.texture_fit_profile && ui.is_item_hovered() {
@@ -230,13 +234,11 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             }
             ui.checkbox("Tilt", &mut flame_ui.texture_fit_groups[3]);
 
-            // Fidelity radio button
-            let mut fidelity_mode: i32 = if flame_ui.texture_fit_profile { 1 } else { 0 };
-            if ui.radio_button("statistics (projection)", &mut fidelity_mode, 0) {
+            if ui.radio_button("statistics (projection)", !flame_ui.texture_fit_profile) {
                 flame_ui.texture_fit_profile = false;
             }
             ui.same_line();
-            if ui.radio_button("profile (reproduction)", &mut fidelity_mode, 1) {
+            if ui.radio_button("profile (reproduction)", flame_ui.texture_fit_profile) {
                 flame_ui.texture_fit_profile = true;
             }
 
@@ -369,12 +371,12 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
 
                     if effect_copy.emitter.kind == 1 {
                         ui.slider_config("Ring Radius", 0.2, 5.0)
-                            .display_format("%.2f")
+                            .display_format(numeric_format("%.2f"))
                             .build(&mut effect_copy.emitter.ring_major_radius);
                         ui.same_line();
                         let mut ring_speed = effect_copy.emitter.ring_angular_speed;
                         ui.slider_config("Ring Speed", 0.0, 6.28)
-                            .display_format("%.2f")
+                            .display_format(numeric_format("%.2f"))
                             .build(&mut ring_speed);
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
@@ -382,6 +384,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
                     let advanced_open = draw_tiered_params(
                         ui,
+                        ecs_world,
                         &thyllore_effect_core::FLAME_UI_PARAMS,
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -448,7 +451,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                         });
                     }
 
-                    if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
+                    if section_header(ui, ecs_world, "Flame Debug", SectionDefault::Closed) {
                         draw_flame_render_settings(ui, ecs_world);
                         if ui.button("Dump Probe") {
                             ecs_world.send_command(FlameUiCommand::DumpWallProbe {
@@ -620,7 +623,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
 
             ui.child_window("##fit_browser_list")
                 .size([0.0, -34.0])
-                .build(|| {
+                .build(ui, || {
                     let read = match std::fs::read_dir(&dir_now) {
                         Ok(read) => read,
                         Err(error) => {
@@ -670,8 +673,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                         }
                         let selected = !is_dir && *name == flame_ui.texture_fit_browser_selected;
                         let clicked = ui.selectable_config(&label).selected(selected).build();
-                        let double_clicked = ui.is_item_hovered()
-                            && ui.is_mouse_double_clicked(imgui::MouseButton::Left);
+                        let double_clicked = is_last_item_double_clicked(ui);
                         if *is_dir {
                             if double_clicked {
                                 jump = Some(format!("{}/{}", dir_now.trim_end_matches('/'), name));
@@ -695,7 +697,8 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                 });
 
             let has_selection = !flame_ui.texture_fit_browser_selected.is_empty();
-            ui.enabled(has_selection, || {
+            {
+                let _enabled_scope = ui.begin_disabled_with_cond(!has_selection);
                 if ui.button("Open") {
                     confirmed = Some(format!(
                         "{}/{}",
@@ -703,7 +706,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
                         flame_ui.texture_fit_browser_selected
                     ));
                 }
-            });
+            }
             ui.same_line();
             if ui.button("Cancel") {
                 flame_ui.texture_fit_browser_open = false;

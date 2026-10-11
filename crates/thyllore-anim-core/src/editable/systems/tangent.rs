@@ -11,24 +11,73 @@ pub fn sample_bezier(
     k1_in: &BezierHandle,
     time: f32,
 ) -> f32 {
+    let [p0, p1, p2, p3] =
+        build_control_points(k0_time, k0_value, k0_out, k1_time, k1_value, k1_in);
+    let u = find_bezier_t_for_time(p0.0, p1.0, p2.0, p3.0, time);
+
+    evaluate_cubic(p0.1, p1.1, p2.1, p3.1, u)
+}
+
+pub struct BezierSplit {
+    pub previous_out: BezierHandle,
+    pub inserted_value: f32,
+    pub inserted_in: BezierHandle,
+    pub inserted_out: BezierHandle,
+    pub next_in: BezierHandle,
+}
+
+pub fn split_bezier(
+    k0_time: f32,
+    k0_value: f32,
+    k0_out: &BezierHandle,
+    k1_time: f32,
+    k1_value: f32,
+    k1_in: &BezierHandle,
+    time: f32,
+) -> BezierSplit {
+    let [p0, p1, p2, p3] =
+        build_control_points(k0_time, k0_value, k0_out, k1_time, k1_value, k1_in);
+    let u = find_bezier_t_for_time(p0.0, p1.0, p2.0, p3.0, time);
+
+    let lerp = |a: (f32, f32), b: (f32, f32)| (a.0 + (b.0 - a.0) * u, a.1 + (b.1 - a.1) * u);
+    let q0 = lerp(p0, p1);
+    let q1 = lerp(p1, p2);
+    let q2 = lerp(p2, p3);
+    let r0 = lerp(q0, q1);
+    let r1 = lerp(q1, q2);
+    let split_point = lerp(r0, r1);
+
+    let handle_from = |origin: (f32, f32), target: (f32, f32)| {
+        BezierHandle::new(target.0 - origin.0, target.1 - origin.1)
+    };
+    BezierSplit {
+        previous_out: handle_from(p0, q0),
+        inserted_value: split_point.1,
+        inserted_in: handle_from(split_point, r0),
+        inserted_out: handle_from(split_point, r1),
+        next_in: handle_from(p3, q2),
+    }
+}
+
+fn build_control_points(
+    k0_time: f32,
+    k0_value: f32,
+    k0_out: &BezierHandle,
+    k1_time: f32,
+    k1_value: f32,
+    k1_in: &BezierHandle,
+) -> [(f32, f32); 4] {
     let dt = k1_time - k0_time;
     let (out_time, out_value) =
         clamp_handle_to_segment(k0_out.time_offset, k0_out.value_offset, dt);
     let (in_time, in_value) = clamp_handle_to_segment(k1_in.time_offset, k1_in.value_offset, -dt);
 
-    let p0_t = k0_time;
-    let p1_t = k0_time + out_time;
-    let p2_t = k1_time + in_time;
-    let p3_t = k1_time;
-
-    let p0_v = k0_value;
-    let p1_v = k0_value + out_value;
-    let p2_v = k1_value + in_value;
-    let p3_v = k1_value;
-
-    let u = find_bezier_t_for_time(p0_t, p1_t, p2_t, p3_t, time);
-
-    evaluate_cubic(p0_v, p1_v, p2_v, p3_v, u)
+    [
+        (k0_time, k0_value),
+        (k0_time + out_time, k0_value + out_value),
+        (k1_time + in_time, k1_value + in_value),
+        (k1_time, k1_value),
+    ]
 }
 
 fn clamp_handle_to_segment(time_offset: f32, value_offset: f32, max_abs_time: f32) -> (f32, f32) {
@@ -365,6 +414,17 @@ pub fn apply_tangent_by_type(keyframes: &mut [EditableKeyframe], index: usize) {
         TangentType::Clamped => apply_clamped_tangent(keyframes, index),
         TangentType::Plateau => apply_plateau_tangent(keyframes, index),
     }
+}
+
+pub fn align_opposite_handle(dragged: &BezierHandle, opposite: &BezierHandle) -> BezierHandle {
+    let dragged_length = compute_handle_length(dragged);
+    if dragged_length < 1e-6 {
+        return BezierHandle::linear();
+    }
+    let opposite_length = compute_handle_length(opposite);
+    let scale = opposite_length / dragged_length;
+
+    BezierHandle::new(-dragged.time_offset * scale, -dragged.value_offset * scale)
 }
 
 #[cfg(test)]
@@ -794,5 +854,80 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    #[test]
+    fn test_align_opposite_handle_symmetric_unchanged() {
+        let dragged = BezierHandle::new(1.0, 1.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            (aligned.value_offset + 1.0).abs() < 1e-6,
+            "value_offset should be -1.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_asymmetric_flips_direction() {
+        let dragged = BezierHandle::new(2.0, 1.0);
+        let opposite = BezierHandle::new(-1.0, -0.5);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            (aligned.value_offset + 0.5).abs() < 1e-6,
+            "value_offset should be -0.5"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_different_lengths() {
+        let dragged = BezierHandle::new(2.0, 0.0);
+        let opposite = BezierHandle::new(-1.0, 0.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            (aligned.time_offset + 1.0).abs() < 1e-6,
+            "time_offset should be -1.0"
+        );
+        assert!(
+            aligned.value_offset.abs() < 1e-6,
+            "value_offset should be ~0.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_zero_dragged() {
+        let dragged = BezierHandle::new(0.0, 0.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        assert!(
+            aligned.time_offset.abs() < 1e-6,
+            "time_offset should be ~0.0"
+        );
+        assert!(
+            aligned.value_offset.abs() < 1e-6,
+            "value_offset should be ~0.0"
+        );
+    }
+
+    #[test]
+    fn test_align_opposite_handle_preserves_length() {
+        let dragged = BezierHandle::new(3.0, 4.0);
+        let opposite = BezierHandle::new(-1.0, -1.0);
+        let aligned = align_opposite_handle(&dragged, &opposite);
+        let aligned_length = compute_handle_length(&aligned);
+        let opposite_length = compute_handle_length(&opposite);
+        assert!(
+            (aligned_length - opposite_length).abs() < 1e-6,
+            "aligned length {:.4} should equal opposite length {:.4}",
+            aligned_length,
+            opposite_length
+        );
     }
 }

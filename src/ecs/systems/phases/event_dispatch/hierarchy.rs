@@ -8,14 +8,14 @@ use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
-    Camera, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue, HierarchyState, TimelineState,
+    ClipLibrary, EntityRemovalCommand, EntityRemovalQueue, HierarchyState, TimelineState,
 };
 use crate::ecs::systems::{
-    camera_move_to_look_at, collapse_entity, expand_entity, hierarchy_collapse_bone,
-    hierarchy_deselect_all, hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
-    hierarchy_select_bone, hierarchy_toggle_selection, rename_entity, resolve_mesh_bone_id,
+    collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
+    hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone,
+    hierarchy_toggle_selection, navigate_hierarchy, rename_entity, resolve_mesh_bone_id,
     resolve_transform_entity, update_entity_scale, update_entity_translation,
-    update_entity_visible,
+    update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
@@ -41,7 +41,11 @@ pub enum HierarchyEvent {
     SetEntityRotation(Entity, Quaternion<f32>),
     SetEntityScale(Entity, Vector3<f32>),
     RenameEntity(Entity, String),
-    FocusOnEntity(Entity),
+    NavigateTree {
+        navigation: TreeNavigation,
+        page_rows: usize,
+    },
+    ScrollToSelectionDone,
     SetBoneDisplayStyle(BoneDisplayStyle),
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
@@ -58,6 +62,45 @@ fn dispatch_hierarchy_events(events: &[HierarchyEvent], world: &mut World, asset
     dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
+    dispatch_hierarchy_navigation_events(events, world, assets);
+}
+
+fn dispatch_hierarchy_navigation_events(
+    events: &[HierarchyEvent],
+    world: &mut World,
+    assets: &AssetStorage,
+) {
+    for event in events {
+        match event {
+            HierarchyEvent::NavigateTree {
+                navigation,
+                page_rows,
+            } => match navigate_hierarchy(world, assets, *navigation, *page_rows) {
+                TreeSelection::Entity(entity) => sync_curve_editor_on_selection(
+                    &[HierarchyEvent::SelectEntity(entity)],
+                    world,
+                    assets,
+                ),
+                TreeSelection::Bone(bone_id) => {
+                    dispatch_hierarchy_bone_events(
+                        &[HierarchyEvent::SelectBone(bone_id)],
+                        world,
+                        assets,
+                    );
+                    sync_curve_editor_on_selection(
+                        &[HierarchyEvent::SelectBone(bone_id)],
+                        world,
+                        assets,
+                    );
+                }
+                TreeSelection::Unchanged => {}
+            },
+            HierarchyEvent::ScrollToSelectionDone => {
+                world.resource_mut::<HierarchyState>().scroll_to_selected = false;
+            }
+            _ => {}
+        }
+    }
 }
 
 fn dispatch_hierarchy_entity_events(events: &[HierarchyEvent], world: &mut World) {
@@ -147,19 +190,6 @@ fn dispatch_hierarchy_entity_events(events: &[HierarchyEvent], world: &mut World
                             entities: all_to_delete,
                         },
                     );
-                }
-            }
-
-            HierarchyEvent::FocusOnEntity(entity) => {
-                let transform_entity = resolve_transform_entity(world, *entity);
-                let target = world
-                    .get_component::<Transform>(transform_entity)
-                    .map(|t| t.translation);
-
-                if let Some(target) = target {
-                    let offset = Vector3::new(5.0, 3.0, 5.0);
-                    let mut camera = world.resource_mut::<Camera>();
-                    camera_move_to_look_at(&mut camera, target, offset);
                 }
             }
 

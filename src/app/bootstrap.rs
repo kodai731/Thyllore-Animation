@@ -7,7 +7,7 @@ use crate::ecs::systems::{
     animation_debug_dump::write_animation_debug_dump, apply_engine_overrides,
     batch_anim_dump_write, batch_run_report, format_validation_summary, EngineCliOverrides,
 };
-use crate::vulkanr::context::{CommandState, RenderTargets};
+use crate::vulkanr::context::RenderTargets;
 
 /// Applies the startup configuration: the engine's own overrides first, then every subsystem
 /// that registered a `bootstrap_hook!`, without naming any of them (see `.claude/rules/hierarchy.md`).
@@ -28,7 +28,8 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
         &system.external_command_sender(),
     );
 
-    let command_pool = app.resource::<CommandState>().pool.clone();
+    app.data.ecs_world.insert_resource(system.ui_fonts);
+
     let rrrender = app.resource::<RenderTargets>().render.clone();
 
     crate::app::effect_hooks::run_effect_after_overrides(
@@ -37,14 +38,7 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
         &mut app.data,
         &rrrender,
     )?;
-    App::init_imgui_rendering(
-        &app.instance,
-        &app.rrdevice,
-        &mut app.data,
-        &mut system.imgui,
-        &command_pool,
-        &rrrender,
-    )
+    App::init_imgui_rendering(&app.rrdevice, &mut app.data, &mut system.imgui, &rrrender)
 }
 
 pub fn finish_run(app: &App, overrides: &EngineCliOverrides, is_batch_mode: bool) {

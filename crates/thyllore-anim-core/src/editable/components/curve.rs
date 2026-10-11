@@ -55,11 +55,24 @@ impl PropertyType {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CurveExtrapolation {
+    #[default]
+    Constant,
+    Linear,
+    Cycle,
+    CycleWithOffset,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PropertyCurve {
     pub id: CurveId,
     pub property_type: PropertyType,
     pub keyframes: Vec<EditableKeyframe>,
+    #[serde(default)]
+    pub pre_extrapolation: CurveExtrapolation,
+    #[serde(default)]
+    pub post_extrapolation: CurveExtrapolation,
     next_keyframe_id: KeyframeId,
 }
 
@@ -69,6 +82,8 @@ impl PropertyCurve {
             id,
             property_type,
             keyframes: Vec::new(),
+            pre_extrapolation: CurveExtrapolation::default(),
+            post_extrapolation: CurveExtrapolation::default(),
             next_keyframe_id: 1,
         }
     }
@@ -83,6 +98,8 @@ impl PropertyCurve {
             id,
             property_type,
             keyframes,
+            pre_extrapolation: CurveExtrapolation::default(),
+            post_extrapolation: CurveExtrapolation::default(),
             next_keyframe_id,
         }
     }
@@ -164,6 +181,8 @@ impl Default for PropertyCurve {
             id: 0,
             property_type: PropertyType::TranslationX,
             keyframes: Vec::new(),
+            pre_extrapolation: CurveExtrapolation::default(),
+            post_extrapolation: CurveExtrapolation::default(),
             next_keyframe_id: 1,
         }
     }

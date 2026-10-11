@@ -171,7 +171,7 @@ fn build_clip_list(
     let remaining = ui.content_region_avail();
     ui.child_window("##clip_list")
         .size([remaining[0], remaining[1] - 4.0])
-        .build(|| {
+        .build(ui, || {
             for (id, name) in &clip_names {
                 if !filter_lower.is_empty() && !name.to_lowercase().contains(&filter_lower) {
                     continue;

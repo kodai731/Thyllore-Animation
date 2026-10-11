@@ -1,8 +1,12 @@
-use imgui::ColorEditFlags;
+use crate::platform::ui::numeric_format::numeric_format;
+use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
 use thyllore_effect_core::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
 };
 use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
+
+use crate::ecs::World;
+use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
 
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
@@ -55,9 +59,10 @@ fn draw_scalar<C>(
     };
 
     let mut value = (scalar.get)(component);
+    property_label(ui, &meta.display_label());
     if ui
-        .slider_config(meta.display_label(), meta.min, meta.max)
-        .display_format(meta.format)
+        .slider_config(format!("##{}", meta.name), meta.min, meta.max)
+        .display_format(numeric_format(meta.format))
         .build(&mut value)
     {
         (scalar.set)(component, value);
@@ -116,9 +121,14 @@ fn draw_color<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut picked = mapping.to_picker(stored);
+    property_label(ui, &meta.display_label());
     let changed = ui
-        .color_picker3_config(meta.display_label(), &mut picked)
-        .flags(ColorEditFlags::FLOAT | ColorEditFlags::NO_ALPHA | ColorEditFlags::NO_INPUTS)
+        .color_picker3_config(format!("##{}", meta.name), &mut picked)
+        .flags(ColorPickerOptions {
+            flags: ColorPickerFlags::NO_ALPHA | ColorPickerFlags::NO_INPUTS,
+            data_type: Some(ColorDataType::Float),
+            ..ColorPickerOptions::default()
+        })
         .build();
     show_tooltip(ui, &mapping.tooltip(meta.tooltip));
 
@@ -167,10 +177,8 @@ fn draw_offset<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut dragged = stored;
-    let changed = imgui::Drag::new(meta.display_label())
-        .range(meta.min, meta.max)
-        .display_format(meta.format)
-        .build_array(ui, &mut dragged);
+    property_label(ui, &meta.display_label());
+    let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
     show_tooltip(ui, meta.tooltip);
 
     let written = if changed {
@@ -239,6 +247,7 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
 
 pub fn draw_tiered_params<C>(
     ui: &imgui::Ui,
+    world: &World,
     ui_params: &[UiParam],
     scalars: &[ScalarParam<C>],
     component: &mut C,
@@ -256,8 +265,7 @@ pub fn draw_tiered_params<C>(
     );
 
     let remaining_groups = group_remaining_params(ui_params, hidden);
-    if remaining_groups.is_empty()
-        || !ui.collapsing_header("Advanced", imgui::TreeNodeFlags::empty())
+    if remaining_groups.is_empty() || !section_header(ui, world, "Advanced", SectionDefault::Closed)
     {
         return false;
     }

@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn bone_set_key_writes_standard_values_on_a_humanoid_model() {
-        use crate::ecs::systems::timeline_systems::process_bone_set_key;
+        use crate::ecs::systems::timeline::process_bone_set_key;
         use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_thyllore;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");

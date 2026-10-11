@@ -816,7 +816,7 @@ impl App {
         command_buffer: vk::CommandBuffer,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
-        if draw_data.total_vtx_count == 0 || draw_data.total_idx_count == 0 {
+        if draw_data.total_vtx_count() == 0 || draw_data.total_idx_count() == 0 {
             return Ok(());
         }
 
@@ -832,11 +832,6 @@ impl App {
             .imgui
             .pipeline_layout
             .ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
-        let descriptor_set = self
-            .data
-            .imgui
-            .descriptor_set
-            .ok_or_else(|| anyhow!("ImGui descriptor set not initialized"))?;
         let vertex_buffer = self.data.imgui.vertex_buffers[frame_slot]
             .ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
         let index_buffer = self.data.imgui.index_buffers[frame_slot]
@@ -847,12 +842,11 @@ impl App {
             draw_data,
             pipeline,
             pipeline_layout,
-            descriptor_set,
             vertex_buffer,
             index_buffer,
         );
 
-        self.record_imgui_draw_commands(command_buffer, draw_data, pipeline_layout, descriptor_set);
+        self.record_imgui_draw_commands(command_buffer, draw_data, pipeline_layout);
 
         Ok(())
     }
@@ -863,7 +857,6 @@ impl App {
         draw_data: &imgui::DrawData,
         pipeline: vk::Pipeline,
         pipeline_layout: vk::PipelineLayout,
-        descriptor_set: vk::DescriptorSet,
         vertex_buffer: vk::Buffer,
         index_buffer: vk::Buffer,
     ) {
@@ -871,15 +864,6 @@ impl App {
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
             pipeline,
-        );
-
-        self.rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            pipeline_layout,
-            0,
-            &[descriptor_set],
-            &[],
         );
 
         self.rrdevice
@@ -892,8 +876,8 @@ impl App {
             vk::IndexType::UINT16,
         );
 
-        let fb_width = draw_data.display_size[0] * draw_data.framebuffer_scale[0];
-        let fb_height = draw_data.display_size[1] * draw_data.framebuffer_scale[1];
+        let fb_width = draw_data.display_size()[0] * draw_data.framebuffer_scale()[0];
+        let fb_height = draw_data.display_size()[1] * draw_data.framebuffer_scale()[1];
         let viewport = vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
@@ -906,12 +890,12 @@ impl App {
             .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
         let scale = [
-            2.0 / draw_data.display_size[0],
-            2.0 / draw_data.display_size[1],
+            2.0 / draw_data.display_size()[0],
+            2.0 / draw_data.display_size()[1],
         ];
         let translate = [
-            -1.0 - draw_data.display_pos[0] * scale[0],
-            -1.0 - draw_data.display_pos[1] * scale[1],
+            -1.0 - draw_data.display_pos()[0] * scale[0],
+            -1.0 - draw_data.display_pos()[1] * scale[1],
         ];
         let push_constants = [scale[0], scale[1], translate[0], translate[1]];
 
@@ -932,12 +916,10 @@ impl App {
         command_buffer: vk::CommandBuffer,
         draw_data: &imgui::DrawData,
         pipeline_layout: vk::PipelineLayout,
-        descriptor_set: vk::DescriptorSet,
     ) {
-        let font_texture_id = descriptor_set.as_raw() as usize;
         let viewport_texture_id = self.data.viewport.texture_id();
         let viewport_descriptor_set = self.data.viewport.descriptor_set;
-        let mut current_texture_id = font_texture_id;
+        let mut bound_texture_id: Option<u64> = None;
 
         let mut vertex_offset: u32 = 0;
         let mut index_offset: u32 = 0;
@@ -948,39 +930,42 @@ impl App {
                     imgui::DrawCmd::Elements { count, cmd_params } => {
                         let texture_id = cmd_params.texture_id.id();
 
-                        if texture_id != current_texture_id {
-                            current_texture_id = texture_id;
-                            let new_descriptor_set = if texture_id == viewport_texture_id {
-                                viewport_descriptor_set
+                        if bound_texture_id != Some(texture_id) {
+                            let descriptor_set = if texture_id == viewport_texture_id {
+                                Some(viewport_descriptor_set)
                             } else {
-                                descriptor_set
+                                self.data.imgui.descriptor_set_for(texture_id)
+                            };
+                            let Some(descriptor_set) = descriptor_set else {
+                                continue;
                             };
                             self.rrdevice.device.cmd_bind_descriptor_sets(
                                 command_buffer,
                                 vk::PipelineBindPoint::GRAPHICS,
                                 pipeline_layout,
                                 0,
-                                &[new_descriptor_set],
+                                &[descriptor_set],
                                 &[],
                             );
+                            bound_texture_id = Some(texture_id);
                         }
 
                         let clip_rect = cmd_params.clip_rect;
                         let scissor = vk::Rect2D::builder()
                             .offset(vk::Offset2D {
-                                x: ((clip_rect[0] - draw_data.display_pos[0])
-                                    * draw_data.framebuffer_scale[0])
+                                x: ((clip_rect[0] - draw_data.display_pos()[0])
+                                    * draw_data.framebuffer_scale()[0])
                                     .max(0.0) as i32,
-                                y: ((clip_rect[1] - draw_data.display_pos[1])
-                                    * draw_data.framebuffer_scale[1])
+                                y: ((clip_rect[1] - draw_data.display_pos()[1])
+                                    * draw_data.framebuffer_scale()[1])
                                     .max(0.0) as i32,
                             })
                             .extent(vk::Extent2D {
                                 width: ((clip_rect[2] - clip_rect[0])
-                                    * draw_data.framebuffer_scale[0])
+                                    * draw_data.framebuffer_scale()[0])
                                     as u32,
                                 height: ((clip_rect[3] - clip_rect[1])
-                                    * draw_data.framebuffer_scale[1])
+                                    * draw_data.framebuffer_scale()[1])
                                     as u32,
                             });
                         self.rrdevice

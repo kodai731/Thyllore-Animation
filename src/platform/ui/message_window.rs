@@ -82,7 +82,7 @@ fn build_filter_buttons(
 fn build_message_list(ui: &imgui::Ui, message_log: &MessageLog) {
     let filtered = crate::ecs::systems::message_log_filtered_messages(message_log);
 
-    ui.child_window("message_list").build(|| {
+    ui.child_window("message_list").build(ui, || {
         for msg in &filtered {
             let color = match msg.level {
                 MessageLevel::Info => COLOR_INFO,
@@ -98,7 +98,7 @@ fn build_message_list(ui: &imgui::Ui, message_log: &MessageLog) {
         }
 
         if message_log.auto_scroll && !filtered.is_empty() {
-            ui.set_scroll_here_y();
+            ui.set_scroll_here_y(0.5);
         }
     });
 }

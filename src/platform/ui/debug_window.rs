@@ -12,6 +12,9 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::World;
+use crate::platform::ui::theme::colors::{srgb_to_linear, TEXT_SECONDARY};
+use crate::platform::ui::theme::icons::Icon;
+use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
@@ -49,74 +52,65 @@ pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn build_camera_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
-    ui.text("Camera:");
-    if ui.button("Reset Camera") {
+    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), "Camera:");
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::Undo, "Reset Camera", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::ResetCamera);
     }
-    ui.same_line();
-    if ui.button("Reset Up") {
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::Rotate, "Reset Up", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::ResetCameraUp);
     }
-    ui.same_line();
-    if ui.button("To Model") {
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::Box, "To Model", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::MoveCameraToModel);
     }
 
-    ui.separator();
-    ui.text("Debug Primitives:");
-    if ui.button("Spawn Cube") {
+    toolbar_divider(ui);
+
+    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), "Debug Primitives:");
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::Box, "Spawn Cube", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
             kind: crate::ecs::events::DebugPrimitiveKind::Cube,
         });
     }
-    ui.same_line();
-    if ui.button("Spawn Sphere") {
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::CircleDot, "Spawn Sphere", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
             kind: crate::ecs::events::DebugPrimitiveKind::Sphere,
         });
     }
-    ui.same_line();
-    if ui.button("Spawn Floor") {
+    ui.same_line_with_spacing(0.0, 4.0);
+    if icon_button(ui, Icon::Layers, "Spawn Floor", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {
             kind: crate::ecs::events::DebugPrimitiveKind::Floor,
         });
     }
 }
 
+const DEBUG_VIEW_MODE_LABELS: [&str; 10] = [
+    "Final (Lit + Shadow)",
+    "Position (World Space)",
+    "Normal (World Space)",
+    "Shadow Mask",
+    "N dot L (Green=Lit, Red=Back)",
+    "Light Direction",
+    "View Depth (Green=GBuffer depth)",
+    "ObjectID (Color per ID)",
+    "Selection View (Orange=Selected)",
+    "SelectionUBO (R=count, G=id0)",
+];
+
 fn build_debug_view_mode_panel(ui: &imgui::Ui, ecs_world: &World) {
     let mut state = ecs_world.resource_mut::<DebugViewState>();
-    ui.text("Debug View Mode:");
-    let mut current_mode = state.debug_view_mode.as_int();
-
-    if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
-        state.debug_view_mode = DebugViewMode::Final;
-    }
-    if ui.radio_button("Position (World Space)", &mut current_mode, 1) {
-        state.debug_view_mode = DebugViewMode::Position;
-    }
-    if ui.radio_button("Normal (World Space)", &mut current_mode, 2) {
-        state.debug_view_mode = DebugViewMode::Normal;
-    }
-    if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
-        state.debug_view_mode = DebugViewMode::ShadowMask;
-    }
-    if ui.radio_button("N dot L (Green=Lit, Red=Back)", &mut current_mode, 4) {
-        state.debug_view_mode = DebugViewMode::NdotL;
-    }
-    if ui.radio_button("Light Direction", &mut current_mode, 5) {
-        state.debug_view_mode = DebugViewMode::LightDirection;
-    }
-    if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
-        state.debug_view_mode = DebugViewMode::ViewDepth;
-    }
-    if ui.radio_button("ObjectID (Color per ID)", &mut current_mode, 7) {
-        state.debug_view_mode = DebugViewMode::ObjectID;
-    }
-    if ui.radio_button("Selection View (Orange=Selected)", &mut current_mode, 8) {
-        state.debug_view_mode = DebugViewMode::SelectionView;
-    }
-    if ui.radio_button("SelectionUBO (R=count, G=id0)", &mut current_mode, 9) {
-        state.debug_view_mode = DebugViewMode::SelectionUBO;
+    let mut current_index = state.debug_view_mode.as_int() as usize;
+    if ui.combo_simple_string(
+        "Debug View Mode",
+        &mut current_index,
+        &DEBUG_VIEW_MODE_LABELS,
+    ) {
+        state.debug_view_mode = DebugViewMode::from_int(current_index as i32);
     }
 }
 
@@ -373,7 +367,7 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static IMGUI_SIZE_LOGGED: AtomicBool = AtomicBool::new(false);
     if !IMGUI_SIZE_LOGGED.load(Ordering::Relaxed) {
-        let display_size = ui.io().display_size;
+        let display_size = ui.io().display_size();
         log!(
             "ImGui display size: {:.1} x {:.1}",
             display_size[0],

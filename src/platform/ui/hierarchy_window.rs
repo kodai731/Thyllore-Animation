@@ -1,15 +1,116 @@
-use imgui::Condition;
+use crate::platform::ui::numeric_format::numeric_format;
+use imgui::{Condition, Key};
 
-use crate::animation::{BoneId, Skeleton};
+use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
+use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
-use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
+use crate::ecs::systems::{
+    query_bone_rows, query_hierarchy_tree, CameraMotion, TreeMove, TreeNavigation,
+};
 use crate::ecs::world::World;
+use crate::platform::ui::theme::{
+    entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
+
+pub(crate) struct TreeKeyBinding {
+    pub(crate) key: Key,
+    pub(crate) modifier: KeyModifier,
+    pub(crate) label: &'static str,
+    navigation: TreeNavigation,
+}
+
+pub(crate) const TREE_KEY_BINDINGS: &[TreeKeyBinding] = &[
+    TreeKeyBinding {
+        key: Key::DownArrow,
+        modifier: KeyModifier::None,
+        label: "Move selection down",
+        navigation: TreeNavigation::Move(TreeMove::Next),
+    },
+    TreeKeyBinding {
+        key: Key::UpArrow,
+        modifier: KeyModifier::None,
+        label: "Move selection up",
+        navigation: TreeNavigation::Move(TreeMove::Prev),
+    },
+    TreeKeyBinding {
+        key: Key::DownArrow,
+        modifier: KeyModifier::Shift,
+        label: "Extend selection down",
+        navigation: TreeNavigation::Extend(TreeMove::Next),
+    },
+    TreeKeyBinding {
+        key: Key::UpArrow,
+        modifier: KeyModifier::Shift,
+        label: "Extend selection up",
+        navigation: TreeNavigation::Extend(TreeMove::Prev),
+    },
+    TreeKeyBinding {
+        key: Key::Home,
+        modifier: KeyModifier::None,
+        label: "Select first item",
+        navigation: TreeNavigation::Move(TreeMove::First),
+    },
+    TreeKeyBinding {
+        key: Key::End,
+        modifier: KeyModifier::None,
+        label: "Select last item",
+        navigation: TreeNavigation::Move(TreeMove::Last),
+    },
+    TreeKeyBinding {
+        key: Key::PageDown,
+        modifier: KeyModifier::None,
+        label: "Page down",
+        navigation: TreeNavigation::Move(TreeMove::PageDown),
+    },
+    TreeKeyBinding {
+        key: Key::PageUp,
+        modifier: KeyModifier::None,
+        label: "Page up",
+        navigation: TreeNavigation::Move(TreeMove::PageUp),
+    },
+    TreeKeyBinding {
+        key: Key::RightArrow,
+        modifier: KeyModifier::None,
+        label: "Expand or descend",
+        navigation: TreeNavigation::ExpandOrDescend,
+    },
+    TreeKeyBinding {
+        key: Key::LeftArrow,
+        modifier: KeyModifier::None,
+        label: "Collapse or ascend",
+        navigation: TreeNavigation::CollapseOrAscend,
+    },
+    TreeKeyBinding {
+        key: Key::RightArrow,
+        modifier: KeyModifier::Shift,
+        label: "Expand all children",
+        navigation: TreeNavigation::ExpandRecursive,
+    },
+    TreeKeyBinding {
+        key: Key::LeftArrow,
+        modifier: KeyModifier::Shift,
+        label: "Collapse all children",
+        navigation: TreeNavigation::CollapseRecursive,
+    },
+    TreeKeyBinding {
+        key: Key::KeypadMultiply,
+        modifier: KeyModifier::None,
+        label: "Expand siblings",
+        navigation: TreeNavigation::ExpandSiblings,
+    },
+    TreeKeyBinding {
+        key: Key::A,
+        modifier: KeyModifier::Ctrl,
+        label: "Select all visible",
+        navigation: TreeNavigation::SelectAllVisible,
+    },
+];
 
 fn draw_hierarchy_window(
     ui: &imgui::Ui,
@@ -41,6 +142,8 @@ fn draw_hierarchy_window(
                     build_bone_tree(ui, world, state, assets);
                 }
             }
+
+            handle_tree_keyboard(ui, world, state);
         });
 }
 
@@ -80,13 +183,33 @@ fn build_mode_tabs(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
 
 fn build_search_bar(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
     let mut search_text = state.search_filter.clone();
-    ui.set_next_item_width(-1.0);
-    if ui
-        .input_text("##search", &mut search_text)
-        .hint("Search...")
-        .build()
-    {
+    if search_field(ui, "hierarchy_search", "Search...", &mut search_text) {
         world.send_command(HierarchyEvent::SetSearchFilter(search_text));
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RowClick {
+    None,
+    Select,
+    ToggleSelect,
+    ToggleExpand,
+    Activate,
+}
+
+fn resolve_tree_response(response: TreeRowResponse, ui: &imgui::Ui) -> RowClick {
+    match response {
+        TreeRowResponse::None => RowClick::None,
+        TreeRowResponse::Clicked => {
+            let ctrl = current_key_modifier(ui) == KeyModifier::Ctrl;
+            if ctrl {
+                RowClick::ToggleSelect
+            } else {
+                RowClick::Select
+            }
+        }
+        TreeRowResponse::ExpandToggled => RowClick::ToggleExpand,
+        TreeRowResponse::DoubleClicked => RowClick::Activate,
     }
 }
 
@@ -94,49 +217,43 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
     let entries = query_hierarchy_tree(world, state);
 
     for entry in entries {
-        let indent = entry.depth as f32 * 16.0;
-        let cursor_pos = ui.cursor_pos();
-        ui.set_cursor_pos([cursor_pos[0] + indent, cursor_pos[1]]);
+        let spec = TreeRowSpec {
+            id: &entry.entity.to_string(),
+            label: &entry.name,
+            icon: &entity_icon(entry.icon).map(Icon::glyph).unwrap_or_default(),
+            depth: entry.depth,
+            has_children: entry.has_children,
+            expanded: entry.expanded,
+            selected: entry.selected,
+        };
+        let follow_scroll = state.scroll_to_selected && state.selected_entity == Some(entry.entity);
+        if follow_scroll {
+            world.send_command(HierarchyEvent::ScrollToSelectionDone);
+        }
 
-        let expand_button_width = 16.0;
+        let response = tree_row(ui, world, &spec);
+        if follow_scroll {
+            ui.set_scroll_here_y(0.5);
+        }
 
-        if entry.has_children {
-            let expand_symbol = if entry.expanded { "v" } else { ">" };
-            if ui.small_button(&format!("{}##{}", expand_symbol, entry.entity)) {
+        match resolve_tree_response(response, ui) {
+            RowClick::None => {}
+            RowClick::Select => world.send_command(HierarchyEvent::SelectEntity(entry.entity)),
+            RowClick::ToggleSelect => {
+                world.send_command(HierarchyEvent::ToggleEntitySelection(entry.entity))
+            }
+            RowClick::ToggleExpand => {
                 if entry.expanded {
                     world.send_command(HierarchyEvent::CollapseEntity(entry.entity));
                 } else {
                     world.send_command(HierarchyEvent::ExpandEntity(entry.entity));
                 }
             }
-            ui.same_line();
-        } else {
-            let cursor = ui.cursor_pos();
-            ui.set_cursor_pos([cursor[0] + expand_button_width, cursor[1]]);
-        }
-
-        let icon_label = format!("[{}]", entry.icon_char);
-        ui.text(&icon_label);
-        ui.same_line();
-
-        let label = format!("{}##{}", entry.name, entry.entity);
-        let selected = entry.selected;
-
-        if ui.selectable_config(&label).selected(selected).build() {
-            if ui.io().key_ctrl {
-                world.send_command(HierarchyEvent::ToggleEntitySelection(entry.entity));
-            } else {
+            RowClick::Activate => {
                 world.send_command(HierarchyEvent::SelectEntity(entry.entity));
+                world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
             }
         }
-
-        if ui.is_item_hovered() && ui.is_mouse_double_clicked(imgui::MouseButton::Left) {
-            world.send_command(HierarchyEvent::FocusOnEntity(entry.entity));
-        }
-    }
-
-    if ui.is_key_pressed(imgui::Key::Delete) && state.selected_entity.is_some() {
-        world.send_command(HierarchyEvent::DeleteSelectedEntities);
     }
 }
 
@@ -166,8 +283,43 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
     ));
     ui.separator();
 
-    for &root_id in &skeleton.root_bone_ids {
-        build_bone_entry_recursive(ui, world, state, skeleton, root_id, 0);
+    for bone_row in query_bone_rows(skeleton, state) {
+        let spec = TreeRowSpec {
+            id: &format!("bone_{}", bone_row.bone_id),
+            label: &bone_row.name,
+            icon: "[B]",
+            depth: bone_row.depth,
+            has_children: bone_row.has_children,
+            expanded: bone_row.expanded,
+            selected: bone_row.selected,
+        };
+        let follow_scroll = state.scroll_to_selected && bone_row.selected;
+        if follow_scroll {
+            world.send_command(HierarchyEvent::ScrollToSelectionDone);
+        }
+
+        let response = tree_row(ui, world, &spec);
+        if follow_scroll {
+            ui.set_scroll_here_y(0.5);
+        }
+
+        match resolve_tree_response(response, ui) {
+            RowClick::None => {}
+            RowClick::Select | RowClick::ToggleSelect => {
+                world.send_command(HierarchyEvent::SelectBone(bone_row.bone_id))
+            }
+            RowClick::Activate => {
+                world.send_command(HierarchyEvent::SelectBone(bone_row.bone_id));
+                world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
+            }
+            RowClick::ToggleExpand => {
+                if bone_row.expanded {
+                    world.send_command(HierarchyEvent::CollapseBone(bone_row.bone_id));
+                } else {
+                    world.send_command(HierarchyEvent::ExpandBone(bone_row.bone_id));
+                }
+            }
+        }
     }
 }
 
@@ -203,8 +355,9 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
     if bone_gizmo.distance_scaling_enabled {
         let mut factor = bone_gizmo.distance_scaling_factor;
         ui.set_next_item_width(-1.0);
-        if imgui::Slider::new(ui, "Factor", 0.01f32, 0.1f32)
-            .display_format("%.3f")
+        if ui
+            .slider_config("Factor", 0.01f32, 0.1f32)
+            .display_format(numeric_format("%.3f"))
             .build(&mut factor)
         {
             world.send_command(HierarchyEvent::SetBoneDistanceScaleFactor(factor));
@@ -212,56 +365,61 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
     }
 }
 
-fn build_bone_entry_recursive(
-    ui: &imgui::Ui,
-    world: &World,
-    state: &HierarchyState,
-    skeleton: &Skeleton,
-    bone_id: BoneId,
-    depth: usize,
-) {
-    let bone = match skeleton.get_bone(bone_id) {
-        Some(b) => b,
-        None => return,
-    };
+fn handle_tree_keyboard(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
+    if !ui.is_window_focused() || ui.is_any_item_active() {
+        return;
+    }
+    let modifier = current_key_modifier(ui);
+    let page_rows =
+        (ui.content_region_avail()[1] / ui.text_line_height_with_spacing()).max(1.0) as usize;
 
-    let has_children = !bone.children.is_empty();
-    let expanded = hierarchy_is_bone_expanded(state, bone_id);
-    let selected = state.selected_bone_id == Some(bone_id);
-
-    let indent = depth as f32 * 16.0;
-    let cursor_pos = ui.cursor_pos();
-    ui.set_cursor_pos([cursor_pos[0] + indent, cursor_pos[1]]);
-
-    let expand_button_width = 16.0;
-
-    if has_children {
-        let expand_symbol = if expanded { "v" } else { ">" };
-        if ui.small_button(&format!("{}##bone_{}", expand_symbol, bone_id)) {
-            if expanded {
-                world.send_command(HierarchyEvent::CollapseBone(bone_id));
-            } else {
-                world.send_command(HierarchyEvent::ExpandBone(bone_id));
-            }
+    for binding in TREE_KEY_BINDINGS {
+        if binding.modifier == modifier && ui.is_key_pressed(binding.key) {
+            world.send_command(HierarchyEvent::NavigateTree {
+                navigation: binding.navigation,
+                page_rows,
+            });
+            return;
         }
-        ui.same_line();
-    } else {
-        let cursor = ui.cursor_pos();
-        ui.set_cursor_pos([cursor[0] + expand_button_width, cursor[1]]);
     }
 
-    ui.text("[B]");
-    ui.same_line();
+    if modifier == KeyModifier::None {
+        handle_tree_activation_keys(ui, world, state);
+        handle_type_ahead(ui, world);
+    }
+}
 
-    let label = format!("{}##bone_{}", bone.name, bone_id);
-    if ui.selectable_config(&label).selected(selected).build() {
-        world.send_command(HierarchyEvent::SelectBone(bone_id));
+fn handle_tree_activation_keys(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
+    let frame_pressed = ui.is_key_pressed(Key::F)
+        || ui.is_key_pressed(Key::Enter)
+        || ui.is_key_pressed(Key::KeypadEnter);
+    if frame_pressed {
+        world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
     }
 
-    if expanded && has_children {
-        let children: Vec<BoneId> = bone.children.clone();
-        for child_id in children {
-            build_bone_entry_recursive(ui, world, state, skeleton, child_id, depth + 1);
+    let entities_selected =
+        state.display_mode == HierarchyDisplayMode::Entities && state.selected_entity.is_some();
+    if entities_selected && ui.is_key_pressed(Key::Delete) {
+        world.send_command(HierarchyEvent::DeleteSelectedEntities);
+    }
+}
+
+fn handle_type_ahead(ui: &imgui::Ui, world: &World) {
+    let now_seconds = ui.time();
+    for character in ui.io().input_queue_characters() {
+        if character == '*' {
+            world.send_command(HierarchyEvent::NavigateTree {
+                navigation: TreeNavigation::ExpandSiblings,
+                page_rows: 1,
+            });
+        } else if character.is_alphanumeric() || character == '_' {
+            world.send_command(HierarchyEvent::NavigateTree {
+                navigation: TreeNavigation::TypeAhead {
+                    character,
+                    now_seconds,
+                },
+                page_rows: 1,
+            });
         }
     }
 }

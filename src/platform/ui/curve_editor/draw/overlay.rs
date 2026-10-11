@@ -1,0 +1,207 @@
+use std::collections::HashSet;
+
+use crate::animation::editable::{curve_sample, PropertyCurve, PropertyType};
+use crate::animation::BoneId;
+use crate::ecs::resource::{CurveEditorBuffer, CurveSelectedKeyframe, TweenSession};
+
+use super::super::tween::{compute_curve_tween, curve_with_values};
+use super::super::view::ViewTransform;
+use super::super::window::{SuggestionOverlay, ALL_PROPERTY_TYPES};
+
+pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    buffer: &CurveEditorBuffer,
+    bone_id: BoneId,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    visible_curves: &HashSet<PropertyType>,
+    vt: &ViewTransform,
+) {
+    if buffer.is_empty() {
+        return;
+    }
+
+    for (prop_type, color, _name) in ALL_PROPERTY_TYPES {
+        if !visible_curves.contains(prop_type) {
+            continue;
+        }
+
+        let snapshot = match buffer.get_snapshot(bone_id, *prop_type) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        if snapshot.len() < 2 {
+            continue;
+        }
+
+        let ghost_color = [color[0], color[1], color[2], 0.35];
+        let curve_vt = view_for_property(vt, curves_to_draw, *prop_type);
+
+        for i in 0..snapshot.len() - 1 {
+            let (t0, v0) = snapshot[i];
+            let (t1, v1) = snapshot[i + 1];
+
+            let x0 = curve_vt.time_to_x(t0);
+            let y0 = curve_vt.value_to_y(v0);
+            let x1 = curve_vt.time_to_x(t1);
+            let y1 = curve_vt.value_to_y(v1);
+
+            draw_list
+                .add_line([x0, y0], [x1, y1], ghost_color)
+                .thickness(1.5)
+                .build();
+        }
+    }
+}
+
+pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    overlays: &[SuggestionOverlay],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    visible_curves: &HashSet<PropertyType>,
+    vt: &ViewTransform,
+) {
+    if overlays.is_empty() {
+        return;
+    }
+
+    for overlay in overlays {
+        if !visible_curves.contains(&overlay.property_type) {
+            continue;
+        }
+
+        if overlay.confidence < 0.05 {
+            continue;
+        }
+
+        let alpha = if overlay.confidence > 0.8 {
+            0.7
+        } else if overlay.confidence > 0.3 {
+            0.45
+        } else {
+            0.25
+        };
+        let ghost_color = if overlay.confidence > 0.8 {
+            [0.3, 1.0, 0.3, alpha]
+        } else if overlay.confidence > 0.3 {
+            [1.0, 1.0, 0.3, alpha]
+        } else {
+            [1.0, 0.7, 0.3, alpha]
+        };
+
+        let curve_vt = view_for_property(vt, curves_to_draw, overlay.property_type);
+        let kf_x = curve_vt.time_to_x(overlay.time);
+        let kf_y = curve_vt.value_to_y(overlay.value);
+        let diamond_size = 6.0;
+
+        draw_list
+            .add_line(
+                [kf_x, kf_y - diamond_size],
+                [kf_x + diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x + diamond_size, kf_y],
+                [kf_x, kf_y + diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x, kf_y + diamond_size],
+                [kf_x - diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x - diamond_size, kf_y],
+                [kf_x, kf_y - diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+
+        let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
+
+        let in_x = curve_vt.time_to_x(overlay.time + overlay.tangent_in.0);
+        let in_y = curve_vt.value_to_y(overlay.value + overlay.tangent_in.1);
+        draw_list
+            .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_circle([in_x, in_y], 3.0, handle_color)
+            .filled(true)
+            .build();
+
+        let out_x = curve_vt.time_to_x(overlay.time + overlay.tangent_out.0);
+        let out_y = curve_vt.value_to_y(overlay.value + overlay.tangent_out.1);
+        draw_list
+            .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_circle([out_x, out_y], 3.0, handle_color)
+            .filled(true)
+            .build();
+    }
+}
+
+pub(in crate::platform::ui::curve_editor) fn draw_tween_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    session: &TweenSession,
+    selected_keyframes: &[CurveSelectedKeyframe],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+    sample_count: usize,
+) {
+    for (curve, color, _) in curves_to_draw {
+        let tweened_values = compute_curve_tween(curve, selected_keyframes, session);
+        if tweened_values.is_empty() {
+            continue;
+        }
+
+        let preview_curve = curve_with_values(curve, &tweened_values);
+        let (Some(first), Some(last)) = (
+            preview_curve.keyframes.first(),
+            preview_curve.keyframes.last(),
+        ) else {
+            continue;
+        };
+
+        let ghost_color = [color[0], color[1], color[2], 0.35];
+        let curve_vt = vt.for_curve(curve);
+        let time_step = (last.time - first.time) / sample_count.max(1) as f32;
+        let points: Vec<[f32; 2]> = (0..=sample_count)
+            .filter_map(|index| {
+                let time = first.time + time_step * index as f32;
+                curve_sample(&preview_curve, time)
+                    .map(|value| [curve_vt.time_to_x(time), curve_vt.value_to_y(value)])
+            })
+            .collect();
+
+        for segment in points.windows(2) {
+            draw_list
+                .add_line(segment[0], segment[1], ghost_color)
+                .thickness(1.5)
+                .build();
+        }
+    }
+}
+
+fn view_for_property(
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    property_type: PropertyType,
+) -> ViewTransform {
+    curves_to_draw
+        .iter()
+        .find(|(curve, _, _)| curve.property_type == property_type)
+        .map_or(*vt, |(curve, _, _)| vt.for_curve(curve))
+}

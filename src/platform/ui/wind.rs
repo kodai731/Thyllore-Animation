@@ -10,6 +10,8 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
 use crate::ecs::World;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -27,7 +29,7 @@ fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
 }
 
 pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
-    if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
+    if !section_header(ui, ecs_world, "Wind", SectionDefault::Closed) {
         return;
     }
     let _section_id = ui.push_id("wind");
@@ -88,6 +90,7 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     let mut effect_copy = effect.clone();
     draw_tiered_params(
         ui,
+        ecs_world,
         &thyllore_effect_core::WIND_UI_PARAMS,
         &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
@@ -103,7 +106,7 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
-    if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
+    if section_header(ui, ecs_world, "Wind Debug", SectionDefault::Closed) {
         draw_wind_render_settings(ui, ecs_world);
         if ui.button("Dump Debug") {
             ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WindDebugCapture)));

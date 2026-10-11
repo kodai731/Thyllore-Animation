@@ -389,6 +389,9 @@ Each window in `src/platform/ui/` registers itself with `ui_window!` and keeps i
 resource it inserts through the hook's `init`; `src/platform/events/` never lists windows, states or
 `cfg` branches for them (a window behind a cargo feature or `debug_assertions` puts the `#![cfg]` at the top of
 its own file).
+A window that interprets the mouse itself (scrub, drag, pan, wheel) reads it through `src/platform/ui/pointer.rs`
+and starts the drag with `ui_pointer_begin`, which resolves hover, active widgets and the `UiPointerOwner` held by
+another drag; it never reads `ui.io().mouse_*` / `ui.is_mouse_*` (`tests/ui_raw_pointer_reads.rs`).
 
 ## src/vulkanr/
 
@@ -475,7 +478,7 @@ per-feature `AddPass`).
   struct of any resource or component: every persisted type registers itself (`scene_resource!`,
   `scene_owner!`, `scene_attachment!`) from its own file, and the capture / apply of a hook that needs
   `World` logic is an ECS system (`src/ecs/systems/scheduled_clip_systems.rs`,
-  `debug_primitive_systems.rs`, `timeline_systems.rs`), never a file under `src/scene/`. Tests in
+  `debug_primitive_systems.rs`, `timeline/scene_record.rs`), never a file under `src/scene/`. Tests in
   `src/scene/` use the test-only `ProbeOwner` / `ProbeLabel` of `entities.rs::test_support`; a test that
   needs a concrete effect belongs to that effect's `tests.rs`
 - `src/asset/` — CPU-side model asset storage

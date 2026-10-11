@@ -15,6 +15,8 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -32,7 +34,7 @@ fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars
 }
 
 pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
-    if !ui.collapsing_header("Lightning", imgui::TreeNodeFlags::empty()) {
+    if !section_header(ui, ecs_world, "Lightning", SectionDefault::Closed) {
         return;
     }
     let _section_id = ui.push_id("lightning");
@@ -107,6 +109,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
 
     draw_tiered_params(
         ui,
+        ecs_world,
         &thyllore_effect_core::LIGHTNING_UI_PARAMS,
         &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
@@ -123,7 +126,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
     }
-    if !ui.collapsing_header("Lightning Debug", imgui::TreeNodeFlags::empty()) {
+    if !section_header(ui, ecs_world, "Lightning Debug", SectionDefault::Closed) {
         return;
     }
     draw_lightning_render_settings(ui, ecs_world);

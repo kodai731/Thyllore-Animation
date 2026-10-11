@@ -306,7 +306,7 @@ fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
     }) else {
         return;
     };
-    crate::ecs::systems::timeline_systems::process_clip_instance_events(
+    crate::ecs::systems::phases::event_dispatch::clip_instance::apply_clip_instance_events(
         &[ClipInstanceEvent::TrimEnd {
             entity,
             instance_id,

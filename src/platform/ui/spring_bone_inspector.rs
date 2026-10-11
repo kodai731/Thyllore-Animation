@@ -7,6 +7,8 @@ use crate::ecs::component::{
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
 
 use super::constraint_inspector::{
     build_bone_combo, build_bone_combo_with_select, build_offset_vector3, collect_bone_list,
@@ -19,7 +21,7 @@ pub fn build_spring_bone_section(
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
 ) {
-    if !ui.collapsing_header("Spring Bones", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+    if !section_header(ui, world, "Spring Bones", SectionDefault::Open) {
         return;
     }
 
@@ -94,11 +96,11 @@ fn build_chain_list(
             "Chain: {} (id:{})###spring_chain_{}",
             chain.name, chain.id, chain.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 
-        let id_token = ui.push_id_int(chain.id as i32);
+        let id_token = ui.push_id(chain.id as i32);
         build_chain_detail(ui, world, entity, chain, bone_list, hierarchy_state);
         id_token.end();
     }
@@ -124,11 +126,11 @@ fn build_chain_detail(
             "Joint {} (bone:{})###joint_{}",
             joint_idx, joint.bone_id, joint_idx
         );
-        if !ui.collapsing_header(&joint_header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &joint_header, SectionDefault::Closed) {
             continue;
         }
 
-        let joint_token = ui.push_id_int(joint_idx as i32 + 1000);
+        let joint_token = ui.push_id(joint_idx as i32 + 1000);
         if let Some(updated) = build_joint_fields(ui, world, joint, bone_list, hierarchy_state) {
             world.send_command(SpringBoneEvent::JointUpdate {
                 entity,
@@ -252,9 +254,9 @@ fn build_add_chain_row(
     }
 
     ui.set_next_item_width(100.0);
-    ui.input_int("Chain Length##add", chain_length)
+    ui.input_int_config("Chain Length##add")
         .step(1)
-        .build();
+        .build(chain_length);
     *chain_length = (*chain_length).max(1);
 
     ui.same_line();
@@ -289,11 +291,11 @@ fn build_collider_list(
             "{} (id:{}, bone:{})###collider_{}",
             shape_name, collider.id, collider.bone_id, collider.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 
-        let id_token = ui.push_id_int(collider.id as i32 + 2000);
+        let id_token = ui.push_id(collider.id as i32 + 2000);
         if let Some(updated) =
             build_collider_fields(ui, world, collider, bone_list, hierarchy_state)
         {
@@ -477,11 +479,11 @@ fn build_collider_group_list(
             "Group: {} (id:{})###group_{}",
             group.name, group.id, group.id
         );
-        if !ui.collapsing_header(&header, imgui::TreeNodeFlags::empty()) {
+        if !section_header(ui, world, &header, SectionDefault::Closed) {
             continue;
         }
 
-        let id_token = ui.push_id_int(group.id as i32 + 3000);
+        let id_token = ui.push_id(group.id as i32 + 3000);
 
         let mut modified = group.clone();
         let mut changed = false;

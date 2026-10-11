@@ -19,6 +19,7 @@ impl System {
             window,
             mut imgui,
             mut platform,
+            ui_fonts: _ui_fonts,
         } = self;
         let mut last_frame = Instant::now();
         let bindings = default_bindings();
@@ -27,7 +28,9 @@ impl System {
             .run(move |event, window_target| match event {
                 Event::NewEvents(_) => {
                     let now = Instant::now();
-                    imgui.io_mut().update_delta_time(now - last_frame);
+                    imgui
+                        .io_mut()
+                        .set_delta_time((now - last_frame).as_secs_f32());
                     last_frame = now;
                 }
 

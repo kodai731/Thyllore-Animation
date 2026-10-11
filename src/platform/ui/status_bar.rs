@@ -15,6 +15,30 @@ const MEMORY_UPDATE_INTERVAL: u32 = 60;
 const OVERLAY_PADDING: f32 = 6.0;
 const BG_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TEXT_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const WIDEST_DIGIT: char = '0';
+
+/// Width the text occupies when every digit takes the widest glyph, so a changing number
+/// moves nothing until its digit count changes.
+fn stable_text_width(ui: &imgui::Ui, text: &str) -> f32 {
+    let widest: String = text
+        .chars()
+        .map(|c| if c.is_ascii_digit() { WIDEST_DIGIT } else { c })
+        .collect();
+    ui.calc_text_size(&widest)[0]
+}
+
+/// Left edge of each item when they are laid out in a row with stable widths.
+fn stable_item_offsets<'a>(ui: &imgui::Ui, items: impl Iterator<Item = &'a str>) -> Vec<f32> {
+    let item_spacing = ui.clone_style().item_spacing()[0] * 2.0;
+    let mut next_x = OVERLAY_PADDING;
+    items
+        .map(|text| {
+            let x = next_x;
+            next_x = x + stable_text_width(ui, text) + item_spacing;
+            x
+        })
+        .collect()
+}
 
 pub struct StatusBarState {
     fps_buffer: [f32; FPS_BUFFER_SIZE],
@@ -100,18 +124,6 @@ fn draw_status_bar(
     let current_time = timeline_state.current_time;
     let playback_icon = if timeline_state.playing { ">" } else { "||" };
 
-    let text = format!(
-        "FPS:{:.0}  CPU {:.1}ms  GPU {:.1}ms  F:{}/{}  {:.3}s  {}  {:.0}MB",
-        fps,
-        cpu_ms,
-        gpu_ms,
-        current_frame,
-        total_frames,
-        current_time,
-        playback_icon,
-        state.memory_mb,
-    );
-
     let model_text = format!(
         "{}  {}",
         model_file_name(&model.model_path),
@@ -120,21 +132,30 @@ fn draw_status_bar(
     let validation_text = format_validation_status(errors, warnings);
     let validation_color = validation_status_color(errors, warnings);
 
-    let model_text_size = ui.calc_text_size(&model_text);
-    let text_size = ui.calc_text_size(&text);
-    let validation_text_size = ui.calc_text_size(&validation_text);
+    let fps_text = format!("FPS:{:.0}", fps);
+    let cpu_text = format!("CPU {:.1}ms", cpu_ms);
+    let gpu_text = format!("GPU {:.1}ms", gpu_ms);
+    let frame_text = format!("F:{}/{}", current_frame, total_frames);
+    let time_text = format!("{:.3}s", current_time);
+    let memory_text = format!("{:.0}MB", state.memory_mb);
+    let items = [
+        (model_text.as_str(), TEXT_COLOR),
+        (fps_text.as_str(), TEXT_COLOR),
+        (cpu_text.as_str(), TEXT_COLOR),
+        (gpu_text.as_str(), TEXT_COLOR),
+        (frame_text.as_str(), TEXT_COLOR),
+        (time_text.as_str(), TEXT_COLOR),
+        (playback_icon, TEXT_COLOR),
+        (memory_text.as_str(), TEXT_COLOR),
+        (validation_text.as_str(), validation_color),
+    ];
+    let item_x = stable_item_offsets(ui, items.iter().map(|(text, _)| *text));
+    let last_item_end = item_x[items.len() - 1] + stable_text_width(ui, validation_text.as_str());
 
     let vp_right = viewport.position[0] + viewport.size[0];
     let vp_bottom = viewport.position[1] + viewport.size[1];
-
-    let item_spacing = ui.clone_style().item_spacing()[0];
-    let window_width = model_text_size[0]
-        + item_spacing
-        + text_size[0]
-        + item_spacing
-        + validation_text_size[0]
-        + OVERLAY_PADDING * 2.0;
-    let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
+    let window_width = last_item_end + OVERLAY_PADDING;
+    let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
     let clicked: bool = {
@@ -148,15 +169,19 @@ fn draw_status_bar(
             .focus_on_appearing(false)
             .save_settings(false)
             .build(|| {
-                ui.text_colored(TEXT_COLOR, &model_text);
-                if ui.is_item_hovered() && !model.model_path.is_empty() {
-                    ui.tooltip_text(&model.model_path);
+                let text_y = ui.cursor_pos()[1];
+                let mut validation_clicked = false;
+                for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
+                    ui.set_cursor_pos([x, text_y]);
+                    ui.text_colored(*color, text);
+                    if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
+                        ui.tooltip_text(&model.model_path);
+                    }
+                    if index == items.len() - 1 {
+                        validation_clicked = ui.is_item_clicked();
+                    }
                 }
-                ui.same_line();
-                ui.text_colored(TEXT_COLOR, &text);
-                ui.same_line();
-                ui.text_colored(validation_color, &validation_text);
-                ui.is_item_clicked()
+                validation_clicked
             });
         result.unwrap_or(false)
     };
@@ -302,8 +327,8 @@ fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &C
         camera.fly_speed_scale,
         camera_fly_speed(camera)
     );
-    let text_size = ui.calc_text_size(&text);
-    let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
+    let window_width = stable_text_width(ui, &text) + OVERLAY_PADDING * 2.0;
+    let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
     let window_pos = [
         viewport.position[0],
         viewport.position[1] + viewport.size[1] - window_height,
@@ -311,10 +336,7 @@ fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &C
 
     ui.window("##fly_speed_indicator")
         .position(window_pos, imgui::Condition::Always)
-        .size(
-            [text_size[0] + OVERLAY_PADDING * 2.0, window_height],
-            imgui::Condition::Always,
-        )
+        .size([window_width, window_height], imgui::Condition::Always)
         .no_decoration()
         .no_inputs()
         .bg_alpha(BG_COLOR[3])

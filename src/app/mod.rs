@@ -9,6 +9,7 @@ pub mod data;
 pub mod effect_hooks;
 pub(crate) mod features;
 pub mod frame;
+mod imgui_textures;
 pub mod init;
 mod pass_targets;
 pub mod post_process;
@@ -42,6 +43,7 @@ pub struct App {
     pub last_frame_interval: f32,
     pub gpu_timestamp_profiler: thyllore_vulkan_core::GpuTimestampProfiler,
     pub last_frame_instant: Option<Instant>,
+    pub applied_ui_settings: Option<crate::ecs::resource::UiSettings>,
 }
 
 impl App {

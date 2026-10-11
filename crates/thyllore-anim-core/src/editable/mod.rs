@@ -24,3 +24,4 @@ pub use systems::manager::*;
 pub use systems::mirror::*;
 pub use systems::snap::*;
 pub use systems::tangent::*;
+pub use systems::tween::*;

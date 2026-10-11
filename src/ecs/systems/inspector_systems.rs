@@ -3,7 +3,7 @@ use cgmath::{Quaternion, Vector3, Vector4};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::EditorDisplay;
+use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -31,7 +31,7 @@ pub struct InspectorData {
     pub rotation_euler: Option<Vector3<f32>>,
     pub scale: Option<Vector3<f32>>,
     pub visible: Option<bool>,
-    pub icon_char: char,
+    pub icon: EntityIcon,
     pub mesh: Option<MeshInspectorData>,
     pub material: Option<MaterialInspectorData>,
 }
@@ -57,10 +57,10 @@ pub fn collect_inspector_data(
         .get_component::<Visible>(entity)
         .map(|v| v.0.is_visible());
 
-    let icon_char = world
+    let icon = world
         .get_component::<EditorDisplay>(entity)
-        .map(|ed| ed.icon.to_char())
-        .unwrap_or(' ');
+        .map(|ed| ed.icon)
+        .unwrap_or(EntityIcon::Empty);
 
     let (mesh, material) = collect_mesh_and_material(world, entity, assets, graphics);
 
@@ -71,7 +71,7 @@ pub fn collect_inspector_data(
         rotation_euler,
         scale,
         visible,
-        icon_char,
+        icon,
         mesh,
         material,
     }

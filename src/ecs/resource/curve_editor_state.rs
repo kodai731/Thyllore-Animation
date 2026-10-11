@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::timeline_state::CurveTrackRef;
-use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType};
+use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType, TweenKind};
 use crate::animation::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,6 +27,12 @@ pub enum TangentHandleType {
 }
 
 #[derive(Clone, Debug)]
+pub struct TweenSession {
+    pub kind: TweenKind,
+    pub factor: f32,
+}
+
+#[derive(Clone, Debug)]
 pub struct DraggingTangent {
     pub property_type: PropertyType,
     pub keyframe_id: KeyframeId,
@@ -37,13 +43,32 @@ pub struct DraggingTangent {
 #[derive(Clone, Debug)]
 pub enum CurveInteractionMode {
     Idle,
-    DraggingKeyframe,
+    DraggingKeyframe {
+        axis_lock: Option<AxisLock>,
+    },
     ScrubbingRuler,
     Panning {
         start_mouse_pos: [f32; 2],
         start_offset: [f32; 2],
     },
     DraggingTangent(DraggingTangent),
+    BoxSelecting {
+        start: [f32; 2],
+        mode: BoxSelectMode,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxisLock {
+    Time,
+    Value,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BoxSelectMode {
+    Replace,
+    Add,
+    Invert,
 }
 
 impl Default for CurveInteractionMode {
@@ -52,12 +77,41 @@ impl Default for CurveInteractionMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameRequest {
+    Selected,
+    All,
+    Playhead,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CurveValueDisplay {
+    #[default]
+    Actual,
+    Normalized,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CurveViewMode {
+    #[default]
+    Curves,
+    Dopesheet,
+}
+
+impl CurveViewMode {
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Curves => Self::Dopesheet,
+            Self::Dopesheet => Self::Curves,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_target: Option<CurveEditorTarget>,
     pub visible_curves: HashSet<PropertyType>,
-    pub window_size: [f32; 2],
     pub selected_keyframes: Vec<CurveSelectedKeyframe>,
     pub selection_anchor: Option<(PropertyType, KeyframeId)>,
     pub interaction: CurveInteractionMode,
@@ -73,6 +127,12 @@ pub struct CurveEditorState {
     pub context_menu_click_time: f32,
     pub context_menu_click_value: f32,
     pub needs_focus: bool,
+    pub frame_request: Option<FrameRequest>,
+    pub value_display: CurveValueDisplay,
+    pub view_mode: CurveViewMode,
+    pub time_field: String,
+    pub value_field: String,
+    pub tween: Option<TweenSession>,
 }
 
 impl CurveEditorState {
@@ -119,7 +179,6 @@ impl Default for CurveEditorState {
             is_open: false,
             selected_target: None,
             visible_curves,
-            window_size: [800.0, 500.0],
             selected_keyframes: Vec::new(),
             selection_anchor: None,
             interaction: CurveInteractionMode::Idle,
@@ -135,6 +194,12 @@ impl Default for CurveEditorState {
             context_menu_click_time: 0.0,
             context_menu_click_value: 0.0,
             needs_focus: false,
+            frame_request: None,
+            value_display: CurveValueDisplay::default(),
+            view_mode: CurveViewMode::default(),
+            time_field: String::new(),
+            value_field: String::new(),
+            tween: None,
         }
     }
 }
@@ -152,7 +217,13 @@ thyllore_scene_core::declare_scene_format! {
         overwrite: overwrite_curve_editor_persisted_fields,
     },
     persisted {
-        is_open: bool { get: |e| e.is_open, set: |e, v| e.is_open = v },
+        is_open: bool {
+            get: |e| e.is_open,
+            set: |e, v| {
+                e.is_open = v;
+                e.needs_focus = v;
+            },
+        },
         selected_bone: SelectedBone {
             get: |e| e.selected_bone_id(),
             set: |e, v| {

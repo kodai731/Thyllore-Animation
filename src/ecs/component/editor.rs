@@ -12,22 +12,6 @@ pub enum EntityIcon {
     Effect(char),
 }
 
-impl EntityIcon {
-    pub fn to_char(&self) -> char {
-        match self {
-            EntityIcon::Empty => ' ',
-            EntityIcon::Model => 'M',
-            EntityIcon::Mesh => 'm',
-            EntityIcon::Light => 'L',
-            EntityIcon::Camera => 'C',
-            EntityIcon::Grid => 'G',
-            EntityIcon::Gizmo => 'g',
-            EntityIcon::Billboard => 'B',
-            EntityIcon::Effect(icon) => *icon,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct EditorDisplay {
     pub icon: EntityIcon,

@@ -8,6 +8,7 @@ mod ml;
 mod model;
 mod render;
 mod timing;
+mod ui;
 
 mod batch;
 mod flame;
@@ -25,6 +26,7 @@ pub use ml::*;
 pub use model::*;
 pub use render::*;
 pub use timing::*;
+pub use ui::*;
 
 pub use batch::*;
 pub use flame::*;

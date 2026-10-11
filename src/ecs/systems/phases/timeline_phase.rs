@@ -15,7 +15,7 @@ use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineStat
 use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
 use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
 use crate::ecs::systems::humanoid_bake_systems::refresh_baked_humanoid_clips;
-use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
+use crate::ecs::systems::timeline::{schedule_extent_seconds, timeline_update};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
 

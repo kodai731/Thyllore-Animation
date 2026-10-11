@@ -3,8 +3,8 @@ use imgui::MouseButton;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
 use crate::animation::editable::{
-    align_opposite_handle, curve_sample, BezierHandle, InterpolationType, KeyframeId,
-    PropertyCurve, PropertyType, TangentContinuity,
+    align_opposite_handle, curve_sample, BezierHandle, EditableKeyframe, InterpolationType,
+    KeyframeId, PropertyCurve, PropertyType, TangentContinuity,
 };
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
@@ -339,77 +339,125 @@ pub(super) fn handle_mouse_release(
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     time_snap: TimeSnap,
 ) {
-    match button {
-        ReleasedButton::Left => {
-            if let CurveInteractionMode::DraggingTangent(ref dragging) =
-                editor_state.interaction.clone()
-            {
-                if let Some(track_ref) = editor_state.selected_track_ref() {
-                    let (in_tangent, out_tangent) =
-                        compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
-                    world.send_command(TimelineEvent::SetKeyframeTangent {
-                        track: track_ref,
-                        property_type: dragging.property_type,
-                        keyframe_id: dragging.keyframe_id,
-                        in_tangent,
-                        out_tangent,
-                    });
-                }
-            } else if let CurveInteractionMode::DraggingKeyframe { axis_lock } =
-                editor_state.interaction
-            {
-                if let Some(track_ref) = editor_state.selected_track_ref() {
-                    for sel in &editor_state.selected_keyframes {
-                        let curve_vt = vt.for_property(sel.property_type, curves_to_draw);
-                        let delta = dragged_key_delta(
-                            &curve_vt,
-                            editor_state.drag_start_mouse_pos,
-                            mouse_pos,
-                        );
+    if button == ReleasedButton::Left {
+        finish_left_drag(
+            world,
+            editor_state,
+            vt,
+            mouse_pos,
+            curves_to_draw,
+            time_snap,
+        );
+    }
+    editor_state.interaction = CurveInteractionMode::Idle;
+}
 
-                        let [new_time, new_value] = dragged_key_position(
-                            [sel.original_time, sel.original_value],
-                            delta,
-                            effective_axis_lock(editor_state.view_mode, axis_lock),
-                            time_snap,
-                        );
-                        world.send_command(TimelineEvent::MoveKeyframe {
-                            track: track_ref,
-                            property_type: sel.property_type.clone(),
-                            keyframe_id: sel.keyframe_id,
-                            new_time,
-                            new_value,
-                        });
-                    }
-                }
-            } else if let CurveInteractionMode::BoxSelecting { start, mode } =
-                editor_state.interaction
-            {
-                let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
-                let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
-                let boxed = match editor_state.view_mode {
-                    CurveViewMode::Curves => {
-                        collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max)
-                    }
-                    CurveViewMode::Dopesheet => super::dopesheet::collect_dopesheet_keys_in_rect(
-                        curves_to_draw,
-                        vt,
-                        min,
-                        max,
-                    ),
-                };
-                editor_state.selected_keyframes =
-                    apply_box_selection(&editor_state.selected_keyframes, boxed, mode);
-                if mode == BoxSelectMode::Replace {
-                    editor_state.selection_anchor = None;
-                }
-            }
-            editor_state.interaction = CurveInteractionMode::Idle;
+fn finish_left_drag(
+    world: &World,
+    editor_state: &mut CurveEditorState,
+    vt: &ViewTransform,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    time_snap: TimeSnap,
+) {
+    match editor_state.interaction.clone() {
+        CurveInteractionMode::DraggingTangent(dragging) => {
+            finish_tangent_drag(world, editor_state, vt, mouse_pos, curves_to_draw, dragging);
         }
+        CurveInteractionMode::DraggingKeyframe { axis_lock } => {
+            finish_keyframe_drag(
+                world,
+                editor_state,
+                vt,
+                mouse_pos,
+                curves_to_draw,
+                time_snap,
+                axis_lock,
+            );
+        }
+        CurveInteractionMode::BoxSelecting { start, mode } => {
+            finish_box_selection(editor_state, vt, mouse_pos, curves_to_draw, start, mode);
+        }
+        CurveInteractionMode::Idle
+        | CurveInteractionMode::ScrubbingRuler
+        | CurveInteractionMode::Panning { .. } => {}
+    }
+}
 
-        ReleasedButton::Middle => {
-            editor_state.interaction = CurveInteractionMode::Idle;
+fn finish_tangent_drag(
+    world: &World,
+    editor_state: &CurveEditorState,
+    vt: &ViewTransform,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    dragging: DraggingTangent,
+) {
+    let Some(track_ref) = editor_state.selected_track_ref() else {
+        return;
+    };
+    let (in_tangent, out_tangent) =
+        compute_dragged_tangent(&dragging, mouse_pos, curves_to_draw, vt);
+    world.send_command(TimelineEvent::SetKeyframeTangent {
+        track: track_ref,
+        property_type: dragging.property_type,
+        keyframe_id: dragging.keyframe_id,
+        in_tangent,
+        out_tangent,
+    });
+}
+
+fn finish_keyframe_drag(
+    world: &World,
+    editor_state: &CurveEditorState,
+    vt: &ViewTransform,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    time_snap: TimeSnap,
+    axis_lock: Option<AxisLock>,
+) {
+    let Some(track_ref) = editor_state.selected_track_ref() else {
+        return;
+    };
+    for sel in &editor_state.selected_keyframes {
+        let curve_vt = vt.for_property(sel.property_type, curves_to_draw);
+        let delta = dragged_key_delta(&curve_vt, editor_state.drag_start_mouse_pos, mouse_pos);
+
+        let [new_time, new_value] = dragged_key_position(
+            [sel.original_time, sel.original_value],
+            delta,
+            effective_axis_lock(editor_state.view_mode, axis_lock),
+            time_snap,
+        );
+        world.send_command(TimelineEvent::MoveKeyframe {
+            track: track_ref,
+            property_type: sel.property_type.clone(),
+            keyframe_id: sel.keyframe_id,
+            new_time,
+            new_value,
+        });
+    }
+}
+
+fn finish_box_selection(
+    editor_state: &mut CurveEditorState,
+    vt: &ViewTransform,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    start: [f32; 2],
+    mode: BoxSelectMode,
+) {
+    let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
+    let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
+    let boxed = match editor_state.view_mode {
+        CurveViewMode::Curves => collect_keyframes_in_screen_rect(curves_to_draw, vt, min, max),
+        CurveViewMode::Dopesheet => {
+            super::dopesheet::collect_dopesheet_keys_in_rect(curves_to_draw, vt, min, max)
         }
+    };
+    editor_state.selected_keyframes =
+        apply_box_selection(&editor_state.selected_keyframes, boxed, mode);
+    if mode == BoxSelectMode::Replace {
+        editor_state.selection_anchor = None;
     }
 }
 
@@ -467,24 +515,8 @@ pub(super) fn handle_curve_area_click(
     vt: &ViewTransform,
     modifier: SelectionModifier,
 ) -> Option<PropertyType> {
-    if editor_state.view_mode == CurveViewMode::Curves {
-        if let Some((handle_type, property_type, keyframe_id, original_handle)) =
-            find_tangent_handle_at_position(
-                mouse_pos,
-                curves_to_draw,
-                &editor_state.selected_keyframes,
-                vt,
-            )
-        {
-            editor_state.interaction = CurveInteractionMode::DraggingTangent(DraggingTangent {
-                property_type,
-                keyframe_id,
-                handle_type,
-                original_handle,
-            });
-            editor_state.drag_start_mouse_pos = mouse_pos;
-            return None;
-        }
+    if try_hit_tangent_handle(editor_state, mouse_pos, curves_to_draw, vt) {
+        return None;
     }
 
     let hit_keyframe = match editor_state.view_mode {
@@ -501,84 +533,137 @@ pub(super) fn handle_curve_area_click(
         }
     };
 
-    if let Some((property_type, keyframe_id, time, value)) = hit_keyframe {
-        let new_selected = CurveSelectedKeyframe {
-            property_type: property_type.clone(),
+    let Some((property_type, keyframe_id, time, value)) = hit_keyframe else {
+        return handle_curve_area_miss(editor_state, mouse_pos, curves_to_draw, vt, modifier);
+    };
+
+    let new_selected = CurveSelectedKeyframe {
+        property_type: property_type.clone(),
+        keyframe_id,
+        original_time: time,
+        original_value: value,
+    };
+
+    let should_drag = match modifier {
+        SelectionModifier::Toggle => {
+            handle_toggle_selection(editor_state, &property_type, keyframe_id, new_selected)
+        }
+        SelectionModifier::Range => apply_shift_range_selection(
+            editor_state,
+            curves_to_draw,
+            &property_type,
             keyframe_id,
-            original_time: time,
-            original_value: value,
-        };
-
-        let should_drag = match modifier {
-            SelectionModifier::Toggle => {
-                let existing = editor_state
-                    .selected_keyframes
-                    .iter()
-                    .position(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
-
-                let drag = if let Some(pos) = existing {
-                    editor_state.selected_keyframes.remove(pos);
-                    false
-                } else {
-                    editor_state.selected_keyframes.push(new_selected.clone());
-                    true
-                };
-                editor_state.selection_anchor = Some((property_type, keyframe_id));
-                drag
-            }
-
-            SelectionModifier::Range => apply_shift_range_selection(
-                editor_state,
-                curves_to_draw,
-                &property_type,
-                keyframe_id,
-                time,
-                value,
-            ),
-
-            SelectionModifier::None => {
-                let already_selected = editor_state
-                    .selected_keyframes
-                    .iter()
-                    .any(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
-
-                if !already_selected {
-                    editor_state.selected_keyframes.clear();
-                    editor_state.selected_keyframes.push(new_selected.clone());
-                    editor_state.selection_anchor = Some((property_type, keyframe_id));
-                }
-                true
-            }
-        };
-
-        if should_drag {
-            refresh_selected_keyframe_positions(
-                &mut editor_state.selected_keyframes,
-                curves_to_draw,
-            );
-            editor_state.interaction = CurveInteractionMode::DraggingKeyframe { axis_lock: None };
-            editor_state.drag_start_mouse_pos = mouse_pos;
+            time,
+            value,
+        ),
+        SelectionModifier::None => {
+            handle_replace_selection(editor_state, &property_type, keyframe_id, new_selected)
         }
-    } else {
-        if modifier == SelectionModifier::Toggle && editor_state.view_mode == CurveViewMode::Curves
-        {
-            if let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) {
-                return Some(property_type);
-            }
-        }
+    };
 
-        let mode = match modifier {
-            SelectionModifier::Toggle => BoxSelectMode::Invert,
-            SelectionModifier::Range => BoxSelectMode::Add,
-            SelectionModifier::None => BoxSelectMode::Replace,
-        };
-        editor_state.interaction = CurveInteractionMode::BoxSelecting {
-            start: mouse_pos,
-            mode,
-        };
+    if should_drag {
+        refresh_selected_keyframe_positions(&mut editor_state.selected_keyframes, curves_to_draw);
+        editor_state.interaction = CurveInteractionMode::DraggingKeyframe { axis_lock: None };
+        editor_state.drag_start_mouse_pos = mouse_pos;
     }
 
     None
+}
+
+fn try_hit_tangent_handle(
+    editor_state: &mut CurveEditorState,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+) -> bool {
+    if editor_state.view_mode != CurveViewMode::Curves {
+        return false;
+    }
+    let Some((handle_type, property_type, keyframe_id, original_handle)) =
+        find_tangent_handle_at_position(
+            mouse_pos,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            vt,
+        )
+    else {
+        return false;
+    };
+
+    editor_state.interaction = CurveInteractionMode::DraggingTangent(DraggingTangent {
+        property_type,
+        keyframe_id,
+        handle_type,
+        original_handle,
+    });
+    editor_state.drag_start_mouse_pos = mouse_pos;
+    true
+}
+
+fn handle_curve_area_miss(
+    editor_state: &mut CurveEditorState,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+    modifier: SelectionModifier,
+) -> Option<PropertyType> {
+    if modifier == SelectionModifier::Toggle && editor_state.view_mode == CurveViewMode::Curves {
+        if let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) {
+            return Some(property_type);
+        }
+    }
+
+    let mode = match modifier {
+        SelectionModifier::Toggle => BoxSelectMode::Invert,
+        SelectionModifier::Range => BoxSelectMode::Add,
+        SelectionModifier::None => BoxSelectMode::Replace,
+    };
+    editor_state.interaction = CurveInteractionMode::BoxSelecting {
+        start: mouse_pos,
+        mode,
+    };
+    None
+}
+
+fn handle_toggle_selection(
+    editor_state: &mut CurveEditorState,
+    property_type: &PropertyType,
+    keyframe_id: KeyframeId,
+    new_selected: CurveSelectedKeyframe,
+) -> bool {
+    let existing = editor_state
+        .selected_keyframes
+        .iter()
+        .position(|s| s.keyframe_id == keyframe_id && s.property_type == *property_type);
+
+    let drag = if let Some(pos) = existing {
+        editor_state.selected_keyframes.remove(pos);
+        false
+    } else {
+        editor_state.selected_keyframes.push(new_selected);
+        true
+    };
+    editor_state.selection_anchor = Some((*property_type, keyframe_id));
+    drag
+}
+
+fn handle_replace_selection(
+    editor_state: &mut CurveEditorState,
+    property_type: &PropertyType,
+    keyframe_id: KeyframeId,
+    new_selected: CurveSelectedKeyframe,
+) -> bool {
+    let already_selected = editor_state
+        .selected_keyframes
+        .iter()
+        .any(|s| s.keyframe_id == keyframe_id && s.property_type == *property_type);
+
+    if !already_selected {
+        editor_state.selected_keyframes.clear();
+        editor_state.selected_keyframes.push(new_selected);
+        editor_state.selection_anchor = Some((*property_type, keyframe_id));
+    }
+    true
 }
 
 pub(super) fn refresh_selected_keyframe_positions(
@@ -728,6 +813,19 @@ pub(super) fn find_curve_at_position(
 
 pub(super) const TANGENT_HANDLE_HIT_RADIUS: f32 = 10.0;
 
+fn tangent_handle_hit(
+    curve_vt: &ViewTransform,
+    kf: &EditableKeyframe,
+    handle: &BezierHandle,
+    mouse_pos: [f32; 2],
+) -> bool {
+    let hx = curve_vt.time_to_x(kf.time + handle.time_offset);
+    let hy = curve_vt.value_to_y(kf.value + handle.value_offset);
+    let dx = mouse_pos[0] - hx;
+    let dy = mouse_pos[1] - hy;
+    (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS
+}
+
 pub(super) fn find_tangent_handle_at_position(
     mouse_pos: [f32; 2],
     curves: &[(&PropertyCurve, [f32; 4], &str)],
@@ -735,48 +833,36 @@ pub(super) fn find_tangent_handle_at_position(
     vt: &ViewTransform,
 ) -> Option<(TangentHandleType, PropertyType, KeyframeId, BezierHandle)> {
     for selected in selected_keyframes {
-        for (curve, _, _) in curves {
-            if curve.property_type != selected.property_type {
-                continue;
-            }
+        let Some((curve, _, _)) = curves
+            .iter()
+            .find(|(curve, _, _)| curve.property_type == selected.property_type)
+        else {
+            continue;
+        };
+        let Some(kf) = curve.get_keyframe(selected.keyframe_id) else {
+            continue;
+        };
+        if kf.interpolation != InterpolationType::Bezier {
+            continue;
+        }
 
-            let kf = match curve.get_keyframe(selected.keyframe_id) {
-                Some(kf) => kf,
-                None => break,
-            };
+        let curve_vt = vt.for_curve(curve);
+        if tangent_handle_hit(&curve_vt, kf, &kf.in_tangent, mouse_pos) {
+            return Some((
+                TangentHandleType::In,
+                curve.property_type,
+                kf.id,
+                kf.in_tangent.clone(),
+            ));
+        }
 
-            if kf.interpolation != InterpolationType::Bezier {
-                break;
-            }
-
-            let curve_vt = vt.for_curve(curve);
-            let in_x = curve_vt.time_to_x(kf.time + kf.in_tangent.time_offset);
-            let in_y = curve_vt.value_to_y(kf.value + kf.in_tangent.value_offset);
-            let dx = mouse_pos[0] - in_x;
-            let dy = mouse_pos[1] - in_y;
-            if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
-                return Some((
-                    TangentHandleType::In,
-                    curve.property_type,
-                    kf.id,
-                    kf.in_tangent.clone(),
-                ));
-            }
-
-            let out_x = curve_vt.time_to_x(kf.time + kf.out_tangent.time_offset);
-            let out_y = curve_vt.value_to_y(kf.value + kf.out_tangent.value_offset);
-            let dx = mouse_pos[0] - out_x;
-            let dy = mouse_pos[1] - out_y;
-            if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
-                return Some((
-                    TangentHandleType::Out,
-                    curve.property_type,
-                    kf.id,
-                    kf.out_tangent.clone(),
-                ));
-            }
-
-            break;
+        if tangent_handle_hit(&curve_vt, kf, &kf.out_tangent, mouse_pos) {
+            return Some((
+                TangentHandleType::Out,
+                curve.property_type,
+                kf.id,
+                kf.out_tangent.clone(),
+            ));
         }
     }
 
@@ -789,23 +875,23 @@ pub(super) fn collect_keyframes_in_screen_rect(
     min: [f32; 2],
     max: [f32; 2],
 ) -> Vec<CurveSelectedKeyframe> {
-    let mut result = Vec::new();
-    for (curve, _, _) in curves {
-        let curve_vt = vt.for_curve(curve);
-        for kf in &curve.keyframes {
-            let x = curve_vt.time_to_x(kf.time);
-            let y = curve_vt.value_to_y(kf.value);
-            if x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1] {
-                result.push(CurveSelectedKeyframe {
+    curves
+        .iter()
+        .flat_map(|(curve, _, _)| {
+            let curve_vt = vt.for_curve(curve);
+            curve.keyframes.iter().filter_map(move |kf| {
+                let x = curve_vt.time_to_x(kf.time);
+                let y = curve_vt.value_to_y(kf.value);
+                let inside = x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1];
+                inside.then(|| CurveSelectedKeyframe {
                     property_type: curve.property_type.clone(),
                     keyframe_id: kf.id,
                     original_time: kf.time,
                     original_value: kf.value,
-                });
-            }
-        }
-    }
-    result
+                })
+            })
+        })
+        .collect()
 }
 
 pub(super) fn apply_box_selection(
@@ -813,35 +899,24 @@ pub(super) fn apply_box_selection(
     boxed: Vec<CurveSelectedKeyframe>,
     mode: BoxSelectMode,
 ) -> Vec<CurveSelectedKeyframe> {
-    match mode {
-        BoxSelectMode::Replace => boxed,
-        BoxSelectMode::Add => {
-            let mut result = current.to_vec();
-            for key in boxed {
-                let already_exists = result.iter().any(|s| {
-                    s.keyframe_id == key.keyframe_id && s.property_type == key.property_type
-                });
-                if !already_exists {
-                    result.push(key);
-                }
+    if mode == BoxSelectMode::Replace {
+        return boxed;
+    }
+
+    let mut result = current.to_vec();
+    for key in boxed {
+        let existing = result
+            .iter()
+            .position(|s| s.keyframe_id == key.keyframe_id && s.property_type == key.property_type);
+        match (mode, existing) {
+            (BoxSelectMode::Invert, Some(pos)) => {
+                result.remove(pos);
             }
-            result
-        }
-        BoxSelectMode::Invert => {
-            let mut result = current.to_vec();
-            for key in boxed {
-                let pos = result.iter().position(|s| {
-                    s.keyframe_id == key.keyframe_id && s.property_type == key.property_type
-                });
-                if let Some(p) = pos {
-                    result.remove(p);
-                } else {
-                    result.push(key);
-                }
-            }
-            result
+            (BoxSelectMode::Add, Some(_)) | (BoxSelectMode::Replace, _) => {}
+            (BoxSelectMode::Add | BoxSelectMode::Invert, None) => result.push(key),
         }
     }
+    result
 }
 
 #[cfg(test)]

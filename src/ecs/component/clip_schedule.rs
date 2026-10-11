@@ -1,6 +1,6 @@
 use crate::animation::editable::{ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ClipSchedule {
     pub instances: Vec<ClipInstance>,
     pub groups: Vec<ClipGroup>,

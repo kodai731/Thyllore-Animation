@@ -36,12 +36,16 @@ fn draw_bottom_panel(
                     message_log.select_tab_requested = false;
                 }
                 tab.build(ui, || {
-                    build_message_window_content(ui, ecs_world, message_log);
+                    ui.child_window("messages_content").build(ui, || {
+                        build_message_window_content(ui, ecs_world, message_log);
+                    });
                 });
 
                 #[cfg(debug_assertions)]
                 imgui::TabItem::new("Debug").build(ui, || {
-                    build_debug_panel_content(ui, ecs_world);
+                    ui.child_window("debug_content").build(ui, || {
+                        build_debug_panel_content(ui, ecs_world);
+                    });
                 });
             });
         });

@@ -91,6 +91,8 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
             build_file_buttons(ui, ecs_world);
             draw_toolbar_group_separator(ui);
             build_gizmo_buttons(ui, ecs_world);
+            draw_toolbar_group_separator(ui);
+            build_overlay_buttons(ui, ecs_world);
 
             #[cfg(feature = "auto-rig")]
             build_auto_rig_buttons(ui, ecs_world);
@@ -144,7 +146,7 @@ fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput)
 }
 
 fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
-    if icon_button(ui, Icon::FolderOpen, "Open FBX", ButtonState::Normal) {
+    if icon_button(ui, Icon::FileBox, "Open FBX", ButtonState::Normal) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
             .pick_file()
@@ -157,7 +159,7 @@ fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
 
     ui.same_line();
 
-    if icon_button(ui, Icon::File, "Open glTF", ButtonState::Normal) {
+    if icon_button(ui, Icon::FileBraces, "Open glTF", ButtonState::Normal) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("glTF Files", &["gltf", "glb"])
             .pick_file()
@@ -251,6 +253,23 @@ fn build_gizmo_buttons(ui: &imgui::Ui, ecs_world: &World) {
         ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
             state_copy,
         )));
+    }
+}
+
+fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() else {
+        return;
+    };
+    let visible = bone_gizmo.visible;
+    drop(bone_gizmo);
+
+    let (tooltip, state) = if visible {
+        ("Bones: shown", ButtonState::Active)
+    } else {
+        ("Bones: hidden", ButtonState::Normal)
+    };
+    if icon_button(ui, Icon::Bone, tooltip, state) {
+        ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(!visible));
     }
 }
 

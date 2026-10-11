@@ -6,7 +6,7 @@ use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionSta
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
-use crate::ecs::systems::timeline_systems::clip_drag_preview_times;
+use crate::ecs::systems::timeline::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
 use crate::ecs::world::{Entity, World};
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::clip::EditableAnimationClip;
-use super::curve::{PropertyCurve, PropertyType};
+use super::curve::{CurveExtrapolation, PropertyCurve, PropertyType};
 use super::keyframe::{CurveId, EditableKeyframe, KeyframeId};
 
 pub const ANIMATION_FORMAT_VERSION: u32 = 3;
@@ -21,6 +21,10 @@ pub struct NamedScalarCurve {
     pub channel: String,
     pub id: CurveId,
     pub keyframes: Vec<EditableKeyframe>,
+    #[serde(default)]
+    pub pre_extrapolation: CurveExtrapolation,
+    #[serde(default)]
+    pub post_extrapolation: CurveExtrapolation,
     pub next_keyframe_id: KeyframeId,
 }
 
@@ -60,6 +64,8 @@ impl AnimationClipFile {
                     channel,
                     id: curve.id,
                     keyframes: curve.keyframes.clone(),
+                    pre_extrapolation: curve.pre_extrapolation,
+                    post_extrapolation: curve.post_extrapolation,
                     next_keyframe_id: curve.next_keyframe_id(),
                 })
             })
@@ -86,15 +92,18 @@ impl AnimationClipFile {
         clip.scalar_curves = self
             .scalar_curves
             .into_iter()
-            .map(|curve| {
-                let property_type = property_type(&curve.channel)
-                    .ok_or(ClipFileError::UnknownScalarChannel(curve.channel))?;
-                Ok(PropertyCurve::from_keyframes(
-                    curve.id,
+            .map(|named| {
+                let property_type = property_type(&named.channel)
+                    .ok_or(ClipFileError::UnknownScalarChannel(named.channel))?;
+                let mut curve = PropertyCurve::from_keyframes(
+                    named.id,
                     property_type,
-                    curve.keyframes,
-                    curve.next_keyframe_id,
-                ))
+                    named.keyframes,
+                    named.next_keyframe_id,
+                );
+                curve.pre_extrapolation = named.pre_extrapolation;
+                curve.post_extrapolation = named.post_extrapolation;
+                Ok(curve)
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(clip)
@@ -212,5 +221,37 @@ mod tests {
 
         let clip = file.into_clip(|_| None).expect("into clip");
         assert!(clip.tracks.is_empty());
+    }
+
+    #[test]
+    fn scalar_curve_extrapolation_round_trip() {
+        let mut clip = EditableAnimationClip::new(1, "clip".to_string());
+        let curve = clip.get_or_add_scalar_curve(PropertyType::Custom(7));
+        curve_add_keyframe(curve, 0.5, 2.0);
+        curve.pre_extrapolation = CurveExtrapolation::Cycle;
+        curve.post_extrapolation = CurveExtrapolation::Linear;
+
+        let file = AnimationClipFile::from_clip(&clip, |_| Some("test_channel".to_string()))
+            .expect("named");
+        assert_eq!(
+            file.scalar_curves[0].pre_extrapolation,
+            CurveExtrapolation::Cycle
+        );
+        assert_eq!(
+            file.scalar_curves[0].post_extrapolation,
+            CurveExtrapolation::Linear
+        );
+
+        let text = ron::to_string(&file).expect("serialize");
+        let parsed: AnimationClipFile = ron::from_str(&text).expect("parse");
+        let loaded = parsed
+            .into_clip(|name| (name == "test_channel").then_some(PropertyType::Custom(7)))
+            .expect("resolved");
+
+        let curve = loaded
+            .get_scalar_curve(PropertyType::Custom(7))
+            .expect("curve");
+        assert_eq!(curve.pre_extrapolation, CurveExtrapolation::Cycle);
+        assert_eq!(curve.post_extrapolation, CurveExtrapolation::Linear);
     }
 }

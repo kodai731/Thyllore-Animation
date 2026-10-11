@@ -1,6 +1,6 @@
 mod gizmo;
 mod graphics;
-mod imgui_font;
+mod imgui;
 pub mod instance;
 mod onion_skin;
 pub mod raytracing;

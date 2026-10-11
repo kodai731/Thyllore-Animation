@@ -55,7 +55,7 @@ env_logger = "0.11"
 thiserror = "1"
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"
-imgui = { path = "./vendor/imgui", features = ["tables-api", "docking"] }
+imgui = { package = "dear-imgui-rs", path = "./vendor/dear-imgui-rs", features = ["build-from-source"] }
 imgui-winit-support = { path = "./vendor/imgui-winit-support" }
 winit = "0.29"
 raw-window-handle = "0.6"

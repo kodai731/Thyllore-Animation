@@ -229,6 +229,7 @@ impl App {
             last_frame_interval: 0.0,
             gpu_timestamp_profiler,
             last_frame_instant: None,
+            applied_ui_settings: None,
         })
     }
 

@@ -1,8 +1,9 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState, ValidationReport,
-    ViewportInput,
+    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
+    ValidationReport, ViewportInput,
 };
+use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
@@ -14,6 +15,30 @@ const MEMORY_UPDATE_INTERVAL: u32 = 60;
 const OVERLAY_PADDING: f32 = 6.0;
 const BG_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TEXT_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const WIDEST_DIGIT: char = '0';
+
+/// Width the text occupies when every digit takes the widest glyph, so a changing number
+/// moves nothing until its digit count changes.
+fn stable_text_width(ui: &imgui::Ui, text: &str) -> f32 {
+    let widest: String = text
+        .chars()
+        .map(|c| if c.is_ascii_digit() { WIDEST_DIGIT } else { c })
+        .collect();
+    ui.calc_text_size(&widest)[0]
+}
+
+/// Left edge of each item when they are laid out in a row with stable widths.
+fn stable_item_offsets<'a>(ui: &imgui::Ui, items: impl Iterator<Item = &'a str>) -> Vec<f32> {
+    let item_spacing = ui.clone_style().item_spacing()[0] * 2.0;
+    let mut next_x = OVERLAY_PADDING;
+    items
+        .map(|text| {
+            let x = next_x;
+            next_x = x + stable_text_width(ui, text) + item_spacing;
+            x
+        })
+        .collect()
+}
 
 pub struct StatusBarState {
     fps_buffer: [f32; FPS_BUFFER_SIZE],
@@ -75,6 +100,7 @@ fn draw_status_bar(
     cpu_ms: f32,
     gpu_ms: Option<f32>,
     viewport: &ViewportInput,
+    model: &ModelState,
     timeline_state: &TimelineState,
     clip_duration: f32,
     errors: usize,
@@ -98,31 +124,38 @@ fn draw_status_bar(
     let current_time = timeline_state.current_time;
     let playback_icon = if timeline_state.playing { ">" } else { "||" };
 
-    let text = format!(
-        "FPS:{:.0}  CPU {:.1}ms  GPU {:.1}ms  F:{}/{}  {:.3}s  {}  {:.0}MB",
-        fps,
-        cpu_ms,
-        gpu_ms,
-        current_frame,
-        total_frames,
-        current_time,
-        playback_icon,
-        state.memory_mb,
+    let model_text = format!(
+        "{}  {}",
+        model_file_name(&model.model_path),
+        model.load_status
     );
-
     let validation_text = format_validation_status(errors, warnings);
     let validation_color = validation_status_color(errors, warnings);
 
-    let text_size = ui.calc_text_size(&text);
-    let validation_text_size = ui.calc_text_size(&validation_text);
+    let fps_text = format!("FPS:{:.0}", fps);
+    let cpu_text = format!("CPU {:.1}ms", cpu_ms);
+    let gpu_text = format!("GPU {:.1}ms", gpu_ms);
+    let frame_text = format!("F:{}/{}", current_frame, total_frames);
+    let time_text = format!("{:.3}s", current_time);
+    let memory_text = format!("{:.0}MB", state.memory_mb);
+    let items = [
+        (model_text.as_str(), TEXT_COLOR),
+        (fps_text.as_str(), TEXT_COLOR),
+        (cpu_text.as_str(), TEXT_COLOR),
+        (gpu_text.as_str(), TEXT_COLOR),
+        (frame_text.as_str(), TEXT_COLOR),
+        (time_text.as_str(), TEXT_COLOR),
+        (playback_icon, TEXT_COLOR),
+        (memory_text.as_str(), TEXT_COLOR),
+        (validation_text.as_str(), validation_color),
+    ];
+    let item_x = stable_item_offsets(ui, items.iter().map(|(text, _)| *text));
+    let last_item_end = item_x[items.len() - 1] + stable_text_width(ui, validation_text.as_str());
 
     let vp_right = viewport.position[0] + viewport.size[0];
     let vp_bottom = viewport.position[1] + viewport.size[1];
-
-    let item_spacing = ui.clone_style().item_spacing[0];
-    let window_width =
-        text_size[0] + item_spacing + validation_text_size[0] + OVERLAY_PADDING * 2.0;
-    let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
+    let window_width = last_item_end + OVERLAY_PADDING;
+    let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
     let clicked: bool = {
@@ -136,10 +169,19 @@ fn draw_status_bar(
             .focus_on_appearing(false)
             .save_settings(false)
             .build(|| {
-                ui.text_colored(TEXT_COLOR, &text);
-                ui.same_line();
-                ui.text_colored(validation_color, &validation_text);
-                ui.is_item_clicked()
+                let text_y = ui.cursor_pos()[1];
+                let mut validation_clicked = false;
+                for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
+                    ui.set_cursor_pos([x, text_y]);
+                    ui.text_colored(*color, text);
+                    if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
+                        ui.tooltip_text(&model.model_path);
+                    }
+                    if index == items.len() - 1 {
+                        validation_clicked = ui.is_item_clicked();
+                    }
+                }
+                validation_clicked
             });
         result.unwrap_or(false)
     };
@@ -159,6 +201,13 @@ fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
     } else {
         TEXT_COLOR
     }
+}
+
+fn model_file_name(model_path: &str) -> String {
+    std::path::Path::new(model_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("None"))
 }
 
 fn format_validation_status(errors: usize, warnings: usize) -> String {
@@ -255,6 +304,12 @@ mod tests {
     }
 
     #[test]
+    fn model_file_name_strips_directories() {
+        assert_eq!(model_file_name("assets/models/robot.glb"), "robot.glb");
+        assert_eq!(model_file_name(""), "None");
+    }
+
+    #[test]
     fn format_validation_status_values() {
         assert_eq!(format_validation_status(0, 0), "VK E:0 W:0");
         assert_eq!(format_validation_status(3, 5), "VK E:3 W:5");
@@ -263,10 +318,42 @@ mod tests {
 }
 
 /// Wall-clock values (FPS, memory) are skipped under a fixed step so a reproducible frame stays identical.
+fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &Camera) {
+    if camera.fly_speed_indicator_seconds <= 0.0 {
+        return;
+    }
+    let text = format!(
+        "Fly speed x{:.2}  ({:.2} m/s)",
+        camera.fly_speed_scale,
+        camera_fly_speed(camera)
+    );
+    let window_width = stable_text_width(ui, &text) + OVERLAY_PADDING * 2.0;
+    let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
+    let window_pos = [
+        viewport.position[0],
+        viewport.position[1] + viewport.size[1] - window_height,
+    ];
+
+    ui.window("##fly_speed_indicator")
+        .position(window_pos, imgui::Condition::Always)
+        .size([window_width, window_height], imgui::Condition::Always)
+        .no_decoration()
+        .no_inputs()
+        .bg_alpha(BG_COLOR[3])
+        .focus_on_appearing(false)
+        .save_settings(false)
+        .build(|| ui.text_colored(TEXT_COLOR, &text));
+}
+
 fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     if world.resource::<FrameClock>().is_fixed() {
         return;
     }
+    draw_fly_speed_indicator(
+        ui,
+        &world.resource::<ViewportInput>(),
+        &world.resource::<Camera>(),
+    );
 
     let frame_ms = world
         .get_resource::<CpuFrameTimings>()
@@ -277,6 +364,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         .get_resource::<GpuPassTimings>()
         .and_then(|timings| timings.frame_total_ms);
     let viewport = world.resource::<ViewportInput>();
+    let model = world.resource::<ModelState>();
     let timeline_state = world.resource::<TimelineState>();
     let clip_duration = {
         let clip_library = world.resource::<ClipLibrary>();
@@ -295,6 +383,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         frame_ms,
         gpu_ms,
         &viewport,
+        &model,
         &timeline_state,
         clip_duration,
         errors,

@@ -1,6 +1,22 @@
 use cgmath::{Deg, InnerSpace, Vector3};
 use thyllore_scene_core::declare_scene_format;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CameraPose {
+    pub pivot: Vector3<f32>,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CameraTransition {
+    pub from: CameraPose,
+    pub to: CameraPose,
+    pub elapsed_seconds: f32,
+    pub duration_seconds: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct Camera {
     pub pivot: Vector3<f32>,
@@ -14,6 +30,30 @@ pub struct Camera {
     pub initial_yaw: f32,
     pub initial_pitch: f32,
     pub initial_distance: f32,
+
+    pub transition: Option<CameraTransition>,
+    pub fly_speed_scale: f32,
+    pub fly_speed_indicator_seconds: f32,
+}
+
+impl Camera {
+    pub const DEFAULT_FLY_SPEED_SCALE: f32 = 1.5;
+
+    pub fn pose(&self) -> CameraPose {
+        CameraPose {
+            pivot: self.pivot,
+            yaw: self.yaw,
+            pitch: self.pitch,
+            distance: self.distance,
+        }
+    }
+
+    pub fn set_pose(&mut self, pose: CameraPose) {
+        self.pivot = pose.pivot;
+        self.yaw = pose.yaw;
+        self.pitch = pose.pitch;
+        self.distance = pose.distance;
+    }
 }
 
 impl Default for Camera {
@@ -36,6 +76,9 @@ impl Default for Camera {
             initial_yaw: yaw,
             initial_pitch: pitch,
             initial_distance: distance,
+            transition: None,
+            fly_speed_scale: Self::DEFAULT_FLY_SPEED_SCALE,
+            fly_speed_indicator_seconds: 0.0,
         }
     }
 }
@@ -80,6 +123,7 @@ declare_scene_format! {
             },
         },
         fov_y: f32 { get: |c| c.fov_y.0, set: |c, v| c.fov_y = Deg(v) },
+        fly_speed_scale: f32 { get: |c| c.fly_speed_scale, set: |c, v| c.fly_speed_scale = v },
     },
     runtime {},
 }

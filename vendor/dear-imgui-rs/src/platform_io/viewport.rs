@@ -1,0 +1,667 @@
+use crate::{Id, sys};
+use std::cell::UnsafeCell;
+use std::ffi::{CStr, c_void};
+
+fn assert_finite_vec2(caller: &str, name: &str, value: [f32; 2]) {
+    assert!(
+        value[0].is_finite() && value[1].is_finite(),
+        "{caller} {name} must contain finite values"
+    );
+}
+
+fn assert_non_negative_finite_vec2(caller: &str, name: &str, value: [f32; 2]) {
+    assert_finite_vec2(caller, name, value);
+    assert!(
+        value[0] >= 0.0 && value[1] >= 0.0,
+        "{caller} {name} must contain non-negative values"
+    );
+}
+
+#[cfg(feature = "multi-viewport")]
+fn assert_dpi_scale(caller: &str, value: f32) {
+    assert!(value.is_finite(), "{caller} scale must be finite");
+    assert!(
+        value > 0.0 && value < 99.0,
+        "{caller} scale must be greater than 0.0 and less than 99.0"
+    );
+}
+
+// - Viewport management
+// - Platform backend callbacks
+// - Renderer backend callbacks
+// - Monitor information
+// - Platform-specific settings
+
+/// Viewport structure for multi-viewport support
+///
+/// This is a transparent wrapper around `ImGuiViewport` that provides
+/// safe access to viewport functionality.
+#[repr(transparent)]
+pub struct Viewport {
+    raw: UnsafeCell<sys::ImGuiViewport>,
+}
+
+// Ensure the wrapper stays layout-compatible with the sys bindings.
+const _: [(); std::mem::size_of::<sys::ImGuiViewport>()] = [(); std::mem::size_of::<Viewport>()];
+const _: [(); std::mem::align_of::<sys::ImGuiViewport>()] = [(); std::mem::align_of::<Viewport>()];
+
+impl Viewport {
+    #[inline]
+    fn inner(&self) -> &sys::ImGuiViewport {
+        // Safety: `Viewport` is a view into ImGui-owned viewport state which may be mutated by
+        // Dear ImGui and platform/renderer backends while Rust holds `&Viewport`.
+        unsafe { &*self.raw.get() }
+    }
+
+    #[inline]
+    fn inner_mut(&mut self) -> &mut sys::ImGuiViewport {
+        unsafe { &mut *self.raw.get() }
+    }
+
+    /// Get a reference to the viewport from a raw pointer
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that:
+    /// - `raw` is non-null and points to a valid `ImGuiViewport`.
+    /// - The viewport outlives the returned reference (e.g. it belongs to the
+    ///   currently active ImGui context).
+    pub(crate) unsafe fn from_raw<'a>(raw: *const sys::ImGuiViewport) -> &'a Self {
+        assert!(
+            !raw.is_null(),
+            "Viewport::from_raw() requires non-null pointer"
+        );
+        unsafe { &*(raw as *const Self) }
+    }
+
+    /// Get a mutable reference to the viewport from a raw pointer
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that:
+    /// - `raw` is non-null and points to a valid `ImGuiViewport`.
+    /// - The viewport outlives the returned reference (e.g. it belongs to the
+    ///   currently active ImGui context).
+    /// - No other references (shared or mutable) to the same viewport are alive.
+    pub unsafe fn from_raw_mut<'a>(raw: *mut sys::ImGuiViewport) -> &'a mut Self {
+        assert!(
+            !raw.is_null(),
+            "Viewport::from_raw_mut() requires non-null pointer"
+        );
+        unsafe { &mut *(raw as *mut Self) }
+    }
+
+    /// Get the raw pointer to the underlying `ImGuiViewport`
+    pub fn as_raw(&self) -> *const sys::ImGuiViewport {
+        self.raw.get().cast_const()
+    }
+
+    /// Get the raw mutable pointer to the underlying `ImGuiViewport`
+    pub fn as_raw_mut(&mut self) -> *mut sys::ImGuiViewport {
+        self.raw.get()
+    }
+
+    /// Get the viewport's current numeric ID.
+    ///
+    /// Docking may transfer ownership by changing this value in place. Use it for current routing
+    /// and diagnostics, not as a persistent native allocation or backend-resource identity.
+    pub fn id(&self) -> Id {
+        Id::from(self.inner().ID)
+    }
+
+    /// Set the viewport position
+    pub fn set_pos(&mut self, pos: [f32; 2]) {
+        assert_finite_vec2("Viewport::set_pos()", "pos", pos);
+        self.inner_mut().Pos.x = pos[0];
+        self.inner_mut().Pos.y = pos[1];
+    }
+
+    /// Get the viewport position
+    pub fn pos(&self) -> [f32; 2] {
+        [self.inner().Pos.x, self.inner().Pos.y]
+    }
+
+    /// Set the viewport size
+    pub fn set_size(&mut self, size: [f32; 2]) {
+        assert_non_negative_finite_vec2("Viewport::set_size()", "size", size);
+        self.inner_mut().Size.x = size[0];
+        self.inner_mut().Size.y = size[1];
+    }
+
+    /// Get the viewport size
+    pub fn size(&self) -> [f32; 2] {
+        [self.inner().Size.x, self.inner().Size.y]
+    }
+
+    /// Get the viewport work position (excluding menu bars, task bars, etc.)
+    pub fn work_pos(&self) -> [f32; 2] {
+        [self.inner().WorkPos.x, self.inner().WorkPos.y]
+    }
+
+    /// Get the viewport work size (excluding menu bars, task bars, etc.)
+    pub fn work_size(&self) -> [f32; 2] {
+        [self.inner().WorkSize.x, self.inner().WorkSize.y]
+    }
+
+    /// Get the center of the viewport rectangle.
+    #[doc(alias = "GetCenter")]
+    pub fn center(&self) -> [f32; 2] {
+        unsafe {
+            let center = sys::ImGuiViewport_GetCenter(self.as_raw().cast_mut());
+            [center.x, center.y]
+        }
+    }
+
+    /// Get the center of the work rectangle.
+    #[doc(alias = "GetWorkCenter")]
+    pub fn work_center(&self) -> [f32; 2] {
+        unsafe {
+            let center = sys::ImGuiViewport_GetWorkCenter(self.as_raw().cast_mut());
+            [center.x, center.y]
+        }
+    }
+
+    /// Return an owned copy of the viewport debug name used by Dear ImGui tooling.
+    ///
+    /// Dear ImGui may replace or rewrite its internal name buffer when a window is renamed, so a
+    /// borrowed string cannot safely outlive this call.
+    #[doc(alias = "GetDebugName")]
+    pub fn debug_name(&self) -> String {
+        unsafe {
+            let ptr = sys::ImGuiViewport_GetDebugName(self.as_raw().cast_mut());
+            if ptr.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(ptr).to_string_lossy().into_owned()
+            }
+        }
+    }
+
+    /// Check whether this is an application-owned main viewport.
+    ///
+    /// The owning managed Context is used for this decision, so the result remains stable while
+    /// another managed Context is temporarily bound by a nested safe operation. Viewport IDs are
+    /// not used because the same numeric ID may appear in different Contexts. A viewport created
+    /// through an unmanaged raw FFI path is resolved against the currently bound native Context.
+    pub fn is_main(&self) -> bool {
+        crate::context::binding::viewport_is_main_viewport(self.as_raw())
+    }
+
+    /// Check whether this is a secondary platform window managed for Dear ImGui.
+    ///
+    /// Dear ImGui also sets `ViewportFlags::IS_PLATFORM_WINDOW` on the main viewport after the
+    /// first frame, so this helper additionally excludes [`Viewport::is_main`].
+    pub fn is_platform_window(&self) -> bool {
+        !self.is_main()
+            && (self.inner().Flags & (crate::ViewportFlags::IS_PLATFORM_WINDOW.bits())) != 0
+    }
+
+    /// Check if this is a platform monitor
+    pub fn is_platform_monitor(&self) -> bool {
+        (self.inner().Flags & (crate::ViewportFlags::IS_PLATFORM_MONITOR.bits())) != 0
+    }
+
+    /// Check if this viewport is owned by the application
+    pub fn is_owned_by_app(&self) -> bool {
+        (self.inner().Flags & (crate::ViewportFlags::OWNED_BY_APP.bits())) != 0
+    }
+
+    /// Get the platform user data
+    pub fn platform_user_data(&self) -> *mut c_void {
+        self.inner().PlatformUserData
+    }
+
+    /// Set the platform backend's opaque viewport data.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be null or point to the exact allocation expected by the installed platform
+    /// callbacks, and that allocation must remain valid until those callbacks clear or release it.
+    pub unsafe fn set_platform_user_data(&mut self, data: *mut c_void) {
+        self.inner_mut().PlatformUserData = data;
+    }
+
+    /// Get the renderer user data
+    pub fn renderer_user_data(&self) -> *mut c_void {
+        self.inner().RendererUserData
+    }
+
+    /// Set the renderer backend's opaque viewport data.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be null or point to the exact allocation expected by the installed renderer
+    /// callbacks, and that allocation must remain valid until those callbacks clear or release it.
+    pub unsafe fn set_renderer_user_data(&mut self, data: *mut c_void) {
+        self.inner_mut().RendererUserData = data;
+    }
+
+    /// Get the platform handle
+    pub fn platform_handle(&self) -> *mut c_void {
+        self.inner().PlatformHandle
+    }
+
+    /// Set the backend-defined platform handle.
+    ///
+    /// # Safety
+    ///
+    /// `handle` must use the representation and lifetime required by the installed platform and
+    /// renderer callbacks.
+    pub unsafe fn set_platform_handle(&mut self, handle: *mut c_void) {
+        self.inner_mut().PlatformHandle = handle;
+    }
+
+    /// Get the raw platform handle.
+    ///
+    /// This is backend/platform specific. For example, on Win32 this may be an `HWND`.
+    pub fn platform_handle_raw(&self) -> *mut c_void {
+        self.inner().PlatformHandleRaw
+    }
+
+    /// Set the raw native platform handle.
+    ///
+    /// # Safety
+    ///
+    /// `handle` must be null or a live native handle of the kind expected by the installed
+    /// platform callbacks for this viewport.
+    pub unsafe fn set_platform_handle_raw(&mut self, handle: *mut c_void) {
+        self.inner_mut().PlatformHandleRaw = handle;
+    }
+
+    /// Check if the platform window was created
+    pub fn platform_window_created(&self) -> bool {
+        self.inner().PlatformWindowCreated
+    }
+
+    /// Set whether the platform window was created.
+    ///
+    /// # Safety
+    ///
+    /// When setting this to `true`, all platform and renderer data required by the corresponding
+    /// destroy callbacks must already be initialized. The caller must keep the flag synchronized
+    /// with the actual native window lifecycle.
+    pub unsafe fn set_platform_window_created(&mut self, created: bool) {
+        self.inner_mut().PlatformWindowCreated = created;
+    }
+
+    /// Check if the platform requested move
+    pub fn platform_request_move(&self) -> bool {
+        self.inner().PlatformRequestMove
+    }
+
+    /// Set whether the platform requested move
+    pub fn set_platform_request_move(&mut self, request: bool) {
+        self.inner_mut().PlatformRequestMove = request;
+    }
+
+    /// Check if the platform requested resize
+    pub fn platform_request_resize(&self) -> bool {
+        self.inner().PlatformRequestResize
+    }
+
+    /// Set whether the platform requested resize
+    pub fn set_platform_request_resize(&mut self, request: bool) {
+        self.inner_mut().PlatformRequestResize = request;
+    }
+
+    /// Check if the platform requested close
+    pub fn platform_request_close(&self) -> bool {
+        self.inner().PlatformRequestClose
+    }
+
+    /// Set whether the platform requested close
+    pub fn set_platform_request_close(&mut self, request: bool) {
+        self.inner_mut().PlatformRequestClose = request;
+    }
+
+    /// Get the viewport flags
+    pub fn flags(&self) -> crate::ViewportFlags {
+        crate::ViewportFlags::from_bits_retain(self.inner().Flags)
+    }
+
+    /// Get the raw viewport flag bits.
+    pub fn raw_flags(&self) -> sys::ImGuiViewportFlags {
+        self.inner().Flags
+    }
+
+    /// Set raw viewport flag bits without validation.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure `flags` contains only bits valid for this Dear ImGui version and
+    /// preserves any viewport invariants expected by the platform and renderer backends.
+    pub unsafe fn set_raw_flags_unchecked(&mut self, flags: sys::ImGuiViewportFlags) {
+        self.inner_mut().Flags = flags;
+    }
+
+    /// Get the DPI scale factor
+    #[cfg(feature = "multi-viewport")]
+    pub fn dpi_scale(&self) -> f32 {
+        self.inner().DpiScale
+    }
+
+    /// Set the DPI scale factor
+    #[cfg(feature = "multi-viewport")]
+    pub fn set_dpi_scale(&mut self, scale: f32) {
+        assert_dpi_scale("Viewport::set_dpi_scale()", scale);
+        self.inner_mut().DpiScale = scale;
+    }
+
+    /// Get the parent viewport ID
+    #[cfg(feature = "multi-viewport")]
+    pub fn parent_viewport_id(&self) -> Option<Id> {
+        let raw = self.inner().ParentViewportId;
+        (raw != 0).then(|| Id::from(raw))
+    }
+
+    /// Get the transient draw data pointer for this viewport.
+    ///
+    /// The pointer may be null and is invalidated by later Dear ImGui frame or viewport work.
+    /// Custom renderers must dereference it only inside the render operation that obtained this
+    /// viewport. Prefer a renderer-owned [`crate::render::ReconciledFrame`] or
+    /// [`crate::render::FrameSnapshot`] in application code.
+    #[cfg(feature = "multi-viewport")]
+    pub fn draw_data(&self) -> *mut sys::ImDrawData {
+        self.inner().DrawData
+    }
+
+    /// Get the framebuffer scale
+    #[cfg(feature = "multi-viewport")]
+    pub fn framebuffer_scale(&self) -> [f32; 2] {
+        [
+            self.inner().FramebufferScale.x,
+            self.inner().FramebufferScale.y,
+        ]
+    }
+
+    /// Set the framebuffer scale
+    #[cfg(feature = "multi-viewport")]
+    pub fn set_framebuffer_scale(&mut self, scale: [f32; 2]) {
+        assert_non_negative_finite_vec2("Viewport::set_framebuffer_scale()", "scale", scale);
+        self.inner_mut().FramebufferScale.x = scale[0];
+        self.inner_mut().FramebufferScale.y = scale[1];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Viewport;
+    use crate::Context;
+    use crate::sys;
+    use std::ffi::c_void;
+
+    fn new_viewport() -> *mut sys::ImGuiViewport {
+        unsafe {
+            let ptr = sys::ImGuiViewport_ImGuiViewport();
+            assert!(
+                !ptr.is_null(),
+                "ImGuiViewport_ImGuiViewport() returned null"
+            );
+            ptr
+        }
+    }
+
+    #[test]
+    fn viewport_center_and_work_center_follow_imgui_helpers() {
+        let raw = new_viewport();
+        unsafe {
+            (*raw).Pos.x = 10.0;
+            (*raw).Pos.y = 20.0;
+            (*raw).Size.x = 100.0;
+            (*raw).Size.y = 40.0;
+            (*raw).WorkPos.x = 30.0;
+            (*raw).WorkPos.y = 50.0;
+            (*raw).WorkSize.x = 20.0;
+            (*raw).WorkSize.y = 10.0;
+
+            let viewport = Viewport::from_raw_mut(raw);
+            assert_eq!(viewport.center(), [60.0, 40.0]);
+            assert_eq!(viewport.work_center(), [40.0, 55.0]);
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[test]
+    fn main_viewport_identity_does_not_depend_on_platform_window_flags() {
+        let _guard = crate::test_support::imgui_context_guard();
+        let mut context = Context::create();
+        let main = context.main_viewport().as_raw_mut();
+        let secondary = new_viewport();
+        unsafe {
+            (*main).Flags = crate::ViewportFlags::IS_PLATFORM_WINDOW.bits()
+                | crate::ViewportFlags::OWNED_BY_APP.bits();
+            (*secondary).ID = (*main).ID;
+            (*secondary).Flags = crate::ViewportFlags::IS_PLATFORM_WINDOW.bits();
+
+            let main_viewport = Viewport::from_raw_mut(main);
+            assert!(main_viewport.is_main());
+            assert!(!main_viewport.is_platform_window());
+            assert!(main_viewport.is_owned_by_app());
+
+            let secondary_viewport = Viewport::from_raw_mut(secondary);
+            assert_eq!(secondary_viewport.id(), main_viewport.id());
+            assert!(!secondary_viewport.is_main());
+            assert!(secondary_viewport.is_platform_window());
+
+            sys::ImGuiViewport_destroy(secondary);
+        }
+    }
+
+    #[test]
+    fn main_viewport_identity_is_scoped_to_its_managed_context() {
+        let _guard = crate::test_support::imgui_context_guard();
+        let context_a = Context::create();
+        let binding_a = context_a.binding();
+        let main_a = unsafe { sys::igGetMainViewport() };
+        unsafe { sys::igSetCurrentContext(std::ptr::null_mut()) };
+        let context_b = Context::create();
+        let main_b = unsafe { sys::igGetMainViewport() };
+        unsafe { sys::igSetCurrentContext(std::ptr::null_mut()) };
+
+        unsafe {
+            assert_eq!((*main_a).ID, (*main_b).ID);
+            assert!(Viewport::from_raw(main_a).is_main());
+            assert!(Viewport::from_raw(main_b).is_main());
+        }
+
+        binding_a.with_bound_context(|| unsafe {
+            assert!(Viewport::from_raw(main_a).is_main());
+            assert!(Viewport::from_raw(main_b).is_main());
+        });
+
+        drop(context_a);
+        assert!(!crate::context::binding::viewport_is_main_viewport(main_a));
+        assert!(crate::context::binding::viewport_is_main_viewport(main_b));
+        drop(context_b);
+    }
+
+    #[test]
+    fn viewport_platform_handle_raw_roundtrips() {
+        let raw = new_viewport();
+        unsafe {
+            let viewport = Viewport::from_raw_mut(raw);
+            let handle = 0x1234usize as *mut c_void;
+            viewport.set_platform_handle_raw(handle);
+            assert_eq!(viewport.platform_handle_raw(), handle);
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[test]
+    fn backend_owned_viewport_state_requires_unsafe_callers() {
+        let _: unsafe fn(&mut Viewport, *mut c_void) = Viewport::set_platform_user_data;
+        let _: unsafe fn(&mut Viewport, *mut c_void) = Viewport::set_renderer_user_data;
+        let _: unsafe fn(&mut Viewport, *mut c_void) = Viewport::set_platform_handle;
+        let _: unsafe fn(&mut Viewport, *mut c_void) = Viewport::set_platform_handle_raw;
+        let _: unsafe fn(&mut Viewport, bool) = Viewport::set_platform_window_created;
+    }
+
+    #[test]
+    fn viewport_ids_are_typed() {
+        let raw = new_viewport();
+        unsafe {
+            (*raw).ID = 42;
+
+            let viewport = Viewport::from_raw_mut(raw);
+            assert_eq!(viewport.id(), crate::Id::from(42u32));
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[cfg(feature = "multi-viewport")]
+    #[test]
+    fn native_viewport_address_lookup_tracks_liveness_in_the_current_context() {
+        let _guard = crate::test_support::imgui_context_guard();
+        let context_a = Context::create();
+        let binding_a = context_a.binding();
+        let raw_context_a = context_a.as_raw();
+        let viewport = unsafe { sys::igGetMainViewport() };
+        let address = viewport as usize;
+        let original_id = unsafe { (*viewport).ID };
+        let changed_id = original_id.wrapping_add(1);
+        unsafe { (*viewport).ID = changed_id };
+
+        let resolved =
+            unsafe { sys::ImGuiContext_FindLiveViewportByAddress(raw_context_a, address) };
+        let resolved_id = unsafe { resolved.as_ref().map(|viewport| viewport.ID) };
+        let unknown = unsafe {
+            sys::ImGuiContext_FindLiveViewportByAddress(
+                raw_context_a,
+                address.wrapping_add(std::mem::align_of::<sys::ImGuiViewport>()),
+            )
+        };
+        unsafe { (*viewport).ID = original_id };
+
+        assert_eq!(resolved, viewport);
+        assert_eq!(resolved_id, Some(changed_id));
+        assert!(unknown.is_null());
+
+        unsafe { sys::igSetCurrentContext(std::ptr::null_mut()) };
+        let context_b = Context::create();
+        assert!(unsafe {
+            sys::ImGuiContext_FindLiveViewportByAddress(raw_context_a, address).is_null()
+        });
+        drop(context_b);
+        binding_a.with_bound_context(|| {
+            assert_eq!(unsafe { sys::igGetMainViewport() }, viewport);
+        });
+    }
+
+    #[test]
+    fn viewport_raw_constructors_reject_null_before_reference_creation() {
+        assert!(
+            std::panic::catch_unwind(|| unsafe {
+                let _ = Viewport::from_raw(std::ptr::null());
+            })
+            .is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| unsafe {
+                let _ = Viewport::from_raw_mut(std::ptr::null_mut());
+            })
+            .is_err()
+        );
+    }
+
+    #[cfg(feature = "multi-viewport")]
+    #[test]
+    fn parent_viewport_id_is_a_read_only_typed_view() {
+        let raw = new_viewport();
+        unsafe {
+            let viewport = Viewport::from_raw_mut(raw);
+            assert_eq!(viewport.parent_viewport_id(), None);
+
+            let parent = crate::Id::from(100u32);
+            (*raw).ParentViewportId = parent.raw();
+            assert_eq!(viewport.parent_viewport_id(), Some(parent));
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[test]
+    fn viewport_flags_are_read_only_without_an_explicit_unsafe_write() {
+        let raw = new_viewport();
+        unsafe {
+            let viewport = Viewport::from_raw_mut(raw);
+
+            let flags = crate::ViewportFlags::OWNED_BY_APP | crate::ViewportFlags::NO_DECORATION;
+            viewport.set_raw_flags_unchecked(flags.bits());
+            assert_eq!(viewport.flags(), flags);
+            assert_eq!(viewport.raw_flags(), flags.bits());
+
+            let unsupported = crate::ViewportFlags::from_bits_retain(1 << 14);
+            viewport.set_raw_flags_unchecked(unsupported.bits());
+            assert_eq!(viewport.raw_flags(), unsupported.bits());
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[test]
+    fn viewport_geometry_and_scale_setters_validate_before_storage() {
+        let raw = new_viewport();
+        unsafe {
+            let viewport = Viewport::from_raw_mut(raw);
+
+            viewport.set_pos([10.0, 20.0]);
+            viewport.set_size([100.0, 40.0]);
+            assert_eq!(viewport.pos(), [10.0, 20.0]);
+            assert_eq!(viewport.size(), [100.0, 40.0]);
+
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    viewport.set_pos([f32::NAN, 20.0]);
+                }))
+                .is_err()
+            );
+            assert_eq!(viewport.pos(), [10.0, 20.0]);
+
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    viewport.set_size([-1.0, 40.0]);
+                }))
+                .is_err()
+            );
+            assert_eq!(viewport.size(), [100.0, 40.0]);
+
+            #[cfg(feature = "multi-viewport")]
+            {
+                viewport.set_dpi_scale(1.5);
+                viewport.set_framebuffer_scale([2.0, 2.0]);
+                assert_eq!(viewport.dpi_scale(), 1.5);
+                assert_eq!(viewport.framebuffer_scale(), [2.0, 2.0]);
+
+                assert!(
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        viewport.set_dpi_scale(99.0);
+                    }))
+                    .is_err()
+                );
+                assert_eq!(viewport.dpi_scale(), 1.5);
+
+                assert!(
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        viewport.set_framebuffer_scale([1.0, f32::INFINITY]);
+                    }))
+                    .is_err()
+                );
+                assert_eq!(viewport.framebuffer_scale(), [2.0, 2.0]);
+            }
+
+            sys::ImGuiViewport_destroy(raw);
+        }
+    }
+
+    #[test]
+    fn main_viewport_exposes_debug_name() {
+        let _guard = crate::test_support::imgui_context_guard();
+        let mut ctx = Context::create();
+        let viewport = ctx.main_viewport();
+        let debug_name: String = viewport.debug_name();
+        assert!(!debug_name.is_empty());
+    }
+}

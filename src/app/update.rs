@@ -1,6 +1,7 @@
 use crate::app::{App, AppData};
 use crate::ecs::run_frame;
 use crate::ecs::FrameContext;
+use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
@@ -63,14 +64,14 @@ impl App {
         draw_data: &imgui::DrawData,
         frame_slot: usize,
     ) -> Result<()> {
-        if draw_data.total_vtx_count == 0 || draw_data.total_idx_count == 0 {
+        if draw_data.total_vtx_count() == 0 || draw_data.total_idx_count() == 0 {
             return Ok(());
         }
 
-        let vtx_buffer_size = (draw_data.total_vtx_count as usize
+        let vtx_buffer_size = (draw_data.total_vtx_count() as usize
             * std::mem::size_of::<imgui::DrawVert>())
             as vk::DeviceSize;
-        let idx_buffer_size = (draw_data.total_idx_count as usize
+        let idx_buffer_size = (draw_data.total_idx_count() as usize
             * std::mem::size_of::<imgui::DrawIdx>())
             as vk::DeviceSize;
 
@@ -118,29 +119,13 @@ unsafe fn resize_imgui_vertex_buffer(
         rrdevice.device.free_memory(memory, None);
     }
 
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(vtx_buffer_size)
-        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-    let vertex_buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-    let mem_requirements = rrdevice
-        .device
-        .get_buffer_memory_requirements(vertex_buffer);
-
-    let mem_alloc_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(mem_requirements.size)
-        .memory_type_index(crate::vulkanr::vulkan::get_memory_type_index(
-            instance,
-            rrdevice.physical_device,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            mem_requirements,
-        )?);
-
-    let vertex_buffer_memory = rrdevice.device.allocate_memory(&mem_alloc_info, None)?;
-    rrdevice
-        .device
-        .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)?;
+    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+        instance,
+        rrdevice,
+        vtx_buffer_size,
+        vk::BufferUsageFlags::VERTEX_BUFFER,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
 
     data.imgui.vertex_buffers[frame_slot] = Some(vertex_buffer);
     data.imgui.vertex_buffer_memories[frame_slot] = Some(vertex_buffer_memory);
@@ -163,27 +148,13 @@ unsafe fn resize_imgui_index_buffer(
         rrdevice.device.free_memory(memory, None);
     }
 
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(idx_buffer_size)
-        .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-    let index_buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-    let mem_requirements = rrdevice.device.get_buffer_memory_requirements(index_buffer);
-
-    let mem_alloc_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(mem_requirements.size)
-        .memory_type_index(crate::vulkanr::vulkan::get_memory_type_index(
-            instance,
-            rrdevice.physical_device,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            mem_requirements,
-        )?);
-
-    let index_buffer_memory = rrdevice.device.allocate_memory(&mem_alloc_info, None)?;
-    rrdevice
-        .device
-        .bind_buffer_memory(index_buffer, index_buffer_memory, 0)?;
+    let (index_buffer, index_buffer_memory) = create_buffer(
+        instance,
+        rrdevice,
+        idx_buffer_size,
+        vk::BufferUsageFlags::INDEX_BUFFER,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
 
     data.imgui.index_buffers[frame_slot] = Some(index_buffer);
     data.imgui.index_buffer_memories[frame_slot] = Some(index_buffer_memory);

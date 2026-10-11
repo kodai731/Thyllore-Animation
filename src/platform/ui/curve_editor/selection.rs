@@ -309,22 +309,8 @@ pub(super) fn apply_box_selection(
 mod tests {
     use super::*;
     use crate::animation::editable::curve_add_keyframe;
-    use crate::ecs::resource::CurveValueDisplay;
 
-    fn build_unit_view() -> ViewTransform {
-        ViewTransform {
-            curve_origin: [0.0, 0.0],
-            curve_width: 1.0,
-            curve_height: 1.0,
-            duration: 1.0,
-            val_range: 1.0,
-            zoom_x: 1.0,
-            zoom_y: 1.0,
-            view_time_offset: 0.0,
-            view_value_offset: 0.0,
-            value_display: CurveValueDisplay::Actual,
-        }
-    }
+    use super::super::test_fixtures::*;
 
     fn build_curve_with_keys(keys: &[(f32, f32)]) -> (PropertyCurve, Vec<KeyframeId>) {
         let mut curve = PropertyCurve::new(0, PropertyType::TranslationX);

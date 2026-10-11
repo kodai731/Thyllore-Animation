@@ -8,6 +8,8 @@ mod interaction;
 mod keyboard;
 mod numeric_input;
 mod selection;
+#[cfg(test)]
+mod test_fixtures;
 mod track_list;
 mod tween;
 mod view;

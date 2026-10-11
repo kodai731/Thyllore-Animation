@@ -21,7 +21,7 @@ vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "wi
 winit = "0.29"
 thiserror = "1"
 png = "0.17"
-imgui = { path = "../../vendor/imgui", features = ["tables-api", "docking"] }
+imgui = { package = "dear-imgui-rs", path = "../../vendor/dear-imgui-rs", features = ["build-from-source"] }
 
 [dev-dependencies]
 thyllore-effect-core = { path = "../thyllore-effect-core" }

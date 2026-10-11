@@ -31,6 +31,13 @@ pub enum TangentType {
     Plateau,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TangentContinuity {
+    #[default]
+    Unified,
+    Broken,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BezierHandle {
     pub time_offset: f32,
@@ -66,6 +73,8 @@ pub struct EditableKeyframe {
     pub weight_mode: TangentWeightMode,
     #[serde(default)]
     pub tangent_type: TangentType,
+    #[serde(default)]
+    pub continuity: TangentContinuity,
 }
 
 impl EditableKeyframe {
@@ -79,6 +88,7 @@ impl EditableKeyframe {
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
+            continuity: TangentContinuity::Unified,
         }
     }
 
@@ -98,6 +108,7 @@ impl EditableKeyframe {
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
+            continuity: TangentContinuity::Unified,
         }
     }
 }
@@ -113,6 +124,7 @@ impl Default for EditableKeyframe {
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
+            continuity: TangentContinuity::Unified,
         }
     }
 }
@@ -178,5 +190,21 @@ mod tests {
         let kf: EditableKeyframe = serde_json::from_str(json).expect("Should deserialize");
         assert_eq!(kf.id, 1);
         assert_eq!(kf.weight_mode, TangentWeightMode::NonWeighted);
+    }
+
+    #[test]
+    fn test_serde_backward_compat_no_continuity() {
+        let json = r#"{
+            "id": 1,
+            "time": 0.5,
+            "value": 1.0,
+            "in_tangent": { "time_offset": -0.1, "value_offset": -0.2 },
+            "out_tangent": { "time_offset": 0.1, "value_offset": 0.2 },
+            "interpolation": "Bezier"
+        }"#;
+
+        let kf: EditableKeyframe = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(kf.id, 1);
+        assert_eq!(kf.continuity, TangentContinuity::Unified);
     }
 }

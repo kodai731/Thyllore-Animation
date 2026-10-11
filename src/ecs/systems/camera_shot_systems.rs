@@ -148,6 +148,7 @@ mod tests {
             initial_yaw: yaw,
             initial_pitch: pitch,
             initial_distance: distance,
+            ..Camera::default()
         }
     }
 

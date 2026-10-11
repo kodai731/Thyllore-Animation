@@ -160,7 +160,7 @@ impl ViewportState {
         Ok(())
     }
 
-    pub fn texture_id(&self) -> usize {
-        self.descriptor_set.as_raw() as usize
+    pub fn texture_id(&self) -> u64 {
+        self.descriptor_set.as_raw()
     }
 }

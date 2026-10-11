@@ -10,6 +10,7 @@ use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::{Entity, Visibility, World};
 use crate::helm::components::tool_call::{ShotPreset, SpeedPreset};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -105,7 +106,9 @@ impl UiCommand for HelmCommand {
                 Box::new(CameraEvent::ResetCamera).apply(world, assets, graphics);
             }
             HelmCommand::FocusOnEntity(entity) => {
-                Box::new(HierarchyEvent::FocusOnEntity(entity)).apply(world, assets, graphics);
+                Box::new(HierarchyEvent::SelectEntity(entity)).apply(world, assets, graphics);
+                Box::new(CameraEvent::FrameSelection(CameraMotion::Eased))
+                    .apply(world, assets, graphics);
             }
             HelmCommand::CameraShot {
                 preset,

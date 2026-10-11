@@ -1,0 +1,517 @@
+//! Windows and window utilities
+//!
+//! This module exposes the `Window` builder and related flags for creating
+//! top-level Dear ImGui windows. It also houses helpers for child windows,
+//! querying content-region size, and controlling window scrolling.
+//!
+//! Basic usage:
+//! ```no_run
+//! # use dear_imgui_rs::*;
+//! # let mut ctx = Context::create();
+//! # let ui = ctx.frame();
+//! ui.window("Hello")
+//!     .size([320.0, 240.0], Condition::FirstUseEver)
+//!     .position([60.0, 60.0], Condition::FirstUseEver)
+//!     .build(|| {
+//!         ui.text("Window contents go here");
+//!     });
+//! ```
+//!
+//! See also:
+//! - `child_window` for scoped child areas
+//! - `content_region` for available size queries
+//! - `scroll` for reading and setting scroll positions
+//!
+//! Quick example (flags + size/pos conditions):
+//! ```no_run
+//! # use dear_imgui_rs::*;
+//! # let mut ctx = Context::create();
+//! # let ui = ctx.frame();
+//! use dear_imgui_rs::WindowFlags;
+//! ui.window("Tools")
+//!     .flags(WindowFlags::NO_RESIZE | WindowFlags::NO_COLLAPSE)
+//!     .size([300.0, 200.0], Condition::FirstUseEver)
+//!     .position([50.0, 60.0], Condition::FirstUseEver)
+//!     .build(|| {
+//!         ui.text("Toolbox contents...");
+//!     });
+//! ```
+//!
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::as_conversions
+)]
+use bitflags::bitflags;
+use std::f32;
+
+use crate::sys;
+use crate::{Condition, Ui};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+mod child_window;
+pub(crate) mod content_region;
+mod key;
+pub(crate) mod scroll;
+
+pub use child_window::{ChildFlags, ChildWindow};
+pub use key::{WindowKey, WindowKeyError, WindowLabel};
+
+// Window-focused/hovered helpers are available via utils.rs variants.
+// Window hovered/focused flag helpers are provided by crate::utils.
+
+bitflags! {
+    /// Configuration flags for windows
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct WindowFlags: i32 {
+        /// Disable title-bar
+        const NO_TITLE_BAR = sys::ImGuiWindowFlags_NoTitleBar as i32;
+        /// Disable user resizing with the lower-right grip
+        const NO_RESIZE = sys::ImGuiWindowFlags_NoResize as i32;
+        /// Disable user moving the window
+        const NO_MOVE = sys::ImGuiWindowFlags_NoMove as i32;
+        /// Disable scrollbars (window can still scroll with mouse or programmatically)
+        const NO_SCROLLBAR = sys::ImGuiWindowFlags_NoScrollbar as i32;
+        /// Disable user vertically scrolling with mouse wheel
+        const NO_SCROLL_WITH_MOUSE = sys::ImGuiWindowFlags_NoScrollWithMouse as i32;
+        /// Disable user collapsing window by double-clicking on it
+        const NO_COLLAPSE = sys::ImGuiWindowFlags_NoCollapse as i32;
+        /// Resize every window to its content every frame
+        const ALWAYS_AUTO_RESIZE = sys::ImGuiWindowFlags_AlwaysAutoResize as i32;
+        /// Disable drawing background color (WindowBg, etc.) and outside border
+        const NO_BACKGROUND = sys::ImGuiWindowFlags_NoBackground as i32;
+        /// Never load/save settings in .ini file
+        const NO_SAVED_SETTINGS = sys::ImGuiWindowFlags_NoSavedSettings as i32;
+        /// Disable catching mouse, hovering test with pass through
+        const NO_MOUSE_INPUTS = sys::ImGuiWindowFlags_NoMouseInputs as i32;
+        /// Has a menu-bar
+        const MENU_BAR = sys::ImGuiWindowFlags_MenuBar as i32;
+        /// Allow horizontal scrollbar to appear (off by default)
+        const HORIZONTAL_SCROLLBAR = sys::ImGuiWindowFlags_HorizontalScrollbar as i32;
+        /// Disable taking focus when transitioning from hidden to visible state
+        const NO_FOCUS_ON_APPEARING = sys::ImGuiWindowFlags_NoFocusOnAppearing as i32;
+        /// Disable bringing window to front when taking focus (e.g. clicking on it or programmatically giving it focus)
+        const NO_BRING_TO_FRONT_ON_FOCUS = sys::ImGuiWindowFlags_NoBringToFrontOnFocus as i32;
+        /// Always show vertical scrollbar (even if ContentSize.y < Size.y)
+        const ALWAYS_VERTICAL_SCROLLBAR = sys::ImGuiWindowFlags_AlwaysVerticalScrollbar as i32;
+        /// Always show horizontal scrollbar (even if ContentSize.x < Size.x)
+        const ALWAYS_HORIZONTAL_SCROLLBAR = sys::ImGuiWindowFlags_AlwaysHorizontalScrollbar as i32;
+        /// No gamepad/keyboard navigation within the window
+        const NO_NAV_INPUTS = sys::ImGuiWindowFlags_NoNavInputs as i32;
+        /// No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
+        const NO_NAV_FOCUS = sys::ImGuiWindowFlags_NoNavFocus as i32;
+        /// Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+        const UNSAVED_DOCUMENT = sys::ImGuiWindowFlags_UnsavedDocument as i32;
+        // Docking related flags
+        /// Disable docking for this window (the window will not be able to dock into another and others won't be able to dock into it)
+        const NO_DOCKING = sys::ImGuiWindowFlags_NoDocking as i32;
+        /// Disable gamepad/keyboard navigation and focusing
+        const NO_NAV = Self::NO_NAV_INPUTS.bits() | Self::NO_NAV_FOCUS.bits();
+        /// Disable all window decorations
+        const NO_DECORATION = Self::NO_TITLE_BAR.bits() | Self::NO_RESIZE.bits() | Self::NO_SCROLLBAR.bits() | Self::NO_COLLAPSE.bits();
+        /// Disable all user interactions
+        const NO_INPUTS = Self::NO_MOUSE_INPUTS.bits() | Self::NO_NAV_INPUTS.bits();
+    }
+}
+
+pub(crate) fn validate_window_flags(caller: &str, flags: WindowFlags) {
+    let unsupported = flags.bits() & !WindowFlags::all().bits();
+    assert!(
+        unsupported == 0,
+        "{caller} received unsupported ImGuiWindowFlags bits: 0x{unsupported:X}"
+    );
+}
+
+fn assert_finite_vec2(caller: &str, name: &str, value: [f32; 2]) {
+    assert!(
+        value[0].is_finite() && value[1].is_finite(),
+        "{caller} {name} must contain finite values"
+    );
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for WindowFlags {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i32(self.bits())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for WindowFlags {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bits = i32::deserialize(deserializer)?;
+        Ok(WindowFlags::from_bits_retain(bits))
+    }
+}
+
+/// Represents a window that can be built
+pub struct Window<'ui> {
+    ui: &'ui Ui,
+    name: WindowLabel<'ui>,
+    opened: Option<&'ui mut bool>,
+    flags: WindowFlags,
+    size: Option<[f32; 2]>,
+    size_condition: Condition,
+    size_constraints: Option<([f32; 2], [f32; 2])>,
+    pos: Option<[f32; 2]>,
+    pos_condition: Condition,
+    pos_pivot: [f32; 2],
+    content_size: Option<[f32; 2]>,
+    collapsed: Option<bool>,
+    collapsed_condition: Condition,
+    focused: Option<bool>,
+    bg_alpha: Option<f32>,
+    scroll: Option<[f32; 2]>,
+}
+
+impl<'ui> Window<'ui> {
+    /// Creates a new window builder
+    pub fn new(ui: &'ui Ui, name: impl Into<WindowLabel<'ui>>) -> Self {
+        Self {
+            ui,
+            name: name.into(),
+            opened: None,
+            flags: WindowFlags::empty(),
+            size: None,
+            size_condition: Condition::Always,
+            size_constraints: None,
+            pos: None,
+            pos_condition: Condition::Always,
+            pos_pivot: [0.0, 0.0],
+            content_size: None,
+            collapsed: None,
+            collapsed_condition: Condition::Always,
+            focused: None,
+            bg_alpha: None,
+            scroll: None,
+        }
+    }
+
+    /// Sets window flags
+    pub fn flags(mut self, flags: WindowFlags) -> Self {
+        self.flags = flags;
+        self
+    }
+
+    /// Sets the pivot of the next window position: `[0.5, 0.5]` centers the window on it.
+    #[doc(alias = "SetNextWindowPos")]
+    pub fn position_pivot(mut self, pivot: [f32; 2]) -> Self {
+        self.pos_pivot = pivot;
+        self
+    }
+
+    /// Enables or disables resizing with the lower-right grip (enabled by default).
+    pub fn resizable(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::NO_RESIZE, !value);
+        self
+    }
+
+    /// Enables or disables moving the window (enabled by default).
+    pub fn movable(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::NO_MOVE, !value);
+        self
+    }
+
+    /// Enables or disables collapsing by double-clicking the title bar (enabled by default).
+    pub fn collapsible(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::NO_COLLAPSE, !value);
+        self
+    }
+
+    /// Enables or disables resizing the window to its contents every frame (disabled by default).
+    pub fn always_auto_resize(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::ALWAYS_AUTO_RESIZE, value);
+        self
+    }
+
+    /// Enables or disables saving the window layout in the ini file (enabled by default).
+    pub fn save_settings(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::NO_SAVED_SETTINGS, !value);
+        self
+    }
+
+    /// Enables or disables taking focus when transitioning from hidden to visible (enabled by default).
+    pub fn focus_on_appearing(mut self, value: bool) -> Self {
+        self.flags.set(WindowFlags::NO_FOCUS_ON_APPEARING, !value);
+        self
+    }
+
+    /// Enables or disables bringing the window to front on focus (enabled by default).
+    pub fn bring_to_front_on_focus(mut self, value: bool) -> Self {
+        self.flags
+            .set(WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS, !value);
+        self
+    }
+
+    /// Disables the title bar, resize grip, scrollbars and collapsing.
+    pub fn no_decoration(mut self) -> Self {
+        self.flags |= WindowFlags::NO_TITLE_BAR
+            | WindowFlags::NO_RESIZE
+            | WindowFlags::NO_SCROLLBAR
+            | WindowFlags::NO_COLLAPSE;
+        self
+    }
+
+    /// Disables mouse and keyboard navigation input for the window.
+    pub fn no_inputs(mut self) -> Self {
+        self.flags |=
+            WindowFlags::NO_MOUSE_INPUTS | WindowFlags::NO_NAV_INPUTS | WindowFlags::NO_NAV_FOCUS;
+        self
+    }
+
+    /// Disables keyboard and gamepad navigation for the window.
+    pub fn no_nav(mut self) -> Self {
+        self.flags |= WindowFlags::NO_NAV_INPUTS | WindowFlags::NO_NAV_FOCUS;
+        self
+    }
+
+    /// Controls whether the window is open (adds a title-bar close button).
+    ///
+    /// In Dear ImGui, a window is "closed" by the user by toggling the `p_open` boolean.
+    /// When the close button (X) is pressed, `opened` will be set to `false`.
+    ///
+    /// Note: as an immediate-mode UI, you should stop submitting this window when
+    /// `*opened == false` (typically by guarding the `window(...).build(...)` call).
+    #[doc(alias = "Begin")]
+    pub fn opened(mut self, opened: &'ui mut bool) -> Self {
+        self.opened = Some(opened);
+        self
+    }
+
+    /// Sets window size
+    #[doc(alias = "SetNextWindowSize")]
+    pub fn size(mut self, size: [f32; 2], condition: Condition) -> Self {
+        self.size = Some(size);
+        self.size_condition = condition;
+        self
+    }
+
+    /// Sets window size constraints for the next Begin call.
+    ///
+    /// This is a convenience wrapper over `ImGui::SetNextWindowSizeConstraints`
+    /// without a custom size callback.
+    #[doc(alias = "SetNextWindowSizeConstraints")]
+    pub fn size_constraints(mut self, min: [f32; 2], max: [f32; 2]) -> Self {
+        self.size_constraints = Some((min, max));
+        self
+    }
+
+    /// Sets window position
+    #[doc(alias = "SetNextWindowPos")]
+    pub fn position(mut self, pos: [f32; 2], condition: Condition) -> Self {
+        self.pos = Some(pos);
+        self.pos_condition = condition;
+        self
+    }
+
+    /// Sets window content size
+    #[doc(alias = "SetNextWindowContentSize")]
+    pub fn content_size(mut self, size: [f32; 2]) -> Self {
+        self.content_size = Some(size);
+        self
+    }
+
+    /// Sets window collapsed state
+    #[doc(alias = "SetNextWindowCollapsed")]
+    pub fn collapsed(mut self, collapsed: bool, condition: Condition) -> Self {
+        self.collapsed = Some(collapsed);
+        self.collapsed_condition = condition;
+        self
+    }
+
+    /// Sets window focused state
+    #[doc(alias = "SetNextWindowFocus")]
+    pub fn focused(mut self, focused: bool) -> Self {
+        self.focused = Some(focused);
+        self
+    }
+
+    /// Sets window background alpha
+    #[doc(alias = "SetNextWindowBgAlpha")]
+    pub fn bg_alpha(mut self, alpha: f32) -> Self {
+        self.bg_alpha = Some(alpha);
+        self
+    }
+
+    /// Sets the initial scroll position for the next Begin call.
+    #[doc(alias = "SetNextWindowScroll")]
+    pub fn scroll(mut self, scroll: [f32; 2]) -> Self {
+        self.scroll = Some(scroll);
+        self
+    }
+
+    /// Builds the window and calls the provided closure
+    pub fn build<F, R>(self, f: F) -> Option<R>
+    where
+        F: FnOnce() -> R,
+    {
+        let token = self.begin()?;
+        let result = f();
+        drop(token);
+        Some(result)
+    }
+
+    /// Begins the window and returns a token
+    fn begin(self) -> Option<WindowGuard<'ui>> {
+        let name = self.name;
+        let name_ptr = match &name {
+            WindowLabel::Plain(title) => self.ui.scratch_txt(title),
+            WindowLabel::Keyed { key, title } => unsafe {
+                (&mut *self.ui.scratch_buffer().get()).scratch_txt_concat(&[
+                    title,
+                    "###",
+                    key.stable_id(),
+                ])
+            },
+        };
+        validate_window_flags("Window::begin()", self.flags);
+
+        // Set window properties before beginning
+        self.ui.run_with_bound_context(|| {
+            if let Some(size) = self.size {
+                assert_finite_vec2("Window::begin()", "size", size);
+                unsafe {
+                    let size_vec = crate::sys::ImVec2 {
+                        x: size[0],
+                        y: size[1],
+                    };
+                    crate::sys::igSetNextWindowSize(size_vec, self.size_condition as i32);
+                }
+            }
+
+            if let Some((min, max)) = self.size_constraints {
+                assert_finite_vec2("Window::begin()", "minimum size constraint", min);
+                assert_finite_vec2("Window::begin()", "maximum size constraint", max);
+                unsafe {
+                    let min_vec = sys::ImVec2_c {
+                        x: min[0],
+                        y: min[1],
+                    };
+                    let max_vec = sys::ImVec2_c {
+                        x: max[0],
+                        y: max[1],
+                    };
+                    sys::igSetNextWindowSizeConstraints(
+                        min_vec,
+                        max_vec,
+                        None,
+                        std::ptr::null_mut(),
+                    );
+                }
+            }
+
+            if let Some(pos) = self.pos {
+                assert_finite_vec2("Window::begin()", "position", pos);
+                unsafe {
+                    let pos_vec = crate::sys::ImVec2 {
+                        x: pos[0],
+                        y: pos[1],
+                    };
+                    let pivot_vec = crate::sys::ImVec2 {
+                        x: self.pos_pivot[0],
+                        y: self.pos_pivot[1],
+                    };
+                    crate::sys::igSetNextWindowPos(pos_vec, self.pos_condition as i32, pivot_vec);
+                }
+            }
+
+            if let Some(content_size) = self.content_size {
+                assert_finite_vec2("Window::begin()", "content size", content_size);
+                unsafe {
+                    let content_size_vec = crate::sys::ImVec2 {
+                        x: content_size[0],
+                        y: content_size[1],
+                    };
+                    crate::sys::igSetNextWindowContentSize(content_size_vec);
+                }
+            }
+
+            if let Some(collapsed) = self.collapsed {
+                unsafe {
+                    crate::sys::igSetNextWindowCollapsed(
+                        collapsed,
+                        self.collapsed_condition as i32,
+                    );
+                }
+            }
+
+            if let Some(focused) = self.focused
+                && focused
+            {
+                unsafe {
+                    crate::sys::igSetNextWindowFocus();
+                }
+            }
+
+            if let Some(alpha) = self.bg_alpha {
+                assert!(
+                    alpha.is_finite(),
+                    "Window::begin() background alpha must be finite"
+                );
+                unsafe {
+                    crate::sys::igSetNextWindowBgAlpha(alpha);
+                }
+            }
+
+            if let Some(scroll) = self.scroll {
+                assert_finite_vec2("Window::begin()", "scroll", scroll);
+                unsafe {
+                    let scroll_vec = sys::ImVec2_c {
+                        x: scroll[0],
+                        y: scroll[1],
+                    };
+                    sys::igSetNextWindowScroll(scroll_vec);
+                }
+            }
+
+            // Begin the window
+            let mut opened = self.opened;
+            let opened_ptr: *mut bool = match opened.as_deref_mut() {
+                Some(opened) => opened as *mut bool,
+                None => std::ptr::null_mut(),
+            };
+            let result = unsafe { crate::sys::igBegin(name_ptr, opened_ptr, self.flags.bits()) };
+            let is_open = opened.is_none_or(|opened| *opened);
+
+            // IMPORTANT: According to ImGui documentation, Begin/End calls must be balanced.
+            // If Begin returns false, we need to call End immediately and return None.
+            if result && is_open {
+                Some(WindowGuard::new(self.ui))
+            } else {
+                // If Begin returns false, call End immediately and return None
+                unsafe {
+                    crate::sys::igEnd();
+                }
+                None
+            }
+        })
+    }
+}
+
+/// Internal guard representing an active window.
+#[doc(alias = "End")]
+struct WindowGuard<'ui> {
+    scope: crate::scope::NativeScopeToken<'ui>,
+}
+
+impl<'ui> WindowGuard<'ui> {
+    fn new(ui: &'ui Ui) -> Self {
+        Self {
+            scope: ui.begin_native_scope(crate::scope::NativeScopePop::EndWindow, "WindowGuard"),
+        }
+    }
+}
+
+impl Drop for WindowGuard<'_> {
+    fn drop(&mut self) {
+        self.scope.finish();
+    }
+}

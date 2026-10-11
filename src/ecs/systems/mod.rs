@@ -40,6 +40,7 @@ mod hierarchy_systems;
 pub mod humanoid_bake_systems;
 mod humanoid_import_systems;
 mod humanoid_rig_systems;
+mod imgui_texture_systems;
 #[cfg(feature = "ml")]
 mod inference_actor_systems;
 mod inspector_systems;
@@ -120,6 +121,7 @@ pub use hierarchy_systems::*;
 pub use humanoid_bake_systems::*;
 pub use humanoid_import_systems::*;
 pub use humanoid_rig_systems::*;
+pub use imgui_texture_systems::*;
 #[cfg(feature = "ml")]
 pub use inference_actor_systems::*;
 pub use inspector_systems::*;

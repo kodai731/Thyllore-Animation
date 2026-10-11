@@ -2,7 +2,7 @@ use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::App;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
-use crate::ecs::resource::{Camera, GridMeshData};
+use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
@@ -934,7 +934,8 @@ impl App {
                             let descriptor_set = if texture_id == viewport_texture_id {
                                 Some(viewport_descriptor_set)
                             } else {
-                                self.data.imgui.descriptor_set_for(texture_id)
+                                self.resource::<ImguiTextures>()
+                                    .descriptor_set_for(texture_id)
                             };
                             let Some(descriptor_set) = descriptor_set else {
                                 continue;

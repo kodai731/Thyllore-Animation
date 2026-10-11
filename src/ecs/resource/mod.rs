@@ -1,6 +1,7 @@
 pub mod billboard;
 pub mod gizmo;
 mod imgui_capture;
+pub mod imgui_textures;
 mod keyboard_modifiers;
 mod layout_snapshot;
 mod mouse_input;
@@ -95,6 +96,7 @@ pub use billboard::*;
 pub use gizmo::*;
 
 pub use imgui_capture::*;
+pub use imgui_textures::*;
 pub use keyboard_modifiers::*;
 pub use layout_snapshot::*;
 pub use mouse_input::*;

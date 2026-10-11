@@ -1316,7 +1316,7 @@ impl App {
         log!("Initializing ImGui Vulkan rendering resources");
 
         let descriptor_set_layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
-        let sampler = crate::app::imgui_textures::create_sampler(&rrdevice.device)?;
+        let sampler = crate::vulkanr::image::create_linear_clamp_sampler(rrdevice)?;
 
         let msaa_samples = {
             let render_config = data.ecs_world.resource::<RenderConfig>();
@@ -1343,6 +1343,8 @@ impl App {
         data.imgui.descriptor_set_layout = Some(descriptor_set_layout);
         data.imgui.sampler = Some(sampler);
         data.imgui.renderer_consumer = Some(renderer_consumer);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ImguiTextures::default());
         log!("ImGui rendering resources initialized successfully");
         log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
         Ok(())

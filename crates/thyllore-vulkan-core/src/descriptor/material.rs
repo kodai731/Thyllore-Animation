@@ -6,6 +6,7 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::RRImage;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
@@ -13,7 +14,7 @@ use thyllore_render_core::MaterialUBO;
 
 pub type MaterialId = u32;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Material {
     pub id: MaterialId,
     pub name: String,
@@ -22,7 +23,7 @@ pub struct Material {
     pub properties: MaterialUBO,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct MaterialManager {
     pub layout: ReflectedSetLayout,
     pub materials: HashMap<MaterialId, Material>,
@@ -109,7 +110,7 @@ impl MaterialManager {
     /// The caller guarantees the device is idle: the sets go back to the allocator for reuse.
     pub unsafe fn clear_materials(&mut self, rrdevice: &RRDevice) {
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(&rrdevice.device);
+            material.uniform_buffer.destroy_gpu(rrdevice);
             self.layout.release_set(rrdevice, material.descriptor_set);
         }
 
@@ -118,10 +119,9 @@ impl MaterialManager {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(device);
+            material.uniform_buffer.destroy_gpu(rrdevice);
         }
-        self.layout.destroy(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
     }
 }

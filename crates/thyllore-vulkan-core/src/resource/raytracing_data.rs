@@ -28,7 +28,7 @@ use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 
 #[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
+#[derive(Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]
     pub command_pool: vk::CommandPool,

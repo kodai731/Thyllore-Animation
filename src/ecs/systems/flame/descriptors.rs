@@ -18,7 +18,7 @@ pub struct FlameImageBindings {
     pub scene_depth_view: vk::ImageView,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct RRFlameDescriptorSet {
     pub layout: ReflectedSetLayout,
     pub descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
@@ -93,7 +93,7 @@ impl RRFlameDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
         self.scene_depth_sampler.destroy_gpu(rrdevice);
     }
 }

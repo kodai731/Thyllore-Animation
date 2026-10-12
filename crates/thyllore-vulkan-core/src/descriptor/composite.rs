@@ -42,9 +42,11 @@ pub struct CompositeGBufferViews {
     pub object_id_sampler: vk::Sampler,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRCompositeDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
     pub selection: UniformBuffer<SelectionUBO>,
 }
@@ -148,21 +150,5 @@ impl RRCompositeDescriptorSet {
         ubo.selected_count = count as u32;
 
         self.selection.write_slot(rrdevice, 0, &ubo)
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        self.selection.destroy(device);
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RRCompositeDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed() && self.selection.is_destroyed()
     }
 }

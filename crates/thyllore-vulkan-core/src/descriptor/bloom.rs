@@ -11,9 +11,11 @@ struct BloomFrameSets {
     upsample_sets: Vec<vk::DescriptorSet>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRBloomDescriptorSets {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     frames: Vec<BloomFrameSets>,
 }
 
@@ -114,20 +116,5 @@ impl RRBloomDescriptorSets {
             self.write_input(rrdevice, *set, mip_image_views[source_view_index], sampler)?;
         }
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.frames.clear();
-    }
-}
-
-impl GpuResource for RRBloomDescriptorSets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

@@ -5,9 +5,11 @@ use crate::descriptor::shader_bindings::{auto_exposure_average, auto_exposure_hi
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRAutoExposureHistogramDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
@@ -84,15 +86,13 @@ impl RRAutoExposureHistogramDescriptorSet {
             .apply(rrdevice);
         Ok(())
     }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRAutoExposureAverageDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
 }
 
@@ -135,29 +135,5 @@ impl RRAutoExposureAverageDescriptorSet {
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RRAutoExposureHistogramDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-    }
-}
-
-impl GpuResource for RRAutoExposureAverageDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

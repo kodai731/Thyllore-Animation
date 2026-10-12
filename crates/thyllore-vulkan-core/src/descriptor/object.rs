@@ -4,13 +4,14 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
 use thyllore_render_core::ObjectUBO;
 
 pub type ObjectId = u32;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ObjectDescriptorSet {
     pub layout: ReflectedSetLayout,
     pub sets: Vec<vk::DescriptorSet>,
@@ -143,10 +144,7 @@ impl ObjectDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        for buffer in &mut self.buffers {
-            buffer.destroy(device);
-        }
-        self.layout.destroy(rrdevice);
+        self.buffers.destroy_gpu(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
     }
 }

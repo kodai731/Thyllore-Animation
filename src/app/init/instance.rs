@@ -9,8 +9,8 @@ use crate::ecs::systems::{
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
-    ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
-    ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
+    ClipLibrary, HierarchyState, LightState, MeshAssets, ModelState, NodeAssets, PipelineManager,
+    SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -363,13 +363,6 @@ impl App {
             GraphicsResources::new(instance, rrdevice, swapchain_image_count, 64)
                 .context("Failed to create render resources")?;
 
-        let gpu_descriptors = GpuDescriptors::new(
-            data.graphics_resources.frame_set.clone(),
-            data.graphics_resources.objects.clone(),
-        );
-        let material_registry = MaterialRegistry::new(data.graphics_resources.materials.clone());
-        data.ecs_world.insert_resource(gpu_descriptors);
-        data.ecs_world.insert_resource(material_registry);
         data.ecs_world.insert_resource(ClipLibrary::new());
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());

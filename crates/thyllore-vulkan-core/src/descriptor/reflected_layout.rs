@@ -31,19 +31,22 @@ fn load_reflections(files: &[ShaderFile]) -> Result<Vec<ShaderReflection>> {
     Ok(reflections)
 }
 
-pub fn verify_pass_layouts(pass: &PassShaders, layouts: &[ReflectedSetLayout]) -> Result<()> {
+pub fn verify_pass_layouts(
+    pass: &PassShaders,
+    layout_bindings: &[Vec<vk::DescriptorSetLayoutBinding>],
+) -> Result<()> {
     let reflections = load_reflections(pass.stages)?;
     let table = DescriptorSetTable::from_reflections(&reflections)?;
     for set in table.set_indices() {
-        let layout = layouts.get(set as usize).ok_or_else(|| {
+        let bindings = layout_bindings.get(set as usize).ok_or_else(|| {
             anyhow!(
                 "pass `{}` uses descriptor set {set} but only {} layouts were given",
                 pass.name(),
-                layouts.len()
+                layout_bindings.len()
             )
         })?;
         let mismatches: Vec<String> = table
-            .verify_layout(set, layout.bindings())
+            .verify_layout(set, bindings)
             .into_iter()
             .filter(|mismatch| !matches!(mismatch, LayoutMismatch::UnusedInShaders { .. }))
             .map(|mismatch| format!("{mismatch:?}"))
@@ -175,10 +178,13 @@ fn reflected_block_sizes(table: &DescriptorSetTable, set: u32) -> Vec<(u32, u32)
         .unwrap_or_default()
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct ReflectedSetLayout {
     pub handle: vk::DescriptorSetLayout,
+    #[gpu_resource(skip)]
     bindings: Vec<vk::DescriptorSetLayoutBinding>,
+    #[gpu_resource(skip)]
     block_sizes: Vec<(u32, u32)>,
 }
 
@@ -290,16 +296,6 @@ impl ReflectedSetLayout {
         sets: impl IntoIterator<Item = vk::DescriptorSet>,
     ) {
         rrdevice.release_descriptor_sets(self.handle, sets);
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.handle != vk::DescriptorSetLayout::null() {
-            rrdevice.forget_descriptor_layout(self.handle);
-            rrdevice
-                .device
-                .destroy_descriptor_set_layout(self.handle, None);
-            self.handle = vk::DescriptorSetLayout::null();
-        }
     }
 }
 
@@ -474,15 +470,5 @@ impl DescriptorSetWriter<'_> {
         rrdevice
             .device
             .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
-    }
-}
-
-impl GpuResource for ReflectedSetLayout {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.handle == vk::DescriptorSetLayout::null()
     }
 }

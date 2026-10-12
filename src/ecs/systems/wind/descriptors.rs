@@ -11,7 +11,7 @@ use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::resource::{UniformBuffer, VolumeImage};
 use thyllore_effect_core::WindUBO;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct WindResolveDescriptorSet {
     pub layout: ReflectedSetLayout,
     pub descriptor_set: vk::DescriptorSet,
@@ -88,12 +88,12 @@ impl WindResolveDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
         self.scene_depth_sampler.destroy_gpu(rrdevice);
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct WindShadowBakeDescriptorSet {
     pub layout: ReflectedSetLayout,
     pub descriptor_set: vk::DescriptorSet,
@@ -148,7 +148,7 @@ impl WindShadowBakeDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
     }
 }
 

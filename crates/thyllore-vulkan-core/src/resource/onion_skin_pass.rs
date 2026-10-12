@@ -10,7 +10,7 @@ use crate::resource::image::{create_image, create_image_view};
 
 pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct OnionSkinPassResources {
     pub ghost_image: vk::Image,
     pub ghost_image_memory: vk::DeviceMemory,

@@ -9,7 +9,7 @@ use thyllore_effect_core::WaterUBO;
 
 const WATER_HISTORY_SET_COUNT: usize = 2;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct RRWaterDescriptorSet {
     pub layout: ReflectedSetLayout,
     frames: Vec<[vk::DescriptorSet; WATER_HISTORY_SET_COUNT]>,
@@ -102,7 +102,7 @@ impl RRWaterDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
+        self.layout.destroy_gpu(rrdevice);
     }
 }
 

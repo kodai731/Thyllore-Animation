@@ -42,7 +42,19 @@ raw_handle_resource!(vk::ImageView, destroy_image_view);
 raw_handle_resource!(vk::DeviceMemory, free_memory);
 raw_handle_resource!(vk::Buffer, destroy_buffer);
 raw_handle_resource!(vk::Sampler, destroy_sampler);
-raw_handle_resource!(vk::DescriptorSetLayout, destroy_descriptor_set_layout);
+impl GpuResource for vk::DescriptorSetLayout {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        if *self != vk::DescriptorSetLayout::null() {
+            rrdevice.forget_descriptor_layout(*self);
+            rrdevice.device.destroy_descriptor_set_layout(*self, None);
+            *self = vk::DescriptorSetLayout::null();
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        *self == vk::DescriptorSetLayout::null()
+    }
+}
 raw_handle_resource!(vk::Pipeline, destroy_pipeline);
 raw_handle_resource!(vk::PipelineLayout, destroy_pipeline_layout);
 raw_handle_resource!(vk::RenderPass, destroy_render_pass);

@@ -6,7 +6,7 @@ use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_cau
 use crate::vulkanr::resource::gpu_resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {
     pub splat_layout: ReflectedSetLayout,
     pub splat_descriptor_set: vk::DescriptorSet,
@@ -133,8 +133,8 @@ impl RRWaterCausticDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.splat_layout.destroy(rrdevice);
-        self.apply_layout.destroy(rrdevice);
+        self.splat_layout.destroy_gpu(rrdevice);
+        self.apply_layout.destroy_gpu(rrdevice);
     }
 }
 

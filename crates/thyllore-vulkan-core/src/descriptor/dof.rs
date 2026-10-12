@@ -5,9 +5,11 @@ use crate::descriptor::shader_bindings::dof;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRDofDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
 }
 
@@ -50,19 +52,5 @@ impl RRDofDescriptorSet {
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RRDofDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

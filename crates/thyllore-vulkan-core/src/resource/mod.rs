@@ -1,4 +1,5 @@
 pub mod accumulation_target;
+pub mod allocation;
 pub mod auto_exposure_buffers;
 pub mod bloom_chain;
 pub mod buffer;
@@ -25,6 +26,7 @@ pub mod uniform_buffer;
 pub mod volume_image;
 
 pub use accumulation_target::AccumulationTarget;
+pub use allocation::{BufferAllocation, ImageAllocation, TextureImage};
 pub use auto_exposure_buffers::{AutoExposureBuffers, LUMINANCE_BUFFER_SIZE};
 pub use bloom_chain::{BloomChain, BloomMipTarget};
 pub use buffer::*;

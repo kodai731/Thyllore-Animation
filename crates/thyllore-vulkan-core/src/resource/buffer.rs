@@ -1,6 +1,7 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::data::UniformBufferObject;
+use crate::resource::allocation::BufferAllocation;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::ffi::c_void;
@@ -373,13 +374,13 @@ impl Drop for RRBuffer {
     }
 }
 
-pub unsafe fn create_buffer(
+pub unsafe fn create_buffer_allocation(
     instance: &Instance,
     rrdevice: &RRDevice,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
     properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+) -> Result<BufferAllocation> {
     let buffer_info = vk::BufferCreateInfo::builder()
         .size(size)
         .usage(usage)
@@ -409,7 +410,23 @@ pub unsafe fn create_buffer(
         .device
         .bind_buffer_memory(buffer, buffer_memory, 0)?;
 
-    Ok((buffer, buffer_memory))
+    Ok(BufferAllocation {
+        memory: buffer_memory,
+        buffer,
+    })
+}
+
+pub unsafe fn create_buffer(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    size: vk::DeviceSize,
+    usage: vk::BufferUsageFlags,
+    properties: vk::MemoryPropertyFlags,
+) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    let mut allocation = create_buffer_allocation(instance, rrdevice, size, usage, properties)?;
+    let buffer = std::mem::take(&mut allocation.buffer);
+    let memory = std::mem::take(&mut allocation.memory);
+    Ok((buffer, memory))
 }
 
 pub unsafe fn copy_buffer(

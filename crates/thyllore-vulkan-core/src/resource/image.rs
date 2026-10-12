@@ -1,5 +1,6 @@
 use crate::command::*;
 use crate::core::device::*;
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
@@ -354,7 +355,7 @@ pub unsafe fn create_texture_image_from_file(
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
-pub unsafe fn create_image(
+pub unsafe fn create_image_allocation(
     instance: &Instance,
     rrdevice: &RRDevice,
     width: u32,
@@ -365,7 +366,7 @@ pub unsafe fn create_image(
     tiling: vk::ImageTiling,
     usage: vk::ImageUsageFlags,
     properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Image, vk::DeviceMemory)> {
+) -> Result<ImageAllocation> {
     let info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::_2D)
         .extent(vk::Extent3D {
@@ -396,7 +397,30 @@ pub unsafe fn create_image(
     let image_memory = rrdevice.device.allocate_memory(&info, None)?;
     rrdevice.device.bind_image_memory(image, image_memory, 0)?;
 
-    Ok((image, image_memory))
+    Ok(ImageAllocation {
+        memory: image_memory,
+        image,
+    })
+}
+
+pub unsafe fn create_image(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    width: u32,
+    height: u32,
+    mip_levels: u32,
+    samples: vk::SampleCountFlags,
+    format: vk::Format,
+    tiling: vk::ImageTiling,
+    usage: vk::ImageUsageFlags,
+    properties: vk::MemoryPropertyFlags,
+) -> Result<(vk::Image, vk::DeviceMemory)> {
+    let mut allocation = create_image_allocation(
+        instance, rrdevice, width, height, mip_levels, samples, format, tiling, usage, properties,
+    )?;
+    let image = std::mem::take(&mut allocation.image);
+    let memory = std::mem::take(&mut allocation.memory);
+    Ok((image, memory))
 }
 
 pub unsafe fn create_image_3d(

@@ -107,6 +107,18 @@ impl<T: GpuResource> GpuResource for Vec<T> {
     }
 }
 
+impl<T: GpuResource, const N: usize> GpuResource for [T; N] {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        for resource in self.iter_mut().rev() {
+            resource.destroy_gpu(rrdevice);
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.iter().all(GpuResource::is_destroyed)
+    }
+}
+
 pub unsafe fn destroy_all_in_reverse(resources: &mut [&mut dyn GpuResource], rrdevice: &RRDevice) {
     destroy_all_in_reverse_with(resources, |resource| resource.destroy_gpu(rrdevice));
 }
@@ -183,5 +195,44 @@ mod tests {
         assert!(DefaultNamedResource
             .resource_name()
             .ends_with("DefaultNamedResource"));
+    }
+
+    #[test]
+    fn array_is_destroyed_null_array_is_true() {
+        use vulkanalia::vk::Handle;
+        let arr: [vk::Buffer; 3] = [vk::Buffer::null(), vk::Buffer::null(), vk::Buffer::null()];
+        assert!(arr.is_destroyed());
+    }
+
+    #[test]
+    fn array_is_destroyed_one_non_null_is_false() {
+        use vulkanalia::vk::Handle;
+        let arr: [vk::Buffer; 3] = [
+            vk::Buffer::null(),
+            vk::Buffer::from_raw(1),
+            vk::Buffer::null(),
+        ];
+        assert!(!arr.is_destroyed());
+    }
+
+    #[test]
+    fn buffer_allocation_default_is_destroyed() {
+        use crate::resource::allocation::BufferAllocation;
+        let allocation = BufferAllocation::default();
+        assert!(allocation.is_destroyed());
+    }
+
+    #[test]
+    fn image_allocation_default_is_destroyed() {
+        use crate::resource::allocation::ImageAllocation;
+        let allocation = ImageAllocation::default();
+        assert!(allocation.is_destroyed());
+    }
+
+    #[test]
+    fn texture_image_default_is_destroyed() {
+        use crate::resource::allocation::TextureImage;
+        let texture = TextureImage::default();
+        assert!(texture.is_destroyed());
     }
 }

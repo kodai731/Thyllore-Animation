@@ -135,20 +135,8 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
     };
 
     let curve_vt = vt.for_curve(curve);
-
-    let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
-    let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
     let kf = &curve.keyframes[kf_idx];
-    let new_handle = BezierHandle::new(mouse_time - kf.time, mouse_value - kf.value);
-
-    let preview_in = match dragging.handle_type {
-        TangentHandleType::In => new_handle.clone(),
-        TangentHandleType::Out => kf.in_tangent.clone(),
-    };
-    let preview_out = match dragging.handle_type {
-        TangentHandleType::In => kf.out_tangent.clone(),
-        TangentHandleType::Out => new_handle.clone(),
-    };
+    let (preview_in, preview_out) = preview_tangent_handles(dragging, mouse_pos, kf, &curve_vt);
 
     let preview_color = [
         (color[0] + 1.0) * 0.5,
@@ -191,6 +179,22 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
         )
         .filled(true)
         .build();
+}
+
+fn preview_tangent_handles(
+    dragging: &DraggingTangent,
+    mouse_pos: [f32; 2],
+    kf: &EditableKeyframe,
+    curve_vt: &ViewTransform,
+) -> (BezierHandle, BezierHandle) {
+    let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
+    let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
+    let new_handle = BezierHandle::new(mouse_time - kf.time, mouse_value - kf.value);
+
+    match dragging.handle_type {
+        TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
+        TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
+    }
 }
 
 pub(in crate::platform::ui::curve_editor) fn draw_preview_segment_before(
@@ -293,5 +297,37 @@ pub(in crate::platform::ui::curve_editor) fn draw_preview_bezier_segment(
                 .build();
         }
         prev_point = Some(point);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::drag::compute_dragged_tangent;
+    use super::super::super::test_fixtures::*;
+    use super::*;
+    use crate::animation::editable::{PropertyType, TangentContinuity};
+
+    #[test]
+    fn preview_handles_match_the_committed_tangent_for_a_unified_key() {
+        let mut curve = build_two_point_curve(PropertyType::TranslationX, [0.0, 1.0]);
+        curve.keyframes[0].in_tangent = BezierHandle::new(-0.3, -0.2);
+        let kf = &curve.keyframes[0];
+        assert_eq!(kf.continuity, TangentContinuity::Unified);
+        let dragging = DraggingTangent {
+            property_type: PropertyType::TranslationX,
+            keyframe_id: kf.id,
+            handle_type: TangentHandleType::Out,
+            original_handle: kf.out_tangent.clone(),
+        };
+        let vt = build_pixel_view();
+        let curves = [(&curve, [1.0; 4], "x")];
+        let mouse_pos = [40.0, 20.0];
+
+        let committed = compute_dragged_tangent(&dragging, mouse_pos, &curves, &vt);
+        let previewed = preview_tangent_handles(&dragging, mouse_pos, kf, &vt.for_curve(&curve));
+
+        let offsets = |handle: &BezierHandle| (handle.time_offset, handle.value_offset);
+        assert_eq!(offsets(&previewed.1), offsets(&committed.1));
+        assert_eq!(offsets(&previewed.0), offsets(&committed.0));
     }
 }

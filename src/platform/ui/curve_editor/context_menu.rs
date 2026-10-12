@@ -3,16 +3,14 @@ use std::collections::HashSet;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
-use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
+use super::window::ALL_PROPERTY_TYPES;
 use crate::animation::editable::{
-    CurveExtrapolation, InterpolationType, PropertyCurve, PropertyType, TangentType,
-    TangentWeightMode,
+    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyCurve, PropertyType,
+    TangentType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
-use crate::ecs::resource::{
-    ClipLibrary, CurveEditorState, CurveSelectedKeyframe, CurveTrackRef, TimelineState,
-};
+use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
 use crate::ecs::world::World;
@@ -139,18 +137,24 @@ pub(super) fn build_curve_editor_context_menu(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &CurveEditorState,
+    clip: &EditableAnimationClip,
     track_ref: CurveTrackRef,
 ) {
     ui.popup("curve_editor_context_menu", || {
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
 
         if ui.selectable_config("Add Key").build() {
-            send_add_key(world, editor_state, track_ref);
+            send_add_key(world, editor_state, clip, track_ref);
         }
     });
 }
 
-fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: CurveTrackRef) {
+fn send_add_key(
+    world: &World,
+    editor_state: &CurveEditorState,
+    clip: &EditableAnimationClip,
+    track_ref: CurveTrackRef,
+) {
     let bone_role = track_ref
         .bone_id()
         .and_then(|bone_id| find_bone_role(&collect_humanoid_bone_roles(world), bone_id));
@@ -159,7 +163,7 @@ fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: Curve
     };
 
     if let CurveTrackRef::Bone(bone_id) = track_ref {
-        ensure_bone_track(world, bone_id);
+        ensure_bone_track(world, clip, bone_id);
     }
     world.send_command(TimelineEvent::AddKeyframe {
         track: track_ref,
@@ -169,8 +173,8 @@ fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: Curve
     });
 }
 
-fn ensure_bone_track(world: &World, bone_id: BoneId) {
-    if current_clip_has_track(world, bone_id) {
+fn ensure_bone_track(world: &World, clip: &EditableAnimationClip, bone_id: BoneId) {
+    if clip.tracks.contains_key(&bone_id) {
         return;
     }
     world.send_command(EnsureBoneTrack { bone_id });
@@ -250,13 +254,6 @@ pub(super) fn extrapolation_target_properties(
     let mut seen = HashSet::new();
     targets.retain(|property_type| seen.insert(*property_type));
     targets
-}
-
-pub(super) fn current_clip_has_track(world: &World, bone_id: BoneId) -> bool {
-    let timeline_state = world.resource::<TimelineState>();
-    let clip_library = world.resource::<ClipLibrary>();
-    get_current_clip(&timeline_state, &clip_library)
-        .is_some_and(|clip| clip.tracks.contains_key(&bone_id))
 }
 
 /// The scalar target only accepts registered channels: the visible set can

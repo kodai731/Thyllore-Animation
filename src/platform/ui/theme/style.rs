@@ -20,7 +20,9 @@ pub fn apply_thyllore_style(style: &mut Style) {
     style.set_frame_padding([10.0, 5.0]);
     style.set_item_spacing([8.0, 6.0]);
     style.set_item_inner_spacing([6.0, 4.0]);
-    style.set_window_border_size(0.0);
+    style.set_window_border_size(1.0);
+    style.set_child_border_size(1.0);
+    style.set_popup_border_size(1.0);
     style.set_frame_border_size(0.0);
     style.set_tab_border_size(0.0);
     style.set_circle_tessellation_max_error(0.15);
@@ -36,7 +38,7 @@ pub fn apply_thyllore_style(style: &mut Style) {
     style.set_color(StyleColor::ChildBg, srgb_to_linear_rgba(SURFACE1));
     style.set_color(StyleColor::PopupBg, srgb_to_linear_rgba(SURFACE1));
     style.set_color(StyleColor::MenuBarBg, srgb_to_linear_rgba(SURFACE1));
-    style.set_color(StyleColor::Border, srgb_to_linear_rgba(OUTLINE));
+    style.set_color(StyleColor::Border, srgb_to_linear_rgba(OUTLINE_STRONG));
     style.set_color(StyleColor::FrameBg, srgb_to_linear_rgba(SURFACE2));
     style.set_color(StyleColor::FrameBgHovered, srgb_to_linear_rgba(SURFACE3));
     style.set_color(StyleColor::Button, srgb_to_linear_rgba(SURFACE2));

@@ -8,8 +8,8 @@ use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorState,
-    PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
+    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorPlacement,
+    CurveEditorState, PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -21,6 +21,7 @@ use crate::ecs::systems::{
     timeline_effective_duration,
 };
 use crate::ecs::world::World;
+use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
 };
@@ -120,7 +121,7 @@ fn draw_timeline_tabs(
     }
     if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
         curve_editor_state.is_open = true;
-        crate::platform::ui::curve_editor::build_curve_editor_tab(
+        draw_curves_tab(
             ui,
             world,
             state,
@@ -130,6 +131,32 @@ fn draw_timeline_tabs(
             pose_library,
         );
     }
+}
+
+fn draw_curves_tab(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &TimelineState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
+) {
+    if curve_editor_state.placement == CurveEditorPlacement::Window {
+        build_placement_toggle(ui, curve_editor_state);
+        ui.same_line();
+        ui.text_disabled("The curve editor is open in its own window");
+        return;
+    }
+    build_curve_editor_tab(
+        ui,
+        world,
+        state,
+        clip_library,
+        curve_editor_state,
+        curve_buffer,
+        pose_library,
+    );
 }
 
 fn draw_timeline_tab(

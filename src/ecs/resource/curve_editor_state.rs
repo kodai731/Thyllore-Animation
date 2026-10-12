@@ -107,9 +107,17 @@ impl CurveViewMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CurveEditorPlacement {
+    #[default]
+    TimelineTab,
+    Window,
+}
+
 #[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
+    pub placement: CurveEditorPlacement,
     pub selected_target: Option<CurveEditorTarget>,
     pub visible_curves: HashSet<PropertyType>,
     pub selected_keyframes: Vec<CurveSelectedKeyframe>,
@@ -177,6 +185,7 @@ impl Default for CurveEditorState {
 
         Self {
             is_open: false,
+            placement: CurveEditorPlacement::TimelineTab,
             selected_target: None,
             visible_curves,
             selected_keyframes: Vec::new(),

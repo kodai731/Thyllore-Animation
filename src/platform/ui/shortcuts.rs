@@ -8,7 +8,10 @@ use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
-use crate::platform::ui::theme::{property_label, section_header, SectionDefault};
+use crate::platform::ui::theme::{
+    draw_raised_window_frame, property_label, push_raised_window_style, section_header,
+    SectionDefault,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
@@ -217,6 +220,7 @@ fn build_shortcuts_window(
 
     let display_size = ui.io().display_size();
     let mut is_open = true;
+    let _raised = push_raised_window_style(ui);
     ui.window(SHORTCUTS_WINDOW_TITLE)
         .position(
             [display_size[0] * 0.5, display_size[1] * 0.5],
@@ -226,7 +230,10 @@ fn build_shortcuts_window(
         .always_auto_resize(true)
         .collapsible(false)
         .opened(&mut is_open)
-        .build(|| draw_shortcut_sections(ui, world));
+        .build(|| {
+            draw_raised_window_frame(ui);
+            draw_shortcut_sections(ui, world);
+        });
 
     if !is_open || ui.is_key_pressed(imgui::Key::Escape) {
         world.resource_mut::<UiWidgetState>().shortcuts_panel = PanelVisibility::Hidden;

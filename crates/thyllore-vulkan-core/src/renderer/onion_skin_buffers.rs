@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::data::Vertex;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 
 #[must_use]
@@ -29,7 +29,7 @@ impl OnionSkinGhostBuffer {
     ) -> Result<Self> {
         let capacity_bytes = (vertex_capacity * std::mem::size_of::<Vertex>()) as u64;
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             capacity_bytes,

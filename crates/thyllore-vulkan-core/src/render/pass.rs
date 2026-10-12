@@ -224,7 +224,7 @@ pub unsafe fn create_depth_objects(
     rrrender: &mut RRRender,
 ) -> Result<()> {
     let format = get_depth_format(instance, rrdevice)?;
-    rrrender.depth_allocation = create_image_allocation(
+    rrrender.depth_allocation = create_image(
         instance,
         rrdevice,
         rrswapchain.swapchain_extent.width,

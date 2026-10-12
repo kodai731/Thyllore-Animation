@@ -9,7 +9,7 @@ pub struct BufferAllocation {
     pub buffer: vk::Buffer,
 }
 
-pub unsafe fn create_buffer_allocation(
+pub unsafe fn create_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     size: vk::DeviceSize,

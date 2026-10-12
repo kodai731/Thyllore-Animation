@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::core::device::RRDevice;
 use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image_allocation, create_image_view};
+use crate::resource::image::{create_image, create_image_view};
 use crate::vulkan::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -73,7 +73,7 @@ impl RenderTargetStorage {
         usage: vk::ImageUsageFlags,
         sampler_info: Option<vk::SamplerCreateInfo>,
     ) -> Result<RenderTargetEntry> {
-        let mut allocation = create_image_allocation(
+        let mut allocation = create_image(
             instance,
             rrdevice,
             self.width,

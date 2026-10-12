@@ -5,7 +5,7 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 
 pub struct DynamicUniformBuffer<T: Copy> {
@@ -24,7 +24,7 @@ impl<T: Copy> DynamicUniformBuffer<T> {
         let element_aligned_size = Self::align_size(element_size, min_alignment);
         let total_size = element_aligned_size * capacity as u64;
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             total_size,

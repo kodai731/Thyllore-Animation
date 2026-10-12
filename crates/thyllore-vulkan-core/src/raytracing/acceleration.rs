@@ -1,7 +1,7 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::raytracing::GpuPrimitive;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
 use crate::vulkan::*;
@@ -59,7 +59,7 @@ unsafe fn create_scratch_buffer(
     rrdevice: &RRDevice,
     size: vk::DeviceSize,
 ) -> Result<BufferAllocation> {
-    create_buffer_allocation(
+    create_buffer(
         instance,
         rrdevice,
         size,
@@ -130,7 +130,7 @@ unsafe fn create_acceleration_structure_with_buffer(
     size: vk::DeviceSize,
     as_type: vk::AccelerationStructureTypeKHR,
 ) -> Result<AccelerationStructureAllocation> {
-    let buffer_allocation = create_buffer_allocation(
+    let buffer_allocation = create_buffer(
         instance,
         rrdevice,
         size,
@@ -231,7 +231,7 @@ unsafe fn upload_instances_buffer(
     let instances_size =
         (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * total) as vk::DeviceSize;
 
-    let buf = create_buffer_allocation(
+    let buf = create_buffer(
         instance,
         rrdevice,
         instances_size,
@@ -433,7 +433,7 @@ impl RRAccelerationStructure {
         aabb: vk::AabbPositionsKHR,
     ) -> Result<RRBLAS> {
         let size = std::mem::size_of::<vk::AabbPositionsKHR>() as vk::DeviceSize;
-        let mut buf = create_buffer_allocation(
+        let mut buf = create_buffer(
             instance,
             rrdevice,
             size,
@@ -470,7 +470,7 @@ impl RRAccelerationStructure {
             let instances_size =
                 std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() as vk::DeviceSize;
 
-            let buf = create_buffer_allocation(
+            let buf = create_buffer(
                 instance,
                 rrdevice,
                 instances_size,

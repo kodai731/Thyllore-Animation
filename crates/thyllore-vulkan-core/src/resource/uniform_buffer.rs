@@ -5,7 +5,7 @@ use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::DeviceV1_2;
 
 use crate::core::device::RRDevice;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::Instance;
 use thyllore_spirv_reflect::GpuBlock;
@@ -57,7 +57,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
             }
         };
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             slot_stride * slot_count as vk::DeviceSize,

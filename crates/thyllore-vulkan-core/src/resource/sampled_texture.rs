@@ -6,9 +6,9 @@ use vulkanalia::prelude::v1_0::*;
 use crate::command::{begin_single_time_commands, end_single_time_commands, RRCommandPool};
 use crate::core::device::RRDevice;
 use crate::descriptor::ReflectedSetLayout;
-use crate::resource::allocation::{create_buffer_allocation, ImageAllocation};
+use crate::resource::allocation::{create_buffer, ImageAllocation};
 use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
-use crate::resource::image::{create_image_allocation, create_image_view};
+use crate::resource::image::{create_image, create_image_view};
 use thyllore_spirv_reflect::ShaderBinding;
 
 pub const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -49,7 +49,7 @@ impl SampledTexture {
         sampler: vk::Sampler,
         region: PixelRegion<'_>,
     ) -> Result<Self> {
-        let allocation = create_image_allocation(
+        let allocation = create_image(
             instance,
             rrdevice,
             region.width,
@@ -129,7 +129,7 @@ impl SampledTexture {
         if total_len == 0 {
             return Ok(());
         }
-        let mut staging = create_buffer_allocation(
+        let mut staging = create_buffer(
             instance,
             rrdevice,
             total_len as vk::DeviceSize,

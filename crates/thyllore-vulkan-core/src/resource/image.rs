@@ -1,6 +1,6 @@
 use crate::command::*;
 use crate::core::device::*;
-use crate::resource::allocation::{create_buffer_allocation, ImageAllocation, TextureImage};
+use crate::resource::allocation::{create_buffer, ImageAllocation, TextureImage};
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
@@ -183,7 +183,7 @@ pub unsafe fn create_texture_image_from_file(
     )
 }
 
-pub unsafe fn create_image_allocation(
+pub unsafe fn create_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     width: u32,
@@ -229,26 +229,6 @@ pub unsafe fn create_image_allocation(
         memory: image_memory,
         image,
     })
-}
-
-pub unsafe fn create_image(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    width: u32,
-    height: u32,
-    mip_levels: u32,
-    samples: vk::SampleCountFlags,
-    format: vk::Format,
-    tiling: vk::ImageTiling,
-    usage: vk::ImageUsageFlags,
-    properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Image, vk::DeviceMemory)> {
-    let mut allocation = create_image_allocation(
-        instance, rrdevice, width, height, mip_levels, samples, format, tiling, usage, properties,
-    )?;
-    let image = std::mem::take(&mut allocation.image);
-    let memory = std::mem::take(&mut allocation.memory);
-    Ok((image, memory))
 }
 
 pub unsafe fn create_image_3d(
@@ -706,7 +686,7 @@ unsafe fn upload_texture_image(
     let size = (size_of::<u8>() * pixels.len()) as u64;
     let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
-    let mut staging = create_buffer_allocation(
+    let mut staging = create_buffer(
         instance,
         rrdevice,
         size,
@@ -721,7 +701,7 @@ unsafe fn upload_texture_image(
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
     rrdevice.device.unmap_memory(staging.memory);
 
-    let allocation = create_image_allocation(
+    let allocation = create_image(
         instance,
         rrdevice,
         width,

@@ -14,7 +14,7 @@ use thyllore_math_core::write_npy_u32;
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
-use thyllore_vulkan_core::resource::{create_buffer_allocation, GpuResource};
+use thyllore_vulkan_core::resource::{create_buffer, GpuResource};
 
 const VERTEX_PROBE_COUNT: usize = 64;
 
@@ -237,7 +237,7 @@ unsafe fn read_gpu_vertex_positions(
     let copy_size = (stride * sample_count) as vk::DeviceSize;
     let command_pool = ctx.command_pool;
 
-    let mut probe = create_buffer_allocation(
+    let mut probe = create_buffer(
         ctx.instance,
         ctx.device,
         copy_size,

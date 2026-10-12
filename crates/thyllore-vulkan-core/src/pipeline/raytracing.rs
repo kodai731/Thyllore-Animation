@@ -1,6 +1,6 @@
 use crate::core::device::*;
 use crate::descriptor::{PassShaders, ShaderStage};
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::fs::File;
@@ -312,7 +312,7 @@ impl ShaderBindingTable {
             &handles[group * handle_size as usize..(group + 1) * handle_size as usize]
         };
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             sbt_size,

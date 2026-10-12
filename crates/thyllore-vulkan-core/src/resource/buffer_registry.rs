@@ -6,7 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::buffer::copy_buffer;
 use crate::resource::GpuResource;
 use thyllore_model_core::mesh::{compute_vertex_layout, create_interleaved_buffer, MeshData};
@@ -357,7 +357,7 @@ impl GpuBufferRegistry {
                 data.as_ptr(),
             )?
         } else {
-            let allocation = create_buffer_allocation(
+            let allocation = create_buffer(
                 instance,
                 device,
                 buffer_size.max(256),
@@ -419,7 +419,7 @@ impl GpuBufferRegistry {
         usage: vk::BufferUsageFlags,
         data_ptr: *const u8,
     ) -> Result<GpuBuffer> {
-        let mut staging = create_buffer_allocation(
+        let mut staging = create_buffer(
             instance,
             device,
             size,
@@ -433,7 +433,7 @@ impl GpuBufferRegistry {
         std::ptr::copy_nonoverlapping(data_ptr, ptr.cast(), size as usize);
         device.device.unmap_memory(staging.memory);
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             device,
             size,
@@ -530,7 +530,7 @@ impl GpuBufferRegistry {
         data_ptr: *const u8,
         data_count: usize,
     ) -> Result<GpuBuffer> {
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             device,
             size,

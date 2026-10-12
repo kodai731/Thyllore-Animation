@@ -1,7 +1,7 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::data::UniformBufferObject;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::ffi::c_void;
@@ -24,7 +24,7 @@ impl RRUniformBuffer {
         name: &str,
     ) -> Result<Self> {
         let mut rruniform_buffer = Self::default();
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             size_of::<UniformBufferObject>() as u64,
@@ -82,7 +82,7 @@ impl RRIndexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrindex_buffer = RRIndexBuffer::default();
-        let mut staging_allocation = create_buffer_allocation(
+        let mut staging_allocation = create_buffer(
             instance,
             rrdevice,
             size,
@@ -99,7 +99,7 @@ impl RRIndexBuffer {
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_allocation.memory);
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             size,
@@ -148,7 +148,7 @@ impl RRVertexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrvertex_buffer = RRVertexBuffer::default();
-        let staging_allocation = create_buffer_allocation(
+        let staging_allocation = create_buffer(
             instance,
             rrdevice,
             size,
@@ -165,7 +165,7 @@ impl RRVertexBuffer {
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_allocation.memory);
 
-        let allocation = create_buffer_allocation(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             size,
@@ -205,7 +205,7 @@ impl RRVertexBuffer {
         if self.staging_allocation.is_destroyed() || size > self.staging_capacity {
             self.staging_allocation.destroy_gpu(rrdevice);
             let new_capacity = size * 2;
-            self.staging_allocation = create_buffer_allocation(
+            self.staging_allocation = create_buffer(
                 instance,
                 rrdevice,
                 new_capacity,
@@ -256,23 +256,9 @@ impl RRBuffer {
         properties: vk::MemoryPropertyFlags,
     ) -> Result<Self> {
         let mut rrbuffer = RRBuffer::default();
-        rrbuffer.allocation =
-            create_buffer_allocation(instance, rrdevice, size, usage, properties)?;
+        rrbuffer.allocation = create_buffer(instance, rrdevice, size, usage, properties)?;
         Ok(rrbuffer)
     }
-}
-
-pub unsafe fn create_buffer(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    size: vk::DeviceSize,
-    usage: vk::BufferUsageFlags,
-    properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Buffer, vk::DeviceMemory)> {
-    let mut allocation = create_buffer_allocation(instance, rrdevice, size, usage, properties)?;
-    let buffer = std::mem::take(&mut allocation.buffer);
-    let memory = std::mem::take(&mut allocation.memory);
-    Ok((buffer, memory))
 }
 
 pub unsafe fn copy_buffer(

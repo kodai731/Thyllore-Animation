@@ -2,7 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::GpuResource;
 use crate::vulkan::*;
 
@@ -29,7 +29,7 @@ impl AutoExposureBuffers {
         width: u32,
         height: u32,
     ) -> Result<Self> {
-        let histogram_allocation = create_buffer_allocation(
+        let histogram_allocation = create_buffer(
             instance,
             rrdevice,
             HISTOGRAM_BUFFER_SIZE,
@@ -37,7 +37,7 @@ impl AutoExposureBuffers {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        let luminance_allocation = create_buffer_allocation(
+        let luminance_allocation = create_buffer(
             instance,
             rrdevice,
             LUMINANCE_BUFFER_SIZE,
@@ -50,7 +50,7 @@ impl AutoExposureBuffers {
         let mut readback_allocations: [BufferAllocation; 2] = Default::default();
 
         for readback_allocation in &mut readback_allocations {
-            let allocation = create_buffer_allocation(
+            let allocation = create_buffer(
                 instance,
                 rrdevice,
                 LUMINANCE_BUFFER_SIZE,

@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation, ImageAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation, ImageAllocation};
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image_allocation, create_image_view, transition_image_layout};
+use crate::resource::image::{create_image, create_image_view, transition_image_layout};
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from
 /// the same pixel so a click can compare what an effect covers against what the surface covers.
@@ -41,7 +41,7 @@ impl RRGBuffer {
         width: u32,
         height: u32,
     ) -> Result<Self> {
-        let position = create_image_allocation(
+        let position = create_image(
             instance,
             rrdevice,
             width,
@@ -65,7 +65,7 @@ impl RRGBuffer {
             1,
         )?;
 
-        let normal = create_image_allocation(
+        let normal = create_image(
             instance,
             rrdevice,
             width,
@@ -88,7 +88,7 @@ impl RRGBuffer {
             1,
         )?;
 
-        let albedo = create_image_allocation(
+        let albedo = create_image(
             instance,
             rrdevice,
             width,
@@ -109,7 +109,7 @@ impl RRGBuffer {
             1,
         )?;
 
-        let object_id = create_image_allocation(
+        let object_id = create_image(
             instance,
             rrdevice,
             width,
@@ -132,7 +132,7 @@ impl RRGBuffer {
             1,
         )?;
 
-        let shadow_mask = create_image_allocation(
+        let shadow_mask = create_image(
             instance,
             rrdevice,
             width,
@@ -155,7 +155,7 @@ impl RRGBuffer {
             1,
         )?;
 
-        let readback_staging = create_buffer_allocation(
+        let readback_staging = create_buffer(
             instance,
             rrdevice,
             READBACK_STAGING_SIZE,

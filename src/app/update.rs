@@ -2,7 +2,7 @@ use crate::app::{App, AppData};
 use crate::ecs::run_frame;
 use crate::ecs::FrameContext;
 use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::{create_buffer_allocation, GpuResource};
+use crate::vulkanr::resource::{create_buffer, GpuResource};
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
@@ -114,7 +114,7 @@ unsafe fn resize_imgui_vertex_buffer(
 ) -> Result<()> {
     data.imgui.vertex_buffers[frame_slot].destroy_gpu(rrdevice);
 
-    let vertex_buffer = create_buffer_allocation(
+    let vertex_buffer = create_buffer(
         instance,
         rrdevice,
         vtx_buffer_size,
@@ -137,7 +137,7 @@ unsafe fn resize_imgui_index_buffer(
 ) -> Result<()> {
     data.imgui.index_buffers[frame_slot].destroy_gpu(rrdevice);
 
-    let index_buffer = create_buffer_allocation(
+    let index_buffer = create_buffer(
         instance,
         rrdevice,
         idx_buffer_size,

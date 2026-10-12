@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::command::*;
 use crate::core::device::*;
-use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::vulkan::*;
 
 pub unsafe fn copy_image_to_host_buffer(
@@ -16,7 +16,7 @@ pub unsafe fn copy_image_to_host_buffer(
     image_size: vk::DeviceSize,
     layout: vk::ImageLayout,
 ) -> Result<BufferAllocation> {
-    let allocation = create_buffer_allocation(
+    let allocation = create_buffer(
         instance,
         rrdevice,
         image_size,

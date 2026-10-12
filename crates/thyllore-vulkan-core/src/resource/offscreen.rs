@@ -5,7 +5,7 @@ use crate::core::RRDevice;
 use crate::render::pass::get_depth_format;
 use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image_allocation, create_image_view, transition_image_layout};
+use crate::resource::image::{create_image, create_image_view, transition_image_layout};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -42,7 +42,7 @@ impl OffscreenFramebuffer {
         msaa_samples: vk::SampleCountFlags,
         format: vk::Format,
     ) -> Result<Self> {
-        let msaa_color = create_image_allocation(
+        let msaa_color = create_image(
             instance,
             rrdevice,
             width,
@@ -63,7 +63,7 @@ impl OffscreenFramebuffer {
             1,
         )?;
 
-        let resolve_color = create_image_allocation(
+        let resolve_color = create_image(
             instance,
             rrdevice,
             width,
@@ -96,7 +96,7 @@ impl OffscreenFramebuffer {
         )?;
 
         let depth_format = get_depth_format(instance, rrdevice)?;
-        let msaa_depth = create_image_allocation(
+        let msaa_depth = create_image(
             instance,
             rrdevice,
             width,

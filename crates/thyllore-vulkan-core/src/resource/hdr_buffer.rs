@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image_allocation, create_image_view};
+use crate::resource::image::{create_image, create_image_view};
 
 pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
@@ -31,7 +31,7 @@ impl HdrBuffer {
         width: u32,
         height: u32,
     ) -> Result<Self> {
-        let color = create_image_allocation(
+        let color = create_image(
             instance,
             rrdevice,
             width,

@@ -35,7 +35,7 @@ pub unsafe fn create_color_objects(
     rrrender: &mut RRRender,
 ) -> Result<()> {
     //  this color buffer doesn't need mipmaps since it's not going to be used as a texture:
-    rrrender.color_allocation = create_image_allocation(
+    rrrender.color_allocation = create_image(
         instance,
         rrdevice,
         rrswapchain.swapchain_extent.width,

@@ -7,7 +7,7 @@ use crate::descriptor::{onion_skin_composite_layout_spec, ReflectedSetLayout};
 use crate::pipeline::RRPipeline;
 use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image_allocation, create_image_view};
+use crate::resource::image::{create_image, create_image_view};
 
 pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
@@ -42,7 +42,7 @@ impl OnionSkinPassResources {
         width: u32,
         height: u32,
     ) -> Result<(ImageAllocation, vk::ImageView, vk::Sampler)> {
-        let allocation = create_image_allocation(
+        let allocation = create_image(
             instance,
             rrdevice,
             width,

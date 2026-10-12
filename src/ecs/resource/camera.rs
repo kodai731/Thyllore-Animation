@@ -71,7 +71,7 @@ impl Default for Camera {
             pitch,
             distance,
             fov_y: Deg(45.0),
-            near_plane: 0.1,
+            near_plane: crate::ecs::systems::camera_systems::near_plane_for_distance(distance),
             initial_pivot: pivot,
             initial_yaw: yaw,
             initial_pitch: pitch,

@@ -8,6 +8,10 @@ pub const CAMERA_FRAMING_SECONDS: f32 = 0.25;
 pub const FLY_SPEED_WHEEL_FACTOR: f32 = 1.08;
 pub const FLY_SPEED_INDICATOR_SECONDS: f32 = 1.5;
 const FLY_SPEED_SCALE_RANGE: (f32, f32) = (0.05, 50.0);
+/// Blender's default clip start is 0.01 m at a 1 m working distance; the ceiling is Unreal's 10 cm default.
+pub const NEAR_PLANE_DISTANCE_RATIO: f32 = 0.01;
+pub const NEAR_PLANE_RANGE: (f32, f32) = (0.001, 0.1);
+pub const FLY_SPEED_MIN_DISTANCE: f32 = 0.01;
 
 pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
     let diff = position - target;
@@ -21,7 +25,7 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         pitch,
         distance,
         fov_y: Deg(45.0),
-        near_plane: 0.1,
+        near_plane: near_plane_for_distance(distance),
         initial_pivot: target,
         initial_yaw: yaw,
         initial_pitch: pitch,
@@ -30,6 +34,14 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         fly_speed_scale: Camera::DEFAULT_FLY_SPEED_SCALE,
         fly_speed_indicator_seconds: 0.0,
     }
+}
+
+pub fn near_plane_for_distance(distance: f32) -> f32 {
+    (distance * NEAR_PLANE_DISTANCE_RATIO).clamp(NEAR_PLANE_RANGE.0, NEAR_PLANE_RANGE.1)
+}
+
+pub fn update_camera_near_plane(camera: &mut Camera) {
+    camera.near_plane = near_plane_for_distance(camera.distance);
 }
 
 pub fn compute_camera_backward(camera: &Camera) -> Vector3<f32> {
@@ -124,7 +136,7 @@ pub fn camera_look(camera: &mut Camera, mouse_diff: Vector2<f32>) {
     camera.pivot = position - compute_camera_backward(camera) * camera.distance;
 }
 
-fn fly_direction_is_active(fly: &CameraFlyInput) -> bool {
+pub fn fly_direction_is_active(fly: &CameraFlyInput) -> bool {
     fly.forward != 0.0 || fly.right != 0.0 || fly.up != 0.0
 }
 
@@ -141,7 +153,7 @@ pub fn camera_fly_move(camera: &mut Camera, fly: &CameraFlyInput) {
 }
 
 pub fn camera_fly_speed(camera: &Camera) -> f32 {
-    camera.distance.max(0.5) * camera.fly_speed_scale
+    camera.distance.max(FLY_SPEED_MIN_DISTANCE) * camera.fly_speed_scale
 }
 
 pub fn adjust_fly_speed(camera: &mut Camera, mouse_wheel: f32) {

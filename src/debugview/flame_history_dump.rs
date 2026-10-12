@@ -4,6 +4,7 @@ use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{FlameDumpSink, FlameRenderTargets};
 use crate::ecs::systems::flame_dump_npy_path;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::{build_flame_ubo, FlameUBO};
 use thyllore_math_core::{f16_to_f32, write_npy_f32};
@@ -70,19 +71,19 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
     let height = flame_history.height;
     let image_size = (width * height * 8) as vk::DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let mut readback = ctx.copy_image_to_buffer(
         history_image,
         width,
         height,
         image_size,
         vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
     )?;
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+    let data_ptr =
+        device.map_memory(readback.memory, 0, image_size, vk::MemoryMapFlags::empty())?;
     let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
     let f32_data = decode_rgba16f(slice);
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    device.unmap_memory(readback.memory);
+    readback.destroy_gpu(ctx.device);
 
     write_npy_f32(path, &[height as usize, width as usize, 4], &f32_data)?;
     Ok(())

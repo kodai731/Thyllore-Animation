@@ -9,7 +9,9 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::hdr_buffer::HdrBuffer;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::resource::{copy_image_to_host_buffer, write_host_buffer_bgra_png};
+use thyllore_vulkan_core::resource::{
+    copy_image_to_host_buffer, write_host_buffer_bgra_png, BufferAllocation, GpuResource,
+};
 
 /// Which capture of the schedule is being taken; `sequence_dir` is set in sequence mode.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,7 +52,7 @@ impl CaptureContext<'_> {
         height: u32,
         image_size: vk::DeviceSize,
         layout: vk::ImageLayout,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    ) -> Result<BufferAllocation> {
         copy_image_to_host_buffer(
             self.instance,
             self.device,
@@ -71,7 +73,7 @@ impl CaptureContext<'_> {
         let extent = swapchain.swapchain_extent;
         let image_size = (extent.width * extent.height * 4) as vk::DeviceSize;
 
-        let (buffer, buffer_memory) = self.copy_image_to_buffer(
+        let mut allocation = self.copy_image_to_buffer(
             image,
             extent.width,
             extent.height,
@@ -80,14 +82,13 @@ impl CaptureContext<'_> {
         )?;
         let written = write_host_buffer_bgra_png(
             &self.device.device,
-            buffer_memory,
+            allocation.memory,
             image_size,
             extent.width,
             extent.height,
             path,
         );
-        self.device.device.free_memory(buffer_memory, None);
-        self.device.device.destroy_buffer(buffer, None);
+        allocation.destroy_gpu(self.device);
         written?;
 
         let absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());

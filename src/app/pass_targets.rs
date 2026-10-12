@@ -19,7 +19,7 @@ impl App {
                 .viewport
                 .storage
                 .get(key)
-                .map(|entry| entry.image)
+                .map(|entry| entry.allocation.image)
                 .ok_or_else(|| anyhow::anyhow!("storage target {key:?} is not allocated")),
             TargetRef::Transient(slot) => {
                 let handle = self.data.frame_transients.handle(slot)?;

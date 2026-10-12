@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::core::device::RRDevice;
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::image::{create_image_allocation, create_image_view};
 use crate::vulkan::*;
 
 pub const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
@@ -36,11 +37,10 @@ enum PoolState {
     InUse { bucket: usize },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 struct PooledImage {
     desc: TransientDesc,
-    image: vk::Image,
-    memory: vk::DeviceMemory,
+    allocation: ImageAllocation,
     view: vk::ImageView,
     generation: u64,
     last_used_frame: u64,
@@ -83,12 +83,12 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn begin_frame(&mut self, device: &Device, frame_index: usize) -> Result<()> {
+    pub unsafe fn begin_frame(&mut self, rrdevice: &RRDevice, frame_index: usize) -> Result<()> {
         let evicted = self.advance_frame(frame_index)?;
 
         for pooled in evicted {
-            self.destroy_framebuffers_using(device, pooled.view);
-            destroy_pooled(device, &pooled);
+            self.destroy_framebuffers_using(&rrdevice.device, pooled.view);
+            destroy_pooled(rrdevice, pooled);
         }
 
         Ok(())
@@ -119,7 +119,7 @@ impl RenderTargetTransient {
         let mut evicted = Vec::new();
 
         for entry in self.pool.iter_mut() {
-            let is_stale = entry.is_some_and(|pooled| {
+            let is_stale = entry.as_ref().is_some_and(|pooled| {
                 pooled.state == PoolState::Free
                     && current_frame - pooled.last_used_frame > TRANSIENT_EVICT_AFTER_FRAMES
             });
@@ -143,7 +143,7 @@ impl RenderTargetTransient {
             return Ok(handle);
         }
 
-        let (image, memory) = create_image(
+        let mut allocation = create_image_allocation(
             instance,
             rrdevice,
             desc.width,
@@ -156,17 +156,21 @@ impl RenderTargetTransient {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        let view =
-            match create_image_view(rrdevice, image, desc.format, vk::ImageAspectFlags::COLOR, 1) {
-                Ok(view) => view,
-                Err(error) => {
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
-                    return Err(error);
-                }
-            };
+        let view = match create_image_view(
+            rrdevice,
+            allocation.image,
+            desc.format,
+            vk::ImageAspectFlags::COLOR,
+            1,
+        ) {
+            Ok(view) => view,
+            Err(error) => {
+                allocation.destroy_gpu(rrdevice);
+                return Err(error);
+            }
+        };
 
-        Ok(self.register(desc, image, memory, view))
+        Ok(self.register(desc, allocation, view))
     }
 
     fn acquire_pooled(&mut self, desc: TransientDesc) -> Option<TransientHandle> {
@@ -175,14 +179,14 @@ impl RenderTargetTransient {
         let current_bucket = self.current_bucket;
 
         let same_bucket = self.pool.iter().position(|entry| {
-            entry.is_some_and(|pooled| {
-                is_free_match(&pooled) && pooled.last_bucket == current_bucket
-            })
+            entry
+                .as_ref()
+                .is_some_and(|pooled| is_free_match(pooled) && pooled.last_bucket == current_bucket)
         });
         let slot = same_bucket.or_else(|| {
             self.pool
                 .iter()
-                .position(|entry| entry.is_some_and(|pooled| is_free_match(&pooled)))
+                .position(|entry| entry.as_ref().is_some_and(is_free_match))
         })?;
 
         self.mark_in_use(slot);
@@ -192,14 +196,12 @@ impl RenderTargetTransient {
     fn register(
         &mut self,
         desc: TransientDesc,
-        image: vk::Image,
-        memory: vk::DeviceMemory,
+        allocation: ImageAllocation,
         view: vk::ImageView,
     ) -> TransientHandle {
         let pooled = PooledImage {
             desc,
-            image,
-            memory,
+            allocation,
             view,
             generation: self.next_generation,
             last_used_frame: self.current_frame,
@@ -276,12 +278,11 @@ impl RenderTargetTransient {
         let pooled = self
             .pool
             .get(handle.slot as usize)
-            .copied()
-            .flatten()
+            .and_then(Option::as_ref)
             .ok_or_else(|| anyhow!("transient slot {} is not allocated", handle.slot))?;
 
         Ok(TransientImage {
-            image: pooled.image,
+            image: pooled.allocation.image,
             view: pooled.view,
             desc: pooled.desc,
             generation: pooled.generation,
@@ -339,13 +340,13 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &Device) {
+    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
         for (_, framebuffer) in self.framebuffers.drain() {
-            device.destroy_framebuffer(framebuffer, None);
+            rrdevice.device.destroy_framebuffer(framebuffer, None);
         }
 
         for pooled in self.pool.drain(..).flatten() {
-            destroy_pooled(device, &pooled);
+            destroy_pooled(rrdevice, pooled);
         }
 
         for bucket in self.buckets.iter_mut() {
@@ -415,21 +416,14 @@ impl FramebufferKey {
     }
 }
 
-unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
-    if pooled.view != vk::ImageView::null() {
-        device.destroy_image_view(pooled.view, None);
-    }
-    if pooled.image != vk::Image::null() {
-        device.destroy_image(pooled.image, None);
-    }
-    if pooled.memory != vk::DeviceMemory::null() {
-        device.free_memory(pooled.memory, None);
-    }
+unsafe fn destroy_pooled(rrdevice: &RRDevice, mut pooled: PooledImage) {
+    pooled.view.destroy_gpu(rrdevice);
+    pooled.allocation.destroy_gpu(rrdevice);
 }
 
 impl GpuResource for RenderTargetTransient {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        self.destroy_all(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -452,12 +446,7 @@ mod tests {
 
     fn acquire_null(transient: &mut RenderTargetTransient, desc: TransientDesc) -> TransientHandle {
         transient.acquire_pooled(desc).unwrap_or_else(|| {
-            transient.register(
-                desc,
-                vk::Image::null(),
-                vk::DeviceMemory::null(),
-                vk::ImageView::null(),
-            )
+            transient.register(desc, ImageAllocation::default(), vk::ImageView::null())
         })
     }
 

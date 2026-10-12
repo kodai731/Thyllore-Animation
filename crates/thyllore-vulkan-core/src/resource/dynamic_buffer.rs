@@ -5,11 +5,11 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
+use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
+use crate::resource::gpu_resource::GpuResource;
 
 pub struct DynamicUniformBuffer<T: Copy> {
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    allocation: BufferAllocation,
     mapped_ptr: *mut c_void,
     alignment: u64,
     element_aligned_size: u64,
@@ -24,7 +24,7 @@ impl<T: Copy> DynamicUniformBuffer<T> {
         let element_aligned_size = Self::align_size(element_size, min_alignment);
         let total_size = element_aligned_size * capacity as u64;
 
-        let (buffer, memory) = create_buffer(
+        let allocation = create_buffer_allocation(
             instance,
             rrdevice,
             total_size,
@@ -32,14 +32,15 @@ impl<T: Copy> DynamicUniformBuffer<T> {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        let mapped_ptr =
-            rrdevice
-                .device
-                .map_memory(memory, 0, total_size, vk::MemoryMapFlags::empty())?;
+        let mapped_ptr = rrdevice.device.map_memory(
+            allocation.memory,
+            0,
+            total_size,
+            vk::MemoryMapFlags::empty(),
+        )?;
 
         Ok(Self {
-            buffer,
-            memory,
+            allocation,
             mapped_ptr,
             alignment: min_alignment,
             element_aligned_size,
@@ -53,7 +54,7 @@ impl<T: Copy> DynamicUniformBuffer<T> {
     }
 
     pub fn buffer(&self) -> vk::Buffer {
-        self.buffer
+        self.allocation.buffer
     }
 
     pub fn alignment(&self) -> u64 {
@@ -107,25 +108,17 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.mapped_ptr != std::ptr::null_mut() {
-            rrdevice.device.unmap_memory(self.memory);
+            rrdevice.device.unmap_memory(self.allocation.memory);
             self.mapped_ptr = std::ptr::null_mut();
         }
 
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-
-        if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
-        }
+        self.allocation.destroy_gpu(rrdevice);
     }
 }
 
 impl<T: Copy> Drop for DynamicUniformBuffer<T> {
     fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
+        if self.allocation.buffer != vk::Buffer::null() {
             log_warn!("DynamicUniformBuffer dropped without calling destroy()");
         }
     }

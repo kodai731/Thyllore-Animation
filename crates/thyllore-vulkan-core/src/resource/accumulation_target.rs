@@ -29,11 +29,11 @@ impl AccumulationTarget {
         let usage = vk::ImageUsageFlags::STORAGE
             | vk::ImageUsageFlags::TRANSFER_DST
             | vk::ImageUsageFlags::TRANSFER_SRC;
-        let entry = *storage.ensure(instance, rrdevice, key, format, usage, None)?;
+        let entry = storage.ensure(instance, rrdevice, key, format, usage, None)?;
 
         let cmd = begin_single_time_commands(rrdevice, command_pool)?;
         let to_general = vk::ImageMemoryBarrier::builder()
-            .image(entry.image)
+            .image(entry.allocation.image)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .src_access_mask(vk::AccessFlags::empty())
@@ -60,7 +60,7 @@ impl AccumulationTarget {
         end_single_time_commands(rrdevice, rrdevice.graphics_queue, command_pool, cmd)?;
 
         Ok(Self {
-            image: entry.image,
+            image: entry.allocation.image,
             view: entry.view,
         })
     }

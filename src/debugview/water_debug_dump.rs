@@ -38,7 +38,7 @@ unsafe fn save_water_caustic_accum_npy(
     let height = water_targets.history.height;
     let image_size = (width * height * 4) as vk::DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let mut readback = ctx.copy_image_to_buffer(
         caustic_image,
         width,
         height,
@@ -46,7 +46,8 @@ unsafe fn save_water_caustic_accum_npy(
         vk::ImageLayout::GENERAL,
     )?;
 
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+    let data_ptr =
+        device.map_memory(readback.memory, 0, image_size, vk::MemoryMapFlags::empty())?;
     let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
 
     let mut u32_data: Vec<u32> = Vec::with_capacity((width * height) as usize);
@@ -60,9 +61,8 @@ unsafe fn save_water_caustic_accum_npy(
         u32_data.push(value);
     }
 
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    device.unmap_memory(readback.memory);
+    readback.destroy_gpu(ctx.device);
 
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory)?;

@@ -117,13 +117,20 @@ unsafe fn execute_as_build(
     )
 }
 
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
+struct AccelerationStructureAllocation {
+    buffer_allocation: BufferAllocation,
+    acceleration_structure: vk::AccelerationStructureKHR,
+}
+
 unsafe fn create_acceleration_structure_with_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     size: vk::DeviceSize,
     as_type: vk::AccelerationStructureTypeKHR,
-) -> Result<(vk::AccelerationStructureKHR, BufferAllocation)> {
-    let as_buf = create_buffer_allocation(
+) -> Result<AccelerationStructureAllocation> {
+    let buffer_allocation = create_buffer_allocation(
         instance,
         rrdevice,
         size,
@@ -133,7 +140,7 @@ unsafe fn create_acceleration_structure_with_buffer(
     )?;
 
     let as_create_info = vk::AccelerationStructureCreateInfoKHR::builder()
-        .buffer(as_buf.buffer)
+        .buffer(buffer_allocation.buffer)
         .size(size)
         .type_(as_type);
 
@@ -141,7 +148,10 @@ unsafe fn create_acceleration_structure_with_buffer(
         .device
         .create_acceleration_structure_khr(&as_create_info, None)?;
 
-    Ok((acceleration_structure, as_buf))
+    Ok(AccelerationStructureAllocation {
+        buffer_allocation,
+        acceleration_structure,
+    })
 }
 
 fn build_triangle_geometry(
@@ -288,12 +298,13 @@ impl RRAccelerationStructure {
             &mut size_info,
         );
 
-        let (acceleration_structure, as_buf) = create_acceleration_structure_with_buffer(
+        let mut allocated = create_acceleration_structure_with_buffer(
             instance,
             rrdevice,
             size_info.acceleration_structure_size,
             vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
         )?;
+        let acceleration_structure = allocated.acceleration_structure;
 
         let mut scratch = create_scratch_buffer(instance, rrdevice, size_info.build_scratch_size)?;
 
@@ -316,8 +327,8 @@ impl RRAccelerationStructure {
         );
 
         Ok(RRBLAS {
-            buffer_allocation: Some(as_buf),
-            acceleration_structure: Some(acceleration_structure),
+            buffer_allocation: Some(std::mem::take(&mut allocated.buffer_allocation)),
+            acceleration_structure: Some(std::mem::take(&mut allocated.acceleration_structure)),
             device_address,
             update_scratch: None,
             update_scratch_size: 0,
@@ -374,12 +385,13 @@ impl RRAccelerationStructure {
             &mut size_info,
         );
 
-        let (acceleration_structure, as_buf) = create_acceleration_structure_with_buffer(
+        let mut allocated = create_acceleration_structure_with_buffer(
             instance,
             rrdevice,
             size_info.acceleration_structure_size,
             vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
         )?;
+        let acceleration_structure = allocated.acceleration_structure;
 
         let mut scratch = create_scratch_buffer(instance, rrdevice, size_info.build_scratch_size)?;
 
@@ -402,8 +414,8 @@ impl RRAccelerationStructure {
         );
 
         Ok(RRBLAS {
-            buffer_allocation: Some(as_buf),
-            acceleration_structure: Some(acceleration_structure),
+            buffer_allocation: Some(std::mem::take(&mut allocated.buffer_allocation)),
+            acceleration_structure: Some(std::mem::take(&mut allocated.acceleration_structure)),
             device_address,
             update_scratch: None,
             update_scratch_size: 0,
@@ -515,12 +527,13 @@ impl RRAccelerationStructure {
             &mut size_info,
         );
 
-        let (acceleration_structure, as_buf) = create_acceleration_structure_with_buffer(
+        let mut allocated = create_acceleration_structure_with_buffer(
             instance,
             rrdevice,
             size_info.acceleration_structure_size,
             vk::AccelerationStructureTypeKHR::TOP_LEVEL,
         )?;
+        let acceleration_structure = allocated.acceleration_structure;
 
         let mut scratch = create_scratch_buffer(instance, rrdevice, size_info.build_scratch_size)?;
 
@@ -545,8 +558,8 @@ impl RRAccelerationStructure {
         );
 
         Ok(RRTLAS {
-            buffer_allocation: Some(as_buf),
-            acceleration_structure: Some(acceleration_structure),
+            buffer_allocation: Some(std::mem::take(&mut allocated.buffer_allocation)),
+            acceleration_structure: Some(std::mem::take(&mut allocated.acceleration_structure)),
             device_address,
             update_scratch: None,
             update_scratch_size: 0,

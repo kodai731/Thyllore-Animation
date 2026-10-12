@@ -29,7 +29,7 @@ impl App {
         self.data
             .viewport
             .transient
-            .begin_frame(&self.rrdevice.device, frame_slot)?;
+            .begin_frame(&self.rrdevice, frame_slot)?;
 
         self.update_auto_exposure();
         self.read_object_id_readback();

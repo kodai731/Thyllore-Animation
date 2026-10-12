@@ -6,9 +6,9 @@ use vulkanalia::prelude::v1_0::*;
 use crate::command::{begin_single_time_commands, end_single_time_commands, RRCommandPool};
 use crate::core::device::RRDevice;
 use crate::descriptor::ReflectedSetLayout;
-use crate::resource::buffer::create_buffer;
+use crate::resource::allocation::{create_buffer_allocation, ImageAllocation};
 use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::image::{create_image_allocation, create_image_view};
 use thyllore_spirv_reflect::ShaderBinding;
 
 pub const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -34,8 +34,7 @@ impl PixelRegion<'_> {
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct SampledTexture {
-    memory: vk::DeviceMemory,
-    image: vk::Image,
+    allocation: ImageAllocation,
     view: vk::ImageView,
     descriptor_set: OwnedDescriptorSet,
 }
@@ -50,7 +49,7 @@ impl SampledTexture {
         sampler: vk::Sampler,
         region: PixelRegion<'_>,
     ) -> Result<Self> {
-        let (image, memory) = create_image(
+        let allocation = create_image_allocation(
             instance,
             rrdevice,
             region.width,
@@ -64,7 +63,7 @@ impl SampledTexture {
         )?;
         let view = create_image_view(
             rrdevice,
-            image,
+            allocation.image,
             SAMPLED_TEXTURE_FORMAT,
             vk::ImageAspectFlags::COLOR,
             1,
@@ -82,8 +81,7 @@ impl SampledTexture {
             .apply(rrdevice);
 
         let texture = Self {
-            memory,
-            image,
+            allocation,
             view,
             descriptor_set: OwnedDescriptorSet::new(descriptor_set, layout.handle),
         };
@@ -131,26 +129,26 @@ impl SampledTexture {
         if total_len == 0 {
             return Ok(());
         }
-        let (staging_buffer, staging_memory) = create_buffer(
+        let mut staging = create_buffer_allocation(
             instance,
             rrdevice,
             total_len as vk::DeviceSize,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
-        let copies = pack_regions(rrdevice, staging_memory, total_len, regions)?;
+        let copies = pack_regions(rrdevice, staging.memory, total_len, regions)?;
 
         let device = &rrdevice.device;
         let command_buffer = begin_single_time_commands(rrdevice, command_pool.command_pool)?;
-        transition_for_transfer(device, command_buffer, self.image, old_layout);
+        transition_for_transfer(device, command_buffer, self.allocation.image, old_layout);
         device.cmd_copy_buffer_to_image(
             command_buffer,
-            staging_buffer,
-            self.image,
+            staging.buffer,
+            self.allocation.image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &copies,
         );
-        transition_for_sampling(device, command_buffer, self.image);
+        transition_for_sampling(device, command_buffer, self.allocation.image);
         end_single_time_commands(
             rrdevice,
             rrdevice.graphics_queue,
@@ -158,8 +156,7 @@ impl SampledTexture {
             command_buffer,
         )?;
 
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_memory, None);
+        staging.destroy_gpu(rrdevice);
         Ok(())
     }
 }

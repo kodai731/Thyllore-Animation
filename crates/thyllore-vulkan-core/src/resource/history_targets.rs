@@ -60,13 +60,13 @@ impl HistoryTargets {
         hdr_view: vk::ImageView,
         desc: HistoryTargetsDesc,
     ) -> Result<Self> {
-        storage.ensure_extent(&rrdevice.device, width, height);
+        storage.ensure_extent(rrdevice, width, height);
 
         let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT
             | vk::ImageUsageFlags::SAMPLED
             | vk::ImageUsageFlags::TRANSFER_DST
             | desc.usage;
-        let current = *storage.ensure(
+        let current = storage.ensure(
             instance,
             rrdevice,
             desc.keys[0],
@@ -74,10 +74,12 @@ impl HistoryTargets {
             usage,
             Some(desc.sampler),
         )?;
+        let (current_image, current_view, sampler) =
+            (current.allocation.image, current.view, current.sampler);
         let previous =
-            *storage.ensure(instance, rrdevice, desc.keys[1], desc.format, usage, None)?;
-        let images = [current.image, previous.image];
-        let views = [current.view, previous.view];
+            storage.ensure(instance, rrdevice, desc.keys[1], desc.format, usage, None)?;
+        let images = [current_image, previous.allocation.image];
+        let views = [current_view, previous.view];
 
         clear_to_shader_read_only(rrdevice, command_pool, &images)?;
 
@@ -98,7 +100,7 @@ impl HistoryTargets {
         Ok(Self {
             images,
             views,
-            sampler: current.sampler,
+            sampler,
             render_pass,
             framebuffers,
             width,

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::core::device::RRDevice;
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::image::{create_image_allocation, create_image_view};
 use crate::vulkan::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -11,10 +12,9 @@ pub enum RenderTargetKey {
     EffectAccumulation(u8),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct RenderTargetEntry {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
+    pub allocation: ImageAllocation,
     pub view: vk::ImageView,
     pub sampler: vk::Sampler,
     pub format: vk::Format,
@@ -53,7 +53,7 @@ impl RenderTargetStorage {
 
         if !is_reusable {
             if let Some(outdated) = self.entries.remove(&key) {
-                destroy_entry(&rrdevice.device, &outdated);
+                destroy_entry(rrdevice, outdated);
             }
 
             let entry = self.create_entry(instance, rrdevice, format, usage, sampler_info)?;
@@ -73,7 +73,7 @@ impl RenderTargetStorage {
         usage: vk::ImageUsageFlags,
         sampler_info: Option<vk::SamplerCreateInfo>,
     ) -> Result<RenderTargetEntry> {
-        let (image, memory) = create_image(
+        let mut allocation = create_image_allocation(
             instance,
             rrdevice,
             self.width,
@@ -86,12 +86,16 @@ impl RenderTargetStorage {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        let view = match create_image_view(rrdevice, image, format, vk::ImageAspectFlags::COLOR, 1)
-        {
+        let mut view = match create_image_view(
+            rrdevice,
+            allocation.image,
+            format,
+            vk::ImageAspectFlags::COLOR,
+            1,
+        ) {
             Ok(view) => view,
             Err(error) => {
-                rrdevice.device.destroy_image(image, None);
-                rrdevice.device.free_memory(memory, None);
+                allocation.destroy_gpu(rrdevice);
                 return Err(error);
             }
         };
@@ -100,9 +104,8 @@ impl RenderTargetStorage {
             Some(info) => match rrdevice.device.create_sampler(&info, None) {
                 Ok(sampler) => sampler,
                 Err(error) => {
-                    rrdevice.device.destroy_image_view(view, None);
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
+                    view.destroy_gpu(rrdevice);
+                    allocation.destroy_gpu(rrdevice);
                     return Err(error.into());
                 }
             },
@@ -110,8 +113,7 @@ impl RenderTargetStorage {
         };
 
         Ok(RenderTargetEntry {
-            image,
-            memory,
+            allocation,
             view,
             sampler,
             format,
@@ -127,27 +129,22 @@ impl RenderTargetStorage {
         (self.width, self.height)
     }
 
-    pub unsafe fn ensure_extent(&mut self, device: &vulkanalia::Device, width: u32, height: u32) {
+    pub unsafe fn ensure_extent(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
         if (self.width, self.height) == (width, height) {
             return;
         }
-        self.set_extent_and_reset(device, width, height);
+        self.set_extent_and_reset(rrdevice, width, height);
     }
 
-    pub unsafe fn set_extent_and_reset(
-        &mut self,
-        device: &vulkanalia::Device,
-        width: u32,
-        height: u32,
-    ) {
-        self.destroy_all(device);
+    pub unsafe fn set_extent_and_reset(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
+        self.destroy_all(rrdevice);
         self.width = width;
         self.height = height;
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
         for (_, entry) in self.entries.drain() {
-            destroy_entry(device, &entry);
+            destroy_entry(rrdevice, entry);
         }
     }
 
@@ -179,24 +176,15 @@ impl Drop for RenderTargetStorage {
     }
 }
 
-unsafe fn destroy_entry(device: &vulkanalia::Device, entry: &RenderTargetEntry) {
-    if entry.sampler != vk::Sampler::null() {
-        device.destroy_sampler(entry.sampler, None);
-    }
-    if entry.view != vk::ImageView::null() {
-        device.destroy_image_view(entry.view, None);
-    }
-    if entry.image != vk::Image::null() {
-        device.destroy_image(entry.image, None);
-    }
-    if entry.memory != vk::DeviceMemory::null() {
-        device.free_memory(entry.memory, None);
-    }
+unsafe fn destroy_entry(rrdevice: &RRDevice, mut entry: RenderTargetEntry) {
+    entry.sampler.destroy_gpu(rrdevice);
+    entry.view.destroy_gpu(rrdevice);
+    entry.allocation.destroy_gpu(rrdevice);
 }
 
 impl GpuResource for RenderTargetStorage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        self.destroy_all(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -212,8 +200,7 @@ mod tests {
         storage.entries.insert(
             key,
             RenderTargetEntry {
-                image: vk::Image::null(),
-                memory: vk::DeviceMemory::null(),
+                allocation: ImageAllocation::default(),
                 view: vk::ImageView::null(),
                 sampler: vk::Sampler::null(),
                 format: vk::Format::R16G16B16A16_SFLOAT,

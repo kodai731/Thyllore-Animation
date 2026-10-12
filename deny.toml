@@ -27,10 +27,8 @@ allow = [
     "0BSD",
     "Unlicense",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "PDDL-1.0",
     "CDLA-Permissive-2.0",
-    "OpenSSL",
     "LGPL-2.1-or-later",
 ]
 confidence-threshold = 0.8
@@ -39,11 +37,6 @@ confidence-threshold = 0.8
 name = "unicode-ident"
 expression = "(MIT OR Apache-2.0) AND Unicode-3.0"
 license-files = [{ path = "LICENSE-UNICODE", hash = 0xb1e0b833 }]
-
-[[licenses.clarify]]
-name = "ring"
-expression = "MIT AND ISC AND OpenSSL"
-license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [bans]
 multiple-versions = "warn"

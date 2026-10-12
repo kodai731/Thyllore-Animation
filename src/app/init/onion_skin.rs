@@ -74,7 +74,7 @@ unsafe fn create_onion_skin_pass(
     height: u32,
 ) -> Result<OnionSkinPassResources> {
     let extent = vk::Extent2D { width, height };
-    let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
+    let (ghost_allocation, ghost_image_view, ghost_sampler) =
         OnionSkinPassResources::create_ghost_buffer(instance, rrdevice, width, height)?;
     let ghost_render_pass = OnionSkinPassResources::create_ghost_render_pass(rrdevice)?;
 
@@ -142,8 +142,7 @@ unsafe fn create_onion_skin_pass(
 
     log!("Created onion skin pass: {}x{}", width, height);
     Ok(OnionSkinPassResources {
-        ghost_image,
-        ghost_image_memory,
+        ghost_allocation,
         ghost_image_view,
         ghost_sampler,
         ghost_render_pass,

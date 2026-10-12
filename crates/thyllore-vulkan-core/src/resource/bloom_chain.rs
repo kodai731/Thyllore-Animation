@@ -14,8 +14,10 @@ pub struct BloomMipTarget {
     pub extent: vk::Extent2D,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct BloomChain {
+    #[gpu_resource(skip)]
     pub mip_extents: Vec<vk::Extent2D>,
     pub downsample_render_pass: vk::RenderPass,
     pub upsample_render_pass: vk::RenderPass,
@@ -146,13 +148,6 @@ impl BloomChain {
         self.mip_extents = compute_mip_extents(new_width, new_height, mip_count);
         log!("Resized bloom chain for {}x{}", new_width, new_height);
     }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        device.destroy_sampler(self.sampler, None);
-        device.destroy_render_pass(self.downsample_render_pass, None);
-        device.destroy_render_pass(self.upsample_render_pass, None);
-        log!("Destroyed bloom chain");
-    }
 }
 
 fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec<vk::Extent2D> {
@@ -169,22 +164,6 @@ fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec
     }
 
     extents
-}
-
-impl GpuResource for BloomChain {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-
-        self.sampler = vk::Sampler::null();
-        self.downsample_render_pass = vk::RenderPass::null();
-        self.upsample_render_pass = vk::RenderPass::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.sampler.is_destroyed()
-            && self.downsample_render_pass.is_destroyed()
-            && self.upsample_render_pass.is_destroyed()
-    }
 }
 
 #[cfg(test)]

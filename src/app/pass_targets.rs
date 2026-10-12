@@ -41,7 +41,7 @@ impl App {
                 .raytracing
                 .onion_skin_pass
                 .as_ref()
-                .map(|onion| onion.ghost_image),
+                .map(|onion| onion.ghost_allocation.image),
             CoreTarget::GBufferPosition => self.gbuffer_image(|g| g.position.image),
             CoreTarget::GBufferNormal => self.gbuffer_image(|g| g.normal.image),
             CoreTarget::GBufferAlbedo => self.gbuffer_image(|g| g.albedo.image),

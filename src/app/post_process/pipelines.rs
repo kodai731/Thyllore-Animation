@@ -212,7 +212,10 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         let (histogram_buffer, luminance_buffer) = match data.viewport.auto_exposure_buffers {
-            Some(ref buf) => (buf.histogram_buffer, buf.luminance_buffer),
+            Some(ref buf) => (
+                buf.histogram_allocation.buffer,
+                buf.luminance_allocation.buffer,
+            ),
             None => {
                 log!("AutoExposure buffers not available, skipping pipeline");
                 return Ok(());

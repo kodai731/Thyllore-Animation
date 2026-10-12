@@ -108,7 +108,7 @@ pub(super) unsafe fn release_model_gpu_resources(
     device.device.device_wait_idle()?;
 
     if let Some(ref mut accel) = raytracing.acceleration_structure {
-        accel.destroy(&device.device);
+        accel.destroy(device);
     }
     raytracing.acceleration_structure = None;
 

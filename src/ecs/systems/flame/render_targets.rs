@@ -8,7 +8,7 @@ use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
 use thyllore_vulkan_core::resource::render_target_storage::RenderTargetKey;
-use thyllore_vulkan_core::resource::{HistoryTargets, HistoryTargetsDesc};
+use thyllore_vulkan_core::resource::{GpuResource, HistoryTargets, HistoryTargetsDesc};
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
@@ -104,7 +104,7 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
     let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() else {
         return Ok(());
     };
-    targets.history.destroy(&ctx.rrdevice.device);
+    targets.history.destroy_gpu(ctx.rrdevice);
     targets.history = HistoryTargets::new(
         ctx.instance,
         ctx.rrdevice,

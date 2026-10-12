@@ -43,7 +43,7 @@ impl DeviceBuffer {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RRAccelerationStructure {
     pub blas_list: Vec<RRBLAS>,
     pub procedural_blas: Vec<RRBLAS>,
@@ -784,7 +784,8 @@ impl RRAccelerationStructure {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         if let Some(tlas_as) = self.tlas.acceleration_structure {
             device.destroy_acceleration_structure_khr(tlas_as, None);
         }
@@ -831,10 +832,7 @@ impl RRAccelerationStructure {
             }
         }
 
-        if let Some(table) = self.hit_shading_table.take() {
-            device.destroy_buffer(table.buffer, None);
-            device.free_memory(table.memory, None);
-        }
+        self.hit_shading_table.destroy_gpu(rrdevice);
         self.tlas = RRTLAS::default();
         self.blas_list.clear();
         self.procedural_blas.clear();
@@ -931,9 +929,7 @@ impl RRAccelerationStructure {
                 Some(table) if table.capacity >= records.len() => table,
                 _ => {
                     let new_table = HitShadingTable::new(instance, rrdevice, records.len())?;
-                    if let Some(old_table) = self.hit_shading_table.take() {
-                        old_table.destroy(rrdevice);
-                    }
+                    self.hit_shading_table.destroy_gpu(rrdevice);
                     self.hit_shading_table.insert(new_table)
                 }
             };
@@ -946,7 +942,7 @@ impl RRAccelerationStructure {
 
 impl GpuResource for RRAccelerationStructure {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

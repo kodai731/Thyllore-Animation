@@ -139,7 +139,7 @@ fn water_scene_bindings(ctx: &PassContext) -> Option<(vk::AccelerationStructureK
     }
     let accel = ctx.raytracing.acceleration_structure.as_ref()?;
     let tlas = accel.tlas.acceleration_structure?;
-    let hit_table = accel.hit_shading_table.as_ref()?.buffer;
+    let hit_table = accel.hit_shading_table.as_ref()?.vk_buffer();
     Some((tlas, hit_table))
 }
 

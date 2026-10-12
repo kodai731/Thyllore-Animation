@@ -257,7 +257,7 @@ pub unsafe fn create_image_3d(
     extent: vk::Extent3D,
     format: vk::Format,
     usage: vk::ImageUsageFlags,
-) -> Result<(vk::Image, vk::DeviceMemory)> {
+) -> Result<ImageAllocation> {
     let info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::_3D)
         .extent(extent)
@@ -283,7 +283,10 @@ pub unsafe fn create_image_3d(
     let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
     rrdevice.device.bind_image_memory(image, image_memory, 0)?;
 
-    Ok((image, image_memory))
+    Ok(ImageAllocation {
+        memory: image_memory,
+        image,
+    })
 }
 
 pub unsafe fn create_image_view_3d(

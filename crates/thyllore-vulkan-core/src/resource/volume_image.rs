@@ -2,15 +2,18 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::allocation::ImageAllocation;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image_3d, create_image_view_3d};
 
 /// A 3D image with its view and a linear clamp-to-edge sampler.
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct VolumeImage {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
+    pub allocation: ImageAllocation,
     pub view: vk::ImageView,
     pub sampler: vk::Sampler,
+    #[gpu_resource(skip)]
     pub extent: vk::Extent3D,
 }
 
@@ -42,13 +45,12 @@ impl VolumeImage {
         format: vk::Format,
         usage: vk::ImageUsageFlags,
     ) -> Result<Self> {
-        let (image, memory) = create_image_3d(instance, rrdevice, extent, format, usage)?;
-        let view = create_image_view_3d(rrdevice, image, format)?;
+        let allocation = create_image_3d(instance, rrdevice, extent, format, usage)?;
+        let view = create_image_view_3d(rrdevice, allocation.image, format)?;
         let sampler = create_linear_clamp_sampler(rrdevice)?;
 
         Ok(Self {
-            image,
-            memory,
+            allocation,
             view,
             sampler,
             extent,
@@ -62,25 +64,6 @@ impl VolumeImage {
             level_count: 1,
             base_array_layer: 0,
             layer_count: 1,
-        }
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        if self.sampler != vk::Sampler::null() {
-            device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-        if self.view != vk::ImageView::null() {
-            device.destroy_image_view(self.view, None);
-            self.view = vk::ImageView::null();
-        }
-        if self.image != vk::Image::null() {
-            device.destroy_image(self.image, None);
-            self.image = vk::Image::null();
-        }
-        if self.memory != vk::DeviceMemory::null() {
-            device.free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
         }
     }
 }

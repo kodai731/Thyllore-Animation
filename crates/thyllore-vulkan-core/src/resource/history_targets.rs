@@ -31,15 +31,21 @@ pub struct HistoryTargetsDesc {
 
 /// A history ping-pong pair from `RenderTargetStorage` plus the render pass and the two
 /// framebuffers that shade onto the HDR image while writing history[i] and sampling
-/// history[1 - i]. The images belong to the storage; `destroy` only owns the pass objects.
-#[derive(Clone, Debug, Default)]
+/// history[1 - i]. The images belong to the storage; `destroy_gpu` only owns the pass objects.
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct HistoryTargets {
+    #[gpu_resource(skip)]
     pub images: [vk::Image; 2],
+    #[gpu_resource(skip)]
     pub views: [vk::ImageView; 2],
+    #[gpu_resource(skip)]
     pub sampler: vk::Sampler,
     pub render_pass: vk::RenderPass,
     pub framebuffers: [vk::Framebuffer; 2],
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 
@@ -115,47 +121,6 @@ impl HistoryTargets {
             extent: self.extent(),
             load,
         }
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        for framebuffer in &mut self.framebuffers {
-            if *framebuffer != vk::Framebuffer::null() {
-                device.destroy_framebuffer(*framebuffer, None);
-                *framebuffer = vk::Framebuffer::null();
-            }
-        }
-        if self.render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.render_pass, None);
-            self.render_pass = vk::RenderPass::null();
-        }
-
-        self.images = [vk::Image::null(); 2];
-        self.views = [vk::ImageView::null(); 2];
-        self.sampler = vk::Sampler::null();
-    }
-
-    fn holds_pass_objects(&self) -> bool {
-        self.framebuffers
-            .iter()
-            .any(|framebuffer| *framebuffer != vk::Framebuffer::null())
-    }
-}
-
-impl Drop for HistoryTargets {
-    fn drop(&mut self) {
-        if self.holds_pass_objects() {
-            log_warn!("HistoryTargets dropped without calling destroy()");
-        }
-    }
-}
-
-impl GpuResource for HistoryTargets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        !self.holds_pass_objects()
     }
 }
 

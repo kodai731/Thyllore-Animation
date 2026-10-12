@@ -129,7 +129,7 @@ impl RayTracingData {
         log!("Building acceleration structures...");
         if let Some(mut previous) = self.acceleration_structure.take() {
             rrdevice.device.device_wait_idle()?;
-            previous.destroy(&rrdevice.device);
+            previous.destroy(rrdevice);
         }
 
         let mut acceleration_structure = RRAccelerationStructure::new();
@@ -300,7 +300,7 @@ impl RayTracingData {
             .acceleration_structure
             .as_ref()
             .and_then(|accel| accel.hit_shading_table.as_ref())
-            .map(|table| table.buffer)
+            .map(|table| table.vk_buffer())
             .unwrap_or_else(vk::Buffer::null);
 
         if descriptor.descriptor_set == vk::DescriptorSet::null() {
@@ -375,7 +375,7 @@ unsafe fn build_ray_query_pipeline(
             let hit_shading_table_buffer = accel_struct
                 .hit_shading_table
                 .as_ref()
-                .map(|t| t.buffer)
+                .map(|t| t.vk_buffer())
                 .unwrap_or(vk::Buffer::null());
             descriptor.allocate_and_update(
                 rrdevice,

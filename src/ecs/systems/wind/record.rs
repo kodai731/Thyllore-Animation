@@ -29,7 +29,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
     insert_storage_image_write_barrier(
         device,
         cmd,
-        volume.image,
+        volume.allocation.image,
         volume.subresource_range(),
         vk::PipelineStageFlags::FRAGMENT_SHADER,
     );
@@ -55,7 +55,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
     insert_storage_image_read_barrier(
         device,
         cmd,
-        volume.image,
+        volume.allocation.image,
         volume.subresource_range(),
         vk::PipelineStageFlags::FRAGMENT_SHADER,
     );

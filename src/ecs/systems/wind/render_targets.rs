@@ -95,7 +95,7 @@ pub unsafe fn create_wind_render_targets(
 
 impl GpuResource for WindRenderTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, &rrdevice.device);
+        destroy_render_targets(self, rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -105,9 +105,10 @@ impl GpuResource for WindRenderTargets {
     }
 }
 
-pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &vulkanalia::Device) {
-    targets.shadow_volume.destroy(device);
-    targets.reduced.destroy(device);
+pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, rrdevice: &RRDevice) {
+    let device = &rrdevice.device;
+    targets.shadow_volume.destroy_gpu(rrdevice);
+    targets.reduced.destroy_gpu(rrdevice);
     if targets.framebuffer != vk::Framebuffer::null() {
         device.destroy_framebuffer(targets.framebuffer, None);
         targets.framebuffer = vk::Framebuffer::null();

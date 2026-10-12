@@ -6,11 +6,14 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct DofBuffer {
     pub render_pass: vk::RenderPass,
     pub sampler: vk::Sampler,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 
@@ -123,41 +126,10 @@ impl DofBuffer {
         self.height = new_height;
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        if self.sampler != vk::Sampler::null() {
-            device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-        if self.render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.render_pass, None);
-            self.render_pass = vk::RenderPass::null();
-        }
-
-        log!("Destroyed DOF buffer");
-    }
-
     pub fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,
             height: self.height,
         }
-    }
-}
-
-impl Drop for DofBuffer {
-    fn drop(&mut self) {
-        if self.sampler != vk::Sampler::null() || self.render_pass != vk::RenderPass::null() {
-            log_warn!("DofBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-impl GpuResource for DofBuffer {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.sampler.is_destroyed() && self.render_pass.is_destroyed()
     }
 }

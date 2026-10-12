@@ -280,7 +280,7 @@ impl App {
             .rrdevice
             .device
             .map_memory(
-                gbuffer.readback_staging_memory,
+                gbuffer.readback_staging.memory,
                 0,
                 thyllore_vulkan_core::resource::READBACK_STAGING_SIZE,
                 vk::MemoryMapFlags::empty(),
@@ -295,7 +295,7 @@ impl App {
             let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
             self.rrdevice
                 .device
-                .unmap_memory(gbuffer.readback_staging_memory);
+                .unmap_memory(gbuffer.readback_staging.memory);
             (object_id, world_position)
         });
 

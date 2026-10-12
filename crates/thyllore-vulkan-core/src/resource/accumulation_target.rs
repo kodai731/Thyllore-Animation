@@ -8,9 +8,12 @@ use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorag
 
 /// A storage image from `RenderTargetStorage` that compute passes accumulate into, kept in
 /// GENERAL layout for its whole life. The storage owns the image; this only holds handles.
-#[derive(Clone, Copy, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct AccumulationTarget {
+    #[gpu_resource(skip)]
     pub image: vk::Image,
+    #[gpu_resource(skip)]
     pub view: vk::ImageView,
 }
 
@@ -60,16 +63,5 @@ impl AccumulationTarget {
             image: entry.image,
             view: entry.view,
         })
-    }
-}
-
-impl GpuResource for AccumulationTarget {
-    unsafe fn destroy_gpu(&mut self, _rrdevice: &RRDevice) {
-        self.image = vk::Image::null();
-        self.view = vk::ImageView::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.image.is_destroyed() && self.view.is_destroyed()
     }
 }

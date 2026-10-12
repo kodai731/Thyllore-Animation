@@ -703,7 +703,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
 
         super::record_water_scene_color_copy(
             &render,
-            hdr_buffer.color_image,
+            hdr_buffer.color.image,
             scene_color_image.image,
             targets.extent(),
             command_buffer,

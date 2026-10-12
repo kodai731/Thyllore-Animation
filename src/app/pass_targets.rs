@@ -35,24 +35,24 @@ impl App {
                 .viewport
                 .hdr_buffer
                 .as_ref()
-                .map(|hdr| hdr.color_image),
+                .map(|hdr| hdr.color.image),
             CoreTarget::OnionSkinGhost => self
                 .data
                 .raytracing
                 .onion_skin_pass
                 .as_ref()
                 .map(|onion| onion.ghost_image),
-            CoreTarget::GBufferPosition => self.gbuffer_image(|g| g.position_image),
-            CoreTarget::GBufferNormal => self.gbuffer_image(|g| g.normal_image),
-            CoreTarget::GBufferAlbedo => self.gbuffer_image(|g| g.albedo_image),
-            CoreTarget::GBufferObjectId => self.gbuffer_image(|g| g.object_id_image),
-            CoreTarget::GBufferShadowMask => self.gbuffer_image(|g| g.shadow_mask_image),
+            CoreTarget::GBufferPosition => self.gbuffer_image(|g| g.position.image),
+            CoreTarget::GBufferNormal => self.gbuffer_image(|g| g.normal.image),
+            CoreTarget::GBufferAlbedo => self.gbuffer_image(|g| g.albedo.image),
+            CoreTarget::GBufferObjectId => self.gbuffer_image(|g| g.object_id.image),
+            CoreTarget::GBufferShadowMask => self.gbuffer_image(|g| g.shadow_mask.image),
             CoreTarget::Offscreen => self
                 .data
                 .viewport
                 .offscreen
                 .as_ref()
-                .map(|offscreen| offscreen.resolve_color_image),
+                .map(|offscreen| offscreen.resolve_color.image),
         };
         image.ok_or_else(|| anyhow::anyhow!("core target {core:?} is not allocated"))
     }

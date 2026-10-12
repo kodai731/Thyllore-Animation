@@ -30,7 +30,7 @@ impl BatchCapture for WaterProbeCapture {
             .clone();
 
         let (width, height) = (hdr.width, hdr.height);
-        let f32_data = read_hdr_rgba16f(ctx, hdr.color_image, width, height)?;
+        let f32_data = read_hdr_rgba16f(ctx, hdr.color.image, width, height)?;
 
         let proj_data = ctx.world.resource::<ProjectionData>();
         let inv_view_proj = inverse_view_proj_f64(proj_data.proj, proj_data.view);

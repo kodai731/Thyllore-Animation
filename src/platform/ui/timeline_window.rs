@@ -717,8 +717,6 @@ fn build_clip_tracks_section(
             world.send_command(ClipInstanceEvent::Deselect);
         }
     }
-
-    handle_delete_key(ui, world, state);
 }
 
 fn build_group_headers(ui: &imgui::Ui, world: &World, entry: &ClipTrackEntry) {
@@ -1060,17 +1058,6 @@ fn handle_clip_mute_button(
     }
 }
 
-fn handle_delete_key(ui: &imgui::Ui, world: &World, state: &TimelineState) {
-    if ui.is_key_pressed(imgui::Key::Delete) {
-        if let Some((entity, instance_id)) = state.selected_clip_instance {
-            world.send_command(ClipInstanceEvent::Delete {
-                entity,
-                instance_id,
-            });
-        }
-    }
-}
-
 fn draw_clip_block(
     draw_list: &imgui::DrawListMut,
     block_min: [f32; 2],
@@ -1167,7 +1154,8 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
 
 fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     let io = ui.io();
-    if !ui.is_window_focused() {
+    let focused = ui.is_window_focused_with_flags(imgui::FocusedFlags::ROOT_AND_CHILD_WINDOWS);
+    if !focused || ui.is_any_item_active() {
         return;
     }
 
@@ -1188,9 +1176,21 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineStat
     }
 
     if ui.is_key_pressed(imgui::Key::Delete) {
-        if !state.selected_keyframes.is_empty() {
-            world.send_command(TimelineEvent::DeleteSelectedKeyframes);
-        }
+        delete_timeline_selection(world, state);
+    }
+}
+
+fn delete_timeline_selection(world: &World, state: &TimelineState) {
+    if !state.selected_keyframes.is_empty() {
+        world.send_command(TimelineEvent::DeleteSelectedKeyframes);
+        return;
+    }
+
+    if let Some((entity, instance_id)) = state.selected_clip_instance {
+        world.send_command(ClipInstanceEvent::Delete {
+            entity,
+            instance_id,
+        });
     }
 }
 

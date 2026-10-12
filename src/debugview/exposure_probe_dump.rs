@@ -7,7 +7,9 @@ use thyllore_render_core::{luminance_statistics, rec709_luminance, LuminanceStat
 use thyllore_vulkan_core::renderer::BACKGROUND_RADIANCE;
 
 use crate::debugview::water_probe_dump::read_hdr_rgba16f;
-use crate::ecs::resource::{AutoExposure, Camera, Exposure, ExposureProbeCapture, ViewportInput};
+use crate::ecs::resource::{
+    AutoExposure, Camera, Exposure, ExposureProbeCapture, SceneBrightness, ViewportInput,
+};
 use crate::ecs::systems::current_unix_time;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
@@ -44,6 +46,7 @@ unsafe fn build_exposure_probe_record(ctx: &CaptureContext) -> Result<Value> {
     let display_stats = luminance_statistics(&display.linear, 0.0);
 
     let exposure = ctx.world.resource::<Exposure>().clone();
+    let brightness = *ctx.world.resource::<SceneBrightness>();
     let auto_exposure = ctx
         .world
         .get_resource::<AutoExposure>()
@@ -60,6 +63,8 @@ unsafe fn build_exposure_probe_record(ctx: &CaptureContext) -> Result<Value> {
             "exposure_value": exposure.exposure_value,
             "ev100": exposure.ev100,
             "metered_luminance": exposure.metered_luminance,
+            "scene_brightness_ev": brightness.ev,
+            "display_multiplier": exposure.display_multiplier(brightness),
         },
         "auto_exposure": auto_exposure.map(auto_exposure_json),
         "hdr": {
@@ -80,6 +85,8 @@ unsafe fn build_exposure_probe_record(ctx: &CaptureContext) -> Result<Value> {
 fn auto_exposure_json(ae: AutoExposure) -> Value {
     json!({
         "enabled": ae.enabled,
+        "metering": ae.metering.name(),
+        "white_level": ae.white_level,
         "min_ev": ae.min_ev,
         "max_ev": ae.max_ev,
         "low_percent": ae.low_percent,

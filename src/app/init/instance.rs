@@ -1260,6 +1260,7 @@ impl App {
     fn register_post_processing_resources(data: &mut AppData) {
         Self::insert_default_if_missing::<crate::ecs::resource::PhysicalCameraParameters>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::Exposure>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SceneBrightness>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::DepthOfField>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ToneMapping>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::LensEffects>(data);

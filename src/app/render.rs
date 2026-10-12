@@ -327,6 +327,18 @@ impl App {
         }
 
         self.save_manual_exposure_if_needed();
+        if let Some(light_referenced) = self.light_referenced_exposure() {
+            let exposure_value = light_referenced.exposure_value;
+            if let Some(mut exposure) = self
+                .data
+                .ecs_world
+                .get_resource_mut::<crate::ecs::resource::Exposure>()
+            {
+                *exposure = light_referenced;
+            }
+            self.record_exposure_dump(frame, Some(exposure_value));
+            return;
+        }
         if is_fixed_step {
             let _ = self.rrdevice.device.device_wait_idle();
         }
@@ -357,6 +369,15 @@ impl App {
         }
 
         self.record_exposure_dump(frame, Some(readback.adapted_exposure));
+    }
+
+    fn light_referenced_exposure(&self) -> Option<crate::ecs::resource::Exposure> {
+        let settings = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()?;
+        (!settings.metering.uses_histogram())
+            .then(|| settings.light_referenced_exposure(thyllore_render_core::lit_white_radiance()))
     }
 
     fn save_manual_exposure_if_needed(&mut self) {

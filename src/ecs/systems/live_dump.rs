@@ -11,7 +11,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
     AutoExposure, Camera, CpuFrameTimings, CurveEditorState, CurveEditorTarget, Exposure,
-    PhaseSubTimings, TimelineState, UpdatePhaseTimings,
+    PhaseSubTimings, SceneBrightness, TimelineState, UpdatePhaseTimings,
 };
 use crate::ecs::systems::animation_debug_dump::{
     build_animation_debug_dump, resolve_animation_debug_target,
@@ -274,6 +274,7 @@ fn phase_sub_json(phase_sub: Option<&PhaseSubTimings>, phase: &str) -> serde_jso
 /// The CPU cost of the last completed frame, by stage, update phase and phase sub-step.
 pub fn exposure_json(world: &World) -> serde_json::Value {
     let exposure = world.resource::<Exposure>();
+    let brightness = *world.resource::<SceneBrightness>();
     let auto_exposure = world.get_resource::<AutoExposure>();
     let camera = world.resource::<Camera>();
     serde_json::json!({
@@ -281,9 +282,13 @@ pub fn exposure_json(world: &World) -> serde_json::Value {
             "exposure_value": exposure.exposure_value,
             "ev100": exposure.ev100,
             "metered_luminance": exposure.metered_luminance,
+            "scene_brightness_ev": brightness.ev,
+            "display_multiplier": exposure.display_multiplier(brightness),
         },
         "auto_exposure": auto_exposure.map(|ae| serde_json::json!({
             "enabled": ae.enabled,
+            "metering": ae.metering.name(),
+            "white_level": ae.white_level,
             "min_ev": ae.min_ev,
             "max_ev": ae.max_ev,
             "low_percent": ae.low_percent,

@@ -86,6 +86,25 @@ impl Default for Exposure {
     }
 }
 
+/// Brightness of the whole Scene View in EV, applied on top of the exposure; positive brightens.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneBrightness {
+    pub ev: f32,
+}
+
+impl Default for SceneBrightness {
+    fn default() -> Self {
+        Self { ev: 0.0 }
+    }
+}
+
+impl Exposure {
+    /// The multiplier the tone map applies: the exposure shifted by the Scene View brightness.
+    pub fn display_multiplier(&self, brightness: SceneBrightness) -> f32 {
+        self.exposure_value * brightness.ev.exp2()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LensEffects {
     pub vignette_enabled: bool,
@@ -105,9 +124,47 @@ impl Default for LensEffects {
     }
 }
 
+/// Where the exposure comes from: the scene light, or a histogram of the HDR image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExposureMetering {
+    /// No image metering: the exposure is derived from the scene light, so it never reacts to
+    /// what is in the frame.
+    Light,
+    /// Eye adaptation from the HDR histogram.
+    Scene,
+}
+
+impl ExposureMetering {
+    pub const ALL: [ExposureMetering; 2] = [ExposureMetering::Light, ExposureMetering::Scene];
+
+    /// Stable name persisted in scene files.
+    pub fn name(self) -> &'static str {
+        match self {
+            ExposureMetering::Light => "Light",
+            ExposureMetering::Scene => "Scene",
+        }
+    }
+
+    pub fn uses_histogram(self) -> bool {
+        match self {
+            ExposureMetering::Light => false,
+            ExposureMetering::Scene => true,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|metering| metering.name() == name)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AutoExposure {
     pub enabled: bool,
+    pub metering: ExposureMetering,
+    /// Display value (linear) of a white diffuse surface facing the light under `Light` metering.
+    pub white_level: f32,
     pub min_ev: f32,
     pub max_ev: f32,
     pub adaptation_speed_up: f32,
@@ -119,11 +176,14 @@ pub struct AutoExposure {
     pub saved_manual_exposure: Option<f32>,
 }
 
-/// Unity HDRP `Exposure` override defaults: limits -1 / 14 EV, histogram 40-90 %, speeds 3 / 1.
+/// Unreal's metered key, 18 % calibration times its 1 EV default bias, is the white level; the
+/// histogram limits -1 / 14 EV, 40-90 % and speeds 3 / 1 are Unity HDRP's `Exposure` defaults.
 impl Default for AutoExposure {
     fn default() -> Self {
         Self {
             enabled: true,
+            metering: ExposureMetering::Light,
+            white_level: 0.36,
             min_ev: -1.0,
             max_ev: 14.0,
             adaptation_speed_up: 3.0,
@@ -133,6 +193,22 @@ impl Default for AutoExposure {
             min_log_luminance: -10.0,
             log_luminance_range: 22.0,
             saved_manual_exposure: None,
+        }
+    }
+}
+
+impl AutoExposure {
+    pub fn uses_histogram(&self) -> bool {
+        self.enabled && self.metering.uses_histogram()
+    }
+
+    /// Exposure that puts a white lit surface at `white_level`.
+    pub fn light_referenced_exposure(&self, lit_white_radiance: f32) -> Exposure {
+        let exposure_value = self.white_level / lit_white_radiance.max(f32::MIN_POSITIVE);
+        Exposure {
+            ev100: Exposure::ev100_from_exposure_value(exposure_value),
+            exposure_value,
+            metered_luminance: lit_white_radiance,
         }
     }
 }

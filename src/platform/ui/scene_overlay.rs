@@ -129,6 +129,8 @@ fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput)
         .build(|| {
             draw_window_shadow(ui, ui.clone_style().window_rounding());
 
+            build_general_section(ui, ecs_world);
+
             build_overlay_section(ui, ecs_world);
 
             build_transform_gizmo_section(ui, ecs_world);
@@ -473,6 +475,28 @@ pub(super) fn send_key_button(
     }
 }
 
+fn build_general_section(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::SceneBrightness;
+
+    if !section_header(ui, ecs_world, "General", SectionDefault::Open) {
+        return;
+    }
+    let Some(brightness) = ecs_world.get_resource::<SceneBrightness>() else {
+        return;
+    };
+    let mut edited = *brightness;
+    drop(brightness);
+
+    ui.input_float_config("Brightness (EV)")
+        .step(0.1)
+        .step_fast(1.0)
+        .build(&mut edited.ev);
+    if ui.is_item_hovered() {
+        ui.tooltip_text("Scene View brightness on top of the exposure; +1 doubles it");
+    }
+    ecs_world.send_command(OverlayEvent::UpdateSceneBrightness(edited));
+}
+
 fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
     if section_header(ui, ecs_world, "Overlay", SectionDefault::Open) {
         if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
@@ -569,6 +593,25 @@ fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
+fn build_exposure_metering_combo(
+    ui: &imgui::Ui,
+    metering: &mut thyllore_render_core::ExposureMetering,
+) {
+    let Some(_token) = ui.begin_combo("Metering", metering.name()) else {
+        return;
+    };
+    for candidate in thyllore_render_core::ExposureMetering::ALL {
+        let selected = candidate == *metering;
+        if ui
+            .selectable_config(candidate.name())
+            .selected(selected)
+            .build()
+        {
+            *metering = candidate;
+        }
+    }
+}
+
 fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
@@ -583,6 +626,11 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
                 "Auto Exposure Enabled",
                 &mut ae_copy.enabled,
             );
+
+            build_exposure_metering_combo(ui, &mut ae_copy.metering);
+
+            ui.slider_config("White Level", 0.05, 1.0)
+                .build(&mut ae_copy.white_level);
 
             ui.slider_config("Min EV", -10.0, 10.0)
                 .build(&mut ae_copy.min_ev);

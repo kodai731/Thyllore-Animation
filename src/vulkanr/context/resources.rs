@@ -2,17 +2,19 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::command::{RRCommandBuffer, RRCommandPool};
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{GpuResource, RRGBuffer};
 use crate::vulkanr::swapchain::RRSwapchain;
 
+#[must_use]
+#[derive(GpuResource)]
 pub struct FrameSync {
-    pub image_available: Vec<vk::Semaphore>,
-    pub render_finished: Vec<vk::Semaphore>,
     pub in_flight: Vec<vk::Fence>,
+    pub render_finished: Vec<vk::Semaphore>,
+    pub image_available: Vec<vk::Semaphore>,
+    #[gpu_resource(skip)]
     pub current_frame: usize,
 }
 
@@ -44,28 +46,6 @@ impl FrameSync {
 
     pub fn current_fence(&self) -> vk::Fence {
         self.in_flight[self.current_frame]
-    }
-}
-
-impl GpuResource for FrameSync {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        for semaphore in self
-            .image_available
-            .drain(..)
-            .chain(self.render_finished.drain(..))
-        {
-            device.destroy_semaphore(semaphore, None);
-        }
-        for fence in self.in_flight.drain(..) {
-            device.destroy_fence(fence, None);
-        }
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.image_available.is_empty()
-            && self.render_finished.is_empty()
-            && self.in_flight.is_empty()
     }
 }
 
@@ -118,6 +98,8 @@ impl RenderTargets {
     }
 }
 
+#[must_use]
+#[derive(GpuResource)]
 pub struct CommandState {
     pub pool: Rc<RRCommandPool>,
     pub buffers: RRCommandBuffer,
@@ -126,23 +108,6 @@ pub struct CommandState {
 impl CommandState {
     pub fn new(pool: Rc<RRCommandPool>, buffers: RRCommandBuffer) -> Self {
         Self { pool, buffers }
-    }
-}
-
-impl GpuResource for CommandState {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        if !self.buffers.command_buffers.is_empty() {
-            device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
-            self.buffers.command_buffers.clear();
-        }
-        if self.pool.command_pool != vk::CommandPool::null() {
-            device.destroy_command_pool(self.pool.command_pool, None);
-        }
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.buffers.command_buffers.is_empty()
     }
 }
 

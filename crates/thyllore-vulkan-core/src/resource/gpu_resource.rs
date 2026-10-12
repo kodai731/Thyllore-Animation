@@ -63,6 +63,9 @@ raw_handle_resource!(vk::Framebuffer, destroy_framebuffer);
 raw_handle_resource!(vk::ShaderModule, destroy_shader_module);
 raw_handle_resource!(vk::QueryPool, destroy_query_pool);
 raw_handle_resource!(vk::SwapchainKHR, destroy_swapchain_khr);
+raw_handle_resource!(vk::Semaphore, destroy_semaphore);
+raw_handle_resource!(vk::Fence, destroy_fence);
+raw_handle_resource!(vk::CommandPool, destroy_command_pool);
 raw_handle_resource!(
     vk::AccelerationStructureKHR,
     destroy_acceleration_structure_khr

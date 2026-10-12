@@ -12,13 +12,16 @@ use crate::gpu_resource;
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
 /// the reduced resolution render pass used by the upsampled resolve path, and the
 /// shadow volume baked once per frame for every instance slot.
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct WindRenderTargets {
     pub render_pass: vk::RenderPass,
     pub framebuffer: vk::Framebuffer,
     pub reduced: ReducedResolveTarget,
     pub shadow_volume: VolumeImage,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 
@@ -55,5 +58,4 @@ pub struct WindGpuState {
     pub upsample_bound: BoundGenerations,
 }
 
-gpu_resource!(WindRenderTargets);
 gpu_resource!(WindGpuState);

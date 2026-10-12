@@ -8,7 +8,7 @@ use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::{create_color_overlay_render_pass, ColorOverlayPassDesc, RRRender};
 use crate::vulkanr::resource::hdr_buffer::HDR_FORMAT;
-use crate::vulkanr::resource::{GpuResource, VolumeImage};
+use crate::vulkanr::resource::VolumeImage;
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
@@ -91,32 +91,6 @@ pub unsafe fn create_wind_render_targets(
         width,
         height,
     })
-}
-
-impl GpuResource for WindRenderTargets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.framebuffer.is_destroyed()
-            && self.render_pass.is_destroyed()
-            && self.reduced.is_destroyed()
-    }
-}
-
-pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, rrdevice: &RRDevice) {
-    let device = &rrdevice.device;
-    targets.shadow_volume.destroy_gpu(rrdevice);
-    targets.reduced.destroy_gpu(rrdevice);
-    if targets.framebuffer != vk::Framebuffer::null() {
-        device.destroy_framebuffer(targets.framebuffer, None);
-        targets.framebuffer = vk::Framebuffer::null();
-    }
-    if targets.render_pass != vk::RenderPass::null() {
-        device.destroy_render_pass(targets.render_pass, None);
-        targets.render_pass = vk::RenderPass::null();
-    }
 }
 
 unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {

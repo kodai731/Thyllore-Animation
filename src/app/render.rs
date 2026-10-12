@@ -833,8 +833,12 @@ impl App {
             .pipeline_layout
             .ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
         let vertex_buffer = self.data.imgui.vertex_buffers[frame_slot]
+            .as_ref()
+            .map(|allocation| allocation.buffer)
             .ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
         let index_buffer = self.data.imgui.index_buffers[frame_slot]
+            .as_ref()
+            .map(|allocation| allocation.buffer)
             .ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
         self.setup_imgui_render_state(

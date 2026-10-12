@@ -1,8 +1,8 @@
 use crate::app::{App, AppData};
 use crate::ecs::run_frame;
 use crate::ecs::FrameContext;
-use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::{create_buffer_allocation, GpuResource};
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
@@ -112,14 +112,9 @@ unsafe fn resize_imgui_vertex_buffer(
     vtx_buffer_size: vk::DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    if let Some(buffer) = data.imgui.vertex_buffers[frame_slot] {
-        rrdevice.device.destroy_buffer(buffer, None);
-    }
-    if let Some(memory) = data.imgui.vertex_buffer_memories[frame_slot] {
-        rrdevice.device.free_memory(memory, None);
-    }
+    data.imgui.vertex_buffers[frame_slot].destroy_gpu(rrdevice);
 
-    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+    let vertex_buffer = create_buffer_allocation(
         instance,
         rrdevice,
         vtx_buffer_size,
@@ -128,7 +123,6 @@ unsafe fn resize_imgui_vertex_buffer(
     )?;
 
     data.imgui.vertex_buffers[frame_slot] = Some(vertex_buffer);
-    data.imgui.vertex_buffer_memories[frame_slot] = Some(vertex_buffer_memory);
     data.imgui.vertex_buffer_sizes[frame_slot] = vtx_buffer_size;
 
     Ok(())
@@ -141,14 +135,9 @@ unsafe fn resize_imgui_index_buffer(
     idx_buffer_size: vk::DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    if let Some(buffer) = data.imgui.index_buffers[frame_slot] {
-        rrdevice.device.destroy_buffer(buffer, None);
-    }
-    if let Some(memory) = data.imgui.index_buffer_memories[frame_slot] {
-        rrdevice.device.free_memory(memory, None);
-    }
+    data.imgui.index_buffers[frame_slot].destroy_gpu(rrdevice);
 
-    let (index_buffer, index_buffer_memory) = create_buffer(
+    let index_buffer = create_buffer_allocation(
         instance,
         rrdevice,
         idx_buffer_size,
@@ -157,7 +146,6 @@ unsafe fn resize_imgui_index_buffer(
     )?;
 
     data.imgui.index_buffers[frame_slot] = Some(index_buffer);
-    data.imgui.index_buffer_memories[frame_slot] = Some(index_buffer_memory);
     data.imgui.index_buffer_sizes[frame_slot] = idx_buffer_size;
 
     Ok(())
@@ -170,7 +158,10 @@ unsafe fn upload_imgui_vertex_data(
     vtx_buffer_size: vk::DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    let Some(vertex_buffer_memory) = data.imgui.vertex_buffer_memories[frame_slot] else {
+    let Some(vertex_buffer_memory) = data.imgui.vertex_buffers[frame_slot]
+        .as_ref()
+        .map(|allocation| allocation.memory)
+    else {
         return Ok(());
     };
 
@@ -204,7 +195,10 @@ unsafe fn upload_imgui_index_data(
     idx_buffer_size: vk::DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    let Some(index_buffer_memory) = data.imgui.index_buffer_memories[frame_slot] else {
+    let Some(index_buffer_memory) = data.imgui.index_buffers[frame_slot]
+        .as_ref()
+        .map(|allocation| allocation.memory)
+    else {
         return Ok(());
     };
 

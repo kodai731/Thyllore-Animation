@@ -18,7 +18,6 @@ pub struct Material {
     pub id: MaterialId,
     pub name: String,
     pub descriptor_set: vk::DescriptorSet,
-    pub textures: Vec<RRImage>,
     pub uniform_buffer: UniformBuffer<MaterialUBO>,
     pub properties: MaterialUBO,
 }
@@ -95,7 +94,6 @@ impl MaterialManager {
             id,
             name: name.to_string(),
             descriptor_set,
-            textures: vec![],
             uniform_buffer,
             properties,
         };

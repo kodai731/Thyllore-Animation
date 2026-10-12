@@ -32,31 +32,30 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
 
     let (instance, rrdevice) = (ctx.instance, ctx.rrdevice);
     let command_pool = ctx.world.resource::<CommandState>().pool.clone();
-    let (image, image_memory, mips) =
-        thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
-            instance,
-            rrdevice,
-            &command_pool,
-            &pixels,
-            width,
-            height,
-            vk::Format::R8G8B8A8_UNORM,
-        )?;
+    let texture = thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
+        instance,
+        rrdevice,
+        &command_pool,
+        &pixels,
+        width,
+        height,
+        vk::Format::R8G8B8A8_UNORM,
+    )?;
     let image_view = thyllore_vulkan_core::resource::create_image_view(
         rrdevice,
-        image,
+        texture.allocation.image,
         vk::Format::R8G8B8A8_UNORM,
         vk::ImageAspectFlags::COLOR,
-        mips,
+        texture.mip_levels,
     )?;
-    let sampler = thyllore_vulkan_core::resource::create_texture_sampler(rrdevice, mips)?;
+    let sampler =
+        thyllore_vulkan_core::resource::create_texture_sampler(rrdevice, texture.mip_levels)?;
     if ctx.world.get_resource::<FlameGpuState>().is_none() {
         ctx.world.insert_resource(FlameGpuState::default());
     }
     let mut gpu_state = ctx.world.resource_mut::<FlameGpuState>();
     gpu_state.sdf = thyllore_vulkan_core::resource::RRImage {
-        image,
-        image_memory,
+        texture,
         image_view,
         sampler,
     };

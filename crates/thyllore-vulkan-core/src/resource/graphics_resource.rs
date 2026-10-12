@@ -144,7 +144,7 @@ impl GraphicsResources {
         let mut mesh = MeshBuffer::default();
 
         let pixels = source.texture.rgba.to_vec();
-        (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+        mesh.texture = create_texture_image_pixel(
             instance,
             rrdevice,
             command_pool,
@@ -154,12 +154,12 @@ impl GraphicsResources {
         )?;
         mesh.image_view = create_image_view(
             rrdevice,
-            mesh.image,
+            mesh.texture.allocation.image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
-            mesh.mip_level,
+            mesh.texture.mip_levels,
         )?;
-        mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
+        mesh.sampler = create_texture_sampler(rrdevice, mesh.texture.mip_levels)?;
 
         mesh.vertex_data = source.vertex_data.clone();
         mesh.morph = source.morph.clone();
@@ -300,10 +300,7 @@ impl GraphicsResources {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for mesh in &mut self.meshes {
-            mesh.destroy(rrdevice);
-        }
-        self.meshes.clear();
+        self.meshes.destroy_gpu(rrdevice);
         self.mesh_material_ids.clear();
 
         self.frame_set.destroy(rrdevice);
@@ -312,10 +309,7 @@ impl GraphicsResources {
     }
 
     pub unsafe fn clear_meshes(&mut self, rrdevice: &RRDevice) {
-        for mesh in &mut self.meshes {
-            mesh.destroy(rrdevice);
-        }
-        self.meshes.clear();
+        self.meshes.destroy_gpu(rrdevice);
         self.mesh_material_ids.clear();
     }
 

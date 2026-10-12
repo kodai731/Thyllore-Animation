@@ -1,5 +1,6 @@
 use crate::core::device::*;
 use crate::core::swapchain::*;
+use crate::resource::allocation::TextureImage;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
@@ -9,27 +10,26 @@ use thyllore_spirv_reflect::declare_gpu_block;
 pub use thyllore_model_core::mesh::{Vertex, VertexData};
 
 // TODO: implement iterator
-#[derive(Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct RRData {
+    pub texture: TextureImage,
     pub rruniform_buffers: Vec<RRUniformBuffer>,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
-    pub mip_level: u32,
     pub image_view: vk::ImageView,
     pub sampler: vk::Sampler,
+    #[gpu_resource(skip)]
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
+    #[gpu_resource(skip)]
     pub render_to_gbuffer: bool,
 }
 
 impl Default for RRData {
     fn default() -> Self {
         Self {
+            texture: TextureImage::default(),
             rruniform_buffers: Vec::new(),
-            image: vk::Image::null(),
-            image_memory: vk::DeviceMemory::null(),
-            mip_level: 0,
             image_view: vk::ImageView::null(),
             sampler: vk::Sampler::null(),
             vertex_data: VertexData::default(),
@@ -66,47 +66,6 @@ impl RRData {
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
         Ok(())
-    }
-
-    pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {
-        self.rruniform_buffers.destroy_gpu(rrdevice);
-
-        if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
-            self.image_view = vk::ImageView::null();
-        }
-
-        if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-
-        self.vertex_buffer.destroy_gpu(rrdevice);
-        self.index_buffer.destroy_gpu(rrdevice);
-    }
-
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
-        self.delete_buffers(rrdevice);
-
-        if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
-            self.image = vk::Image::null();
-        }
-
-        if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
-            self.image_memory = vk::DeviceMemory::null();
-        }
-    }
-}
-
-impl GpuResource for RRData {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.delete(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.image.is_destroyed() && self.vertex_buffer.is_destroyed()
     }
 }
 

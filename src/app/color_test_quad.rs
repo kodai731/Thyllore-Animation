@@ -180,27 +180,24 @@ unsafe fn create_quad_mesh_buffer(
     )?;
 
     let white_pixel = vec![255u8, 255, 255, 255];
-    let (image, image_memory, mip_level) =
-        create_texture_image_pixel(instance, device, command_pool, &white_pixel, 1, 1)?;
+    let texture = create_texture_image_pixel(instance, device, command_pool, &white_pixel, 1, 1)?;
 
     let image_view = create_image_view(
         device,
-        image,
+        texture.allocation.image,
         vk::Format::R8G8B8A8_SRGB,
         vk::ImageAspectFlags::COLOR,
-        mip_level,
+        texture.mip_levels,
     )?;
-    let sampler = create_texture_sampler(device, mip_level)?;
+    let sampler = create_texture_sampler(device, texture.mip_levels)?;
 
     let object_index = graphics.objects.allocate_slot();
 
     Ok(MeshBuffer {
+        texture,
         vertex_buffer,
         index_buffer,
         vertex_data,
-        image,
-        image_memory,
-        mip_level,
         image_view,
         sampler,
         render_to_gbuffer: true,

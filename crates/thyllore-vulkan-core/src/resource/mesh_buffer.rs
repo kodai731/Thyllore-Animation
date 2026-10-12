@@ -8,40 +8,47 @@ use vulkanalia::prelude::v1_0::*;
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
+use crate::resource::allocation::TextureImage;
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
-#[derive(Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct MeshBuffer {
+    pub texture: TextureImage,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
+    #[gpu_resource(skip)]
     pub vertex_data: VertexData,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
-    pub mip_level: u32,
     pub image_view: vk::ImageView,
     pub sampler: vk::Sampler,
+    #[gpu_resource(skip)]
     pub render_to_gbuffer: bool,
+    #[gpu_resource(skip)]
     pub object_index: usize,
+    #[gpu_resource(skip)]
     pub skin_data: Option<SkinData>,
+    #[gpu_resource(skip)]
     pub skeleton_id: Option<SkeletonId>,
+    #[gpu_resource(skip)]
     pub node_index: Option<usize>,
+    #[gpu_resource(skip)]
     pub base_vertices: Vec<Vertex>,
+    #[gpu_resource(skip)]
     pub base_colors: Option<Vec<Vector4<f32>>>,
+    #[gpu_resource(skip)]
     pub morph: MeshMorph,
 }
 
 impl Default for MeshBuffer {
     fn default() -> Self {
         Self {
+            texture: TextureImage::default(),
             vertex_buffer: RRVertexBuffer::default(),
             index_buffer: RRIndexBuffer::default(),
             vertex_data: VertexData::default(),
-            image: vk::Image::null(),
-            image_memory: vk::DeviceMemory::null(),
-            mip_level: 0,
             image_view: vk::ImageView::null(),
             sampler: vk::Sampler::null(),
             render_to_gbuffer: true,
@@ -72,34 +79,5 @@ impl MeshBuffer {
             vertices.as_ptr() as *const c_void,
             vertices.len(),
         )
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
-            self.image_view = vk::ImageView::null();
-        }
-        if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-        self.vertex_buffer.destroy_gpu(rrdevice);
-        self.index_buffer.destroy_gpu(rrdevice);
-        if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
-            self.image = vk::Image::null();
-        }
-        if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
-            self.image_memory = vk::DeviceMemory::null();
-        }
-    }
-}
-
-impl Drop for MeshBuffer {
-    fn drop(&mut self) {
-        if !self.vertex_buffer.is_destroyed() {
-            log_warn!("MeshBuffer dropped without calling destroy()");
-        }
     }
 }

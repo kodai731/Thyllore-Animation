@@ -60,13 +60,15 @@ pub struct MeshSource<'a> {
     pub morph: &'a MeshMorph,
 }
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct GraphicsResources {
-    pub frame_set: FrameDescriptorSet,
-    pub materials: MaterialManager,
     pub objects: ObjectDescriptorSet,
-    pub meshes: Vec<MeshBuffer>,
+    pub materials: MaterialManager,
+    pub frame_set: FrameDescriptorSet,
+    #[gpu_resource(skip)]
     pub mesh_material_ids: Vec<MaterialId>,
+    pub meshes: Vec<MeshBuffer>,
 }
 
 impl GraphicsResources {
@@ -299,15 +301,6 @@ impl GraphicsResources {
         Some((min, max, center))
     }
 
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.meshes.destroy_gpu(rrdevice);
-        self.mesh_material_ids.clear();
-
-        self.frame_set.destroy_gpu(rrdevice);
-        self.materials.destroy_gpu(rrdevice);
-        self.objects.destroy_gpu(rrdevice);
-    }
-
     pub unsafe fn clear_meshes(&mut self, rrdevice: &RRDevice) {
         self.meshes.destroy_gpu(rrdevice);
         self.mesh_material_ids.clear();
@@ -337,18 +330,5 @@ impl GraphicsResources {
             1,
             render_pass,
         )
-    }
-}
-
-impl GpuResource for GraphicsResources {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.meshes.is_empty()
-            && self.frame_set.layout.is_destroyed()
-            && self.materials.layout.is_destroyed()
-            && self.objects.layout.is_destroyed()
     }
 }

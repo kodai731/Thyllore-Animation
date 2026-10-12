@@ -11,6 +11,7 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
@@ -32,7 +33,7 @@ pub unsafe fn rebuild_acceleration_structures(
     log!("Rebuilding acceleration structures...");
     if let Some(mut previous) = raytracing.acceleration_structure.take() {
         device.device.device_wait_idle()?;
-        previous.destroy(device);
+        previous.destroy_gpu(device);
     }
 
     let mut acceleration_structure = RRAccelerationStructure::new();

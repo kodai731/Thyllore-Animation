@@ -9,6 +9,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
@@ -27,11 +28,13 @@ fn draw_avatar_setup_window(
     }
 
     let mut is_open = state.is_open;
+    let _raised = push_raised_window_style(ui);
     ui.window("Avatar Setup")
         .size([520.0, 600.0], Condition::FirstUseEver)
         .movable(true)
         .opened(&mut is_open)
         .build(|| {
+            draw_raised_window_frame(ui);
             let Some(_tab_bar) = ui.tab_bar("##avatar_setup_tabs") else {
                 return;
             };
@@ -134,7 +137,7 @@ fn build_materials_tab(ui: &imgui::Ui, world: &World, material_textures: &Materi
             ui.text_colored(UNRESOLVED_COLOR, "Unsaved changes");
         }
         MaterialTextureSaveState::SaveFailed { reason } => {
-            let _wrap = ui.push_text_wrap_pos();
+            let _wrap = ui.push_text_wrap_pos(0.0);
             ui.text_colored(FAILURE_COLOR, reason);
         }
     }
@@ -142,9 +145,13 @@ fn build_materials_tab(ui: &imgui::Ui, world: &World, material_textures: &Materi
     let Some(_table) = ui.begin_table("##material_textures", 3) else {
         return;
     };
-    ui.table_setup_column("Material");
-    ui.table_setup_column("Base color texture");
-    ui.table_setup_column("##material_texture_actions");
+    ui.table_setup_column("Material", imgui::TableColumnFlags::empty(), None);
+    ui.table_setup_column("Base color texture", imgui::TableColumnFlags::empty(), None);
+    ui.table_setup_column(
+        "##material_texture_actions",
+        imgui::TableColumnFlags::empty(),
+        None,
+    );
     ui.table_headers_row();
 
     for slot in &material_textures.slots {
@@ -268,9 +275,9 @@ fn build_stats_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) {
         return;
     };
     if let Some(_table) = ui.begin_table("##avatar_stats", 3) {
-        ui.table_setup_column("Stat");
-        ui.table_setup_column("Value");
-        ui.table_setup_column("Rank");
+        ui.table_setup_column("Stat", imgui::TableColumnFlags::empty(), None);
+        ui.table_setup_column("Value", imgui::TableColumnFlags::empty(), None);
+        ui.table_setup_column("Rank", imgui::TableColumnFlags::empty(), None);
         ui.table_headers_row();
         for item in &rank.items {
             ui.table_next_row();

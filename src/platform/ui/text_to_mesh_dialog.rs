@@ -6,6 +6,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
 use crate::hooks::ui_window::init_window_state;
+use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToMeshDialogState {
@@ -60,9 +61,11 @@ fn draw_text_to_mesh_dialog(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState, 
 
     let mut should_close = false;
 
+    let _raised = push_raised_window_style(ui);
     ui.window("Mesh Generation")
         .size([420.0, 440.0], imgui::Condition::FirstUseEver)
         .build(|| {
+            draw_raised_window_frame(ui);
             build_mode_tabs(ui, dialog);
             ui.separator();
             build_input_section(ui, world, dialog, &status, &mut should_close);
@@ -155,7 +158,7 @@ fn build_input_section(
             _ => ui.text("Generating..."),
         }
     } else {
-        let _disabled = ui.begin_disabled(!can_generate);
+        let _disabled = ui.begin_disabled_with_cond(!can_generate);
         if ui.button("Generate") {
             world.send_command(AutoRigEvent::TextToMeshGenerate {
                 prompt: dialog.prompt_buf.trim().to_string(),

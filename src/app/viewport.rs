@@ -8,6 +8,7 @@ use crate::vulkanr::resource::{
     RenderTargetStorage, RenderTargetTransient,
 };
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct ViewportState {
     pub storage: RenderTargetStorage,
@@ -160,7 +161,7 @@ impl ViewportState {
         Ok(())
     }
 
-    pub fn texture_id(&self) -> usize {
-        self.descriptor_set.as_raw() as usize
+    pub fn texture_id(&self) -> u64 {
+        self.descriptor_set.as_raw()
     }
 }

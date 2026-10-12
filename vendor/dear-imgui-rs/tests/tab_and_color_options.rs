@@ -1,0 +1,42 @@
+use dear_imgui_rs as imgui;
+use std::sync::{Mutex, OnceLock};
+
+fn test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+    GUARD.get_or_init(|| Mutex::new(())).lock().unwrap()
+}
+
+#[test]
+fn tab_and_color_options_helpers_no_panic() {
+    let _guard = test_guard();
+
+    let mut ctx = imgui::Context::create();
+    {
+        let io = ctx.io_mut();
+        io.set_display_size([800.0, 600.0]);
+        io.set_delta_time(1.0 / 60.0);
+        io.set_color_edit_options(
+            imgui::ColorEditOptions::new()
+                .data_type(imgui::ColorDataType::Uint8)
+                .display_mode(imgui::ColorDisplayMode::Hsv)
+                .picker_mode(imgui::ColorPickerMode::HueBar),
+        );
+    }
+    ctx.font_atlas()
+        .try_claim_legacy_renderer()
+        .expect("legacy renderer font atlas should be available")
+        .build();
+    let _ = ctx.set_ini_filename::<std::path::PathBuf>(None);
+
+    let ui = ctx.frame();
+
+    let _ = ui.tab_bar("Tabs").map(|_tab| {
+        let _ = ui.tab_item("A");
+        let _ = ui.tab_item_button("+");
+        let _ = ui.tab_item_button_with_flags(
+            "+##fit",
+            imgui::TabItemOptions::new().placement(imgui::TabItemPlacement::Trailing),
+        );
+        ui.set_tab_item_closed("A");
+    });
+}

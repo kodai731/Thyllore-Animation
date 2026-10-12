@@ -23,4 +23,3 @@ accepted = [
 
 ignore-build-dependencies = false
 ignore-dev-dependencies = true
-filter-noassertion = true

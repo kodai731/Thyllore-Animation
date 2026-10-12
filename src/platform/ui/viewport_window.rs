@@ -36,7 +36,7 @@ fn build_viewport_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Gr
             } else {
                 image_size
             };
-            imgui::Image::new(texture_id, display_size).build(ui);
+            imgui::Image::new(ui, texture_id, display_size).build();
         });
 
     let new_width = viewport.size[0] as u32;

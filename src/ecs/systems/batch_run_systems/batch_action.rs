@@ -3,10 +3,13 @@ use std::rc::Rc;
 
 use anyhow::Result;
 
+use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::ecs::resource::{BatchRun, DebugViewMode, DebugViewState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::BatchCapture;
 
@@ -109,6 +112,9 @@ pub struct ResetCameraUp;
 #[derive(Debug, Default)]
 pub struct CameraToModel;
 
+#[derive(Debug, Default)]
+pub struct FrameSelection;
+
 impl BatchAction for ResetCamera {
     fn name(&self) -> &'static str {
         "reset_camera"
@@ -136,9 +142,19 @@ impl BatchAction for CameraToModel {
     }
 }
 
+impl BatchAction for FrameSelection {
+    fn name(&self) -> &'static str {
+        "frame_selection"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(CameraEvent::FrameSelection(CameraMotion::Immediate));
+    }
+}
+
 crate::batch_action!("reset_camera", unit_action_parse::<ResetCamera>);
 crate::batch_action!("reset_camera_up", unit_action_parse::<ResetCameraUp>);
 crate::batch_action!("camera_to_model", unit_action_parse::<CameraToModel>);
+crate::batch_action!("frame_selection", unit_action_parse::<FrameSelection>);
 
 #[derive(Debug)]
 pub struct ViewMode(pub DebugViewMode);
@@ -213,6 +229,35 @@ fn timeline_time_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     )
 }
 
+/// Selects the first scheduled clip instance in entity order, the way a click on its block would.
+#[derive(Debug, Default)]
+pub struct SelectFirstClipInstance;
+
+impl BatchAction for SelectFirstClipInstance {
+    fn name(&self) -> &'static str {
+        "select_first_clip_instance"
+    }
+    fn apply(&self, world: &mut World) {
+        let mut entities = world.component_entities::<ClipSchedule>();
+        entities.sort_unstable();
+        let first = entities.into_iter().find_map(|entity| {
+            let schedule = world.get_component::<ClipSchedule>(entity)?;
+            let instance = schedule.instances.first()?;
+            Some((entity, instance.instance_id))
+        });
+        if let Some((entity, instance_id)) = first {
+            world.send_command(ClipInstanceEvent::Select {
+                entity,
+                instance_id,
+            });
+        }
+    }
+}
+
+crate::batch_action!(
+    "select_first_clip_instance",
+    unit_action_parse::<SelectFirstClipInstance>
+);
 crate::batch_action!("timeline_time", timeline_time_parse);
 crate::batch_action!("view_mode", view_mode_parse);
 crate::batch_action!("black_background", unit_action_parse::<BlackBackground>);

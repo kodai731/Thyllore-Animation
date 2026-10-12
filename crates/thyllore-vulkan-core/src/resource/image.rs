@@ -778,6 +778,28 @@ pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler>
     Ok(sampler)
 }
 
+pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .anisotropy_enable(false)
+        .max_anisotropy(1.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(1.0);
+    let sampler = rrdevice.device.create_sampler(&info, None)?;
+
+    Ok(sampler)
+}
+
 pub unsafe fn create_texture_image_pixel(
     instance: &Instance,
     rrdevice: &RRDevice,
@@ -896,5 +918,9 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
 impl GpuResource for RRImage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.image.is_destroyed()
     }
 }

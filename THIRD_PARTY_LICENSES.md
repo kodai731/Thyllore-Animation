@@ -3,7 +3,7 @@
 This document lists all third-party dependencies used by the Thyllore Animation project,
 organized by category and license type.
 
-Last updated: 2026-03-16
+Last updated: 2026-10-12
 
 ---
 
@@ -14,11 +14,16 @@ These libraries are directly included in the repository source tree.
 ### Dear ImGui (C++)
 
 - **License:** MIT
-- **Copyright:** (c) 2014-2023 Omar Cornut
-- **Source:** https://github.com/ocornut/imgui
-- **Vendored at:** `vendor/imgui`, `vendor/imgui-sys`, `vendor/imgui-winit-support`
+- **Copyright:** (c) 2014-2026 Omar Cornut
+- **Source:** https://github.com/ocornut/imgui (v1.92.9b, docking branch) via cimgui (MIT)
+- **Vendored at:** `vendor/dear-imgui-sys/third-party/cimgui`
 - **Usage:** Immediate-mode GUI for debugging and editor UI
-- **Rust bindings:** imgui-rs (MIT OR Apache-2.0)
+- **Rust bindings:** dear-imgui-rs 0.18.0 (MIT OR Apache-2.0, https://github.com/Latias94/dear-imgui-rs,
+  license texts in `vendor/dear-imgui-rs/LICENSE-MIT` and `LICENSE-APACHE`), vendored at
+  `vendor/dear-imgui-rs`, `vendor/dear-imgui-sys`, `vendor/dear-imgui-build-support`; only `dear-imgui-rs`
+  carries local patches, listed in `vendor/dear-imgui-rs/THYLLORE_PATCHES.md`
+- **winit backend:** `vendor/imgui-winit-support` (imgui-rs 0.11 winit backend, MIT OR Apache-2.0,
+  ported to the dear-imgui-rs `Io` API)
 
 ---
 
@@ -26,8 +31,10 @@ These libraries are directly included in the repository source tree.
 
 | Font | File | License | Copyright |
 |------|------|---------|-----------|
-| Roboto | `assets/fonts/Roboto-Regular.ttf` | Apache-2.0 | Google Inc. |
+| Inter | `assets/fonts/Inter-Regular.ttf` | SIL Open Font License 1.1 (OFL-1.1) | The Inter Project Authors |
+| Inter | `assets/fonts/Inter-SemiBold.ttf` | SIL Open Font License 1.1 (OFL-1.1) | The Inter Project Authors |
 | M+ 1p | `assets/fonts/mplus-1p-regular.ttf` | SIL Open Font License 1.1 (OFL-1.1) | M+ Fonts Project |
+| Lucide | `assets/fonts/lucide.ttf` | ISC License | Lucide Icons and Contributors |
 
 ---
 

@@ -11,13 +11,15 @@ use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizm
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     BonePoseOverride, CameraFlyInput, ClipLibrary, HierarchyDisplayMode, ImGuiInputCapture,
-    KeyboardModifiers, MeshAssets, MouseInput, TimelineState, TransformGizmoMode,
-    TransformGizmoState, ViewportInput,
+    KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose, TimelineState,
+    TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
 };
 use crate::ecs::systems::{
-    apply_mesh_selection, compute_local_override_from_global_rotation,
+    apply_mesh_selection, camera_anchor_pivot_to_focus, camera_move_to_pose,
+    camera_pose_looking_at, compute_local_override_from_global_rotation,
     compute_local_override_from_global_scale, compute_local_override_from_global_translation,
-    select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
+    fly_direction_is_active, select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
+    CameraMotion,
 };
 use crate::ecs::world::{Entity, GlobalTransform, Parent, Transform};
 use crate::ecs::{
@@ -34,7 +36,8 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     ctx.pointer_capture_mut().active = false;
     let wants_pointer = ctx.pointer_state().imgui_wants_pointer;
     let viewport_hovered = ctx.pointer_state().viewport_hovered;
-    if wants_pointer && !viewport_hovered {
+    let ui_handler_owns_pointer = ctx.world.resource::<UiPointerOwner>().owner().is_some();
+    if (wants_pointer && !viewport_hovered) || ui_handler_owns_pointer {
         ctx.pointer_capture_mut().active = true;
     }
 
@@ -84,6 +87,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
         let screen_size = [ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32];
         let is_alt_held = ctx.world.resource::<KeyboardModifiers>().alt;
         let fly = ctx.world.resource::<CameraFlyInput>().clone();
+        request_camera_focus_pick(ctx, is_right_clicked, mouse_wheel, &fly);
         let mut camera = ctx.camera_mut();
         crate::ecs::camera_input_system_inner(
             &mut *camera,
@@ -99,6 +103,22 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn request_camera_focus_pick(
+    ctx: &mut EcsContext,
+    is_right_clicked: bool,
+    mouse_wheel: f32,
+    fly: &CameraFlyInput,
+) {
+    let middle_clicked = ctx.pointer_state().middle_clicked();
+    let zoom_scrolls = mouse_wheel != 0.0 && !is_right_clicked;
+    let flying = is_right_clicked && fly_direction_is_active(fly);
+    if middle_clicked {
+        request_pixel_pick(ctx, PickPurpose::CameraLookAt);
+    } else if zoom_scrolls || flying {
+        request_pixel_pick(ctx, PickPurpose::CameraDepthAnchor);
+    }
 }
 
 fn update_pointer_state(ctx: &mut EcsContext) {
@@ -128,6 +148,9 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     button_state_advance(&mut pointer.left, to_input(is_left));
     button_state_advance(&mut pointer.right, to_input(is_right));
     button_state_advance(&mut pointer.middle, to_input(is_wheel));
+    if pointer.middle.just_pressed() {
+        pointer.middle_press_position = Some(mouse_pos);
+    }
     pointer.position = mouse_pos;
     pointer.viewport_position = [
         mouse_pos[0] - viewport_pos[0],
@@ -449,6 +472,10 @@ fn apply_bone_selection_result(
 }
 
 fn request_mesh_selection(ctx: &mut EcsContext) {
+    request_pixel_pick(ctx, PickPurpose::Selection);
+}
+
+fn request_pixel_pick(ctx: &mut EcsContext, purpose: PickPurpose) {
     if !ctx
         .world
         .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
@@ -497,6 +524,7 @@ fn request_mesh_selection(ctx: &mut EcsContext) {
 
     let mut readback = ctx.object_id_readback_mut();
     readback.pending_pixel = Some((px, py));
+    readback.purpose = purpose;
     readback.pick_ray = Some(pick_ray);
     readback.is_shift = is_shift;
     readback.is_ctrl = is_ctrl;
@@ -1125,12 +1153,38 @@ fn process_pending_mesh_selection(ctx: &mut EcsContext) {
     drop(readback);
 
     let mut readback_state = readback_clone;
-    apply_mesh_selection(ctx.world, ctx.assets, &mut readback_state);
+    match readback_state.purpose {
+        PickPurpose::Selection => {
+            apply_mesh_selection(ctx.world, ctx.assets, &mut readback_state);
+        }
+        PickPurpose::CameraLookAt | PickPurpose::CameraDepthAnchor => {
+            apply_camera_focus_pick(ctx, &mut readback_state);
+        }
+    }
 
     let mut readback = ctx.object_id_readback_mut();
     readback.last_read_object_id = readback_state.last_read_object_id;
     readback.is_shift = readback_state.is_shift;
     readback.is_ctrl = readback_state.is_ctrl;
+}
+
+fn apply_camera_focus_pick(ctx: &EcsContext, readback: &mut ObjectIdReadback) {
+    readback.last_read_object_id = None;
+    let Some(position) = readback.last_read_world_position else {
+        return;
+    };
+    let focus = Vector3::new(position[0], position[1], position[2]);
+
+    let mut camera = ctx.camera_mut();
+    match readback.purpose {
+        PickPurpose::CameraLookAt => {
+            if let Some(pose) = camera_pose_looking_at(&camera, focus) {
+                camera_move_to_pose(&mut camera, pose, CameraMotion::Eased);
+            }
+        }
+        PickPurpose::CameraDepthAnchor => camera_anchor_pivot_to_focus(&mut camera, focus),
+        PickPurpose::Selection => {}
+    }
 }
 
 #[cfg(test)]

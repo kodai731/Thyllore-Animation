@@ -9,9 +9,11 @@ use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::resource::UniformBuffer;
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct LightningResolveDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
     pub scene_depth_sampler: vk::Sampler,
 }
@@ -71,20 +73,5 @@ impl LightningResolveDescriptorSet {
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy_gpu(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for LightningResolveDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed() && self.scene_depth_sampler.is_destroyed()
     }
 }

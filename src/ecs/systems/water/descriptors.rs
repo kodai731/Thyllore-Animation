@@ -2,16 +2,18 @@ use crate::vulkanr::core::device::*;
 use crate::vulkanr::descriptor::pass_manifest::WATER_RESOLVE;
 use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::descriptor::shader_bindings::water_resolve;
-use crate::vulkanr::resource::gpu_resource::GpuResource;
 use crate::vulkanr::resource::uniform_buffer::UniformBuffer;
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::WaterUBO;
 
 const WATER_HISTORY_SET_COUNT: usize = 2;
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRWaterDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     frames: Vec<[vk::DescriptorSet; WATER_HISTORY_SET_COUNT]>,
 }
 
@@ -99,19 +101,5 @@ impl RRWaterDescriptorSet {
                 .apply(rrdevice);
         }
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for RRWaterDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

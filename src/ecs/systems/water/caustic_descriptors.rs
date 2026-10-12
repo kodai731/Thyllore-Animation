@@ -3,14 +3,17 @@ use crate::vulkanr::data::SceneUniformData;
 use crate::vulkanr::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
 use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::vulkanr::resource::gpu_resource::GpuResource;
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRWaterCausticDescriptorSet {
     pub splat_layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub splat_descriptor_set: vk::DescriptorSet,
     pub apply_layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub apply_descriptor_set: vk::DescriptorSet,
 }
 
@@ -130,20 +133,5 @@ impl RRWaterCausticDescriptorSet {
             .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.splat_layout.destroy_gpu(rrdevice);
-        self.apply_layout.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for RRWaterCausticDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.splat_layout.is_destroyed() && self.apply_layout.is_destroyed()
     }
 }

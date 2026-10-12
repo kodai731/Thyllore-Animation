@@ -302,14 +302,21 @@ def anim_state(frames: int = 2, camera: str = "", include: str = "", scene: str 
 
 @mcp.tool()
 def debug_action(
-    actions: str,
+    actions: str = "",
     frames: int = 120,
     screenshot: bool = True,
     camera: str = "",
+    at: str = "",
 ) -> str:
     """Execute debug-window actions headlessly and (by default) return a
     screenshot so the effect is visible. `actions` is a semicolon-separated
-    list; run `list_debug_actions` for the full set. Examples:
+    list applied at startup; `at` is a semicolon-separated list of
+    `<frame>:<action>` entries applied once the frame clock reaches the frame
+    (`"10:add_flame;30:focus_window=Hierarchy;32:press_key=Ctrl+Shift+Delete"`),
+    which is how key input is measured: `focus_window=<title>` focuses an imgui
+    window and `press_key=<chord>` presses an `imgui::Key` by variant name with
+    optional Ctrl / Shift / Alt, held for one frame. Run `list_debug_actions`
+    for the full set. Examples:
     `view_mode=normal` (G-buffer normal view), `view_mode=object_id`,
     `reset_camera`, `camera_to_model`, `add_flame`, `open_flame_curves`,
     `flame_clip_preview=<end_seconds>` (draw the first flame's timeline clip
@@ -322,10 +329,15 @@ def debug_action(
     `screenshot` is true)."""
     args, png_path = _batch_base_args(frames, camera, "", screenshot)
     names = [s.strip() for s in actions.split(";") if s.strip()]
-    if not names:
-        return _error("actions must contain at least one action name")
+    scheduled = [s.strip() for s in at.split(";") if s.strip()]
+    if not names and not scheduled:
+        return _error("actions or at must contain at least one action")
     for name in names:
         args += ["--batch-debug-action", name]
+    for entry in scheduled:
+        if ":" not in entry:
+            return _error(f"at entries must be <frame>:<action>, got '{entry}'")
+        args += ["--batch-debug-action-at", entry]
     return _run_batch_with_dump(args, screenshot, png_path)
 
 

@@ -11,7 +11,9 @@ use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_property, AnimationMeta, ClipSchedule,
     ScalarChannelDomain,
 };
-use crate::ecs::resource::{AnimationType, ClipLibrary, HumanoidRigState, TimelineState};
+use crate::ecs::resource::{
+    AnimationType, ClipLibrary, HumanoidRigState, TimelineState, UiFocusState,
+};
 use crate::ecs::world::{Entity, World};
 
 #[derive(Serialize)]
@@ -85,11 +87,18 @@ struct DragPreviewJson {
 }
 
 #[derive(Serialize)]
+struct SelectedInstanceJson {
+    entity: Entity,
+    instance_id: u64,
+}
+
+#[derive(Serialize)]
 struct TimelineJson {
     current_time: f32,
     playing: bool,
     looping: bool,
     current_clip_id: Option<u64>,
+    selected_clip_instance: Option<SelectedInstanceJson>,
     drag_preview: Option<DragPreviewJson>,
 }
 
@@ -100,11 +109,17 @@ struct ModelJson {
 }
 
 #[derive(Serialize)]
+struct UiJson {
+    focused_window: Option<String>,
+}
+
+#[derive(Serialize)]
 struct AnimDumpJson {
     entities: Vec<EntityJson>,
     clips: Vec<ClipJson>,
     timeline: Option<TimelineJson>,
     models: Vec<ModelJson>,
+    ui: Option<UiJson>,
 }
 
 fn schedule_instances_json(world: &World, entity: Entity) -> Vec<ScheduleInstanceJson> {
@@ -274,6 +289,12 @@ fn timeline_dump(world: &World) -> Option<TimelineJson> {
             playing: t.playing,
             looping: t.looping,
             current_clip_id: t.current_clip_id,
+            selected_clip_instance: t.selected_clip_instance.map(|(entity, instance_id)| {
+                SelectedInstanceJson {
+                    entity,
+                    instance_id,
+                }
+            }),
             drag_preview,
         }
     })
@@ -304,6 +325,9 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
         clips: clips_dumps(world, include_tracks),
         timeline: timeline_dump(world),
         models: model_dumps(world),
+        ui: world.get_resource::<UiFocusState>().map(|focus| UiJson {
+            focused_window: focus.focused_window.clone(),
+        }),
     };
     serde_json::to_value(&dump).expect("AnimDumpJson serialization")
 }

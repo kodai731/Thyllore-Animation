@@ -2,9 +2,11 @@ pub mod billboard;
 pub mod gizmo;
 mod imgui_capture;
 pub mod imgui_textures;
+mod injected_input;
 mod keyboard_modifiers;
 mod layout_snapshot;
 mod mouse_input;
+mod ui_focus;
 mod viewport_input;
 
 mod app_command;
@@ -97,9 +99,11 @@ pub use gizmo::*;
 
 pub use imgui_capture::*;
 pub use imgui_textures::*;
+pub use injected_input::*;
 pub use keyboard_modifiers::*;
 pub use layout_snapshot::*;
 pub use mouse_input::*;
+pub use ui_focus::*;
 pub use viewport_input::*;
 
 pub use app_command::*;

@@ -32,10 +32,13 @@ impl InjectedKeyPress {
     }
 }
 
-/// Keyboard and focus input queued by batch actions; the platform layer feeds it to imgui.
+/// Keyboard, mouse and focus input queued by batch actions; the platform layer feeds it to imgui.
 #[derive(Clone, Debug, Default)]
 pub struct InjectedInput {
     pub pending_presses: Vec<InjectedKeyPress>,
     pub held_presses: Vec<InjectedKeyPress>,
     pub pending_window_focus: Option<String>,
+    pub pending_mouse_move: Option<[f32; 2]>,
+    pub pending_click: Option<[f32; 2]>,
+    pub click_held: bool,
 }

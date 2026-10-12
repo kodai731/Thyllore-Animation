@@ -8,6 +8,8 @@ use super::batch_action::BatchAction;
 
 const PRESS_KEY_PREFIX: &str = "press_key=";
 const FOCUS_WINDOW_PREFIX: &str = "focus_window=";
+const MOVE_MOUSE_PREFIX: &str = "move_mouse=";
+const CLICK_PREFIX: &str = "click=";
 
 #[derive(Debug)]
 pub struct PressKey(pub InjectedKeyPress);
@@ -34,6 +36,43 @@ impl BatchAction for FocusWindow {
     fn apply(&self, world: &mut World) {
         world.resource_mut::<InjectedInput>().pending_window_focus = Some(self.0.clone());
     }
+}
+
+#[derive(Debug)]
+pub struct MoveMouse(pub [f32; 2]);
+
+#[derive(Debug)]
+pub struct Click(pub [f32; 2]);
+
+impl BatchAction for MoveMouse {
+    fn name(&self) -> &'static str {
+        "move_mouse"
+    }
+    fn apply(&self, world: &mut World) {
+        world.resource_mut::<InjectedInput>().pending_mouse_move = Some(self.0);
+    }
+}
+
+impl BatchAction for Click {
+    fn name(&self) -> &'static str {
+        "click"
+    }
+    fn apply(&self, world: &mut World) {
+        world.resource_mut::<InjectedInput>().pending_click = Some(self.0);
+    }
+}
+
+/// `640,360`: a window-space pixel position.
+pub fn parse_mouse_position(text: &str) -> Result<[f32; 2]> {
+    let (x, y) = text
+        .split_once(',')
+        .ok_or_else(|| anyhow!("mouse position '{text}' must be <x>,<y>"))?;
+    let parse = |axis: &str| {
+        axis.trim()
+            .parse::<f32>()
+            .map_err(|_| anyhow!("invalid coordinate '{axis}' in mouse position '{text}'"))
+    };
+    Ok([parse(x)?, parse(y)?])
 }
 
 /// `Ctrl+Shift+Delete`: zero or more modifiers, then an `imgui::Key` variant name.
@@ -77,8 +116,20 @@ fn focus_window_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     })
 }
 
+fn move_mouse_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let position = text.strip_prefix(MOVE_MOUSE_PREFIX)?;
+    Some(parse_mouse_position(position).map(|p| Box::new(MoveMouse(p)) as Box<dyn BatchAction>))
+}
+
+fn click_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let position = text.strip_prefix(CLICK_PREFIX)?;
+    Some(parse_mouse_position(position).map(|p| Box::new(Click(p)) as Box<dyn BatchAction>))
+}
+
 crate::batch_action!("press_key", press_key_parse);
 crate::batch_action!("focus_window", focus_window_parse);
+crate::batch_action!("move_mouse", move_mouse_parse);
+crate::batch_action!("click", click_parse);
 
 #[cfg(test)]
 mod tests {
@@ -130,6 +181,27 @@ mod tests {
         assert_eq!(injected.pending_presses[0].key, Key::F);
         assert!(injected.pending_presses[0].modifiers.alt);
         assert_eq!(injected.pending_window_focus.as_deref(), Some("Hierarchy"));
+    }
+
+    #[test]
+    fn mouse_actions_queue_their_positions() {
+        let mut world = World::new();
+        world.insert_resource(InjectedInput::default());
+
+        move_mouse_parse("move_mouse=10,20")
+            .expect("prefix")
+            .expect("valid")
+            .apply(&mut world);
+        click_parse("click=30.5, 40")
+            .expect("prefix")
+            .expect("valid")
+            .apply(&mut world);
+
+        let injected = world.resource::<InjectedInput>();
+        assert_eq!(injected.pending_mouse_move, Some([10.0, 20.0]));
+        assert_eq!(injected.pending_click, Some([30.5, 40.0]));
+        assert!(click_parse("click=30").expect("prefix").is_err());
+        assert!(click_parse("click=a,b").expect("prefix").is_err());
     }
 
     #[test]

@@ -120,6 +120,7 @@ struct AnimDumpJson {
     timeline: Option<TimelineJson>,
     models: Vec<ModelJson>,
     ui: Option<UiJson>,
+    curve_editor: serde_json::Value,
 }
 
 fn schedule_instances_json(world: &World, entity: Entity) -> Vec<ScheduleInstanceJson> {
@@ -328,6 +329,7 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
         ui: world.get_resource::<UiFocusState>().map(|focus| UiJson {
             focused_window: focus.focused_window.clone(),
         }),
+        curve_editor: crate::ecs::systems::live_dump::curve_editor_json(world),
     };
     serde_json::to_value(&dump).expect("AnimDumpJson serialization")
 }

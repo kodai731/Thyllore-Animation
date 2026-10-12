@@ -256,18 +256,7 @@ fn build_transport_controls(
     toolbar_divider(ui);
 
     if icon_button(ui, Icon::Spline, "Curves", ButtonState::Normal) {
-        curve_editor_state.is_open = true;
-        curve_editor_state.needs_focus = true;
-        let previous_bone_exists = current_clip
-            .zip(curve_editor_state.selected_bone_id())
-            .is_some_and(|(c, id)| c.tracks.contains_key(&id));
-
-        if !previous_bone_exists {
-            if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().min().copied()) {
-                curve_editor_state.select_bone(first_bone_id);
-            }
-        }
-        curve_editor_state.view_initialized = false;
+        curve_editor_state.open_for_clip(current_clip);
     }
 
     build_clip_selector(ui, world, state, clip_library);

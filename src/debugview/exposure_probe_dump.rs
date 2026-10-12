@@ -10,7 +10,6 @@ use crate::debugview::water_probe_dump::read_hdr_rgba16f;
 use crate::ecs::resource::{
     AutoExposure, Camera, Exposure, ExposureProbeCapture, SceneBrightness, ViewportInput,
 };
-use crate::ecs::systems::current_unix_time;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::vulkan::*;
@@ -22,7 +21,7 @@ const EXPOSURE_PROBE_DIRECTORY: &str = "log/exposure";
 impl BatchCapture for ExposureProbeCapture {
     unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
         let record = build_exposure_probe_record(ctx)?;
-        let path = write_exposure_probe(&record, current_unix_time())?;
+        let path = write_exposure_probe(&record, ctx.slot.index)?;
         msg_info!("Exposure probe dumped: {}", path.display());
         Ok(())
     }
@@ -193,10 +192,11 @@ fn viewport_pixel_rect(
     }
 }
 
-fn write_exposure_probe(record: &Value, unix_time: u64) -> Result<PathBuf> {
+/// One file per capture slot, overwritten on the next run, so the directory never grows.
+fn write_exposure_probe(record: &Value, capture_index: u32) -> Result<PathBuf> {
     let directory = Path::new(EXPOSURE_PROBE_DIRECTORY);
     std::fs::create_dir_all(directory)?;
-    let path = directory.join(format!("exposure_probe_{unix_time}.json"));
+    let path = directory.join(format!("probe_{capture_index}.json"));
     std::fs::write(&path, serde_json::to_string_pretty(record)?)?;
     Ok(path)
 }

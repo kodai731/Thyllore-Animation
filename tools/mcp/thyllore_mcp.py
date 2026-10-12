@@ -553,7 +553,7 @@ def fringe_field_patch(dump: str, out: str = "", res: int = 128, rect: str = "-1
     """Fringe probe + beat-table analysis of a flame dump.
 
     dump: path to a flame JSONL dump (from profile or batch).
-    out: output patch path; defaults to log/flame/fringe_patch_<unixtime>.json.
+    out: output patch path; defaults to log/flame/fringe_patch.json (overwritten).
     res: probe resolution (default 128).
     rect: screen-space rectangle as "x0,y0,x1,y1" (default "-1,-1,1,1").
 
@@ -562,7 +562,7 @@ def fringe_field_patch(dump: str, out: str = "", res: int = 128, rect: str = "-1
     "report": {...}} where report is the beat-table JSON from flame_fringe_beats.py.
     """
     if not out:
-        out = f"log/flame/fringe_patch_{int(time.time())}.json"
+        out = "log/flame/fringe_patch.json"
 
     result1 = subprocess.run(
         ["./target/debug/fringe_probe", "--dump", dump, "--out", out,
@@ -609,9 +609,11 @@ def _run_water_script(command: list[str], timeout: int = _WATER_SCRIPT_TIMEOUT_S
     return lines[-1]
 
 
-def _latest_water_debug_json() -> Path | None:
-    dumps = sorted(_repo_root().glob("log/water/water_debug_*.json"), key=lambda p: p.stat().st_mtime)
-    return dumps[-1] if dumps else None
+def _latest_water_debug_json() -> tuple[Path, float] | None:
+    dumps = sorted(_repo_root().glob("log/water/debug_*.json"), key=lambda p: p.stat().st_mtime)
+    if not dumps:
+        return None
+    return dumps[-1], dumps[-1].stat().st_mtime
 
 
 @mcp.tool()
@@ -667,9 +669,10 @@ def water_dump(scene: str = "assets/scenes/default.scene.ron", camera: str = "",
     if result.returncode != 0:
         return _error((result.stderr or result.stdout).strip()[-800:])
 
-    dump_path = _latest_water_debug_json()
-    if dump_path is None or dump_path == dump_before_run:
-        return _error("no new log/water/water_debug_*.json produced by the run")
+    latest = _latest_water_debug_json()
+    if latest is None or latest == dump_before_run:
+        return _error("no new log/water/debug_*.json produced by the run")
+    dump_path, _ = latest
     try:
         dump = json.loads(dump_path.read_text())
     except (OSError, json.JSONDecodeError) as failure:

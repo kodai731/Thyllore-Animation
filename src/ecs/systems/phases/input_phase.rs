@@ -105,7 +105,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 }
 
 fn request_camera_focus_pick(ctx: &mut EcsContext, is_right_clicked: bool, mouse_wheel: f32) {
-    let middle_clicked = ctx.pointer_state().middle_clicked_without_drag();
+    let middle_clicked = ctx.pointer_state().middle_clicked();
     let zoom_scrolls = mouse_wheel != 0.0 && !is_right_clicked;
     if middle_clicked {
         request_pixel_pick(ctx, PickPurpose::CameraLookAt);

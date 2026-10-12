@@ -32,14 +32,14 @@ mod tests {
     #[test]
     fn a_middle_release_near_the_press_is_a_click() {
         let pointer = pointer_after_middle_press_and_release([11.0, 12.0]);
-        assert!(pointer.middle_clicked_without_drag());
+        assert!(pointer.middle_clicked());
     }
 
     #[test]
     fn a_middle_release_after_a_drag_is_not_a_click() {
         let far = 10.0 + CLICK_MAX_TRAVEL_PIXELS * 2.0;
         let pointer = pointer_after_middle_press_and_release([far, 10.0]);
-        assert!(!pointer.middle_clicked_without_drag());
+        assert!(!pointer.middle_clicked());
     }
 
     #[test]
@@ -48,7 +48,7 @@ mod tests {
         button_state_advance(&mut pointer.middle, RawButtonInput::Pressed);
         pointer.middle_press_position = Some([10.0, 10.0]);
         pointer.position = [10.0, 10.0];
-        assert!(!pointer.middle_clicked_without_drag());
+        assert!(!pointer.middle_clicked());
     }
 
     #[test]

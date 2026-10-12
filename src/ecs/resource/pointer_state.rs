@@ -49,7 +49,7 @@ pub struct PointerState {
 }
 
 impl PointerState {
-    pub fn middle_clicked_without_drag(&self) -> bool {
+    pub fn middle_clicked(&self) -> bool {
         let Some(pressed_at) = self.middle_press_position else {
             return false;
         };

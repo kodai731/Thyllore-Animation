@@ -58,4 +58,5 @@ pub struct WindGpuState {
     pub upsample_bound: BoundGenerations,
 }
 
+gpu_resource!(WindRenderTargets);
 gpu_resource!(WindGpuState);

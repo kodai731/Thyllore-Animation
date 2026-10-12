@@ -47,4 +47,5 @@ pub struct LightningGpuState {
     pub resolve_descriptor: Option<LightningResolveDescriptorSet>,
 }
 
+gpu_resource!(LightningRenderTargets);
 gpu_resource!(LightningGpuState);

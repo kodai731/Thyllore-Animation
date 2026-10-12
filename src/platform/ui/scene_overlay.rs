@@ -278,8 +278,10 @@ fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
-    let gizmo_hotkeys_enabled =
-        !ui.io().key_ctrl() && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
+    let scene_view_focused = ecs_world.resource::<ViewportInput>().focused;
+    let gizmo_hotkeys_enabled = scene_view_focused
+        && !ui.io().key_ctrl()
+        && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
     if !gizmo_hotkeys_enabled {
         return;
     }

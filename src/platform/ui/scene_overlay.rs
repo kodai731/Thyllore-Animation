@@ -23,7 +23,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear, SURFACE3};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
@@ -194,7 +194,11 @@ fn draw_toolbar_group_separator(ui: &imgui::Ui) {
     ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
     let [x, y] = ui.cursor_screen_pos();
     ui.get_window_draw_list()
-        .add_line([x, y], [x, y + ICON_BUTTON_SIZE], srgb_to_linear(SURFACE3))
+        .add_line(
+            [x, y],
+            [x, y + ICON_BUTTON_SIZE],
+            srgb_to_linear_rgba(SURFACE3),
+        )
         .build();
     ui.dummy([1.0, ICON_BUTTON_SIZE]);
     ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);

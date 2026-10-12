@@ -1,4 +1,4 @@
-use crate::platform::ui::theme::colors::srgb_to_linear;
+use crate::platform::ui::theme::colors::srgb_to_linear_rgba;
 
 const SHADOW_SPREAD: f32 = 12.0;
 const SHADOW_LAYER_COUNT: usize = 8;
@@ -49,7 +49,7 @@ pub fn draw_window_shadow(ui: &imgui::Ui, rounding: f32) {
                 window_pos[0] + window_size[0] + layer.offset,
                 window_pos[1] + window_size[1] + layer.offset + SHADOW_Y_OFFSET,
             ];
-            let shadow_color = srgb_to_linear([0.0, 0.0, 0.0, layer.alpha]);
+            let shadow_color = srgb_to_linear_rgba([0.0, 0.0, 0.0, layer.alpha]);
             draw_list
                 .add_rect(layer_min, layer_max, shadow_color)
                 .rounding(rounding + layer.offset)

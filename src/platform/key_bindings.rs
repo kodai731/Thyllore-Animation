@@ -28,6 +28,13 @@ impl ModifierKeys {
         }
     }
 
+    pub fn shift() -> Self {
+        Self {
+            ctrl: false,
+            shift: true,
+        }
+    }
+
     pub fn has_any(&self) -> bool {
         self.ctrl || self.shift
     }

@@ -71,48 +71,90 @@ fn draw_timeline_window(
         .build(|| {
             build_transport_controls(ui, world, state, clip_library, curve_editor_state);
             ui.separator();
-
-            let mut curves_tab_active = curve_editor_state.is_open;
-            if let Some(_tab_bar) = ui.tab_bar("timeline_tabs") {
-                let curves_flags = if curve_editor_state.needs_focus {
-                    imgui::TabItemFlags::SET_SELECTED
-                } else {
-                    imgui::TabItemFlags::empty()
-                };
-                curve_editor_state.needs_focus = false;
-
-                if let Some(_tab) = ui.tab_item("Timeline") {
-                    curves_tab_active = false;
-                    handle_middle_drag_pan(ui, world, state);
-                    build_timeline_content(
-                        ui,
-                        world,
-                        state,
-                        interaction,
-                        clip_library,
-                        curve_editor_state,
-                        clip_track_snapshot,
-                    );
-
-                    let clip_duration = timeline_effective_duration(state, clip_library);
-                    handle_timeline_shortcuts(ui, world, state);
-                    handle_mouse_wheel_zoom(ui, world, state, clip_duration);
-                }
-                if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
-                    curves_tab_active = true;
-                    crate::platform::ui::curve_editor::build_curve_editor_tab(
-                        ui,
-                        world,
-                        state,
-                        clip_library,
-                        curve_editor_state,
-                        curve_buffer,
-                        pose_library,
-                    );
-                }
-            }
-            curve_editor_state.is_open = curves_tab_active;
+            draw_timeline_tabs(
+                ui,
+                world,
+                state,
+                interaction,
+                clip_library,
+                curve_editor_state,
+                clip_track_snapshot,
+                curve_buffer,
+                pose_library,
+            );
         });
+}
+
+fn draw_timeline_tabs(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    clip_track_snapshot: &ClipTrackSnapshot,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
+) {
+    let Some(_tab_bar) = ui.tab_bar("timeline_tabs") else {
+        return;
+    };
+    let curves_flags = if curve_editor_state.needs_focus {
+        imgui::TabItemFlags::SET_SELECTED
+    } else {
+        imgui::TabItemFlags::empty()
+    };
+    curve_editor_state.needs_focus = false;
+
+    if let Some(_tab) = ui.tab_item("Timeline") {
+        curve_editor_state.is_open = false;
+        draw_timeline_tab(
+            ui,
+            world,
+            state,
+            interaction,
+            clip_library,
+            curve_editor_state,
+            clip_track_snapshot,
+        );
+    }
+    if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
+        curve_editor_state.is_open = true;
+        crate::platform::ui::curve_editor::build_curve_editor_tab(
+            ui,
+            world,
+            state,
+            clip_library,
+            curve_editor_state,
+            curve_buffer,
+            pose_library,
+        );
+    }
+}
+
+fn draw_timeline_tab(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    clip_track_snapshot: &ClipTrackSnapshot,
+) {
+    handle_middle_drag_pan(ui, world, state);
+    build_timeline_content(
+        ui,
+        world,
+        state,
+        interaction,
+        clip_library,
+        curve_editor_state,
+        clip_track_snapshot,
+    );
+
+    let clip_duration = timeline_effective_duration(state, clip_library);
+    handle_timeline_shortcuts(ui, world, state);
+    handle_mouse_wheel_zoom(ui, world, state, clip_duration);
 }
 
 fn build_transport_controls(

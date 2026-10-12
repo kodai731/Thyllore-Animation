@@ -7,7 +7,6 @@ use crate::platform::key_bindings::{default_bindings, ModifierKeys};
 use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
-use crate::platform::ui::key_modifier::KeyModifier;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
 use crate::platform::ui::theme::{property_label, section_header, SectionDefault};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -46,22 +45,16 @@ pub struct ShortcutEntry {
     pub label: &'static str,
 }
 
-pub(crate) fn format_chord(modifier: KeyModifier, key_name: &str) -> String {
-    match modifier {
-        KeyModifier::None => key_name.to_string(),
-        KeyModifier::Shift => format!("Shift+{}", key_name),
-        KeyModifier::Ctrl => format!("Ctrl+{}", key_name),
+pub(crate) fn format_chord(modifiers: ModifierKeys, key_name: &str) -> String {
+    let mut chord = String::new();
+    if modifiers.ctrl {
+        chord.push_str("Ctrl+");
     }
-}
-
-pub(crate) fn format_global_chord(modifiers: ModifierKeys, key: &str) -> String {
-    let upper = key.to_uppercase();
-    match (modifiers.ctrl, modifiers.shift) {
-        (false, false) => upper,
-        (true, false) => format!("Ctrl+{}", upper),
-        (false, true) => format!("Shift+{}", upper),
-        (true, true) => format!("Ctrl+Shift+{}", upper),
+    if modifiers.shift {
+        chord.push_str("Shift+");
     }
+    chord.push_str(key_name);
+    chord
 }
 
 fn imgui_key_name(key: imgui::Key) -> &'static str {
@@ -141,14 +134,14 @@ fn imgui_key_name(key: imgui::Key) -> &'static str {
 pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let global = default_bindings().into_iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Global,
-        chord: format_global_chord(binding.modifiers, binding.key),
+        chord: format_chord(binding.modifiers, &binding.key.to_uppercase()),
         label: binding.label,
     });
 
     let command_palette = std::iter::once(ShortcutEntry {
         scope: ShortcutScope::Global,
         chord: format_chord(
-            PALETTE_KEY_BINDING.modifier,
+            PALETTE_KEY_BINDING.modifier.into(),
             imgui_key_name(PALETTE_KEY_BINDING.key),
         ),
         label: PALETTE_KEY_BINDING.label,
@@ -156,7 +149,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 
     let hierarchy = TREE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Hierarchy,
-        chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+        chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
         label: binding.label,
     });
 
@@ -164,13 +157,13 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         .iter()
         .map(|binding| ShortcutEntry {
             scope: ShortcutScope::CurveEditor,
-            chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+            chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
             label: binding.label,
         });
 
     let scene_gizmo = GIZMO_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::SceneGizmo,
-        chord: format_chord(KeyModifier::None, imgui_key_name(binding.key)),
+        chord: format_chord(ModifierKeys::none(), imgui_key_name(binding.key)),
         label: binding.label,
     });
 
@@ -245,6 +238,7 @@ crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::ui::key_modifier::KeyModifier;
 
     #[test]
     fn test_collect_shortcuts_contains_all_scopes() {
@@ -287,16 +281,35 @@ mod tests {
 
     #[test]
     fn test_format_chord_none() {
-        assert_eq!(format_chord(KeyModifier::None, "F"), "F");
+        assert_eq!(format_chord(ModifierKeys::none(), "F"), "F");
     }
 
     #[test]
     fn test_format_chord_shift() {
-        assert_eq!(format_chord(KeyModifier::Shift, "E"), "Shift+E");
+        assert_eq!(format_chord(ModifierKeys::shift(), "E"), "Shift+E");
     }
 
     #[test]
     fn test_format_chord_ctrl() {
-        assert_eq!(format_chord(KeyModifier::Ctrl, "Z"), "Ctrl+Z");
+        assert_eq!(format_chord(ModifierKeys::ctrl(), "Z"), "Ctrl+Z");
+    }
+
+    #[test]
+    fn test_format_chord_ctrl_shift() {
+        let both = ModifierKeys {
+            ctrl: true,
+            shift: true,
+        };
+        assert_eq!(format_chord(both, "Z"), "Ctrl+Shift+Z");
+    }
+
+    #[test]
+    fn test_imgui_modifier_maps_onto_global_modifiers() {
+        assert_eq!(ModifierKeys::from(KeyModifier::Ctrl), ModifierKeys::ctrl());
+        assert_eq!(
+            ModifierKeys::from(KeyModifier::Shift),
+            ModifierKeys::shift()
+        );
+        assert_eq!(ModifierKeys::from(KeyModifier::None), ModifierKeys::none());
     }
 }

@@ -14,19 +14,26 @@ use thyllore_render_core::MaterialUBO;
 
 pub type MaterialId = u32;
 
-#[derive(Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct Material {
+    #[gpu_resource(skip)]
     pub id: MaterialId,
+    #[gpu_resource(skip)]
     pub name: String,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
     pub uniform_buffer: UniformBuffer<MaterialUBO>,
+    #[gpu_resource(skip)]
     pub properties: MaterialUBO,
 }
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct MaterialManager {
     pub layout: ReflectedSetLayout,
     pub materials: HashMap<MaterialId, Material>,
+    #[gpu_resource(skip)]
     next_id: MaterialId,
 }
 
@@ -116,12 +123,5 @@ impl MaterialManager {
 
         self.materials.clear();
         self.next_id = 0;
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy_gpu(rrdevice);
-        }
-        self.layout.destroy_gpu(rrdevice);
     }
 }

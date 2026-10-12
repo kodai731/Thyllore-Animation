@@ -9,9 +9,11 @@ use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
 use thyllore_render_core::FrameUBO;
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct FrameDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub sets: Vec<vk::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<FrameUBO>>,
 }
@@ -66,10 +68,5 @@ impl FrameDescriptorSet {
         ubo: &FrameUBO,
     ) -> anyhow::Result<()> {
         self.buffers[image_index].write_slot(rrdevice, 0, ubo)
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.buffers.destroy_gpu(rrdevice);
-        self.layout.destroy_gpu(rrdevice);
     }
 }

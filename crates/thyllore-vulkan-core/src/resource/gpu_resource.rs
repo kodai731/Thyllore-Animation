@@ -119,6 +119,19 @@ impl<T: GpuResource> GpuResource for Vec<T> {
     }
 }
 
+impl<K, V: GpuResource> GpuResource for std::collections::HashMap<K, V> {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        for resource in self.values_mut() {
+            resource.destroy_gpu(rrdevice);
+        }
+        self.clear();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.values().all(GpuResource::is_destroyed)
+    }
+}
+
 impl<T: GpuResource, const N: usize> GpuResource for [T; N] {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         for resource in self.iter_mut().rev() {
@@ -246,5 +259,20 @@ mod tests {
         use crate::resource::allocation::TextureImage;
         let texture = TextureImage::default();
         assert!(texture.is_destroyed());
+    }
+
+    #[test]
+    fn hashmap_is_destroyed_empty_is_true() {
+        use vulkanalia::vk::Handle;
+        let map: std::collections::HashMap<u32, vk::Buffer> = std::collections::HashMap::new();
+        assert!(map.is_destroyed());
+    }
+
+    #[test]
+    fn hashmap_is_destroyed_with_non_null_value_is_false() {
+        use vulkanalia::vk::Handle;
+        let mut map: std::collections::HashMap<u32, vk::Buffer> = std::collections::HashMap::new();
+        map.insert(0, vk::Buffer::from_raw(!0));
+        assert!(!map.is_destroyed());
     }
 }

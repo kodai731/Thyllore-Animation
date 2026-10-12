@@ -165,7 +165,7 @@ impl App {
         let mut render_targets = self.resource_mut::<RenderTargets>();
         render_targets
             .render
-            .destroy_gbuffer_attachments(&self.rrdevice.device);
+            .destroy_gbuffer_attachments(&self.rrdevice);
 
         if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
             create_gbuffer_framebuffer(

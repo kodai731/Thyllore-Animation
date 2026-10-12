@@ -35,7 +35,7 @@ pub unsafe fn create_color_objects(
     rrrender: &mut RRRender,
 ) -> Result<()> {
     //  this color buffer doesn't need mipmaps since it's not going to be used as a texture:
-    let (color_image, color_image_memory) = create_image(
+    rrrender.color_allocation = create_image_allocation(
         instance,
         rrdevice,
         rrswapchain.swapchain_extent.width,
@@ -48,12 +48,9 @@ pub unsafe fn create_color_objects(
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 
-    rrrender.color_image = color_image;
-    rrrender.color_image_memory = color_image_memory;
-
     rrrender.color_image_view = create_image_view(
         rrdevice,
-        rrrender.color_image,
+        rrrender.color_allocation.image,
         rrswapchain.swapchain_format,
         vk::ImageAspectFlags::COLOR,
         1,

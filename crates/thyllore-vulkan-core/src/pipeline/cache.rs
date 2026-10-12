@@ -5,6 +5,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::device::RRDevice;
 use crate::pipeline::builder::{PipelineBuilder, RRPipeline};
 use crate::render::pass::RRRender;
+use crate::resource::gpu_resource::GpuResource;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PipelineKey {
@@ -84,13 +85,15 @@ impl PipelineCache {
         self.vulkan_cache
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        for (_, pipeline) in self.cache.drain() {
-            pipeline.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        for (_, mut pipeline) in self.cache.drain() {
+            pipeline.destroy_gpu(rrdevice);
         }
 
         if self.vulkan_cache != vk::PipelineCache::null() {
-            device.destroy_pipeline_cache(self.vulkan_cache, None);
+            rrdevice
+                .device
+                .destroy_pipeline_cache(self.vulkan_cache, None);
             self.vulkan_cache = vk::PipelineCache::null();
         }
     }
@@ -129,7 +132,7 @@ impl PipelineManager {
         self.cache.get(key)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.cache.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        self.cache.destroy(rrdevice);
     }
 }

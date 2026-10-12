@@ -10,7 +10,8 @@ use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::PrimitiveTopology;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRPipeline {
     pub pipeline_layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
@@ -579,16 +580,6 @@ impl RRPipeline {
             pipeline,
         })
     }
-
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
-        if self.pipeline != vk::Pipeline::null() {
-            device.destroy_pipeline(self.pipeline, None);
-        }
-
-        if self.pipeline_layout != vk::PipelineLayout::null() {
-            device.destroy_pipeline_layout(self.pipeline_layout, None);
-        }
-    }
 }
 
 unsafe fn load_pass_stages(
@@ -741,16 +732,4 @@ fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions
         offset += attr.format.size();
     }
     (bindings, attributes)
-}
-
-impl GpuResource for RRPipeline {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-        self.pipeline = vk::Pipeline::null();
-        self.pipeline_layout = vk::PipelineLayout::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.pipeline.is_destroyed() && self.pipeline_layout.is_destroyed()
-    }
 }

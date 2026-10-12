@@ -11,11 +11,15 @@ pub struct SwapchainSupport {
     pub present_modes: Vec<vk::PresentModeKHR>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRSwapchain {
     pub swapchain: vk::SwapchainKHR,
+    #[gpu_resource(skip)]
     pub swapchain_images: Vec<vk::Image>,
+    #[gpu_resource(skip)]
     pub swapchain_format: vk::Format,
+    #[gpu_resource(skip)]
     pub swapchain_extent: vk::Extent2D,
     pub swapchain_image_views: Vec<vk::ImageView>,
 }
@@ -31,27 +35,6 @@ impl RRSwapchain {
         create_swapchain_image_view(rrdevice, &mut rrswapchain)?;
         log!("Created swapchain");
         Ok(rrswapchain)
-    }
-
-    pub unsafe fn destroy(&mut self, device: &super::device::Device) {
-        for view in self.swapchain_image_views.drain(..) {
-            device.destroy_image_view(view, None);
-        }
-        self.swapchain_images.clear();
-        if self.swapchain != vk::SwapchainKHR::null() {
-            device.destroy_swapchain_khr(self.swapchain, None);
-            self.swapchain = vk::SwapchainKHR::null();
-        }
-    }
-}
-
-impl GpuResource for RRSwapchain {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.swapchain == vk::SwapchainKHR::null()
     }
 }
 

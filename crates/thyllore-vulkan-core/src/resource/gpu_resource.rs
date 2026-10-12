@@ -1,4 +1,5 @@
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::vk::KhrSwapchainExtension;
 
 use crate::core::device::RRDevice;
 
@@ -61,6 +62,7 @@ raw_handle_resource!(vk::RenderPass, destroy_render_pass);
 raw_handle_resource!(vk::Framebuffer, destroy_framebuffer);
 raw_handle_resource!(vk::ShaderModule, destroy_shader_module);
 raw_handle_resource!(vk::QueryPool, destroy_query_pool);
+raw_handle_resource!(vk::SwapchainKHR, destroy_swapchain_khr);
 
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]

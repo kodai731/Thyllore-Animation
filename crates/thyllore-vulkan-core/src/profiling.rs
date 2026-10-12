@@ -1,4 +1,3 @@
-use crate::core::device::RRDevice;
 use crate::resource::GpuResource;
 use vulkanalia::prelude::v1_0::*;
 
@@ -29,10 +28,15 @@ pub fn decode_results(
     Some(results)
 }
 
+#[must_use]
+#[derive(GpuResource)]
 pub struct GpuTimestampProfiler {
     pools: Vec<vk::QueryPool>,
+    #[gpu_resource(skip)]
     labels: Vec<Vec<(String, u32, u32)>>,
+    #[gpu_resource(skip)]
     next_query: Vec<u32>,
+    #[gpu_resource(skip)]
     timestamp_period: f32,
 }
 
@@ -194,25 +198,6 @@ impl GpuTimestampProfiler {
             })
             .collect();
         Some(results)
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        for pool in &mut self.pools {
-            if *pool != vk::QueryPool::null() {
-                device.destroy_query_pool(*pool, None);
-                *pool = vk::QueryPool::null();
-            }
-        }
-    }
-}
-
-impl GpuResource for GpuTimestampProfiler {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        Self::destroy(self, &rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.pools.is_destroyed()
     }
 }
 

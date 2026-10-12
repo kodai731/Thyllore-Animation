@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::pass::get_depth_format;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
+use crate::vulkanr::resource::{create_image_allocation, create_image_view, RRGBuffer};
 
 pub use thyllore_vulkan_core::renderer::push_constants::{
     GBufferPushConstants, OnionSkinPushConstants,
@@ -60,7 +60,7 @@ pub unsafe fn create_gbuffer_framebuffer(
     rrrender: &mut RRRender,
     gbuffer: &RRGBuffer,
 ) -> Result<()> {
-    let (depth_image, depth_image_memory) = create_image(
+    let depth_allocation = create_image_allocation(
         instance,
         rrdevice,
         gbuffer.width,
@@ -75,14 +75,13 @@ pub unsafe fn create_gbuffer_framebuffer(
 
     let depth_image_view = create_image_view(
         rrdevice,
-        depth_image,
+        depth_allocation.image,
         get_depth_format(instance, rrdevice)?,
         vk::ImageAspectFlags::DEPTH,
         1,
     )?;
 
-    rrrender.gbuffer_depth_image = depth_image;
-    rrrender.gbuffer_depth_image_memory = depth_image_memory;
+    rrrender.gbuffer_depth_allocation = depth_allocation;
     rrrender.gbuffer_depth_image_view = depth_image_view;
 
     let attachments = [

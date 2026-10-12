@@ -215,7 +215,7 @@ impl App {
             &rrdevice,
             &rrswapchain,
             &rrcommand_pool,
-            &rrrender,
+            rrrender,
             &mut data,
         )?;
 
@@ -274,6 +274,7 @@ impl App {
         let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
             Self::create_sync_objects(&rrdevice.device)?;
 
+        let swapchain_image_count = rrswapchain.swapchain_images.len();
         let vulkan_resources = VulkanResources {
             messenger,
             surface,
@@ -289,7 +290,7 @@ impl App {
 
         Self::register_resources(
             &mut data,
-            &vulkan_resources,
+            vulkan_resources,
             &model_path,
             rrdevice.msaa_samples,
         );
@@ -301,7 +302,7 @@ impl App {
         let gpu_timestamp_profiler = thyllore_vulkan_core::GpuTimestampProfiler::new(
             &rrdevice.device,
             rrdevice.timestamp_period,
-            vulkan_resources.rrswapchain.swapchain_images.len(),
+            swapchain_image_count,
         );
 
         Ok(Self {
@@ -879,17 +880,16 @@ impl App {
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         rrcommand_pool: &Rc<RRCommandPool>,
-        rrrender: &RRRender,
+        mut rrrender: RRRender,
         data: &mut AppData,
     ) -> Result<RRRender> {
-        let mut rrrender_mut = rrrender.clone();
         match Self::init_ray_tracing_with_resources(
             instance,
             rrdevice,
             data,
             rrswapchain,
             rrcommand_pool.as_ref(),
-            &mut rrrender_mut,
+            &mut rrrender,
         ) {
             Ok(_) => {
                 log!("init_ray_tracing succeeded");
@@ -898,7 +898,7 @@ impl App {
                 log_warn!("Failed to initialize ray tracing: {:?}", e);
             }
         }
-        Ok(rrrender_mut)
+        Ok(rrrender)
     }
 
     unsafe fn load_startup_model(
@@ -1147,7 +1147,7 @@ impl App {
 
     fn register_resources(
         data: &mut AppData,
-        resources: &VulkanResources,
+        resources: VulkanResources,
         model_path: &str,
         msaa_samples: vk::SampleCountFlags,
     ) {
@@ -1161,31 +1161,32 @@ impl App {
 
     fn register_vulkan_resources(
         data: &mut AppData,
-        resources: &VulkanResources,
+        resources: VulkanResources,
         model_path: &str,
         msaa_samples: vk::SampleCountFlags,
     ) {
         data.ecs_world.insert_resource(FrameSync::new(
-            resources.image_available_semaphores.clone(),
-            resources.render_finish_semaphores.clone(),
-            resources.in_flight_fences.clone(),
+            resources.image_available_semaphores,
+            resources.render_finish_semaphores,
+            resources.in_flight_fences,
         ));
 
+        let swapchain_image_count = resources.rrswapchain.swapchain_images.len();
         data.ecs_world.insert_resource(SwapchainState::new(
-            resources.rrswapchain.clone(),
-            resources.rrswapchain.swapchain_images.len(),
+            resources.rrswapchain,
+            swapchain_image_count,
         ));
 
         data.ecs_world
-            .insert_resource(RenderTargets::new(resources.rrrender.clone()));
+            .insert_resource(RenderTargets::new(resources.rrrender));
 
         data.ecs_world.insert_resource(CommandState::new(
-            resources.rrcommand_pool.clone(),
-            resources.rrcommand_buffer.clone(),
+            resources.rrcommand_pool,
+            resources.rrcommand_buffer,
         ));
 
         data.ecs_world
-            .insert_resource(PipelineState::new(resources.model_pipeline.clone()));
+            .insert_resource(PipelineState::new(resources.model_pipeline));
 
         data.ecs_world
             .insert_resource(SurfaceState::new(resources.surface, resources.messenger));
@@ -1319,7 +1320,7 @@ impl App {
                 vk::SampleCountFlags::_8
             }
         };
-        let imgui_pipeline = RRPipeline::new_imgui(
+        let mut imgui_pipeline = RRPipeline::new_imgui(
             rrdevice,
             rrrender,
             &descriptor_set_layout,
@@ -1331,15 +1332,15 @@ impl App {
             .create_synchronous_renderer_consumer()
             .map_err(|error| anyhow!("ImGui renderer consumer: {error}"))?;
 
-        data.imgui.pipeline = Some(imgui_pipeline.pipeline);
-        data.imgui.pipeline_layout = Some(imgui_pipeline.pipeline_layout);
+        data.imgui.pipeline = Some(std::mem::take(&mut imgui_pipeline.pipeline));
+        data.imgui.pipeline_layout = Some(std::mem::take(&mut imgui_pipeline.pipeline_layout));
         data.imgui.descriptor_set_layout = Some(descriptor_set_layout);
         data.imgui.sampler = Some(sampler);
         data.imgui.renderer_consumer = Some(renderer_consumer);
         data.ecs_world
             .insert_resource(crate::ecs::resource::ImguiTextures::default());
         log!("ImGui rendering resources initialized successfully");
-        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
+        log!("  Pipeline: {:?}", data.imgui.pipeline);
         Ok(())
     }
 

@@ -4,16 +4,20 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::data::Vertex;
-use crate::resource::create_buffer;
+use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 
-#[derive(Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct OnionSkinGhostBuffer {
-    pub vertex_buffer: vk::Buffer,
-    pub vertex_buffer_memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub vertex_count: u32,
+    #[gpu_resource(skip)]
     pub tint_color: [f32; 3],
+    #[gpu_resource(skip)]
     pub opacity: f32,
+    #[gpu_resource(skip)]
     capacity_bytes: u64,
 }
 
@@ -25,7 +29,7 @@ impl OnionSkinGhostBuffer {
     ) -> Result<Self> {
         let capacity_bytes = (vertex_capacity * std::mem::size_of::<Vertex>()) as u64;
 
-        let (buffer, memory) = create_buffer(
+        let allocation = create_buffer_allocation(
             instance,
             rrdevice,
             capacity_bytes,
@@ -34,8 +38,7 @@ impl OnionSkinGhostBuffer {
         )?;
 
         Ok(Self {
-            vertex_buffer: buffer,
-            vertex_buffer_memory: memory,
+            allocation,
             vertex_count: 0,
             tint_color: [1.0, 1.0, 1.0],
             opacity: 0.3,
@@ -60,7 +63,7 @@ impl OnionSkinGhostBuffer {
         }
 
         let memory = rrdevice.device.map_memory(
-            self.vertex_buffer_memory,
+            self.allocation.memory,
             0,
             data_size,
             vk::MemoryMapFlags::empty(),
@@ -72,7 +75,7 @@ impl OnionSkinGhostBuffer {
             data_size as usize,
         );
 
-        rrdevice.device.unmap_memory(self.vertex_buffer_memory);
+        rrdevice.device.unmap_memory(self.allocation.memory);
 
         self.vertex_count = vertices.len() as u32;
         self.tint_color = tint_color;
@@ -80,18 +83,17 @@ impl OnionSkinGhostBuffer {
 
         Ok(())
     }
-
-    pub unsafe fn destroy(&self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.vertex_buffer, None);
-        rrdevice.device.free_memory(self.vertex_buffer_memory, None);
-    }
 }
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct OnionSkinGpuState {
     pub ghost_buffers: Vec<OnionSkinGhostBuffer>,
+    #[gpu_resource(skip)]
     pub source_index_buffer: vk::Buffer,
+    #[gpu_resource(skip)]
     pub source_index_count: u32,
+    #[gpu_resource(skip)]
     pub source_mesh_index: Option<usize>,
 }
 
@@ -109,18 +111,12 @@ impl OnionSkinGpuState {
         }
 
         while self.ghost_buffers.len() > ghost_count {
-            if let Some(buffer) = self.ghost_buffers.pop() {
-                buffer.destroy(rrdevice);
+            if let Some(mut buffer) = self.ghost_buffers.pop() {
+                buffer.destroy_gpu(rrdevice);
             }
         }
 
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for buffer in self.ghost_buffers.drain(..) {
-            buffer.destroy(rrdevice);
-        }
     }
 
     pub fn active_ghost_count(&self) -> usize {
@@ -128,16 +124,6 @@ impl OnionSkinGpuState {
             .iter()
             .filter(|b| b.vertex_count > 0)
             .count()
-    }
-}
-
-impl GpuResource for OnionSkinGpuState {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.ghost_buffers.is_empty()
     }
 }
 

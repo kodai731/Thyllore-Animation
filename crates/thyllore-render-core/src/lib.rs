@@ -3,6 +3,7 @@ mod billboard;
 mod buffer_handle;
 mod gizmo;
 mod gizmo_data;
+pub mod luminance_statistics;
 mod mesh;
 mod projection;
 mod render_data;
@@ -18,6 +19,9 @@ pub use gizmo::{
     TransformGizmoHandle,
 };
 pub use gizmo_data::{BoneGizmoData, ConstraintGizmoData, GridMeshData, LightGizmoData};
+pub use luminance_statistics::{
+    luminance_statistics, rec709_luminance, LuminanceStatistics, Percentile,
+};
 pub use mesh::{DynamicMesh, GpuMeshRef, LineMesh, MeshScale, RenderInfo, FRAMES_IN_FLIGHT};
 pub use projection::{DistanceAttenuation, ProjectionData};
 pub use render_data::{MeshHandle, ObjectIndex, RenderData, SkeletonHandle};

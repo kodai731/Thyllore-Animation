@@ -331,25 +331,32 @@ impl App {
             let _ = self.rrdevice.device.device_wait_idle();
         }
 
-        let adapted = match self.data.viewport.auto_exposure_buffers {
+        let readback = match self.data.viewport.auto_exposure_buffers {
             Some(ref ae_buffers) => {
                 let current_slot = self.resource::<FrameSync>().current_frame;
-                ae_buffers.read_adapted_exposure(&self.rrdevice.device, current_slot)
+                ae_buffers.read_luminance(&self.rrdevice.device, current_slot)
             }
             None => return,
         };
+        let Some(readback) = readback else {
+            return;
+        };
 
-        if adapted > 0.0 {
+        if readback.adapted_exposure > 0.0 {
             if let Some(mut exposure) = self
                 .data
                 .ecs_world
                 .get_resource_mut::<crate::ecs::resource::Exposure>()
             {
-                exposure.exposure_value = adapted;
+                exposure.exposure_value = readback.adapted_exposure;
+                exposure.ev100 = crate::ecs::resource::Exposure::ev100_from_exposure_value(
+                    readback.adapted_exposure,
+                );
+                exposure.metered_luminance = readback.average_luminance;
             }
         }
 
-        self.record_exposure_dump(frame, Some(adapted));
+        self.record_exposure_dump(frame, Some(readback.adapted_exposure));
     }
 
     fn save_manual_exposure_if_needed(&mut self) {

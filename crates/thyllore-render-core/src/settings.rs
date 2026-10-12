@@ -65,6 +65,15 @@ impl Default for ToneMapping {
 pub struct Exposure {
     pub ev100: f32,
     pub exposure_value: f32,
+    /// Scene luminance the auto exposure metered this frame; 0 while auto exposure is off.
+    pub metered_luminance: f32,
+}
+
+impl Exposure {
+    /// Unity HDRP `ConvertEV100ToExposure`: exposure = 1 / (1.2 * 2^EV100).
+    pub fn ev100_from_exposure_value(exposure_value: f32) -> f32 {
+        -(1.2 * exposure_value.max(f32::MIN_POSITIVE)).log2()
+    }
 }
 
 impl Default for Exposure {
@@ -72,6 +81,7 @@ impl Default for Exposure {
         Self {
             ev100: -0.263,
             exposure_value: 1.0,
+            metered_luminance: 0.0,
         }
     }
 }
@@ -109,15 +119,16 @@ pub struct AutoExposure {
     pub saved_manual_exposure: Option<f32>,
 }
 
+/// Unity HDRP `Exposure` override defaults: limits -1 / 14 EV, histogram 40-90 %, speeds 3 / 1.
 impl Default for AutoExposure {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_ev: 0.0,
-            max_ev: 12.0,
+            min_ev: -1.0,
+            max_ev: 14.0,
             adaptation_speed_up: 3.0,
             adaptation_speed_down: 1.0,
-            low_percent: 0.1,
+            low_percent: 0.4,
             high_percent: 0.9,
             min_log_luminance: -10.0,
             log_luminance_range: 22.0,

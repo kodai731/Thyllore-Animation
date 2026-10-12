@@ -1,17 +1,18 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::data::UniformBufferObject;
-use crate::resource::allocation::BufferAllocation;
+use crate::resource::allocation::{create_buffer_allocation, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRUniformBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub uniform_buffer_object: UniformBufferObject,
 }
 
@@ -23,7 +24,7 @@ impl RRUniformBuffer {
         name: &str,
     ) -> Result<Self> {
         let mut rruniform_buffer = Self::default();
-        let (uniform_buffer, uniform_buffer_memory) = create_buffer(
+        let allocation = create_buffer_allocation(
             instance,
             rrdevice,
             size_of::<UniformBufferObject>() as u64,
@@ -34,12 +35,11 @@ impl RRUniformBuffer {
         log!(
             "RRUniformBuffer::new [{}] buffer={:?}, memory={:?}",
             name,
-            uniform_buffer,
-            uniform_buffer_memory
+            allocation.buffer,
+            allocation.memory
         );
 
-        rruniform_buffer.buffer = uniform_buffer;
-        rruniform_buffer.buffer_memory = uniform_buffer_memory;
+        rruniform_buffer.allocation = allocation;
         rruniform_buffer.uniform_buffer_object = uniform_buffer_object;
         Ok(rruniform_buffer)
     }
@@ -50,53 +50,25 @@ impl RRUniformBuffer {
         ubo: &UniformBufferObject,
     ) -> anyhow::Result<()> {
         let memory = rrdevice.device.map_memory(
-            self.buffer_memory,
+            self.allocation.memory,
             0,
             size_of::<UniformBufferObject>() as u64,
             vk::MemoryMapFlags::empty(),
         )?;
         memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(self.buffer_memory);
+        rrdevice.device.unmap_memory(self.allocation.memory);
 
         self.uniform_buffer_object = ubo.clone();
 
         Ok(())
     }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-    }
 }
 
-impl GpuResource for RRUniformBuffer {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.buffer.is_destroyed()
-    }
-}
-
-impl Drop for RRUniformBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRUniformBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRIndexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub indices: u32,
 }
 
@@ -110,7 +82,7 @@ impl RRIndexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrindex_buffer = RRIndexBuffer::default();
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
+        let mut staging_allocation = create_buffer_allocation(
             instance,
             rrdevice,
             size,
@@ -118,16 +90,16 @@ impl RRIndexBuffer {
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
         let map_memory = rrdevice.device.map_memory(
-            staging_buffer_memory,
+            staging_allocation.memory,
             0,
             size,
             vk::MemoryMapFlags::empty(),
         )?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
+        rrdevice.device.unmap_memory(staging_allocation.memory);
 
-        let (index_buffer, index_buffer_memory) = create_buffer(
+        let allocation = create_buffer_allocation(
             instance,
             rrdevice,
             size,
@@ -141,49 +113,28 @@ impl RRIndexBuffer {
         copy_buffer(
             rrdevice,
             rr_command_pool,
-            staging_buffer,
-            index_buffer,
+            staging_allocation.buffer,
+            allocation.buffer,
             size,
         )?;
 
-        rrdevice.device.destroy_buffer(staging_buffer, None);
-        rrdevice.device.free_memory(staging_buffer_memory, None);
+        GpuResource::destroy_gpu(&mut staging_allocation, rrdevice);
 
-        rrindex_buffer.buffer = index_buffer;
-        rrindex_buffer.buffer_memory = index_buffer_memory;
+        rrindex_buffer.allocation = allocation;
         rrindex_buffer.indices = length as u32;
 
         Ok(rrindex_buffer)
     }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.indices = 0;
-    }
 }
 
-impl Drop for RRIndexBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRIndexBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRVertexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub vertices: u32,
-    pub staging_buffer: vk::Buffer,
-    pub staging_memory: vk::DeviceMemory,
+    pub staging_allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub staging_capacity: u64,
 }
 
@@ -197,7 +148,7 @@ impl RRVertexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrvertex_buffer = RRVertexBuffer::default();
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
+        let staging_allocation = create_buffer_allocation(
             instance,
             rrdevice,
             size,
@@ -205,16 +156,16 @@ impl RRVertexBuffer {
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
         let map_memory = rrdevice.device.map_memory(
-            staging_buffer_memory,
+            staging_allocation.memory,
             0,
             size,
             vk::MemoryMapFlags::empty(),
         )?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
+        rrdevice.device.unmap_memory(staging_allocation.memory);
 
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+        let allocation = create_buffer_allocation(
             instance,
             rrdevice,
             size,
@@ -229,57 +180,19 @@ impl RRVertexBuffer {
         copy_buffer(
             rrdevice,
             rr_command_pool,
-            staging_buffer,
-            vertex_buffer,
+            staging_allocation.buffer,
+            allocation.buffer,
             size,
         )?;
 
-        rrvertex_buffer.buffer = vertex_buffer;
-        rrvertex_buffer.buffer_memory = vertex_buffer_memory;
+        rrvertex_buffer.allocation = allocation;
         rrvertex_buffer.vertices = length as u32;
-        rrvertex_buffer.staging_buffer = staging_buffer;
-        rrvertex_buffer.staging_memory = staging_buffer_memory;
+        rrvertex_buffer.staging_allocation = staging_allocation;
         rrvertex_buffer.staging_capacity = size;
 
         Ok(rrvertex_buffer)
     }
 
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.staging_buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.staging_buffer, None);
-            self.staging_buffer = vk::Buffer::null();
-        }
-        if self.staging_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.staging_memory, None);
-            self.staging_memory = vk::DeviceMemory::null();
-        }
-        self.staging_capacity = 0;
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.vertices = 0;
-    }
-}
-
-impl Drop for RRVertexBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRVertexBuffer dropped without calling destroy()");
-        }
-        if self.staging_buffer != vk::Buffer::null() {
-            log_warn!(
-                "RRVertexBuffer dropped without calling destroy() (staging buffer not freed)"
-            );
-        }
-    }
-}
-
-impl RRVertexBuffer {
     pub unsafe fn update(
         &mut self,
         instance: &Instance,
@@ -289,41 +202,36 @@ impl RRVertexBuffer {
         data: *const c_void,
         length: usize,
     ) -> Result<()> {
-        // Allocate or grow staging buffer if needed
-        let (staging_buffer, staging_memory) =
-            if self.staging_buffer == vk::Buffer::null() || size > self.staging_capacity {
-                // Free old staging buffer if it exists
-                if self.staging_buffer != vk::Buffer::null() {
-                    rrdevice.device.destroy_buffer(self.staging_buffer, None);
-                }
-                if self.staging_memory != vk::DeviceMemory::null() {
-                    rrdevice.device.free_memory(self.staging_memory, None);
-                }
-                let new_capacity = size * 2;
-                let (buf, mem) = create_buffer(
-                    instance,
-                    rrdevice,
-                    new_capacity,
-                    vk::BufferUsageFlags::TRANSFER_SRC,
-                    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-                )?;
-                self.staging_buffer = buf;
-                self.staging_memory = mem;
-                self.staging_capacity = new_capacity;
-                (buf, mem)
-            } else {
-                (self.staging_buffer, self.staging_memory)
-            };
+        if self.staging_allocation.is_destroyed() || size > self.staging_capacity {
+            self.staging_allocation.destroy_gpu(rrdevice);
+            let new_capacity = size * 2;
+            self.staging_allocation = create_buffer_allocation(
+                instance,
+                rrdevice,
+                new_capacity,
+                vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+            )?;
+            self.staging_capacity = new_capacity;
+        }
 
-        let map_memory =
-            rrdevice
-                .device
-                .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())?;
+        let map_memory = rrdevice.device.map_memory(
+            self.staging_allocation.memory,
+            0,
+            size,
+            vk::MemoryMapFlags::empty(),
+        )?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_memory);
+        rrdevice.device.unmap_memory(self.staging_allocation.memory);
 
-        copy_buffer(rrdevice, rr_command_pool, staging_buffer, self.buffer, size)?;
+        copy_buffer(
+            rrdevice,
+            rr_command_pool,
+            self.staging_allocation.buffer,
+            self.allocation.buffer,
+            size,
+        )?;
 
         self.vertices = length as u32;
 
@@ -331,10 +239,11 @@ impl RRVertexBuffer {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub indices: u32,
 }
 
@@ -347,73 +256,10 @@ impl RRBuffer {
         properties: vk::MemoryPropertyFlags,
     ) -> Result<Self> {
         let mut rrbuffer = RRBuffer::default();
-        let (buffer, buffer_memory) = create_buffer(instance, rrdevice, size, usage, properties)?;
-        rrbuffer.buffer = buffer;
-        rrbuffer.buffer_memory = buffer_memory;
+        rrbuffer.allocation =
+            create_buffer_allocation(instance, rrdevice, size, usage, properties)?;
         Ok(rrbuffer)
     }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.indices = 0;
-    }
-}
-
-impl Drop for RRBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-pub unsafe fn create_buffer_allocation(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    size: vk::DeviceSize,
-    usage: vk::BufferUsageFlags,
-    properties: vk::MemoryPropertyFlags,
-) -> Result<BufferAllocation> {
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(size)
-        .usage(usage)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-    let buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-    let requirements = rrdevice.device.get_buffer_memory_requirements(buffer);
-
-    let mut memory_allocate_flags_info =
-        vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
-
-    let mut memory_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(requirements.size)
-        .memory_type_index(get_memory_type_index(
-            instance,
-            rrdevice.physical_device,
-            properties,
-            requirements,
-        )?);
-
-    if usage.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
-        memory_info = memory_info.push_next(&mut memory_allocate_flags_info);
-    }
-
-    let buffer_memory = rrdevice.device.allocate_memory(&memory_info, None)?;
-    rrdevice
-        .device
-        .bind_buffer_memory(buffer, buffer_memory, 0)?;
-
-    Ok(BufferAllocation {
-        memory: buffer_memory,
-        buffer,
-    })
 }
 
 pub unsafe fn create_buffer(

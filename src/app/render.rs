@@ -629,13 +629,13 @@ impl App {
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[mesh.vertex_buffer.buffer],
+                &[mesh.vertex_buffer.allocation.buffer],
                 &[0],
             );
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
-                mesh.index_buffer.buffer,
+                mesh.index_buffer.allocation.buffer,
                 0,
                 vk::IndexType::UINT32,
             );

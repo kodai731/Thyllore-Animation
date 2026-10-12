@@ -103,10 +103,10 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 self.device,
                 self.command_pool.as_ref(),
                 blas,
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.allocation.buffer,
                 mesh.vertex_data.vertices.len() as u32,
                 size_of::<Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.allocation.buffer,
                 mesh.vertex_data.indices.len() as u32,
             )?;
         }

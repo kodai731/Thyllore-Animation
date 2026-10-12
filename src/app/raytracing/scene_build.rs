@@ -44,10 +44,10 @@ pub unsafe fn rebuild_acceleration_structures(
         .filter(|mesh| mesh.render_to_gbuffer)
         .map(|mesh| {
             (
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.allocation.buffer,
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.allocation.buffer,
                 mesh.vertex_data.indices.len() as u32,
             )
         })
@@ -62,10 +62,10 @@ pub unsafe fn rebuild_acceleration_structures(
             instance,
             device,
             command_pool.as_ref(),
-            &mesh.vertex_buffer.buffer,
+            &mesh.vertex_buffer.allocation.buffer,
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
-            &mesh.index_buffer.buffer,
+            &mesh.index_buffer.allocation.buffer,
             mesh.vertex_data.indices.len() as u32,
         )?;
 

@@ -240,7 +240,7 @@ unsafe fn read_gpu_vertex_positions(
     let command_buffer = record_and_submit_vertex_copy(
         ctx,
         command_pool,
-        mesh.vertex_buffer.buffer,
+        mesh.vertex_buffer.allocation.buffer,
         buffer,
         copy_size,
     )?;

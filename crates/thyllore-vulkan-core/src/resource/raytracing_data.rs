@@ -140,10 +140,10 @@ impl RayTracingData {
             .filter(|mesh| mesh.render_to_gbuffer)
             .map(|mesh| {
                 (
-                    &mesh.vertex_buffer.buffer,
+                    &mesh.vertex_buffer.allocation.buffer,
                     mesh.vertex_data.vertices.len() as u32,
                     std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                    &mesh.index_buffer.buffer,
+                    &mesh.index_buffer.allocation.buffer,
                     mesh.vertex_data.indices.len() as u32,
                 )
             })
@@ -158,10 +158,10 @@ impl RayTracingData {
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.allocation.buffer,
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.allocation.buffer,
                 mesh.vertex_data.indices.len() as u32,
             )?;
 

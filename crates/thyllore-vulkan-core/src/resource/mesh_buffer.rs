@@ -9,10 +9,11 @@ use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MeshBuffer {
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
@@ -82,8 +83,8 @@ impl MeshBuffer {
             rrdevice.device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
-        self.vertex_buffer.destroy(rrdevice);
-        self.index_buffer.destroy(rrdevice);
+        self.vertex_buffer.destroy_gpu(rrdevice);
+        self.index_buffer.destroy_gpu(rrdevice);
         if self.image != vk::Image::null() {
             rrdevice.device.destroy_image(self.image, None);
             self.image = vk::Image::null();
@@ -97,7 +98,7 @@ impl MeshBuffer {
 
 impl Drop for MeshBuffer {
     fn drop(&mut self) {
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
+        if !self.vertex_buffer.is_destroyed() {
             log_warn!("MeshBuffer dropped without calling destroy()");
         }
     }

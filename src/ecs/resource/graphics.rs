@@ -56,7 +56,7 @@ impl Default for ModelState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct MeshAssets {
     pub meshes: Vec<MeshBuffer>,
 }

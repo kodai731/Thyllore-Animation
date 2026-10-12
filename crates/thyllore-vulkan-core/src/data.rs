@@ -9,7 +9,7 @@ use thyllore_spirv_reflect::declare_gpu_block;
 pub use thyllore_model_core::mesh::{Vertex, VertexData};
 
 // TODO: implement iterator
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
     pub image: vk::Image,
@@ -69,10 +69,7 @@ impl RRData {
     }
 
     pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {
-        for uniform_buffer in &mut self.rruniform_buffers {
-            uniform_buffer.destroy(rrdevice);
-        }
-        self.rruniform_buffers.clear();
+        self.rruniform_buffers.destroy_gpu(rrdevice);
 
         if self.image_view != vk::ImageView::null() {
             rrdevice.device.destroy_image_view(self.image_view, None);
@@ -84,33 +81,8 @@ impl RRData {
             self.sampler = vk::Sampler::null();
         }
 
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.vertex_buffer.buffer, None);
-            self.vertex_buffer.buffer = vk::Buffer::null();
-        }
-
-        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.vertex_buffer.buffer_memory, None);
-            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
-
-        if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.index_buffer.buffer, None);
-            self.index_buffer.buffer = vk::Buffer::null();
-        }
-
-        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.index_buffer.buffer_memory, None);
-            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
+        self.vertex_buffer.destroy_gpu(rrdevice);
+        self.index_buffer.destroy_gpu(rrdevice);
     }
 
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
@@ -134,7 +106,7 @@ impl GpuResource for RRData {
     }
 
     fn is_destroyed(&self) -> bool {
-        self.image.is_destroyed() && self.vertex_buffer.buffer.is_destroyed()
+        self.image.is_destroyed() && self.vertex_buffer.is_destroyed()
     }
 }
 

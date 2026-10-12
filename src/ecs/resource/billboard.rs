@@ -7,14 +7,14 @@ use crate::vulkanr::resource::GpuResource;
 pub use thyllore_render_core::{BillboardMesh, BillboardTransform, BillboardVertex};
 
 #[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
+#[derive(Debug, Default, GpuResource)]
 pub struct BillboardRenderState {
     pub descriptor_set: RRBillboardDescriptorSet,
     pub texture: Option<RRImage>,
 }
 
 #[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
+#[derive(Debug, Default, GpuResource)]
 pub struct BillboardData {
     #[gpu_resource(skip)]
     pub mesh: BillboardMesh,

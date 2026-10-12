@@ -60,7 +60,7 @@ pub struct MeshSource<'a> {
     pub morph: &'a MeshMorph,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct GraphicsResources {
     pub frame_set: FrameDescriptorSet,
     pub materials: MaterialManager,

@@ -948,4 +948,10 @@ impl GpuResource for RRAccelerationStructure {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.tlas.acceleration_structure.is_none()
+            && self.blas_list.is_empty()
+            && self.procedural_blas.is_empty()
+    }
 }

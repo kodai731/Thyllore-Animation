@@ -156,7 +156,7 @@ pub unsafe fn record_auto_exposure(
     let Some(ae_settings) = ae_settings else {
         return Ok(());
     };
-    if !ae_settings.enabled {
+    if !ae_settings.uses_histogram() {
         return Ok(());
     }
 

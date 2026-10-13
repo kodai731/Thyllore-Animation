@@ -3958,6 +3958,7 @@ dependencies = [
  "thyllore-anim-core",
  "thyllore-avatar-core",
  "thyllore-cli-core",
+ "thyllore-color-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
  "thyllore-grpc-client",

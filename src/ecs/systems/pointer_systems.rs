@@ -18,6 +18,38 @@ pub fn button_state_advance(state: &mut ButtonState, input: RawButtonInput) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::resource::{PointerState, CLICK_MAX_TRAVEL_PIXELS};
+
+    fn pointer_after_middle_press_and_release(release_at: [f32; 2]) -> PointerState {
+        let mut pointer = PointerState::default();
+        button_state_advance(&mut pointer.middle, RawButtonInput::Pressed);
+        pointer.middle_press_position = Some([10.0, 10.0]);
+        button_state_advance(&mut pointer.middle, RawButtonInput::Released);
+        pointer.position = release_at;
+        pointer
+    }
+
+    #[test]
+    fn a_middle_release_near_the_press_is_a_click() {
+        let pointer = pointer_after_middle_press_and_release([11.0, 12.0]);
+        assert!(pointer.middle_clicked());
+    }
+
+    #[test]
+    fn a_middle_release_after_a_drag_is_not_a_click() {
+        let far = 10.0 + CLICK_MAX_TRAVEL_PIXELS * 2.0;
+        let pointer = pointer_after_middle_press_and_release([far, 10.0]);
+        assert!(!pointer.middle_clicked());
+    }
+
+    #[test]
+    fn a_held_middle_button_is_not_a_click() {
+        let mut pointer = PointerState::default();
+        button_state_advance(&mut pointer.middle, RawButtonInput::Pressed);
+        pointer.middle_press_position = Some([10.0, 10.0]);
+        pointer.position = [10.0, 10.0];
+        assert!(!pointer.middle_clicked());
+    }
 
     #[test]
     fn test_button_state_transitions() {

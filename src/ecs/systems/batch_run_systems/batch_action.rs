@@ -3,9 +3,11 @@ use std::rc::Rc;
 
 use anyhow::Result;
 
+use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::ecs::resource::{BatchRun, DebugViewMode, DebugViewState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
@@ -227,6 +229,35 @@ fn timeline_time_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     )
 }
 
+/// Selects the first scheduled clip instance in entity order, the way a click on its block would.
+#[derive(Debug, Default)]
+pub struct SelectFirstClipInstance;
+
+impl BatchAction for SelectFirstClipInstance {
+    fn name(&self) -> &'static str {
+        "select_first_clip_instance"
+    }
+    fn apply(&self, world: &mut World) {
+        let mut entities = world.component_entities::<ClipSchedule>();
+        entities.sort_unstable();
+        let first = entities.into_iter().find_map(|entity| {
+            let schedule = world.get_component::<ClipSchedule>(entity)?;
+            let instance = schedule.instances.first()?;
+            Some((entity, instance.instance_id))
+        });
+        if let Some((entity, instance_id)) = first {
+            world.send_command(ClipInstanceEvent::Select {
+                entity,
+                instance_id,
+            });
+        }
+    }
+}
+
+crate::batch_action!(
+    "select_first_clip_instance",
+    unit_action_parse::<SelectFirstClipInstance>
+);
 crate::batch_action!("timeline_time", timeline_time_parse);
 crate::batch_action!("view_mode", view_mode_parse);
 crate::batch_action!("black_background", unit_action_parse::<BlackBackground>);

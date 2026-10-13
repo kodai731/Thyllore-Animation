@@ -174,6 +174,16 @@ fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec
 impl GpuResource for BloomChain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
+
+        self.sampler = vk::Sampler::null();
+        self.downsample_render_pass = vk::RenderPass::null();
+        self.upsample_render_pass = vk::RenderPass::null();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.sampler.is_destroyed()
+            && self.downsample_render_pass.is_destroyed()
+            && self.upsample_render_pass.is_destroyed()
     }
 }
 

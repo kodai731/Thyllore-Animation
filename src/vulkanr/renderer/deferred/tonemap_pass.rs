@@ -44,7 +44,19 @@ pub unsafe fn record_tonemap_to_offscreen(
         .get_resource::<crate::ecs::resource::BloomSettings>();
 
     let tonemap_ref = tonemap.as_deref().unwrap_or(&tonemap_default);
-    let exposure_ref = exposure.as_deref().unwrap_or(&exposure_default);
+    let brightness = ctx
+        .world
+        .get_resource::<crate::ecs::resource::SceneBrightness>()
+        .map(|b| *b)
+        .unwrap_or_default();
+    let displayed_exposure = crate::ecs::resource::Exposure {
+        exposure_value: exposure
+            .as_deref()
+            .unwrap_or(&exposure_default)
+            .display_multiplier(brightness),
+        ..exposure_default.clone()
+    };
+    let exposure_ref = &displayed_exposure;
     let lens_ref = lens.as_deref().unwrap_or(&lens_default);
     let bloom_ref = bloom.as_deref().unwrap_or(&bloom_default);
 

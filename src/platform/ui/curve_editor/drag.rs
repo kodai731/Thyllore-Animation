@@ -141,7 +141,7 @@ pub(super) fn compute_dragged_tangent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::PropertyType;
+    use crate::animation::editable::{PropertyType, TangentContinuity};
 
     use super::super::test_fixtures::*;
 
@@ -169,6 +169,33 @@ mod tests {
         assert!((small_delta[1] - normalized_delta * 5.0).abs() < 1e-4);
         assert!((large_delta[1] - normalized_delta * 100.0).abs() < 1e-3);
         assert_eq!(small_delta[0], large_delta[0]);
+    }
+
+    #[test]
+    fn dragging_one_handle_of_a_unified_key_realigns_the_opposite_handle() {
+        let mut curve = build_two_point_curve(PropertyType::TranslationX, [0.0, 1.0]);
+        curve.keyframes[0].in_tangent = BezierHandle::new(-0.3, -0.2);
+        let kf = &curve.keyframes[0];
+        assert_eq!(kf.continuity, TangentContinuity::Unified);
+        let dragging = DraggingTangent {
+            property_type: PropertyType::TranslationX,
+            keyframe_id: kf.id,
+            handle_type: TangentHandleType::Out,
+            original_handle: kf.out_tangent.clone(),
+        };
+        let vt = build_pixel_view();
+        let curves = [(&curve, [1.0; 4], "x")];
+
+        let (in_tangent, out_tangent) =
+            compute_dragged_tangent(&dragging, [40.0, 20.0], &curves, &vt);
+
+        let in_length = (in_tangent.time_offset.powi(2) + in_tangent.value_offset.powi(2)).sqrt();
+        let original_length: f32 = (0.3f32.powi(2) + 0.2f32.powi(2)).sqrt();
+        assert!((in_length - original_length).abs() < 1e-5);
+        let cross = in_tangent.time_offset * out_tangent.value_offset
+            - in_tangent.value_offset * out_tangent.time_offset;
+        assert!(cross.abs() < 1e-5);
+        assert!(in_tangent.time_offset * out_tangent.time_offset < 0.0);
     }
 
     #[test]

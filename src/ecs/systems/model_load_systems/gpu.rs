@@ -99,7 +99,7 @@ pub(super) unsafe fn release_model_gpu_resources(
 
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
-    graphics.materials.clear_materials(&device.device);
+    graphics.materials.clear_materials(device);
     graphics.objects.reset_to_reserved();
     Ok(())
 }

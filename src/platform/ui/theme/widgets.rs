@@ -29,6 +29,29 @@ pub fn item_tooltip(ui: &Ui, text: &str) {
     }
 }
 
+pub fn enum_combo<T: Clone + PartialEq>(
+    ui: &Ui,
+    label: &str,
+    current: &mut T,
+    options: &[T],
+    name: impl Fn(&T) -> &'static str,
+) -> bool {
+    let mut changed = false;
+    if let Some(_token) = ui.begin_combo(label, name(current)) {
+        for option in options {
+            if ui
+                .selectable_config(name(option))
+                .selected(*option == *current)
+                .build()
+            {
+                *current = option.clone();
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonState {
     Normal,

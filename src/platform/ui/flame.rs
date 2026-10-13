@@ -9,7 +9,7 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{item_tooltip, section_header};
+use crate::platform::ui::theme::{enum_combo, item_tooltip, section_header};
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::pointer::is_last_item_double_clicked;
@@ -476,28 +476,20 @@ fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let mut settings_copy = *settings;
     drop(settings);
 
-    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-        for mode in FlameShadingMode::ALL {
-            if ui
-                .selectable_config(mode.label())
-                .selected(mode == settings_copy.shading_mode)
-                .build()
-            {
-                settings_copy.shading_mode = mode;
-            }
-        }
-    }
-    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-        for view in FlameDebugView::ALL {
-            if ui
-                .selectable_config(view.label())
-                .selected(view == settings_copy.debug_view)
-                .build()
-            {
-                settings_copy.debug_view = view;
-            }
-        }
-    }
+    enum_combo(
+        ui,
+        "Shading Mode",
+        &mut settings_copy.shading_mode,
+        &FlameShadingMode::ALL,
+        |m| m.label(),
+    );
+    enum_combo(
+        ui,
+        "Debug View",
+        &mut settings_copy.debug_view,
+        &FlameDebugView::ALL,
+        |v| v.label(),
+    );
 
     let mut jitter = read_env_wave_jitter();
     if ui

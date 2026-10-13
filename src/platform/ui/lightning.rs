@@ -16,7 +16,7 @@ use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{item_tooltip, section_header};
+use crate::platform::ui::theme::{enum_combo, item_tooltip, section_header};
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -197,28 +197,20 @@ fn draw_lightning_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let mut settings_copy = *settings;
     drop(settings);
 
-    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-        for mode in LightningShadingMode::ALL {
-            if ui
-                .selectable_config(mode.label())
-                .selected(mode == settings_copy.shading_mode)
-                .build()
-            {
-                settings_copy.shading_mode = mode;
-            }
-        }
-    }
-    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-        for view in LightningDebugView::ALL {
-            if ui
-                .selectable_config(view.label())
-                .selected(view == settings_copy.debug_view)
-                .build()
-            {
-                settings_copy.debug_view = view;
-            }
-        }
-    }
+    enum_combo(
+        ui,
+        "Shading Mode",
+        &mut settings_copy.shading_mode,
+        &LightningShadingMode::ALL,
+        |m| m.label(),
+    );
+    enum_combo(
+        ui,
+        "Debug View",
+        &mut settings_copy.debug_view,
+        &LightningDebugView::ALL,
+        |v| v.label(),
+    );
     let mut step_count = settings_copy.reference_step_count as i32;
     if ui
         .slider_config("Reference Steps", 16, 2048)

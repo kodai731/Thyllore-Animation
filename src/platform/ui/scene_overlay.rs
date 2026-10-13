@@ -29,7 +29,7 @@ use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{
-    icon_button, item_tooltip, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE,
+    enum_combo, icon_button, item_tooltip, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE,
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -596,25 +596,6 @@ fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
-fn build_exposure_metering_combo(
-    ui: &imgui::Ui,
-    metering: &mut thyllore_render_core::ExposureMetering,
-) {
-    let Some(_token) = ui.begin_combo("Metering", metering.name()) else {
-        return;
-    };
-    for candidate in thyllore_render_core::ExposureMetering::ALL {
-        let selected = candidate == *metering;
-        if ui
-            .selectable_config(candidate.name())
-            .selected(selected)
-            .build()
-        {
-            *metering = candidate;
-        }
-    }
-}
-
 fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
@@ -630,7 +611,13 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
                 &mut ae_copy.enabled,
             );
 
-            build_exposure_metering_combo(ui, &mut ae_copy.metering);
+            enum_combo(
+                ui,
+                "Metering",
+                &mut ae_copy.metering,
+                &thyllore_render_core::ExposureMetering::ALL,
+                |m| m.name(),
+            );
 
             ui.slider_config("White Level", 0.05, 1.0)
                 .build(&mut ae_copy.white_level);

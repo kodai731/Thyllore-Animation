@@ -11,6 +11,7 @@ pub use elevation::{draw_raised_window_frame, push_raised_window_style};
 pub use fonts::UiFonts;
 pub use icons::{entity_icon, Icon};
 pub use style::apply_ui_settings;
+pub use widgets::enum_combo;
 pub use widgets::icon_button;
 pub use widgets::item_tooltip;
 pub use widgets::property_label;

@@ -291,7 +291,7 @@ unsafe fn record_wind_passes(
 
     let resolve_sets = [
         render.graphics.frame_set.sets[image_index],
-        descriptor.descriptor_set,
+        descriptor.descriptor_set(),
     ];
     match reduced_scale(ctx) {
         None => {

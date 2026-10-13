@@ -147,7 +147,7 @@ pub unsafe fn ensure_effect_trace_pipeline(
         instance,
         rrdevice,
         &EFFECT_TRACE,
-        &[effect_trace_descriptor.layout.handle],
+        &[effect_trace_descriptor.layout().handle],
         &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;

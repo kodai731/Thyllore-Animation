@@ -193,7 +193,7 @@ impl WaterFrame {
                 .caustic_descriptor
                 .as_ref()
                 .is_some_and(|descriptor| {
-                    descriptor.splat_descriptor_set != vk::DescriptorSet::null()
+                    descriptor.splat_descriptor_set() != vk::DescriptorSet::null()
                 })
     }
 
@@ -569,7 +569,7 @@ impl RenderPassNode for WaterCausticSplatNode {
             vk::PipelineBindPoint::COMPUTE,
             splat_pipeline.pipeline_layout,
             0,
-            &[descriptor.splat_descriptor_set],
+            &[descriptor.splat_descriptor_set()],
             &[],
         );
         let splat_group_count = CAUSTIC_GRID_SIZE / CAUSTIC_WORKGROUP_SIZE;
@@ -646,7 +646,7 @@ impl RenderPassNode for WaterCausticApplyNode {
             vk::PipelineBindPoint::COMPUTE,
             apply_pipeline.pipeline_layout,
             0,
-            &[descriptor.apply_descriptor_set],
+            &[descriptor.apply_descriptor_set()],
             &[],
         );
         device.cmd_dispatch(

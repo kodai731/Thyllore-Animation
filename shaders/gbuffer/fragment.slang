@@ -37,7 +37,7 @@ void main(VSOutput input, out float4 outPosition : SV_Target0, out float4 outNor
     }
 
     outPosition = float4(input.worldPos, 1.0);
-    outNormal = float4(normalize(input.worldNormal), 1.0);
-    outAlbedo = float4(albedoRGB, 1.0);
+    outNormal = float4(normalize(input.worldNormal), material.roughness);
+    outAlbedo = float4(albedoRGB, material.metallic);
     outObjectID = pc.objectID;
 }

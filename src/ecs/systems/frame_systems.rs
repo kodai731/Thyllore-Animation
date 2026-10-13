@@ -7,6 +7,8 @@ use super::{
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::billboard::BillboardData;
+use thyllore_render_core::LightingParams;
+
 use crate::ecs::resource::{Camera, LightState, ProjectionData};
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;
@@ -35,6 +37,7 @@ pub unsafe fn update_frame_ubo(
     camera_position: Vector3<f32>,
     light_position: Vector3<f32>,
     light_color: Vector3<f32>,
+    lighting: LightingParams,
     image_index: usize,
 ) -> Result<()> {
     backend.update_frame_ubo(
@@ -42,6 +45,7 @@ pub unsafe fn update_frame_ubo(
         camera_position,
         light_position,
         light_color,
+        lighting,
         image_index,
     )
 }

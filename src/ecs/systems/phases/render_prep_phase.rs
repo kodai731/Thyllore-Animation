@@ -278,7 +278,12 @@ unsafe fn update_frame_and_scene_uniforms(
     aspect: f32,
     camera_position: Vector3<f32>,
 ) -> Result<()> {
-    let light_position = ctx.light_state().light_position;
+    let light = ctx.light_state();
+    let light_position = light.light_position;
+    let lighting = light.lighting;
+    let shadow_strength = light.shadow_strength;
+    let distance_attenuation = light.distance_attenuation;
+    drop(light);
 
     {
         let proj_data = ProjectionData {
@@ -293,18 +298,13 @@ unsafe fn update_frame_and_scene_uniforms(
             &proj_data,
             camera_position,
             light_position,
-            Vector3::new(1.0, 1.0, 1.0),
+            thyllore_render_core::DIRECT_LIGHT_COLOR,
+            lighting,
             image_index,
         )?;
     }
 
     update_mesh_entity_transforms(ctx)?;
-
-    let light = ctx.light_state();
-    let light_pos = light.light_position;
-    let shadow_strength = light.shadow_strength;
-    let distance_attenuation = light.distance_attenuation;
-    drop(light);
 
     let debug_mode = ctx.debug_view_state().debug_view_mode.as_int();
 
@@ -323,12 +323,14 @@ unsafe fn update_frame_and_scene_uniforms(
     backend.update_scene_uniform(
         view,
         proj,
-        light_pos,
+        light_position,
         thyllore_render_core::DIRECT_LIGHT_COLOR,
         debug_mode,
         shadow_strength,
         distance_attenuation,
         exposure_value,
+        lighting,
+        camera_position,
     )?;
 
     Ok(())

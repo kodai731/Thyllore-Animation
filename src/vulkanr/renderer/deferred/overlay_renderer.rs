@@ -78,7 +78,6 @@ impl<'a> OverlayRenderer<'a> {
         };
 
         let options = LineMeshDrawOptions {
-            line_width: Some(1.0),
             index_count_override: Some(index_count),
             bind_object_set: true,
             frame_set_override: None,
@@ -300,7 +299,6 @@ impl<'a> OverlayRenderer<'a> {
         };
 
         let options = LineMeshDrawOptions {
-            line_width: None,
             index_count_override: None,
             bind_object_set: false,
             frame_set_override: Some(descriptor_set),

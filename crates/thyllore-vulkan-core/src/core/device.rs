@@ -65,6 +65,7 @@ pub struct RRDevice {
     pub msaa_samples: vk::SampleCountFlags,
     pub min_uniform_buffer_offset_alignment: u64,
     pub timestamp_period: f32,
+    pub wide_lines: bool,
     descriptor_allocator: RefCell<DescriptorAllocator>,
 }
 
@@ -79,6 +80,7 @@ impl RRDevice {
             msaa_samples: vk::SampleCountFlags::default(),
             min_uniform_buffer_offset_alignment: 256,
             timestamp_period: 1.0,
+            wide_lines: false,
             descriptor_allocator: RefCell::default(),
         }
     }
@@ -113,6 +115,7 @@ impl RRDevice {
         let properties = instance.get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
+        let wide_lines = supports_wide_lines(instance, physical_device);
 
         println!("created logical device");
         Ok(Self {
@@ -124,6 +127,7 @@ impl RRDevice {
             msaa_samples: sample_count,
             min_uniform_buffer_offset_alignment: min_ubo_alignment,
             timestamp_period,
+            wide_lines,
             descriptor_allocator: RefCell::default(),
         })
     }
@@ -155,6 +159,7 @@ impl RRDevice {
         let properties = instance.get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
+        let wide_lines = supports_wide_lines(instance, physical_device);
 
         println!("created headless logical device");
         Ok(Self {
@@ -166,6 +171,7 @@ impl RRDevice {
             msaa_samples: sample_count,
             min_uniform_buffer_offset_alignment: min_ubo_alignment,
             timestamp_period,
+            wide_lines,
             descriptor_allocator: RefCell::default(),
         })
     }
@@ -279,6 +285,7 @@ unsafe fn create_device_common(
         .sampler_anisotropy(true)
         .sample_rate_shading(true)
         .fill_mode_non_solid(true)
+        .wide_lines(supports_wide_lines(instance, *physical_device))
         .independent_blend(true)
         .geometry_shader(true)
         .shader_int64(true);
@@ -711,4 +718,11 @@ impl RRDevice {
         let properties = instance.get_physical_device_properties(self.physical_device);
         properties.api_version
     }
+}
+
+unsafe fn supports_wide_lines(instance: &Instance, physical_device: vk::PhysicalDevice) -> bool {
+    instance
+        .get_physical_device_features(physical_device)
+        .wide_lines
+        == vk::TRUE
 }

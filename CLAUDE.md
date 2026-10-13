@@ -41,7 +41,8 @@ RUST_LOG=debug cargo run --bin thyllore-animation       # Direct launch with deb
 initializers that can crash integration test binaries (`tests/*.rs`) at process start. Lib tests
 (`cargo test --lib`) are not affected. Always run integration tests with `--no-default-features`.
 
-**Before running tests**, check `.cargo/config.toml` for the `ORT_DYLIB_PATH` environment setting.
+**Before running tests**, make sure ONNX Runtime for the host OS is extracted under `vendor/onnxruntime/`
+(`thyllore_ml_core::onnx_runtime` picks it up; `ORT_DYLIB_PATH` overrides it).
 
 **How to run tests correctly**:
 

@@ -23,10 +23,17 @@ pub enum OverlayEvent {
     UpdateAutoExposure(AutoExposure),
     UpdateSceneBrightness(SceneBrightness),
     UpdateOnionSkinning(OnionSkinningConfig),
-    SelectEffectInstance { key: &'static str, index: usize },
+    SelectEffectInstance {
+        key: &'static str,
+        index: usize,
+    },
     SetGridShowYAxis(bool),
     ClearMessageLog,
     ShowValidationMessages,
+    #[cfg(feature = "auto-rig")]
+    OpenTextToMeshDialog,
+    #[cfg(feature = "auto-rig")]
+    OpenTextToAnimationDialog,
 }
 
 impl UiCommand for OverlayEvent {
@@ -103,6 +110,22 @@ impl UiCommand for OverlayEvent {
             OverlayEvent::ShowValidationMessages => {
                 if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
                     crate::ecs::systems::message_log_show_validation(&mut log);
+                }
+            }
+            #[cfg(feature = "auto-rig")]
+            OverlayEvent::OpenTextToMeshDialog => {
+                if let Some(mut dialog) =
+                    world.get_resource_mut::<crate::ecs::resource::TextToMeshDialogState>()
+                {
+                    dialog.open = true;
+                }
+            }
+            #[cfg(feature = "auto-rig")]
+            OverlayEvent::OpenTextToAnimationDialog => {
+                if let Some(mut dialog) =
+                    world.get_resource_mut::<crate::ecs::resource::TextToAnimationDialogState>()
+                {
+                    dialog.open = true;
                 }
             }
         }

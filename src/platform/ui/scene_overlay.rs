@@ -5,10 +5,6 @@ use imgui::{Condition, StyleVar};
 use thyllore_anim_core::editable::PropertyType;
 
 use super::pointer::read_ui_pointer;
-#[cfg(feature = "auto-rig")]
-use super::text_to_animation_dialog::TextToAnimationDialogState;
-#[cfg(feature = "auto-rig")]
-use super::text_to_mesh_dialog::TextToMeshDialogState;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
@@ -359,12 +355,12 @@ fn build_ui_settings_popup(ui: &imgui::Ui, ecs_world: &World) {
 fn build_auto_rig_buttons(ui: &imgui::Ui, ecs_world: &World) {
     ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
     if ui.button("Generate Mesh") {
-        ecs_world.resource_mut::<TextToMeshDialogState>().open = true;
+        ecs_world.send_command(OverlayEvent::OpenTextToMeshDialog);
     }
 
     ui.same_line();
     if ui.button("Generate Animation") {
-        ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
+        ecs_world.send_command(OverlayEvent::OpenTextToAnimationDialog);
     }
 
     ui.same_line();

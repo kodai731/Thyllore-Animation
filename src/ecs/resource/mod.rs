@@ -79,6 +79,8 @@ mod spring_bone_state;
 #[cfg(feature = "auto-rig")]
 mod text_to_animation_state;
 #[cfg(feature = "auto-rig")]
+mod text_to_dialog_state;
+#[cfg(feature = "auto-rig")]
 mod text_to_mesh_state;
 mod timeline_interaction_state;
 mod timeline_state;
@@ -177,6 +179,8 @@ pub use spring_bone_editor_state::*;
 pub use spring_bone_state::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_animation_state::*;
+#[cfg(feature = "auto-rig")]
+pub use text_to_dialog_state::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_mesh_state::*;
 pub use timeline_interaction_state::*;

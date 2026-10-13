@@ -603,7 +603,7 @@ pub(super) fn build_curve_toolbar(
                 let label = format!("{}##pose_{}", name, pose_id);
 
                 if ui.selectable_config(&label).selected(is_selected).build() {
-                    pose_library.selected_pose_id = Some(pose_id);
+                    world.send_command(PoseLibraryEvent::Select(pose_id));
                 }
             }
         }

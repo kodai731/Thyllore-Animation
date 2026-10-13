@@ -24,4 +24,4 @@ pub use widgets::SectionDefault;
 pub use widgets::TreeRowResponse;
 pub use widgets::TreeRowSpec;
 pub use widgets::ICON_BUTTON_SIZE;
-pub use window_frame::{window_frame, WindowKind};
+pub use window_frame::{show_floating_window, window_frame, FloatingPlacement, WindowKind};

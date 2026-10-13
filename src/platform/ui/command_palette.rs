@@ -11,9 +11,9 @@ use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
 use crate::platform::key_bindings::default_bindings;
 use crate::platform::ui::shortcuts::format_chord;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
-use crate::platform::ui::theme::search_field;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
+use crate::platform::ui::theme::{draw_selected_row, search_field};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";
@@ -21,8 +21,6 @@ const PALETTE_WIDTH: f32 = 520.0;
 const PALETTE_TOP_FRACTION: f32 = 0.12;
 const MAX_VISIBLE_CANDIDATES: usize = 12;
 const ROW_TEXT_PADDING: f32 = 8.0;
-const ROW_ROUNDING: f32 = 6.0;
-const SELECTED_ROW_ALPHA: f32 = 0.25;
 
 const MATCH_SCORE: u32 = 1;
 const START_BONUS: u32 = 3;
@@ -182,12 +180,7 @@ fn draw_candidate_rows(
         let rect_max = ui.item_rect_max();
 
         if row == selection {
-            let accent_fill = [ACCENT[0], ACCENT[1], ACCENT[2], SELECTED_ROW_ALPHA];
-            draw_list
-                .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_fill))
-                .rounding(ROW_ROUNDING)
-                .filled(true)
-                .build();
+            draw_selected_row(&draw_list, rect_min, rect_max);
         }
 
         let text_y = rect_min[1] + text_offset_y;

@@ -74,25 +74,22 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     let text_size = ui.calc_text_size(&glyph);
     let id = ui.get_id(tooltip).raw();
 
-    let clicked = ui.invisible_button(format!("icon_btn_{}", id), [size, size]);
-    let hovered = ui.is_item_hovered();
+    let rect = interactive_rect(ui, &format!("icon_btn_{}", id), [size, size]);
 
-    if hovered {
+    if rect.hovered {
         ui.tooltip_text(tooltip);
     }
 
     let draw_list = ui.get_window_draw_list();
-    let rect_min = ui.item_rect_min();
-    let rect_max = ui.item_rect_max();
 
     let bg_color = match state {
         ButtonState::Active => srgb_to_linear_rgba([ACCENT[0], ACCENT[1], ACCENT[2], 0.3]),
-        ButtonState::Normal if hovered => srgb_to_linear_rgba(SURFACE3),
+        ButtonState::Normal if rect.hovered => srgb_to_linear_rgba(SURFACE3),
         ButtonState::Normal => [0.0, 0.0, 0.0, 0.0],
     };
 
     draw_list
-        .add_rect(rect_min, rect_max, bg_color)
+        .add_rect(rect.min, rect.max, bg_color)
         .rounding(6.0)
         .filled(true)
         .build();
@@ -102,11 +99,11 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
         ButtonState::Normal => srgb_to_linear_rgba(TEXT),
     };
 
-    let center_x = rect_min[0] + (size - text_size[0]) * 0.5;
-    let center_y = rect_min[1] + (size - text_size[1]) * 0.5;
+    let center_x = rect.min[0] + (size - text_size[0]) * 0.5;
+    let center_y = rect.min[1] + (size - text_size[1]) * 0.5;
     draw_list.add_text([center_x, center_y], icon_color, &glyph);
 
-    clicked
+    rect.clicked
 }
 
 const ELLIPSIS: char = '…';
@@ -280,6 +277,34 @@ fn triangle_points(center: [f32; 2], size: f32, angle_rad: f32) -> [[f32; 2]; 3]
     [tip, base_left, base_right]
 }
 
+fn draw_expand_arrow(draw_list: &DrawListMut, center: [f32; 2], size: f32, angle_rad: f32) {
+    let points = triangle_points(center, size, angle_rad);
+    draw_list
+        .add_triangle(points[0], points[1], points[2], srgb_to_linear_rgba(TEXT))
+        .filled(true)
+        .build();
+}
+
+struct InteractiveRect {
+    clicked: bool,
+    hovered: bool,
+    min: [f32; 2],
+    max: [f32; 2],
+}
+
+fn interactive_rect(ui: &Ui, id: &str, size: [f32; 2]) -> InteractiveRect {
+    let clicked = ui.invisible_button(id, size);
+    let hovered = ui.is_item_hovered();
+    let min = ui.item_rect_min();
+    let max = ui.item_rect_max();
+    InteractiveRect {
+        clicked,
+        hovered,
+        min,
+        max,
+    }
+}
+
 fn toggle_knob_x(left: f32, width: f32, knob_radius: f32, t: f32) -> f32 {
     let track_inner_width = width - 2.0 * knob_radius;
     left + knob_radius + track_inner_width * t
@@ -292,15 +317,12 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
 
     let row_height = ui.frame_height();
     let row_width = ui.content_region_avail()[0];
-    let clicked = ui.invisible_button(format!("section_{}", id), [row_width, row_height]);
-    let hovered = ui.is_item_hovered();
-    let rect_min = ui.item_rect_min();
-    let rect_max = ui.item_rect_max();
+    let rect = interactive_rect(ui, &format!("section_{}", id), [row_width, row_height]);
 
     let is_open = match world.get_resource_mut::<UiWidgetState>() {
         Some(mut state) => {
             let open = state.section_open.entry(id).or_insert(default_open);
-            if clicked {
+            if rect.clicked {
                 *open = !*open;
             }
             *open
@@ -313,13 +335,13 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     let angle_rad = t * std::f32::consts::FRAC_PI_2;
 
     let draw_list = ui.get_window_draw_list();
-    let bg_color = if hovered {
+    let bg_color = if rect.hovered {
         srgb_to_linear_rgba(SURFACE3)
     } else {
         srgb_to_linear_rgba(SURFACE1)
     };
     draw_list
-        .add_rect(rect_min, rect_max, bg_color)
+        .add_rect(rect.min, rect.max, bg_color)
         .rounding(6.0)
         .filled(true)
         .build();
@@ -328,18 +350,14 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     let font_height = ui.text_line_height();
     let triangle_size = font_height * 0.5;
     let triangle_center = [
-        rect_min[0] + frame_padding[0] + triangle_size * 0.5,
-        rect_min[1] + row_height * 0.5,
+        rect.min[0] + frame_padding[0] + triangle_size * 0.5,
+        rect.min[1] + row_height * 0.5,
     ];
-    let points = triangle_points(triangle_center, triangle_size, angle_rad);
-    draw_list
-        .add_triangle(points[0], points[1], points[2], srgb_to_linear_rgba(TEXT))
-        .filled(true)
-        .build();
+    draw_expand_arrow(&draw_list, triangle_center, triangle_size, angle_rad);
 
     let text_pos = [
-        rect_min[0] + frame_padding[0] * 2.0 + triangle_size,
-        rect_min[1] + frame_padding[1],
+        rect.min[0] + frame_padding[0] * 2.0 + triangle_size,
+        rect.min[1] + frame_padding[1],
     ];
     if let Some(fonts) = world.get_resource::<UiFonts>() {
         let _font_stack = ui.push_font(fonts.heading);
@@ -365,9 +383,9 @@ pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> b
     let row_height = font_height.max(pill_height);
     let total_width = pill_width + spacing + label_width;
 
-    let clicked = ui.invisible_button(format!("toggle_btn_{}", id), [total_width, row_height]);
-    let origin = ui.item_rect_min();
-    if clicked {
+    let rect = interactive_rect(ui, &format!("toggle_btn_{}", id), [total_width, row_height]);
+    let origin = rect.min;
+    if rect.clicked {
         *value = !*value;
     }
 
@@ -407,7 +425,7 @@ pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> b
     ];
     draw_list.add_text(text_pos, srgb_to_linear_rgba(TEXT), display_label);
 
-    clicked
+    rect.clicked
 }
 
 fn draw_search_icon(draw_list: &DrawListMut, center: [f32; 2], color: [f32; 4]) {
@@ -537,22 +555,39 @@ pub enum TreeRowResponse {
     DoubleClicked,
 }
 
+pub fn draw_selected_row(draw_list: &DrawListMut, min: [f32; 2], max: [f32; 2]) {
+    let accent_alpha = [ACCENT[0], ACCENT[1], ACCENT[2], 0.25];
+    draw_list
+        .add_rect(min, max, srgb_to_linear_rgba(accent_alpha))
+        .rounding(6.0)
+        .filled(true)
+        .build();
+
+    let bar_left = min[0];
+    let bar_right = bar_left + 2.0;
+    draw_list
+        .add_rect(
+            [bar_left, min[1]],
+            [bar_right, max[1]],
+            srgb_to_linear_rgba(ACCENT),
+        )
+        .filled(true)
+        .build();
+}
+
 pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
     let id = ui.get_id(spec.id).raw();
     let row_height = ui.frame_height();
     let row_width = ui.content_region_avail()[0];
 
-    let clicked = ui.invisible_button(format!("tree_row_{}", id), [row_width, row_height]);
-    let hovered = ui.is_item_hovered();
+    let rect = interactive_rect(ui, &format!("tree_row_{}", id), [row_width, row_height]);
     let double_clicked = is_last_item_double_clicked(ui);
-    let rect_min = ui.item_rect_min();
-    let rect_max = ui.item_rect_max();
-    let row_left = rect_min[0];
+    let row_left = rect.min[0];
 
     let pointer = read_ui_pointer(ui);
     let on_expand_triangle =
         spec.has_children && is_in_expand_hit(pointer.pos[0], row_left, spec.depth);
-    let response = match (on_expand_triangle, clicked, double_clicked) {
+    let response = match (on_expand_triangle, rect.clicked, double_clicked) {
         (true, true, _) => TreeRowResponse::ExpandToggled,
         (true, false, _) => TreeRowResponse::None,
         (false, _, true) => TreeRowResponse::DoubleClicked,
@@ -562,32 +597,16 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
 
     let draw_list = ui.get_window_draw_list();
 
-    if hovered {
+    if rect.hovered {
         draw_list
-            .add_rect(rect_min, rect_max, srgb_to_linear_rgba(SURFACE3))
+            .add_rect(rect.min, rect.max, srgb_to_linear_rgba(SURFACE3))
             .rounding(6.0)
             .filled(true)
             .build();
     }
 
     if spec.selected {
-        let accent_alpha = [ACCENT[0], ACCENT[1], ACCENT[2], 0.25];
-        draw_list
-            .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_alpha))
-            .rounding(6.0)
-            .filled(true)
-            .build();
-
-        let bar_left = rect_min[0];
-        let bar_right = bar_left + 2.0;
-        draw_list
-            .add_rect(
-                [bar_left, rect_min[1]],
-                [bar_right, rect_max[1]],
-                srgb_to_linear_rgba(ACCENT),
-            )
-            .filled(true)
-            .build();
+        draw_selected_row(&draw_list, rect.min, rect.max);
     }
 
     let indent_x = row_left + spec.depth as f32 * TREE_INDENT;
@@ -596,16 +615,12 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
         let t = ui_anim(ui, world, &format!("tree_expand_{}", id), target);
         let angle_rad = t * std::f32::consts::FRAC_PI_2;
 
-        let triangle_center = [indent_x + TREE_INDENT * 0.5, rect_min[1] + row_height * 0.5];
+        let triangle_center = [indent_x + TREE_INDENT * 0.5, rect.min[1] + row_height * 0.5];
         let triangle_size = ui.text_line_height() * 0.5;
-        let points = triangle_points(triangle_center, triangle_size, angle_rad);
-        draw_list
-            .add_triangle(points[0], points[1], points[2], srgb_to_linear_rgba(TEXT))
-            .filled(true)
-            .build();
+        draw_expand_arrow(&draw_list, triangle_center, triangle_size, angle_rad);
     }
 
-    let text_y = rect_min[1] + ui.clone_style().frame_padding()[1];
+    let text_y = rect.min[1] + ui.clone_style().frame_padding()[1];
     let icon_x = indent_x + TREE_INDENT;
     draw_list.add_text([icon_x, text_y], srgb_to_linear_rgba(TEXT), spec.icon);
 

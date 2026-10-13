@@ -13,6 +13,7 @@ pub use icons::{entity_icon, Icon};
 pub use style::apply_ui_settings;
 pub use widgets::bone_picker;
 pub use widgets::bone_picker_with_hierarchy;
+pub use widgets::draw_selected_row;
 pub use widgets::enum_combo;
 pub use widgets::icon_button;
 pub use widgets::item_tooltip;

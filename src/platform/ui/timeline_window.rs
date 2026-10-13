@@ -21,8 +21,8 @@ use crate::ecs::systems::{
     timeline_effective_duration,
 };
 use crate::ecs::world::World;
+use crate::platform::key_bindings::{dispatch_bindings, Binding, KeyChord, ModifierKeys};
 use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
-use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
 };
@@ -1142,31 +1142,74 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
         && point[1] <= rect_max[1]
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum TimelineKeyAction {
+    Copy,
+    Paste,
+    MirrorPaste,
+    Delete,
+}
+
+pub(crate) const TIMELINE_KEY_BINDINGS: &[Binding<TimelineKeyAction>] = &[
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::C,
+            modifiers: ModifierKeys::ctrl(),
+        },
+        label: "Copy",
+        action: TimelineKeyAction::Copy,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::V,
+            modifiers: ModifierKeys::ctrl(),
+        },
+        label: "Paste",
+        action: TimelineKeyAction::Paste,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::V,
+            modifiers: ModifierKeys::ctrl_shift(),
+        },
+        label: "Mirror Paste",
+        action: TimelineKeyAction::MirrorPaste,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Delete,
+            modifiers: ModifierKeys::none(),
+        },
+        label: "Delete",
+        action: TimelineKeyAction::Delete,
+    },
+];
+
 fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
-    let modifiers = current_key_modifier(ui);
     let focused = ui.is_window_focused_with_flags(imgui::FocusedFlags::ROOT_AND_CHILD_WINDOWS);
     if !focused || ui.is_any_item_active() {
         return;
     }
 
-    if modifiers.ctrl && ui.is_key_pressed(imgui::Key::C) {
-        world.send_command(TimelineEvent::CopyKeyframes);
-    }
-
-    if modifiers.ctrl && !modifiers.shift && ui.is_key_pressed(imgui::Key::V) {
-        world.send_command(TimelineEvent::PasteKeyframes {
-            paste_time: state.current_time,
-        });
-    }
-
-    if modifiers.ctrl && modifiers.shift && ui.is_key_pressed(imgui::Key::V) {
-        world.send_command(TimelineEvent::MirrorPaste {
-            paste_time: state.current_time,
-        });
-    }
-
-    if ui.is_key_pressed(imgui::Key::Delete) {
-        delete_timeline_selection(world, state);
+    if let Some(action) = dispatch_bindings(ui, TIMELINE_KEY_BINDINGS) {
+        match action {
+            TimelineKeyAction::Copy => {
+                world.send_command(TimelineEvent::CopyKeyframes);
+            }
+            TimelineKeyAction::Paste => {
+                world.send_command(TimelineEvent::PasteKeyframes {
+                    paste_time: state.current_time,
+                });
+            }
+            TimelineKeyAction::MirrorPaste => {
+                world.send_command(TimelineEvent::MirrorPaste {
+                    paste_time: state.current_time,
+                });
+            }
+            TimelineKeyAction::Delete => {
+                delete_timeline_selection(world, state);
+            }
+        }
     }
 }
 

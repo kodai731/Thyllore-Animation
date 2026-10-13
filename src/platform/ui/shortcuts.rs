@@ -5,7 +5,7 @@ use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
 use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys};
 use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
-use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
+use crate::platform::ui::curve_editor::{CURVE_EDITOR_KEY_BINDINGS, SUGGESTION_KEY_BINDINGS};
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
 use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
@@ -13,14 +13,16 @@ use crate::platform::ui::theme::{
     draw_raised_window_frame, property_label, push_raised_window_style, section_header,
     SectionDefault,
 };
+use crate::platform::ui::timeline_window::TIMELINE_KEY_BINDINGS;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
-const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
+const SHORTCUT_SCOPES: [ShortcutScope; 6] = [
     ShortcutScope::Global,
     ShortcutScope::SceneView,
     ShortcutScope::Hierarchy,
     ShortcutScope::CurveEditor,
+    ShortcutScope::Timeline,
     ShortcutScope::SceneGizmo,
 ];
 
@@ -30,6 +32,7 @@ pub enum ShortcutScope {
     SceneView,
     Hierarchy,
     CurveEditor,
+    Timeline,
     SceneGizmo,
 }
 
@@ -40,6 +43,7 @@ impl ShortcutScope {
             ShortcutScope::SceneView => "Scene View",
             ShortcutScope::Hierarchy => "Hierarchy",
             ShortcutScope::CurveEditor => "Curve Editor",
+            ShortcutScope::Timeline => "Timeline",
             ShortcutScope::SceneGizmo => "Scene Gizmo",
         }
     }
@@ -59,6 +63,9 @@ pub(crate) fn format_chord(modifiers: ModifierKeys, key_name: &str) -> String {
     }
     if modifiers.shift {
         chord.push_str("Shift+");
+    }
+    if modifiers.alt {
+        chord.push_str("Alt+");
     }
     chord.push_str(key_name);
     chord
@@ -171,6 +178,18 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
             label: binding.label,
         });
 
+    let curve_suggestion = SUGGESTION_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
+        scope: ShortcutScope::CurveEditor,
+        chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
+        label: binding.label,
+    });
+
+    let timeline = TIMELINE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
+        scope: ShortcutScope::Timeline,
+        chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
+        label: binding.label,
+    });
+
     let scene_gizmo = GIZMO_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::SceneGizmo,
         chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
@@ -181,6 +200,8 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         .chain(command_palette)
         .chain(hierarchy)
         .chain(curve_editor)
+        .chain(curve_suggestion)
+        .chain(timeline)
         .chain(scene_gizmo)
         .collect()
 }
@@ -261,6 +282,7 @@ mod tests {
         assert!(scopes.contains(&ShortcutScope::SceneView));
         assert!(scopes.contains(&ShortcutScope::Hierarchy));
         assert!(scopes.contains(&ShortcutScope::CurveEditor));
+        assert!(scopes.contains(&ShortcutScope::Timeline));
         assert!(scopes.contains(&ShortcutScope::SceneGizmo));
     }
 
@@ -314,5 +336,22 @@ mod tests {
             format_chord(ModifierKeys::ctrl_shift(), "Z"),
             "Ctrl+Shift+Z"
         );
+    }
+
+    #[test]
+    fn test_format_chord_alt() {
+        let modifiers = ModifierKeys {
+            alt: true,
+            ..ModifierKeys::none()
+        };
+        assert_eq!(format_chord(modifiers, "D"), "Alt+D");
+    }
+
+    #[test]
+    fn test_timeline_mirror_paste_is_listed() {
+        let shortcuts = collect_shortcuts();
+        assert!(shortcuts
+            .iter()
+            .any(|entry| entry.scope == ShortcutScope::Timeline && entry.chord == "Ctrl+Shift+V"));
     }
 }

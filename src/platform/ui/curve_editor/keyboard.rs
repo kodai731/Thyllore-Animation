@@ -281,6 +281,40 @@ pub(super) fn select_all_keyframes(
     selected
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum SuggestionKeyAction {
+    Request,
+    Accept,
+    Dismiss,
+}
+
+pub(crate) const SUGGESTION_KEY_BINDINGS: &[Binding<SuggestionKeyAction>] = &[
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::C,
+            modifiers: ModifierKeys::shift(),
+        },
+        label: "Request suggestion",
+        action: SuggestionKeyAction::Request,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Tab,
+            modifiers: ModifierKeys::none(),
+        },
+        label: "Accept suggestion",
+        action: SuggestionKeyAction::Accept,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Escape,
+            modifiers: ModifierKeys::none(),
+        },
+        label: "Dismiss suggestion",
+        action: SuggestionKeyAction::Dismiss,
+    },
+];
+
 #[cfg(feature = "ml")]
 pub(super) fn handle_suggestion_keyboard(
     ui: &imgui::Ui,
@@ -289,23 +323,27 @@ pub(super) fn handle_suggestion_keyboard(
     editor_state: &CurveEditorState,
     suggestion_overlays: &[SuggestionOverlay],
 ) {
-    let modifiers = current_key_modifier(ui);
-
-    if modifiers.shift && ui.is_key_pressed(imgui::Key::C) {
-        for property_type in &editor_state.visible_curves {
-            world.send_command(CurveSuggestionEvent::Request {
-                bone_id,
-                property_type: *property_type,
-            });
+    if let Some(action) = dispatch_bindings(ui, SUGGESTION_KEY_BINDINGS) {
+        match action {
+            SuggestionKeyAction::Request => {
+                for property_type in &editor_state.visible_curves {
+                    world.send_command(CurveSuggestionEvent::Request {
+                        bone_id,
+                        property_type: *property_type,
+                    });
+                }
+            }
+            SuggestionKeyAction::Accept => {
+                if !suggestion_overlays.is_empty() {
+                    world.send_command(CurveSuggestionEvent::Accept);
+                }
+            }
+            SuggestionKeyAction::Dismiss => {
+                if !suggestion_overlays.is_empty() {
+                    world.send_command(CurveSuggestionEvent::Dismiss);
+                }
+            }
         }
-    }
-
-    if !modifiers.ctrl && ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
-        world.send_command(CurveSuggestionEvent::Accept);
-    }
-
-    if ui.is_key_pressed(imgui::Key::Escape) && !suggestion_overlays.is_empty() {
-        world.send_command(CurveSuggestionEvent::Dismiss);
     }
 }
 

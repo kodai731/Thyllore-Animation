@@ -1,0 +1,54 @@
+name: Third Party Licenses
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'crates/**/Cargo.toml'
+      - 'vendor/**/Cargo.toml'
+      - 'deny.toml'
+      - 'about.toml'
+      - 'about.template.md'
+      - 'THIRD_PARTY_CARGO_LICENSES.md'
+      - 'scripts/generate_third_party_licenses.sh'
+      - '.github/workflows/third_party_licenses.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'crates/**/Cargo.toml'
+      - 'vendor/**/Cargo.toml'
+      - 'deny.toml'
+      - 'about.toml'
+      - 'about.template.md'
+      - 'THIRD_PARTY_CARGO_LICENSES.md'
+      - 'scripts/generate_third_party_licenses.sh'
+      - '.github/workflows/third_party_licenses.yml'
+
+jobs:
+  check:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        run: cargo install --locked --version 0.20.2 cargo-deny
+
+      - name: Install cargo-about
+        run: cargo install --locked --version 0.9.2 --features cli cargo-about
+
+      - name: Check licenses with cargo-deny
+        run: cargo deny check licenses
+
+      - name: Regenerate and verify THIRD_PARTY_CARGO_LICENSES.md
+        run: |
+          bash scripts/generate_third_party_licenses.sh
+          git diff --exit-code THIRD_PARTY_CARGO_LICENSES.md

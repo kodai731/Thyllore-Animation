@@ -8,14 +8,22 @@ use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::{create_color_overlay_render_pass, ColorOverlayPassDesc, RRRender};
 use crate::vulkanr::resource::hdr_buffer::HDR_FORMAT;
-use crate::vulkanr::resource::{GpuResource, VolumeImage};
+use crate::vulkanr::resource::GpuResource;
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
 };
-use thyllore_vulkan_core::renderer::ReducedResolveTarget;
+use thyllore_vulkan_core::renderer::{
+    create_shadow_volume, ReducedResolveTarget, ShadowVolumeSpec,
+};
 
-pub const WIND_SHADOW_VOLUME_FORMAT: vk::Format = vk::Format::R16G16_SFLOAT;
+pub const WIND_SHADOW_VOLUME: ShadowVolumeSpec = ShadowVolumeSpec {
+    radial: WIND_SHADOW_VOLUME_RADIAL,
+    height: WIND_SHADOW_VOLUME_HEIGHT,
+    theta: WIND_SHADOW_VOLUME_THETA,
+    slots: WIND_SHADOW_VOLUME_SLOTS,
+    format: vk::Format::R16G16_SFLOAT,
+};
 
 pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     name: "wind",
@@ -24,14 +32,6 @@ pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     on_viewport_resize: Some(resize_wind_render_targets),
     passes: &[&super::passes::WindPassNode],
 };
-
-pub fn wind_shadow_volume_extent() -> vk::Extent3D {
-    vk::Extent3D {
-        width: WIND_SHADOW_VOLUME_RADIAL * WIND_SHADOW_VOLUME_SLOTS,
-        height: WIND_SHADOW_VOLUME_HEIGHT,
-        depth: WIND_SHADOW_VOLUME_THETA,
-    }
-}
 
 unsafe fn create_framebuffer(
     rrdevice: &RRDevice,
@@ -74,13 +74,7 @@ pub unsafe fn create_wind_render_targets(
 
     let reduced = ReducedResolveTarget::new(rrdevice, HDR_FORMAT)?;
 
-    let shadow_volume = VolumeImage::new(
-        instance,
-        rrdevice,
-        wind_shadow_volume_extent(),
-        WIND_SHADOW_VOLUME_FORMAT,
-        vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
-    )?;
+    let shadow_volume = create_shadow_volume(instance, rrdevice, &WIND_SHADOW_VOLUME)?;
 
     log!("Created wind render targets: {}x{}", width, height);
     Ok(WindRenderTargets {

@@ -60,7 +60,7 @@ pub unsafe fn create_gbuffer_framebuffer(
     rrrender: &mut RRRender,
     gbuffer: &RRGBuffer,
 ) -> Result<()> {
-    let (depth_image, depth_image_memory) = create_image(
+    let depth_allocation = create_image(
         instance,
         rrdevice,
         gbuffer.width,
@@ -75,14 +75,13 @@ pub unsafe fn create_gbuffer_framebuffer(
 
     let depth_image_view = create_image_view(
         rrdevice,
-        depth_image,
+        depth_allocation.image,
         get_depth_format(instance, rrdevice)?,
         vk::ImageAspectFlags::DEPTH,
         1,
     )?;
 
-    rrrender.gbuffer_depth_image = depth_image;
-    rrrender.gbuffer_depth_image_memory = depth_image_memory;
+    rrrender.gbuffer_depth_allocation = depth_allocation;
     rrrender.gbuffer_depth_image_view = depth_image_view;
 
     let attachments = [

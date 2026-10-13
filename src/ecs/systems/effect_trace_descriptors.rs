@@ -5,9 +5,11 @@ use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::resource::GpuResource;
 use thyllore_vulkan_core::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RREffectTraceDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
@@ -58,19 +60,5 @@ impl RREffectTraceDescriptorSet {
             .buffer(effect_trace::HIT_TABLE, hit_table, 0, vk::WHOLE_SIZE as u64)?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RREffectTraceDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

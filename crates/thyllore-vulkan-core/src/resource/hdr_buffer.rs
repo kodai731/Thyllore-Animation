@@ -2,21 +2,25 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 
 pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct HdrBuffer {
-    pub color_image: vk::Image,
-    pub color_image_memory: vk::DeviceMemory,
+    pub color: ImageAllocation,
     pub color_image_view: vk::ImageView,
+    #[gpu_resource(skip)]
     pub depth_image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub framebuffer: vk::Framebuffer,
     pub render_pass: vk::RenderPass,
+    pub framebuffer: vk::Framebuffer,
+    pub sampler: vk::Sampler,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 
@@ -27,7 +31,7 @@ impl HdrBuffer {
         width: u32,
         height: u32,
     ) -> Result<Self> {
-        let (color_image, color_image_memory) = create_image(
+        let color = create_image(
             instance,
             rrdevice,
             width,
@@ -45,7 +49,7 @@ impl HdrBuffer {
 
         let color_image_view = create_image_view(
             rrdevice,
-            color_image,
+            color.image,
             HDR_FORMAT,
             vk::ImageAspectFlags::COLOR,
             1,
@@ -63,8 +67,7 @@ impl HdrBuffer {
         );
 
         Ok(Self {
-            color_image,
-            color_image_memory,
+            color,
             color_image_view,
             depth_image_view: vk::ImageView::null(),
             sampler,
@@ -230,40 +233,11 @@ impl HdrBuffer {
         // The depth attachment belongs to the G-buffer, which is resized after
         // this call and re-attaches its new depth view; the old one has the
         // previous extent and would not fit this framebuffer.
-        self.destroy(&rrdevice.device);
+        self.destroy_gpu(rrdevice);
         *self = Self::new(instance, rrdevice, new_width, new_height)?;
 
         log!("Resized HDR buffer to: {}x{}", new_width, new_height);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        if self.sampler != vk::Sampler::null() {
-            device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-        if self.framebuffer != vk::Framebuffer::null() {
-            device.destroy_framebuffer(self.framebuffer, None);
-            self.framebuffer = vk::Framebuffer::null();
-        }
-        if self.render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.render_pass, None);
-            self.render_pass = vk::RenderPass::null();
-        }
-        if self.color_image_view != vk::ImageView::null() {
-            device.destroy_image_view(self.color_image_view, None);
-            self.color_image_view = vk::ImageView::null();
-        }
-        if self.color_image != vk::Image::null() {
-            device.destroy_image(self.color_image, None);
-            self.color_image = vk::Image::null();
-        }
-        if self.color_image_memory != vk::DeviceMemory::null() {
-            device.free_memory(self.color_image_memory, None);
-            self.color_image_memory = vk::DeviceMemory::null();
-        }
-
-        log!("Destroyed HDR buffer");
     }
 
     pub fn extent(&self) -> vk::Extent2D {
@@ -271,23 +245,5 @@ impl HdrBuffer {
             width: self.width,
             height: self.height,
         }
-    }
-}
-
-impl Drop for HdrBuffer {
-    fn drop(&mut self) {
-        if self.color_image != vk::Image::null() {
-            log_warn!("HdrBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-impl GpuResource for HdrBuffer {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.color_image.is_destroyed()
     }
 }

@@ -3,30 +3,32 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::render::pass::get_depth_format;
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct OffscreenFramebuffer {
-    pub msaa_color_image: vk::Image,
-    pub msaa_color_image_memory: vk::DeviceMemory,
+    pub msaa_color: ImageAllocation,
+    pub resolve_color: ImageAllocation,
+    pub msaa_depth: ImageAllocation,
+
     pub msaa_color_image_view: vk::ImageView,
-
-    pub resolve_color_image: vk::Image,
-    pub resolve_color_image_memory: vk::DeviceMemory,
     pub resolve_color_image_view: vk::ImageView,
-
-    pub msaa_depth_image: vk::Image,
-    pub msaa_depth_image_memory: vk::DeviceMemory,
     pub msaa_depth_image_view: vk::ImageView,
 
-    pub framebuffer: vk::Framebuffer,
     pub render_pass: vk::RenderPass,
+    pub framebuffer: vk::Framebuffer,
     pub sampler: vk::Sampler,
 
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
+    #[gpu_resource(skip)]
     pub format: vk::Format,
+    #[gpu_resource(skip)]
     pub msaa_samples: vk::SampleCountFlags,
 }
 
@@ -40,7 +42,7 @@ impl OffscreenFramebuffer {
         msaa_samples: vk::SampleCountFlags,
         format: vk::Format,
     ) -> Result<Self> {
-        let (msaa_color_image, msaa_color_image_memory) = create_image(
+        let msaa_color = create_image(
             instance,
             rrdevice,
             width,
@@ -55,13 +57,13 @@ impl OffscreenFramebuffer {
 
         let msaa_color_image_view = create_image_view(
             rrdevice,
-            msaa_color_image,
+            msaa_color.image,
             format,
             vk::ImageAspectFlags::COLOR,
             1,
         )?;
 
-        let (resolve_color_image, resolve_color_image_memory) = create_image(
+        let resolve_color = create_image(
             instance,
             rrdevice,
             width,
@@ -76,7 +78,7 @@ impl OffscreenFramebuffer {
 
         let resolve_color_image_view = create_image_view(
             rrdevice,
-            resolve_color_image,
+            resolve_color.image,
             format,
             vk::ImageAspectFlags::COLOR,
             1,
@@ -86,7 +88,7 @@ impl OffscreenFramebuffer {
             rrdevice,
             rrdevice.graphics_queue,
             command_pool,
-            resolve_color_image,
+            resolve_color.image,
             format,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -94,7 +96,7 @@ impl OffscreenFramebuffer {
         )?;
 
         let depth_format = get_depth_format(instance, rrdevice)?;
-        let (msaa_depth_image, msaa_depth_image_memory) = create_image(
+        let msaa_depth = create_image(
             instance,
             rrdevice,
             width,
@@ -109,7 +111,7 @@ impl OffscreenFramebuffer {
 
         let msaa_depth_image_view = create_image_view(
             rrdevice,
-            msaa_depth_image,
+            msaa_depth.image,
             depth_format,
             vk::ImageAspectFlags::DEPTH,
             1,
@@ -142,14 +144,11 @@ impl OffscreenFramebuffer {
         );
 
         Ok(Self {
-            msaa_color_image,
-            msaa_color_image_memory,
+            msaa_color,
+            resolve_color,
+            msaa_depth,
             msaa_color_image_view,
-            resolve_color_image,
-            resolve_color_image_memory,
             resolve_color_image_view,
-            msaa_depth_image,
-            msaa_depth_image_memory,
             msaa_depth_image_view,
             framebuffer,
             render_pass,
@@ -303,7 +302,7 @@ impl OffscreenFramebuffer {
 
         let msaa_samples = self.msaa_samples;
         let format = self.format;
-        self.destroy(&rrdevice.device);
+        self.destroy_gpu(rrdevice);
 
         let new_fb = Self::new(
             instance,
@@ -324,26 +323,6 @@ impl OffscreenFramebuffer {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        device.destroy_sampler(self.sampler, None);
-        device.destroy_framebuffer(self.framebuffer, None);
-        device.destroy_render_pass(self.render_pass, None);
-
-        device.destroy_image_view(self.msaa_color_image_view, None);
-        device.destroy_image(self.msaa_color_image, None);
-        device.free_memory(self.msaa_color_image_memory, None);
-
-        device.destroy_image_view(self.resolve_color_image_view, None);
-        device.destroy_image(self.resolve_color_image, None);
-        device.free_memory(self.resolve_color_image_memory, None);
-
-        device.destroy_image_view(self.msaa_depth_image_view, None);
-        device.destroy_image(self.msaa_depth_image, None);
-        device.free_memory(self.msaa_depth_image_memory, None);
-
-        log!("Destroyed offscreen framebuffer");
-    }
-
     pub fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,
@@ -353,22 +332,5 @@ impl OffscreenFramebuffer {
 
     pub fn resolve_image_view(&self) -> vk::ImageView {
         self.resolve_color_image_view
-    }
-}
-
-impl GpuResource for OffscreenFramebuffer {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-
-        self.sampler = vk::Sampler::null();
-        self.framebuffer = vk::Framebuffer::null();
-        self.render_pass = vk::RenderPass::null();
-        self.msaa_color_image = vk::Image::null();
-        self.resolve_color_image = vk::Image::null();
-        self.msaa_depth_image = vk::Image::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.render_pass.is_destroyed() && self.resolve_color_image.is_destroyed()
     }
 }

@@ -1,6 +1,6 @@
 use crate::core::device::*;
 use crate::descriptor::{PassShaders, ShaderStage};
-use crate::resource::buffer::create_buffer;
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::fs::File;
@@ -8,15 +8,19 @@ use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
-#[derive(Clone, Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct RRRayTracingPipeline {
+    pub sbt_allocation: BufferAllocation,
     pub pipeline_layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
-    pub sbt_buffer: vk::Buffer,
-    pub sbt_memory: vk::DeviceMemory,
+    #[gpu_resource(skip)]
     pub raygen_region: vk::StridedDeviceAddressRegionKHR,
+    #[gpu_resource(skip)]
     pub miss_region: vk::StridedDeviceAddressRegionKHR,
+    #[gpu_resource(skip)]
     pub hit_region: vk::StridedDeviceAddressRegionKHR,
+    #[gpu_resource(skip)]
     pub callable_region: vk::StridedDeviceAddressRegionKHR,
 }
 
@@ -192,20 +196,12 @@ impl RRRayTracingPipeline {
         Ok(Self {
             pipeline_layout,
             pipeline,
-            sbt_buffer: sbt.buffer,
-            sbt_memory: sbt.memory,
+            sbt_allocation: sbt.allocation,
             raygen_region: sbt.raygen_region,
             miss_region: sbt.miss_region,
             hit_region: sbt.hit_region,
             callable_region: sbt.callable_region,
         })
-    }
-
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
-        device.destroy_pipeline(self.pipeline, None);
-        device.destroy_pipeline_layout(self.pipeline_layout, None);
-        device.destroy_buffer(self.sbt_buffer, None);
-        device.free_memory(self.sbt_memory, None);
     }
 }
 
@@ -275,8 +271,7 @@ unsafe fn ray_tracing_properties(
 }
 
 struct ShaderBindingTable {
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    allocation: BufferAllocation,
     raygen_region: vk::StridedDeviceAddressRegionKHR,
     miss_region: vk::StridedDeviceAddressRegionKHR,
     hit_region: vk::StridedDeviceAddressRegionKHR,
@@ -317,7 +312,7 @@ impl ShaderBindingTable {
             &handles[group * handle_size as usize..(group + 1) * handle_size as usize]
         };
 
-        let (buffer, memory) = create_buffer(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             sbt_size,
@@ -326,6 +321,8 @@ impl ShaderBindingTable {
                 | vk::BufferUsageFlags::TRANSFER_DST,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        let buffer = allocation.buffer;
+        let memory = allocation.memory;
         let mapped_ptr = device.map_memory(memory, 0, sbt_size, vk::MemoryMapFlags::empty())?;
         let slice = std::slice::from_raw_parts_mut(mapped_ptr as *mut u8, sbt_size as usize);
         let mut write = |offset: u64, group: usize| {
@@ -352,8 +349,7 @@ impl ShaderBindingTable {
                 .build()
         };
         Ok(Self {
-            buffer,
-            memory,
+            allocation,
             raygen_region: region(0, region_size, region_size),
             miss_region: region(region_size, region_size, handle_stride),
             hit_region: region(2 * region_size, hit_region_size, handle_stride),
@@ -381,23 +377,6 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
 
 pub fn align_up(v: u64, a: u64) -> u64 {
     (v + a - 1) & !(a - 1)
-}
-
-impl GpuResource for RRRayTracingPipeline {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        if self.pipeline == vk::Pipeline::null() {
-            return;
-        }
-        self.destroy(&rrdevice.device);
-        self.pipeline = vk::Pipeline::null();
-        self.pipeline_layout = vk::PipelineLayout::null();
-        self.sbt_buffer = vk::Buffer::null();
-        self.sbt_memory = vk::DeviceMemory::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.pipeline.is_destroyed() && self.sbt_buffer.is_destroyed()
-    }
 }
 
 #[cfg(test)]

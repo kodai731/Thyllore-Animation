@@ -5,9 +5,11 @@ use crate::descriptor::shader_bindings::ray_query_shadow;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRRayQueryDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
 }
 
@@ -116,19 +118,5 @@ impl RRRayQueryDescriptorSet {
         }
         writer.apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RRRayQueryDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
     }
 }

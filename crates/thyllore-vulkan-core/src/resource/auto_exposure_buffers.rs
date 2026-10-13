@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::allocation::{create_buffer, BufferAllocation};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 const HISTOGRAM_BIN_COUNT: u32 = 256;
@@ -17,15 +17,15 @@ pub struct AutoExposureReadback {
     pub adapted_exposure: f32,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct AutoExposureBuffers {
-    pub histogram_buffer: vk::Buffer,
-    pub histogram_buffer_memory: vk::DeviceMemory,
-    pub luminance_buffer: vk::Buffer,
-    pub luminance_buffer_memory: vk::DeviceMemory,
-    pub readback_buffers: [vk::Buffer; 2],
-    pub readback_memories: [vk::DeviceMemory; 2],
+    pub readback_allocations: [BufferAllocation; 2],
+    pub luminance_allocation: BufferAllocation,
+    pub histogram_allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 
@@ -36,7 +36,7 @@ impl AutoExposureBuffers {
         width: u32,
         height: u32,
     ) -> Result<Self> {
-        let (histogram_buffer, histogram_buffer_memory) = create_buffer(
+        let histogram_allocation = create_buffer(
             instance,
             rrdevice,
             HISTOGRAM_BUFFER_SIZE,
@@ -44,7 +44,7 @@ impl AutoExposureBuffers {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        let (luminance_buffer, luminance_buffer_memory) = create_buffer(
+        let luminance_allocation = create_buffer(
             instance,
             rrdevice,
             LUMINANCE_BUFFER_SIZE,
@@ -52,33 +52,28 @@ impl AutoExposureBuffers {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        Self::zero_luminance_buffer(&rrdevice.device, luminance_buffer_memory)?;
+        Self::zero_luminance_buffer(&rrdevice.device, luminance_allocation.memory)?;
 
-        let mut readback_buffers = [vk::Buffer::null(); 2];
-        let mut readback_memories = [vk::DeviceMemory::null(); 2];
+        let mut readback_allocations: [BufferAllocation; 2] = Default::default();
 
-        for i in 0..2 {
-            let (buf, mem) = create_buffer(
+        for readback_allocation in &mut readback_allocations {
+            let allocation = create_buffer(
                 instance,
                 rrdevice,
                 LUMINANCE_BUFFER_SIZE,
                 vk::BufferUsageFlags::TRANSFER_DST,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
-            Self::zero_readback_buffer(&rrdevice.device, mem)?;
-            readback_buffers[i] = buf;
-            readback_memories[i] = mem;
+            Self::zero_readback_buffer(&rrdevice.device, allocation.memory)?;
+            *readback_allocation = allocation;
         }
 
         log!("Created AutoExposure buffers: {}x{}", width, height);
 
         Ok(Self {
-            histogram_buffer,
-            histogram_buffer_memory,
-            luminance_buffer,
-            luminance_buffer_memory,
-            readback_buffers,
-            readback_memories,
+            histogram_allocation,
+            luminance_allocation,
+            readback_allocations,
             width,
             height,
         })
@@ -125,7 +120,7 @@ impl AutoExposureBuffers {
     ) -> Option<AutoExposureReadback> {
         let data = device
             .map_memory(
-                self.readback_memories[slot],
+                self.readback_allocations[slot].memory,
                 0,
                 LUMINANCE_BUFFER_SIZE,
                 vk::MemoryMapFlags::empty(),
@@ -138,7 +133,7 @@ impl AutoExposureBuffers {
             adapted_exposure: *values.add(1),
         };
 
-        device.unmap_memory(self.readback_memories[slot]);
+        device.unmap_memory(self.readback_allocations[slot].memory);
         Some(readback)
     }
 
@@ -153,61 +148,10 @@ impl AutoExposureBuffers {
             return Ok(());
         }
 
-        self.destroy(&rrdevice.device);
+        self.destroy_gpu(rrdevice);
         let new_buf = Self::new(instance, rrdevice, new_width, new_height)?;
         *self = new_buf;
 
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        if self.histogram_buffer != vk::Buffer::null() {
-            device.destroy_buffer(self.histogram_buffer, None);
-            self.histogram_buffer = vk::Buffer::null();
-        }
-        if self.histogram_buffer_memory != vk::DeviceMemory::null() {
-            device.free_memory(self.histogram_buffer_memory, None);
-            self.histogram_buffer_memory = vk::DeviceMemory::null();
-        }
-
-        if self.luminance_buffer != vk::Buffer::null() {
-            device.destroy_buffer(self.luminance_buffer, None);
-            self.luminance_buffer = vk::Buffer::null();
-        }
-        if self.luminance_buffer_memory != vk::DeviceMemory::null() {
-            device.free_memory(self.luminance_buffer_memory, None);
-            self.luminance_buffer_memory = vk::DeviceMemory::null();
-        }
-
-        for i in 0..2 {
-            if self.readback_buffers[i] != vk::Buffer::null() {
-                device.destroy_buffer(self.readback_buffers[i], None);
-                self.readback_buffers[i] = vk::Buffer::null();
-            }
-            if self.readback_memories[i] != vk::DeviceMemory::null() {
-                device.free_memory(self.readback_memories[i], None);
-                self.readback_memories[i] = vk::DeviceMemory::null();
-            }
-        }
-
-        log!("Destroyed AutoExposure buffers");
-    }
-}
-
-impl Drop for AutoExposureBuffers {
-    fn drop(&mut self) {
-        if self.histogram_buffer != vk::Buffer::null() {
-            log_warn!("AutoExposureBuffers dropped without calling destroy()");
-        }
-    }
-}
-
-impl GpuResource for AutoExposureBuffers {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.histogram_buffer.is_destroyed()
     }
 }

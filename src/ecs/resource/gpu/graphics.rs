@@ -1,39 +1,6 @@
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 
-use crate::vulkanr::resource::graphics_resource::{
-    FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
-};
-
-#[derive(Clone, Debug, Default)]
-pub struct GpuDescriptors {
-    pub frame_set: FrameDescriptorSet,
-    pub objects: ObjectDescriptorSet,
-}
-
-impl GpuDescriptors {
-    pub fn new(frame_set: FrameDescriptorSet, objects: ObjectDescriptorSet) -> Self {
-        Self { frame_set, objects }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct MaterialRegistry {
-    pub materials: MaterialManager,
-    pub mesh_material_ids: Vec<MaterialId>,
-}
-
-impl MaterialRegistry {
-    pub fn new(materials: MaterialManager) -> Self {
-        Self {
-            materials,
-            mesh_material_ids: Vec::new(),
-        }
-    }
-
-    pub fn get_material_id(&self, mesh_index: usize) -> Option<MaterialId> {
-        self.mesh_material_ids.get(mesh_index).copied()
-    }
-}
+use crate::vulkanr::resource::graphics_resource::{MeshBuffer, NodeData};
 
 pub use thyllore_anim_core::AnimationType;
 
@@ -56,7 +23,7 @@ impl Default for ModelState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct MeshAssets {
     pub meshes: Vec<MeshBuffer>,
 }

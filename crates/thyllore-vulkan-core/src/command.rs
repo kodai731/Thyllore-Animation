@@ -1,6 +1,7 @@
 use super::device::*;
 use super::vulkan::*;
 use crate::render::pass::RRRender;
+use crate::resource::GpuResource;
 use std::rc::Rc;
 
 pub unsafe fn begin_single_time_commands(
@@ -60,6 +61,18 @@ impl RRCommandPool {
     }
 }
 
+impl GpuResource for Rc<RRCommandPool> {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        let mut command_pool = self.command_pool;
+        command_pool.destroy_gpu(rrdevice);
+        *self = Rc::default();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.command_pool.is_destroyed()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RRCommandBuffer {
     pub rrcommand_pool: Rc<RRCommandPool>,
@@ -85,6 +98,21 @@ impl RRCommandBuffer {
             .command_buffer_count((rrrender.framebuffers.len() * 2) as u32);
         rrcommand_buffer.command_buffers = rrdevice.device.allocate_command_buffers(&info)?;
         Ok(())
+    }
+}
+
+impl GpuResource for RRCommandBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        if !self.command_buffers.is_empty() {
+            rrdevice
+                .device
+                .free_command_buffers(self.rrcommand_pool.command_pool, &self.command_buffers);
+            self.command_buffers.clear();
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.command_buffers.is_empty()
     }
 }
 

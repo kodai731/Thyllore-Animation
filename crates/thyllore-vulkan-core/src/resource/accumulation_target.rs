@@ -8,9 +8,12 @@ use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorag
 
 /// A storage image from `RenderTargetStorage` that compute passes accumulate into, kept in
 /// GENERAL layout for its whole life. The storage owns the image; this only holds handles.
-#[derive(Clone, Copy, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct AccumulationTarget {
+    #[gpu_resource(skip)]
     pub image: vk::Image,
+    #[gpu_resource(skip)]
     pub view: vk::ImageView,
 }
 
@@ -26,11 +29,11 @@ impl AccumulationTarget {
         let usage = vk::ImageUsageFlags::STORAGE
             | vk::ImageUsageFlags::TRANSFER_DST
             | vk::ImageUsageFlags::TRANSFER_SRC;
-        let entry = *storage.ensure(instance, rrdevice, key, format, usage, None)?;
+        let entry = storage.ensure(instance, rrdevice, key, format, usage, None)?;
 
         let cmd = begin_single_time_commands(rrdevice, command_pool)?;
         let to_general = vk::ImageMemoryBarrier::builder()
-            .image(entry.image)
+            .image(entry.allocation.image)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .src_access_mask(vk::AccessFlags::empty())
@@ -57,19 +60,8 @@ impl AccumulationTarget {
         end_single_time_commands(rrdevice, rrdevice.graphics_queue, command_pool, cmd)?;
 
         Ok(Self {
-            image: entry.image,
+            image: entry.allocation.image,
             view: entry.view,
         })
-    }
-}
-
-impl GpuResource for AccumulationTarget {
-    unsafe fn destroy_gpu(&mut self, _rrdevice: &RRDevice) {
-        self.image = vk::Image::null();
-        self.view = vk::ImageView::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.image.is_destroyed() && self.view.is_destroyed()
     }
 }

@@ -6,6 +6,7 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::RRImage;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
@@ -13,20 +14,26 @@ use thyllore_render_core::MaterialUBO;
 
 pub type MaterialId = u32;
 
-#[derive(Clone, Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct Material {
+    #[gpu_resource(skip)]
     pub id: MaterialId,
+    #[gpu_resource(skip)]
     pub name: String,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
-    pub textures: Vec<RRImage>,
     pub uniform_buffer: UniformBuffer<MaterialUBO>,
+    #[gpu_resource(skip)]
     pub properties: MaterialUBO,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct MaterialManager {
     pub layout: ReflectedSetLayout,
     pub materials: HashMap<MaterialId, Material>,
+    #[gpu_resource(skip)]
     next_id: MaterialId,
 }
 
@@ -95,7 +102,6 @@ impl MaterialManager {
             id,
             name: name.to_string(),
             descriptor_set,
-            textures: vec![],
             uniform_buffer,
             properties,
         };
@@ -111,19 +117,11 @@ impl MaterialManager {
     /// The caller guarantees the device is idle: the sets go back to the allocator for reuse.
     pub unsafe fn clear_materials(&mut self, rrdevice: &RRDevice) {
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(&rrdevice.device);
+            material.uniform_buffer.destroy_gpu(rrdevice);
             self.layout.release_set(rrdevice, material.descriptor_set);
         }
 
         self.materials.clear();
         self.next_id = 0;
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(device);
-        }
-        self.layout.destroy(rrdevice);
     }
 }

@@ -8,11 +8,14 @@ use crate::ecs::systems::lightning::LightningResolveDescriptorSet;
 use crate::gpu_resource;
 
 /// Render pass and framebuffer that blend the lightning resolve pass onto the HDR color image.
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct LightningRenderTargets {
     pub render_pass: vk::RenderPass,
     pub framebuffer: vk::Framebuffer,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
 

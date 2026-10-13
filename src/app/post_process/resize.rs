@@ -86,7 +86,7 @@ impl App {
                 &self.rrdevice,
                 hdr_image_view,
                 hdr_sampler,
-                ae_buffers.histogram_buffer,
+                ae_buffers.histogram_allocation.buffer,
                 (256 * 4) as u64,
             )?;
         }
@@ -94,9 +94,9 @@ impl App {
         if let Some(ref avg_desc) = self.data.raytracing.auto_exposure_average_descriptor {
             avg_desc.update_bindings(
                 &self.rrdevice,
-                ae_buffers.histogram_buffer,
+                ae_buffers.histogram_allocation.buffer,
                 (256 * 4) as u64,
-                ae_buffers.luminance_buffer,
+                ae_buffers.luminance_allocation.buffer,
                 (2 * 4) as u64,
             )?;
         }

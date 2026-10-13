@@ -1,4 +1,5 @@
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::vk::{KhrAccelerationStructureExtension, KhrSwapchainExtension};
 
 use crate::core::device::RRDevice;
 
@@ -42,13 +43,33 @@ raw_handle_resource!(vk::ImageView, destroy_image_view);
 raw_handle_resource!(vk::DeviceMemory, free_memory);
 raw_handle_resource!(vk::Buffer, destroy_buffer);
 raw_handle_resource!(vk::Sampler, destroy_sampler);
-raw_handle_resource!(vk::DescriptorSetLayout, destroy_descriptor_set_layout);
+impl GpuResource for vk::DescriptorSetLayout {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        if *self != vk::DescriptorSetLayout::null() {
+            rrdevice.forget_descriptor_layout(*self);
+            rrdevice.device.destroy_descriptor_set_layout(*self, None);
+            *self = vk::DescriptorSetLayout::null();
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        *self == vk::DescriptorSetLayout::null()
+    }
+}
 raw_handle_resource!(vk::Pipeline, destroy_pipeline);
 raw_handle_resource!(vk::PipelineLayout, destroy_pipeline_layout);
 raw_handle_resource!(vk::RenderPass, destroy_render_pass);
 raw_handle_resource!(vk::Framebuffer, destroy_framebuffer);
 raw_handle_resource!(vk::ShaderModule, destroy_shader_module);
 raw_handle_resource!(vk::QueryPool, destroy_query_pool);
+raw_handle_resource!(vk::SwapchainKHR, destroy_swapchain_khr);
+raw_handle_resource!(vk::Semaphore, destroy_semaphore);
+raw_handle_resource!(vk::Fence, destroy_fence);
+raw_handle_resource!(vk::CommandPool, destroy_command_pool);
+raw_handle_resource!(
+    vk::AccelerationStructureKHR,
+    destroy_acceleration_structure_khr
+);
 
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
@@ -100,6 +121,31 @@ impl<T: GpuResource> GpuResource for Vec<T> {
             resource.destroy_gpu(rrdevice);
         }
         self.clear();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.iter().all(GpuResource::is_destroyed)
+    }
+}
+
+impl<K, V: GpuResource> GpuResource for std::collections::HashMap<K, V> {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        for resource in self.values_mut() {
+            resource.destroy_gpu(rrdevice);
+        }
+        self.clear();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.values().all(GpuResource::is_destroyed)
+    }
+}
+
+impl<T: GpuResource, const N: usize> GpuResource for [T; N] {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        for resource in self.iter_mut().rev() {
+            resource.destroy_gpu(rrdevice);
+        }
     }
 
     fn is_destroyed(&self) -> bool {
@@ -183,5 +229,59 @@ mod tests {
         assert!(DefaultNamedResource
             .resource_name()
             .ends_with("DefaultNamedResource"));
+    }
+
+    #[test]
+    fn array_is_destroyed_null_array_is_true() {
+        use vulkanalia::vk::Handle;
+        let arr: [vk::Buffer; 3] = [vk::Buffer::null(), vk::Buffer::null(), vk::Buffer::null()];
+        assert!(arr.is_destroyed());
+    }
+
+    #[test]
+    fn array_is_destroyed_one_non_null_is_false() {
+        use vulkanalia::vk::Handle;
+        let arr: [vk::Buffer; 3] = [
+            vk::Buffer::null(),
+            vk::Buffer::from_raw(1),
+            vk::Buffer::null(),
+        ];
+        assert!(!arr.is_destroyed());
+    }
+
+    #[test]
+    fn buffer_allocation_default_is_destroyed() {
+        use crate::resource::allocation::BufferAllocation;
+        let allocation = BufferAllocation::default();
+        assert!(allocation.is_destroyed());
+    }
+
+    #[test]
+    fn image_allocation_default_is_destroyed() {
+        use crate::resource::allocation::ImageAllocation;
+        let allocation = ImageAllocation::default();
+        assert!(allocation.is_destroyed());
+    }
+
+    #[test]
+    fn texture_image_default_is_destroyed() {
+        use crate::resource::allocation::TextureImage;
+        let texture = TextureImage::default();
+        assert!(texture.is_destroyed());
+    }
+
+    #[test]
+    fn hashmap_is_destroyed_empty_is_true() {
+        use vulkanalia::vk::Handle;
+        let map: std::collections::HashMap<u32, vk::Buffer> = std::collections::HashMap::new();
+        assert!(map.is_destroyed());
+    }
+
+    #[test]
+    fn hashmap_is_destroyed_with_non_null_value_is_false() {
+        use vulkanalia::vk::Handle;
+        let mut map: std::collections::HashMap<u32, vk::Buffer> = std::collections::HashMap::new();
+        map.insert(0, vk::Buffer::from_raw(!0));
+        assert!(!map.is_destroyed());
     }
 }

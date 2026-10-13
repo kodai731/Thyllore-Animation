@@ -4,19 +4,25 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
 use thyllore_render_core::ObjectUBO;
 
 pub type ObjectId = u32;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct ObjectDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub sets: Vec<vk::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<ObjectUBO>>,
+    #[gpu_resource(skip)]
     pub max_objects: usize,
+    #[gpu_resource(skip)]
     next_slot: usize,
+    #[gpu_resource(skip)]
     reserved_slot_count: usize,
 }
 
@@ -140,13 +146,5 @@ impl ObjectDescriptorSet {
         self.grow_to(instance, rrdevice, swapchain_image_count * required_objects)?;
         self.max_objects = required_objects;
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        for buffer in &mut self.buffers {
-            buffer.destroy(device);
-        }
-        self.layout.destroy(rrdevice);
     }
 }

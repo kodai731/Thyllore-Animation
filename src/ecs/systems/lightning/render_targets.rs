@@ -54,30 +54,6 @@ pub unsafe fn create_lightning_render_targets(
     })
 }
 
-impl GpuResource for LightningRenderTargets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, &rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.framebuffer.is_destroyed() && self.render_pass.is_destroyed()
-    }
-}
-
-unsafe fn destroy_render_targets(
-    targets: &mut LightningRenderTargets,
-    device: &vulkanalia::Device,
-) {
-    if targets.framebuffer != vk::Framebuffer::null() {
-        device.destroy_framebuffer(targets.framebuffer, None);
-        targets.framebuffer = vk::Framebuffer::null();
-    }
-    if targets.render_pass != vk::RenderPass::null() {
-        device.destroy_render_pass(targets.render_pass, None);
-        targets.render_pass = vk::RenderPass::null();
-    }
-}
-
 unsafe fn setup_lightning(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
     let Some(hdr_view) = ctx.hdr_color_view else {
         log!("HDR buffer not available, skipping lightning pipeline");
@@ -119,7 +95,7 @@ unsafe fn resize_lightning_render_targets(ctx: &mut EffectContext) -> Result<()>
     let Some(mut targets) = ctx.world.get_resource_mut::<LightningRenderTargets>() else {
         return Ok(());
     };
-    destroy_render_targets(&mut targets, &ctx.rrdevice.device);
+    targets.destroy_gpu(ctx.rrdevice);
     *targets = create_lightning_render_targets(ctx.rrdevice, width, height, hdr_view)?;
 
     let Some(gpu_state) = ctx.world.get_resource::<LightningGpuState>() else {

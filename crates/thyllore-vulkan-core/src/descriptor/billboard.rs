@@ -8,7 +8,7 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 #[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRBillboardDescriptorSet {
     pub layout: ReflectedSetLayout,
     #[gpu_resource(skip)]
@@ -56,7 +56,7 @@ impl RRBillboardDescriptorSet {
                     .writer(descriptor_set)
                     .buffer(
                         billboard::UBO,
-                        rrdata.rruniform_buffers[image_index].buffer,
+                        rrdata.rruniform_buffers[image_index].allocation.buffer,
                         0,
                         std::mem::size_of::<UniformBufferObject>() as u64,
                     )?

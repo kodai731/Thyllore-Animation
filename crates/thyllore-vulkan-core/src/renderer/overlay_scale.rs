@@ -107,9 +107,11 @@ pub const UPSAMPLE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
 
 /// The render pass of a reduced resolution overlay: a transient color image cleared to transparent
 /// and left readable for the upsample. The scale is chosen per frame, so only the format is fixed.
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct ReducedResolveTarget {
     pub render_pass: vk::RenderPass,
+    #[gpu_resource(skip)]
     pub format: vk::Format,
 }
 
@@ -152,23 +154,6 @@ impl ReducedResolveTarget {
             extent: scale.reduce_extent(full),
             load: OverlayAttachmentLoad::Clear([0.0; 4]),
         }
-    }
-
-    pub unsafe fn destroy(&mut self, device: &Device) {
-        if self.render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.render_pass, None);
-            self.render_pass = vk::RenderPass::null();
-        }
-    }
-}
-
-impl GpuResource for ReducedResolveTarget {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.render_pass.is_destroyed()
     }
 }
 

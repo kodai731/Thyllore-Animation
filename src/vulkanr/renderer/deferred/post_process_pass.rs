@@ -208,7 +208,7 @@ pub unsafe fn record_auto_exposure(
         .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
         .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
         .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-        .buffer(buffers.luminance_buffer)
+        .buffer(buffers.luminance_allocation.buffer)
         .offset(0)
         .size(8u64)
         .build();
@@ -223,11 +223,11 @@ pub unsafe fn record_auto_exposure(
         &[] as &[vk::ImageMemoryBarrier],
     );
 
-    // Copy luminance_buffer → readback_buffers[frame_slot] (8 bytes)
+    // Copy luminance_allocation → readback_allocations[frame_slot] (8 bytes)
     render.device.device.cmd_copy_buffer(
         command_buffer,
-        buffers.luminance_buffer,
-        buffers.readback_buffers[frame_slot],
+        buffers.luminance_allocation.buffer,
+        buffers.readback_allocations[frame_slot].buffer,
         &[vk::BufferCopy::builder()
             .src_offset(0)
             .dst_offset(0)

@@ -172,7 +172,7 @@ unsafe fn draw_ghosts(
             continue;
         }
 
-        device.cmd_bind_vertex_buffers(cmd, 0, &[ghost_buffer.vertex_buffer], &[0]);
+        device.cmd_bind_vertex_buffers(cmd, 0, &[ghost_buffer.allocation.buffer], &[0]);
 
         device.cmd_bind_index_buffer(
             cmd,

@@ -29,7 +29,7 @@ impl App {
         self.data
             .viewport
             .transient
-            .begin_frame(&self.rrdevice.device, frame_slot)?;
+            .begin_frame(&self.rrdevice, frame_slot)?;
 
         self.update_auto_exposure();
         self.read_object_id_readback();
@@ -165,7 +165,7 @@ impl App {
         let mut render_targets = self.resource_mut::<RenderTargets>();
         render_targets
             .render
-            .destroy_gbuffer_attachments(&self.rrdevice.device);
+            .destroy_gbuffer_attachments(&self.rrdevice);
 
         if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
             create_gbuffer_framebuffer(
@@ -280,7 +280,7 @@ impl App {
             .rrdevice
             .device
             .map_memory(
-                gbuffer.readback_staging_memory,
+                gbuffer.readback_staging.memory,
                 0,
                 thyllore_vulkan_core::resource::READBACK_STAGING_SIZE,
                 vk::MemoryMapFlags::empty(),
@@ -295,7 +295,7 @@ impl App {
             let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
             self.rrdevice
                 .device
-                .unmap_memory(gbuffer.readback_staging_memory);
+                .unmap_memory(gbuffer.readback_staging.memory);
             (object_id, world_position)
         });
 
@@ -655,13 +655,13 @@ impl App {
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[mesh.vertex_buffer.buffer],
+                &[mesh.vertex_buffer.allocation.buffer],
                 &[0],
             );
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
-                mesh.index_buffer.buffer,
+                mesh.index_buffer.allocation.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
@@ -859,8 +859,12 @@ impl App {
             .pipeline_layout
             .ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
         let vertex_buffer = self.data.imgui.vertex_buffers[frame_slot]
+            .as_ref()
+            .map(|allocation| allocation.buffer)
             .ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
         let index_buffer = self.data.imgui.index_buffers[frame_slot]
+            .as_ref()
+            .map(|allocation| allocation.buffer)
             .ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
         self.setup_imgui_render_state(

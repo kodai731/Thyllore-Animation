@@ -492,15 +492,13 @@ mod tests {
 
     #[test]
     fn test_count_avatar_stats() {
-        let graphics = GraphicsResources {
-            meshes: vec![
-                make_mesh(10, "Face", Some(SkinData::default())),
-                make_mesh(4, "Face", None),
-                make_mesh(2, "", Some(SkinData::default())),
-            ],
-            mesh_material_ids: vec![0, 1, 1],
-            ..Default::default()
-        };
+        let mut graphics = GraphicsResources::default();
+        graphics.meshes = vec![
+            make_mesh(10, "Face", Some(SkinData::default())),
+            make_mesh(4, "Face", None),
+            make_mesh(2, "", Some(SkinData::default())),
+        ];
+        graphics.mesh_material_ids = vec![0, 1, 1];
         let setup = SpringBoneSetup {
             chains: vec![SpringChain {
                 joints: vec![SpringJointParam::default(), SpringJointParam::default()],

@@ -144,9 +144,14 @@ unsafe fn draw_single_mesh(
     let graphics = ctx.graphics;
     let image_index = ctx.image_index;
 
-    device.cmd_bind_vertex_buffers(cmd, 0, &[mesh.vertex_buffer.buffer], &[0]);
+    device.cmd_bind_vertex_buffers(cmd, 0, &[mesh.vertex_buffer.allocation.buffer], &[0]);
 
-    device.cmd_bind_index_buffer(cmd, mesh.index_buffer.buffer, 0, vk::IndexType::UINT32);
+    device.cmd_bind_index_buffer(
+        cmd,
+        mesh.index_buffer.allocation.buffer,
+        0,
+        vk::IndexType::UINT32,
+    );
 
     let frame_set = graphics.frame_set.sets[image_index];
     device.cmd_bind_descriptor_sets(

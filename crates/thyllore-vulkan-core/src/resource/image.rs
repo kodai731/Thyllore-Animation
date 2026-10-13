@@ -1,5 +1,6 @@
 use crate::command::*;
 use crate::core::device::*;
+use crate::resource::allocation::{create_buffer, ImageAllocation, TextureImage};
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
@@ -7,10 +8,10 @@ use std::fs::File;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRImage {
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub texture: TextureImage,
     pub image_view: vk::ImageView,
     pub sampler: vk::Sampler,
 }
@@ -21,22 +22,8 @@ impl RRImage {
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
     ) -> Result<Self> {
-        let mut rrimage = RRImage::default();
-        let (image, image_memory, mip_levels) =
-            create_texture_image(instance, rrdevice, rrcommand_pool)?;
-        let image_view = create_image_view(
-            rrdevice,
-            image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
-            mip_levels,
-        )?;
-        rrimage.image = image;
-        rrimage.image_memory = image_memory;
-        rrimage.image_view = image_view;
-        let sampler = create_texture_sampler(&rrdevice, mip_levels)?;
-        rrimage.sampler = sampler;
-        Ok(rrimage)
+        let texture = create_texture_image(instance, rrdevice, rrcommand_pool)?;
+        Self::from_texture(rrdevice, texture)
     }
 
     pub unsafe fn new_from_pixels(
@@ -47,7 +34,7 @@ impl RRImage {
         width: u32,
         height: u32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let (image, image_memory, mip_levels) = create_texture_image_pixel(
+        let texture = create_texture_image_pixel(
             instance,
             rrdevice,
             rrcommand_pool,
@@ -55,23 +42,7 @@ impl RRImage {
             width,
             height,
         )?;
-
-        let image_view = create_image_view(
-            rrdevice,
-            image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
-            mip_levels,
-        )?;
-
-        let sampler = create_texture_sampler(rrdevice, mip_levels)?;
-
-        Ok(Self {
-            image,
-            image_memory,
-            image_view,
-            sampler,
-        })
+        Ok(Self::from_texture(rrdevice, texture)?)
     }
 
     pub unsafe fn new_from_file(
@@ -80,53 +51,26 @@ impl RRImage {
         rrcommand_pool: &RRCommandPool,
         file_path: &std::path::Path,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut rrimage = RRImage::default();
-        let (image, image_memory, mip_levels) =
+        let texture =
             create_texture_image_from_file(instance, rrdevice, rrcommand_pool, file_path)?;
+        Ok(Self::from_texture(rrdevice, texture)?)
+    }
 
+    unsafe fn from_texture(rrdevice: &RRDevice, texture: TextureImage) -> Result<Self> {
         let image_view = create_image_view(
             rrdevice,
-            image,
+            texture.allocation.image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
-            mip_levels,
+            texture.mip_levels,
         )?;
+        let sampler = create_texture_sampler(rrdevice, texture.mip_levels)?;
 
-        rrimage.image = image;
-        rrimage.image_memory = image_memory;
-        rrimage.image_view = image_view;
-
-        let sampler = create_texture_sampler(&rrdevice, mip_levels)?;
-        rrimage.sampler = sampler;
-
-        Ok(rrimage)
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
-            self.sampler = vk::Sampler::null();
-        }
-        if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
-            self.image_view = vk::ImageView::null();
-        }
-        if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
-            self.image = vk::Image::null();
-        }
-        if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
-            self.image_memory = vk::DeviceMemory::null();
-        }
-    }
-}
-
-impl Drop for RRImage {
-    fn drop(&mut self) {
-        if self.image != vk::Image::null() {
-            log_warn!("RRImage dropped without calling destroy()");
-        }
+        Ok(Self {
+            texture,
+            image_view,
+            sampler,
+        })
     }
 }
 
@@ -134,7 +78,7 @@ pub unsafe fn create_texture_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
-) -> Result<(vk::Image, vk::DeviceMemory, u32)> {
+) -> Result<TextureImage> {
     /*TODO :
      Try to experiment with this by creating a setup_command_buffer that the helper functions record commands into,
      and add a flush_setup_commands to execute the commands that have been recorded so far.
@@ -145,9 +89,7 @@ pub unsafe fn create_texture_image(
     let mut reader = decoder.read_info()?;
     let mut pixels = vec![0; reader.info().raw_bytes()];
     reader.next_frame(&mut pixels)?;
-    let size = reader.info().raw_bytes() as u64;
     let (width, height) = reader.info().size();
-    let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     if width != 1024 || height != 1024 || reader.info().color_type != png::ColorType::Rgba {
         return Err(anyhow!(
@@ -158,70 +100,15 @@ pub unsafe fn create_texture_image(
         ));
     }
 
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
-        instance,
-        rrdevice,
-        size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
-    memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
-
-    let (texture_image, texture_image_memory) = create_image(
-        instance,
-        rrdevice,
-        width,
-        height,
-        mip_levels,
-        vk::SampleCountFlags::_1,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::SAMPLED
-            | vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    transition_image_layout(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        texture_image,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageLayout::UNDEFINED,
-        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        mip_levels,
-    )?;
-    copy_buffer_to_image(
-        rrdevice,
-        rrcommand_pool,
-        staging_buffer,
-        texture_image,
-        width,
-        height,
-    )?;
-
-    generate_mipmaps(
+    upload_texture_image(
         instance,
         rrdevice,
         rrcommand_pool,
-        texture_image,
-        vk::Format::R8G8B8A8_SRGB,
+        &pixels,
         width,
         height,
-        mip_levels,
-    )?;
-
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
-
-    Ok((texture_image, texture_image_memory, mip_levels))
+        vk::Format::R8G8B8A8_SRGB,
+    )
 }
 
 pub unsafe fn create_texture_image_from_file(
@@ -229,7 +116,7 @@ pub unsafe fn create_texture_image_from_file(
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
     file_path: &std::path::Path,
-) -> Result<(vk::Image, vk::DeviceMemory, u32)> {
+) -> Result<TextureImage> {
     let image = File::open(file_path)?;
     let decoder = png::Decoder::new(image);
     let mut reader = decoder.read_info()?;
@@ -285,73 +172,15 @@ pub unsafe fn create_texture_image_from_file(
         }
     };
 
-    let size = (rgba_pixels.len()) as u64;
-    let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
-
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
-        instance,
-        rrdevice,
-        size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
-    memcpy(rgba_pixels.as_ptr(), memory.cast(), rgba_pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
-
-    let (texture_image, texture_image_memory) = create_image(
-        instance,
-        rrdevice,
-        width,
-        height,
-        mip_levels,
-        vk::SampleCountFlags::_1,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::SAMPLED
-            | vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    transition_image_layout(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        texture_image,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageLayout::UNDEFINED,
-        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        mip_levels,
-    )?;
-    copy_buffer_to_image(
-        rrdevice,
-        rrcommand_pool,
-        staging_buffer,
-        texture_image,
-        width,
-        height,
-    )?;
-
-    generate_mipmaps(
+    upload_texture_image(
         instance,
         rrdevice,
         rrcommand_pool,
-        texture_image,
-        vk::Format::R8G8B8A8_SRGB,
+        &rgba_pixels,
         width,
         height,
-        mip_levels,
-    )?;
-
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
-
-    Ok((texture_image, texture_image_memory, mip_levels))
+        vk::Format::R8G8B8A8_SRGB,
+    )
 }
 
 pub unsafe fn create_image(
@@ -365,7 +194,7 @@ pub unsafe fn create_image(
     tiling: vk::ImageTiling,
     usage: vk::ImageUsageFlags,
     properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Image, vk::DeviceMemory)> {
+) -> Result<ImageAllocation> {
     let info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::_2D)
         .extent(vk::Extent3D {
@@ -396,7 +225,10 @@ pub unsafe fn create_image(
     let image_memory = rrdevice.device.allocate_memory(&info, None)?;
     rrdevice.device.bind_image_memory(image, image_memory, 0)?;
 
-    Ok((image, image_memory))
+    Ok(ImageAllocation {
+        memory: image_memory,
+        image,
+    })
 }
 
 pub unsafe fn create_image_3d(
@@ -405,7 +237,7 @@ pub unsafe fn create_image_3d(
     extent: vk::Extent3D,
     format: vk::Format,
     usage: vk::ImageUsageFlags,
-) -> Result<(vk::Image, vk::DeviceMemory)> {
+) -> Result<ImageAllocation> {
     let info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::_3D)
         .extent(extent)
@@ -431,7 +263,10 @@ pub unsafe fn create_image_3d(
     let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
     rrdevice.device.bind_image_memory(image, image_memory, 0)?;
 
-    Ok((image, image_memory))
+    Ok(ImageAllocation {
+        memory: image_memory,
+        image,
+    })
 }
 
 pub unsafe fn create_image_view_3d(
@@ -807,7 +642,7 @@ pub unsafe fn create_texture_image_pixel(
     pixels: &Vec<u8>,
     width: u32,
     height: u32,
-) -> Result<(vk::Image, vk::DeviceMemory, u32)> {
+) -> Result<TextureImage> {
     create_texture_image_pixel_with_format(
         instance,
         rrdevice,
@@ -827,16 +662,31 @@ pub unsafe fn create_texture_image_pixel_with_format(
     width: u32,
     height: u32,
     format: vk::Format,
-) -> Result<(vk::Image, vk::DeviceMemory, u32)> {
-    /*TODO :
-     Try to experiment with this by creating a setup_command_buffer that the helper functions record commands into,
-     and add a flush_setup_commands to execute the commands that have been recorded so far.
-     It's best to do this after the texture mapping works to check if the texture resources are still set up correctly.
-    */
+) -> Result<TextureImage> {
+    upload_texture_image(
+        instance,
+        rrdevice,
+        rrcommand_pool,
+        pixels,
+        width,
+        height,
+        format,
+    )
+}
+
+unsafe fn upload_texture_image(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    rrcommand_pool: &RRCommandPool,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    format: vk::Format,
+) -> Result<TextureImage> {
     let size = (size_of::<u8>() * pixels.len()) as u64;
     let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
+    let mut staging = create_buffer(
         instance,
         rrdevice,
         size,
@@ -847,11 +697,11 @@ pub unsafe fn create_texture_image_pixel_with_format(
     let memory =
         rrdevice
             .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+            .map_memory(staging.memory, 0, size, vk::MemoryMapFlags::empty())?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device.unmap_memory(staging.memory);
 
-    let (texture_image, texture_image_memory) = create_image(
+    let allocation = create_image(
         instance,
         rrdevice,
         width,
@@ -870,7 +720,7 @@ pub unsafe fn create_texture_image_pixel_with_format(
         rrdevice,
         rrdevice.graphics_queue,
         rrcommand_pool.command_pool,
-        texture_image,
+        allocation.image,
         format,
         vk::ImageLayout::UNDEFINED,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -879,8 +729,8 @@ pub unsafe fn create_texture_image_pixel_with_format(
     copy_buffer_to_image(
         rrdevice,
         rrcommand_pool,
-        staging_buffer,
-        texture_image,
+        staging.buffer,
+        allocation.image,
         width,
         height,
     )?;
@@ -889,17 +739,19 @@ pub unsafe fn create_texture_image_pixel_with_format(
         instance,
         rrdevice,
         rrcommand_pool,
-        texture_image,
+        allocation.image,
         format,
         width,
         height,
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    staging.destroy_gpu(rrdevice);
 
-    Ok((texture_image, texture_image_memory, mip_levels))
+    Ok(TextureImage {
+        allocation,
+        mip_levels,
+    })
 }
 
 // Depth formats must not be sampled with LINEAR filtering.
@@ -913,14 +765,4 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .build();
     Ok(rrdevice.device.create_sampler(&info, None)?)
-}
-
-impl GpuResource for RRImage {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.image.is_destroyed()
-    }
 }

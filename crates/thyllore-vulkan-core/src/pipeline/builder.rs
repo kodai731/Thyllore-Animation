@@ -10,7 +10,8 @@ use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::PrimitiveTopology;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRPipeline {
     pub pipeline_layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
@@ -108,7 +109,8 @@ pub struct PipelineBuilder {
     blend: BlendConfig,
     push_constants: Option<PushConstantConfig>,
     dynamic_states: Vec<vk::DynamicState>,
-    descriptor_layouts: Vec<ReflectedSetLayout>,
+    descriptor_layouts: Vec<vk::DescriptorSetLayout>,
+    descriptor_layout_bindings: Vec<Vec<vk::DescriptorSetLayoutBinding>>,
     msaa_samples: vk::SampleCountFlags,
     custom_render_pass: Option<vk::RenderPass>,
     mrt_attachment_count: u32,
@@ -130,6 +132,7 @@ impl PipelineBuilder {
             push_constants: None,
             dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR],
             descriptor_layouts: vec![],
+            descriptor_layout_bindings: vec![],
             msaa_samples: vk::SampleCountFlags::empty(),
             custom_render_pass: None,
             mrt_attachment_count: 1,
@@ -225,7 +228,11 @@ impl PipelineBuilder {
 
     /// Set descriptor set layouts, ordered by set index
     pub fn descriptor_layouts(mut self, layouts: &[&ReflectedSetLayout]) -> Self {
-        self.descriptor_layouts = layouts.iter().map(|layout| (*layout).clone()).collect();
+        self.descriptor_layouts = layouts.iter().map(|layout| layout.handle).collect();
+        self.descriptor_layout_bindings = layouts
+            .iter()
+            .map(|layout| layout.bindings().to_vec())
+            .collect();
         self
     }
 
@@ -257,7 +264,7 @@ impl PipelineBuilder {
                 self.line_width
             ));
         }
-        verify_pass_layouts(self.pass, &self.descriptor_layouts)?;
+        verify_pass_layouts(self.pass, &self.descriptor_layout_bindings)?;
         let shader_stages = load_pass_stages(rrdevice, self.pass)?;
 
         let (binding_descriptions, attribute_descriptions) =
@@ -378,13 +385,8 @@ impl PipelineBuilder {
             })
             .unwrap_or_default();
 
-        let layout_handles: Vec<vk::DescriptorSetLayout> = self
-            .descriptor_layouts
-            .iter()
-            .map(|layout| layout.handle)
-            .collect();
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&layout_handles)
+            .set_layouts(&self.descriptor_layouts)
             .push_constant_ranges(&push_constant_ranges);
 
         rrpipeline.pipeline_layout = rrdevice
@@ -539,13 +541,15 @@ impl RRPipeline {
     ) -> Result<Self> {
         let device = &rrdevice.device;
 
-        let owned_layouts: Vec<ReflectedSetLayout> = descriptor_set_layouts
+        let layout_bindings: Vec<Vec<vk::DescriptorSetLayoutBinding>> = descriptor_set_layouts
             .iter()
-            .map(|layout| (*layout).clone())
+            .map(|layout| layout.bindings().to_vec())
             .collect();
-        verify_pass_layouts(pass, &owned_layouts)?;
-        let layout_handles: Vec<vk::DescriptorSetLayout> =
-            owned_layouts.iter().map(|layout| layout.handle).collect();
+        verify_pass_layouts(pass, &layout_bindings)?;
+        let layout_handles: Vec<vk::DescriptorSetLayout> = descriptor_set_layouts
+            .iter()
+            .map(|layout| layout.handle)
+            .collect();
 
         let compute_shader = pass.stage(ShaderStage::Compute).ok_or_else(|| {
             anyhow::anyhow!(
@@ -586,16 +590,6 @@ impl RRPipeline {
             pipeline_layout,
             pipeline,
         })
-    }
-
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
-        if self.pipeline != vk::Pipeline::null() {
-            device.destroy_pipeline(self.pipeline, None);
-        }
-
-        if self.pipeline_layout != vk::PipelineLayout::null() {
-            device.destroy_pipeline_layout(self.pipeline_layout, None);
-        }
     }
 }
 
@@ -749,16 +743,4 @@ fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions
         offset += attr.format.size();
     }
     (bindings, attributes)
-}
-
-impl GpuResource for RRPipeline {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-        self.pipeline = vk::Pipeline::null();
-        self.pipeline_layout = vk::PipelineLayout::null();
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.pipeline.is_destroyed() && self.pipeline_layout.is_destroyed()
-    }
 }

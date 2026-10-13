@@ -5,7 +5,7 @@ use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::DeviceV1_2;
 
 use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
+use crate::resource::allocation::{create_buffer, BufferAllocation};
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::Instance;
 use thyllore_spirv_reflect::GpuBlock;
@@ -17,13 +17,17 @@ pub enum Placement {
     DeviceUpdated,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct UniformBuffer<T: GpuBlock> {
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     slot_stride: vk::DeviceSize,
+    #[gpu_resource(skip)]
     slot_count: usize,
+    #[gpu_resource(skip)]
     placement: Placement,
+    #[gpu_resource(skip)]
     _block: PhantomData<T>,
 }
 
@@ -53,7 +57,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
             }
         };
-        let (buffer, memory) = create_buffer(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             slot_stride * slot_count as vk::DeviceSize,
@@ -62,8 +66,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         )?;
 
         Ok(Self {
-            buffer,
-            memory,
+            allocation,
             slot_stride,
             slot_count,
             placement,
@@ -72,7 +75,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
     }
 
     pub fn handle(&self) -> vk::Buffer {
-        self.buffer
+        self.allocation.buffer
     }
 
     pub fn block_size(&self) -> vk::DeviceSize {
@@ -96,8 +99,9 @@ impl<T: GpuBlock> UniformBuffer<T> {
         device: &vulkanalia::Device,
         slot: usize,
     ) -> Result<vk::DeviceAddress> {
-        let base = device
-            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
+        let base = device.get_buffer_device_address(
+            &vk::BufferDeviceAddressInfo::builder().buffer(self.allocation.buffer),
+        );
         Ok(base + self.slot_offset(slot)?)
     }
 
@@ -105,13 +109,13 @@ impl<T: GpuBlock> UniformBuffer<T> {
         let offset = self.slot_offset(slot)?;
         let bytes = value.as_bytes();
         let mapped = rrdevice.device.map_memory(
-            self.memory,
+            self.allocation.memory,
             offset,
             bytes.len() as vk::DeviceSize,
             vk::MemoryMapFlags::empty(),
         )?;
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), mapped.cast::<u8>(), bytes.len());
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device.unmap_memory(self.allocation.memory);
         Ok(())
     }
 
@@ -143,7 +147,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
                 vk::AccessFlags::TRANSFER_WRITE,
             ),
         );
-        device.cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
+        device.cmd_update_buffer(cmd, self.allocation.buffer, offset, value.as_bytes());
         self.record_barrier(
             device,
             cmd,
@@ -170,7 +174,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
             .dst_access_mask(dst_access)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .buffer(self.buffer)
+            .buffer(self.allocation.buffer)
             .offset(offset)
             .size(self.block_size())
             .build();
@@ -183,26 +187,5 @@ impl<T: GpuBlock> UniformBuffer<T> {
             &[barrier],
             &[] as &[vk::ImageMemoryBarrier],
         );
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        if self.buffer != vk::Buffer::null() {
-            device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.memory != vk::DeviceMemory::null() {
-            device.free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
-        }
-    }
-}
-
-impl<T: GpuBlock> GpuResource for UniformBuffer<T> {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.buffer.is_destroyed()
     }
 }

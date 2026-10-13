@@ -2,7 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
+use crate::resource::allocation::{create_buffer, BufferAllocation};
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use thyllore_math_core::GpuMat4;
 
@@ -35,10 +36,11 @@ impl HitShadingRecord {
     }
 }
 /// HitShadingTable: a storage buffer holding an array of `HitShadingRecord`.
-#[derive(Clone, Debug)]
+#[must_use]
+#[derive(Debug, GpuResource)]
 pub struct HitShadingTable {
-    pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
+    pub allocation: BufferAllocation,
+    #[gpu_resource(skip)]
     pub capacity: usize,
 }
 
@@ -47,7 +49,7 @@ impl HitShadingTable {
     pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, capacity: usize) -> Result<Self> {
         let size = (std::mem::size_of::<HitShadingRecord>() * capacity) as vk::DeviceSize;
 
-        let (buffer, memory) = create_buffer(
+        let allocation = create_buffer(
             instance,
             rrdevice,
             size,
@@ -58,8 +60,7 @@ impl HitShadingTable {
         )?;
 
         Ok(Self {
-            buffer,
-            memory,
+            allocation,
             capacity,
         })
     }
@@ -71,7 +72,7 @@ impl HitShadingTable {
         let data = std::slice::from_raw_parts(records.as_ptr() as *const u8, data_len);
 
         let mapped = rrdevice.device.map_memory(
-            self.memory,
+            self.allocation.memory,
             0,
             data.len() as vk::DeviceSize,
             vk::MemoryMapFlags::empty(),
@@ -79,25 +80,13 @@ impl HitShadingTable {
 
         std::ptr::copy_nonoverlapping(data.as_ptr(), mapped as *mut u8, data.len());
 
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device.unmap_memory(self.allocation.memory);
 
         Ok(())
     }
 
     /// Get the Vulkan buffer handle.
     pub fn vk_buffer(&self) -> vk::Buffer {
-        self.buffer
-    }
-
-    /// Destroy the underlying buffer and memory.
-    pub unsafe fn destroy(mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
-        }
+        self.allocation.buffer
     }
 }

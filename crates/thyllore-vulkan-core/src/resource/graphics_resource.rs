@@ -60,13 +60,15 @@ pub struct MeshSource<'a> {
     pub morph: &'a MeshMorph,
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct GraphicsResources {
-    pub frame_set: FrameDescriptorSet,
-    pub materials: MaterialManager,
     pub objects: ObjectDescriptorSet,
-    pub meshes: Vec<MeshBuffer>,
+    pub materials: MaterialManager,
+    pub frame_set: FrameDescriptorSet,
+    #[gpu_resource(skip)]
     pub mesh_material_ids: Vec<MaterialId>,
+    pub meshes: Vec<MeshBuffer>,
 }
 
 impl GraphicsResources {
@@ -144,7 +146,7 @@ impl GraphicsResources {
         let mut mesh = MeshBuffer::default();
 
         let pixels = source.texture.rgba.to_vec();
-        (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+        mesh.texture = create_texture_image_pixel(
             instance,
             rrdevice,
             command_pool,
@@ -154,12 +156,12 @@ impl GraphicsResources {
         )?;
         mesh.image_view = create_image_view(
             rrdevice,
-            mesh.image,
+            mesh.texture.allocation.image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
-            mesh.mip_level,
+            mesh.texture.mip_levels,
         )?;
-        mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
+        mesh.sampler = create_texture_sampler(rrdevice, mesh.texture.mip_levels)?;
 
         mesh.vertex_data = source.vertex_data.clone();
         mesh.morph = source.morph.clone();
@@ -299,23 +301,8 @@ impl GraphicsResources {
         Some((min, max, center))
     }
 
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for mesh in &mut self.meshes {
-            mesh.destroy(rrdevice);
-        }
-        self.meshes.clear();
-        self.mesh_material_ids.clear();
-
-        self.frame_set.destroy(rrdevice);
-        self.materials.destroy(rrdevice);
-        self.objects.destroy(rrdevice);
-    }
-
     pub unsafe fn clear_meshes(&mut self, rrdevice: &RRDevice) {
-        for mesh in &mut self.meshes {
-            mesh.destroy(rrdevice);
-        }
-        self.meshes.clear();
+        self.meshes.destroy_gpu(rrdevice);
         self.mesh_material_ids.clear();
     }
 
@@ -343,18 +330,5 @@ impl GraphicsResources {
             1,
             render_pass,
         )
-    }
-}
-
-impl GpuResource for GraphicsResources {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.meshes.is_empty()
-            && self.frame_set.layout.is_destroyed()
-            && self.materials.layout.is_destroyed()
-            && self.objects.layout.is_destroyed()
     }
 }

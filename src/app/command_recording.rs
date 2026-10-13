@@ -253,7 +253,7 @@ impl App {
             .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .image(gbuffer.shadow_mask_image)
+            .image(gbuffer.shadow_mask.image)
             .subresource_range(subresource_range)
             .build();
 
@@ -272,7 +272,7 @@ impl App {
         };
         self.rrdevice.device.cmd_clear_color_image(
             command_buffer,
-            gbuffer.shadow_mask_image,
+            gbuffer.shadow_mask.image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &clear_value,
             &[subresource_range],
@@ -283,7 +283,7 @@ impl App {
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image(gbuffer.shadow_mask_image)
+            .image(gbuffer.shadow_mask.image)
             .subresource_range(subresource_range)
             .build();
 
@@ -320,9 +320,9 @@ impl App {
             return;
         };
 
-        let object_id_image = gbuffer.object_id_image;
-        let position_image = gbuffer.position_image;
-        let staging_buffer = gbuffer.readback_staging_buffer;
+        let object_id_image = gbuffer.object_id.image;
+        let position_image = gbuffer.position.image;
+        let staging_buffer = gbuffer.readback_staging.buffer;
 
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,

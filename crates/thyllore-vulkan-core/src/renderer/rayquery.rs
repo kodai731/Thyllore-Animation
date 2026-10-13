@@ -34,7 +34,7 @@ unsafe fn insert_pre_compute_barriers(
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .old_layout(vk::ImageLayout::GENERAL)
             .new_layout(vk::ImageLayout::GENERAL)
-            .image(gbuffer.position_image)
+            .image(gbuffer.position.image)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
@@ -48,7 +48,7 @@ unsafe fn insert_pre_compute_barriers(
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .old_layout(vk::ImageLayout::GENERAL)
             .new_layout(vk::ImageLayout::GENERAL)
-            .image(gbuffer.normal_image)
+            .image(gbuffer.normal.image)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
@@ -62,7 +62,7 @@ unsafe fn insert_pre_compute_barriers(
             .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::GENERAL)
-            .image(gbuffer.shadow_mask_image)
+            .image(gbuffer.shadow_mask.image)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
@@ -130,7 +130,7 @@ unsafe fn insert_post_compute_barriers(
         .dst_access_mask(vk::AccessFlags::SHADER_READ)
         .old_layout(vk::ImageLayout::GENERAL)
         .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .image(gbuffer.shadow_mask_image)
+        .image(gbuffer.shadow_mask.image)
         .subresource_range(vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,
             base_mip_level: 0,

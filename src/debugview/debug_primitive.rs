@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::vulkanr::context::{CommandState, SwapchainState};
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 use anyhow::Result;
 
@@ -114,7 +115,7 @@ impl App {
                 if let Some(idx) = graphics_mesh_index {
                     if idx < self.data.graphics_resources.meshes.len() {
                         self.data.graphics_resources.meshes[idx].render_to_gbuffer = false;
-                        self.data.graphics_resources.meshes[idx].destroy(&self.rrdevice);
+                        self.data.graphics_resources.meshes[idx].destroy_gpu(&self.rrdevice);
                     }
                 }
             }

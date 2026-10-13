@@ -8,6 +8,7 @@ use crate::app::{App, AppData};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::{CommandState, SwapchainState};
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 
@@ -30,10 +31,7 @@ impl App {
     ) -> Result<()> {
         rrdevice.device.device_wait_idle()?;
 
-        if let Some(ref mut gpu) = data.onion_skin_gpu {
-            gpu.destroy(rrdevice);
-        }
-        data.onion_skin_gpu = None;
+        data.onion_skin_gpu.destroy_gpu(rrdevice);
 
         load_model_from_file_system(
             model_path,
@@ -269,7 +267,7 @@ impl App {
                 "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
                 i,
                 mesh.render_to_gbuffer,
-                mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.allocation.buffer,
                 mesh.index_buffer.indices
             );
             log!(

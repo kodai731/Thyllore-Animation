@@ -11,7 +11,7 @@ use crate::loader::ModelLoadResult;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::{MeshSource, TexturePixels};
+use crate::vulkanr::resource::{GpuResource, MeshSource, TexturePixels};
 use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
@@ -108,7 +108,7 @@ pub(super) unsafe fn release_model_gpu_resources(
     device.device.device_wait_idle()?;
 
     if let Some(ref mut accel) = raytracing.acceleration_structure {
-        accel.destroy(&device.device);
+        accel.destroy_gpu(device);
     }
     raytracing.acceleration_structure = None;
 

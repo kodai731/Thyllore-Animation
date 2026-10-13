@@ -12,6 +12,7 @@ use crate::ecs::resource::{
 };
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::vulkan::*;
 
 const EXPOSURE_PROBE_DIRECTORY: &str = "log/exposure";
@@ -34,7 +35,7 @@ unsafe fn build_exposure_probe_record(ctx: &CaptureContext) -> Result<Value> {
     let hdr = ctx
         .hdr
         .ok_or_else(|| anyhow!("hdr buffer not initialized"))?;
-    let hdr_rgba = read_hdr_rgba16f(ctx, hdr.color_image, hdr.width, hdr.height)?;
+    let hdr_rgba = read_hdr_rgba16f(ctx, hdr.color.image, hdr.width, hdr.height)?;
     let hdr_luminance: Vec<f32> = hdr_rgba
         .chunks_exact(4)
         .map(|px| rec709_luminance([px[0], px[1], px[2]]))
@@ -117,7 +118,7 @@ unsafe fn read_viewport_display_luminance(
     let extent = swapchain.swapchain_extent;
     let image_size = (extent.width * extent.height * 4) as vk::DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let mut readback = ctx.copy_image_to_buffer(
         image,
         extent.width,
         extent.height,
@@ -125,7 +126,7 @@ unsafe fn read_viewport_display_luminance(
         vk::ImageLayout::PRESENT_SRC_KHR,
     )?;
     let device = &ctx.device.device;
-    let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+    let data = device.map_memory(readback.memory, 0, image_size, vk::MemoryMapFlags::empty())?;
     let bgra = std::slice::from_raw_parts(data as *const u8, image_size as usize);
 
     let rect = viewport_pixel_rect(ctx.world, extent.width, extent.height);
@@ -146,9 +147,8 @@ unsafe fn read_viewport_display_luminance(
         }
     }
 
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    device.unmap_memory(readback.memory);
+    readback.destroy_gpu(ctx.device);
 
     let pixel_count = linear.len().max(1) as f64;
     Ok(ViewportDisplayLuminance {

@@ -14,6 +14,7 @@ use thyllore_math_core::write_npy_u32;
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::{create_buffer, GpuResource};
 
 const VERTEX_PROBE_COUNT: usize = 64;
 
@@ -37,7 +38,7 @@ unsafe fn save_water_caustic_accum_npy(
     let height = water_targets.history.height;
     let image_size = (width * height * 4) as vk::DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let mut readback = ctx.copy_image_to_buffer(
         caustic_image,
         width,
         height,
@@ -45,7 +46,8 @@ unsafe fn save_water_caustic_accum_npy(
         vk::ImageLayout::GENERAL,
     )?;
 
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+    let data_ptr =
+        device.map_memory(readback.memory, 0, image_size, vk::MemoryMapFlags::empty())?;
     let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
 
     let mut u32_data: Vec<u32> = Vec::with_capacity((width * height) as usize);
@@ -59,9 +61,8 @@ unsafe fn save_water_caustic_accum_npy(
         u32_data.push(value);
     }
 
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    device.unmap_memory(readback.memory);
+    readback.destroy_gpu(ctx.device);
 
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory)?;
@@ -237,56 +238,33 @@ unsafe fn read_gpu_vertex_positions(
     let copy_size = (stride * sample_count) as vk::DeviceSize;
     let command_pool = ctx.command_pool;
 
-    let (buffer, buffer_memory) = allocate_vertex_probe_buffer(ctx, copy_size)?;
+    let mut probe = create_buffer(
+        ctx.instance,
+        ctx.device,
+        copy_size,
+        vk::BufferUsageFlags::TRANSFER_DST,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
     let command_buffer = record_and_submit_vertex_copy(
         ctx,
         command_pool,
-        mesh.vertex_buffer.buffer,
-        buffer,
+        mesh.vertex_buffer.allocation.buffer,
+        probe.buffer,
         copy_size,
     )?;
 
-    let mapped = device.map_memory(buffer_memory, 0, copy_size, vk::MemoryMapFlags::empty())?;
+    let mapped = device.map_memory(probe.memory, 0, copy_size, vk::MemoryMapFlags::empty())?;
     let bytes = std::slice::from_raw_parts(mapped as *const u8, copy_size as usize);
     let pos_offset = std::mem::offset_of!(Vertex, pos);
     let positions = (0..sample_count)
         .map(|index| read_position(bytes, index * stride + pos_offset))
         .collect();
 
-    device.unmap_memory(buffer_memory);
+    device.unmap_memory(probe.memory);
     device.free_command_buffers(command_pool, &[command_buffer]);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    probe.destroy_gpu(ctx.device);
 
     Ok(positions)
-}
-
-unsafe fn allocate_vertex_probe_buffer(
-    ctx: &CaptureContext,
-    size: vk::DeviceSize,
-) -> Result<(vk::Buffer, vk::DeviceMemory)> {
-    let device = &ctx.device.device;
-
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(size)
-        .usage(vk::BufferUsageFlags::TRANSFER_DST)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let buffer = device.create_buffer(&buffer_info, None)?;
-
-    let requirements = device.get_buffer_memory_requirements(buffer);
-    let memory_type_index = thyllore_vulkan_core::vulkan::get_memory_type_index(
-        ctx.instance,
-        ctx.device.physical_device,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        requirements,
-    )?;
-    let allocate_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(requirements.size)
-        .memory_type_index(memory_type_index);
-    let buffer_memory = device.allocate_memory(&allocate_info, None)?;
-    device.bind_buffer_memory(buffer, buffer_memory, 0)?;
-
-    Ok((buffer, buffer_memory))
 }
 
 unsafe fn record_and_submit_vertex_copy(

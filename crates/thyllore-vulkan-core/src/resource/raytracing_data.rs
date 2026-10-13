@@ -28,7 +28,7 @@ use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 
 #[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
+#[derive(Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]
     pub command_pool: vk::CommandPool,
@@ -129,7 +129,7 @@ impl RayTracingData {
         log!("Building acceleration structures...");
         if let Some(mut previous) = self.acceleration_structure.take() {
             rrdevice.device.device_wait_idle()?;
-            previous.destroy(&rrdevice.device);
+            previous.destroy_gpu(rrdevice);
         }
 
         let mut acceleration_structure = RRAccelerationStructure::new();
@@ -140,10 +140,10 @@ impl RayTracingData {
             .filter(|mesh| mesh.render_to_gbuffer)
             .map(|mesh| {
                 (
-                    &mesh.vertex_buffer.buffer,
+                    &mesh.vertex_buffer.allocation.buffer,
                     mesh.vertex_data.vertices.len() as u32,
                     std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                    &mesh.index_buffer.buffer,
+                    &mesh.index_buffer.allocation.buffer,
                     mesh.vertex_data.indices.len() as u32,
                 )
             })
@@ -158,10 +158,10 @@ impl RayTracingData {
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.allocation.buffer,
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.allocation.buffer,
                 mesh.vertex_data.indices.len() as u32,
             )?;
 
@@ -300,7 +300,7 @@ impl RayTracingData {
             .acceleration_structure
             .as_ref()
             .and_then(|accel| accel.hit_shading_table.as_ref())
-            .map(|table| table.buffer)
+            .map(|table| table.vk_buffer())
             .unwrap_or_else(vk::Buffer::null);
 
         if descriptor.descriptor_set == vk::DescriptorSet::null() {
@@ -375,7 +375,7 @@ unsafe fn build_ray_query_pipeline(
             let hit_shading_table_buffer = accel_struct
                 .hit_shading_table
                 .as_ref()
-                .map(|t| t.buffer)
+                .map(|t| t.vk_buffer())
                 .unwrap_or(vk::Buffer::null());
             descriptor.allocate_and_update(
                 rrdevice,

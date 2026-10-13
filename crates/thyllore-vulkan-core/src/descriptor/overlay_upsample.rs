@@ -7,9 +7,11 @@ use crate::resource::image::{create_nearest_sampler, create_scene_depth_sampler}
 use crate::vulkan::*;
 
 /// One set per frame slot binding the reduced overlay color and the scene depth of that frame.
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct OverlayUpsampleDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub reduced_color_sampler: vk::Sampler,
     pub scene_depth_sampler: vk::Sampler,
@@ -63,23 +65,5 @@ impl OverlayUpsampleDescriptorSet {
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.reduced_color_sampler.destroy_gpu(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for OverlayUpsampleDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-            && self.reduced_color_sampler.is_destroyed()
-            && self.scene_depth_sampler.is_destroyed()
     }
 }

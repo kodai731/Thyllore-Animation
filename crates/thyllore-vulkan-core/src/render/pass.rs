@@ -2,74 +2,39 @@ use crate::command::*;
 use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::render::framebuffer::{create_color_objects, create_framebuffers};
+use crate::resource::allocation::ImageAllocation;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::*;
 use crate::vulkan::*;
-#[derive(Clone, Debug, Default)]
-pub struct RRRender {
-    // Main render pass (for final presentation)
-    pub render_pass: vk::RenderPass,
-    pub framebuffers: Vec<vk::Framebuffer>,
-    pub depth_image: vk::Image,
-    pub depth_image_memory: vk::DeviceMemory,
-    pub depth_image_view: vk::ImageView,
-    pub color_image: vk::Image,
-    pub color_image_view: vk::ImageView,
-    pub color_image_memory: vk::DeviceMemory,
 
-    // G-Buffer render pass (for deferred rendering)
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
+pub struct RRRender {
     pub gbuffer_render_pass: vk::RenderPass,
-    pub gbuffer_framebuffer: vk::Framebuffer,
-    pub gbuffer_depth_image: vk::Image,
-    pub gbuffer_depth_image_memory: vk::DeviceMemory,
+    pub render_pass: vk::RenderPass,
+    pub gbuffer_depth_allocation: ImageAllocation,
     pub gbuffer_depth_image_view: vk::ImageView,
+    pub gbuffer_framebuffer: vk::Framebuffer,
+    pub color_allocation: ImageAllocation,
+    pub color_image_view: vk::ImageView,
+    pub depth_allocation: ImageAllocation,
+    pub depth_image_view: vk::ImageView,
+    pub framebuffers: Vec<vk::Framebuffer>,
 }
 
 impl RRRender {
-    pub unsafe fn destroy_size_dependent(&mut self, device: &crate::core::device::Device) {
-        for fb in self.framebuffers.drain(..) {
-            device.destroy_framebuffer(fb, None);
-        }
-
-        destroy_image_objects(
-            device,
-            &mut self.depth_image_view,
-            &mut self.depth_image,
-            &mut self.depth_image_memory,
-        );
-        destroy_image_objects(
-            device,
-            &mut self.color_image_view,
-            &mut self.color_image,
-            &mut self.color_image_memory,
-        );
+    pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {
+        self.framebuffers.destroy_gpu(rrdevice);
+        self.depth_image_view.destroy_gpu(rrdevice);
+        self.depth_allocation.destroy_gpu(rrdevice);
+        self.color_image_view.destroy_gpu(rrdevice);
+        self.color_allocation.destroy_gpu(rrdevice);
     }
 
-    pub unsafe fn destroy_gbuffer_attachments(&mut self, device: &crate::core::device::Device) {
-        if self.gbuffer_framebuffer != vk::Framebuffer::null() {
-            device.destroy_framebuffer(self.gbuffer_framebuffer, None);
-            self.gbuffer_framebuffer = vk::Framebuffer::null();
-        }
-        destroy_image_objects(
-            device,
-            &mut self.gbuffer_depth_image_view,
-            &mut self.gbuffer_depth_image,
-            &mut self.gbuffer_depth_image_memory,
-        );
-    }
-
-    pub unsafe fn destroy(&mut self, device: &crate::core::device::Device) {
-        self.destroy_size_dependent(device);
-        self.destroy_gbuffer_attachments(device);
-
-        if self.render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.render_pass, None);
-            self.render_pass = vk::RenderPass::null();
-        }
-        if self.gbuffer_render_pass != vk::RenderPass::null() {
-            device.destroy_render_pass(self.gbuffer_render_pass, None);
-            self.gbuffer_render_pass = vk::RenderPass::null();
-        }
+    pub unsafe fn destroy_gbuffer_attachments(&mut self, rrdevice: &RRDevice) {
+        self.gbuffer_framebuffer.destroy_gpu(rrdevice);
+        self.gbuffer_depth_image_view.destroy_gpu(rrdevice);
+        self.gbuffer_depth_allocation.destroy_gpu(rrdevice);
     }
 
     pub unsafe fn new(
@@ -103,36 +68,6 @@ impl RRRender {
         }
         println!("created render pass {:?}", rrrender);
         rrrender
-    }
-}
-
-unsafe fn destroy_image_objects(
-    device: &crate::core::device::Device,
-    view: &mut vk::ImageView,
-    image: &mut vk::Image,
-    memory: &mut vk::DeviceMemory,
-) {
-    if *view != vk::ImageView::null() {
-        device.destroy_image_view(*view, None);
-        *view = vk::ImageView::null();
-    }
-    if *image != vk::Image::null() {
-        device.destroy_image(*image, None);
-        *image = vk::Image::null();
-    }
-    if *memory != vk::DeviceMemory::null() {
-        device.free_memory(*memory, None);
-        *memory = vk::DeviceMemory::null();
-    }
-}
-
-impl GpuResource for RRRender {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.render_pass.is_destroyed() && self.gbuffer_render_pass.is_destroyed()
     }
 }
 
@@ -289,7 +224,7 @@ pub unsafe fn create_depth_objects(
     rrrender: &mut RRRender,
 ) -> Result<()> {
     let format = get_depth_format(instance, rrdevice)?;
-    let (depth_image, depth_image_memory) = create_image(
+    rrrender.depth_allocation = create_image(
         instance,
         rrdevice,
         rrswapchain.swapchain_extent.width,
@@ -301,11 +236,9 @@ pub unsafe fn create_depth_objects(
         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
-    rrrender.depth_image = depth_image;
-    rrrender.depth_image_memory = depth_image_memory;
     rrrender.depth_image_view = create_image_view(
         rrdevice,
-        rrrender.depth_image,
+        rrrender.depth_allocation.image,
         format,
         vk::ImageAspectFlags::DEPTH,
         1,
@@ -315,7 +248,7 @@ pub unsafe fn create_depth_objects(
         rrdevice,
         rrdevice.graphics_queue,
         rrcommand_buffer.command_pool,
-        rrrender.depth_image,
+        rrrender.depth_allocation.image,
         format,
         vk::ImageLayout::UNDEFINED,
         vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,

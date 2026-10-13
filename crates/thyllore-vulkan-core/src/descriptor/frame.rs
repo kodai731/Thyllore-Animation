@@ -4,13 +4,16 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::vulkan::Instance;
 use thyllore_render_core::FrameUBO;
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct FrameDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub sets: Vec<vk::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<FrameUBO>>,
 }
@@ -65,13 +68,5 @@ impl FrameDescriptorSet {
         ubo: &FrameUBO,
     ) -> anyhow::Result<()> {
         self.buffers[image_index].write_slot(rrdevice, 0, ubo)
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-        for buffer in &mut self.buffers {
-            buffer.destroy(device);
-        }
-        self.layout.destroy(rrdevice);
     }
 }

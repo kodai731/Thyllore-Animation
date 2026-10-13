@@ -3,7 +3,8 @@ use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
 use thyllore_effect_core::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
 };
-use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
+use thyllore_scene_core::{find_scalar_param, find_ui_param, UiKind};
+pub use thyllore_scene_core::{ScalarParam, UiParam};
 
 use crate::ecs::World;
 use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};

@@ -3,20 +3,40 @@ use std::collections::HashSet;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
-use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
+use super::window::ALL_PROPERTY_TYPES;
 use crate::animation::editable::{
-    CurveExtrapolation, InterpolationType, PropertyCurve, PropertyType, TangentType,
-    TangentWeightMode,
+    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyCurve, PropertyType,
+    TangentType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
-use crate::ecs::resource::{
-    ClipLibrary, CurveEditorState, CurveSelectedKeyframe, CurveTrackRef, TimelineState,
-};
+use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
 use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
 use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
+
+const SECTION_COLOR: [f32; 4] = [0.6, 0.8, 1.0, 1.0];
+
+const INTERPOLATION_ITEMS: [(&str, InterpolationType); 3] = [
+    ("  Linear", InterpolationType::Linear),
+    ("  Bezier", InterpolationType::Bezier),
+    ("  Stepped", InterpolationType::Stepped),
+];
+
+const TANGENT_ITEMS: [(&str, TangentType); 6] = [
+    ("  Spline", TangentType::Spline),
+    ("  Linear", TangentType::Linear),
+    ("  Flat", TangentType::Flat),
+    ("  Clamped", TangentType::Clamped),
+    ("  Plateau", TangentType::Plateau),
+    ("  Manual", TangentType::Manual),
+];
+
+const WEIGHT_ITEMS: [(&str, TangentWeightMode); 2] = [
+    ("  Non-Weighted", TangentWeightMode::NonWeighted),
+    ("  Weighted", TangentWeightMode::Weighted),
+];
 
 pub(super) fn build_keyframe_context_menu(
     ui: &imgui::Ui,
@@ -26,131 +46,104 @@ pub(super) fn build_keyframe_context_menu(
 ) {
     ui.popup("keyframe_context_menu", || {
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
-
-        let ctx_kf = match editor_state.context_menu_keyframe.clone() {
-            Some(kf) => kf,
-            None => return,
+        let Some(context_key) = editor_state.context_menu_keyframe.clone() else {
+            return;
         };
 
         if ui.selectable_config("Delete Key").build() {
-            if editor_state.selected_keyframes.len() > 1 {
-                for sel in &editor_state.selected_keyframes {
-                    world.send_command(TimelineEvent::DeleteKeyframe {
-                        track: track_ref,
-                        property_type: sel.property_type.clone(),
-                        keyframe_id: sel.keyframe_id,
-                    });
-                }
-                editor_state.selected_keyframes.clear();
-                editor_state.selection_anchor = None;
-            } else {
-                world.send_command(TimelineEvent::DeleteKeyframe {
-                    track: track_ref,
-                    property_type: ctx_kf.property_type.clone(),
-                    keyframe_id: ctx_kf.keyframe_id,
-                });
-                editor_state.selected_keyframes.clear();
-                editor_state.selection_anchor = None;
-            }
+            delete_context_menu_keys(world, editor_state, track_ref, &context_key);
         }
 
-        let section_color = [0.6, 0.8, 1.0, 1.0];
-
         ui.separator();
-        ui.text_colored(section_color, "Interpolation");
-        ui.separator();
-
-        if ui.selectable_config("  Linear").build() {
+        build_key_menu_section(ui, "Interpolation", &INTERPOLATION_ITEMS, |interpolation| {
             world.send_command(TimelineEvent::SetKeyframeInterpolation {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Linear,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                interpolation,
             });
-        }
-
-        if ui.selectable_config("  Bezier").build() {
-            world.send_command(TimelineEvent::SetKeyframeInterpolation {
+        });
+        build_key_menu_section(ui, "Tangent", &TANGENT_ITEMS, |tangent_type| {
+            world.send_command(TimelineEvent::SetTangentType {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Bezier,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                tangent_type,
             });
-        }
-
-        if ui.selectable_config("  Stepped").build() {
-            world.send_command(TimelineEvent::SetKeyframeInterpolation {
-                track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Stepped,
-            });
-        }
-
-        ui.spacing();
-        ui.text_colored(section_color, "Tangent");
-        ui.separator();
-
-        let tangent_options = [
-            ("  Spline", TangentType::Spline),
-            ("  Linear", TangentType::Linear),
-            ("  Flat", TangentType::Flat),
-            ("  Clamped", TangentType::Clamped),
-            ("  Plateau", TangentType::Plateau),
-            ("  Manual", TangentType::Manual),
-        ];
-
-        for (label, tangent_type) in &tangent_options {
-            if ui.selectable_config(label).build() {
-                world.send_command(TimelineEvent::SetTangentType {
-                    track: track_ref,
-                    property_type: ctx_kf.property_type,
-                    keyframe_id: ctx_kf.keyframe_id,
-                    tangent_type: *tangent_type,
-                });
-            }
-        }
-
-        ui.spacing();
-        ui.text_colored(section_color, "Weight");
-        ui.separator();
-
-        if ui.selectable_config("  Non-Weighted").build() {
+        });
+        build_key_menu_section(ui, "Weight", &WEIGHT_ITEMS, |weight_mode| {
             world.send_command(TimelineEvent::SetTangentWeightMode {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                weight_mode: TangentWeightMode::NonWeighted,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                weight_mode,
             });
-        }
-
-        if ui.selectable_config("  Weighted").build() {
-            world.send_command(TimelineEvent::SetTangentWeightMode {
-                track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                weight_mode: TangentWeightMode::Weighted,
-            });
-        }
+        });
     });
+}
+
+/// A multi-key selection is deleted as a whole; otherwise only the right-clicked key goes.
+fn delete_context_menu_keys(
+    world: &World,
+    editor_state: &mut CurveEditorState,
+    track_ref: CurveTrackRef,
+    context_key: &CurveSelectedKeyframe,
+) {
+    let targets: Vec<&CurveSelectedKeyframe> = if editor_state.selected_keyframes.len() > 1 {
+        editor_state.selected_keyframes.iter().collect()
+    } else {
+        vec![context_key]
+    };
+    for key in targets {
+        world.send_command(TimelineEvent::DeleteKeyframe {
+            track: track_ref,
+            property_type: key.property_type,
+            keyframe_id: key.keyframe_id,
+        });
+    }
+
+    editor_state.selected_keyframes.clear();
+    editor_state.selection_anchor = None;
+}
+
+fn build_key_menu_section<T: Copy>(
+    ui: &imgui::Ui,
+    title: &str,
+    items: &[(&str, T)],
+    mut on_select: impl FnMut(T),
+) {
+    ui.text_colored(SECTION_COLOR, title);
+    ui.separator();
+    for (label, value) in items {
+        if ui.selectable_config(label).build() {
+            on_select(*value);
+        }
+    }
+    ui.spacing();
 }
 
 pub(super) fn build_curve_editor_context_menu(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &CurveEditorState,
+    clip: &EditableAnimationClip,
     track_ref: CurveTrackRef,
 ) {
     ui.popup("curve_editor_context_menu", || {
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
 
         if ui.selectable_config("Add Key").build() {
-            send_add_key(world, editor_state, track_ref);
+            send_add_key(world, editor_state, clip, track_ref);
         }
     });
 }
 
-fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: CurveTrackRef) {
+fn send_add_key(
+    world: &World,
+    editor_state: &CurveEditorState,
+    clip: &EditableAnimationClip,
+    track_ref: CurveTrackRef,
+) {
     let bone_role = track_ref
         .bone_id()
         .and_then(|bone_id| find_bone_role(&collect_humanoid_bone_roles(world), bone_id));
@@ -159,7 +152,7 @@ fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: Curve
     };
 
     if let CurveTrackRef::Bone(bone_id) = track_ref {
-        ensure_bone_track(world, bone_id);
+        ensure_bone_track(world, clip, bone_id);
     }
     world.send_command(TimelineEvent::AddKeyframe {
         track: track_ref,
@@ -169,8 +162,8 @@ fn send_add_key(world: &World, editor_state: &CurveEditorState, track_ref: Curve
     });
 }
 
-fn ensure_bone_track(world: &World, bone_id: BoneId) {
-    if current_clip_has_track(world, bone_id) {
+fn ensure_bone_track(world: &World, clip: &EditableAnimationClip, bone_id: BoneId) {
+    if clip.tracks.contains_key(&bone_id) {
         return;
     }
     world.send_command(EnsureBoneTrack { bone_id });
@@ -250,13 +243,6 @@ pub(super) fn extrapolation_target_properties(
     let mut seen = HashSet::new();
     targets.retain(|property_type| seen.insert(*property_type));
     targets
-}
-
-pub(super) fn current_clip_has_track(world: &World, bone_id: BoneId) -> bool {
-    let timeline_state = world.resource::<TimelineState>();
-    let clip_library = world.resource::<ClipLibrary>();
-    get_current_clip(&timeline_state, &clip_library)
-        .is_some_and(|clip| clip.tracks.contains_key(&bone_id))
 }
 
 /// The scalar target only accepts registered channels: the visible set can

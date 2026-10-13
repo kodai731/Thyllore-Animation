@@ -371,14 +371,8 @@ pub(super) fn apply_mesh_response(
     );
 
     if let Some(ref png_data) = intermediate_image_png {
-        let path = format!(
-            "log/text_to_mesh_intermediate_{}.png",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        );
-        if let Err(e) = std::fs::write(&path, png_data) {
+        let path = "log/text_to_mesh_intermediate.png";
+        if let Err(e) = std::fs::write(path, png_data) {
             log_warn!("Failed to save intermediate image: {}", e);
         } else {
             log!("TextToMesh: saved intermediate image to {}", path);

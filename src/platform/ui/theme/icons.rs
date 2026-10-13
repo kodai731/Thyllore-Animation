@@ -44,6 +44,8 @@ pub enum Icon {
     Command,
     SkipBack,
     SkipForward,
+    PictureInPicture,
+    Minimize,
 }
 
 impl Icon {
@@ -91,6 +93,8 @@ impl Icon {
             Icon::Command => '\u{e09a}',
             Icon::SkipBack => '\u{e15f}',
             Icon::SkipForward => '\u{e160}',
+            Icon::PictureInPicture => '\u{e3af}',
+            Icon::Minimize => '\u{e11b}',
         }
     }
 

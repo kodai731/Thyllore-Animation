@@ -68,4 +68,8 @@ impl GpuResource for AccumulationTarget {
         self.image = vk::Image::null();
         self.view = vk::ImageView::null();
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.image.is_destroyed() && self.view.is_destroyed()
+    }
 }

@@ -28,7 +28,6 @@ pub struct MaterialManager {
     pub layout: ReflectedSetLayout,
     pub materials: HashMap<MaterialId, Material>,
     next_id: MaterialId,
-    recycled_sets: Vec<vk::DescriptorSet>,
 }
 
 impl MaterialManager {
@@ -39,7 +38,6 @@ impl MaterialManager {
             layout,
             materials: HashMap::new(),
             next_id: 0,
-            recycled_sets: Vec::new(),
         })
     }
 
@@ -74,10 +72,7 @@ impl MaterialManager {
         sampler: vk::Sampler,
         properties: MaterialUBO,
     ) -> anyhow::Result<MaterialId> {
-        let descriptor_set = match self.recycled_sets.pop() {
-            Some(set) => set,
-            None => self.layout.allocate_set(rrdevice)?,
-        };
+        let descriptor_set = self.layout.allocate_set(rrdevice)?;
 
         let uniform_buffer = UniformBuffer::new(instance, rrdevice, 1, Placement::HostMapped)?;
         uniform_buffer.write_slot(rrdevice, 0, &properties)?;
@@ -113,21 +108,22 @@ impl MaterialManager {
         self.materials.get(&id)
     }
 
-    pub unsafe fn clear_materials(&mut self, device: &vulkanalia::Device) {
+    /// The caller guarantees the device is idle: the sets go back to the allocator for reuse.
+    pub unsafe fn clear_materials(&mut self, rrdevice: &RRDevice) {
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(device);
-            self.recycled_sets.push(material.descriptor_set);
+            material.uniform_buffer.destroy(&rrdevice.device);
+            self.layout.release_set(rrdevice, material.descriptor_set);
         }
 
         self.materials.clear();
         self.next_id = 0;
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         for material in self.materials.values_mut() {
             material.uniform_buffer.destroy(device);
         }
-        self.recycled_sets.clear();
-        self.layout.destroy(device);
+        self.layout.destroy(rrdevice);
     }
 }

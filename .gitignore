@@ -34,12 +34,35 @@ log/
 # distribution packages
 dist/
 
+# ML training artifacts. Weights are too large to version, so models/ tracks the
+# manifest, configs and the learned head that explain how each model was made,
+# and the weights themselves stay untracked beside them.
+# `*.bin` is deliberately absent -- tests/fixtures/*.bin are tracked fixtures.
+checkpoints/
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.pkl
+# Copied verbatim from the base encoder and 17MB apiece, so versioning one per
+# trained variant buys nothing. models/gemma/README.md names the base model.
+models/**/tokenizer.json
+# Derived from the untracked encoder beside them and valid only for that one: the
+# exemplar vectors the engine loads, and the decisions the Rust parity test replays.
+# `AnimationModelTraining scripts/helm_router/export_router_index.py` regenerates all three.
+models/**/router_index.f32
+models/**/router_index.json
+models/**/router_parity.json
+# The pose table labels embedded by the raw encoder beside them, rebuilt when either changes.
+models/**/motion_label_vectors.json
+
 # lib
 vendor/
 
 # claude
 .claude/settings.local.json
-.claude/local/
+.claude/local
 
 # python
 .venv/

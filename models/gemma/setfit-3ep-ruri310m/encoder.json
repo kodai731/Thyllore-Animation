@@ -1,0 +1,1 @@
+{"query_prefix": "トピック: ", "raw_encoder": "ruri-v3-310m-raw", "thresholds": {"tau_reject": 0.98, "tau_raw": 0.89, "tau_raw_nearmiss": 0.84, "compose_tau": 0.9, "compose_margin": 0.02}}

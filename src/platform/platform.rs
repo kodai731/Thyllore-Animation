@@ -58,6 +58,7 @@ pub fn init(title: &str, take_focus: bool) -> System {
             .with_position(PhysicalPosition::new(10000, 10000));
     }
     let window = builder.build(&event_loop).expect("Failed to create window");
+    window.set_ime_allowed(true);
 
     let mut imgui = Context::create();
     super::ui::theme::style::apply_thyllore_style(imgui.style_mut());

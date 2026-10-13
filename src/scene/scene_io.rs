@@ -200,11 +200,16 @@ fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<
         return Ok(None);
     }
 
-    let model_path = assets_dir.join(&model.path);
-    if !model_path.exists() {
-        return Err(SceneError::ModelNotFound(model_path));
+    let cwd_path = Path::new(&model.path);
+    if cwd_path.exists() {
+        return Ok(Some(PathBuf::from(&model.path)));
     }
-    Ok(Some(model_path))
+
+    let joined_path = assets_dir.join(&model.path);
+    if !joined_path.exists() {
+        return Err(SceneError::ModelNotFound(joined_path));
+    }
+    Ok(Some(joined_path))
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -322,6 +327,23 @@ mod tests {
         let loaded = load_scene(&scene_path).expect("model file exists");
 
         assert_eq!(loaded.model_path, Some(dir.join("models/mesh.glb")));
+    }
+
+    #[test]
+    fn resolve_model_path_cwd_relative_existing_file() {
+        let model = ModelReference::new("Cargo.toml");
+        let result = resolve_model_path(Path::new("."), &model);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().unwrap(), PathBuf::from("Cargo.toml"));
+    }
+
+    #[test]
+    fn resolve_model_path_nonexistent_returns_error() {
+        let model = ModelReference::new("nonexistent/path.glb");
+        let result = resolve_model_path(Path::new("."), &model);
+
+        assert!(matches!(result, Err(SceneError::ModelNotFound(_))));
     }
 
     #[test]

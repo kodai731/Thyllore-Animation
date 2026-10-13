@@ -68,8 +68,13 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `ecs-architecture.md`.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
   `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
-  sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and,
-  later, helm's `GenerateMotion` call the same function; nothing in `src/` holds angles or poses.
+  sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and
+  helm's `compose_motion:<motion>` routes call the same function; nothing in `src/` holds angles or poses.
+  `src/helm/systems/motion_labels.rs` embeds each motion's labels with the raw encoder into the raw index
+  when the runtime loads (cached beside that encoder), `src/ecs/systems/helm/routing.rs` ranks them on the
+  utterance without its slot words (`modifier.rs::strip_slot_terms`) and `compose_decision.rs` decides
+  before the trained router runs; `HelmCommand::ComposeMotion` composes a new clip through
+  `src/ecs/systems/motion_seed_systems.rs`.
 - GPU object lifetime: every owner of Vulkan objects is a `#[must_use]` struct with
   `#[derive(GpuResource)]` (`resource/gpu_resource.rs`, `thyllore-vulkan-derive`). The derive destroys
   the fields in reverse declaration order, answers `is_destroyed` from them, warns from `Drop` while any
@@ -136,11 +141,11 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 |---|---|
 | `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
 | `editor/` | Timeline, curves, clips, hierarchy, layout and its per-frame snapshot, history, keyframes, poses, constraints, avatar setup, blend shape inspector, expression library |
-| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
+| `render/` | Camera, active camera entity, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
 | `timing/` | Frame clock, CPU and GPU frame timing, update phase, per-phase sub-steps |
 | `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui capture and textures, trace |
 | `ui/` | UI pointer owner, UI settings, widget animation and state, toast |
-| `batch/` | Batch run schedule, scheduled actions, pick and orbit capture, pending anim edits |
+| `batch/` | Batch run schedule, helm batch rows, scheduled actions, pick and orbit capture, pending anim edits |
 | `gizmo/` | Bone, constraint, grid, light, spring bone and transform gizmo state |
 | `flame/` | Flame effect data, render targets, history snapshot, SDF source, UI state, batch capture |
 | `lightning/` | Lightning GPU state, render targets, batch debug capture |
@@ -149,7 +154,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `app/` | App command and exit, message log, scene state, Vulkan validation report |
 | `model/` | FBX and glTF model caches, material texture slots, humanoid rig |
 | `animation/` | Bone pose override, pose apply cache, spring bone state, morph track playback, baked humanoid clips |
-| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
+| `ml/` | Auto-rig, helm router state, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
 
 `mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
 
@@ -159,7 +164,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 |---|---|
 | `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and the effect scalar domain registry, spring bone |
 | `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
-| `render/` | camera state, render handles, field-driven look |
+| `render/` | camera state, camera entity and its keyable params, render handles, field-driven look |
 | `model/` | GLB source, morph weights |
 | `ml/` | inference actor |
 | `mesh/` | GPU mesh types and vertex attribute presets |

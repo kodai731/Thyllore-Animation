@@ -1,5 +1,6 @@
 pub mod billboard;
 
+mod active_camera;
 mod auto_exposure;
 mod bloom;
 mod camera;
@@ -20,6 +21,7 @@ mod tone_mapping;
 mod view_mode;
 mod weight_heatmap;
 
+pub use active_camera::*;
 pub use billboard::*;
 
 pub use auto_exposure::*;

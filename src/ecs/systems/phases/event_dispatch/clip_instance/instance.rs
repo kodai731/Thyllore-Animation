@@ -24,7 +24,8 @@ fn apply_clip_instance_event(event: &ClipInstanceEvent, world: &mut World) {
             entity,
             source_id,
             start_time,
-        } => add_clip_instance(world, *entity, *source_id, *start_time),
+            speed,
+        } => add_clip_instance(world, *entity, *source_id, *start_time, *speed),
 
         ClipInstanceEvent::Select {
             entity,
@@ -229,6 +230,7 @@ mod tests {
                 entity,
                 source_id: clip_id,
                 start_time: 0.0,
+                speed: 1.0,
             }],
             &mut world,
         );

@@ -75,6 +75,7 @@ Right side; left mirrors Y and Z. These are the base values a new pose is built 
 | Bow | `Spine` x +20, `Chest` x +20 |
 | Twist torso to the right | `Spine` y positive |
 | Raise right leg forward | `RightUpperLeg` x −90. Bend right knee: `RightLowerLeg` x +90 |
+| Lower hips | `Hips` ty negative (offset, relative to hip height) |
 
 Avoid one role near x ±90 together with large y and z (gimbal lock).
 

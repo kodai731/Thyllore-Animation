@@ -17,6 +17,23 @@ pub struct AnimDebugDumpRequest {
     pub times: Vec<f32>,
 }
 
+#[derive(Clone, Debug)]
+pub struct AnimDumpRequest {
+    pub path: String,
+    pub include_tracks: bool,
+}
+
+pub fn anim_dump_request_resolve_from_process_args() -> Result<Option<AnimDumpRequest>> {
+    let args: Vec<String> = std::env::args().collect();
+    let Some(path) = flag_value_resolve_from_args(&args, BATCH_ANIM_DUMP_FLAG)? else {
+        return Ok(None);
+    };
+    Ok(Some(AnimDumpRequest {
+        path,
+        include_tracks: args.iter().any(|a| a == BATCH_ANIM_DUMP_TRACKS_FLAG),
+    }))
+}
+
 /// The engine's own startup flags; subsystem flags arrive through `bootstrap_hook!` and their
 /// actions through `batch_action!`.
 pub struct EngineCliOverrides {

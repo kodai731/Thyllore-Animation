@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{BoneNode, FbxAnimation, FbxAxesInfo, FbxData, LoadedConstraint};
+use super::{BoneNode, FbxAnimation, FbxAxesInfo, FbxData, LoadedCamera, LoadedConstraint};
 
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
@@ -12,4 +12,5 @@ pub struct FbxModel {
     pub constraints: Vec<LoadedConstraint>,
     pub axes: FbxAxesInfo,
     pub source_path: Option<String>,
+    pub cameras: Vec<LoadedCamera>,
 }

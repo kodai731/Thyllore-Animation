@@ -15,6 +15,7 @@ pub fn add_clip_instance(
     entity: Entity,
     source_id: SourceClipId,
     start_time: f32,
+    speed: f32,
 ) {
     let duration = {
         let library = world.resource::<ClipLibrary>();
@@ -31,6 +32,7 @@ pub fn add_clip_instance(
     clip_schedule_add_instance(schedule, source_id, duration);
     if let Some(last) = schedule.instances.last_mut() {
         last.start_time = start_time;
+        last.speed = speed;
     }
 }
 

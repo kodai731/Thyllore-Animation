@@ -5,22 +5,22 @@ use anyhow::{bail, Result};
 use crate::humanoid::components::role::HumanoidRole;
 use crate::motion::seed::components::motion_spec::{MotionSide, MotionSpec};
 use crate::motion::seed::components::pose_table::{
-    MotionDef, PoseEntry, PoseSide, PoseTable, RoleKey, RotationAxis,
+    MotionDef, PoseAxis, PoseEntry, PoseSide, PoseTable, RoleKey,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SeedKey {
     pub role: HumanoidRole,
-    pub axis: RotationAxis,
+    pub axis: PoseAxis,
     pub time: f32,
-    pub degrees: f32,
+    pub value: f32,
 }
 
 /// Where the Copilot may add follow-through: a curve that just arrived at a value it then holds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SettleRequest {
     pub role: HumanoidRole,
-    pub axis: RotationAxis,
+    pub axis: PoseAxis,
     pub time: f32,
     pub until: f32,
     pub max_frames: usize,
@@ -47,11 +47,11 @@ pub fn settle_requests(
             && previous.axis == arrival.axis
             && next.role == arrival.role
             && next.axis == arrival.axis;
-        if !same_curve {
+        if !same_curve || !arrival.axis.is_rotation() {
             continue;
         }
-        let change = (arrival.degrees - previous.degrees).abs();
-        let holds = (next.degrees - arrival.degrees).abs() < 1e-6 && next.time > arrival.time;
+        let change = (arrival.value - previous.value).abs();
+        let holds = (next.value - arrival.value).abs() < 1e-6 && next.time > arrival.time;
         if change >= settle.min_change && holds {
             requests.push(SettleRequest {
                 role: arrival.role,
@@ -123,7 +123,7 @@ fn expand_poses(
             if spec.side == MotionSide::Left {
                 *key = key.mirrored();
             }
-            key.degrees *= spec.amount;
+            key.value *= spec.amount;
         }
         poses.push(TimedPose {
             time: pose.time,
@@ -183,7 +183,7 @@ fn scale_time(speed: f32, poses: &mut [TimedPose], duration: &mut f32) {
 }
 
 fn emit_keys_with_holds(poses: &[TimedPose], duration: f32) -> Vec<SeedKey> {
-    let mut held: BTreeMap<(usize, RotationAxis), (HumanoidRole, f32)> = BTreeMap::new();
+    let mut held: BTreeMap<(usize, PoseAxis), (HumanoidRole, f32)> = BTreeMap::new();
     for pose in poses {
         for key in &pose.keys {
             held.insert((key.role.index(), key.axis), (key.role, 0.0));
@@ -195,15 +195,15 @@ fn emit_keys_with_holds(poses: &[TimedPose], duration: f32) -> Vec<SeedKey> {
         |time: f32, set: &[RoleKey], held: &mut BTreeMap<_, (HumanoidRole, f32)>| {
             for key in set {
                 if let Some(slot) = held.get_mut(&(key.role.index(), key.axis)) {
-                    slot.1 = key.degrees;
+                    slot.1 = key.value;
                 }
             }
-            for (&(_, axis), &(role, degrees)) in held.iter() {
+            for (&(_, axis), &(role, value)) in held.iter() {
                 keys.push(SeedKey {
                     role,
                     axis,
                     time,
-                    degrees,
+                    value,
                 });
             }
         };
@@ -223,8 +223,8 @@ fn emit_keys_with_holds(poses: &[TimedPose], duration: f32) -> Vec<SeedKey> {
             .values()
             .map(|(role, _)| RoleKey {
                 role: *role,
-                axis: RotationAxis::X,
-                degrees: 0.0,
+                axis: PoseAxis::X,
+                value: 0.0,
             })
             .collect();
         for slot in held.values_mut() {
@@ -245,10 +245,10 @@ fn emit_keys_with_holds(poses: &[TimedPose], duration: f32) -> Vec<SeedKey> {
 mod tests {
     use super::*;
 
-    fn keys_of(keys: &[SeedKey], role: HumanoidRole, axis: RotationAxis) -> Vec<(f32, f32)> {
+    fn keys_of(keys: &[SeedKey], role: HumanoidRole, axis: PoseAxis) -> Vec<(f32, f32)> {
         keys.iter()
             .filter(|k| k.role == role && k.axis == axis)
-            .map(|k| (k.time, k.degrees))
+            .map(|k| (k.time, k.value))
             .collect()
     }
 
@@ -257,7 +257,7 @@ mod tests {
         let keys = compose_motion(PoseTable::builtin(), &MotionSpec::new("punch")).unwrap();
 
         assert_eq!(
-            keys_of(&keys, HumanoidRole::RightUpperArm, RotationAxis::Y),
+            keys_of(&keys, HumanoidRole::RightUpperArm, PoseAxis::Y),
             vec![
                 (0.0, 0.0),
                 (0.4, 0.0),
@@ -268,7 +268,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            keys_of(&keys, HumanoidRole::LeftUpperArm, RotationAxis::Z),
+            keys_of(&keys, HumanoidRole::LeftUpperArm, PoseAxis::Z),
             vec![
                 (0.0, 0.0),
                 (0.4, 80.0),
@@ -279,7 +279,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            keys_of(&keys, HumanoidRole::Spine, RotationAxis::Y),
+            keys_of(&keys, HumanoidRole::Spine, PoseAxis::Y),
             vec![
                 (0.0, 0.0),
                 (0.4, 15.0),
@@ -298,7 +298,7 @@ mod tests {
         let keys = compose_motion(PoseTable::builtin(), &spec).unwrap();
 
         assert_eq!(
-            keys_of(&keys, HumanoidRole::LeftUpperArm, RotationAxis::Y),
+            keys_of(&keys, HumanoidRole::LeftUpperArm, PoseAxis::Y),
             vec![
                 (0.0, 0.0),
                 (0.4, 0.0),
@@ -309,7 +309,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            keys_of(&keys, HumanoidRole::Spine, RotationAxis::Y),
+            keys_of(&keys, HumanoidRole::Spine, PoseAxis::Y),
             vec![
                 (0.0, 0.0),
                 (0.4, -15.0),
@@ -328,7 +328,7 @@ mod tests {
         let keys = compose_motion(PoseTable::builtin(), &spec).unwrap();
 
         assert_eq!(
-            keys_of(&keys, HumanoidRole::RightLowerArm, RotationAxis::Z),
+            keys_of(&keys, HumanoidRole::RightLowerArm, PoseAxis::Z),
             vec![
                 (0.0, 0.0),
                 (0.4, 90.0),
@@ -357,7 +357,7 @@ mod tests {
         let keys = compose_motion(PoseTable::builtin(), &spec).unwrap();
 
         assert_eq!(
-            keys_of(&keys, HumanoidRole::Spine, RotationAxis::X),
+            keys_of(&keys, HumanoidRole::Spine, PoseAxis::X),
             vec![(0.0, 0.0), (0.3, 10.0), (0.5, 10.0), (0.8, 0.0)]
         );
     }
@@ -368,7 +368,7 @@ mod tests {
         let keys = compose_motion(PoseTable::builtin(), &spec).unwrap();
         let requests = settle_requests(PoseTable::builtin(), &spec, &keys).unwrap();
 
-        let mut found: Vec<(HumanoidRole, RotationAxis, f32, f32)> = requests
+        let mut found: Vec<(HumanoidRole, PoseAxis, f32, f32)> = requests
             .iter()
             .map(|r| (r.role, r.axis, r.time, r.until))
             .collect();
@@ -380,13 +380,13 @@ mod tests {
         assert_eq!(
             found,
             vec![
-                (HumanoidRole::Spine, RotationAxis::Y, 0.55, 0.9),
-                (HumanoidRole::LeftUpperArm, RotationAxis::Z, 0.4, 0.55),
-                (HumanoidRole::RightUpperArm, RotationAxis::Y, 0.55, 0.9),
-                (HumanoidRole::RightUpperArm, RotationAxis::Y, 1.3, 2.0),
-                (HumanoidRole::RightUpperArm, RotationAxis::Z, 0.55, 0.9),
-                (HumanoidRole::LeftLowerArm, RotationAxis::Y, 0.4, 0.55),
-                (HumanoidRole::RightLowerArm, RotationAxis::Y, 0.55, 0.9),
+                (HumanoidRole::Spine, PoseAxis::Y, 0.55, 0.9),
+                (HumanoidRole::LeftUpperArm, PoseAxis::Z, 0.4, 0.55),
+                (HumanoidRole::RightUpperArm, PoseAxis::Y, 0.55, 0.9),
+                (HumanoidRole::RightUpperArm, PoseAxis::Y, 1.3, 2.0),
+                (HumanoidRole::RightUpperArm, PoseAxis::Z, 0.55, 0.9),
+                (HumanoidRole::LeftLowerArm, PoseAxis::Y, 0.4, 0.55),
+                (HumanoidRole::RightLowerArm, PoseAxis::Y, 0.55, 0.9),
             ]
         );
         assert!(requests
@@ -401,6 +401,48 @@ mod tests {
         assert!(settle_requests(PoseTable::builtin(), &spec, &keys)
             .unwrap()
             .is_empty());
+    }
+
+    fn crouch_table() -> PoseTable {
+        PoseTable::parse(
+            r#"
+[[motion]]
+name = "crouch"
+region = "lower_body"
+duration = 2.0
+settle = { blend = 0.3, frames = 8, min_change = 0.0 }
+poses = [
+    { time = 0.5, set = [{ role = "Hips", axis = "ty", offset = -0.4 }, { role = "Hips", axis = "x", degrees = 10 }] },
+    { time = 1.0, set = [{ role = "Hips", axis = "ty", offset = -0.4 }, { role = "Hips", axis = "x", degrees = 10 }] },
+]
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn amount_scales_hips_translation() {
+        let table = crouch_table();
+        let mut spec = MotionSpec::new("crouch");
+        spec.amount = 0.5;
+        let keys = compose_motion(&table, &spec).unwrap();
+
+        assert_eq!(
+            keys_of(&keys, HumanoidRole::Hips, PoseAxis::TranslationY),
+            vec![(0.0, 0.0), (0.5, -0.2), (1.0, -0.2), (2.0, 0.0)]
+        );
+    }
+
+    #[test]
+    fn settle_requests_skip_translation_curves() {
+        let table = crouch_table();
+        let spec = MotionSpec::new("crouch");
+        let keys = compose_motion(&table, &spec).unwrap();
+        let requests = settle_requests(&table, &spec, &keys).unwrap();
+
+        let found: Vec<(HumanoidRole, PoseAxis)> =
+            requests.iter().map(|r| (r.role, r.axis)).collect();
+        assert_eq!(found, vec![(HumanoidRole::Hips, PoseAxis::X)]);
     }
 
     #[test]

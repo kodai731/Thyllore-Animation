@@ -1,6 +1,7 @@
 pub mod avatar_setup;
 pub mod bone_track;
 pub mod camera;
+pub mod camera_rig;
 pub mod clip_browser;
 pub mod clip_instance;
 pub mod constraint;

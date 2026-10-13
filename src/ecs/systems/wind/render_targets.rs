@@ -97,6 +97,12 @@ impl GpuResource for WindRenderTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         destroy_render_targets(self, &rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.framebuffer.is_destroyed()
+            && self.render_pass.is_destroyed()
+            && self.reduced.is_destroyed()
+    }
 }
 
 pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &vulkanalia::Device) {

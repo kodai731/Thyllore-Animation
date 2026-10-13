@@ -5,7 +5,7 @@ use super::hit_test::*;
 use super::selection::*;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
-use crate::animation::editable::PropertyCurve;
+use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
     CurveTrackRef, CurveViewMode, DraggingTangent, TimelineState, UiPointerOwnerId,
@@ -40,7 +40,8 @@ pub(super) fn handle_curve_view_interaction(
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     cursor_pos: [f32; 2],
     curve_area_width: f32,
-    clip_duration: f32,
+    timeline_state: &TimelineState,
+    clip: &EditableAnimationClip,
     track_ref: CurveTrackRef,
 ) {
     let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
@@ -78,7 +79,8 @@ pub(super) fn handle_curve_view_interaction(
         },
         ruler_pos,
         curve_area_width,
-        clip_duration,
+        clip.duration,
+        timeline_state.snap_settings.frame_rate,
     );
 
     if owns_press && pointer.is_clicked(MouseButton::Right) {
@@ -105,7 +107,7 @@ pub(super) fn handle_curve_view_interaction(
     }
 
     build_keyframe_context_menu(ui, world, editor_state, track_ref);
-    build_curve_editor_context_menu(ui, world, editor_state, track_ref);
+    build_curve_editor_context_menu(ui, world, editor_state, clip, track_ref);
 }
 
 #[derive(Clone, Copy)]
@@ -125,6 +127,7 @@ pub(super) fn handle_mouse_interaction(
     ruler_pos: [f32; 2],
     curve_area_width: f32,
     duration: f32,
+    frame_rate: f32,
 ) {
     let mouse_pos = pointer.pos;
     let mouse_clicked = access.owns_press && pointer.is_clicked(MouseButton::Left);
@@ -132,10 +135,7 @@ pub(super) fn handle_mouse_interaction(
     let mouse_released = pointer.is_released(MouseButton::Left);
     let middle_clicked = access.owns_press && pointer.is_clicked(MouseButton::Middle);
     let middle_released = pointer.is_released(MouseButton::Middle);
-    let time_snap = current_time_snap(
-        ui,
-        world.resource::<TimelineState>().snap_settings.frame_rate,
-    );
+    let time_snap = current_time_snap(ui, frame_rate);
 
     let in_ruler_area = mouse_pos[0] >= ruler_pos[0]
         && mouse_pos[0] <= ruler_pos[0] + curve_area_width

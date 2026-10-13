@@ -191,41 +191,42 @@ pub(super) fn apply_shift_range_selection(
     time: f32,
     value: f32,
 ) -> bool {
-    let anchor = editor_state.selection_anchor.clone();
+    let anchor_time = editor_state
+        .selection_anchor
+        .filter(|(anchor_prop, _)| anchor_prop == property_type)
+        .and_then(|(anchor_prop, anchor_id)| {
+            find_keyframe_time(curves_to_draw, &anchor_prop, anchor_id)
+        });
 
-    if let Some((anchor_prop, anchor_id)) = anchor {
-        if anchor_prop == *property_type {
-            let anchor_time = find_keyframe_time(curves_to_draw, &anchor_prop, anchor_id);
-            if let Some(anchor_time) = anchor_time {
-                let range_keys =
-                    collect_keyframes_in_range(curves_to_draw, property_type, anchor_time, time);
-                for key in range_keys {
-                    let already_exists = editor_state.selected_keyframes.iter().any(|s| {
-                        s.keyframe_id == key.keyframe_id && s.property_type == key.property_type
-                    });
-                    if !already_exists {
-                        editor_state.selected_keyframes.push(key);
-                    }
-                }
-                return true;
-            }
+    if let Some(anchor_time) = anchor_time {
+        let range_keys =
+            collect_keyframes_in_range(curves_to_draw, property_type, anchor_time, time);
+        for key in range_keys {
+            push_if_unselected(&mut editor_state.selected_keyframes, key);
         }
+        return true;
     }
 
-    let already_exists = editor_state
-        .selected_keyframes
-        .iter()
-        .any(|s| s.keyframe_id == keyframe_id && s.property_type == *property_type);
-    if !already_exists {
-        editor_state.selected_keyframes.push(CurveSelectedKeyframe {
+    push_if_unselected(
+        &mut editor_state.selected_keyframes,
+        CurveSelectedKeyframe {
             property_type: property_type.clone(),
             keyframe_id,
             original_time: time,
             original_value: value,
-        });
-    }
+        },
+    );
     editor_state.selection_anchor = Some((property_type.clone(), keyframe_id));
     true
+}
+
+fn push_if_unselected(selected: &mut Vec<CurveSelectedKeyframe>, key: CurveSelectedKeyframe) {
+    let already_selected = selected
+        .iter()
+        .any(|s| s.keyframe_id == key.keyframe_id && s.property_type == key.property_type);
+    if !already_selected {
+        selected.push(key);
+    }
 }
 
 pub(super) fn collect_keyframes_in_range(

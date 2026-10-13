@@ -9,11 +9,15 @@ const CAPTURE_SAMPLE_COUNT: usize = 100;
 
 pub(super) fn dispatch_curve_buffer_events(events: &[TimelineEvent], world: &mut World) {
     for event in events {
-        match event {
-            TimelineEvent::CaptureBuffer => capture_buffer(world),
-            TimelineEvent::SwapBuffer => swap_buffer(world),
-            _ => {}
-        }
+        dispatch_curve_buffer_event(event, world);
+    }
+}
+
+fn dispatch_curve_buffer_event(event: &TimelineEvent, world: &mut World) {
+    match event {
+        TimelineEvent::CaptureBuffer => capture_buffer(world),
+        TimelineEvent::SwapBuffer => swap_buffer(world),
+        _ => {}
     }
 }
 

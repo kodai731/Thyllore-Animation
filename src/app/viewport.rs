@@ -8,6 +8,7 @@ use crate::vulkanr::resource::{
     RenderTargetStorage, RenderTargetTransient,
 };
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct ViewportState {
     pub storage: RenderTargetStorage,

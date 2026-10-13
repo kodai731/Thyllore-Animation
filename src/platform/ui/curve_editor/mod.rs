@@ -3,6 +3,7 @@ mod context_menu;
 mod dopesheet;
 mod drag;
 mod draw;
+mod floating;
 mod hit_test;
 mod interaction;
 mod keyboard;
@@ -16,4 +17,4 @@ mod view;
 mod window;
 
 pub(crate) use keyboard::CURVE_EDITOR_KEY_BINDINGS;
-pub(crate) use window::build_curve_editor_tab;
+pub(crate) use window::{build_curve_editor_tab, build_placement_toggle};

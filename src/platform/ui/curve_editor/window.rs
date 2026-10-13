@@ -4,13 +4,16 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
-    ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveEditorTarget, CurveInteractionMode,
-    CurveTrackRef, CurveValueDisplay, CurveViewMode, FrameRequest, PoseLibrary, TimelineState,
+    ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState, CurveEditorTarget,
+    CurveInteractionMode, CurveTrackRef, CurveValueDisplay, CurveViewMode, FrameRequest,
+    PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
+use crate::platform::ui::theme::icons::Icon;
+use crate::platform::ui::theme::widgets::{icon_button, ButtonState};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
@@ -231,7 +234,8 @@ pub(super) fn build_curve_view(
         &curves_to_draw,
         cursor_pos,
         curve_area_width,
-        clip.duration,
+        timeline_state,
+        clip,
         track_ref,
     );
 
@@ -545,6 +549,9 @@ pub(super) fn build_curve_toolbar(
     pose_library: &mut PoseLibrary,
     clip_library: &ClipLibrary,
 ) {
+    build_placement_toggle(ui, editor_state);
+    ui.same_line_with_spacing(0.0, 20.0);
+
     if ui.small_button("Capture") {
         world.send_command(TimelineEvent::CaptureBuffer);
     }
@@ -639,6 +646,26 @@ pub(super) fn build_curve_toolbar(
         editor_state.view_mode == CurveViewMode::Dopesheet,
     ) {
         editor_state.view_mode = CurveViewMode::Dopesheet;
+    }
+}
+
+/// One button that moves the curve editor between the timeline's Curves tab and its own window.
+pub(crate) fn build_placement_toggle(ui: &imgui::Ui, editor_state: &mut CurveEditorState) {
+    let (icon, tooltip, next) = match editor_state.placement {
+        CurveEditorPlacement::TimelineTab => (
+            Icon::PictureInPicture,
+            "Open in window",
+            CurveEditorPlacement::Window,
+        ),
+        CurveEditorPlacement::Window => (
+            Icon::Minimize,
+            "Dock into timeline",
+            CurveEditorPlacement::TimelineTab,
+        ),
+    };
+    if icon_button(ui, icon, tooltip, ButtonState::Normal) {
+        editor_state.placement = next;
+        editor_state.needs_focus = true;
     }
 }
 

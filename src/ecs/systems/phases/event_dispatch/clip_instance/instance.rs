@@ -11,85 +11,89 @@ use super::ClipInstanceEvent;
 /// Applies the batch to the schedules without recording the edit history; the batch CLI uses it.
 pub fn apply_clip_instance_events(events: &[ClipInstanceEvent], world: &mut World) {
     for event in events {
-        match event {
-            ClipInstanceEvent::Add {
-                entity,
-                source_id,
-                start_time,
-            } => add_clip_instance(world, *entity, *source_id, *start_time),
-
-            ClipInstanceEvent::Select {
-                entity,
-                instance_id,
-            } => select_clip_instance(world, *entity, *instance_id),
-
-            ClipInstanceEvent::Deselect => {
-                world.resource_mut::<TimelineState>().selected_clip_instance = None;
-            }
-
-            ClipInstanceEvent::Move {
-                entity,
-                instance_id,
-                new_start_time,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.start_time = *new_start_time;
-            }),
-
-            ClipInstanceEvent::TrimStart {
-                entity,
-                instance_id,
-                new_clip_in,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.clip_in = new_clip_in.clamp(0.0, inst.clip_out);
-            }),
-
-            ClipInstanceEvent::TrimEnd {
-                entity,
-                instance_id,
-                new_clip_out,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.clip_out = new_clip_out.max(inst.clip_in);
-            }),
-
-            ClipInstanceEvent::ToggleMute {
-                entity,
-                instance_id,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.muted = !inst.muted;
-            }),
-
-            ClipInstanceEvent::Delete {
-                entity,
-                instance_id,
-            } => remove_clip_instance(world, *entity, *instance_id),
-
-            ClipInstanceEvent::SetWeight {
-                entity,
-                instance_id,
-                weight,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.weight = weight.clamp(0.0, 1.0);
-            }),
-
-            ClipInstanceEvent::SetBlendMode {
-                entity,
-                instance_id,
-                blend_mode,
-            } => modify_clip_instance(world, *entity, *instance_id, |inst| {
-                inst.blend_mode = *blend_mode;
-            }),
-
-            ClipInstanceEvent::GroupCreate { .. }
-            | ClipInstanceEvent::GroupDelete { .. }
-            | ClipInstanceEvent::GroupAddInstance { .. }
-            | ClipInstanceEvent::GroupRemoveInstance { .. }
-            | ClipInstanceEvent::GroupToggleMute { .. }
-            | ClipInstanceEvent::GroupSetWeight { .. } => {}
-        }
+        apply_clip_instance_event(event, world);
     }
 
     apply_clip_group_events(events, world);
     request_bake_scan(world);
+}
+
+fn apply_clip_instance_event(event: &ClipInstanceEvent, world: &mut World) {
+    match event {
+        ClipInstanceEvent::Add {
+            entity,
+            source_id,
+            start_time,
+        } => add_clip_instance(world, *entity, *source_id, *start_time),
+
+        ClipInstanceEvent::Select {
+            entity,
+            instance_id,
+        } => select_clip_instance(world, *entity, *instance_id),
+
+        ClipInstanceEvent::Deselect => {
+            world.resource_mut::<TimelineState>().selected_clip_instance = None;
+        }
+
+        ClipInstanceEvent::Move {
+            entity,
+            instance_id,
+            new_start_time,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.start_time = *new_start_time;
+        }),
+
+        ClipInstanceEvent::TrimStart {
+            entity,
+            instance_id,
+            new_clip_in,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.clip_in = new_clip_in.clamp(0.0, inst.clip_out);
+        }),
+
+        ClipInstanceEvent::TrimEnd {
+            entity,
+            instance_id,
+            new_clip_out,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.clip_out = new_clip_out.max(inst.clip_in);
+        }),
+
+        ClipInstanceEvent::ToggleMute {
+            entity,
+            instance_id,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.muted = !inst.muted;
+        }),
+
+        ClipInstanceEvent::Delete {
+            entity,
+            instance_id,
+        } => remove_clip_instance(world, *entity, *instance_id),
+
+        ClipInstanceEvent::SetWeight {
+            entity,
+            instance_id,
+            weight,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.weight = weight.clamp(0.0, 1.0);
+        }),
+
+        ClipInstanceEvent::SetBlendMode {
+            entity,
+            instance_id,
+            blend_mode,
+        } => modify_clip_instance(world, *entity, *instance_id, |inst| {
+            inst.blend_mode = *blend_mode;
+        }),
+
+        ClipInstanceEvent::GroupCreate { .. }
+        | ClipInstanceEvent::GroupDelete { .. }
+        | ClipInstanceEvent::GroupAddInstance { .. }
+        | ClipInstanceEvent::GroupRemoveInstance { .. }
+        | ClipInstanceEvent::GroupToggleMute { .. }
+        | ClipInstanceEvent::GroupSetWeight { .. } => {}
+    }
 }
 
 #[cfg(test)]

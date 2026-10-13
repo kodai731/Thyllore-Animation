@@ -6,9 +6,19 @@ pub struct PickRay {
     pub direction: cgmath::Vector3<f32>,
 }
 
+/// What the picked pixel is for once its object id and world position come back.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PickPurpose {
+    #[default]
+    Selection,
+    CameraLookAt,
+    CameraDepthAnchor,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ObjectIdReadback {
     pub pending_pixel: Option<(u32, u32)>,
+    pub purpose: PickPurpose,
     pub pick_ray: Option<PickRay>,
     pub copy_in_flight: bool,
     pub last_read_object_id: Option<u32>,

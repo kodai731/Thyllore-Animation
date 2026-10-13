@@ -61,20 +61,21 @@ pub fn build_water_debug_record(
     })
 }
 
-pub fn write_water_debug_dump(record: &Value, unix_time: u64) -> std::io::Result<PathBuf> {
+/// One file set per capture slot, overwritten on the next run, so the directory never grows.
+pub fn write_water_debug_dump(record: &Value, capture_index: u32) -> std::io::Result<PathBuf> {
     let directory = Path::new(WATER_DEBUG_DUMP_DIRECTORY);
     std::fs::create_dir_all(directory)?;
-    let path = directory.join(format!("water_debug_{unix_time}.json"));
+    let path = directory.join(format!("debug_{capture_index}.json"));
     std::fs::write(&path, serde_json::to_string_pretty(record)?)?;
     Ok(path)
 }
 
-pub fn water_debug_screenshot_path(unix_time: u64) -> PathBuf {
-    Path::new(WATER_DEBUG_DUMP_DIRECTORY).join(format!("water_debug_{unix_time}.png"))
+pub fn water_debug_screenshot_path(capture_index: u32) -> PathBuf {
+    Path::new(WATER_DEBUG_DUMP_DIRECTORY).join(format!("debug_{capture_index}.png"))
 }
 
-pub fn water_debug_caustic_accum_path(unix_time: u64) -> PathBuf {
-    Path::new(WATER_DEBUG_DUMP_DIRECTORY).join(format!("water_debug_{unix_time}_caustic.npy"))
+pub fn water_debug_caustic_accum_path(capture_index: u32) -> PathBuf {
+    Path::new(WATER_DEBUG_DUMP_DIRECTORY).join(format!("debug_{capture_index}_caustic.npy"))
 }
 
 fn build_render_info_json(info: &WaterDebugRenderInfo) -> Value {

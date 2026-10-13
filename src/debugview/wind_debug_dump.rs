@@ -18,8 +18,9 @@ crate::capture_action!("dump_wind_debug", WindDebugCapture);
 
 pub fn dump_wind_debug(ctx: &CaptureContext) {
     let unix_time = current_unix_time();
+    let capture_index = ctx.slot.index;
 
-    let screenshot_path = wind_debug_screenshot_path(unix_time);
+    let screenshot_path = wind_debug_screenshot_path(capture_index);
     let saved_screenshot = match unsafe { ctx.save_screenshot_to(&screenshot_path) } {
         Ok(_) => Some(screenshot_path.as_path()),
         Err(error) => {
@@ -29,7 +30,7 @@ pub fn dump_wind_debug(ctx: &CaptureContext) {
     };
 
     let record = build_wind_debug_record(ctx.world, saved_screenshot, unix_time);
-    match write_wind_debug_dump(&record, unix_time) {
+    match write_wind_debug_dump(&record, capture_index) {
         Ok(path) => msg_info!("Wind debug dumped: {}", path.display()),
         Err(error) => log_error!("wind debug dump failed: {}", error),
     }

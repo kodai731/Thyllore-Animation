@@ -509,6 +509,10 @@ impl GpuResource for GpuBufferRegistry {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy_all(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        !self.has_leaked_buffers()
+    }
 }
 
 impl Drop for GpuBufferRegistry {

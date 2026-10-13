@@ -78,6 +78,10 @@ impl GpuResource for RRUniformBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.buffer.is_destroyed()
+    }
 }
 
 impl Drop for RRUniformBuffer {

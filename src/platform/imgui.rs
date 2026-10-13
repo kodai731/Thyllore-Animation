@@ -72,4 +72,12 @@ impl GpuResource for ImguiData {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.pipeline.is_destroyed()
+            && self.descriptor_set_layout.is_destroyed()
+            && self.sampler.is_destroyed()
+            && self.vertex_buffers.iter().all(Option::is_none)
+            && self.index_buffers.iter().all(Option::is_none)
+    }
 }

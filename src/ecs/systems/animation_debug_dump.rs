@@ -96,11 +96,7 @@ pub fn dump_animation_debug(world: &World, assets: &AssetStorage) -> anyhow::Res
     let looping = timeline_state.looping;
     drop(timeline_state);
 
-    let now = chrono::Local::now();
-    let path = std::path::PathBuf::from(format!(
-        "log/animation_debug_{}.json",
-        now.format("%Y%m%d_%H%M%S")
-    ));
+    let path = std::path::PathBuf::from("log/animation_debug.json");
     write_animation_debug_dump(world, assets, &path, &[current_time], looping)?;
 
     log!("Animation debug dumped to {}", path.display());

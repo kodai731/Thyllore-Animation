@@ -17,6 +17,7 @@ Usage:
     python3 tools/live_dump.py --timings             # CPU ms of the last frame by phase and hook
     python3 tools/live_dump.py --timings 1s          # record every frame for 1 s, print mean/p50/max
     python3 tools/live_dump.py --timings 1s --out t.json   # keep every sample instead
+    python3 tools/live_dump.py --exposure            # auto exposure: metered luminance, EV100, limits
     python3 tools/live_dump.py --out dump.json       # write instead of printing
 """
 
@@ -48,6 +49,8 @@ def build_request(args: argparse.Namespace) -> dict:
         return {"kind": "timings", "seconds": parse_duration_seconds(args.timings)}
     if args.pose is not None:
         return {"kind": "pose", "times": args.pose}
+    if args.exposure:
+        return {"kind": "exposure"}
     return {"kind": "anim", "include_tracks": args.tracks}
 
 
@@ -123,6 +126,7 @@ def main() -> None:
         "--timings", nargs="?", const="", metavar="DURATION",
         help="CPU cost of the last frame by phase and hook; with DURATION (1s, 500ms) record every frame that long and print a summary",
     )
+    parser.add_argument("--exposure", action="store_true", help="auto exposure state: metered luminance, EV100, limits")
     parser.add_argument("--clip", help="keep only the clip with this name (anim dump only)")
     parser.add_argument("--out", help="write the JSON to this file instead of stdout")
     parser.add_argument("--timeout", type=float, default=15.0, help="seconds to wait for the engine")

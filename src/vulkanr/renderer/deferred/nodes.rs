@@ -56,7 +56,7 @@ fn is_onion_skin_active(ctx: &PassContext) -> bool {
 fn is_auto_exposure_enabled(ctx: &PassContext) -> bool {
     ctx.world
         .get_resource::<crate::ecs::resource::AutoExposure>()
-        .is_some_and(|settings| settings.enabled)
+        .is_some_and(|settings| settings.uses_histogram())
         && ctx.auto_exposure_buffers.is_some()
 }
 

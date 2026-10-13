@@ -286,4 +286,8 @@ impl GpuResource for HdrBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.color_image.is_destroyed()
+    }
 }

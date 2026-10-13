@@ -2,9 +2,11 @@ use crate::animation::editable::{
     sample_bezier, segment_uses_bezier, BezierHandle, EditableKeyframe, InterpolationType,
     PropertyCurve,
 };
-use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent, TangentHandleType};
+use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
 
-use super::super::drag::{dragged_key_delta, dragged_key_position, TimeSnap};
+use super::super::drag::{
+    compute_dragged_tangent, dragged_key_delta, dragged_key_position, TimeSnap,
+};
 use super::super::view::ViewTransform;
 
 pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
@@ -135,20 +137,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
     };
 
     let curve_vt = vt.for_curve(curve);
-
-    let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
-    let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
     let kf = &curve.keyframes[kf_idx];
-    let new_handle = BezierHandle::new(mouse_time - kf.time, mouse_value - kf.value);
-
-    let preview_in = match dragging.handle_type {
-        TangentHandleType::In => new_handle.clone(),
-        TangentHandleType::Out => kf.in_tangent.clone(),
-    };
-    let preview_out = match dragging.handle_type {
-        TangentHandleType::In => kf.out_tangent.clone(),
-        TangentHandleType::Out => new_handle.clone(),
-    };
+    let (preview_in, preview_out) =
+        compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
 
     let preview_color = [
         (color[0] + 1.0) * 0.5,

@@ -167,7 +167,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         .iter()
         .map(|binding| ShortcutEntry {
             scope: ShortcutScope::CurveEditor,
-            chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+            chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
             label: binding.label,
         });
 

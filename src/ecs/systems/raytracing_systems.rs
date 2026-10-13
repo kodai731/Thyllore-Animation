@@ -1,10 +1,16 @@
+use std::rc::Rc;
+
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
+use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
-use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
+use thyllore_vulkan_core::raytracing::{
+    BlasGeometry, GpuPrimitive, RRAccelerationStructure, RRBLAS,
+};
+use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::AssetStorage;
@@ -12,6 +18,10 @@ use crate::ecs::resource::EffectTraceGpuState;
 use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::FrameContext;
+use crate::vulkanr::command::RRCommandPool;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::vulkan::Instance;
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
     let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world
@@ -98,6 +108,129 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         &acceleration_structure.blas_list,
         &acceleration_structure.procedural_blas,
     )
+}
+
+pub unsafe fn rebuild_scene_acceleration(
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    graphics: &GraphicsResources,
+    raytracing: &mut RayTracingData,
+    world: &World,
+    assets: &AssetStorage,
+) -> Result<()> {
+    let procedural_primitives = crate::hooks::gpu_primitive::collect_all(world);
+    let mesh_transforms = collect_mesh_transforms(world, assets);
+    rebuild_acceleration_structures(
+        instance,
+        device,
+        command_pool,
+        graphics,
+        raytracing,
+        &procedural_primitives,
+        &mesh_transforms,
+    )
+}
+
+unsafe fn rebuild_acceleration_structures(
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    graphics: &GraphicsResources,
+    raytracing: &mut RayTracingData,
+    procedural_primitives: &[GpuPrimitive<'static>],
+    mesh_transforms: &[cgmath::Matrix4<f32>],
+) -> Result<()> {
+    log!("Rebuilding acceleration structures...");
+    if let Some(mut previous) = raytracing.acceleration_structure.take() {
+        device.device.device_wait_idle()?;
+        previous.destroy(&device.device);
+    }
+
+    let mut acceleration_structure = RRAccelerationStructure::new();
+
+    // Collect vertex_buffers in the same order as BLAS creation
+    let vertex_buffers: Vec<_> = graphics
+        .meshes
+        .iter()
+        .filter(|mesh| mesh.render_to_gbuffer)
+        .map(|mesh| {
+            (
+                &mesh.vertex_buffer.buffer,
+                mesh.vertex_data.vertices.len() as u32,
+                std::mem::size_of::<vulkan_data::Vertex>() as u32,
+                &mesh.index_buffer.buffer,
+                mesh.vertex_data.indices.len() as u32,
+            )
+        })
+        .collect();
+
+    for (mesh_index, mesh) in graphics.meshes.iter().enumerate() {
+        if !mesh.render_to_gbuffer {
+            continue;
+        }
+
+        let mut blas = RRAccelerationStructure::create_blas(
+            instance,
+            device,
+            command_pool.as_ref(),
+            &mesh.vertex_buffer.buffer,
+            mesh.vertex_data.vertices.len() as u32,
+            std::mem::size_of::<vulkan_data::Vertex>() as u32,
+            &mesh.index_buffer.buffer,
+            mesh.vertex_data.indices.len() as u32,
+        )?;
+
+        let model = mesh_transforms
+            .get(mesh_index)
+            .copied()
+            .unwrap_or_else(cgmath::Matrix4::identity);
+        blas.transform = vk::TransformMatrixKHR {
+            matrix: AffineRows3x4::from_mat4(model).rows,
+        };
+
+        acceleration_structure.blas_list.push(blas);
+        log!("Created BLAS for mesh");
+    }
+
+    for primitive in procedural_primitives {
+        if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
+            let blas = RRAccelerationStructure::create_procedural_blas(
+                instance,
+                device,
+                command_pool.as_ref(),
+                &primitive.model,
+                *aabb,
+            )?;
+            acceleration_structure.procedural_blas.push(blas);
+        }
+    }
+
+    let tlas = RRAccelerationStructure::create_tlas(
+        instance,
+        device,
+        command_pool.as_ref(),
+        &acceleration_structure.blas_list,
+        &acceleration_structure.procedural_blas,
+    )?;
+    acceleration_structure.tlas = tlas;
+    log!(
+        "Created TLAS with {} mesh + {} procedural instances",
+        acceleration_structure.blas_list.len(),
+        acceleration_structure.procedural_blas.len()
+    );
+
+    acceleration_structure.fill_hit_shading_table(
+        instance,
+        device,
+        &vertex_buffers,
+        procedural_primitives,
+    )?;
+
+    raytracing.acceleration_structure = Some(acceleration_structure);
+    raytracing.bind_ray_query_tlas(device)?;
+    log!("Acceleration structures rebuilt successfully");
+    Ok(())
 }
 
 fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {

@@ -6,7 +6,7 @@ pub mod keyframe_search;
 mod pose;
 pub mod spring_bone;
 
-pub use animation_type::AnimationType;
+pub use animation_type::{classify_imported_animation, AnimationType};
 pub use clip::*;
 pub use constraint::*;
 pub use pose::*;

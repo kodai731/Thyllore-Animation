@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use super::{caches, cleanup, clips, entities, gpu, initial_pose, nodes};
 use crate::asset::AssetStorage;
 use crate::ecs::component::GlbSource;
+use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
 use crate::loader::fbx::FbxModel;
@@ -137,7 +138,7 @@ pub(crate) unsafe fn append_model_to_scene(
         swapchain,
         graphics,
     )?;
-    gpu::rebuild_scene_acceleration(
+    rebuild_scene_acceleration(
         instance,
         device,
         command_pool,
@@ -213,7 +214,7 @@ unsafe fn replace_scene_model(
     )?;
     let posed_meshes = initial_pose::apply_initial_pose(world, assets, graphics, load_result);
     gpu::upload_posed_meshes(instance, device, command_pool, graphics, &posed_meshes);
-    gpu::rebuild_scene_acceleration(
+    rebuild_scene_acceleration(
         instance,
         device,
         command_pool,

@@ -1,13 +1,12 @@
+use std::path::Path;
 use std::rc::Rc;
 
 use anyhow::Result;
+use thyllore_avatar_core::material::systems::texture_remap_io::resolve_remapped_texture;
 use vulkanalia::prelude::v1_0::*;
 
-use super::texture::{resolve_texture_pixels, DecodedTextureFiles};
-use crate::asset::AssetStorage;
 use crate::ecs::systems::load_model_texture_remap;
-use crate::ecs::world::World;
-use crate::loader::ModelLoadResult;
+use crate::loader::{resolve_mesh_texture, DecodedTextureFiles, ModelLoadResult};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -36,8 +35,17 @@ pub(super) unsafe fn upload_model_meshes(
     let mut decoded_files = DecodedTextureFiles::new();
 
     for loaded_mesh in &load_result.meshes {
-        let texture =
-            resolve_texture_pixels(loaded_mesh, model_path, &texture_remap, &mut decoded_files);
+        let remapped_file = resolve_remapped_texture(
+            &texture_remap,
+            &loaded_mesh.material_name,
+            Path::new(model_path),
+        );
+        let texture = resolve_mesh_texture(
+            loaded_mesh,
+            Path::new(model_path),
+            remapped_file,
+            &mut decoded_files,
+        );
         let source = MeshSource {
             vertex_data: &loaded_mesh.vertex_data,
             base_vertices: &loaded_mesh.local_vertices,
@@ -75,29 +83,6 @@ pub(super) unsafe fn upload_posed_meshes(
             );
         }
     }
-}
-
-pub(super) unsafe fn rebuild_scene_acceleration(
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
-    graphics: &GraphicsResources,
-    raytracing: &mut RayTracingData,
-    world: &World,
-    assets: &AssetStorage,
-) -> Result<()> {
-    let procedural_primitives =
-        crate::app::raytracing::scene_build::collect_procedural_primitives(world);
-    let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
-    crate::app::raytracing::scene_build::rebuild_acceleration_structures(
-        instance,
-        device,
-        command_pool,
-        graphics,
-        raytracing,
-        &procedural_primitives,
-        &mesh_transforms,
-    )
 }
 
 pub(super) unsafe fn release_model_gpu_resources(

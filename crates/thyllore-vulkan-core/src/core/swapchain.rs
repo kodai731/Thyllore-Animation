@@ -49,6 +49,10 @@ impl GpuResource for RRSwapchain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.swapchain == vk::SwapchainKHR::null()
+    }
 }
 
 impl SwapchainSupport {

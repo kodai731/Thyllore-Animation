@@ -1,11 +1,13 @@
 pub mod anim;
 pub mod colors;
+pub mod elevation;
 pub mod fonts;
 pub mod icons;
 pub mod shadow;
 pub mod style;
 pub mod widgets;
 
+pub use elevation::{draw_raised_window_frame, push_raised_window_style};
 pub use fonts::UiFonts;
 pub use icons::{entity_icon, Icon};
 pub use style::apply_ui_settings;

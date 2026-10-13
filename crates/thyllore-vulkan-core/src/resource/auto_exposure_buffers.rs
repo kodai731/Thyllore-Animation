@@ -10,6 +10,13 @@ const HISTOGRAM_BIN_COUNT: u32 = 256;
 const HISTOGRAM_BUFFER_SIZE: u64 = (HISTOGRAM_BIN_COUNT * std::mem::size_of::<u32>() as u32) as u64;
 pub const LUMINANCE_BUFFER_SIZE: u64 = (2 * std::mem::size_of::<f32>() as u32) as u64;
 
+/// The two floats the average pass writes: metered luminance and the adapted exposure multiplier.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AutoExposureReadback {
+    pub average_luminance: f32,
+    pub adapted_exposure: f32,
+}
+
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct AutoExposureBuffers {
@@ -106,22 +113,28 @@ impl AutoExposureBuffers {
         Ok(())
     }
 
-    pub unsafe fn read_adapted_exposure(&self, device: &vulkanalia::Device, slot: usize) -> f32 {
-        let data = match device.map_memory(
-            self.readback_allocations[slot].memory,
-            0,
-            LUMINANCE_BUFFER_SIZE,
-            vk::MemoryMapFlags::empty(),
-        ) {
-            Ok(ptr) => ptr,
-            Err(_) => return 0.0,
-        };
+    pub unsafe fn read_luminance(
+        &self,
+        device: &vulkanalia::Device,
+        slot: usize,
+    ) -> Option<AutoExposureReadback> {
+        let data = device
+            .map_memory(
+                self.readback_allocations[slot].memory,
+                0,
+                LUMINANCE_BUFFER_SIZE,
+                vk::MemoryMapFlags::empty(),
+            )
+            .ok()?;
 
         let values = data as *const f32;
-        let adapted = *values.add(1);
+        let readback = AutoExposureReadback {
+            average_luminance: *values,
+            adapted_exposure: *values.add(1),
+        };
 
         device.unmap_memory(self.readback_allocations[slot].memory);
-        adapted
+        Some(readback)
     }
 
     pub unsafe fn resize(

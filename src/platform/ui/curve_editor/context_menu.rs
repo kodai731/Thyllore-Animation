@@ -16,6 +16,28 @@ use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, Ti
 use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 
+const SECTION_COLOR: [f32; 4] = [0.6, 0.8, 1.0, 1.0];
+
+const INTERPOLATION_ITEMS: [(&str, InterpolationType); 3] = [
+    ("  Linear", InterpolationType::Linear),
+    ("  Bezier", InterpolationType::Bezier),
+    ("  Stepped", InterpolationType::Stepped),
+];
+
+const TANGENT_ITEMS: [(&str, TangentType); 6] = [
+    ("  Spline", TangentType::Spline),
+    ("  Linear", TangentType::Linear),
+    ("  Flat", TangentType::Flat),
+    ("  Clamped", TangentType::Clamped),
+    ("  Plateau", TangentType::Plateau),
+    ("  Manual", TangentType::Manual),
+];
+
+const WEIGHT_ITEMS: [(&str, TangentWeightMode); 2] = [
+    ("  Non-Weighted", TangentWeightMode::NonWeighted),
+    ("  Weighted", TangentWeightMode::Weighted),
+];
+
 pub(super) fn build_keyframe_context_menu(
     ui: &imgui::Ui,
     world: &World,
@@ -24,113 +46,80 @@ pub(super) fn build_keyframe_context_menu(
 ) {
     ui.popup("keyframe_context_menu", || {
         draw_window_shadow(ui, ui.clone_style().popup_rounding());
-
-        let ctx_kf = match editor_state.context_menu_keyframe.clone() {
-            Some(kf) => kf,
-            None => return,
+        let Some(context_key) = editor_state.context_menu_keyframe.clone() else {
+            return;
         };
 
         if ui.selectable_config("Delete Key").build() {
-            if editor_state.selected_keyframes.len() > 1 {
-                for sel in &editor_state.selected_keyframes {
-                    world.send_command(TimelineEvent::DeleteKeyframe {
-                        track: track_ref,
-                        property_type: sel.property_type.clone(),
-                        keyframe_id: sel.keyframe_id,
-                    });
-                }
-                editor_state.selected_keyframes.clear();
-                editor_state.selection_anchor = None;
-            } else {
-                world.send_command(TimelineEvent::DeleteKeyframe {
-                    track: track_ref,
-                    property_type: ctx_kf.property_type.clone(),
-                    keyframe_id: ctx_kf.keyframe_id,
-                });
-                editor_state.selected_keyframes.clear();
-                editor_state.selection_anchor = None;
-            }
+            delete_context_menu_keys(world, editor_state, track_ref, &context_key);
         }
 
-        let section_color = [0.6, 0.8, 1.0, 1.0];
-
         ui.separator();
-        ui.text_colored(section_color, "Interpolation");
-        ui.separator();
-
-        if ui.selectable_config("  Linear").build() {
+        build_key_menu_section(ui, "Interpolation", &INTERPOLATION_ITEMS, |interpolation| {
             world.send_command(TimelineEvent::SetKeyframeInterpolation {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Linear,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                interpolation,
             });
-        }
-
-        if ui.selectable_config("  Bezier").build() {
-            world.send_command(TimelineEvent::SetKeyframeInterpolation {
+        });
+        build_key_menu_section(ui, "Tangent", &TANGENT_ITEMS, |tangent_type| {
+            world.send_command(TimelineEvent::SetTangentType {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Bezier,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                tangent_type,
             });
-        }
-
-        if ui.selectable_config("  Stepped").build() {
-            world.send_command(TimelineEvent::SetKeyframeInterpolation {
-                track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                interpolation: InterpolationType::Stepped,
-            });
-        }
-
-        ui.spacing();
-        ui.text_colored(section_color, "Tangent");
-        ui.separator();
-
-        let tangent_options = [
-            ("  Spline", TangentType::Spline),
-            ("  Linear", TangentType::Linear),
-            ("  Flat", TangentType::Flat),
-            ("  Clamped", TangentType::Clamped),
-            ("  Plateau", TangentType::Plateau),
-            ("  Manual", TangentType::Manual),
-        ];
-
-        for (label, tangent_type) in &tangent_options {
-            if ui.selectable_config(label).build() {
-                world.send_command(TimelineEvent::SetTangentType {
-                    track: track_ref,
-                    property_type: ctx_kf.property_type,
-                    keyframe_id: ctx_kf.keyframe_id,
-                    tangent_type: *tangent_type,
-                });
-            }
-        }
-
-        ui.spacing();
-        ui.text_colored(section_color, "Weight");
-        ui.separator();
-
-        if ui.selectable_config("  Non-Weighted").build() {
+        });
+        build_key_menu_section(ui, "Weight", &WEIGHT_ITEMS, |weight_mode| {
             world.send_command(TimelineEvent::SetTangentWeightMode {
                 track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                weight_mode: TangentWeightMode::NonWeighted,
+                property_type: context_key.property_type,
+                keyframe_id: context_key.keyframe_id,
+                weight_mode,
             });
-        }
-
-        if ui.selectable_config("  Weighted").build() {
-            world.send_command(TimelineEvent::SetTangentWeightMode {
-                track: track_ref,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                weight_mode: TangentWeightMode::Weighted,
-            });
-        }
+        });
     });
+}
+
+/// A multi-key selection is deleted as a whole; otherwise only the right-clicked key goes.
+fn delete_context_menu_keys(
+    world: &World,
+    editor_state: &mut CurveEditorState,
+    track_ref: CurveTrackRef,
+    context_key: &CurveSelectedKeyframe,
+) {
+    let targets: Vec<&CurveSelectedKeyframe> = if editor_state.selected_keyframes.len() > 1 {
+        editor_state.selected_keyframes.iter().collect()
+    } else {
+        vec![context_key]
+    };
+    for key in targets {
+        world.send_command(TimelineEvent::DeleteKeyframe {
+            track: track_ref,
+            property_type: key.property_type,
+            keyframe_id: key.keyframe_id,
+        });
+    }
+
+    editor_state.selected_keyframes.clear();
+    editor_state.selection_anchor = None;
+}
+
+fn build_key_menu_section<T: Copy>(
+    ui: &imgui::Ui,
+    title: &str,
+    items: &[(&str, T)],
+    mut on_select: impl FnMut(T),
+) {
+    ui.text_colored(SECTION_COLOR, title);
+    ui.separator();
+    for (label, value) in items {
+        if ui.selectable_config(label).build() {
+            on_select(*value);
+        }
+    }
+    ui.spacing();
 }
 
 pub(super) fn build_curve_editor_context_menu(

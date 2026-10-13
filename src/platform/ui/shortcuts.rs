@@ -3,7 +3,7 @@ use imgui::Condition;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
-use crate::platform::key_bindings::{default_bindings, ModifierKeys};
+use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys};
 use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
@@ -15,8 +15,9 @@ use crate::platform::ui::theme::{
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
-const SHORTCUT_SCOPES: [ShortcutScope; 4] = [
+const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
     ShortcutScope::Global,
+    ShortcutScope::SceneView,
     ShortcutScope::Hierarchy,
     ShortcutScope::CurveEditor,
     ShortcutScope::SceneGizmo,
@@ -25,6 +26,7 @@ const SHORTCUT_SCOPES: [ShortcutScope; 4] = [
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShortcutScope {
     Global,
+    SceneView,
     Hierarchy,
     CurveEditor,
     SceneGizmo,
@@ -34,6 +36,7 @@ impl ShortcutScope {
     fn label(self) -> &'static str {
         match self {
             ShortcutScope::Global => "Global",
+            ShortcutScope::SceneView => "Scene View",
             ShortcutScope::Hierarchy => "Hierarchy",
             ShortcutScope::CurveEditor => "Curve Editor",
             ShortcutScope::SceneGizmo => "Scene Gizmo",
@@ -136,7 +139,10 @@ fn imgui_key_name(key: imgui::Key) -> &'static str {
 
 pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let global = default_bindings().into_iter().map(|binding| ShortcutEntry {
-        scope: ShortcutScope::Global,
+        scope: match binding.scope {
+            BindingScope::Global => ShortcutScope::Global,
+            BindingScope::SceneView => ShortcutScope::SceneView,
+        },
         chord: format_chord(binding.modifiers, &binding.key.to_uppercase()),
         label: binding.label,
     });
@@ -252,6 +258,7 @@ mod tests {
         let shortcuts = collect_shortcuts();
         let scopes: Vec<ShortcutScope> = shortcuts.iter().map(|e| e.scope).collect();
         assert!(scopes.contains(&ShortcutScope::Global));
+        assert!(scopes.contains(&ShortcutScope::SceneView));
         assert!(scopes.contains(&ShortcutScope::Hierarchy));
         assert!(scopes.contains(&ShortcutScope::CurveEditor));
         assert!(scopes.contains(&ShortcutScope::SceneGizmo));

@@ -108,7 +108,7 @@ impl Default for SceneUniformData {
         let identity = Mat4::identity();
         Self {
             light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
-            light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            light_color: Vec4::new(1.0, 1.0, 1.0, thyllore_render_core::AMBIENT_INTENSITY),
             view: identity,
             proj: identity,
             debug_mode: 0,

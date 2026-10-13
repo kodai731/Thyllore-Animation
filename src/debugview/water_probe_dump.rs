@@ -90,7 +90,7 @@ fn probe_root_of(ctx: &CaptureContext) -> ProbeRoot {
     }
 }
 
-unsafe fn read_hdr_rgba16f(
+pub(crate) unsafe fn read_hdr_rgba16f(
     ctx: &CaptureContext,
     image: vk::Image,
     width: u32,

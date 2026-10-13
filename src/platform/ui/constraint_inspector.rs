@@ -6,11 +6,12 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintEntry, ConstraintSet};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
-use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{
+    bone_picker, bone_picker_with_hierarchy, property_slider, section_header,
+};
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -170,10 +171,7 @@ fn build_common_fields(ui: &imgui::Ui, enabled: &mut bool, weight: &mut f32) -> 
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui.slider_config("Weight", 0.0, 1.0).build(weight) {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Weight", 0.0, 1.0, weight);
 
     changed
 }
@@ -188,7 +186,7 @@ fn build_ik_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Effector (End Bone)",
@@ -200,7 +198,7 @@ fn build_ik_fields(
         changed = true;
     }
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Goal (Target Position)",
@@ -234,13 +232,7 @@ fn build_ik_fields(
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Twist", -180.0_f32, 180.0)
-        .build(&mut modified.twist)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Twist", -180.0_f32, 180.0, &mut modified.twist);
 
     if changed {
         Some(ConstraintType::Ik(modified))
@@ -259,7 +251,7 @@ fn build_aim_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Aim Bone (Rotates)",
@@ -271,7 +263,7 @@ fn build_aim_fields(
         changed = true;
     }
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Look At (Target)",
@@ -320,7 +312,7 @@ fn build_parent_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Applied To",
@@ -348,7 +340,7 @@ fn build_parent_fields(
         let source_token = ui.push_id(i as i32);
         let mut current_weight = *weight;
 
-        if let Some(bone) = build_bone_combo(ui, &format!("Src {}", i), *bone_id, bone_list) {
+        if let Some(bone) = bone_picker(ui, &format!("Src {}", i), *bone_id, bone_list) {
             new_sources[i].0 = bone;
             sources_changed = true;
         }
@@ -401,7 +393,7 @@ fn build_position_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Applied To",
@@ -413,7 +405,7 @@ fn build_position_fields(
         changed = true;
     }
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Copy From",
@@ -450,7 +442,7 @@ fn build_rotation_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Applied To",
@@ -462,7 +454,7 @@ fn build_rotation_fields(
         changed = true;
     }
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Copy From",
@@ -508,7 +500,7 @@ fn build_scale_fields(
     let mut modified = data.clone();
     let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Applied To",
@@ -520,7 +512,7 @@ fn build_scale_fields(
         changed = true;
     }
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Copy From",
@@ -546,90 +538,6 @@ fn build_scale_fields(
         None
     }
 }
-
-pub fn build_bone_combo_with_select(
-    ui: &imgui::Ui,
-    world: &World,
-    label: &str,
-    current_bone: BoneId,
-    bone_list: &[(BoneId, String)],
-    hierarchy_state: &HierarchyState,
-) -> Option<BoneId> {
-    let current_name = bone_list
-        .iter()
-        .find(|(id, _)| *id == current_bone)
-        .map(|(_, name)| name.as_str())
-        .unwrap_or("(none)");
-
-    let mut result = None;
-
-    ui.text(label);
-
-    if let Some(selected_bone) = hierarchy_state.selected_bone_id {
-        ui.same_line();
-        if ui.small_button(&format!("<##use_{}", label)) {
-            result = Some(selected_bone);
-        }
-        if ui.is_item_hovered() {
-            ui.tooltip_text("Use selected bone from Hierarchy");
-        }
-    }
-
-    ui.set_next_item_width(-1.0);
-    if let Some(combo_token) = ui.begin_combo(&format!("##{}", label), current_name) {
-        for (bone_id, bone_name) in bone_list {
-            let selected = *bone_id == current_bone;
-            let highlighted = hierarchy_state.selected_bone_id == Some(*bone_id);
-            let display_name = if highlighted {
-                format!("* {}", bone_name)
-            } else {
-                bone_name.clone()
-            };
-
-            if ui
-                .selectable_config(&display_name)
-                .selected(selected)
-                .build()
-            {
-                result = Some(*bone_id);
-                world.send_command(HierarchyEvent::SelectBone(*bone_id));
-            }
-        }
-        combo_token.end();
-    }
-
-    result
-}
-
-pub fn build_bone_combo(
-    ui: &imgui::Ui,
-    label: &str,
-    current_bone: BoneId,
-    bone_list: &[(BoneId, String)],
-) -> Option<BoneId> {
-    let current_name = bone_list
-        .iter()
-        .find(|(id, _)| *id == current_bone)
-        .map(|(_, name)| name.as_str())
-        .unwrap_or("(none)");
-
-    let mut result = None;
-
-    ui.text(label);
-    ui.set_next_item_width(-1.0);
-    if let Some(combo_token) = ui.begin_combo(&format!("##{}", label), current_name) {
-        for (bone_id, bone_name) in bone_list {
-            let selected = *bone_id == current_bone;
-            if ui.selectable_config(bone_name).selected(selected).build() {
-                result = Some(*bone_id);
-            }
-        }
-        combo_token.end();
-    }
-
-    result
-}
-
 pub fn build_offset_vector3(
     ui: &imgui::Ui,
     label: &str,

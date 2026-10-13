@@ -8,8 +8,8 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{enum_combo, item_tooltip, section_header};
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::pointer::is_last_item_double_clicked;
@@ -38,15 +38,14 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         effect.noise.shaping_scale =
             thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Crispness of the noise pattern: log remap of the tanh shaping \
-             scale, harder edges to the right (small scale saturates the \
-             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
-             perceptual sweet spot). Stateless — noise_shaping_scale stays \
-             the source of truth (0 = built-in 0.6)",
-        );
-    }
+    item_tooltip(
+        ui,
+        "Crispness of the noise pattern: log remap of the tanh shaping \
+         scale, harder edges to the right (small scale saturates the \
+         tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
+         perceptual sweet spot). Stateless — noise_shaping_scale stays \
+         the source of truth (0 = built-in 0.6)",
+    );
 
     let mut wave_segments = effect.wave_segments as i32;
     if ui
@@ -59,13 +58,12 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
     {
         effect.wave_segments = wave_segments as u32;
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Closed-form segments per ray: the noise grid aliases into a \
-             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-             frequency ~4 at twice the cost",
-        );
-    }
+    item_tooltip(
+        ui,
+        "Closed-form segments per ray: the noise grid aliases into a \
+         pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
+         frequency ~4 at twice the cost",
+    );
 
     let mut vortex =
         (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
@@ -78,13 +76,12 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
         effect.twist.gain = gain;
         effect.twist.speed = speed;
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Vortex macro: one knob writing both twist parameters along a \
-             faster-and-deeper curve (stateless; the fine sliders \
-             stay the source of truth)",
-        );
-    }
+    item_tooltip(
+        ui,
+        "Vortex macro: one knob writing both twist parameters along a \
+         faster-and-deeper curve (stateless; the fine sliders \
+         stay the source of truth)",
+    );
 
     let mut branch_seed = effect.branch.seed as i32;
     if ui.input_int("Branch Seed", &mut branch_seed) {
@@ -315,14 +312,13 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     }
                 }
             }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Apply the selected style file's parameters (Style-owned only, \
-                     dimensionless: lengths scale with the flame's radius, opacity \
-                     via tau0). Fields the style leaves unset keep their current \
-                     values",
-                );
-            }
+            item_tooltip(
+                ui,
+                "Apply the selected style file's parameters (Style-owned only, \
+                 dimensionless: lengths scale with the flame's radius, opacity \
+                 via tau0). Fields the style leaves unset keep their current \
+                 values",
+            );
             if let Some(selected_flame) = selected_flame_entity {
                 if let Some(applied) = ecs_world
                     .get_component::<crate::ecs::component::AppliedFlameStyle>(selected_flame)
@@ -341,13 +337,12 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     ecs_world.send_command(FlameUiCommand::SaveStyle { name });
                 }
             }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Save the selected flame's current look as \
-                     assets/flames/styles/<name>.style.ron (all Style-owned \
-                     parameters, lengths over r0, opacity as tau0)",
-                );
-            }
+            item_tooltip(
+                ui,
+                "Save the selected flame's current look as \
+                 assets/flames/styles/<name>.style.ron (all Style-owned \
+                 parameters, lengths over r0, opacity as tau0)",
+            );
 
             if let Some(selected_flame) = selected_flame_entity {
                 if let Some(effect) = ecs_world.get_component::<FlameEffect>(selected_flame) {
@@ -458,11 +453,10 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                                 viewport_size: ecs_world.resource::<ViewportInput>().size,
                             });
                         }
-                        if ui.is_item_hovered() {
-                            ui.tooltip_text(
-                                "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-                            );
-                        }
+                        item_tooltip(
+                            ui,
+                            "Dump camera pose + wall-regime ray diagnostics to log/flame/",
+                        );
                     }
                 }
             }
@@ -482,28 +476,20 @@ fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let mut settings_copy = *settings;
     drop(settings);
 
-    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-        for mode in FlameShadingMode::ALL {
-            if ui
-                .selectable_config(mode.label())
-                .selected(mode == settings_copy.shading_mode)
-                .build()
-            {
-                settings_copy.shading_mode = mode;
-            }
-        }
-    }
-    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-        for view in FlameDebugView::ALL {
-            if ui
-                .selectable_config(view.label())
-                .selected(view == settings_copy.debug_view)
-                .build()
-            {
-                settings_copy.debug_view = view;
-            }
-        }
-    }
+    enum_combo(
+        ui,
+        "Shading Mode",
+        &mut settings_copy.shading_mode,
+        &FlameShadingMode::ALL,
+        |m| m.label(),
+    );
+    enum_combo(
+        ui,
+        "Debug View",
+        &mut settings_copy.debug_view,
+        &FlameDebugView::ALL,
+        |v| v.label(),
+    );
 
     let mut jitter = read_env_wave_jitter();
     if ui

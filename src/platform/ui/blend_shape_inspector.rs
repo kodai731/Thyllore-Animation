@@ -13,8 +13,8 @@ use crate::ecs::systems::{
     find_morph_channel_names, find_morph_siblings,
 };
 use crate::ecs::world::{Children, Entity, World};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{matches_filter, search_field, section_header};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 struct ChannelView<'a> {
@@ -130,10 +130,12 @@ fn build_blend_shape_toolbar(
     entity: Entity,
     inspector_state: &mut BlendShapeInspectorState,
 ) {
-    ui.set_next_item_width(-1.0);
-    ui.input_text("##blend_shape_search", &mut inspector_state.search)
-        .hint("Search...")
-        .build();
+    search_field(
+        ui,
+        "blend_shape_search",
+        "Search",
+        &mut inspector_state.search,
+    );
 
     ui.checkbox("Mirror L/R", &mut inspector_state.mirror_edit);
     ui.same_line();
@@ -189,13 +191,12 @@ fn build_channel_groups(
 }
 
 fn filter_channels(group: &ChannelGroup, view: &ChannelView, search: &str) -> Vec<usize> {
-    let search = search.to_lowercase();
     group
         .channel_indices
         .iter()
         .copied()
         .filter(|channel| view.deforming_channels.contains(channel))
-        .filter(|&channel| view.names[channel].to_lowercase().contains(&search))
+        .filter(|&channel| matches_filter(&view.names[channel], search))
         .collect()
 }
 

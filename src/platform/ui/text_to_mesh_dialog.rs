@@ -6,7 +6,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
 use crate::hooks::ui_window::init_window_state;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
+use crate::platform::ui::theme::{draw_raised_window_frame, enum_combo, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToMeshDialogState {
@@ -210,19 +210,13 @@ fn build_t2i_model_selector(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState) 
     ui.same_line();
     ui.set_next_item_width(160.0);
 
-    let current_label = dialog.t2i_model_type.display_name();
-    if let Some(_combo) = ui.begin_combo("##t2i_model_type", current_label) {
-        for variant in TextToImageModelType::ALL_VARIANTS {
-            let is_selected = dialog.t2i_model_type == *variant;
-            if ui
-                .selectable_config(variant.display_name())
-                .selected(is_selected)
-                .build()
-            {
-                dialog.t2i_model_type = variant.clone();
-            }
-        }
-    }
+    enum_combo(
+        ui,
+        "##t2i_model_type",
+        &mut dialog.t2i_model_type,
+        TextToImageModelType::ALL_VARIANTS,
+        |v| v.display_name(),
+    );
 }
 
 fn build_image_picker(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState) {

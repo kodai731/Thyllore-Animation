@@ -7,12 +7,12 @@ use crate::ecs::component::{
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
-
-use super::constraint_inspector::{
-    build_bone_combo, build_bone_combo_with_select, build_offset_vector3, collect_bone_list,
+use crate::platform::ui::theme::{
+    bone_picker, bone_picker_with_hierarchy, property_slider, section_header,
 };
+
+use super::constraint_inspector::{build_offset_vector3, collect_bone_list};
 
 pub fn build_spring_bone_section(
     ui: &imgui::Ui,
@@ -168,7 +168,7 @@ fn build_joint_fields(
     let mut modified = joint.clone();
     let mut changed = false;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Bone",
@@ -180,41 +180,23 @@ fn build_joint_fields(
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Stiffness", 0.0_f32, 4.0)
-        .build(&mut modified.stiffness)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Stiffness", 0.0_f32, 4.0, &mut modified.stiffness);
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Drag Force", 0.0_f32, 1.0)
-        .build(&mut modified.drag_force)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Drag Force", 0.0_f32, 1.0, &mut modified.drag_force);
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Gravity Power", 0.0_f32, 2.0)
-        .build(&mut modified.gravity_power)
-    {
-        changed = true;
-    }
+    changed |= property_slider(
+        ui,
+        "Gravity Power",
+        0.0_f32,
+        2.0,
+        &mut modified.gravity_power,
+    );
 
     if build_offset_vector3(ui, "Gravity Dir", &mut modified.gravity_dir) {
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Hit Radius", 0.0_f32, 0.5)
-        .build(&mut modified.hit_radius)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Hit Radius", 0.0_f32, 0.5, &mut modified.hit_radius);
 
     if changed {
         Some(modified)
@@ -242,7 +224,7 @@ fn build_add_chain_row(
     let root_bone = &mut root_bone_val;
     let chain_length = &mut chain_length_val;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Root Bone##add_chain",
@@ -326,7 +308,7 @@ fn build_collider_fields(
     let mut modified = collider.clone();
     let mut changed = false;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Bone##collider",
@@ -373,19 +355,10 @@ fn build_collider_fields(
 
     match &mut modified.shape {
         ColliderShape::Sphere { radius } => {
-            ui.set_next_item_width(-1.0);
-            if ui.slider_config("Radius", 0.001_f32, 1.0).build(radius) {
-                changed = true;
-            }
+            changed |= property_slider(ui, "Radius", 0.001_f32, 1.0, radius);
         }
         ColliderShape::Capsule { radius, tail } => {
-            ui.set_next_item_width(-1.0);
-            if ui
-                .slider_config("Radius##cap", 0.001_f32, 1.0)
-                .build(radius)
-            {
-                changed = true;
-            }
+            changed |= property_slider(ui, "Radius##cap", 0.001_f32, 1.0, radius);
             if build_offset_vector3(ui, "Tail", tail) {
                 changed = true;
             }
@@ -415,22 +388,8 @@ fn build_add_collider_row(
     let bone = &mut bone_val;
     let shape_idx = &mut shape_idx_val;
 
-    let current_name = bone_list
-        .iter()
-        .find(|(id, _)| *id == *bone)
-        .map(|(_, name)| name.as_str())
-        .unwrap_or("(none)");
-
-    ui.text("Add Collider");
-    ui.set_next_item_width(-1.0);
-    if let Some(token) = ui.begin_combo("Bone##add_collider", current_name) {
-        for (bone_id, bone_name) in bone_list {
-            let selected = *bone_id == *bone;
-            if ui.selectable_config(bone_name).selected(selected).build() {
-                *bone = *bone_id;
-            }
-        }
-        token.end();
+    if let Some(selected_bone) = bone_picker(ui, "Add Collider", *bone, bone_list) {
+        *bone = selected_bone;
     }
 
     let shape_names = ["Sphere", "Capsule"];

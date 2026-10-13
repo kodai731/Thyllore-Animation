@@ -10,8 +10,8 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::water::WaterUiCommand;
 use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
 use crate::ecs::World;
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{enum_combo, item_tooltip, section_header};
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -111,11 +111,10 @@ pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
         if ui.button("Dump Debug") {
             ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WaterDebugCapture)));
         }
-        if ui.is_item_hovered() {
-            ui.tooltip_text(
-                "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
-            );
-        }
+        item_tooltip(
+            ui,
+            "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
+        );
     }
 }
 
@@ -126,17 +125,13 @@ fn draw_water_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     let mut settings_copy = *settings;
     drop(settings);
 
-    if let Some(_token) = ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label()) {
-        for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
-            if ui
-                .selectable_config(mode.label())
-                .selected(mode == settings_copy.secondary_rays)
-                .build()
-            {
-                settings_copy.secondary_rays = mode;
-            }
-        }
-    }
+    enum_combo(
+        ui,
+        "Secondary Rays",
+        &mut settings_copy.secondary_rays,
+        &thyllore_effect_core::WaterSecondaryRays::ALL,
+        |m| m.label(),
+    );
     let mut debug_view = settings_copy.debug_view as f32;
     if ui
         .slider_config("Debug View", 0.0f32, 1.0f32)

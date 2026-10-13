@@ -1,7 +1,7 @@
 use crate::platform::ui::numeric_format::numeric_format;
 use std::path::Path;
 
-use imgui::{Condition, StyleVar};
+use imgui::StyleVar;
 use thyllore_anim_core::editable::PropertyType;
 
 use super::pointer::read_ui_pointer;
@@ -9,7 +9,6 @@ use super::pointer::read_ui_pointer;
 use super::text_to_animation_dialog::TextToAnimationDialogState;
 #[cfg(feature = "auto-rig")]
 use super::text_to_mesh_dialog::TextToMeshDialogState;
-use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
@@ -28,8 +27,9 @@ use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{
+    icon_button, toggle_switch, window_frame, ButtonState, Icon, WindowKind, ICON_BUTTON_SIZE,
+};
 
 use super::param_widgets::EditedScalars;
 
@@ -77,28 +77,30 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
         (TOOLBAR_HEIGHT - ICON_BUTTON_SIZE) * 0.5,
     ]));
 
-    ui.window("Scene Toolbar")
-        .position(viewport.position, Condition::Always)
-        .size([viewport.size[0], TOOLBAR_HEIGHT], Condition::Always)
-        .no_decoration()
-        .bg_alpha(0.7)
-        .no_nav()
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding());
+    window_frame(
+        ui,
+        "Scene Toolbar",
+        WindowKind::Overlay {
+            position: viewport.position,
+            size: [viewport.size[0], TOOLBAR_HEIGHT],
+        },
+    )
+    .bg_alpha(0.7)
+    .no_nav()
+    .build(|| {
+        draw_window_shadow(ui, ui.clone_style().window_rounding());
 
-            build_file_buttons(ui, ecs_world);
-            draw_toolbar_group_separator(ui);
-            build_gizmo_buttons(ui, ecs_world);
-            draw_toolbar_group_separator(ui);
-            build_overlay_buttons(ui, ecs_world);
+        build_file_buttons(ui, ecs_world);
+        draw_toolbar_group_separator(ui);
+        build_gizmo_buttons(ui, ecs_world);
+        draw_toolbar_group_separator(ui);
+        build_overlay_buttons(ui, ecs_world);
 
-            #[cfg(feature = "auto-rig")]
-            build_auto_rig_buttons(ui, ecs_world);
+        #[cfg(feature = "auto-rig")]
+        build_auto_rig_buttons(ui, ecs_world);
 
-            build_scene_panel_toggle(ui, ecs_world);
-        });
+        build_scene_panel_toggle(ui, ecs_world);
+    });
 
     apply_gizmo_hotkeys(ui, ecs_world);
 }
@@ -111,40 +113,46 @@ fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput)
     let pos_x = viewport.position[0] + viewport.size[0] - OVERLAY_WIDTH - OVERLAY_MARGIN;
     let pos_y = viewport.position[1] + TOOLBAR_HEIGHT + OVERLAY_MARGIN;
 
-    ui.window("Scene Panel")
-        .position([pos_x, pos_y], Condition::Always)
-        .size_constraints(
-            [OVERLAY_WIDTH, 0.0],
-            [
+    window_frame(
+        ui,
+        "Scene Panel",
+        WindowKind::Overlay {
+            position: [pos_x, pos_y],
+            size: [
                 OVERLAY_WIDTH,
                 viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN,
             ],
-        )
-        .always_auto_resize(true)
-        .no_decoration()
-        .bg_alpha(0.7)
-        .no_nav()
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding());
+        },
+    )
+    .size_constraints(
+        [OVERLAY_WIDTH, 0.0],
+        [
+            OVERLAY_WIDTH,
+            viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN,
+        ],
+    )
+    .always_auto_resize(true)
+    .bg_alpha(0.7)
+    .no_nav()
+    .build(|| {
+        draw_window_shadow(ui, ui.clone_style().window_rounding());
 
-            build_general_section(ui, ecs_world);
+        build_general_section(ui, ecs_world);
 
-            build_overlay_section(ui, ecs_world);
+        build_overlay_section(ui, ecs_world);
 
-            build_transform_gizmo_section(ui, ecs_world);
+        build_transform_gizmo_section(ui, ecs_world);
 
-            build_dof_section(ui, ecs_world);
+        build_dof_section(ui, ecs_world);
 
-            build_auto_exposure_section(ui, ecs_world);
+        build_auto_exposure_section(ui, ecs_world);
 
-            build_onion_skinning_section(ui, ecs_world);
+        build_onion_skinning_section(ui, ecs_world);
 
-            for section in crate::platform::ui::effect_sections::collect_effect_sections() {
-                (section.draw)(ui, ecs_world);
-            }
-        });
+        for section in crate::platform::ui::effect_sections::collect_effect_sections() {
+            (section.draw)(ui, ecs_world);
+        }
+    });
 }
 
 fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
@@ -705,10 +713,15 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
-fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_scene_overlay(ui: &imgui::Ui, world: &World) {
     let viewport = world.resource::<ViewportInput>().clone();
     draw_scene_toolbar(ui, world, &viewport);
     draw_scene_panel(ui, world, &viewport);
 }
 
-crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);
+crate::ui_window!(
+    "scene_overlay",
+    Overlay,
+    0,
+    build_world = build_scene_overlay
+);

@@ -1,9 +1,6 @@
-use imgui::Condition;
-
-use crate::asset::AssetStorage;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 
 #[cfg(debug_assertions)]
 use super::debug_window::build_debug_panel_content;
@@ -16,17 +13,11 @@ fn draw_bottom_panel(
     message_log: &mut MessageLog,
     layout: &LayoutSnapshot,
 ) {
-    ui.window("Bottom Panel")
-        .position([0.0, layout.debug_y], Condition::Always)
-        .size(
-            [layout.display_size[0], layout.debug_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| draw_bottom_tabs(ui, ecs_world, message_log));
+    let kind = WindowKind::Docked {
+        position: [0.0, layout.debug_y],
+        size: [layout.display_size[0], layout.debug_height],
+    };
+    window_frame(ui, "Bottom Panel", kind).build(|| draw_bottom_tabs(ui, ecs_world, message_log));
 }
 
 fn draw_bottom_tabs(ui: &imgui::Ui, ecs_world: &World, message_log: &mut MessageLog) {
@@ -78,11 +69,11 @@ fn build_message_tab_label(message_log: &MessageLog) -> String {
     }
 }
 
-fn build_bottom_panel(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_bottom_panel(ui: &imgui::Ui, world: &World) {
     let mut message_log = world.resource_mut::<MessageLog>();
     message_log.sync_from_buffer();
     let layout = world.resource::<LayoutSnapshot>();
     draw_bottom_panel(ui, world, &mut message_log, &layout);
 }
 
-crate::ui_window!("bottom_panel", Side, 0, build_bottom_panel);
+crate::ui_window!("bottom_panel", Side, 0, build_world = build_bottom_panel);

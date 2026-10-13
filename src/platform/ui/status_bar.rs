@@ -1,4 +1,3 @@
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
     ValidationReport, ViewportInput,
@@ -8,7 +7,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;
@@ -159,30 +158,31 @@ fn draw_status_bar(
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
     let clicked: bool = {
-        let result: Option<bool> = ui
-            .window("##status_bar")
-            .position(window_pos, imgui::Condition::Always)
-            .size([window_width, window_height], imgui::Condition::Always)
-            .no_decoration()
-            .no_nav()
-            .bg_alpha(BG_COLOR[3])
-            .focus_on_appearing(false)
-            .save_settings(false)
-            .build(|| {
-                let text_y = ui.cursor_pos()[1];
-                let mut validation_clicked = false;
-                for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
-                    ui.set_cursor_pos([x, text_y]);
-                    ui.text_colored(*color, text);
-                    if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
-                        ui.tooltip_text(&model.model_path);
-                    }
-                    if index == items.len() - 1 {
-                        validation_clicked = ui.is_item_clicked();
-                    }
+        let result: Option<bool> = window_frame(
+            ui,
+            "##status_bar",
+            WindowKind::Overlay {
+                position: window_pos,
+                size: [window_width, window_height],
+            },
+        )
+        .no_nav()
+        .bg_alpha(BG_COLOR[3])
+        .build(|| {
+            let text_y = ui.cursor_pos()[1];
+            let mut validation_clicked = false;
+            for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
+                ui.set_cursor_pos([x, text_y]);
+                ui.text_colored(*color, text);
+                if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
+                    ui.tooltip_text(&model.model_path);
                 }
-                validation_clicked
-            });
+                if index == items.len() - 1 {
+                    validation_clicked = ui.is_item_clicked();
+                }
+            }
+            validation_clicked
+        });
         result.unwrap_or(false)
     };
 
@@ -334,18 +334,20 @@ fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &C
         viewport.position[1] + viewport.size[1] - window_height,
     ];
 
-    ui.window("##fly_speed_indicator")
-        .position(window_pos, imgui::Condition::Always)
-        .size([window_width, window_height], imgui::Condition::Always)
-        .no_decoration()
-        .no_inputs()
-        .bg_alpha(BG_COLOR[3])
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| ui.text_colored(TEXT_COLOR, &text));
+    window_frame(
+        ui,
+        "##fly_speed_indicator",
+        WindowKind::Overlay {
+            position: window_pos,
+            size: [window_width, window_height],
+        },
+    )
+    .no_inputs()
+    .bg_alpha(BG_COLOR[3])
+    .build(|| ui.text_colored(TEXT_COLOR, &text));
 }
 
-fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_status_bar(ui: &imgui::Ui, world: &World) {
     if world.resource::<FrameClock>().is_fixed() {
         return;
     }
@@ -398,5 +400,5 @@ crate::ui_window!(
     Bottom,
     1,
     init = init_window_state::<StatusBarState>,
-    build = build_status_bar
+    build_world = build_status_bar
 );

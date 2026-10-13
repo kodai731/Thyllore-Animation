@@ -58,6 +58,26 @@ macro_rules! ui_window {
             }
         }
     };
+    ($name:literal, $panel:ident, $order:literal, build_world = $build:path) => {
+        $crate::ui_window!(
+            $name,
+            $panel,
+            $order,
+            init = $crate::hooks::ui_window::no_window_state,
+            build_world = $build
+        );
+    };
+    ($name:literal, $panel:ident, $order:literal, init = $init:path, build_world = $build:path) => {
+        inventory::submit! {
+            $crate::hooks::ui_window::UiWindowHook {
+                name: $name,
+                panel: $crate::hooks::ui_window::UiPanel::$panel,
+                order: $order,
+                init: $init,
+                build: |ui, world, _, _| $build(ui, world),
+            }
+        }
+    };
 }
 
 /// Every window submitted at link time, sorted by panel, order, then name.

@@ -1,6 +1,3 @@
-use imgui::Condition;
-
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
 use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys};
@@ -9,10 +6,8 @@ use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
 use crate::platform::ui::theme::{
-    draw_raised_window_frame, property_label, push_raised_window_style, section_header,
-    SectionDefault,
+    property_label, section_header, show_floating_window, FloatingPlacement, SectionDefault,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
 const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
@@ -213,40 +208,32 @@ fn draw_shortcut_sections(ui: &imgui::Ui, world: &World) {
     }
 }
 
-fn build_shortcuts_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _assets: &AssetStorage,
-    _graphics: &GraphicsResources,
-) {
+fn build_shortcuts_window(ui: &imgui::Ui, world: &World) {
     toggle_shortcuts_panel_on_hotkey(ui, world);
     if world.resource::<UiWidgetState>().shortcuts_panel == PanelVisibility::Hidden {
         return;
     }
 
-    let display_size = ui.io().display_size();
     let mut is_open = true;
-    let _raised = push_raised_window_style(ui);
-    ui.window(SHORTCUTS_WINDOW_TITLE)
-        .position(
-            [display_size[0] * 0.5, display_size[1] * 0.5],
-            Condition::Always,
-        )
-        .position_pivot([0.5, 0.5])
-        .always_auto_resize(true)
-        .collapsible(false)
-        .opened(&mut is_open)
-        .build(|| {
-            draw_raised_window_frame(ui);
-            draw_shortcut_sections(ui, world);
-        });
+    show_floating_window(
+        ui,
+        SHORTCUTS_WINDOW_TITLE,
+        FloatingPlacement::Centered,
+        &mut is_open,
+        || draw_shortcut_sections(ui, world),
+    );
 
     if !is_open || ui.is_key_pressed(imgui::Key::Escape) {
         world.resource_mut::<UiWidgetState>().shortcuts_panel = PanelVisibility::Hidden;
     }
 }
 
-crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
+crate::ui_window!(
+    "keyboard_shortcuts",
+    Floating,
+    5,
+    build_world = build_shortcuts_window
+);
 
 #[cfg(test)]
 mod tests {

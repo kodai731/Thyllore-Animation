@@ -1,7 +1,6 @@
-use imgui::{Condition, Key};
+use imgui::Key;
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     CommandPaletteSession, CommandPaletteState, HierarchyState, UiWidgetState,
 };
@@ -14,7 +13,7 @@ use crate::platform::ui::shortcuts::format_chord;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";
 const PALETTE_WIDTH: f32 = 520.0;
@@ -273,12 +272,7 @@ fn draw_palette_contents(
     handle_palette_navigation(ui, world, session, &items, &visible)
 }
 
-fn build_command_palette_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _assets: &AssetStorage,
-    _graphics: &GraphicsResources,
-) {
+fn build_command_palette_window(ui: &imgui::Ui, world: &World) {
     toggle_command_palette_on_hotkey(ui, world);
     let CommandPaletteState::Open(mut session) =
         world.resource::<UiWidgetState>().command_palette.clone()
@@ -287,24 +281,24 @@ fn build_command_palette_window(
     };
 
     let display_size = ui.io().display_size();
-    let outcome = ui
-        .window(PALETTE_WINDOW_TITLE)
-        .position(
-            [
+    let outcome = window_frame(
+        ui,
+        PALETTE_WINDOW_TITLE,
+        WindowKind::Overlay {
+            position: [
                 display_size[0] * 0.5,
                 display_size[1] * PALETTE_TOP_FRACTION,
             ],
-            Condition::Always,
-        )
-        .position_pivot([0.5, 0.0])
-        .size([PALETTE_WIDTH, 0.0], Condition::Always)
-        .no_decoration()
-        .save_settings(false)
-        .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding());
-            draw_palette_contents(ui, world, &mut session)
-        })
-        .unwrap_or(PaletteOutcome::KeepOpen);
+            size: [PALETTE_WIDTH, 0.0],
+        },
+    )
+    .position_pivot([0.5, 0.0])
+    .focus_on_appearing(true)
+    .build(|| {
+        draw_window_shadow(ui, ui.clone_style().window_rounding());
+        draw_palette_contents(ui, world, &mut session)
+    })
+    .unwrap_or(PaletteOutcome::KeepOpen);
 
     world.resource_mut::<UiWidgetState>().command_palette = match outcome {
         PaletteOutcome::KeepOpen => CommandPaletteState::Open(session),
@@ -312,7 +306,12 @@ fn build_command_palette_window(
     };
 }
 
-crate::ui_window!("command_palette", Floating, 6, build_command_palette_window);
+crate::ui_window!(
+    "command_palette",
+    Floating,
+    6,
+    build_world = build_command_palette_window
+);
 
 #[cfg(test)]
 mod tests {

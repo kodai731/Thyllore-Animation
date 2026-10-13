@@ -1,16 +1,13 @@
-use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{show_floating_window, FloatingPlacement};
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
@@ -28,13 +25,12 @@ fn draw_avatar_setup_window(
     }
 
     let mut is_open = state.is_open;
-    let _raised = push_raised_window_style(ui);
-    ui.window("Avatar Setup")
-        .size([520.0, 600.0], Condition::FirstUseEver)
-        .movable(true)
-        .opened(&mut is_open)
-        .build(|| {
-            draw_raised_window_frame(ui);
+    show_floating_window(
+        ui,
+        "Avatar Setup",
+        FloatingPlacement::Sized([520.0, 600.0]),
+        &mut is_open,
+        || {
             let Some(_tab_bar) = ui.tab_bar("##avatar_setup_tabs") else {
                 return;
             };
@@ -53,7 +49,8 @@ fn draw_avatar_setup_window(
             if let Some(_tab) = ui.tab_item("Export") {
                 build_export_tab(ui, world, state);
             }
-        });
+        },
+    );
     state.is_open = is_open;
 }
 
@@ -323,15 +320,15 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
     }
 }
 
-fn build_avatar_setup_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
-) {
+fn build_avatar_setup_window(ui: &imgui::Ui, world: &World) {
     let mut avatar_setup = world.resource_mut::<AvatarSetupState>();
     let material_textures = world.resource::<MaterialTextureState>();
     draw_avatar_setup_window(ui, world, &mut avatar_setup, &material_textures);
 }
 
-crate::ui_window!("avatar_setup", Floating, 1, build_avatar_setup_window);
+crate::ui_window!(
+    "avatar_setup",
+    Floating,
+    1,
+    build_world = build_avatar_setup_window
+);

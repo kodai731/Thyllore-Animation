@@ -1,11 +1,10 @@
-use imgui::{Condition, StyleVar};
+use imgui::StyleVar;
 
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{advance_toast, ToastMessage, UiToast, ViewportInput};
 use crate::ecs::world::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE2, TEXT};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 
 const TOAST_FADE_SECS: f32 = 0.3;
 const TOAST_PADDING: [f32; 2] = [16.0, 8.0];
@@ -33,38 +32,40 @@ fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMess
     let alpha = compute_fade_alpha(message.remaining_secs);
 
     let _border = ui.push_style_var(StyleVar::WindowBorderSize(0.0));
-    ui.window("##undo_toast")
-        .position(anchor, Condition::Always)
-        .position_pivot([0.5, 1.0])
-        .size(pill_size, Condition::Always)
-        .no_decoration()
-        .no_inputs()
-        .bg_alpha(0.0)
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| {
-            draw_window_shadow(ui, pill_rounding);
+    window_frame(
+        ui,
+        "##undo_toast",
+        WindowKind::Overlay {
+            position: anchor,
+            size: pill_size,
+        },
+    )
+    .position_pivot([0.5, 1.0])
+    .no_inputs()
+    .bg_alpha(0.0)
+    .build(|| {
+        draw_window_shadow(ui, pill_rounding);
 
-            let draw_list = ui.get_window_draw_list();
-            let pill_min = ui.window_pos();
-            let pill_max = [pill_min[0] + pill_size[0], pill_min[1] + pill_size[1]];
-            draw_list
-                .add_rect(pill_min, pill_max, with_alpha(SURFACE2, alpha))
-                .rounding(pill_rounding)
-                .filled(true)
-                .build();
-            draw_list.add_text(
-                [
-                    pill_min[0] + TOAST_PADDING[0],
-                    pill_min[1] + TOAST_PADDING[1],
-                ],
-                with_alpha(TEXT, alpha),
-                &message.text,
-            );
-        });
+        let draw_list = ui.get_window_draw_list();
+        let pill_min = ui.window_pos();
+        let pill_max = [pill_min[0] + pill_size[0], pill_min[1] + pill_size[1]];
+        draw_list
+            .add_rect(pill_min, pill_max, with_alpha(SURFACE2, alpha))
+            .rounding(pill_rounding)
+            .filled(true)
+            .build();
+        draw_list.add_text(
+            [
+                pill_min[0] + TOAST_PADDING[0],
+                pill_min[1] + TOAST_PADDING[1],
+            ],
+            with_alpha(TEXT, alpha),
+            &message.text,
+        );
+    });
 }
 
-fn build_toast_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_toast_window(ui: &imgui::Ui, world: &World) {
     let message = {
         let mut toast = world.resource_mut::<UiToast>();
         toast.message = advance_toast(toast.message.take(), ui.io().delta_time());
@@ -77,7 +78,7 @@ fn build_toast_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graph
     draw_toast_pill(ui, &world.resource::<ViewportInput>(), &message);
 }
 
-crate::ui_window!("toast", Floating, 4, build_toast_window);
+crate::ui_window!("toast", Floating, 4, build_world = build_toast_window);
 
 #[cfg(test)]
 mod tests {

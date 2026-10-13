@@ -1,5 +1,5 @@
 use crate::platform::ui::numeric_format::numeric_format;
-use imgui::{Condition, Key};
+use imgui::Key;
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
@@ -12,7 +12,8 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{
-    entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
+    entity_icon, search_field, tree_row, window_frame, Icon, TreeRowResponse, TreeRowSpec,
+    WindowKind,
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -119,32 +120,26 @@ fn draw_hierarchy_window(
     assets: &AssetStorage,
     layout: &LayoutSnapshot,
 ) {
-    ui.window("Hierarchy")
-        .position([0.0, 0.0], Condition::Always)
-        .size(
-            [layout.hierarchy_width, layout.hierarchy_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| {
-            build_mode_tabs(ui, world, state);
-            build_search_bar(ui, world, state);
-            ui.separator();
+    let kind = WindowKind::Docked {
+        position: [0.0, 0.0],
+        size: [layout.hierarchy_width, layout.hierarchy_height],
+    };
+    window_frame(ui, "Hierarchy", kind).build(|| {
+        build_mode_tabs(ui, world, state);
+        build_search_bar(ui, world, state);
+        ui.separator();
 
-            match state.display_mode {
-                HierarchyDisplayMode::Entities => {
-                    build_entity_tree(ui, world, state);
-                }
-                HierarchyDisplayMode::Bones => {
-                    build_bone_tree(ui, world, state, assets);
-                }
+        match state.display_mode {
+            HierarchyDisplayMode::Entities => {
+                build_entity_tree(ui, world, state);
             }
+            HierarchyDisplayMode::Bones => {
+                build_bone_tree(ui, world, state, assets);
+            }
+        }
 
-            handle_tree_keyboard(ui, world, state);
-        });
+        handle_tree_keyboard(ui, world, state);
+    });
 }
 
 fn build_mode_tabs(ui: &imgui::Ui, world: &World, state: &HierarchyState) {

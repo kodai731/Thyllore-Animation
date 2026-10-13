@@ -17,8 +17,6 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 mod time;
-mod ui_apply;
-mod ui_command;
 
 pub use caustic_descriptors::*;
 pub use cli::*;
@@ -33,4 +31,3 @@ pub use record::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use time::*;
-pub use ui_command::*;

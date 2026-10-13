@@ -1,6 +1,6 @@
 use super::paths::FLAMES_STYLE_DIR;
-use super::resolve_selected_flame;
 use crate::ecs::component::{AppliedFlameStyle, FlameBaked, FlameEffect};
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::world::World;
 use thyllore_effect_core::StyleGroups;
 
@@ -9,7 +9,7 @@ use thyllore_effect_core::StyleGroups;
 /// batch helper; this system owns the component I/O so UI and batch share one
 /// behavior.
 pub fn apply_flame_style_to_selected(world: &mut World, path: &str, groups: StyleGroups) {
-    let Some(target) = resolve_selected_flame(world) else {
+    let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
         return;
     };
     let Some(mut effect) = world
@@ -55,7 +55,7 @@ pub fn save_flame_style_of_selected(world: &World, name: &str) -> Option<String>
         return None;
     }
 
-    let target = resolve_selected_flame(world)?;
+    let target = resolve_selected_effect::<FlameEffect>(world)?;
     let effect = world.get_component::<FlameEffect>(target)?;
     let path = format!("{}/{}.style.ron", FLAMES_STYLE_DIR, sanitized);
     dump_flame_style_to_path(effect, &path);

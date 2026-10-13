@@ -3,9 +3,8 @@ use std::io::Cursor;
 use serde_json::json;
 use thyllore_effect_core::TextureFitGroups;
 
-use super::resolve_selected_flame;
 use crate::ecs::component::{FlameBaked, FlameEffect};
-use crate::ecs::systems::effect_edit::apply_effect_update;
+use crate::ecs::systems::effect_edit::{apply_effect_update, resolve_selected_effect};
 use crate::ecs::systems::flame::write_texture_fit_provenance;
 use crate::ecs::world::World;
 
@@ -28,7 +27,7 @@ pub fn apply_flame_texture_fit_to_selected(
     profile: bool,
     route: &str,
 ) {
-    let Some(target) = resolve_selected_flame(world) else {
+    let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
         return;
     };
     let Some(mut effect) = world

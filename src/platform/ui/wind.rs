@@ -1,112 +1,41 @@
 use std::rc::Rc;
 
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::wind::WindUiCommand;
-use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
+use crate::ecs::systems::{EffectEdit, WIND_SPAWN_HOOK};
 use crate::ecs::World;
-use crate::platform::ui::theme::section_header;
-use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
-use super::scene_overlay::send_key_button;
+use super::effect_sections::{build_effect_section, EffectPanel};
+use super::param_widgets::{ScalarParam, UiParam};
 
-fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WIND_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
+pub(super) struct WindPanel;
 
-pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
-    if !section_header(ui, ecs_world, "Wind", SectionDefault::Closed) {
-        return;
-    }
-    let _section_id = ui.push_id("wind");
+impl EffectPanel for WindPanel {
+    type Component = WindTornadoEffect;
+    type RenderSettings = WindRenderSettings;
 
-    if ui.button("Add Wind") {
-        ecs_world.send_command(ScalarCurveEvent::AddEffect(WIND_SPAWN_HOOK.key));
+    const NAME: &'static str = "Wind";
+    const SPAWN_HOOK_KEY: &'static str = WIND_SPAWN_HOOK.key;
+    const PRESET_NAMES: &'static [&'static str] = thyllore_effect_core::WIND_PRESET_NAMES;
+
+    fn ui_params() -> &'static [UiParam] {
+        &*thyllore_effect_core::WIND_UI_PARAMS
     }
 
-    let winds = ecs_world.entities_with::<WindTornadoEffect>();
-    let selected_wind_entity = resolve_selected_wind(ecs_world);
-    if winds.len() > 1 {
-        let mut current = selected_wind_entity
-            .and_then(|entity| winds.iter().position(|&e| e == entity))
-            .unwrap_or(0);
-        let items: Vec<String> = winds
-            .iter()
-            .enumerate()
-            .map(|(i, &entity)| {
-                ecs_world
-                    .get_component::<crate::ecs::world::Name>(entity)
-                    .map(|n| n.0.clone())
-                    .unwrap_or_else(|| format!("Wind {}", i + 1))
-            })
-            .collect();
-        if ui.combo_simple_string("Instance", &mut current, &items) {
-            ecs_world.send_command(OverlayEvent::SelectEffectInstance {
-                key: WIND_SPAWN_HOOK.key,
-                index: current,
-            });
-        }
+    fn scalar_params() -> &'static [ScalarParam<Self::Component>] {
+        &*thyllore_effect_core::WIND_SCALAR_PARAMS
     }
 
-    let applied_preset = selected_wind_entity.and_then(|entity| {
-        ecs_world
-            .get_component::<AppliedWindPreset>(entity)
-            .map(|preset| preset.name.clone())
-    });
-    let mut effect_applied_this_frame = false;
-    if let Some(chosen) = draw_preset_combo(
-        ui,
-        "Wind Preset",
-        thyllore_effect_core::WIND_PRESET_NAMES,
-        applied_preset.as_deref(),
-    ) {
-        if selected_wind_entity.is_some() {
-            ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            ecs_world.send_command(WindUiCommand::ApplyPreset(chosen));
-            effect_applied_this_frame = true;
-        }
+    fn domain() -> &'static crate::ecs::component::ScalarChannelDomain {
+        &WIND_DOMAIN
     }
 
-    let Some(selected_wind) = selected_wind_entity else {
-        return;
-    };
-    let Some(effect) = ecs_world.get_component::<WindTornadoEffect>(selected_wind) else {
-        return;
-    };
-    let mut effect_copy = effect.clone();
-    draw_tiered_params(
-        ui,
-        ecs_world,
-        &thyllore_effect_core::WIND_UI_PARAMS,
-        &thyllore_effect_core::WIND_SCALAR_PARAMS,
-        &mut effect_copy,
-        &[],
-        |ui, edited| wind_key_button(ui, ecs_world, edited),
-    );
-    if !effect_applied_this_frame {
-        ecs_world.send_command(WindUiCommand::UpdateEffect {
-            entity: selected_wind,
-            effect: Box::new(effect_copy),
-        });
+    fn applied_preset_name(applied: &AppliedWindPreset) -> String {
+        applied.name.clone()
     }
-    if ui.button("Curves") {
-        ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
-    }
-    if section_header(ui, ecs_world, "Wind Debug", SectionDefault::Closed) {
+
+    fn draw_debug(ui: &imgui::Ui, ecs_world: &World) {
         draw_wind_render_settings(ui, ecs_world);
         if ui.button("Dump Debug") {
             ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WindDebugCapture)));
@@ -161,11 +90,13 @@ fn draw_wind_render_settings(ui: &imgui::Ui, ecs_world: &World) {
         "Animate when paused",
         &mut settings_copy.free_run_when_paused,
     );
-    ecs_world.send_command(WindUiCommand::UpdateRenderSettings(settings_copy));
+    ecs_world.send_command(
+        EffectEdit::<WindTornadoEffect, WindRenderSettings>::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "wind",
     order: 2,
-    draw: build_wind_section,
+    draw: build_effect_section::<WindPanel>,
 });

@@ -2,12 +2,14 @@ use anyhow::{bail, Result};
 use thyllore_effect_core::TextureFitGroups;
 
 use crate::ecs::component::{ClipSchedule, FlameBaked, FlameEffect};
-use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionState};
+use crate::ecs::resource::{
+    ClipDragPreview, ClipDragType, FlameRenderSettings, TimelineInteractionState,
+};
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline::clip_drag_preview_times;
-use crate::ecs::systems::{unit_action_parse, BatchAction};
+use crate::ecs::systems::{unit_action_parse, BatchAction, EffectEdit};
 use crate::ecs::world::{Entity, World};
 
 use super::apply_texture_fit_from_path;
@@ -102,10 +104,12 @@ impl BatchAction for ApplyTextureFitRoundtrip {
             return;
         };
         apply_texture_fit_to_first_flame(world, &self.path, self.blend, self.profile);
-        world.send_command(FlameUiCommand::UpdateEffect {
-            entity: flame,
-            effect: Box::new(original_effect),
-        });
+        world.send_command(
+            EffectEdit::<FlameEffect, FlameRenderSettings>::UpdateEffect {
+                entity: flame,
+                effect: Box::new(original_effect),
+            },
+        );
         world.send_command(FlameUiCommand::UpdateBaked(Box::new(original_baked)));
     }
 }
@@ -164,10 +168,12 @@ fn apply_texture_fit_to_first_flame(world: &World, path: &str, blend: f32, profi
         profile,
         "debug_action",
     );
-    world.send_command(FlameUiCommand::UpdateEffect {
-        entity: flame,
-        effect: Box::new(effect),
-    });
+    world.send_command(
+        EffectEdit::<FlameEffect, FlameRenderSettings>::UpdateEffect {
+            entity: flame,
+            effect: Box::new(effect),
+        },
+    );
     world.send_command(FlameUiCommand::UpdateBaked(Box::new(baked)));
 }
 

@@ -5,8 +5,7 @@ use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::wind::WindUiCommand;
-use crate::ecs::systems::{resolve_selected_effect, WIND_SPAWN_HOOK};
+use crate::ecs::systems::{resolve_selected_effect, EffectEdit, WIND_SPAWN_HOOK};
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
@@ -62,7 +61,9 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     ) {
         if selected_wind_entity.is_some() {
             ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            ecs_world.send_command(WindUiCommand::ApplyPreset(chosen));
+            ecs_world.send_command(
+                EffectEdit::<WindTornadoEffect, WindRenderSettings>::ApplyPreset(chosen),
+            );
             effect_applied_this_frame = true;
         }
     }
@@ -84,10 +85,12 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
         |ui, edited| key_edited_scalars(ui, ecs_world, &WIND_DOMAIN, edited),
     );
     if !effect_applied_this_frame {
-        ecs_world.send_command(WindUiCommand::UpdateEffect {
-            entity: selected_wind,
-            effect: Box::new(effect_copy),
-        });
+        ecs_world.send_command(
+            EffectEdit::<WindTornadoEffect, WindRenderSettings>::UpdateEffect {
+                entity: selected_wind,
+                effect: Box::new(effect_copy),
+            },
+        );
     }
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
@@ -147,7 +150,9 @@ fn draw_wind_render_settings(ui: &imgui::Ui, ecs_world: &World) {
         "Animate when paused",
         &mut settings_copy.free_run_when_paused,
     );
-    ecs_world.send_command(WindUiCommand::UpdateRenderSettings(settings_copy));
+    ecs_world.send_command(
+        EffectEdit::<WindTornadoEffect, WindRenderSettings>::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

@@ -1,4 +1,3 @@
-use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::WindRenderSettings;

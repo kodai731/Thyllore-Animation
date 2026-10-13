@@ -10,7 +10,7 @@ use crate::ecs::systems::lightning::LightningUiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::{resolve_selected_effect, LIGHTNING_SPAWN_HOOK};
+use crate::ecs::systems::{resolve_selected_effect, EffectEdit, LIGHTNING_SPAWN_HOOK};
 use crate::ecs::world::Entity;
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
@@ -67,7 +67,9 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     ) {
         if selected_entity.is_some() {
             ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            ecs_world.send_command(LightningUiCommand::ApplyPreset(chosen));
+            ecs_world.send_command(
+                EffectEdit::<LightningEffect, LightningRenderSettings>::ApplyPreset(chosen),
+            );
             effect_applied_this_frame = true;
         }
     }
@@ -104,10 +106,12 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     );
 
     if !effect_applied_this_frame {
-        ecs_world.send_command(LightningUiCommand::UpdateEffect {
-            entity: selected,
-            effect: Box::new(effect_copy),
-        });
+        ecs_world.send_command(
+            EffectEdit::<LightningEffect, LightningRenderSettings>::UpdateEffect {
+                entity: selected,
+                effect: Box::new(effect_copy),
+            },
+        );
     }
     if ui.button("Curves") {
         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
@@ -216,7 +220,9 @@ fn draw_lightning_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     {
         settings_copy.reference_step_count = step_count.max(1) as u32;
     }
-    ecs_world.send_command(LightningUiCommand::UpdateRenderSettings(settings_copy));
+    ecs_world.send_command(
+        EffectEdit::<LightningEffect, LightningRenderSettings>::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

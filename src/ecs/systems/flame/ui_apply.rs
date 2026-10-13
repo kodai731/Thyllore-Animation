@@ -2,30 +2,19 @@ use super::ui_command::FlameUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail};
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
-use crate::ecs::systems::effect_edit::{apply_effect_update, resolve_selected_effect};
+use crate::ecs::resource::FlameUIState;
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 impl UiCommand for FlameUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
         match *self {
-            FlameUiCommand::UpdateEffect { entity, effect } => {
-                apply_effect_update::<FlameEffect>(world, entity, *effect);
-            }
             FlameUiCommand::UpdateBaked(baked) => {
                 let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 world.insert_component(target, *baked);
-            }
-            FlameUiCommand::ApplyPreset(name) => {
-                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
-                    return;
-                };
-                crate::ecs::systems::effect_edit::apply_effect_preset::<FlameEffect>(
-                    world, target, &name,
-                );
             }
             FlameUiCommand::ApplyTextureFit {
                 path,
@@ -64,11 +53,6 @@ impl UiCommand for FlameUiCommand {
                         flame_ui.style_scan_done = false;
                         flame_ui.style_scan.clear();
                     }
-                }
-            }
-            FlameUiCommand::UpdateRenderSettings(new_settings) => {
-                if let Some(mut settings) = world.get_resource_mut::<FlameRenderSettings>() {
-                    *settings = new_settings;
                 }
             }
             FlameUiCommand::UpdateTrailEnabled(enabled) => {

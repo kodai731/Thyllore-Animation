@@ -1,11 +1,11 @@
 use crate::platform::ui::numeric_format::numeric_format;
 
-use crate::ecs::component::FLAME_DOMAIN;
-use crate::ecs::resource::{FlameUIState, ViewportInput};
+use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
+use crate::ecs::resource::{FlameRenderSettings, FlameUIState, ViewportInput};
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::FLAME_SPAWN_HOOK;
+use crate::ecs::systems::{EffectEdit, FLAME_SPAWN_HOOK};
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
@@ -80,8 +80,6 @@ fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::
 }
 
 pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::component::FlameEffect;
-
     if section_header(ui, ecs_world, "Flame", SectionDefault::Closed) {
         let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
@@ -134,7 +132,9 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-                    ecs_world.send_command(FlameUiCommand::ApplyPreset(chosen));
+                    ecs_world.send_command(
+                        EffectEdit::<FlameEffect, FlameRenderSettings>::ApplyPreset(chosen),
+                    );
                     effect_applied_this_frame = true;
                 }
             }
@@ -433,10 +433,12 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     }
 
                     if !effect_applied_this_frame {
-                        ecs_world.send_command(FlameUiCommand::UpdateEffect {
-                            entity: selected_flame,
-                            effect: Box::new(effect_copy),
-                        });
+                        ecs_world.send_command(
+                            EffectEdit::<FlameEffect, FlameRenderSettings>::UpdateEffect {
+                                entity: selected_flame,
+                                effect: Box::new(effect_copy),
+                            },
+                        );
                     }
 
                     if section_header(ui, ecs_world, "Flame Debug", SectionDefault::Closed) {
@@ -459,7 +461,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
+    use crate::ecs::resource::{FlameDebugView, FlameShadingMode};
     use thyllore_effect_core::flame_wave::{
         read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter, set_wave_jitter_freq,
     };
@@ -525,7 +527,9 @@ fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
         | FlameShadingMode::DebugDepthClamp => {}
     }
 
-    ecs_world.send_command(FlameUiCommand::UpdateRenderSettings(settings_copy));
+    ecs_world.send_command(
+        EffectEdit::<FlameEffect, FlameRenderSettings>::UpdateRenderSettings(settings_copy),
+    );
 }
 
 /// Canonicalized directory, falling back to the typed text when the path

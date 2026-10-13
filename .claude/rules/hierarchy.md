@@ -136,7 +136,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 |---|---|
 | `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
 | `editor/` | Timeline, curves, clips, hierarchy, layout and its per-frame snapshot, history, keyframes, poses, constraints, avatar setup, blend shape inspector, expression library |
-| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard, temporal history snapshot |
+| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, flash light and discharge events published by effects, billboard, temporal history snapshot |
 | `timing/` | Frame clock, CPU and GPU frame timing, update phase, per-phase sub-steps |
 | `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui capture and textures, trace |
 | `ui/` | UI pointer owner, UI settings, widget animation and state, toast |

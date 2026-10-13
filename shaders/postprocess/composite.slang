@@ -30,6 +30,10 @@ struct SceneData {
     float shadowStrength;
     int enableDistanceAttenuation;
     float exposureValue;
+    float4 flashLight;
+    float4 flashColor;
+    float4 impactDecal;
+    float4 impactStrength;
 };
 
 [[vk::binding(4, 0)]] ConstantBuffer<SceneData> sceneData;
@@ -201,7 +205,18 @@ float4 fragmentMain(Varyings input, out float fragDepth : SV_Depth) : SV_Target0
     float3 diffuseLight = diffuse * attenuation * sceneData.lightColor.rgb;
 
     float3 lighting = ambientLight + diffuseLight * shadowFactor;
+
+    float3 flashVec = sceneData.flashLight.xyz - worldPosition;
+    float flashDist = length(flashVec);
+    float flashDiffuse = max(dot(worldNormal, flashVec / max(flashDist, 1e-4)), 0.0);
+    float3 flashLightTerm = sceneData.flashColor.rgb * sceneData.flashLight.w * flashDiffuse / (1.0 + flashDist * flashDist);
+    lighting += flashLightTerm;
+
     float3 finalColor = baseColor * lighting;
+
+    float impactDist = length(worldPosition.xz - sceneData.impactDecal.xz);
+    float impactFalloff = 1.0 - smoothstep(0.0, max(sceneData.impactDecal.w, 1e-4), impactDist);
+    finalColor += sceneData.flashColor.rgb * sceneData.impactStrength.x * impactFalloff;
 
     if (selection.selectedCount > 0u && onSelectionOutline(fragTexCoord)) {
         return float4(OUTLINE_COLOR, 1.0);

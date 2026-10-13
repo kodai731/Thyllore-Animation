@@ -1,4 +1,5 @@
 mod camera_fly;
+mod injected;
 mod keyboard_modifiers;
 mod mouse;
 mod pointer;
@@ -6,6 +7,7 @@ mod pointer_capture;
 mod viewport;
 
 pub use camera_fly::*;
+pub use injected::*;
 pub use keyboard_modifiers::*;
 pub use mouse::*;
 pub use pointer::*;

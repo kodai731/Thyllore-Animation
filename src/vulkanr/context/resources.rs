@@ -61,8 +61,15 @@ impl GpuResource for FrameSync {
             device.destroy_fence(fence, None);
         }
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.image_available.is_empty()
+            && self.render_finished.is_empty()
+            && self.in_flight.is_empty()
+    }
 }
 
+#[must_use]
 #[derive(GpuResource)]
 pub struct SwapchainState {
     pub swapchain: RRSwapchain,
@@ -91,6 +98,7 @@ impl SwapchainState {
     }
 }
 
+#[must_use]
 #[derive(GpuResource)]
 pub struct RenderTargets {
     pub render: RRRender,
@@ -131,6 +139,10 @@ impl GpuResource for CommandState {
         if self.pool.command_pool != vk::CommandPool::null() {
             device.destroy_command_pool(self.pool.command_pool, None);
         }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.buffers.command_buffers.is_empty()
     }
 }
 

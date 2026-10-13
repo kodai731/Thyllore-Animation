@@ -279,9 +279,25 @@ impl ReflectedSetLayout {
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    /// The caller guarantees no pending command buffer binds the set, as for `vkFreeDescriptorSets`.
+    pub fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
+        rrdevice.release_descriptor_sets(self.handle, [set]);
+    }
+
+    pub fn release_sets(
+        &self,
+        rrdevice: &RRDevice,
+        sets: impl IntoIterator<Item = vk::DescriptorSet>,
+    ) {
+        rrdevice.release_descriptor_sets(self.handle, sets);
+    }
+
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.handle != vk::DescriptorSetLayout::null() {
-            device.destroy_descriptor_set_layout(self.handle, None);
+            rrdevice.forget_descriptor_layout(self.handle);
+            rrdevice
+                .device
+                .destroy_descriptor_set_layout(self.handle, None);
             self.handle = vk::DescriptorSetLayout::null();
         }
     }
@@ -463,6 +479,10 @@ impl DescriptorSetWriter<'_> {
 
 impl GpuResource for ReflectedSetLayout {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.handle == vk::DescriptorSetLayout::null()
     }
 }

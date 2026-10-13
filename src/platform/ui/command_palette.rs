@@ -10,8 +10,8 @@ use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
 use crate::platform::key_bindings::default_bindings;
-use crate::platform::ui::shortcuts::format_global_chord;
-use crate::platform::ui::theme::colors::{srgb_to_linear, ACCENT, TEXT, TEXT_SECONDARY};
+use crate::platform::ui::shortcuts::format_chord;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -120,7 +120,7 @@ fn collect_palette_items(world: &World) -> Vec<PaletteItem> {
         .into_iter()
         .map(|binding| PaletteItem::Command {
             label: binding.label,
-            chord: format_global_chord(binding.modifiers, binding.key),
+            chord: format_chord(binding.modifiers, &binding.key.to_uppercase()),
             send: binding.send,
         });
 
@@ -184,7 +184,7 @@ fn draw_candidate_rows(
         if row == selection {
             let accent_fill = [ACCENT[0], ACCENT[1], ACCENT[2], SELECTED_ROW_ALPHA];
             draw_list
-                .add_rect(rect_min, rect_max, srgb_to_linear(accent_fill))
+                .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_fill))
                 .rounding(ROW_ROUNDING)
                 .filled(true)
                 .build();
@@ -193,14 +193,14 @@ fn draw_candidate_rows(
         let text_y = rect_min[1] + text_offset_y;
         draw_list.add_text(
             [rect_min[0] + ROW_TEXT_PADDING, text_y],
-            srgb_to_linear(TEXT),
+            srgb_to_linear_rgba(TEXT),
             item.label(),
         );
         if let Some(chord) = item.chord() {
             let chord_width = ui.calc_text_size(chord)[0];
             draw_list.add_text(
                 [rect_max[0] - ROW_TEXT_PADDING - chord_width, text_y],
-                srgb_to_linear(TEXT_SECONDARY),
+                srgb_to_linear_rgba(TEXT_SECONDARY),
                 chord,
             );
         }

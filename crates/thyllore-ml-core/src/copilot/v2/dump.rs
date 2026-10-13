@@ -17,8 +17,7 @@ pub fn dump_v2_curve_copilot_inference(
     output_dir: &Path,
 ) -> Result<PathBuf> {
     create_dir_all(output_dir)?;
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string();
-    let path = output_dir.join(format!("{}-v2-curve-copilot-inference.npz", timestamp));
+    let path = output_dir.join("v2-curve-copilot-inference.npz");
 
     let mut npz = NpzWriter::new(File::create(&path)?);
 

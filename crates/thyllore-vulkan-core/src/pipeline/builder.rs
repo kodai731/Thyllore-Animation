@@ -103,6 +103,7 @@ pub struct PipelineBuilder {
     vertex_input: VertexInputConfig,
     topology: vk::PrimitiveTopology,
     polygon_mode: vk::PolygonMode,
+    line_width: f32,
     cull_mode: vk::CullModeFlags,
     depth_test: DepthTestConfig,
     blend: BlendConfig,
@@ -124,15 +125,12 @@ impl PipelineBuilder {
             vertex_input: VertexInputConfig::Standard,
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             polygon_mode: vk::PolygonMode::FILL,
+            line_width: 1.0,
             cull_mode: vk::CullModeFlags::NONE,
             depth_test: DepthTestConfig::default(),
             blend: BlendConfig::default(),
             push_constants: None,
-            dynamic_states: vec![
-                vk::DynamicState::VIEWPORT,
-                vk::DynamicState::SCISSOR,
-                vk::DynamicState::LINE_WIDTH,
-            ],
+            dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR],
             descriptor_layouts: vec![],
             descriptor_layout_bindings: vec![],
             msaa_samples: vk::SampleCountFlags::empty(),
@@ -186,6 +184,12 @@ impl PipelineBuilder {
     }
 
     /// Set cull mode (NONE, FRONT, BACK, FRONT_AND_BACK)
+    /// Static rasterization line width; a width other than 1.0 needs the device's `wideLines` feature.
+    pub fn line_width(mut self, width: f32) -> Self {
+        self.line_width = width;
+        self
+    }
+
     pub fn cull_mode(mut self, mode: vk::CullModeFlags) -> Self {
         self.cull_mode = mode;
         self
@@ -253,6 +257,13 @@ impl PipelineBuilder {
                 self.pass.name()
             ));
         }
+        if self.line_width != 1.0 && !rrdevice.wide_lines {
+            return Err(anyhow::anyhow!(
+                "pass `{}` asks for line width {} but the device has no wideLines feature",
+                self.pass.name(),
+                self.line_width
+            ));
+        }
         verify_pass_layouts(self.pass, &self.descriptor_layout_bindings)?;
         let shader_stages = load_pass_stages(rrdevice, self.pass)?;
 
@@ -302,7 +313,7 @@ impl PipelineBuilder {
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(self.polygon_mode)
-            .line_width(1.0)
+            .line_width(self.line_width)
             .cull_mode(self.cull_mode)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false);

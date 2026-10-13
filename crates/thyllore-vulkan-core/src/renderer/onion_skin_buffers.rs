@@ -135,6 +135,10 @@ impl GpuResource for OnionSkinGpuState {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.ghost_buffers.is_empty()
+    }
 }
 
 #[cfg(test)]

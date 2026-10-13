@@ -1,6 +1,8 @@
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 use thyllore_spirv_reflect::declare_gpu_block;
 
+use crate::lighting::AMBIENT_INTENSITY;
+
 #[derive(Clone, Copy, Debug)]
 pub struct LightingParams {
     pub ambient_intensity: f32,
@@ -11,7 +13,7 @@ pub struct LightingParams {
 impl Default for LightingParams {
     fn default() -> Self {
         Self {
-            ambient_intensity: 0.3,
+            ambient_intensity: AMBIENT_INTENSITY,
             attenuation_linear: 0.01,
             attenuation_quadratic: 0.001,
         }

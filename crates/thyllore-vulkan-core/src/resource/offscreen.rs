@@ -359,5 +359,16 @@ impl OffscreenFramebuffer {
 impl GpuResource for OffscreenFramebuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
+
+        self.sampler = vk::Sampler::null();
+        self.framebuffer = vk::Framebuffer::null();
+        self.render_pass = vk::RenderPass::null();
+        self.msaa_color_image = vk::Image::null();
+        self.resolve_color_image = vk::Image::null();
+        self.msaa_depth_image = vk::Image::null();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.render_pass.is_destroyed() && self.resolve_color_image.is_destroyed()
     }
 }

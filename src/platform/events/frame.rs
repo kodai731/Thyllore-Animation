@@ -23,6 +23,7 @@ pub(crate) fn handle_redraw_requested(
     };
 
     apply_changed_ui_settings(imgui, app);
+    super::injected_input::feed_injected_keys(imgui.io_mut(), &app.data.ecs_world);
     let ui = imgui.frame();
 
     let io = ui.io();

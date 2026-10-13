@@ -132,6 +132,10 @@ impl GpuResource for RRData {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.delete(rrdevice);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.image.is_destroyed() && self.vertex_buffer.buffer.is_destroyed()
+    }
 }
 
 declare_gpu_block! {

@@ -338,5 +338,16 @@ impl OnionSkinPassResources {
 impl GpuResource for OnionSkinPassResources {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
+
+        self.ghost_image = vk::Image::null();
+        self.ghost_render_pass = vk::RenderPass::null();
+        self.composite_render_pass = vk::RenderPass::null();
+        self.ghost_pipeline.pipeline = vk::Pipeline::null();
+        self.composite_pipeline.pipeline = vk::Pipeline::null();
+        self.composite_descriptor_layout.handle = vk::DescriptorSetLayout::null();
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.ghost_image.is_destroyed() && self.composite_render_pass.is_destroyed()
     }
 }

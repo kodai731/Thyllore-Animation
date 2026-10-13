@@ -681,6 +681,18 @@ impl RRDevice {
             .allocate(&self.device, layout, signature, count)
     }
 
+    pub fn release_descriptor_sets(
+        &self,
+        layout: vk::DescriptorSetLayout,
+        sets: impl IntoIterator<Item = vk::DescriptorSet>,
+    ) {
+        self.descriptor_allocator.borrow_mut().release(layout, sets);
+    }
+
+    pub fn forget_descriptor_layout(&self, layout: vk::DescriptorSetLayout) {
+        self.descriptor_allocator.borrow_mut().forget_layout(layout);
+    }
+
     pub unsafe fn destroy_descriptor_pools(&self) {
         self.descriptor_allocator.borrow_mut().destroy(&self.device);
     }

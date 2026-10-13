@@ -28,6 +28,7 @@ use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 
+#[must_use]
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]

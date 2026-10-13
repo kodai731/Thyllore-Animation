@@ -399,7 +399,6 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(TestResource { value: 42.0 });
         let result = edit_resource_copy::<TestResource>(&world, |value| {
-            // read but don't modify
             let _ = value.value;
             false
         });

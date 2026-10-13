@@ -481,20 +481,18 @@ fn build_general_section(ui: &imgui::Ui, ecs_world: &World) {
     if !section_header(ui, ecs_world, "General", SectionDefault::Open) {
         return;
     }
-    let Some(brightness) = ecs_world.get_resource::<SceneBrightness>() else {
-        return;
-    };
-    let mut edited = *brightness;
-    drop(brightness);
-
-    ui.input_float_config("Brightness (EV)")
-        .step(0.1)
-        .step_fast(1.0)
-        .build(&mut edited.ev);
+    let brightness = edit_resource_copy::<SceneBrightness>(ecs_world, |value| {
+        ui.input_float_config("Brightness (EV)")
+            .step(0.1)
+            .step_fast(1.0)
+            .build(&mut value.ev)
+    });
     if ui.is_item_hovered() {
         ui.tooltip_text("Scene View brightness on top of the exposure; +1 doubles it");
     }
-    ecs_world.send_command(OverlayEvent::UpdateSceneBrightness(edited));
+    if let Some(edited) = brightness {
+        ecs_world.send_command(OverlayEvent::UpdateSceneBrightness(edited));
+    }
 }
 
 fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
@@ -521,13 +519,10 @@ fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
-    let Some(state) = ecs_world.get_resource::<TransformGizmoState>() else {
+    if !section_header(ui, ecs_world, "Transform Gizmo", SectionDefault::Open) {
         return;
-    };
-    let mut state_copy = state.clone();
-    drop(state);
-
-    if section_header(ui, ecs_world, "Transform Gizmo", SectionDefault::Open) {
+    }
+    let state = edit_resource_copy::<TransformGizmoState>(ecs_world, |state_copy| {
         let snap_edited = state_copy.snap_enabled
             && match state_copy.mode {
                 TransformGizmoMode::Translate => ui
@@ -546,11 +541,10 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
             .display_format(numeric_format("%.3f"))
             .build(&mut state_copy.gizmo_scale);
 
-        if snap_edited || scale_edited {
-            ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
-                state_copy,
-            )));
-        }
+        snap_edited || scale_edited
+    });
+    if let Some(edited) = state {
+        ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(edited)));
     }
 }
 

@@ -10,6 +10,7 @@ use super::text_to_animation_dialog::TextToAnimationDialogState;
 #[cfg(feature = "auto-rig")]
 use super::text_to_mesh_dialog::TextToMeshDialogState;
 use crate::asset::AssetStorage;
+use crate::ecs::component::SceneCamera;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
     clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
@@ -24,7 +25,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::scene_camera::SceneCameraEvent;
 use crate::ecs::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3, TEXT_SECONDARY};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
@@ -44,6 +45,49 @@ const DENSITY_OPTIONS: [(UiDensity, &str); 2] = [
     (UiDensity::Compact, "Compact"),
     (UiDensity::Default, "Default"),
 ];
+fn compute_resolution_gate(
+    viewport_pos: [f32; 2],
+    viewport_size: [f32; 2],
+    resolution: [u32; 2],
+) -> ([f32; 2], [f32; 2]) {
+    let res_w = resolution[0] as f32;
+    let res_h = resolution[1] as f32;
+    let target_aspect = res_w / res_h;
+    let vp_aspect = viewport_size[0] / viewport_size[1];
+
+    let (gate_w, gate_h) = if vp_aspect > target_aspect {
+        let gate_w = viewport_size[1] * target_aspect;
+        (gate_w, viewport_size[1])
+    } else {
+        let gate_h = viewport_size[0] / target_aspect;
+        (viewport_size[0], gate_h)
+    };
+
+    let gate_x = viewport_pos[0] + (viewport_size[0] - gate_w) * 0.5;
+    let gate_y = viewport_pos[1] + (viewport_size[1] - gate_h) * 0.5;
+    ([gate_x, gate_y], [gate_w, gate_h])
+}
+
+fn passepartout_bars(
+    viewport_pos: [f32; 2],
+    viewport_size: [f32; 2],
+    gate_pos: [f32; 2],
+    gate_size: [f32; 2],
+) -> [([f32; 2], [f32; 2]); 4] {
+    let vp_min = [viewport_pos[0], viewport_pos[1]];
+    let vp_max = [
+        viewport_pos[0] + viewport_size[0],
+        viewport_pos[1] + viewport_size[1],
+    ];
+    let gate_min = [gate_pos[0], gate_pos[1]];
+    let gate_max = [gate_pos[0] + gate_size[0], gate_pos[1] + gate_size[1]];
+    [
+        (vp_min, [gate_min[0], vp_max[1]]),
+        ([gate_max[0], vp_min[1]], vp_max),
+        ([gate_min[0], vp_min[1]], [gate_max[0], gate_min[1]]),
+        ([gate_min[0], gate_max[1]], [gate_max[0], vp_max[1]]),
+    ]
+}
 
 pub(super) struct GizmoKeyBinding {
     pub(super) key: imgui::Key,
@@ -100,8 +144,47 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
 
             build_scene_panel_toggle(ui, ecs_world);
         });
+    draw_resolution_gate(ui, ecs_world, viewport);
 
     apply_gizmo_hotkeys(ui, ecs_world);
+}
+
+fn draw_resolution_gate(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
+    let active_camera = ecs_world.resource::<ActiveSceneCamera>();
+    if !active_camera.view_enabled {
+        return;
+    }
+    let entity = match active_camera.entity {
+        Some(e) => e,
+        None => return,
+    };
+    let resolution = match ecs_world.get_component::<SceneCamera>(entity) {
+        Some(cam) => cam.resolution,
+        None => return,
+    };
+
+    let (gate_pos, gate_size) =
+        compute_resolution_gate(viewport.position, viewport.size, resolution);
+
+    let draw_list = ui.get_foreground_draw_list();
+    let dark_color = srgb_to_linear_rgba([0.0, 0.0, 0.0, 0.5]);
+    let outline_color = srgb_to_linear_rgba(TEXT_SECONDARY);
+
+    let bars = passepartout_bars(viewport.position, viewport.size, gate_pos, gate_size);
+    for (min, max) in bars {
+        if max[0] > min[0] && max[1] > min[1] {
+            draw_list
+                .add_rect(min, max, dark_color)
+                .filled(true)
+                .build();
+        }
+    }
+
+    let gate_max = [gate_pos[0] + gate_size[0], gate_pos[1] + gate_size[1]];
+    draw_list
+        .add_rect([gate_pos[0], gate_pos[1]], gate_max, outline_color)
+        .thickness(1.0)
+        .build();
 }
 
 fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
@@ -729,3 +812,138 @@ fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Grap
 }
 
 crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolution_gate_landscape_viewport_16x9() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [800.0, 600.0], [1920, 1080]);
+        assert!(
+            (gate_pos[0] - 0.0).abs() < 0.01,
+            "gate x should be 0, got {}",
+            gate_pos[0]
+        );
+        assert!(
+            (gate_size[0] - 800.0).abs() < 0.01,
+            "gate width should be 800, got {}",
+            gate_size[0]
+        );
+        assert!(
+            (gate_pos[1] - 75.0).abs() < 0.01,
+            "gate y should be 75, got {}",
+            gate_pos[1]
+        );
+        assert!(
+            (gate_size[1] - 450.0).abs() < 0.01,
+            "gate height should be 450, got {}",
+            gate_size[1]
+        );
+    }
+
+    #[test]
+    fn resolution_gate_portrait_viewport_16x9() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [600.0, 800.0], [1920, 1080]);
+        assert!(
+            (gate_pos[0] - 0.0).abs() < 0.01,
+            "gate x should be 0, got {}",
+            gate_pos[0]
+        );
+        assert!(
+            (gate_size[0] - 600.0).abs() < 0.01,
+            "gate width should be 600, got {}",
+            gate_size[0]
+        );
+        assert!(
+            (gate_pos[1] - 231.25).abs() < 0.01,
+            "gate y should be 231.25, got {}",
+            gate_pos[1]
+        );
+        assert!(
+            (gate_size[1] - 337.5).abs() < 0.01,
+            "gate height should be 337.5, got {}",
+            gate_size[1]
+        );
+    }
+
+    #[test]
+    fn resolution_gate_square_viewport_16x9() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [600.0, 600.0], [1920, 1080]);
+        assert!(
+            (gate_pos[0] - 0.0).abs() < 0.01,
+            "gate x should be 0, got {}",
+            gate_pos[0]
+        );
+        assert!(
+            (gate_size[0] - 600.0).abs() < 0.01,
+            "gate width should be 600, got {}",
+            gate_size[0]
+        );
+        assert!(
+            (gate_pos[1] - 131.25).abs() < 0.01,
+            "gate y should be 131.25, got {}",
+            gate_pos[1]
+        );
+        assert!(
+            (gate_size[1] - 337.5).abs() < 0.01,
+            "gate height should be 337.5, got {}",
+            gate_size[1]
+        );
+    }
+
+    #[test]
+    fn resolution_gate_landscape_viewport_4x3() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [800.0, 600.0], [1024, 768]);
+        assert!((gate_pos[0] - 0.0).abs() < 0.01);
+        assert!((gate_pos[1] - 0.0).abs() < 0.01);
+        assert!((gate_size[0] - 800.0).abs() < 0.01);
+        assert!((gate_size[1] - 600.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn resolution_gate_wide_viewport_tall_resolution() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [1920.0, 480.0], [1080, 1920]);
+        assert!(
+            (gate_pos[0] - 825.0).abs() < 0.01,
+            "gate x should be 825, got {}",
+            gate_pos[0]
+        );
+        assert!(
+            (gate_size[0] - 270.0).abs() < 0.01,
+            "gate width should be 270, got {}",
+            gate_size[0]
+        );
+        assert!((gate_pos[1] - 0.0).abs() < 0.01);
+        assert!((gate_size[1] - 480.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn passepartout_bars_landscape() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [1920.0, 480.0], [1920, 1080]);
+        let bars = passepartout_bars([0.0, 0.0], [1920.0, 480.0], gate_pos, gate_size);
+
+        assert!(bars[0].1[0] > bars[0].0[0] && bars[0].1[1] > bars[0].0[1]);
+        assert!(bars[1].1[0] > bars[1].0[0] && bars[1].1[1] > bars[1].0[1]);
+        assert!(!(bars[2].1[0] > bars[2].0[0] && bars[2].1[1] > bars[2].0[1]));
+        assert!(!(bars[3].1[0] > bars[3].0[0] && bars[3].1[1] > bars[3].0[1]));
+    }
+
+    #[test]
+    fn passepartout_bars_portrait() {
+        let (gate_pos, gate_size) =
+            compute_resolution_gate([0.0, 0.0], [600.0, 800.0], [1920, 1080]);
+        let bars = passepartout_bars([0.0, 0.0], [600.0, 800.0], gate_pos, gate_size);
+
+        assert!(!(bars[0].1[0] > bars[0].0[0] && bars[0].1[1] > bars[0].0[1]));
+        assert!(!(bars[1].1[0] > bars[1].0[0] && bars[1].1[1] > bars[1].0[1]));
+        assert!(bars[2].1[0] > bars[2].0[0] && bars[2].1[1] > bars[2].0[1]);
+        assert!(bars[3].1[0] > bars[3].0[0] && bars[3].1[1] > bars[3].0[1]);
+    }
+}

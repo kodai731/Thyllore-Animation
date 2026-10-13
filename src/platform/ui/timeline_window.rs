@@ -9,7 +9,8 @@ use crate::ecs::component::{
 };
 use crate::ecs::resource::{
     ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorPlacement,
-    CurveEditorState, PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
+    CurveEditorState, KeyboardModifiers, PoseLibrary, TimelineInteractionState, TimelineState,
+    UiPointerOwnerId, BASE_PIXELS_PER_SECOND, WHEEL_ZOOM_STEP,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -35,7 +36,6 @@ use crate::ecs::resource::LayoutSnapshot;
 
 pub(crate) const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
-pub(crate) const PIXELS_PER_SECOND: f32 = 80.0;
 const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
 const CLIP_TRACK_HEIGHT: f32 = 28.0;
 const CLIP_EDGE_DRAG_WIDTH: f32 = 5.0;
@@ -314,7 +314,7 @@ fn build_timeline_content(
     state.last_visible_width = visible_width;
 
     let duration = timeline_effective_duration(state, clip_library);
-    let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let pixels_per_second = BASE_PIXELS_PER_SECOND * state.zoom_level;
     let timeline_width = (duration * pixels_per_second).max(visible_width);
 
     let ruler_child_height = TIME_RULER_HEIGHT + ui.text_line_height_with_spacing() + 4.0;
@@ -335,9 +335,11 @@ fn build_timeline_content(
         .size(remaining)
         .horizontal_scrollbar(true)
         .build(ui, || {
+            state.scroll_offset = ui.scroll_x();
             if state.pan_pending_delta_x.abs() >= 0.01 {
                 let new_scroll = (ui.scroll_x() + state.pan_pending_delta_x).max(0.0);
                 ui.set_scroll_x(new_scroll);
+                state.scroll_offset = new_scroll;
                 state.pan_pending_delta_x = 0.0;
             }
             if !clip_track_snapshot.entries.is_empty() {
@@ -366,7 +368,7 @@ fn build_time_ruler_with_scrub(
     let cursor_pos = ui.cursor_screen_pos();
     let ruler_start_x = cursor_pos[0] + TRACK_LABEL_WIDTH;
     let ruler_width = timeline_width;
-    let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let pixels_per_second = BASE_PIXELS_PER_SECOND * state.zoom_level;
 
     ui.text("Time:");
     ui.same_line_with_pos(TRACK_LABEL_WIDTH);
@@ -536,7 +538,7 @@ fn build_clip_tracks_section(
     snapshot: &ClipTrackSnapshot,
     timeline_width: f32,
 ) {
-    let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let pixels_per_second = BASE_PIXELS_PER_SECOND * state.zoom_level;
     let pointer = read_ui_pointer(ui);
     let mouse_pos = pointer.pos;
     let mouse_down = pointer.is_down(MouseButton::Left);
@@ -1189,10 +1191,10 @@ fn compute_zoom_limits(available_width: f32, clip_duration: f32, frame_rate: f32
     let duration = clip_duration.max(0.1);
 
     let three_frames_duration = 3.0 / fps;
-    let max_zoom = width / (three_frames_duration * PIXELS_PER_SECOND);
+    let max_zoom = width / (three_frames_duration * BASE_PIXELS_PER_SECOND);
 
     let four_clips_duration = duration * 4.0;
-    let min_zoom = width / (four_clips_duration * PIXELS_PER_SECOND);
+    let min_zoom = width / (four_clips_duration * BASE_PIXELS_PER_SECOND);
 
     (min_zoom.max(0.01), max_zoom)
 }
@@ -1213,6 +1215,12 @@ fn handle_mouse_wheel_zoom(
         return;
     }
 
+    let pointer = read_ui_pointer(ui);
+    let is_ctrl_held = world.resource::<KeyboardModifiers>().ctrl;
+    if pointer.wheel == 0.0 || !is_ctrl_held {
+        return;
+    }
+
     let available_width = state.last_visible_width.max(1.0);
     let (min_zoom, max_zoom) = compute_zoom_limits(
         available_width,
@@ -1220,12 +1228,21 @@ fn handle_mouse_wheel_zoom(
         state.snap_settings.frame_rate,
     );
 
-    let wheel = read_ui_pointer(ui).wheel;
-    if wheel > 0.0 {
-        world.send_command(TimelineEvent::ZoomIn { max_zoom });
-    } else if wheel < 0.0 {
-        world.send_command(TimelineEvent::ZoomOut { min_zoom });
-    }
+    let ruler_start_x = ui.cursor_screen_pos()[0] + TRACK_LABEL_WIDTH;
+    let pixels_per_second = BASE_PIXELS_PER_SECOND * state.zoom_level;
+    let cursor_time = (pointer.pos[0] - ruler_start_x + state.scroll_offset) / pixels_per_second;
+
+    let factor = if pointer.wheel > 0.0 {
+        WHEEL_ZOOM_STEP
+    } else {
+        1.0 / WHEEL_ZOOM_STEP
+    };
+    world.send_command(TimelineEvent::ZoomAt {
+        cursor_time,
+        factor,
+        min_zoom,
+        max_zoom,
+    });
 }
 
 fn handle_middle_drag_pan(ui: &imgui::Ui, world: &World, state: &mut TimelineState) {

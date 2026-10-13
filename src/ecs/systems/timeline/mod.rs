@@ -17,5 +17,5 @@ pub use scene_record::TimelineSceneRecord;
 pub use view::{
     clip_drag_preview_times, timeline_apply_fit_zoom, timeline_apply_selection,
     timeline_select_clip, timeline_set_keyframe_selection, timeline_toggle_track_expanded,
-    timeline_zoom_in, timeline_zoom_out,
+    timeline_zoom_at, timeline_zoom_in, timeline_zoom_out,
 };

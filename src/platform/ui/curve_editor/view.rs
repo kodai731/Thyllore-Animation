@@ -1,6 +1,7 @@
 use crate::animation::editable::{PropertyCurve, PropertyType};
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveValueDisplay, FrameRequest,
+    WHEEL_ZOOM_STEP,
 };
 use crate::platform::ui::pointer::UiPointer;
 
@@ -175,7 +176,11 @@ pub(super) fn zoom_at_mouse(
     let mouse_time = vt.x_to_time(mouse_pos[0]);
     let mouse_value = vt.y_to_value(mouse_pos[1]);
 
-    let factor = if wheel > 0.0 { 1.15 } else { 1.0 / 1.15 };
+    let factor = if wheel > 0.0 {
+        WHEEL_ZOOM_STEP
+    } else {
+        1.0 / WHEEL_ZOOM_STEP
+    };
     let new_zoom_x = (editor_state.zoom_x * factor).clamp(0.1, 10.0);
     let new_zoom_y = (editor_state.zoom_y * factor).clamp(0.1, 10.0);
 

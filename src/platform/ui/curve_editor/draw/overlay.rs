@@ -35,7 +35,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
         }
 
         let ghost_color = [color[0], color[1], color[2], 0.35];
-        let curve_vt = view_for_property(vt, curves_to_draw, *prop_type);
+        let curve_vt = vt.for_property(*prop_type, curves_to_draw);
 
         for i in 0..snapshot.len() - 1 {
             let (t0, v0) = snapshot[i];
@@ -89,7 +89,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
             [1.0, 0.7, 0.3, alpha]
         };
 
-        let curve_vt = view_for_property(vt, curves_to_draw, overlay.property_type);
+        let curve_vt = vt.for_property(overlay.property_type, curves_to_draw);
         let kf_x = curve_vt.time_to_x(overlay.time);
         let kf_y = curve_vt.value_to_y(overlay.value);
         let diamond_size = 6.0;
@@ -193,15 +193,4 @@ pub(in crate::platform::ui::curve_editor) fn draw_tween_curve_overlay(
                 .build();
         }
     }
-}
-
-fn view_for_property(
-    vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
-    property_type: PropertyType,
-) -> ViewTransform {
-    curves_to_draw
-        .iter()
-        .find(|(curve, _, _)| curve.property_type == property_type)
-        .map_or(*vt, |(curve, _, _)| vt.for_curve(curve))
 }

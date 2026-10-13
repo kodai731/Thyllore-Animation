@@ -271,10 +271,7 @@ pub(super) fn draw_normalized_value_tooltip(
     let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) else {
         return;
     };
-    let Some((curve, color, _)) = curves_to_draw
-        .iter()
-        .find(|(curve, _, _)| curve.property_type == property_type)
-    else {
+    let Some((curve, color, _)) = find_drawn_curve(curves_to_draw, property_type) else {
         return;
     };
     let Some(value) = curve_sample(curve, vt.x_to_time(mouse_pos[0])) else {

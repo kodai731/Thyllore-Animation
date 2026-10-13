@@ -75,11 +75,18 @@ impl ViewTransform {
         property_type: PropertyType,
         curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     ) -> ViewTransform {
-        curves_to_draw
-            .iter()
-            .find(|(curve, _, _)| curve.property_type == property_type)
+        find_drawn_curve(curves_to_draw, property_type)
             .map_or(*self, |(curve, _, _)| self.for_curve(curve))
     }
+}
+
+pub(super) fn find_drawn_curve<'curves, 'curve>(
+    curves_to_draw: &'curves [(&'curve PropertyCurve, [f32; 4], &'curves str)],
+    property_type: PropertyType,
+) -> Option<&'curves (&'curve PropertyCurve, [f32; 4], &'curves str)> {
+    curves_to_draw
+        .iter()
+        .find(|(curve, _, _)| curve.property_type == property_type)
 }
 
 const MIN_NORMALIZED_HALF_WIDTH: f32 = 1e-6;
@@ -363,9 +370,7 @@ fn collect_selected_keyframe_bounds(
     }
 
     merge_into_bounds(selected_keyframes.iter().filter_map(|selected| {
-        curves
-            .iter()
-            .find(|(curve, _, _)| curve.property_type == selected.property_type)
+        find_drawn_curve(curves, selected.property_type)
             .and_then(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
             .map(|keyframe| (keyframe.time, keyframe.value))
     }))

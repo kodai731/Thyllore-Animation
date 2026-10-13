@@ -3,6 +3,8 @@ use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRe
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 
+use super::view::find_drawn_curve;
+
 const SHARED_VALUE_TOLERANCE: f32 = 1e-6;
 const FIELD_WIDTH: f32 = 80.0;
 
@@ -84,9 +86,7 @@ fn collect_selected_keys<'a>(
     selected_keyframes
         .iter()
         .filter_map(|selected| {
-            curves
-                .iter()
-                .find(|(curve, _, _)| curve.property_type == selected.property_type)
+            find_drawn_curve(curves, selected.property_type)
                 .and_then(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
                 .map(|key| (selected, key))
         })

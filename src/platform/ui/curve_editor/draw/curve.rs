@@ -160,7 +160,7 @@ fn draw_extrapolation(
     }
 }
 
-fn dashed_segments(points: &[[f32; 2]], dash: f32, gap: f32) -> Vec<[[f32; 2]; 2]> {
+pub(super) fn dashed_segments(points: &[[f32; 2]], dash: f32, gap: f32) -> Vec<[[f32; 2]; 2]> {
     let period = dash + gap;
     let mut segments = Vec::new();
     let mut phase = 0.0;

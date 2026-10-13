@@ -197,3 +197,125 @@ pub(crate) fn compute_min_max_vec4(data: &[f32]) -> ([f32; 4], [f32; 4]) {
 
     (min, max)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cgmath::Quaternion;
+    use thyllore_anim_core::Skeleton;
+
+    fn create_test_skeleton() -> Skeleton {
+        let mut skeleton = Skeleton::new("test");
+        skeleton.add_bone("Hips", None);
+        skeleton.add_bone("Spine", Some(0));
+        skeleton.add_bone("Head", Some(1));
+        skeleton
+    }
+
+    fn create_test_nodes() -> Vec<json::scene::Node> {
+        vec![
+            json::scene::Node {
+                name: Some("Armature".to_string()),
+                ..Default::default()
+            },
+            json::scene::Node {
+                name: Some("Hips".to_string()),
+                ..Default::default()
+            },
+            json::scene::Node {
+                name: Some("Spine".to_string()),
+                ..Default::default()
+            },
+            json::scene::Node {
+                name: Some("Head".to_string()),
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn test_bone_to_node_mapping() {
+        let skeleton = create_test_skeleton();
+        let nodes = create_test_nodes();
+
+        let map = build_bone_to_node_map(&skeleton, &nodes);
+
+        assert_eq!(map.get(&0), Some(&1));
+        assert_eq!(map.get(&1), Some(&2));
+        assert_eq!(map.get(&2), Some(&3));
+    }
+
+    #[test]
+    fn test_bone_to_node_mapping_missing_nodes() {
+        let skeleton = create_test_skeleton();
+        let nodes = vec![json::scene::Node {
+            name: Some("Hips".to_string()),
+            ..Default::default()
+        }];
+
+        let map = build_bone_to_node_map(&skeleton, &nodes);
+
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get(&0), Some(&0));
+        assert!(!map.contains_key(&1));
+    }
+
+    #[test]
+    fn test_quaternion_to_gltf_array() {
+        let q = Quaternion::new(1.0, 0.2, 0.3, 0.4);
+        let arr = quaternion_to_gltf_array(q);
+
+        assert_eq!(arr[0], 0.2);
+        assert_eq!(arr[1], 0.3);
+        assert_eq!(arr[2], 0.4);
+        assert_eq!(arr[3], 1.0);
+    }
+
+    #[test]
+    fn test_quaternion_identity() {
+        let q = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+        let arr = quaternion_to_gltf_array(q);
+
+        assert_eq!(arr, [0.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_append_f32_data_alignment() {
+        let mut bin = vec![0u8; 5];
+        let data = [1.0f32, 2.0];
+
+        let offset = append_f32_data(&mut bin, &data);
+
+        assert_eq!(offset, 8);
+        assert_eq!(bin.len(), 16);
+    }
+
+    #[test]
+    fn test_compute_min_max_scalar() {
+        let data = [3.0, 1.0, 4.0, 1.5, 9.0];
+        let (min, max) = compute_min_max_scalar(&data);
+
+        assert_eq!(min, 1.0);
+        assert_eq!(max, 9.0);
+    }
+
+    #[test]
+    fn test_compute_min_max_vec3() {
+        let data = [1.0, 2.0, 3.0, -1.0, 5.0, 0.0];
+        let (min, max) = compute_min_max_vec3(&data);
+
+        assert_eq!(min, [-1.0, 2.0, 0.0]);
+        assert_eq!(max, [1.0, 5.0, 3.0]);
+    }
+
+    #[test]
+    fn test_pad_to_4byte_alignment() {
+        let mut bin = vec![0u8; 5];
+        pad_to_4byte_alignment(&mut bin);
+        assert_eq!(bin.len(), 8);
+
+        let mut bin2 = vec![0u8; 8];
+        pad_to_4byte_alignment(&mut bin2);
+        assert_eq!(bin2.len(), 8);
+    }
+}

@@ -116,14 +116,18 @@ impl RRBloomDescriptorSets {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        self.layout.destroy(rrdevice);
         self.frames.clear();
     }
 }
 
 impl GpuResource for RRBloomDescriptorSets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.layout.is_destroyed()
     }
 }

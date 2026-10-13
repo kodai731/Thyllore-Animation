@@ -60,13 +60,17 @@ impl RREffectTraceDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        self.layout.destroy(rrdevice);
     }
 }
 
 impl GpuResource for RREffectTraceDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.layout.is_destroyed()
     }
 }

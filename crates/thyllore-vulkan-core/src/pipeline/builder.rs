@@ -746,4 +746,8 @@ impl GpuResource for RRPipeline {
         self.pipeline = vk::Pipeline::null();
         self.pipeline_layout = vk::PipelineLayout::null();
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.pipeline.is_destroyed() && self.pipeline_layout.is_destroyed()
+    }
 }

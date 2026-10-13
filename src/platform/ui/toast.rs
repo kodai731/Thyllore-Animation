@@ -3,7 +3,7 @@ use imgui::{Condition, StyleVar};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{advance_toast, ToastMessage, UiToast, ViewportInput};
 use crate::ecs::world::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear, SURFACE2, TEXT};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE2, TEXT};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -16,7 +16,7 @@ fn compute_fade_alpha(remaining_secs: f32) -> f32 {
 }
 
 fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
-    srgb_to_linear([color[0], color[1], color[2], color[3] * alpha])
+    srgb_to_linear_rgba([color[0], color[1], color[2], color[3] * alpha])
 }
 
 fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMessage) {

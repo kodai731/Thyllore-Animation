@@ -1,7 +1,7 @@
 use cgmath::{Deg, Euler, Quaternion, Rad};
 
-use super::camera::CameraComponent;
-use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
+use super::camera_entity::CameraComponent;
+use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::resource::{ActiveCamera, TimelineState};
 use crate::ecs::world::{Entity, Transform, World};
 use thyllore_anim_core::editable::PropertyType;

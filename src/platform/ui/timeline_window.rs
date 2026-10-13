@@ -8,8 +8,8 @@ use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorState,
-    PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
+    ClipDragState, ClipDragType, ClipLibrary, ClipPreview, CurveEditorBuffer, CurveEditorPlacement,
+    CurveEditorState, PoseLibrary, TimelineInteractionState, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
@@ -21,6 +21,7 @@ use crate::ecs::systems::{
     timeline_effective_duration, CameraSwitchMarker,
 };
 use crate::ecs::world::World;
+use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
 };
@@ -71,48 +72,116 @@ fn draw_timeline_window(
         .build(|| {
             build_transport_controls(ui, world, state, clip_library, curve_editor_state);
             ui.separator();
-
-            let mut curves_tab_active = curve_editor_state.is_open;
-            if let Some(_tab_bar) = ui.tab_bar("timeline_tabs") {
-                let curves_flags = if curve_editor_state.needs_focus {
-                    imgui::TabItemFlags::SET_SELECTED
-                } else {
-                    imgui::TabItemFlags::empty()
-                };
-                curve_editor_state.needs_focus = false;
-
-                if let Some(_tab) = ui.tab_item("Timeline") {
-                    curves_tab_active = false;
-                    handle_middle_drag_pan(ui, world, state);
-                    build_timeline_content(
-                        ui,
-                        world,
-                        state,
-                        interaction,
-                        clip_library,
-                        curve_editor_state,
-                        clip_track_snapshot,
-                    );
-
-                    let clip_duration = timeline_effective_duration(state, clip_library);
-                    handle_timeline_shortcuts(ui, world, state);
-                    handle_mouse_wheel_zoom(ui, world, state, clip_duration);
-                }
-                if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
-                    curves_tab_active = true;
-                    crate::platform::ui::curve_editor::build_curve_editor_tab(
-                        ui,
-                        world,
-                        state,
-                        clip_library,
-                        curve_editor_state,
-                        curve_buffer,
-                        pose_library,
-                    );
-                }
-            }
-            curve_editor_state.is_open = curves_tab_active;
+            draw_timeline_tabs(
+                ui,
+                world,
+                state,
+                interaction,
+                clip_library,
+                curve_editor_state,
+                clip_track_snapshot,
+                curve_buffer,
+                pose_library,
+            );
         });
+}
+
+fn draw_timeline_tabs(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    clip_track_snapshot: &ClipTrackSnapshot,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
+) {
+    let Some(_tab_bar) = ui.tab_bar("timeline_tabs") else {
+        return;
+    };
+    let curves_flags = if curve_editor_state.needs_focus {
+        imgui::TabItemFlags::SET_SELECTED
+    } else {
+        imgui::TabItemFlags::empty()
+    };
+    curve_editor_state.needs_focus = false;
+
+    if let Some(_tab) = ui.tab_item("Timeline") {
+        curve_editor_state.is_open = false;
+        draw_timeline_tab(
+            ui,
+            world,
+            state,
+            interaction,
+            clip_library,
+            curve_editor_state,
+            clip_track_snapshot,
+        );
+    }
+    if let Some(_tab) = ui.tab_item_with_flags("Curves", None, curves_flags) {
+        curve_editor_state.is_open = true;
+        draw_curves_tab(
+            ui,
+            world,
+            state,
+            clip_library,
+            curve_editor_state,
+            curve_buffer,
+            pose_library,
+        );
+    }
+}
+
+fn draw_curves_tab(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &TimelineState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
+) {
+    if curve_editor_state.placement == CurveEditorPlacement::Window {
+        build_placement_toggle(ui, curve_editor_state);
+        ui.same_line();
+        ui.text_disabled("The curve editor is open in its own window");
+        return;
+    }
+    build_curve_editor_tab(
+        ui,
+        world,
+        state,
+        clip_library,
+        curve_editor_state,
+        curve_buffer,
+        pose_library,
+    );
+}
+
+fn draw_timeline_tab(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
+    clip_track_snapshot: &ClipTrackSnapshot,
+) {
+    handle_middle_drag_pan(ui, world, state);
+    build_timeline_content(
+        ui,
+        world,
+        state,
+        interaction,
+        clip_library,
+        curve_editor_state,
+        clip_track_snapshot,
+    );
+
+    let clip_duration = timeline_effective_duration(state, clip_library);
+    handle_timeline_shortcuts(ui, world, state);
+    handle_mouse_wheel_zoom(ui, world, state, clip_duration);
 }
 
 fn build_transport_controls(
@@ -187,18 +256,7 @@ fn build_transport_controls(
     toolbar_divider(ui);
 
     if icon_button(ui, Icon::Spline, "Curves", ButtonState::Normal) {
-        curve_editor_state.is_open = true;
-        curve_editor_state.needs_focus = true;
-        let previous_bone_exists = current_clip
-            .zip(curve_editor_state.selected_bone_id())
-            .is_some_and(|(c, id)| c.tracks.contains_key(&id));
-
-        if !previous_bone_exists {
-            if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().min().copied()) {
-                curve_editor_state.select_bone(first_bone_id);
-            }
-        }
-        curve_editor_state.view_initialized = false;
+        curve_editor_state.open_for_clip(current_clip);
     }
 
     build_clip_selector(ui, world, state, clip_library);
@@ -683,8 +741,6 @@ fn build_clip_tracks_section(
             world.send_command(ClipInstanceEvent::Deselect);
         }
     }
-
-    handle_delete_key(ui, world, state);
 }
 
 fn build_group_headers(ui: &imgui::Ui, world: &World, entry: &ClipTrackEntry) {
@@ -1026,17 +1082,6 @@ fn handle_clip_mute_button(
     }
 }
 
-fn handle_delete_key(ui: &imgui::Ui, world: &World, state: &TimelineState) {
-    if ui.is_key_pressed(imgui::Key::Delete) {
-        if let Some((entity, instance_id)) = state.selected_clip_instance {
-            world.send_command(ClipInstanceEvent::Delete {
-                entity,
-                instance_id,
-            });
-        }
-    }
-}
-
 fn draw_clip_block(
     draw_list: &imgui::DrawListMut,
     block_min: [f32; 2],
@@ -1133,7 +1178,8 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
 
 fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     let io = ui.io();
-    if !ui.is_window_focused() {
+    let focused = ui.is_window_focused_with_flags(imgui::FocusedFlags::ROOT_AND_CHILD_WINDOWS);
+    if !focused || ui.is_any_item_active() {
         return;
     }
 
@@ -1154,9 +1200,21 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineStat
     }
 
     if ui.is_key_pressed(imgui::Key::Delete) {
-        if !state.selected_keyframes.is_empty() {
-            world.send_command(TimelineEvent::DeleteSelectedKeyframes);
-        }
+        delete_timeline_selection(world, state);
+    }
+}
+
+fn delete_timeline_selection(world: &World, state: &TimelineState) {
+    if !state.selected_keyframes.is_empty() {
+        world.send_command(TimelineEvent::DeleteSelectedKeyframes);
+        return;
+    }
+
+    if let Some((entity, instance_id)) = state.selected_clip_instance {
+        world.send_command(ClipInstanceEvent::Delete {
+            entity,
+            instance_id,
+        });
     }
 }
 

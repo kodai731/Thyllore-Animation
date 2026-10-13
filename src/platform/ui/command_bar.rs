@@ -148,7 +148,7 @@ fn build_command_bar_window(
 crate::ui_window!(
     "command_bar",
     Floating,
-    7,
+    8,
     init = init_window_state::<CommandBarState>,
     build = build_command_bar_window
 );

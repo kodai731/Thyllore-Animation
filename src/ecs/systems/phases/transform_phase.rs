@@ -4,7 +4,8 @@ use cgmath::Vector2;
 use crate::ecs::context::EcsContext;
 use crate::ecs::systems::camera_shot_step;
 use crate::ecs::systems::camera_systems::{
-    advance_camera_transition, compute_camera_position, compute_camera_up, tick_fly_speed_indicator,
+    advance_camera_transition, compute_camera_position, compute_camera_up,
+    tick_fly_speed_indicator, update_camera_near_plane,
 };
 use crate::ecs::systems::sync_active_camera_to_view;
 use crate::ecs::FrameContext;
@@ -32,7 +33,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
 
     sync_active_camera_to_view(&mut ctx.world);
 
-    update_camera_near_plane(ctx);
+    update_camera_near_plane(&mut ctx.camera_mut());
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 
@@ -78,10 +79,4 @@ pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;
     Ok(())
-}
-
-fn update_camera_near_plane(ctx: &mut EcsContext) {
-    let camera_distance = ctx.camera().distance;
-    let mut camera = ctx.camera_mut();
-    camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
 }

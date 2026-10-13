@@ -61,20 +61,24 @@ pub(super) fn build_tween_controls(
                 editor_state.tween = None;
             }
         }
-        None if !editor_state.selected_keyframes.is_empty() => {
-            for (index, (label, kind)) in TWEEN_BUTTONS.iter().enumerate() {
-                if index > 0 {
-                    ui.same_line();
-                }
-                if ui.small_button(label) {
-                    editor_state.tween = Some(TweenSession {
-                        kind: *kind,
-                        factor: 0.0,
-                    });
-                }
-            }
+        None => build_tween_buttons(ui, editor_state),
+    }
+}
+
+/// The button row is drawn even without a selection so the curve area keeps its height and the
+/// keys stay where they are on screen when the selection changes.
+fn build_tween_buttons(ui: &imgui::Ui, editor_state: &mut CurveEditorState) {
+    let _disabled = ui.begin_disabled_with_cond(editor_state.selected_keyframes.is_empty());
+    for (index, (label, kind)) in TWEEN_BUTTONS.iter().enumerate() {
+        if index > 0 {
+            ui.same_line();
         }
-        None => {}
+        if ui.small_button(label) {
+            editor_state.tween = Some(TweenSession {
+                kind: *kind,
+                factor: 0.0,
+            });
+        }
     }
 }
 

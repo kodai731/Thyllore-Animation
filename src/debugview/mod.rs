@@ -1,6 +1,7 @@
 pub mod billboard_debug;
 pub mod debug_primitive;
 pub mod exposure_dump;
+pub mod exposure_probe_dump;
 pub mod fbx_debug;
 pub mod flame_history_dump;
 pub mod flame_wall_probe_dump;

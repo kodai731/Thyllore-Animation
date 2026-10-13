@@ -83,15 +83,16 @@ crate::capture_action!("dump_water_debug", WaterDebugCapture);
 
 pub fn dump_water_debug(ctx: &CaptureContext) {
     let unix_time = current_unix_time();
+    let capture_index = ctx.slot.index;
     let mut render_info = collect_water_debug_render_info(ctx);
 
-    let screenshot_path = water_debug_screenshot_path(unix_time);
+    let screenshot_path = water_debug_screenshot_path(capture_index);
     match unsafe { ctx.save_screenshot_to(&screenshot_path) } {
         Ok(_) => render_info.screenshot_path = Some(screenshot_path.display().to_string()),
         Err(error) => log_warn!("water debug screenshot failed: {:?}", error),
     }
 
-    let caustic_accum_path = water_debug_caustic_accum_path(unix_time);
+    let caustic_accum_path = water_debug_caustic_accum_path(capture_index);
     match unsafe { save_water_caustic_accum_npy(ctx, &caustic_accum_path) } {
         Ok(stats) => {
             render_info.caustic_accum_path = Some(caustic_accum_path.display().to_string());
@@ -102,7 +103,7 @@ pub fn dump_water_debug(ctx: &CaptureContext) {
     }
 
     let record = build_water_debug_record(ctx.world, &render_info, unix_time);
-    match write_water_debug_dump(&record, unix_time) {
+    match write_water_debug_dump(&record, capture_index) {
         Ok(path) => msg_info!("Water debug dumped: {}", path.display()),
         Err(error) => log_error!("water debug dump failed: {}", error),
     }

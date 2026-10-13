@@ -54,12 +54,10 @@ pub unsafe fn create_water_pipeline(
         water_targets.extent(),
     )?;
 
-    let mut gpu_state = WaterGpuState {
-        shading_pipeline: Some(water_shading_pipeline),
-        descriptor: Some(water_descriptor),
-        ubo: Some(water_ubo),
-        ..Default::default()
-    };
+    let mut gpu_state = WaterGpuState::default();
+    gpu_state.shading_pipeline = Some(water_shading_pipeline);
+    gpu_state.descriptor = Some(water_descriptor);
+    gpu_state.ubo = Some(water_ubo);
 
     create_water_caustic_pipelines(
         rrdevice,

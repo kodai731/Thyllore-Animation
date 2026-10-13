@@ -75,17 +75,23 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   utterance without its slot words (`modifier.rs::strip_slot_terms`) and `compose_decision.rs` decides
   before the trained router runs; `HelmCommand::ComposeMotion` composes a new clip through
   `src/ecs/systems/motion_seed_systems.rs`.
-- GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
-  next to its own `destroy`; a type that only aggregates such fields writes `#[derive(GpuResource)]`
-  (`thyllore-vulkan-derive`) and never enumerates them, `#[gpu_resource(skip)]` marks a borrowed handle.
-  Destroy order is the reverse of field declaration order, and `resource_name` is the type name, never a
-  hand-written string. `AppData` is itself derived, so a new GPU field on it fails to compile until its type
-  implements `GpuResource`. A `World` resource that owns GPU objects derives the trait and writes
-  `gpu_resource!(Type)` next to its definition (`src/hooks/gpu_resource.rs`, link-time `inventory`);
-  `App::destroy` runs every registration, then `AppData`, then the swapchain-level resources in fixed
-  order, then the device, surface, messenger and instance, so the validation layer's leak check at
-  `vkDestroyDevice` is the final proof. A test in `src/hooks/gpu_resource.rs` fails when a file in
-  `src/ecs/resource/` declares a GPU-owning field without `gpu_resource!`.
+- GPU object lifetime: every owner of Vulkan objects is a `#[must_use]` struct with
+  `#[derive(GpuResource)]` (`resource/gpu_resource.rs`, `thyllore-vulkan-derive`). The derive destroys
+  the fields in reverse declaration order, answers `is_destroyed` from them, warns from `Drop` while any
+  field is still live, and refuses to compile without `#[must_use]`; `#[gpu_resource(skip)]` marks a
+  borrowed handle or plain data. Raw handles (`vk::Image`, `vk::Buffer`, `vk::DeviceMemory`, `vk::Sampler`,
+  `vk::Pipeline`, ...) implement `GpuResource` themselves, and a descriptor set is owned through
+  `OwnedDescriptorSet` so destroying it returns the set to the device allocator. A type therefore never
+  writes `destroy_image` / `free_memory` by hand or enumerates its fields: it lists them in destroy order
+  (`SampledTexture`). A hand-written `impl GpuResource` is allowed only when destruction needs logic the
+  derive cannot express (a pool that frees in bulk), and it must implement `is_destroyed` honestly from
+  the handles its `destroy` nulls. `resource_name` is the type name, never a hand-written string. A
+  `World` resource that owns GPU objects writes `gpu_resource!(Type)` next to its definition
+  (`src/hooks/gpu_resource.rs`, link-time `inventory`); `App::destroy` runs every registration, then
+  `AppData`, then the swapchain-level resources in fixed order, then the device, surface, messenger and
+  instance, so the validation layer's leak check at `vkDestroyDevice` is the final proof and a
+  `dropped without destroy_gpu()` warning in the log is a bug. A test in `src/hooks/gpu_resource.rs`
+  fails when a file in `src/ecs/resource/` declares a GPU-owning field without `gpu_resource!`.
 
 Rule of thumb: if the code needs neither `World` nor `vk::*`, it belongs in a crate. If it needs `vk::*`
 but not `World`, it belongs in `thyllore-vulkan-core`.

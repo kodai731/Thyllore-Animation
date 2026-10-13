@@ -4,6 +4,7 @@ use thyllore_vulkan_core::resource::GpuResource;
 use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::gpu_resource;
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct EffectTraceGpuState {
     pub pipeline: Option<RRRayTracingPipeline>,

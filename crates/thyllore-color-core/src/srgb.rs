@@ -7,6 +7,12 @@ pub fn srgb_to_linear(c: f32) -> f32 {
     }
 }
 
+/// Converts the color channels of an sRGB RGBA value to linear light; alpha is left as is.
+pub fn srgb_to_linear_rgba(color: [f32; 4]) -> [f32; 4] {
+    let [r, g, b, a] = color;
+    [srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b), a]
+}
+
 /// Relative luminance from linear RGB (Rec. 709 weights).
 pub fn luminance(rgb: [f32; 3]) -> f32 {
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]

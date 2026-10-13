@@ -3,6 +3,7 @@ members = [
     "crates/*",
     "crates/thyllore-scene-core/derive",
     "crates/thyllore-effect-core/derive",
+    "scratch",
 ]
 
 [package]
@@ -97,3 +98,6 @@ strip = true
 
 [profile.dev.package.thyllore-model-core]
 opt-level = 3
+
+[profile.dev.package.thyllore-scratch]
+opt-level = 2

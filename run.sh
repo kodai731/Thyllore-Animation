@@ -106,6 +106,17 @@ Commands:
         ./run.sh engine                        # once; then, at any time:
         ./run.sh live-dump --tracks --clip "New Clip"
         ./run.sh live-dump --timings 1s        # per-frame CPU ms from now for 1 s
+  scratch <job> [--args JSON]
+      Build the scratch crate (prefer-dynamic), copy its .so to a timestamped
+      path, and send a scratch request to the running engine. The job name is
+      dispatched by the scratch crate's entry function (e.g. "timeline").
+      scratch jobs can only be loaded by an engine built with prefer-dynamic
+      (use ./run.sh scratch-engine to start one):
+        ./run.sh scratch timeline
+        ./run.sh scratch timeline --args '{"foo":"bar"}'
+  scratch-engine [private|degrade|full] [cargo args...]
+      Like engine, but builds with RUSTFLAGS="-C prefer-dynamic" so it can
+      load scratch crates.
   help
       Show this help.
 EOF
@@ -129,7 +140,7 @@ fi
 
 runs_on_terminal() {
     case "$1" in
-        help|-h|--help|live-dump|auto) return 0 ;;
+        help|-h|--help|live-dump|scratch|auto) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -209,6 +220,31 @@ case "$command" in
         ;;
     live-dump)
         exec python3 "$REPO_ROOT/tools/live_dump.py" "$@"
+        ;;
+    scratch)
+        job="${1:-}"
+        shift || true
+        if [[ -z "$job" ]]; then
+            echo "usage: ./run.sh scratch <job> [--args JSON]" >&2
+            exit 1
+        fi
+        args="null"
+        if [[ "${1:-}" == "--args" ]]; then
+            shift
+            args="${1:-null}"
+            shift || true
+        fi
+        RUSTFLAGS="-C prefer-dynamic" CARGO_TARGET_DIR="$REPO_ROOT/target/scratch" cargo build -p thyllore-scratch
+        libs_dir="$REPO_ROOT/target/scratch/libs"
+        mkdir -p "$libs_dir"
+        ts=$(date +%s%3N)
+        dst="$libs_dir/libscratch_${ts}.so"
+        cp "$REPO_ROOT/target/scratch/debug/libthyllore_scratch.so" "$dst"
+        request="{\"kind\":\"scratch\",\"library\":\"$(cd "$(dirname "$dst")" && pwd)/$(basename "$dst")\",\"job\":\"$job\",\"args\":$args}"
+        python3 "$REPO_ROOT/tools/live_dump.py" --raw-request "$request"
+        ;;
+    scratch-engine)
+        RUSTFLAGS="-C prefer-dynamic" CARGO_TARGET_DIR="$REPO_ROOT/target/scratch" exec bash "$REPO_ROOT/scripts/run_engine.sh" "$@"
         ;;
     help|-h|--help)
         usage

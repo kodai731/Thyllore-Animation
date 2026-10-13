@@ -4204,6 +4204,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "thyllore-scratch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thyllore-animation",
+]
+
+[[package]]
 name = "thyllore-shader-manifest"
 version = "0.0.1"
 dependencies = [

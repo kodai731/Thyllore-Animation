@@ -130,9 +130,13 @@ def main() -> None:
     parser.add_argument("--clip", help="keep only the clip with this name (anim dump only)")
     parser.add_argument("--out", help="write the JSON to this file instead of stdout")
     parser.add_argument("--timeout", type=float, default=15.0, help="seconds to wait for the engine")
+    parser.add_argument("--raw-request", metavar="JSON", help="send a raw JSON request string instead of building one from flags")
     args = parser.parse_args()
 
-    request = build_request(args)
+    if args.raw_request is not None:
+        request = json.loads(args.raw_request)
+    else:
+        request = build_request(args)
     timeout = args.timeout + request.get("seconds", 0.0)
     response = send_request(request, timeout)
     if not response.get("ok"):

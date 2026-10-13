@@ -1,6 +1,5 @@
 #![cfg(debug_assertions)]
 
-use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::CurveSuggestionState;
@@ -15,7 +14,6 @@ use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
     build_camera_debug_panel(ui, ecs_world);
@@ -392,18 +390,9 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
-fn build_click_debug_overlay_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
-) {
-    build_click_debug_overlay(ui, world);
-}
-
 crate::ui_window!(
     "click_debug_overlay",
     Floating,
     9,
-    build_click_debug_overlay_window
+    build_world = build_click_debug_overlay
 );

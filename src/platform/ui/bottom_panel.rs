@@ -1,8 +1,6 @@
-use crate::asset::AssetStorage;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[cfg(debug_assertions)]
 use super::debug_window::build_debug_panel_content;
@@ -71,11 +69,11 @@ fn build_message_tab_label(message_log: &MessageLog) -> String {
     }
 }
 
-fn build_bottom_panel(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_bottom_panel(ui: &imgui::Ui, world: &World) {
     let mut message_log = world.resource_mut::<MessageLog>();
     message_log.sync_from_buffer();
     let layout = world.resource::<LayoutSnapshot>();
     draw_bottom_panel(ui, world, &mut message_log, &layout);
 }
 
-crate::ui_window!("bottom_panel", Side, 0, build_bottom_panel);
+crate::ui_window!("bottom_panel", Side, 0, build_world = build_bottom_panel);

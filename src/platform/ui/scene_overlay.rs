@@ -9,7 +9,6 @@ use super::pointer::read_ui_pointer;
 use super::text_to_animation_dialog::TextToAnimationDialogState;
 #[cfg(feature = "auto-rig")]
 use super::text_to_mesh_dialog::TextToMeshDialogState;
-use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
@@ -31,7 +30,6 @@ use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{
     icon_button, toggle_switch, window_frame, ButtonState, Icon, WindowKind, ICON_BUTTON_SIZE,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
 
@@ -715,10 +713,15 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 }
 
-fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_scene_overlay(ui: &imgui::Ui, world: &World) {
     let viewport = world.resource::<ViewportInput>().clone();
     draw_scene_toolbar(ui, world, &viewport);
     draw_scene_panel(ui, world, &viewport);
 }
 
-crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);
+crate::ui_window!(
+    "scene_overlay",
+    Overlay,
+    0,
+    build_world = build_scene_overlay
+);

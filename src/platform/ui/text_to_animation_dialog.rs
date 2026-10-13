@@ -1,13 +1,11 @@
 #![cfg(feature = "auto-rig")]
 
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::theme::{show_floating_window, FloatingPlacement};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToAnimationDialogState {
     pub open: bool,
@@ -182,12 +180,7 @@ fn build_status_section(ui: &imgui::Ui, snapshot: &StateSnapshot) {
     }
 }
 
-fn build_text_to_animation_dialog(
-    ui: &imgui::Ui,
-    world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
-) {
+fn build_text_to_animation_dialog(ui: &imgui::Ui, world: &World) {
     let mut dialog = world.resource_mut::<TextToAnimationDialogState>();
     draw_text_to_animation_dialog(ui, &mut dialog, world);
 }
@@ -197,5 +190,5 @@ crate::ui_window!(
     Floating,
     3,
     init = init_window_state::<TextToAnimationDialogState>,
-    build = build_text_to_animation_dialog
+    build_world = build_text_to_animation_dialog
 );

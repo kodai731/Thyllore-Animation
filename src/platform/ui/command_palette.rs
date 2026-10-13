@@ -1,7 +1,6 @@
 use imgui::Key;
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     CommandPaletteSession, CommandPaletteState, HierarchyState, UiWidgetState,
 };
@@ -15,7 +14,6 @@ use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";
 const PALETTE_WIDTH: f32 = 520.0;
@@ -274,12 +272,7 @@ fn draw_palette_contents(
     handle_palette_navigation(ui, world, session, &items, &visible)
 }
 
-fn build_command_palette_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _assets: &AssetStorage,
-    _graphics: &GraphicsResources,
-) {
+fn build_command_palette_window(ui: &imgui::Ui, world: &World) {
     toggle_command_palette_on_hotkey(ui, world);
     let CommandPaletteState::Open(mut session) =
         world.resource::<UiWidgetState>().command_palette.clone()
@@ -313,7 +306,12 @@ fn build_command_palette_window(
     };
 }
 
-crate::ui_window!("command_palette", Floating, 6, build_command_palette_window);
+crate::ui_window!(
+    "command_palette",
+    Floating,
+    6,
+    build_world = build_command_palette_window
+);
 
 #[cfg(test)]
 mod tests {

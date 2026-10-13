@@ -1,10 +1,8 @@
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{LayoutSnapshot, ViewportInput};
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-fn build_viewport_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_viewport_window(ui: &imgui::Ui, world: &World) {
     let layout = world.resource::<LayoutSnapshot>();
     let mut viewport = world.resource_mut::<ViewportInput>();
     let texture_id = imgui::TextureId::new(viewport.texture_id);
@@ -39,4 +37,4 @@ fn build_viewport_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Gr
     }
 }
 
-crate::ui_window!("viewport", Viewport, 0, build_viewport_window);
+crate::ui_window!("viewport", Viewport, 0, build_world = build_viewport_window);

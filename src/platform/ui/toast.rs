@@ -1,12 +1,10 @@
 use imgui::StyleVar;
 
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{advance_toast, ToastMessage, UiToast, ViewportInput};
 use crate::ecs::world::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE2, TEXT};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const TOAST_FADE_SECS: f32 = 0.3;
 const TOAST_PADDING: [f32; 2] = [16.0, 8.0];
@@ -67,7 +65,7 @@ fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMess
     });
 }
 
-fn build_toast_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_toast_window(ui: &imgui::Ui, world: &World) {
     let message = {
         let mut toast = world.resource_mut::<UiToast>();
         toast.message = advance_toast(toast.message.take(), ui.io().delta_time());
@@ -80,7 +78,7 @@ fn build_toast_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graph
     draw_toast_pill(ui, &world.resource::<ViewportInput>(), &message);
 }
 
-crate::ui_window!("toast", Floating, 4, build_toast_window);
+crate::ui_window!("toast", Floating, 4, build_world = build_toast_window);
 
 #[cfg(test)]
 mod tests {

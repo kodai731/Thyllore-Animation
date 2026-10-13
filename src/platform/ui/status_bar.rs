@@ -1,4 +1,3 @@
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
     ValidationReport, ViewportInput,
@@ -9,7 +8,6 @@ use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;
@@ -349,7 +347,7 @@ fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &C
     .build(|| ui.text_colored(TEXT_COLOR, &text));
 }
 
-fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_status_bar(ui: &imgui::Ui, world: &World) {
     if world.resource::<FrameClock>().is_fixed() {
         return;
     }
@@ -402,5 +400,5 @@ crate::ui_window!(
     Bottom,
     1,
     init = init_window_state::<StatusBarState>,
-    build = build_status_bar
+    build_world = build_status_bar
 );

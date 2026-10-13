@@ -1,4 +1,3 @@
-use crate::asset::AssetStorage;
 use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
 use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys};
@@ -9,7 +8,6 @@ use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
 use crate::platform::ui::theme::{
     property_label, section_header, show_floating_window, FloatingPlacement, SectionDefault,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
 const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
@@ -210,12 +208,7 @@ fn draw_shortcut_sections(ui: &imgui::Ui, world: &World) {
     }
 }
 
-fn build_shortcuts_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _assets: &AssetStorage,
-    _graphics: &GraphicsResources,
-) {
+fn build_shortcuts_window(ui: &imgui::Ui, world: &World) {
     toggle_shortcuts_panel_on_hotkey(ui, world);
     if world.resource::<UiWidgetState>().shortcuts_panel == PanelVisibility::Hidden {
         return;
@@ -235,7 +228,12 @@ fn build_shortcuts_window(
     }
 }
 
-crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
+crate::ui_window!(
+    "keyboard_shortcuts",
+    Floating,
+    5,
+    build_world = build_shortcuts_window
+);
 
 #[cfg(test)]
 mod tests {

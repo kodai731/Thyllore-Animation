@@ -1,12 +1,10 @@
 use crate::animation::editable::SourceClipId;
-use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, TimelineState};
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{window_frame, WindowKind};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -217,12 +215,7 @@ fn extract_source_filename(
         .to_string()
 }
 
-fn build_clip_browser_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
-) {
+fn build_clip_browser_window(ui: &imgui::Ui, world: &World) {
     let clip_library = world.resource::<ClipLibrary>();
     let mut browser_state = world.resource_mut::<ClipBrowserState>();
     let timeline_state = world.resource::<TimelineState>();
@@ -237,4 +230,9 @@ fn build_clip_browser_window(
     );
 }
 
-crate::ui_window!("clip_browser", Side, 2, build_clip_browser_window);
+crate::ui_window!(
+    "clip_browser",
+    Side,
+    2,
+    build_world = build_clip_browser_window
+);

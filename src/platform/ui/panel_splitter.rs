@@ -1,12 +1,10 @@
 use imgui::MouseButton;
 
-use crate::ecs::resource::{ActiveSplitter, DragState, PanelLayout, UiPointerOwnerId};
-
-use crate::asset::AssetStorage;
-use crate::ecs::resource::LayoutSnapshot;
+use crate::ecs::resource::{
+    ActiveSplitter, DragState, LayoutSnapshot, PanelLayout, UiPointerOwnerId,
+};
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SPLITTER_THICKNESS: f32 = 6.0;
 const SPLITTER_VISUAL_THICKNESS: f32 = 2.0;
@@ -209,10 +207,15 @@ fn reset_to_default(layout: &mut PanelLayout, splitter: ActiveSplitter) {
     }
 }
 
-fn build_panel_splitters(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
+fn build_panel_splitters(ui: &imgui::Ui, world: &World) {
     let snapshot = world.resource::<LayoutSnapshot>().clone();
     let mut layout = world.resource_mut::<PanelLayout>();
     handle_splitters(ui, world, &mut layout, &snapshot);
 }
 
-crate::ui_window!("panel_splitters", Bottom, 2, build_panel_splitters);
+crate::ui_window!(
+    "panel_splitters",
+    Bottom,
+    2,
+    build_world = build_panel_splitters
+);

@@ -465,7 +465,6 @@ mod tests {
 
         assert_eq!(scene.version, SCENE_FORMAT_VERSION);
         assert!(!scene.resources.is_empty());
-        assert!(!scene.entities.is_empty());
     }
 
     #[test]

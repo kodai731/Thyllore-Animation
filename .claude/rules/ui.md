@@ -23,7 +23,7 @@ Never add an index, a priority number or an ordering table.
 
 An animatable field is marked `#[persist(curve)]` and nothing else. The `PropertyType::Custom` code
 the engine uses at runtime is derived from the domain's registry position and the channel's declaration
-position (`src/ecs/component/scalar_channel.rs`); it never appears in a declaration, a file or a test
+position (`src/ecs/component/animation/scalar_channel.rs`); it never appears in a declaration, a file or a test
 fixture.
 
 Per-field numbers (`code = 775`, `code = [768, 769, 770]`) were rejected: every field needs a unique

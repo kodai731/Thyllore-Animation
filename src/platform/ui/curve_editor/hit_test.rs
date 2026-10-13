@@ -4,7 +4,7 @@ use crate::animation::editable::{
 };
 use crate::ecs::resource::{CurveSelectedKeyframe, TangentHandleType};
 
-use super::view::ViewTransform;
+use super::view::{find_drawn_curve, ViewTransform};
 
 pub(super) const KEYFRAME_HIT_RADIUS: f32 = 8.0;
 pub(super) const CURVE_HIT_RADIUS_PX: f32 = 6.0;
@@ -86,10 +86,7 @@ pub(super) fn find_tangent_handle_at_position(
     vt: &ViewTransform,
 ) -> Option<(TangentHandleType, PropertyType, KeyframeId, BezierHandle)> {
     for selected in selected_keyframes {
-        let Some((curve, _, _)) = curves
-            .iter()
-            .find(|(curve, _, _)| curve.property_type == selected.property_type)
-        else {
+        let Some((curve, _, _)) = find_drawn_curve(curves, selected.property_type) else {
             continue;
         };
         let Some(kf) = curve.get_keyframe(selected.keyframe_id) else {

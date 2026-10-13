@@ -129,16 +129,12 @@ pub(in crate::platform::ui::curve_editor) fn draw_pose_markers(
                 .thickness(2.0)
                 .build();
         } else {
-            let dash_len = 6.0;
-            let gap_len = 4.0;
-            let mut y = top;
-            while y < bottom {
-                let y_end = (y + dash_len).min(bottom);
+            let segments = super::curve::dashed_segments(&[[x, top], [x, bottom]], 6.0, 4.0);
+            for [from, to] in segments {
                 draw_list
-                    .add_line([x, y], [x, y_end], unselected_color)
+                    .add_line(from, to, unselected_color)
                     .thickness(1.0)
                     .build();
-                y += dash_len + gap_len;
             }
         }
 

@@ -25,6 +25,7 @@ use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
 };
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR};
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{
     icon_button, segmented_control, toolbar_divider, ButtonState,
@@ -446,7 +447,7 @@ fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_he
             [x - PLAYHEAD_HANDLE_SIZE, y],
             [x + PLAYHEAD_HANDLE_SIZE, y],
             [x, y + PLAYHEAD_HANDLE_SIZE + 4.0],
-            [1.0, 0.3, 0.3, 1.0],
+            srgb_to_linear_rgba(ERROR),
         )
         .filled(true)
         .build();
@@ -455,7 +456,7 @@ fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_he
         .add_line(
             [x, y + PLAYHEAD_HANDLE_SIZE],
             [x, y + ruler_height],
-            [1.0, 0.3, 0.3, 1.0],
+            srgb_to_linear_rgba(ERROR),
         )
         .thickness(2.0)
         .build();

@@ -23,7 +23,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR, SURFACE3};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
@@ -445,7 +445,7 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
 
         AutoRigStatus::Error => {
             if let Some(ref msg) = error_msg {
-                ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
+                ui.text_colored(srgb_to_linear_rgba(ERROR), format!("Rig error: {}", msg));
                 ui.same_line();
             }
             if ui.button("Dismiss##rig") {

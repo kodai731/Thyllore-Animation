@@ -12,6 +12,7 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
+use crate::platform::ui::theme::colors::AXIS_X;
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, ButtonState};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -45,7 +46,7 @@ pub(super) const CURVE_PADDING: f32 = 10.0;
 pub(super) const Y_AXIS_WIDTH: f32 = 50.0;
 
 pub(super) const ALL_PROPERTY_TYPES: &[(PropertyType, [f32; 4], &str)] = &[
-    (PropertyType::TranslationX, [1.0, 0.3, 0.3, 1.0], "Pos.X"),
+    (PropertyType::TranslationX, AXIS_X, "Pos.X"),
     (PropertyType::TranslationY, [0.3, 1.0, 0.3, 1.0], "Pos.Y"),
     (PropertyType::TranslationZ, [0.3, 0.3, 1.0, 1.0], "Pos.Z"),
     (PropertyType::RotationX, [1.0, 0.6, 0.6, 1.0], "Rot.X"),

@@ -9,8 +9,8 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 
 use super::anim::ui_anim;
 use super::colors::{
-    srgb_to_linear_rgba, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3,
-    TEXT, TEXT_SECONDARY,
+    srgb_to_linear_rgba, with_alpha, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, CONTROL_ROUNDING, OUTLINE,
+    SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
 use super::icons::Icon;
@@ -47,14 +47,14 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     let rect_max = ui.item_rect_max();
 
     let bg_color = match state {
-        ButtonState::Active => srgb_to_linear_rgba([ACCENT[0], ACCENT[1], ACCENT[2], 0.3]),
+        ButtonState::Active => srgb_to_linear_rgba(with_alpha(ACCENT, 0.3)),
         ButtonState::Normal if hovered => srgb_to_linear_rgba(SURFACE3),
         ButtonState::Normal => [0.0, 0.0, 0.0, 0.0],
     };
 
     draw_list
         .add_rect(rect_min, rect_max, bg_color)
-        .rounding(6.0)
+        .rounding(CONTROL_ROUNDING)
         .filled(true)
         .build();
 
@@ -281,7 +281,7 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     };
     draw_list
         .add_rect(rect_min, rect_max, bg_color)
-        .rounding(6.0)
+        .rounding(CONTROL_ROUNDING)
         .filled(true)
         .build();
 
@@ -517,16 +517,16 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
     if hovered {
         draw_list
             .add_rect(rect_min, rect_max, srgb_to_linear_rgba(SURFACE3))
-            .rounding(6.0)
+            .rounding(CONTROL_ROUNDING)
             .filled(true)
             .build();
     }
 
     if spec.selected {
-        let accent_alpha = [ACCENT[0], ACCENT[1], ACCENT[2], 0.25];
+        let accent_alpha = with_alpha(ACCENT, 0.25);
         draw_list
             .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_alpha))
-            .rounding(6.0)
+            .rounding(CONTROL_ROUNDING)
             .filled(true)
             .build();
 

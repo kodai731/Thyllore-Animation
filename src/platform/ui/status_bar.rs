@@ -7,14 +7,15 @@ use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
-use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
+use crate::platform::ui::theme::colors::{
+    srgb_to_linear_rgba, with_alpha, ERROR, SURFACE0, TEXT, WARNING,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;
 const OVERLAY_PADDING: f32 = 6.0;
-const BG_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
-const TEXT_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const OVERLAY_BG_ALPHA: f32 = 0.6;
 const WIDEST_DIGIT: char = '0';
 
 /// Width the text occupies when every digit takes the widest glyph, so a changing number
@@ -139,14 +140,14 @@ fn draw_status_bar(
     let time_text = format!("{:.3}s", current_time);
     let memory_text = format!("{:.0}MB", state.memory_mb);
     let items = [
-        (model_text.as_str(), TEXT_COLOR),
-        (fps_text.as_str(), TEXT_COLOR),
-        (cpu_text.as_str(), TEXT_COLOR),
-        (gpu_text.as_str(), TEXT_COLOR),
-        (frame_text.as_str(), TEXT_COLOR),
-        (time_text.as_str(), TEXT_COLOR),
-        (playback_icon, TEXT_COLOR),
-        (memory_text.as_str(), TEXT_COLOR),
+        (model_text.as_str(), TEXT),
+        (fps_text.as_str(), TEXT),
+        (cpu_text.as_str(), TEXT),
+        (gpu_text.as_str(), TEXT),
+        (frame_text.as_str(), TEXT),
+        (time_text.as_str(), TEXT),
+        (playback_icon, TEXT),
+        (memory_text.as_str(), TEXT),
         (validation_text.as_str(), validation_color),
     ];
     let item_x = stable_item_offsets(ui, items.iter().map(|(text, _)| *text));
@@ -159,13 +160,13 @@ fn draw_status_bar(
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
     let clicked: bool = {
+        let _overlay_bg = push_overlay_bg_color(ui);
         let result: Option<bool> = ui
             .window("##status_bar")
             .position(window_pos, imgui::Condition::Always)
             .size([window_width, window_height], imgui::Condition::Always)
             .no_decoration()
             .no_nav()
-            .bg_alpha(BG_COLOR[3])
             .focus_on_appearing(false)
             .save_settings(false)
             .build(|| {
@@ -173,7 +174,7 @@ fn draw_status_bar(
                 let mut validation_clicked = false;
                 for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
                     ui.set_cursor_pos([x, text_y]);
-                    ui.text_colored(*color, text);
+                    ui.text_colored(srgb_to_linear_rgba(*color), text);
                     if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
                         ui.tooltip_text(&model.model_path);
                     }
@@ -193,13 +194,20 @@ fn draw_status_bar(
     }
 }
 
+fn push_overlay_bg_color(ui: &imgui::Ui) -> imgui::ColorStackToken<'_> {
+    ui.push_style_color(
+        imgui::StyleColor::WindowBg,
+        srgb_to_linear_rgba(with_alpha(SURFACE0, OVERLAY_BG_ALPHA)),
+    )
+}
+
 fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
     if errors > 0 {
-        COLOR_ERROR
+        ERROR
     } else if warnings > 0 {
-        COLOR_WARNING
+        WARNING
     } else {
-        TEXT_COLOR
+        TEXT
     }
 }
 
@@ -284,23 +292,23 @@ mod tests {
     #[test]
     fn validation_status_color_errors_red() {
         let color = validation_status_color(1, 0);
-        assert_eq!(color, COLOR_ERROR);
+        assert_eq!(color, ERROR);
         let color = validation_status_color(5, 3);
-        assert_eq!(color, COLOR_ERROR);
+        assert_eq!(color, ERROR);
     }
 
     #[test]
     fn validation_status_color_warnings_yellow() {
         let color = validation_status_color(0, 1);
-        assert_eq!(color, COLOR_WARNING);
+        assert_eq!(color, WARNING);
         let color = validation_status_color(0, 10);
-        assert_eq!(color, COLOR_WARNING);
+        assert_eq!(color, WARNING);
     }
 
     #[test]
     fn validation_status_color_zero_white() {
         let color = validation_status_color(0, 0);
-        assert_eq!(color, TEXT_COLOR);
+        assert_eq!(color, TEXT);
     }
 
     #[test]
@@ -334,15 +342,15 @@ fn draw_fly_speed_indicator(ui: &imgui::Ui, viewport: &ViewportInput, camera: &C
         viewport.position[1] + viewport.size[1] - window_height,
     ];
 
+    let _overlay_bg = push_overlay_bg_color(ui);
     ui.window("##fly_speed_indicator")
         .position(window_pos, imgui::Condition::Always)
         .size([window_width, window_height], imgui::Condition::Always)
         .no_decoration()
         .no_inputs()
-        .bg_alpha(BG_COLOR[3])
         .focus_on_appearing(false)
         .save_settings(false)
-        .build(|| ui.text_colored(TEXT_COLOR, &text));
+        .build(|| ui.text_colored(srgb_to_linear_rgba(TEXT), &text));
 }
 
 fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {

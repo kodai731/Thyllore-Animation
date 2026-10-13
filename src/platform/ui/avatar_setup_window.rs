@@ -9,11 +9,11 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR};
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
-const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
 const NO_TEXTURE_LABEL: &str = "(from model)";
 
@@ -138,7 +138,7 @@ fn build_materials_tab(ui: &imgui::Ui, world: &World, material_textures: &Materi
         }
         MaterialTextureSaveState::SaveFailed { reason } => {
             let _wrap = ui.push_text_wrap_pos(0.0);
-            ui.text_colored(FAILURE_COLOR, reason);
+            ui.text_colored(srgb_to_linear_rgba(ERROR), reason);
         }
     }
 
@@ -302,7 +302,7 @@ fn rank_color(rank: PerformanceRank) -> [f32; 4] {
         PerformanceRank::Good => [0.3, 1.0, 0.3, 1.0],
         PerformanceRank::Medium => [1.0, 1.0, 0.3, 1.0],
         PerformanceRank::Poor => [1.0, 0.6, 0.2, 1.0],
-        PerformanceRank::VeryPoor => [1.0, 0.3, 0.3, 1.0],
+        PerformanceRank::VeryPoor => srgb_to_linear_rgba(ERROR),
     }
 }
 

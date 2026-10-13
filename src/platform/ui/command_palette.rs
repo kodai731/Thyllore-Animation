@@ -11,7 +11,9 @@ use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
 use crate::platform::key_bindings::default_bindings;
 use crate::platform::ui::shortcuts::format_chord;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::{
+    srgb_to_linear_rgba, with_alpha, ACCENT, TEXT, TEXT_SECONDARY,
+};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -182,7 +184,7 @@ fn draw_candidate_rows(
         let rect_max = ui.item_rect_max();
 
         if row == selection {
-            let accent_fill = [ACCENT[0], ACCENT[1], ACCENT[2], SELECTED_ROW_ALPHA];
+            let accent_fill = with_alpha(ACCENT, SELECTED_ROW_ALPHA);
             draw_list
                 .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_fill))
                 .rounding(ROW_ROUNDING)

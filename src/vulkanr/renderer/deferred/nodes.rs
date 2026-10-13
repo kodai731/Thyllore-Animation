@@ -6,6 +6,7 @@ use crate::app::post_process::{
     bloom_mip_count, is_dof_enabled, prepare_auto_exposure_input, prepare_bloom_targets,
     prepare_dof_target, prepare_tonemap_inputs, BLOOM_MIPS, DOF_OUTPUT, MAX_BLOOM_MIPS,
 };
+use crate::ecs::systems::post_process_preview_enabled;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassGraph, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
@@ -54,9 +55,11 @@ fn is_onion_skin_active(ctx: &PassContext) -> bool {
 }
 
 fn is_auto_exposure_enabled(ctx: &PassContext) -> bool {
-    ctx.world
-        .get_resource::<crate::ecs::resource::AutoExposure>()
-        .is_some_and(|settings| settings.uses_histogram())
+    post_process_preview_enabled(ctx.world)
+        && ctx
+            .world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .is_some_and(|settings| settings.uses_histogram())
         && ctx.auto_exposure_buffers.is_some()
 }
 

@@ -2,9 +2,10 @@ use winit::keyboard::Key;
 
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
+use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
-use crate::ecs::systems::CameraMotion;
+use crate::ecs::systems::{current_post_process_preview, CameraMotion};
 use crate::ecs::world::World;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -112,6 +113,16 @@ pub fn default_bindings() -> Vec<KeyBinding> {
             scope: BindingScope::SceneView,
             label: "Frame selection",
             send: |world| world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased)),
+        },
+        KeyBinding {
+            key: "p",
+            modifiers: ModifierKeys::none(),
+            scope: BindingScope::SceneView,
+            label: "Toggle post processing",
+            send: |world| {
+                let toggled = current_post_process_preview(world).toggled();
+                world.send_command(OverlayEvent::SetPostProcessPreview(toggled));
+            },
         },
     ]
 }

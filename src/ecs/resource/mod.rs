@@ -6,6 +6,7 @@ mod injected_input;
 mod keyboard_modifiers;
 mod layout_snapshot;
 mod mouse_input;
+mod post_process;
 mod ui_focus;
 mod viewport_input;
 
@@ -98,6 +99,7 @@ mod wind;
 
 pub use billboard::*;
 pub use gizmo::*;
+pub use post_process::*;
 
 pub use imgui_capture::*;
 pub use imgui_textures::*;

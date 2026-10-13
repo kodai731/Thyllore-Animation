@@ -34,6 +34,7 @@ crate-type = ["cdylib", "rlib"]
 thyllore-cli-core = { path = "crates/thyllore-cli-core" }
 thyllore-log-core = { path = "crates/thyllore-log-core" }
 thyllore-math-core = { path = "crates/thyllore-math-core" }
+thyllore-color-core = { path = "crates/thyllore-color-core" }
 thyllore-model-core = { path = "crates/thyllore-model-core" }
 thyllore-anim-core = { path = "crates/thyllore-anim-core" }
 thyllore-ml-core = { path = "crates/thyllore-ml-core", optional = true }
@@ -55,7 +56,7 @@ env_logger = "0.11"
 thiserror = "1"
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"
-imgui = { package = "dear-imgui-rs", path = "./vendor/dear-imgui-rs", features = ["build-from-source"] }
+imgui = { package = "dear-imgui-rs", path = "./vendor/dear-imgui-rs", features = ["build-from-source", "serde"] }
 imgui-winit-support = { path = "./vendor/imgui-winit-support" }
 winit = "0.29"
 raw-window-handle = "0.6"

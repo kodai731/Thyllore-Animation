@@ -142,10 +142,11 @@ impl ObjectDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         for buffer in &mut self.buffers {
             buffer.destroy(device);
         }
-        self.layout.destroy(device);
+        self.layout.destroy(rrdevice);
     }
 }

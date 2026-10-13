@@ -4,22 +4,23 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
+use crate::ecs::FrameContext;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
-use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{
-    Camera, Exposure, FlashLightState, GpuPassTimings, GpuTimingsSink, TransformGizmoState,
+    Camera, Exposure, FlashLightState, GpuPassTimings, GpuTimingsSink, SceneBrightness,
+    TransformGizmoState,
 };
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
     transform_gizmo_render_data,
 };
-use crate::ecs::FrameContext;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
@@ -309,10 +310,15 @@ unsafe fn update_frame_and_scene_uniforms(
 
     let debug_mode = ctx.debug_view_state().debug_view_mode.as_int();
 
+    let brightness = ctx
+        .world
+        .get_resource::<SceneBrightness>()
+        .map(|b| *b)
+        .unwrap_or_default();
     let exposure_value = ctx
         .world
         .get_resource::<Exposure>()
-        .map(|e| e.exposure_value)
+        .map(|e| e.display_multiplier(brightness))
         .unwrap_or(1.0);
 
     let flash = ctx
@@ -326,7 +332,7 @@ unsafe fn update_frame_and_scene_uniforms(
         view,
         proj,
         light_pos,
-        Vector3::new(1.0, 1.0, 1.0),
+        thyllore_render_core::DIRECT_LIGHT_COLOR,
         debug_mode,
         shadow_strength,
         distance_attenuation,

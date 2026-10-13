@@ -210,6 +210,10 @@ impl GpuResource for GpuTimestampProfiler {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         Self::destroy(self, &rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.pools.is_destroyed()
+    }
 }
 
 #[cfg(test)]

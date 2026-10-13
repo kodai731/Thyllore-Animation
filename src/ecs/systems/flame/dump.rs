@@ -9,6 +9,9 @@ use thyllore_effect_core::{
     WallProbeView,
 };
 
+/// Dumps are written under fixed names, overwritten on the next dump, so the directory never grows.
+pub const FLAME_DUMP_DIRECTORY: &str = "log/flame";
+
 pub fn build_effect_json(
     effect: &FlameEffect,
     baked: &FlameBaked,
@@ -473,9 +476,9 @@ pub fn write_flame_wall_probe_dump(
         }
         output_path.to_path_buf()
     } else {
-        let directory = std::path::Path::new("log/flame");
+        let directory = std::path::Path::new(FLAME_DUMP_DIRECTORY);
         std::fs::create_dir_all(directory)?;
-        directory.join(format!("wall_probe_{}.json", unix_time))
+        directory.join("wall_probe.json")
     };
     std::fs::write(&path, serde_json::to_string_pretty(&record)?)?;
     Ok(path)
@@ -495,10 +498,6 @@ pub fn write_flame_field_traces(
     )],
     output_path: Option<&std::path::Path>,
 ) -> std::io::Result<Vec<std::path::PathBuf>> {
-    let unix_time = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
     let mut paths = Vec::new();
     for (index, (effect, baked, temporal, _)) in flames.iter().enumerate() {
         let trace = thyllore_render_debug::flame_field_trace::trace_flame_field(
@@ -510,14 +509,9 @@ pub fn write_flame_field_traces(
             }
             output_path.to_path_buf()
         } else {
-            let directory = std::path::Path::new("log/flame");
+            let directory = std::path::Path::new(FLAME_DUMP_DIRECTORY);
             std::fs::create_dir_all(directory)?;
-            let name = if flames.len() > 1 {
-                format!("flame_trace_{}_{}.json", unix_time, index)
-            } else {
-                format!("flame_trace_{}.json", unix_time)
-            };
-            directory.join(name)
+            directory.join(format!("trace_{index}.json"))
         };
         std::fs::write(&path, serde_json::to_string(&trace)?)?;
         paths.push(path);
@@ -547,7 +541,7 @@ pub fn write_texture_fit_provenance(
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let directory = std::path::Path::new("log/flame");
+    let directory = std::path::Path::new(FLAME_DUMP_DIRECTORY);
     if std::fs::create_dir_all(directory).is_err() {
         return;
     }
@@ -560,7 +554,7 @@ pub fn write_texture_fit_provenance(
         hasher.update(bytes);
         sha256 = json!(format!("{:x}", hasher.finalize()));
         if bytes.len() <= MAX_COPY_BYTES {
-            let name = format!("texture_fit_{unix_time}.png");
+            let name = "texture_fit.png".to_string();
             if std::fs::write(directory.join(&name), bytes).is_ok() {
                 copy_name = json!(name);
             }
@@ -598,10 +592,7 @@ pub fn write_texture_fit_provenance(
         "effect_after": after,
     });
     if let Ok(text) = serde_json::to_string_pretty(&record) {
-        let _ = std::fs::write(
-            directory.join(format!("texture_fit_{unix_time}.json")),
-            text,
-        );
+        let _ = std::fs::write(directory.join("texture_fit.json"), text);
     }
 }
 

@@ -1,9 +1,11 @@
 use imgui::MouseButton;
 
 use crate::app::App;
-use crate::platform::key_bindings::{dispatch_keyboard_shortcut, ModifierKeys};
+use crate::platform::key_bindings::{dispatch_keyboard_shortcut, KeyboardFocus, ModifierKeys};
 
-use crate::ecs::resource::{CameraFlyInput, FlySpeedModifier, KeyboardModifiers, MouseInput};
+use crate::ecs::resource::{
+    CameraFlyInput, FlySpeedModifier, KeyboardModifiers, MouseInput, ViewportInput,
+};
 
 pub(crate) fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     let io = ui.io();
@@ -63,13 +65,12 @@ pub(crate) fn dispatch_keyboard_input(
     drop(modifiers_res);
 
     let camera_fly_active = app.data.ecs_world.resource::<MouseInput>().right_pressed;
+    let focus = KeyboardFocus {
+        imgui_wants_keyboard: imgui.io().want_capture_keyboard() || camera_fly_active,
+        scene_view_focused: app.data.ecs_world.resource::<ViewportInput>().focused,
+    };
 
-    if let Some(send) = dispatch_keyboard_shortcut(
-        &event.logical_key,
-        modifiers,
-        imgui.io().want_capture_keyboard() || camera_fly_active,
-        bindings,
-    ) {
+    if let Some(send) = dispatch_keyboard_shortcut(&event.logical_key, modifiers, focus, bindings) {
         send(&app.data.ecs_world);
     }
 }

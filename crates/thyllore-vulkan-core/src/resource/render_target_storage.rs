@@ -198,6 +198,10 @@ impl GpuResource for RenderTargetStorage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy_all(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        !self.has_leaked_targets()
+    }
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ use crate::ecs::systems::camera_systems::{
     advance_camera_transition, compute_camera_position, compute_camera_up,
     tick_fly_speed_indicator, update_camera_near_plane,
 };
+use crate::ecs::systems::phases::event_dispatch::scene_camera::sync_scene_camera_to_editor_camera;
 use crate::ecs::FrameContext;
 use crate::ecs::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
@@ -21,6 +22,8 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
         tick_fly_speed_indicator(&mut camera, delta_time);
         update_camera_near_plane(&mut camera);
     }
+
+    sync_scene_camera_to_editor_camera(ctx.world);
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 

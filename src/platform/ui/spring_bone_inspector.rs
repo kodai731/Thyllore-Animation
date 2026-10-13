@@ -8,7 +8,9 @@ use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{bone_picker, bone_picker_with_hierarchy, section_header};
+use crate::platform::ui::theme::{
+    bone_picker, bone_picker_with_hierarchy, property_slider, section_header,
+};
 
 use super::constraint_inspector::{build_offset_vector3, collect_bone_list};
 
@@ -178,41 +180,23 @@ fn build_joint_fields(
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Stiffness", 0.0_f32, 4.0)
-        .build(&mut modified.stiffness)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Stiffness", 0.0_f32, 4.0, &mut modified.stiffness);
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Drag Force", 0.0_f32, 1.0)
-        .build(&mut modified.drag_force)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Drag Force", 0.0_f32, 1.0, &mut modified.drag_force);
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Gravity Power", 0.0_f32, 2.0)
-        .build(&mut modified.gravity_power)
-    {
-        changed = true;
-    }
+    changed |= property_slider(
+        ui,
+        "Gravity Power",
+        0.0_f32,
+        2.0,
+        &mut modified.gravity_power,
+    );
 
     if build_offset_vector3(ui, "Gravity Dir", &mut modified.gravity_dir) {
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Hit Radius", 0.0_f32, 0.5)
-        .build(&mut modified.hit_radius)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Hit Radius", 0.0_f32, 0.5, &mut modified.hit_radius);
 
     if changed {
         Some(modified)
@@ -371,19 +355,10 @@ fn build_collider_fields(
 
     match &mut modified.shape {
         ColliderShape::Sphere { radius } => {
-            ui.set_next_item_width(-1.0);
-            if ui.slider_config("Radius", 0.001_f32, 1.0).build(radius) {
-                changed = true;
-            }
+            changed |= property_slider(ui, "Radius", 0.001_f32, 1.0, radius);
         }
         ColliderShape::Capsule { radius, tail } => {
-            ui.set_next_item_width(-1.0);
-            if ui
-                .slider_config("Radius##cap", 0.001_f32, 1.0)
-                .build(radius)
-            {
-                changed = true;
-            }
+            changed |= property_slider(ui, "Radius##cap", 0.001_f32, 1.0, radius);
             if build_offset_vector3(ui, "Tail", tail) {
                 changed = true;
             }

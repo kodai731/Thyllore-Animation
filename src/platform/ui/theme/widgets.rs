@@ -31,6 +31,14 @@ pub fn item_tooltip(ui: &Ui, text: &str) {
     }
 }
 
+pub fn property_slider<T>(ui: &Ui, label: &str, min: T, max: T, value: &mut T) -> bool
+where
+    T: imgui::internal::DataTypeKind,
+{
+    ui.set_next_item_width(-1.0);
+    ui.slider_config(label, min, max).build(value)
+}
+
 pub fn enum_combo<T: Clone + PartialEq>(
     ui: &Ui,
     label: &str,

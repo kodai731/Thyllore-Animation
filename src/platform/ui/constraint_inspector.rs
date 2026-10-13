@@ -9,7 +9,9 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::theme::{bone_picker, bone_picker_with_hierarchy, section_header};
+use crate::platform::ui::theme::{
+    bone_picker, bone_picker_with_hierarchy, property_slider, section_header,
+};
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -169,10 +171,7 @@ fn build_common_fields(ui: &imgui::Ui, enabled: &mut bool, weight: &mut f32) -> 
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui.slider_config("Weight", 0.0, 1.0).build(weight) {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Weight", 0.0, 1.0, weight);
 
     changed
 }
@@ -233,13 +232,7 @@ fn build_ik_fields(
         changed = true;
     }
 
-    ui.set_next_item_width(-1.0);
-    if ui
-        .slider_config("Twist", -180.0_f32, 180.0)
-        .build(&mut modified.twist)
-    {
-        changed = true;
-    }
+    changed |= property_slider(ui, "Twist", -180.0_f32, 180.0, &mut modified.twist);
 
     if changed {
         Some(ConstraintType::Ik(modified))

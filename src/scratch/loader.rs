@@ -1,7 +1,12 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use serde_json::{json, Value};
+
+use crate::asset::AssetStorage;
+use crate::ecs::events::UiCommand;
+use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::job::{ScratchContext, ScratchEntryFn, ScratchJob, ScratchStep, SCRATCH_ENTRY_SYMBOL};
 
@@ -60,12 +65,50 @@ impl ScratchHost {
     }
 }
 
+pub fn step_scratch_jobs(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &GraphicsResources,
+) {
+    let Some(mut host) = world.remove_resource::<ScratchHost>() else {
+        return;
+    };
+    let mut ctx = ScratchContext {
+        world,
+        assets,
+        graphics,
+    };
+    host.step_running_jobs(&mut ctx);
+    world.insert_resource(host);
+}
+
+#[derive(Debug)]
+pub struct LoadScratchJob {
+    pub library: PathBuf,
+    pub job: String,
+    pub args: Value,
+    pub reply: Sender<Value>,
+}
+
+impl UiCommand for LoadScratchJob {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        let Some(mut host) = world.get_resource_mut::<ScratchHost>() else {
+            let _ = self
+                .reply
+                .send(json!({"ok": false, "error": "ScratchHost is not registered"}));
+            return;
+        };
+        if let Err(e) = host.load_job(&self.library, &self.job, self.args, self.reply.clone()) {
+            let _ = self
+                .reply
+                .send(json!({"ok": false, "error": format!("{e:#}")}));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::AssetStorage;
-    use crate::ecs::World;
-    use crate::vulkanr::resource::graphics_resource::GraphicsResources;
     use std::sync::mpsc;
 
     #[derive(Debug)]
@@ -156,5 +199,26 @@ mod tests {
         let msg = rx.recv().unwrap();
         assert_eq!(msg["ok"], false);
         assert!(msg["error"].is_string());
+    }
+
+    #[test]
+    fn load_scratch_job_replies_error_for_missing_library() {
+        let mut world = World::new();
+        world.insert_resource(ScratchHost::default());
+        let mut assets = AssetStorage::default();
+        let (reply, reply_rx) = mpsc::channel();
+
+        Box::new(LoadScratchJob {
+            library: PathBuf::from("/nonexistent/scratch.so"),
+            job: "anim".to_string(),
+            args: Value::Null,
+            reply,
+        })
+        .apply(&mut world, &mut assets, &GraphicsResources::default());
+
+        let response = reply_rx.recv().unwrap();
+        assert_eq!(response["ok"], false);
+        assert!(response["error"].is_string());
+        assert!(world.resource::<ScratchHost>().running.is_empty());
     }
 }

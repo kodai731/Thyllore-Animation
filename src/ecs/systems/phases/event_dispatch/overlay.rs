@@ -5,7 +5,7 @@ use crate::ecs::resource::CoordinateSpace;
 use crate::ecs::resource::TransformGizmoMode;
 use crate::ecs::resource::{
     AutoExposure, DepthOfField, GridMeshData, HierarchyState, MessageLog, OnionSkinningConfig,
-    PhysicalCameraParameters, TransformGizmoState, WeightHeatmapState,
+    PhysicalCameraParameters, SceneBrightness, TransformGizmoState, WeightHeatmapState,
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
@@ -21,6 +21,7 @@ pub enum OverlayEvent {
     UpdateDepthOfField(DepthOfField),
     UpdatePhysicalCamera(PhysicalCameraParameters),
     UpdateAutoExposure(AutoExposure),
+    UpdateSceneBrightness(SceneBrightness),
     UpdateOnionSkinning(OnionSkinningConfig),
     SelectEffectInstance { key: &'static str, index: usize },
     SetGridShowYAxis(bool),
@@ -71,6 +72,11 @@ impl UiCommand for OverlayEvent {
             OverlayEvent::UpdateAutoExposure(new_ae) => {
                 if let Some(mut ae) = world.get_resource_mut::<AutoExposure>() {
                     *ae = new_ae;
+                }
+            }
+            OverlayEvent::UpdateSceneBrightness(new_brightness) => {
+                if let Some(mut brightness) = world.get_resource_mut::<SceneBrightness>() {
+                    *brightness = new_brightness;
                 }
             }
             OverlayEvent::UpdateOnionSkinning(new_config) => {

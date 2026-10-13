@@ -1,3 +1,4 @@
+use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::timeline::keyframe_edit::edit_curve;
 use crate::ecs::systems::timeline::tangent_edit::{
@@ -16,58 +17,63 @@ pub(super) fn apply_tangent_edits(
         return false;
     };
 
-    let mut clip_modified = false;
-    for event in events {
-        clip_modified |= match event {
-            TimelineEvent::SetKeyframeInterpolation {
-                track,
-                property_type,
-                keyframe_id,
-                interpolation,
-            } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
-                curve.set_keyframe_interpolation(*keyframe_id, *interpolation)
-            }),
+    events.iter().fold(false, |modified, event| {
+        apply_tangent_edit(event, clip_id, clip_library) | modified
+    })
+}
 
-            TimelineEvent::SetKeyframeTangent {
-                track,
-                property_type,
-                keyframe_id,
-                in_tangent,
-                out_tangent,
-            } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
-                set_manual_tangents(curve, *keyframe_id, in_tangent.clone(), out_tangent.clone())
-            }),
+fn apply_tangent_edit(
+    event: &TimelineEvent,
+    clip_id: SourceClipId,
+    clip_library: &mut ClipLibrary,
+) -> bool {
+    match event {
+        TimelineEvent::SetKeyframeInterpolation {
+            track,
+            property_type,
+            keyframe_id,
+            interpolation,
+        } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            curve.set_keyframe_interpolation(*keyframe_id, *interpolation)
+        }),
 
-            TimelineEvent::SetTangentType {
-                track,
-                property_type,
-                keyframe_id,
-                tangent_type,
-            } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
-                set_tangent_type(curve, *keyframe_id, *tangent_type)
-            }),
+        TimelineEvent::SetKeyframeTangent {
+            track,
+            property_type,
+            keyframe_id,
+            in_tangent,
+            out_tangent,
+        } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            set_manual_tangents(curve, *keyframe_id, in_tangent.clone(), out_tangent.clone())
+        }),
 
-            TimelineEvent::SetTangentWeightMode {
-                track,
-                property_type,
-                keyframe_id,
-                weight_mode,
-            } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
-                set_tangent_weight_mode(curve, *keyframe_id, *weight_mode)
-            }),
+        TimelineEvent::SetTangentType {
+            track,
+            property_type,
+            keyframe_id,
+            tangent_type,
+        } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            set_tangent_type(curve, *keyframe_id, *tangent_type)
+        }),
 
-            TimelineEvent::SetTangentContinuity {
-                track,
-                property_type,
-                keyframe_id,
-                continuity,
-            } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
-                set_tangent_continuity(curve, *keyframe_id, *continuity)
-            }),
+        TimelineEvent::SetTangentWeightMode {
+            track,
+            property_type,
+            keyframe_id,
+            weight_mode,
+        } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            set_tangent_weight_mode(curve, *keyframe_id, *weight_mode)
+        }),
 
-            _ => false,
-        };
+        TimelineEvent::SetTangentContinuity {
+            track,
+            property_type,
+            keyframe_id,
+            continuity,
+        } => edit_curve(clip_library, clip_id, *track, *property_type, |curve| {
+            set_tangent_continuity(curve, *keyframe_id, *continuity)
+        }),
+
+        _ => false,
     }
-
-    clip_modified
 }

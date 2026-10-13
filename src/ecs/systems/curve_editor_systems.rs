@@ -4,7 +4,12 @@ use crate::animation::editable::{
     curve_add_keyframe, curve_remove_keyframe, curve_sample, EditableAnimationClip, PropertyType,
 };
 use crate::animation::BoneId;
-use crate::ecs::resource::CurveEditorBuffer;
+use crate::ecs::resource::{
+    ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState, TimelineState,
+};
+use crate::ecs::world::World;
+
+use super::batch_run_systems::{unit_action_parse, BatchAction};
 
 pub fn curve_editor_capture_buffer(
     buffer: &mut CurveEditorBuffer,
@@ -81,3 +86,24 @@ pub fn curve_editor_swap_buffer(
         }
     }
 }
+
+/// `open_curve_editor`: a headless run opens the editor as its floating window on the timeline's
+/// current clip, the same way the timeline's Curves button does.
+#[derive(Debug, Default)]
+pub struct OpenCurveEditor;
+
+impl BatchAction for OpenCurveEditor {
+    fn name(&self) -> &'static str {
+        "open_curve_editor"
+    }
+    fn apply(&self, world: &mut World) {
+        let current_clip_id = world.resource::<TimelineState>().current_clip_id;
+        let clip_library = world.resource::<ClipLibrary>();
+        let clip = current_clip_id.and_then(|id| clip_library.get(id));
+        let mut editor = world.resource_mut::<CurveEditorState>();
+        editor.placement = CurveEditorPlacement::Window;
+        editor.open_for_clip(clip);
+    }
+}
+
+crate::batch_action!("open_curve_editor", unit_action_parse::<OpenCurveEditor>);

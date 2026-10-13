@@ -8,6 +8,7 @@ pub(super) fn build_ui_windows(ui: &imgui::Ui, app: &mut App) {
     publish_layout_snapshot(app, ui.io().display_size());
     publish_viewport_image(app);
     release_idle_ui_pointer(ui, &app.data.ecs_world);
+    super::injected_input::apply_injected_window_focus(ui, &app.data.ecs_world);
 
     let windows = app.data.ecs_world.resource::<UiWindows>().ordered();
     for window in windows {
@@ -18,6 +19,7 @@ pub(super) fn build_ui_windows(ui: &imgui::Ui, app: &mut App) {
             &app.data.graphics_resources,
         );
     }
+    super::injected_input::record_focused_window(ui, &app.data.ecs_world);
 }
 
 fn publish_layout_snapshot(app: &mut App, display_size: [f32; 2]) {

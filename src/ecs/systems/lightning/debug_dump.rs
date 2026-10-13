@@ -46,16 +46,17 @@ pub fn build_lightning_debug_record(
     })
 }
 
-pub fn write_lightning_debug_dump(record: &Value, unix_time: u64) -> std::io::Result<PathBuf> {
+/// One file per capture slot, overwritten on the next run, so the directory never grows.
+pub fn write_lightning_debug_dump(record: &Value, capture_index: u32) -> std::io::Result<PathBuf> {
     let directory = Path::new(LIGHTNING_DEBUG_DUMP_DIRECTORY);
     std::fs::create_dir_all(directory)?;
-    let path = directory.join(format!("lightning_debug_{unix_time}.json"));
+    let path = directory.join(format!("debug_{capture_index}.json"));
     std::fs::write(&path, serde_json::to_string_pretty(record)?)?;
     Ok(path)
 }
 
-pub fn lightning_debug_screenshot_path(unix_time: u64) -> PathBuf {
-    Path::new(LIGHTNING_DEBUG_DUMP_DIRECTORY).join(format!("lightning_debug_{unix_time}.png"))
+pub fn lightning_debug_screenshot_path(capture_index: u32) -> PathBuf {
+    Path::new(LIGHTNING_DEBUG_DUMP_DIRECTORY).join(format!("debug_{capture_index}.png"))
 }
 
 fn build_render_settings_json(world: &World) -> Value {

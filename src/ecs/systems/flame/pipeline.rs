@@ -65,10 +65,9 @@ pub unsafe fn create_flame_pipeline(
     )?;
     log!("Created flame pipelines");
 
-    Ok(FlameGpuState {
-        shading_pipeline: Some(flame_shading_pipeline),
-        descriptor: Some(flame_descriptor),
-        ubo: Some(flame_ubo),
-        ..Default::default()
-    })
+    let mut gpu_state = FlameGpuState::default();
+    gpu_state.shading_pipeline = Some(flame_shading_pipeline);
+    gpu_state.descriptor = Some(flame_descriptor);
+    gpu_state.ubo = Some(flame_ubo);
+    Ok(gpu_state)
 }

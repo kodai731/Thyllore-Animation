@@ -7,7 +7,6 @@ use crate::resource::GpuBufferRegistry;
 use thyllore_render_core::{DynamicMesh, RenderInfo};
 
 pub struct LineMeshDrawOptions {
-    pub line_width: Option<f32>,
     pub index_count_override: Option<u32>,
     pub bind_object_set: bool,
     pub frame_set_override: Option<vk::DescriptorSet>,
@@ -17,7 +16,6 @@ pub struct LineMeshDrawOptions {
 impl Default for LineMeshDrawOptions {
     fn default() -> Self {
         Self {
-            line_width: Some(1.0),
             index_count_override: None,
             bind_object_set: true,
             frame_set_override: None,
@@ -47,7 +45,7 @@ pub unsafe fn record_line_mesh_draw<V>(
         return Ok(false);
     };
 
-    bind_line_pipeline(ctx, pipeline, options.line_width, cmd);
+    bind_line_pipeline(ctx, pipeline, cmd);
     bind_line_mesh_buffers(
         ctx,
         pipeline,
@@ -71,14 +69,10 @@ pub unsafe fn record_line_mesh_draw<V>(
 unsafe fn bind_line_pipeline(
     ctx: &FrameRenderContext,
     pipeline: &RRPipeline,
-    line_width: Option<f32>,
     cmd: vk::CommandBuffer,
 ) {
     let device = &ctx.device.device;
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    if let Some(width) = line_width {
-        device.cmd_set_line_width(cmd, width);
-    }
 }
 
 unsafe fn bind_line_mesh_buffers(

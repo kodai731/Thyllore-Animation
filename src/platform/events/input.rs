@@ -75,3 +75,56 @@ pub(crate) fn dispatch_keyboard_input(
         send(&app.data.ecs_world);
     }
 }
+
+pub(crate) fn keyboard_modifiers_from_winit(
+    state: winit::keyboard::ModifiersState,
+) -> KeyboardModifiers {
+    KeyboardModifiers {
+        ctrl: state.control_key(),
+        shift: state.shift_key(),
+        alt: state.alt_key(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyboard_modifiers_from_winit() {
+        let winit_state = winit::keyboard::ModifiersState::empty();
+        let modifiers = keyboard_modifiers_from_winit(winit_state);
+        assert!(!modifiers.ctrl);
+        assert!(!modifiers.shift);
+        assert!(!modifiers.alt);
+
+        let mut winit_state = winit::keyboard::ModifiersState::empty();
+        winit_state.insert(winit::keyboard::ModifiersState::CONTROL);
+        let modifiers = keyboard_modifiers_from_winit(winit_state);
+        assert!(modifiers.ctrl);
+        assert!(!modifiers.shift);
+        assert!(!modifiers.alt);
+
+        let mut winit_state = winit::keyboard::ModifiersState::empty();
+        winit_state.insert(winit::keyboard::ModifiersState::SHIFT);
+        let modifiers = keyboard_modifiers_from_winit(winit_state);
+        assert!(!modifiers.ctrl);
+        assert!(modifiers.shift);
+        assert!(!modifiers.alt);
+
+        let mut winit_state = winit::keyboard::ModifiersState::empty();
+        winit_state.insert(winit::keyboard::ModifiersState::ALT);
+        let modifiers = keyboard_modifiers_from_winit(winit_state);
+        assert!(!modifiers.ctrl);
+        assert!(!modifiers.shift);
+        assert!(modifiers.alt);
+
+        let mut winit_state = winit::keyboard::ModifiersState::empty();
+        winit_state.insert(winit::keyboard::ModifiersState::CONTROL);
+        winit_state.insert(winit::keyboard::ModifiersState::SHIFT);
+        let modifiers = keyboard_modifiers_from_winit(winit_state);
+        assert!(modifiers.ctrl);
+        assert!(modifiers.shift);
+        assert!(!modifiers.alt);
+    }
+}

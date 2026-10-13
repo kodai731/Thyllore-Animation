@@ -1,45 +1,13 @@
 #![cfg(feature = "auto-rig")]
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+use crate::ecs::resource::{TextToMeshDialogState, TextToMeshState, TextToMeshStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
-pub struct TextToMeshDialogState {
-    pub open: bool,
-    pub prompt_buf: String,
-    pub target_faces: i32,
-    pub seed: i32,
-    pub generate_start_time: Option<std::time::Instant>,
-    pub input_mode: MeshInputMode,
-    pub model_type: MeshModelType,
-    pub t2i_model_type: TextToImageModelType,
-    pub image_path: String,
-    pub image_bytes: Option<Vec<u8>>,
-    pub image_load_error: Option<String>,
-}
-
-impl Default for TextToMeshDialogState {
-    fn default() -> Self {
-        Self {
-            open: false,
-            prompt_buf: String::new(),
-            target_faces: 50000,
-            seed: 0,
-            generate_start_time: None,
-            input_mode: MeshInputMode::TextOnly,
-            model_type: MeshModelType::Trellis,
-            t2i_model_type: TextToImageModelType::ServerDefault,
-            image_path: String::new(),
-            image_bytes: None,
-            image_load_error: None,
-        }
-    }
-}
 
 fn draw_text_to_mesh_dialog(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState, world: &World) {
     if !dialog.open {

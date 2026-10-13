@@ -5,8 +5,23 @@ use thyllore_effect_core::{
 };
 use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
 
+use crate::ecs::world::Resource;
 use crate::ecs::World;
 use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
+
+pub fn edit_resource_copy<R: Resource + Clone>(
+    world: &World,
+    edit: impl FnOnce(&mut R) -> bool,
+) -> Option<R> {
+    let resource = world.get_resource::<R>()?;
+    let mut cloned = resource.clone();
+    drop(resource);
+    if edit(&mut cloned) {
+        Some(cloned)
+    } else {
+        None
+    }
+}
 
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
@@ -377,5 +392,32 @@ mod tests {
         }
         drawn.sort_unstable();
         assert_eq!(drawn, ["a", "b", "c", "d", "e", "f"]);
+    }
+
+    #[test]
+    fn edit_resource_copy_no_change_returns_none() {
+        let mut world = World::new();
+        world.insert_resource(TestResource { value: 42.0 });
+        let result = edit_resource_copy::<TestResource>(&world, |value| {
+            let _ = value.value;
+            false
+        });
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn edit_resource_copy_with_change_returns_some() {
+        let mut world = World::new();
+        world.insert_resource(TestResource { value: 42.0 });
+        let result = edit_resource_copy::<TestResource>(&world, |value| {
+            value.value = 99.0;
+            true
+        });
+        assert_eq!(result.map(|r| r.value), Some(99.0));
+    }
+
+    #[derive(Clone)]
+    struct TestResource {
+        value: f32,
     }
 }

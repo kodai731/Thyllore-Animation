@@ -1,29 +1,15 @@
 #![cfg(feature = "auto-rig")]
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
+use crate::ecs::resource::{
+    TextToAnimationDialogState, TextToAnimationState, TextToAnimationStatus,
+};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
-pub struct TextToAnimationDialogState {
-    pub open: bool,
-    pub prompt_buf: String,
-    pub duration: f32,
-}
-
-impl Default for TextToAnimationDialogState {
-    fn default() -> Self {
-        Self {
-            open: false,
-            prompt_buf: String::new(),
-            duration: 3.0,
-        }
-    }
-}
 
 fn draw_text_to_animation_dialog(
     ui: &imgui::Ui,

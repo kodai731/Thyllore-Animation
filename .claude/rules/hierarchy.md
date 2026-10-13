@@ -149,7 +149,7 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `app/` | App command and exit, message log, scene state, Vulkan validation report |
 | `model/` | FBX and glTF model caches, material texture slots, humanoid rig |
 | `animation/` | Bone pose override, pose apply cache, spring bone state, morph track playback, baked humanoid clips |
-| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
+| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state and their dialogs |
 
 `mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
 

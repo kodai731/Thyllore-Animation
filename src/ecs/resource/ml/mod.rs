@@ -7,6 +7,8 @@ mod inference_actor_state;
 #[cfg(feature = "auto-rig")]
 mod text_to_animation_state;
 #[cfg(feature = "auto-rig")]
+mod text_to_dialog_state;
+#[cfg(feature = "auto-rig")]
 mod text_to_mesh_state;
 
 #[cfg(feature = "auto-rig")]
@@ -17,5 +19,7 @@ pub use grpc_server_process::*;
 pub use inference_actor_state::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_animation_state::*;
+#[cfg(feature = "auto-rig")]
+pub use text_to_dialog_state::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_mesh_state::*;

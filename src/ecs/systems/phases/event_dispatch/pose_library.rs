@@ -12,6 +12,7 @@ pub enum PoseLibraryEvent {
     SaveCurrent { name: String },
     Apply(SourceClipId),
     Delete(SourceClipId),
+    Select(SourceClipId),
 }
 
 impl UiCommand for PoseLibraryEvent {
@@ -122,6 +123,10 @@ fn dispatch_pose_library_events(
                 }
 
                 log!("Deleted pose (id={})", pose_id);
+            }
+
+            PoseLibraryEvent::Select(pose_id) => {
+                world.resource_mut::<PoseLibrary>().selected_pose_id = Some(*pose_id);
             }
         }
     }

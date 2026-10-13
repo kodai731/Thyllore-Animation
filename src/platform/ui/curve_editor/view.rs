@@ -41,6 +41,10 @@ impl ViewTransform {
             + self.view_time_offset
     }
 
+    pub(super) fn pixels_per_second(&self) -> f32 {
+        self.zoom_x * self.curve_width / self.duration.max(0.001)
+    }
+
     pub(super) fn y_to_value(&self, y: f32) -> f32 {
         (self.curve_origin[1] + self.curve_height - y)
             / (self.zoom_y * self.curve_height).max(0.001)

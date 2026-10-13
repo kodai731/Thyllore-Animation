@@ -1,7 +1,9 @@
 use crate::animation::editable::{EditableKeyframe, PropertyCurve};
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe};
 
-use super::drag::{dragged_key_delta, dragged_key_position, TimeSnap};
+use super::drag::{
+    collect_unselected_key_times, dragged_key_delta, dragged_key_position, KeyTimeSnap,
+};
 use super::draw::draw_time_grid;
 use super::hit_test::KEYFRAME_HIT_RADIUS;
 use super::view::ViewTransform;
@@ -150,12 +152,13 @@ pub(super) fn draw_dopesheet_drag_preview(
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     selected_keyframes: &[CurveSelectedKeyframe],
     axis_lock: Option<AxisLock>,
-    time_snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
 ) {
     let delta = dragged_key_delta(vt, drag_start, mouse_pos);
 
     for (row_index, (curve, _, _)) in curves_to_draw.iter().enumerate() {
         let row_y = dopesheet_row_center_y(vt.curve_origin[1], row_index);
+        let nearby_times = collect_unselected_key_times(curve, selected_keyframes);
 
         for sel in selected_keyframes {
             if sel.property_type != curve.property_type {
@@ -167,6 +170,7 @@ pub(super) fn draw_dopesheet_drag_preview(
                 delta,
                 axis_lock,
                 time_snap,
+                &nearby_times,
             );
             let preview_x = vt
                 .time_to_x(preview_time)

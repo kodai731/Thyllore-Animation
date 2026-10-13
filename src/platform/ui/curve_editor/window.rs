@@ -18,7 +18,7 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
 use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};
-use super::drag::{current_time_snap, effective_axis_lock};
+use super::drag::{effective_axis_lock, resolve_key_time_snap};
 use super::draw::*;
 use super::hit_test::*;
 use super::interaction::*;
@@ -429,7 +429,7 @@ pub(super) fn draw_clipped_curve_content(
     if let CurveInteractionMode::DraggingKeyframe { axis_lock } = editor_state.interaction {
         let mouse_pos = read_ui_pointer(ui).pos;
         let drag_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
-        let time_snap = current_time_snap(ui, timeline_state.snap_settings.frame_rate);
+        let time_snap = resolve_key_time_snap(ui, &timeline_state.snap_settings, vt);
         match editor_state.view_mode {
             CurveViewMode::Curves => draw_keyframe_drag_preview(
                 draw_list,
@@ -439,7 +439,7 @@ pub(super) fn draw_clipped_curve_content(
                 curves_to_draw,
                 &editor_state.selected_keyframes,
                 drag_lock,
-                time_snap,
+                &time_snap,
             ),
             CurveViewMode::Dopesheet => draw_dopesheet_drag_preview(
                 draw_list,
@@ -449,7 +449,7 @@ pub(super) fn draw_clipped_curve_content(
                 curves_to_draw,
                 &editor_state.selected_keyframes,
                 drag_lock,
-                time_snap,
+                &time_snap,
             ),
         }
     }

@@ -8,7 +8,7 @@ use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
 use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
-    CurveTrackRef, CurveViewMode, DraggingTangent, TimelineState, UiPointerOwnerId,
+    CurveTrackRef, CurveViewMode, DraggingTangent, SnapSettings, TimelineState, UiPointerOwnerId,
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
@@ -80,7 +80,7 @@ pub(super) fn handle_curve_view_interaction(
         ruler_pos,
         curve_area_width,
         clip.duration,
-        timeline_state.snap_settings.frame_rate,
+        &timeline_state.snap_settings,
     );
 
     if owns_press && pointer.is_clicked(MouseButton::Right) {
@@ -127,7 +127,7 @@ pub(super) fn handle_mouse_interaction(
     ruler_pos: [f32; 2],
     curve_area_width: f32,
     duration: f32,
-    frame_rate: f32,
+    snap_settings: &SnapSettings,
 ) {
     let mouse_pos = pointer.pos;
     let mouse_clicked = access.owns_press && pointer.is_clicked(MouseButton::Left);
@@ -135,7 +135,7 @@ pub(super) fn handle_mouse_interaction(
     let mouse_released = pointer.is_released(MouseButton::Left);
     let middle_clicked = access.owns_press && pointer.is_clicked(MouseButton::Middle);
     let middle_released = pointer.is_released(MouseButton::Middle);
-    let time_snap = current_time_snap(ui, frame_rate);
+    let time_snap = resolve_key_time_snap(ui, snap_settings, vt);
 
     let in_ruler_area = mouse_pos[0] >= ruler_pos[0]
         && mouse_pos[0] <= ruler_pos[0] + curve_area_width
@@ -155,7 +155,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos,
             ReleasedButton::Left,
             curves_to_draw,
-            time_snap,
+            &time_snap,
         );
     }
     if middle_released {
@@ -166,7 +166,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos,
             ReleasedButton::Middle,
             curves_to_draw,
-            time_snap,
+            &time_snap,
         );
     }
 
@@ -247,7 +247,7 @@ pub(super) fn handle_mouse_release(
     mouse_pos: [f32; 2],
     button: ReleasedButton,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
-    time_snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
 ) {
     if button == ReleasedButton::Left {
         finish_left_drag(
@@ -268,7 +268,7 @@ fn finish_left_drag(
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
-    time_snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
 ) {
     match editor_state.interaction.clone() {
         CurveInteractionMode::DraggingTangent(dragging) => {
@@ -322,7 +322,7 @@ fn finish_keyframe_drag(
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
-    time_snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
     axis_lock: Option<AxisLock>,
 ) {
     let Some(track_ref) = editor_state.selected_track_ref() else {
@@ -331,12 +331,20 @@ fn finish_keyframe_drag(
     for sel in &editor_state.selected_keyframes {
         let curve_vt = vt.for_property(sel.property_type, curves_to_draw);
         let delta = dragged_key_delta(&curve_vt, editor_state.drag_start_mouse_pos, mouse_pos);
+        let nearby_times = curves_to_draw
+            .iter()
+            .find(|(curve, _, _)| curve.property_type == sel.property_type)
+            .map(|(curve, _, _)| {
+                collect_unselected_key_times(curve, &editor_state.selected_keyframes)
+            })
+            .unwrap_or_default();
 
         let [new_time, new_value] = dragged_key_position(
             [sel.original_time, sel.original_value],
             delta,
             effective_axis_lock(editor_state.view_mode, axis_lock),
             time_snap,
+            &nearby_times,
         );
         world.send_command(TimelineEvent::MoveKeyframe {
             track: track_ref,

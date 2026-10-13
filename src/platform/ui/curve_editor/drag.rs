@@ -1,11 +1,44 @@
 use crate::animation::editable::{
-    align_opposite_handle, BezierHandle, PropertyCurve, TangentContinuity,
+    align_opposite_handle, compute_snap_threshold_time, snap_time, BezierHandle, PropertyCurve,
+    SnapSettings, TangentContinuity,
 };
-use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
+use crate::ecs::resource::{
+    AxisLock, CurveSelectedKeyframe, CurveViewMode, DraggingTangent, TangentHandleType,
+};
 
 use super::view::ViewTransform;
 
 const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
+
+#[derive(Clone, Debug)]
+pub(super) struct KeyTimeSnap {
+    settings: SnapSettings,
+    threshold_time: f32,
+}
+
+impl KeyTimeSnap {
+    #[must_use]
+    pub(super) fn new(settings: SnapSettings, pixels_per_second: f32) -> Self {
+        let threshold_time =
+            compute_snap_threshold_time(settings.snap_threshold_px, pixels_per_second);
+        Self {
+            settings,
+            threshold_time,
+        }
+    }
+
+    #[must_use]
+    fn disabled(settings: &SnapSettings) -> Self {
+        Self {
+            settings: SnapSettings {
+                snap_to_frame: false,
+                snap_to_key: false,
+                ..settings.clone()
+            },
+            threshold_time: 0.0,
+        }
+    }
+}
 
 #[must_use]
 pub(super) fn effective_axis_lock(
@@ -16,12 +49,6 @@ pub(super) fn effective_axis_lock(
         CurveViewMode::Curves => axis_lock,
         CurveViewMode::Dopesheet => Some(AxisLock::Time),
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum TimeSnap {
-    Frame(f32),
-    Free,
 }
 
 #[must_use]
@@ -49,12 +76,33 @@ pub(super) fn resolve_axis_lock(
 }
 
 #[must_use]
-pub(super) fn current_time_snap(ui: &imgui::Ui, frame_rate: f32) -> TimeSnap {
+pub(super) fn resolve_key_time_snap(
+    ui: &imgui::Ui,
+    snap_settings: &SnapSettings,
+    vt: &ViewTransform,
+) -> KeyTimeSnap {
     if ui.io().key_ctrl() {
-        TimeSnap::Free
+        KeyTimeSnap::disabled(snap_settings)
     } else {
-        TimeSnap::Frame(frame_rate)
+        KeyTimeSnap::new(snap_settings.clone(), vt.pixels_per_second())
     }
+}
+
+#[must_use]
+pub(super) fn collect_unselected_key_times(
+    curve: &PropertyCurve,
+    selected_keyframes: &[CurveSelectedKeyframe],
+) -> Vec<f32> {
+    curve
+        .keyframes
+        .iter()
+        .filter(|kf| {
+            !selected_keyframes
+                .iter()
+                .any(|sel| sel.property_type == curve.property_type && sel.keyframe_id == kf.id)
+        })
+        .map(|kf| kf.time)
+        .collect()
 }
 
 #[must_use]
@@ -62,7 +110,8 @@ pub(super) fn dragged_key_position(
     original: [f32; 2],
     delta: [f32; 2],
     axis_lock: Option<AxisLock>,
-    snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
+    nearby_times: &[f32],
 ) -> [f32; 2] {
     let locked_delta = match axis_lock {
         Some(AxisLock::Time) => [delta[0], 0.0],
@@ -71,10 +120,12 @@ pub(super) fn dragged_key_position(
     };
 
     let free_time = original[0] + locked_delta[0];
-    let snapped_time = match snap {
-        TimeSnap::Frame(frame_rate) => (free_time * frame_rate).round() / frame_rate,
-        TimeSnap::Free => free_time,
-    };
+    let snapped_time = snap_time(
+        free_time,
+        &time_snap.settings,
+        nearby_times,
+        time_snap.threshold_time,
+    );
 
     [snapped_time.max(0.0), original[1] + locked_delta[1]]
 }
@@ -235,10 +286,45 @@ mod tests {
         );
     }
 
+    fn build_snap(snap_settings: SnapSettings) -> KeyTimeSnap {
+        KeyTimeSnap::new(snap_settings, 100.0)
+    }
+
+    fn free_snap() -> KeyTimeSnap {
+        build_snap(SnapSettings {
+            snap_to_frame: false,
+            ..SnapSettings::default()
+        })
+    }
+
+    fn frame_snap() -> KeyTimeSnap {
+        build_snap(SnapSettings::default())
+    }
+
+    fn key_snap() -> KeyTimeSnap {
+        build_snap(SnapSettings {
+            snap_to_frame: false,
+            snap_to_key: true,
+            ..SnapSettings::default()
+        })
+    }
+
+    fn frame_and_key_snap() -> KeyTimeSnap {
+        build_snap(SnapSettings {
+            snap_to_key: true,
+            ..SnapSettings::default()
+        })
+    }
+
     #[test]
     fn dragged_key_position_time_lock_keeps_the_value() {
-        let position =
-            dragged_key_position([1.0, 2.0], [0.5, 3.0], Some(AxisLock::Time), TimeSnap::Free);
+        let position = dragged_key_position(
+            [1.0, 2.0],
+            [0.5, 3.0],
+            Some(AxisLock::Time),
+            &free_snap(),
+            &[],
+        );
 
         assert_eq!(position, [1.5, 2.0]);
     }
@@ -249,7 +335,8 @@ mod tests {
             [1.0, 2.0],
             [0.5, 3.0],
             Some(AxisLock::Value),
-            TimeSnap::Free,
+            &free_snap(),
+            &[],
         );
 
         assert_eq!(position, [1.0, 5.0]);
@@ -258,7 +345,7 @@ mod tests {
     #[test]
     fn dragged_key_position_snaps_time_to_30fps_frames() {
         let [time, value] =
-            dragged_key_position([0.0, 1.0], [0.05, 0.25], None, TimeSnap::Frame(30.0));
+            dragged_key_position([0.0, 1.0], [0.05, 0.25], None, &frame_snap(), &[]);
 
         assert!((time - 2.0 / 30.0).abs() < 1e-6);
         assert_eq!(value, 1.25);
@@ -267,12 +354,38 @@ mod tests {
     #[test]
     fn dragged_key_position_free_keeps_the_raw_time_and_clamps_at_zero() {
         assert_eq!(
-            dragged_key_position([1.0, 0.0], [0.013, 0.0], None, TimeSnap::Free),
+            dragged_key_position([1.0, 0.0], [0.013, 0.0], None, &free_snap(), &[]),
             [1.013, 0.0]
         );
         assert_eq!(
-            dragged_key_position([0.1, 0.0], [-0.5, 0.0], None, TimeSnap::Frame(30.0)),
+            dragged_key_position([0.1, 0.0], [-0.5, 0.0], None, &frame_snap(), &[]),
             [0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn dragged_key_position_snaps_to_a_nearby_key_within_the_pixel_threshold() {
+        let [near_time, _] =
+            dragged_key_position([0.0, 0.0], [0.47, 0.0], None, &frame_and_key_snap(), &[0.5]);
+        let [far_time, _] = dragged_key_position([0.0, 0.0], [0.3, 0.0], None, &key_snap(), &[0.5]);
+
+        assert_eq!(near_time, 0.5);
+        assert_eq!(far_time, 0.3);
+    }
+
+    #[test]
+    fn unselected_key_times_skip_the_dragged_keys() {
+        let curve = build_two_point_curve(PropertyType::TranslationX, [0.0, 1.0]);
+        let dragged = CurveSelectedKeyframe {
+            property_type: PropertyType::TranslationX,
+            keyframe_id: curve.keyframes[0].id,
+            original_time: curve.keyframes[0].time,
+            original_value: curve.keyframes[0].value,
+        };
+
+        assert_eq!(
+            collect_unselected_key_times(&curve, &[dragged]),
+            vec![curve.keyframes[1].time]
         );
     }
 

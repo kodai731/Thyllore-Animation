@@ -11,17 +11,18 @@ use super::text_to_animation_dialog::TextToAnimationDialogState;
 use super::text_to_mesh_dialog::TextToMeshDialogState;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
-use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
     clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
     TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings, UiWidgetState,
     WeightHeatmapState, MAX_UI_SCALE, MIN_UI_SCALE, UI_SETTINGS_PATH,
 };
+use crate::ecs::resource::{ActiveSceneCamera, ViewportInput};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::systems::phases::event_dispatch::scene_camera::SceneCameraEvent;
 use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::section_header;
@@ -190,6 +191,11 @@ fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
     if icon_button(ui, Icon::Camera, "Screenshot", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::TakeScreenshot);
     }
+
+    ui.same_line();
+    if icon_button(ui, Icon::Plus, "Add Camera", ButtonState::Normal) {
+        ecs_world.send_command(SceneCameraEvent::AddAtEditorCamera);
+    }
 }
 
 fn draw_toolbar_group_separator(ui: &imgui::Ui) {
@@ -276,6 +282,17 @@ fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
     };
     if icon_button(ui, Icon::Bone, tooltip, state) {
         ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(!visible));
+    }
+
+    ui.same_line();
+    let view_enabled = ecs_world.resource::<ActiveSceneCamera>().view_enabled;
+    let (tooltip, state) = if view_enabled {
+        ("Camera View: on", ButtonState::Active)
+    } else {
+        ("Camera View: off", ButtonState::Normal)
+    };
+    if icon_button(ui, Icon::Camera, tooltip, state) {
+        ecs_world.send_command(SceneCameraEvent::ToggleCameraView);
     }
 }
 

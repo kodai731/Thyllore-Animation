@@ -15,6 +15,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 pub enum SceneCameraEvent {
     AddAtEditorCamera,
     ToggleCameraView,
+    LookThrough(Entity),
 }
 
 impl UiCommand for SceneCameraEvent {
@@ -22,6 +23,7 @@ impl UiCommand for SceneCameraEvent {
         match *self {
             SceneCameraEvent::AddAtEditorCamera => add_scene_camera_at_editor_camera(world),
             SceneCameraEvent::ToggleCameraView => toggle_camera_view(world),
+            SceneCameraEvent::LookThrough(entity) => look_through(world, entity),
         }
     }
 }
@@ -74,6 +76,19 @@ fn exit_camera_view(world: &mut World) {
         editor_camera.fov_y = Deg(fov_y);
     }
     active.view_enabled = false;
+}
+
+fn look_through(world: &mut World, entity: Entity) {
+    if world.get_component::<SceneCamera>(entity).is_none() {
+        return;
+    }
+
+    let view_enabled = world.resource::<ActiveSceneCamera>().view_enabled;
+    if view_enabled {
+        exit_camera_view(world);
+    }
+    world.resource_mut::<ActiveSceneCamera>().entity = Some(entity);
+    enter_camera_view(world);
 }
 
 fn editor_pose_from_scene_camera(scene_camera: &SceneCamera, distance: f32) -> CameraPose {
@@ -241,5 +256,56 @@ mod tests {
             "fov_y changed without active entity"
         );
         assert!(!world.resource::<ActiveSceneCamera>().view_enabled);
+    }
+
+    fn look_through(world: &mut World, entity: Entity) {
+        Box::new(SceneCameraEvent::LookThrough(entity)).apply(
+            world,
+            &mut AssetStorage::new(),
+            &GraphicsResources::default(),
+        );
+    }
+
+    #[test]
+    fn look_through_switches_active_and_enters_view() {
+        let mut world = world_with_cameras();
+        add_at_editor_camera(&mut world);
+        let first = world.resource::<ActiveSceneCamera>().entity;
+
+        add_at_editor_camera(&mut world);
+        let second = world
+            .entities_with::<SceneCamera>()
+            .into_iter()
+            .find(|&entity| Some(entity) != first)
+            .expect("second scene camera");
+
+        look_through(&mut world, second);
+        let active = world.resource::<ActiveSceneCamera>();
+        assert_eq!(active.entity, Some(second), "active not switched");
+        assert!(active.view_enabled, "view not enabled");
+    }
+
+    #[test]
+    fn look_through_during_camera_view_keeps_original_editor_pose() {
+        let mut world = world_with_cameras();
+        add_at_editor_camera(&mut world);
+        let first = world.resource::<ActiveSceneCamera>().entity;
+        world.resource_mut::<Camera>().yaw += 0.5;
+        add_at_editor_camera(&mut world);
+        let second = world
+            .entities_with::<SceneCamera>()
+            .into_iter()
+            .find(|&entity| Some(entity) != first)
+            .expect("second scene camera");
+        world.resource_mut::<Camera>().yaw += 0.5;
+        let original_pose = world.resource::<Camera>().pose();
+
+        toggle_camera_view(&mut world);
+        look_through(&mut world, second);
+        assert_eq!(world.resource::<ActiveSceneCamera>().entity, Some(second));
+        assert!(world.resource::<ActiveSceneCamera>().view_enabled);
+
+        toggle_camera_view(&mut world);
+        assert_eq!(world.resource::<Camera>().pose(), original_pose);
     }
 }

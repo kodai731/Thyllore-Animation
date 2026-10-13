@@ -3,14 +3,16 @@ use imgui::{Condition, Key};
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
+use crate::ecs::component::SceneCamera;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
+use crate::ecs::systems::phases::event_dispatch::scene_camera::SceneCameraEvent;
 use crate::ecs::systems::{
     query_bone_rows, query_hierarchy_tree, CameraMotion, TreeMove, TreeNavigation,
 };
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 use crate::platform::ui::theme::{
     entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
 };
@@ -254,6 +256,20 @@ fn build_entity_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
                 world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
             }
         }
+
+        build_scene_camera_context_menu(ui, world, entry.entity);
+    }
+}
+
+fn build_scene_camera_context_menu(ui: &imgui::Ui, world: &World, entity: Entity) {
+    if world.get_component::<SceneCamera>(entity).is_none() {
+        return;
+    }
+    let Some(_popup) = ui.begin_popup_context_item() else {
+        return;
+    };
+    if ui.menu_item("Look Through Selected") {
+        world.send_command(SceneCameraEvent::LookThrough(entity));
     }
 }
 

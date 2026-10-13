@@ -1,5 +1,5 @@
 use crate::platform::ui::numeric_format::numeric_format;
-use imgui::{Condition, MouseButton};
+use imgui::MouseButton;
 
 use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
@@ -29,6 +29,7 @@ use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{
     icon_button, segmented_control, toolbar_divider, ButtonState,
 };
+use crate::platform::ui::theme::{window_frame, WindowKind};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -59,31 +60,25 @@ fn draw_timeline_window(
     curve_buffer: &CurveEditorBuffer,
     pose_library: &mut PoseLibrary,
 ) {
-    ui.window("Timeline")
-        .position([0.0, layout.timeline_y], Condition::Always)
-        .size(
-            [layout.display_size[0], layout.timeline_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| {
-            build_transport_controls(ui, world, state, clip_library, curve_editor_state);
-            ui.separator();
-            draw_timeline_tabs(
-                ui,
-                world,
-                state,
-                interaction,
-                clip_library,
-                curve_editor_state,
-                clip_track_snapshot,
-                curve_buffer,
-                pose_library,
-            );
-        });
+    let kind = WindowKind::Docked {
+        position: [0.0, layout.timeline_y],
+        size: [layout.display_size[0], layout.timeline_height],
+    };
+    window_frame(ui, "Timeline", kind).build(|| {
+        build_transport_controls(ui, world, state, clip_library, curve_editor_state);
+        ui.separator();
+        draw_timeline_tabs(
+            ui,
+            world,
+            state,
+            interaction,
+            clip_library,
+            curve_editor_state,
+            clip_track_snapshot,
+            curve_buffer,
+            pose_library,
+        );
+    });
 }
 
 fn draw_timeline_tabs(

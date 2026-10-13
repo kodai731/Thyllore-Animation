@@ -1,8 +1,7 @@
-use imgui::Condition;
-
 use crate::asset::AssetStorage;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[cfg(debug_assertions)]
@@ -16,17 +15,11 @@ fn draw_bottom_panel(
     message_log: &mut MessageLog,
     layout: &LayoutSnapshot,
 ) {
-    ui.window("Bottom Panel")
-        .position([0.0, layout.debug_y], Condition::Always)
-        .size(
-            [layout.display_size[0], layout.debug_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| draw_bottom_tabs(ui, ecs_world, message_log));
+    let kind = WindowKind::Docked {
+        position: [0.0, layout.debug_y],
+        size: [layout.display_size[0], layout.debug_height],
+    };
+    window_frame(ui, "Bottom Panel", kind).build(|| draw_bottom_tabs(ui, ecs_world, message_log));
 }
 
 fn draw_bottom_tabs(ui: &imgui::Ui, ecs_world: &World, message_log: &mut MessageLog) {

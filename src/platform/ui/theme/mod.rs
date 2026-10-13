@@ -6,6 +6,7 @@ pub mod icons;
 pub mod shadow;
 pub mod style;
 pub mod widgets;
+pub mod window_frame;
 
 pub use elevation::{draw_raised_window_frame, push_raised_window_style};
 pub use fonts::UiFonts;
@@ -23,3 +24,4 @@ pub use widgets::SectionDefault;
 pub use widgets::TreeRowResponse;
 pub use widgets::TreeRowSpec;
 pub use widgets::ICON_BUTTON_SIZE;
+pub use window_frame::{window_frame, WindowKind};

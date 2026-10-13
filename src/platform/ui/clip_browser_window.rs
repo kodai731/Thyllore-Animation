@@ -1,5 +1,3 @@
-use imgui::Condition;
-
 use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
@@ -7,6 +5,7 @@ use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, Timeli
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::{window_frame, WindowKind};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -19,22 +18,17 @@ fn draw_clip_browser_window(
     world: &World,
     layout: &LayoutSnapshot,
 ) {
-    ui.window("Clip Browser")
-        .position([0.0, layout.clip_browser_y], Condition::Always)
-        .size(
-            [layout.hierarchy_width, layout.clip_browser_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .build(|| {
-            build_toolbar(ui, timeline_state, world);
-            ui.separator();
-            build_filter_bar(ui, browser_state);
-            ui.separator();
-            build_clip_list(ui, clip_library, browser_state, timeline_state, world);
-        });
+    let kind = WindowKind::Docked {
+        position: [0.0, layout.clip_browser_y],
+        size: [layout.hierarchy_width, layout.clip_browser_height],
+    };
+    window_frame(ui, "Clip Browser", kind).build(|| {
+        build_toolbar(ui, timeline_state, world);
+        ui.separator();
+        build_filter_bar(ui, browser_state);
+        ui.separator();
+        build_clip_list(ui, clip_library, browser_state, timeline_state, world);
+    });
 }
 
 fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {

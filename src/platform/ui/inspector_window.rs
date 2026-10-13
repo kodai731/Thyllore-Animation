@@ -1,5 +1,3 @@
-use imgui::Condition;
-
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
@@ -11,6 +9,7 @@ use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{entity_icon, Icon};
 use crate::platform::ui::theme::{property_label, vector3_field};
+use crate::platform::ui::theme::{window_frame, WindowKind};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
@@ -26,66 +25,60 @@ fn draw_inspector_window(
     graphics: &GraphicsResources,
     layout: &LayoutSnapshot,
 ) {
-    ui.window("Inspector")
-        .position([layout.inspector_x, 0.0], Condition::Always)
-        .size(
-            [layout.inspector_width, layout.main_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| {
-            if let Some(entity) = state.selected_entity {
-                let data = collect_inspector_data(world, entity, assets, graphics);
+    let kind = WindowKind::Docked {
+        position: [layout.inspector_x, 0.0],
+        size: [layout.inspector_width, layout.main_height],
+    };
+    window_frame(ui, "Inspector", kind).build(|| {
+        if let Some(entity) = state.selected_entity {
+            let data = collect_inspector_data(world, entity, assets, graphics);
 
-                match entity_icon(data.icon) {
-                    Some(icon) => ui.text(&format!("{} {}", icon.glyph(), data.name)),
-                    None => ui.text(&data.name),
-                }
-                ui.separator();
-
-                build_transform_section(ui, world, &data);
-
-                build_mesh_section(ui, world, &data);
-
-                build_material_section(ui, world, &data);
-
-                build_visible_section(ui, world, &data);
-
-                let (mut add_type_index, mut bake_fps) = world
-                    .get_resource::<ConstraintEditorState>()
-                    .map(|s| (s.add_type_index, s.bake_fps))
-                    .unwrap_or((3, 30.0));
-
-                build_constraint_section(
-                    ui,
-                    world,
-                    entity,
-                    assets,
-                    state,
-                    &mut add_type_index,
-                    &mut bake_fps,
-                );
-
-                if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
-                    editor_state.add_type_index = add_type_index;
-                    editor_state.bake_fps = bake_fps;
-                }
-
-                build_spring_bone_section(ui, world, entity, assets, state);
-
-                build_blend_shape_section(ui, world, entity, assets, graphics);
-
-                ui.separator();
-                if ui.button("Avatar Setup...") {
-                    world.send_command(AvatarSetupEvent::OpenAvatarSetup);
-                }
-            } else {
-                ui.text("No entity selected");
+            match entity_icon(data.icon) {
+                Some(icon) => ui.text(&format!("{} {}", icon.glyph(), data.name)),
+                None => ui.text(&data.name),
             }
-        });
+            ui.separator();
+
+            build_transform_section(ui, world, &data);
+
+            build_mesh_section(ui, world, &data);
+
+            build_material_section(ui, world, &data);
+
+            build_visible_section(ui, world, &data);
+
+            let (mut add_type_index, mut bake_fps) = world
+                .get_resource::<ConstraintEditorState>()
+                .map(|s| (s.add_type_index, s.bake_fps))
+                .unwrap_or((3, 30.0));
+
+            build_constraint_section(
+                ui,
+                world,
+                entity,
+                assets,
+                state,
+                &mut add_type_index,
+                &mut bake_fps,
+            );
+
+            if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
+                editor_state.add_type_index = add_type_index;
+                editor_state.bake_fps = bake_fps;
+            }
+
+            build_spring_bone_section(ui, world, entity, assets, state);
+
+            build_blend_shape_section(ui, world, entity, assets, graphics);
+
+            ui.separator();
+            if ui.button("Avatar Setup...") {
+                world.send_command(AvatarSetupEvent::OpenAvatarSetup);
+            }
+        } else {
+            ui.text("No entity selected");
+        }
+    });
 }
 
 fn build_transform_section(

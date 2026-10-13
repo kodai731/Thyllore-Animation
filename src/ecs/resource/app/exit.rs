@@ -4,6 +4,8 @@ pub struct AppExit {
     requested: bool,
 }
 
+crate::startup_resource!(AppExit, Editor);
+
 impl AppExit {
     pub fn request(&mut self) {
         self.requested = true;

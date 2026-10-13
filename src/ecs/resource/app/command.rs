@@ -31,6 +31,11 @@ pub type SceneLoadQueue = CommandQueue<SceneLoadCommand>;
 pub type AssetEditQueue = CommandQueue<AssetEditCommand>;
 pub type OutputQueue = CommandQueue<OutputCommand>;
 
+crate::startup_resource!(EntityRemovalQueue, Editor);
+crate::startup_resource!(SceneLoadQueue, Editor);
+crate::startup_resource!(AssetEditQueue, Editor);
+crate::startup_resource!(OutputQueue, Editor);
+
 /// Applied first: the entity ids were collected from the scene as it was before any load.
 #[derive(Clone, Debug)]
 pub enum EntityRemovalCommand {

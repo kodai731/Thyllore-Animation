@@ -41,3 +41,6 @@ impl Default for TextToAnimationState {
         }
     }
 }
+
+#[cfg(feature = "auto-rig")]
+crate::startup_resource!(TextToAnimationState, CoreResources);

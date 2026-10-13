@@ -50,3 +50,6 @@ impl Default for TextToMeshState {
         }
     }
 }
+
+#[cfg(feature = "auto-rig")]
+crate::startup_resource!(TextToMeshState, CoreResources);

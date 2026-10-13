@@ -14,3 +14,5 @@ pub struct WaterHistorySnapshot {
 }
 
 pub type WaterHistorySnapshotState = HistorySnapshotState<WaterHistorySnapshot>;
+
+crate::startup_resource!(WaterHistorySnapshotState, PostProcessing);

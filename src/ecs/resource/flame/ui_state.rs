@@ -44,3 +44,5 @@ impl Default for FlameUIState {
         }
     }
 }
+
+crate::startup_resource!(FlameUIState, PostProcessing);

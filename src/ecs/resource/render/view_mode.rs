@@ -65,3 +65,5 @@ pub struct DebugViewState {
     pub show_click_debug: bool,
     pub black_background: bool,
 }
+
+crate::startup_resource!(DebugViewState, CoreResources);

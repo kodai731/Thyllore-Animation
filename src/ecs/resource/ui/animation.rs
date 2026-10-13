@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use super::MotionPreference;
 
+crate::startup_resource!(UiAnimState, Editor);
+
 pub const DEFAULT_ANIM_DURATION_SECS: f32 = 0.15;
 
 #[derive(Clone, Debug)]

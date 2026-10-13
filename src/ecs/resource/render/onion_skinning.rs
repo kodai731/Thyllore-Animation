@@ -25,6 +25,8 @@ impl Default for OnionSkinningConfig {
     }
 }
 
+crate::startup_resource!(OnionSkinningConfig, PostProcessing);
+
 #[derive(Clone, Debug)]
 pub struct GhostFrameInfo {
     pub time_offset: f32,

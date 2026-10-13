@@ -135,7 +135,9 @@ Global state that changes per frame. Located in `ecs/resource/`. **Only use for 
 
 A resource that belongs in the scene file declares its persisted fields with `declare_scene_format!`
 (runtime-only fields stay out of the table) and registers with `scene_resource!(Type)` in its own file;
-`src/scene/` never mirrors it (see `hierarchy.md`, "Feature isolation").
+`src/scene/` never mirrors it (see `hierarchy.md`, "Feature isolation"). A new resource's default value
+registration is done by writing `crate::startup_resource!(T, Editor)` etc. next to the type definition,
+without editing `src/app/init/`.
 
 Resources correspond to **singleton components** in other ECS frameworks:
 - Flecs: singletons (component added to its own entity)

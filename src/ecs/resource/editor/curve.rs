@@ -145,6 +145,8 @@ pub struct CurveEditorState {
     pub tween: Option<TweenSession>,
 }
 
+crate::startup_resource!(CurveEditorState, Editor);
+
 impl CurveEditorState {
     pub fn selected_bone_id(&self) -> Option<BoneId> {
         match self.selected_target {

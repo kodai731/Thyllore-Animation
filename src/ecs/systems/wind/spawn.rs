@@ -1,7 +1,7 @@
 use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
-use crate::ecs::resource::{HierarchyState, WindRenderSettings};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -70,11 +70,3 @@ pub fn resolve_selected_wind(world: &World) -> Option<Entity> {
 
     world.entities_with::<WindTornadoEffect>().first().copied()
 }
-
-fn insert_wind_default_resources(world: &mut World) {
-    if !world.contains_resource::<WindRenderSettings>() {
-        world.insert_resource(WindRenderSettings::default());
-    }
-}
-
-crate::effect_default_resource!("wind", insert_wind_default_resources);

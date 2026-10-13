@@ -48,3 +48,6 @@ impl Default for CurveSuggestionState {
         }
     }
 }
+
+#[cfg(feature = "ml")]
+crate::startup_resource!(CurveSuggestionState, CoreResources);

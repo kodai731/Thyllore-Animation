@@ -12,6 +12,8 @@ pub struct PoseLibrary {
     pub selected_pose_id: Option<SourceClipId>,
 }
 
+crate::startup_resource!(PoseLibrary, Editor);
+
 impl PoseLibrary {
     pub fn add_pose(&mut self, id: SourceClipId, captured_time: f32) {
         self.poses.push(PoseEntry { id, captured_time });

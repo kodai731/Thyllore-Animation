@@ -1,32 +1,18 @@
 use std::rc::Rc;
 
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{AppliedWaterPreset, WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::water::WaterUiCommand;
-use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
+use crate::ecs::systems::{resolve_selected_effect, WATER_SPAWN_HOOK};
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
-use super::scene_overlay::send_key_button;
-
-fn water_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WATER_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
+use super::effect_sections::key_edited_scalars;
+use super::param_widgets::{draw_preset_combo, draw_tiered_params};
 
 pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
     if !section_header(ui, ecs_world, "Water", SectionDefault::Closed) {
@@ -39,7 +25,7 @@ pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 
     let waters = ecs_world.entities_with::<WaterTorusEffect>();
-    let selected_water_entity = resolve_selected_water(ecs_world);
+    let selected_water_entity = resolve_selected_effect::<WaterTorusEffect>(ecs_world);
     if waters.len() > 1 {
         let mut current = selected_water_entity
             .and_then(|entity| waters.iter().position(|&e| e == entity))
@@ -95,7 +81,7 @@ pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
         &thyllore_effect_core::WATER_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
-        |ui, edited| water_key_button(ui, ecs_world, edited),
+        |ui, edited| key_edited_scalars(ui, ecs_world, &WATER_DOMAIN, edited),
     );
     if !effect_applied_this_frame {
         ecs_world.send_command(WaterUiCommand::UpdateEffect {

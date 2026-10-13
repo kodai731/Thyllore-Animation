@@ -1,6 +1,7 @@
 use super::*;
 use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect};
 use crate::ecs::resource::{HierarchyState, PickRay, WindRenderSettings};
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
 use crate::ecs::world::{GlobalTransform, Name, Transform, World};
 use cgmath::Vector3;
@@ -26,12 +27,18 @@ fn selected_wind_wins_over_the_first_wind() {
     let mut world = World::new();
     let first = spawn_wind(&mut world, "Wind 1", WindTornadoEffect::default());
     let second = spawn_wind(&mut world, "Wind 2", WindTornadoEffect::default());
-    assert_eq!(resolve_selected_wind(&world), Some(first));
+    assert_eq!(
+        resolve_selected_effect::<WindTornadoEffect>(&world),
+        Some(first)
+    );
 
     let mut hierarchy = HierarchyState::default();
     hierarchy.selected_entity = Some(second);
     world.insert_resource(hierarchy);
-    assert_eq!(resolve_selected_wind(&world), Some(second));
+    assert_eq!(
+        resolve_selected_effect::<WindTornadoEffect>(&world),
+        Some(second)
+    );
 }
 
 #[test]

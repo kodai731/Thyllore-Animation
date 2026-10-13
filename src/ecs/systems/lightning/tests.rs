@@ -5,7 +5,7 @@ use crate::ecs::component::{
     EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
-use crate::ecs::systems::effect_edit::apply_effect_preset;
+use crate::ecs::systems::effect_edit::{apply_effect_preset, resolve_selected_effect};
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
@@ -40,12 +40,18 @@ fn selected_lightning_wins_over_the_first_lightning() {
     let mut world = World::new();
     let first = spawn_lightning(&mut world, "Lightning 1", LightningEffect::default());
     let second = spawn_lightning(&mut world, "Lightning 2", LightningEffect::default());
-    assert_eq!(resolve_selected_lightning(&world), Some(first));
+    assert_eq!(
+        resolve_selected_effect::<LightningEffect>(&world),
+        Some(first)
+    );
 
     let mut hierarchy = HierarchyState::default();
     hierarchy.selected_entity = Some(second);
     world.insert_resource(hierarchy);
-    assert_eq!(resolve_selected_lightning(&world), Some(second));
+    assert_eq!(
+        resolve_selected_effect::<LightningEffect>(&world),
+        Some(second)
+    );
 }
 
 #[test]
@@ -79,7 +85,7 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         .shape
         .core_radius = 0.9;
 
-    if let Some(target) = resolve_selected_lightning(&world) {
+    if let Some(target) = resolve_selected_effect::<LightningEffect>(&world) {
         apply_effect_preset::<LightningEffect>(&mut world, target, "no_such_preset");
     }
     assert_eq!(
@@ -96,7 +102,7 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         preset_name
     ));
 
-    if let Some(target) = resolve_selected_lightning(&world) {
+    if let Some(target) = resolve_selected_effect::<LightningEffect>(&world) {
         apply_effect_preset::<LightningEffect>(&mut world, target, preset_name);
     }
     assert_eq!(

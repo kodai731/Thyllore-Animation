@@ -1,9 +1,11 @@
-use super::{resolve_selected_wind, ui_command::WindUiCommand};
+use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
+use crate::ecs::systems::effect_edit::{
+    apply_effect_preset, apply_effect_update, resolve_selected_effect,
+};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -14,7 +16,7 @@ impl UiCommand for WindUiCommand {
                 apply_effect_update::<WindTornadoEffect>(world, entity, *effect);
             }
             WindUiCommand::ApplyPreset(name) => {
-                let Some(target) = resolve_selected_wind(world) else {
+                let Some(target) = resolve_selected_effect::<WindTornadoEffect>(world) else {
                     return;
                 };
                 apply_effect_preset::<WindTornadoEffect>(world, target, &name);

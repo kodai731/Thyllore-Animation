@@ -1,9 +1,11 @@
-use super::{resolve_selected_water, ui_command::WaterUiCommand};
+use super::ui_command::WaterUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::WaterRenderSettings;
-use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
+use crate::ecs::systems::effect_edit::{
+    apply_effect_preset, apply_effect_update, resolve_selected_effect,
+};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -14,7 +16,7 @@ impl UiCommand for WaterUiCommand {
                 apply_effect_update::<WaterTorusEffect>(world, entity, *effect);
             }
             WaterUiCommand::ApplyPreset(name) => {
-                let Some(target) = resolve_selected_water(world) else {
+                let Some(target) = resolve_selected_effect::<WaterTorusEffect>(world) else {
                     return;
                 };
                 apply_effect_preset::<WaterTorusEffect>(world, target, &name);

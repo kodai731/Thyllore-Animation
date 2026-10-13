@@ -1,7 +1,7 @@
 use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
-use crate::ecs::resource::{HierarchyState, WindRenderSettings};
+use crate::ecs::resource::WindRenderSettings;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -53,22 +53,6 @@ pub fn spawn_wind_with_clip(
         &WIND_DOMAIN,
     );
     entity
-}
-
-/// The wind the UI and the wind events act on: the selected entity when it is a wind,
-/// otherwise the first one.
-pub fn resolve_selected_wind(world: &World) -> Option<Entity> {
-    let selected = world
-        .get_resource::<HierarchyState>()
-        .and_then(|state| state.selected_entity);
-
-    if let Some(entity) = selected {
-        if world.get_component::<WindTornadoEffect>(entity).is_some() {
-            return Some(entity);
-        }
-    }
-
-    world.entities_with::<WindTornadoEffect>().first().copied()
 }
 
 fn insert_wind_default_resources(world: &mut World) {

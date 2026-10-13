@@ -1,37 +1,23 @@
 use std::rc::Rc;
 
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{
     AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, LIGHTNING_DOMAIN,
 };
 use crate::ecs::resource::{
     LightningDebugCapture, LightningDebugView, LightningRenderSettings, LightningShadingMode,
 };
-use crate::ecs::systems::lightning::{resolve_selected_lightning, LightningUiCommand};
+use crate::ecs::systems::lightning::LightningUiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
+use crate::ecs::systems::{resolve_selected_effect, LIGHTNING_SPAWN_HOOK};
 use crate::ecs::world::Entity;
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
-use super::scene_overlay::send_key_button;
-
-fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            LIGHTNING_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
+use super::effect_sections::key_edited_scalars;
+use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params};
 
 pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     if !section_header(ui, ecs_world, "Lightning", SectionDefault::Closed) {
@@ -44,7 +30,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 
     let lightnings = ecs_world.entities_with::<LightningEffect>();
-    let selected_entity = resolve_selected_lightning(ecs_world);
+    let selected_entity = resolve_selected_effect::<LightningEffect>(ecs_world);
     if lightnings.len() > 1 {
         let mut current = selected_entity
             .and_then(|entity| lightnings.iter().position(|&e| e == entity))
@@ -103,7 +89,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
             &thyllore_effect_core::LIGHTNING_UI_PARAMS,
             &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
-            |ui, edited| lightning_key_button(ui, ecs_world, edited),
+            |ui, edited| key_edited_scalars(ui, ecs_world, &LIGHTNING_DOMAIN, edited),
         );
     }
 
@@ -114,7 +100,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
         &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
         &mut effect_copy,
         &["shape_end_offset"],
-        |ui, edited| lightning_key_button(ui, ecs_world, edited),
+        |ui, edited| key_edited_scalars(ui, ecs_world, &LIGHTNING_DOMAIN, edited),
     );
 
     if !effect_applied_this_frame {

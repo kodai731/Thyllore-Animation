@@ -1,32 +1,18 @@
 use std::rc::Rc;
 
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::wind::WindUiCommand;
-use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
+use crate::ecs::systems::{resolve_selected_effect, WIND_SPAWN_HOOK};
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
-use super::scene_overlay::send_key_button;
-
-fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WIND_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
+use super::effect_sections::key_edited_scalars;
+use super::param_widgets::{draw_preset_combo, draw_tiered_params};
 
 pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     if !section_header(ui, ecs_world, "Wind", SectionDefault::Closed) {
@@ -39,7 +25,7 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
     }
 
     let winds = ecs_world.entities_with::<WindTornadoEffect>();
-    let selected_wind_entity = resolve_selected_wind(ecs_world);
+    let selected_wind_entity = resolve_selected_effect::<WindTornadoEffect>(ecs_world);
     if winds.len() > 1 {
         let mut current = selected_wind_entity
             .and_then(|entity| winds.iter().position(|&e| e == entity))
@@ -95,7 +81,7 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
         &thyllore_effect_core::WIND_SCALAR_PARAMS,
         &mut effect_copy,
         &[],
-        |ui, edited| wind_key_button(ui, ecs_world, edited),
+        |ui, edited| key_edited_scalars(ui, ecs_world, &WIND_DOMAIN, edited),
     );
     if !effect_applied_this_frame {
         ecs_world.send_command(WindUiCommand::UpdateEffect {

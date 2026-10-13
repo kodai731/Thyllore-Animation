@@ -3,8 +3,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail};
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
-use crate::ecs::systems::effect_edit::apply_effect_update;
-use crate::ecs::systems::resolve_selected_flame;
+use crate::ecs::systems::effect_edit::{apply_effect_update, resolve_selected_effect};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -15,13 +14,13 @@ impl UiCommand for FlameUiCommand {
                 apply_effect_update::<FlameEffect>(world, entity, *effect);
             }
             FlameUiCommand::UpdateBaked(baked) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 world.insert_component(target, *baked);
             }
             FlameUiCommand::ApplyPreset(name) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 crate::ecs::systems::effect_edit::apply_effect_preset::<FlameEffect>(
@@ -73,7 +72,7 @@ impl UiCommand for FlameUiCommand {
                 }
             }
             FlameUiCommand::UpdateTrailEnabled(enabled) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {
@@ -92,7 +91,7 @@ impl UiCommand for FlameUiCommand {
                 }
             }
             FlameUiCommand::UpdateTrailFade(fade) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {

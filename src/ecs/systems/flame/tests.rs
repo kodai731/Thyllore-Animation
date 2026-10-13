@@ -2,6 +2,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedFlameStyle, FlameEffect};
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{BatchRun, ClipLibrary, FlameWallProbeCapture, HierarchyState};
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
 
@@ -58,7 +59,7 @@ fn selection_falls_back_to_the_first_flame_when_nothing_is_selected() {
     let first = spawn_default_flame(&mut world, "Flame 1");
     spawn_default_flame(&mut world, "Flame 2");
 
-    assert_eq!(resolve_selected_flame(&world), Some(first));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(first));
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn selection_follows_the_hierarchy_when_a_flame_is_selected() {
         .unwrap()
         .selected_entity = Some(second);
 
-    assert_eq!(resolve_selected_flame(&world), Some(second));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(second));
 }
 
 #[test]
@@ -88,7 +89,7 @@ fn selecting_a_non_flame_entity_keeps_editing_the_first_flame() {
         .unwrap()
         .selected_entity = Some(other);
 
-    assert_eq!(resolve_selected_flame(&world), Some(first));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(first));
 }
 
 #[test]
@@ -113,7 +114,7 @@ fn resolve_returns_none_without_any_flame() {
     let mut world = World::new();
     world.insert_resource(HierarchyState::default());
 
-    assert_eq!(resolve_selected_flame(&world), None);
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), None);
 }
 
 #[test]

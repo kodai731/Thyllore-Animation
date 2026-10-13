@@ -1,5 +1,4 @@
 use crate::platform::ui::numeric_format::numeric_format;
-use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FLAME_DOMAIN;
 use crate::ecs::resource::{FlameUIState, ViewportInput};
@@ -11,21 +10,9 @@ use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
+use super::effect_sections::key_edited_scalars;
+use super::param_widgets::{draw_preset_combo, draw_tiered_params};
 use super::pointer::is_last_item_double_clicked;
-use super::scene_overlay::send_key_button;
-
-fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            FLAME_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
 
 fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
     let mut noise_sharpness =
@@ -98,7 +85,8 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
     if section_header(ui, ecs_world, "Flame", SectionDefault::Closed) {
         let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
-        let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
+        let selected_flame_entity =
+            crate::ecs::systems::resolve_selected_effect::<FlameEffect>(ecs_world);
         let clamped_index = selected_flame_entity
             .and_then(|entity| flames.iter().position(|&e| e == entity))
             .unwrap_or(0);
@@ -389,7 +377,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
                         &[],
-                        |ui, edited| flame_key_button(ui, ecs_world, edited),
+                        |ui, edited| key_edited_scalars(ui, ecs_world, &FLAME_DOMAIN, edited),
                     );
                     if advanced_open {
                         draw_flame_manual_params(ui, &mut effect_copy);

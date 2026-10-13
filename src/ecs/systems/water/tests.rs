@@ -485,7 +485,7 @@ fn water_debug_caustic_accum_path_is_a_npy_next_to_the_dump() {
 
     assert_eq!(
         path.file_name().unwrap().to_string_lossy(),
-        "water_debug_42_caustic.npy"
+        "debug_42_caustic.npy"
     );
 }
 

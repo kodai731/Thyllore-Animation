@@ -7,6 +7,7 @@ use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, Timeli
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::{matches_filter, search_field};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -142,10 +143,7 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
 }
 
 fn build_filter_bar(ui: &imgui::Ui, browser_state: &mut ClipBrowserState) {
-    ui.set_next_item_width(-1.0);
-    ui.input_text("##clip_filter", &mut browser_state.filter_text)
-        .hint("Filter...")
-        .build();
+    search_field(ui, "clip_filter", "Search", &mut browser_state.filter_text);
 }
 
 fn build_clip_list(
@@ -166,14 +164,12 @@ fn build_clip_list(
     let reference_counts =
         crate::ecs::systems::clip_library_systems::clip_library_count_references(world);
 
-    let filter_lower = browser_state.filter_text.to_lowercase();
-
     let remaining = ui.content_region_avail();
     ui.child_window("##clip_list")
         .size([remaining[0], remaining[1] - 4.0])
         .build(ui, || {
             for (id, name) in &clip_names {
-                if !filter_lower.is_empty() && !name.to_lowercase().contains(&filter_lower) {
+                if !matches_filter(name, &browser_state.filter_text) {
                     continue;
                 }
 

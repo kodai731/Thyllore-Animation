@@ -14,6 +14,7 @@ pub use style::apply_ui_settings;
 pub use widgets::enum_combo;
 pub use widgets::icon_button;
 pub use widgets::item_tooltip;
+pub use widgets::matches_filter;
 pub use widgets::property_label;
 pub use widgets::search_field;
 pub use widgets::section_header;

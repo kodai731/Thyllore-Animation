@@ -494,6 +494,15 @@ pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
     changed
 }
 
+pub fn matches_filter(text: &str, filter: &str) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
+    let text_lower = text.to_lowercase();
+    let filter_lower = filter.to_lowercase();
+    text_lower.contains(&filter_lower)
+}
+
 pub fn is_in_expand_hit(mouse_x: f32, row_left: f32, depth: usize) -> bool {
     let expand_left = row_left + depth as f32 * TREE_INDENT;
     mouse_x >= expand_left && mouse_x < expand_left + TREE_INDENT
@@ -733,6 +742,23 @@ mod tests {
     fn test_vector3_component_width() {
         assert!((vector3_component_width(300.0) - 100.0).abs() < 1e-6);
         assert!((vector3_component_width(96.0) - 32.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_matches_filter_empty_filter() {
+        assert!(matches_filter("Hello World", ""));
+    }
+
+    #[test]
+    fn test_matches_filter_case_insensitive() {
+        assert!(matches_filter("Hello World", "hello"));
+        assert!(matches_filter("Hello World", "WORLD"));
+        assert!(matches_filter("Hello World", "ello"));
+    }
+
+    #[test]
+    fn test_matches_filter_no_match() {
+        assert!(!matches_filter("Hello World", "xyz"));
     }
 }
 

@@ -80,6 +80,7 @@ mod spring_bone_state;
 mod text_to_animation_state;
 #[cfg(feature = "auto-rig")]
 mod text_to_mesh_state;
+mod time_axis;
 mod timeline_interaction_state;
 mod timeline_state;
 mod tone_mapping;
@@ -179,6 +180,7 @@ pub use spring_bone_state::*;
 pub use text_to_animation_state::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_mesh_state::*;
+pub use time_axis::*;
 pub use timeline_interaction_state::*;
 pub use timeline_state::*;
 pub use tone_mapping::*;

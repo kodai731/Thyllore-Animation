@@ -42,8 +42,7 @@ pub fn timeline_apply_fit_zoom(timeline_state: &mut TimelineState, clip_duration
         return;
     }
 
-    let fit_zoom =
-        visible_width / (clip_duration * crate::platform::ui::timeline_window::PIXELS_PER_SECOND);
+    let fit_zoom = visible_width / (clip_duration * crate::ecs::resource::BASE_PIXELS_PER_SECOND);
     timeline_state.zoom_level = fit_zoom.clamp(0.01, 100.0);
 }
 

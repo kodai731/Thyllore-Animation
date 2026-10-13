@@ -11,9 +11,9 @@ pub fn apply_thyllore_style(style: &mut Style) {
     style.set_window_rounding(10.0);
     style.set_child_rounding(10.0);
     style.set_popup_rounding(10.0);
-    style.set_frame_rounding(6.0);
-    style.set_grab_rounding(6.0);
-    style.set_tab_rounding(6.0);
+    style.set_frame_rounding(CONTROL_ROUNDING);
+    style.set_grab_rounding(CONTROL_ROUNDING);
+    style.set_tab_rounding(CONTROL_ROUNDING);
     style.set_scrollbar_rounding(9.0);
     style.set_scrollbar_size(10.0);
     style.set_window_padding([12.0, 12.0]);

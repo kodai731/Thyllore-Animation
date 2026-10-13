@@ -2,9 +2,7 @@ use crate::ecs::resource::{MessageFilter, MessageLog};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::logger::message_buffer::MessageLevel;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR, INFO, WARNING};
-
-const BUTTON_ACTIVE_COLOR: [f32; 4] = [0.3, 0.5, 0.7, 1.0];
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, ERROR, INFO, WARNING};
 
 pub fn build_message_window_content(ui: &imgui::Ui, world: &World, message_log: &mut MessageLog) {
     let total = message_log.messages.len();
@@ -58,7 +56,7 @@ fn build_filter_buttons(
         }
         let is_active = message_log.filter == *filter;
         let token = if is_active {
-            Some(ui.push_style_color(imgui::StyleColor::Button, BUTTON_ACTIVE_COLOR))
+            Some(ui.push_style_color(imgui::StyleColor::Button, srgb_to_linear_rgba(ACCENT)))
         } else {
             None
         };

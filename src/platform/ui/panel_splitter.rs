@@ -6,14 +6,11 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::LayoutSnapshot;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, OUTLINE, SURFACE3};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SPLITTER_THICKNESS: f32 = 6.0;
 const SPLITTER_VISUAL_THICKNESS: f32 = 2.0;
-
-const COLOR_IDLE: [f32; 4] = [0.3, 0.3, 0.3, 0.8];
-const COLOR_HOVERED: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
-const COLOR_ACTIVE: [f32; 4] = [0.8, 0.8, 0.2, 1.0];
 
 struct SplitterRect {
     kind: ActiveSplitter,
@@ -102,14 +99,14 @@ fn handle_splitters(
     let draw_list = ui.get_background_draw_list();
     for rect in &rects {
         let color = if active_splitter == Some(rect.kind) {
-            COLOR_ACTIVE
+            srgb_to_linear_rgba(ACCENT)
         } else if hovered_splitter
             .as_ref()
             .map_or(false, |h| h.kind == rect.kind)
         {
-            COLOR_HOVERED
+            srgb_to_linear_rgba(SURFACE3)
         } else {
-            COLOR_IDLE
+            srgb_to_linear_rgba(OUTLINE)
         };
 
         if rect.is_horizontal {

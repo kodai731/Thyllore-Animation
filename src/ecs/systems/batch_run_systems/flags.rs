@@ -10,6 +10,7 @@ pub(super) const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 pub(super) const GPU_TIMINGS_FLAG: &str = "--gpu-timings";
 pub(super) const EXPOSURE_DUMP_FLAG: &str = "--exposure-dump";
 pub(super) const BATCH_PICK_FLAG: &str = "--batch-pick";
+pub(super) const BATCH_WINDOW_FLAG: &str = "--batch-window";
 pub(super) const BATCH_SCENE_FLAG: &str = "--batch-scene";
 pub(super) const BATCH_PLAY_FLAG: &str = "--batch-play";
 pub(super) const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";

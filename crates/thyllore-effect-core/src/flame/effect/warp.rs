@@ -11,6 +11,9 @@ pub struct FlameWarp {
     pub freq: f32,
     #[persist(curve, debug_range = (0.0, 2.5))]
     pub rise_speed: f32,
+    /// Height gain of the vertical advection: speed = rise_speed * (1 + rise_accel * h); 0 = uniform.
+    #[persist(ui(min = 0.0, max = 10.0, format = "%.2f"))]
+    pub rise_accel: f32,
     #[persist(owner = Shape)]
     pub taper_power: f32,
     #[runtime]
@@ -27,6 +30,7 @@ impl Default for FlameWarp {
             amp: 1.4,
             freq: 5.0,
             rise_speed: 1.5,
+            rise_accel: 0.0,
             taper_power: 1.4,
             y_scale: 0.6,
             reach: crate::flame_wave::WARP_REACH_DEFAULT,
@@ -62,6 +66,8 @@ pub fn build_warp_style(warp: &FlameWarp) -> FlameWarpStyle {
         warp_freq: warp.freq,
         rise_speed: warp.rise_speed,
         taper_power: warp.taper_power,
+        rise_accel: warp.rise_accel,
+        _padding: [0.0; 3],
     }
 }
 

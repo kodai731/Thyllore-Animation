@@ -71,6 +71,12 @@ pub struct FlameEffect {
     pub optical_depth: f32,
     #[nested]
     pub branch: FlameBranch,
+    #[nested]
+    pub puff: FlamePuff,
+    #[nested]
+    pub flow: FlameFlow,
+    #[nested]
+    pub lobe: FlameLobe,
     pub coefficients: FlameCoefficients,
     pub light_position_world: Vector3<f32>,
 }
@@ -111,6 +117,9 @@ impl Default for FlameEffect {
             twist: FlameTwist::default(),
             meander: FlameMeander::default(),
             branch: FlameBranch::default(),
+            puff: FlamePuff::default(),
+            flow: FlameFlow::default(),
+            lobe: FlameLobe::default(),
         };
         refresh_flame_coefficients(&mut effect, &FlameBaked::default());
         effect

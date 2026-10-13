@@ -2,6 +2,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedFlameStyle, FlameEffect};
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{BatchRun, ClipLibrary, FlameWallProbeCapture, HierarchyState};
+use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources};
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
 
@@ -331,4 +332,19 @@ fn clicking_empty_space_selects_nothing() {
         resolve_closest_pick(&world, None, Some(&ray_towards_origin()), None),
         None
     );
+}
+
+#[test]
+fn fixed_step_flame_time_follows_the_time_scale_and_offset() {
+    let sources = EffectTimeSources {
+        batch_fixed_time: None,
+        fixed_step_time: Some(2.0),
+        timeline: None,
+        delta_time: 1.0 / 60.0,
+        free_run_when_paused: false,
+    };
+
+    let mut flame_time = 0.0;
+    resolve_effect_time(&mut flame_time, 2.0, 1.5, sources);
+    assert!((flame_time - 5.5).abs() < 1e-6, "got {flame_time}");
 }

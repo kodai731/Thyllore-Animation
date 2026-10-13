@@ -95,7 +95,7 @@ const GPU_ONLY_BLOCKS: [GpuOnlyBlock; 2] = [
 
 fn flame_extra_derives() -> BTreeMap<String, Vec<String>> {
     let mut derives = BTreeMap::new();
-    for name in ["FlameBranchElement", "FlameBranchField"] {
+    for name in ["FlameBranchElement", "FlameBranchField", "FlamePuffField"] {
         derives.insert(name.to_string(), vec!["Default".into(), "PartialEq".into()]);
     }
     derives.insert("FlameBranchAgeProfile".into(), vec!["PartialEq".into()]);

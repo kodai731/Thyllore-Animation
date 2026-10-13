@@ -1,4 +1,5 @@
 use crate::flame::*;
+use crate::flame_wave::{WaveLobeShape, WAVE_LOBE_SCALE_DEFAULT};
 
 /// Erosion noise of the medium.
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
@@ -24,6 +25,12 @@ pub struct FlameNoise {
     pub shaping_scale: f32,
     #[persist]
     pub erosion_gain: f32,
+    /// Low-octave high-pass knee (normalized |k|): smaller passes larger, rounder lobes.
+    #[persist(ui(min = 0.1, max = 1.5, format = "%.2f"))]
+    pub lobe_scale: f32,
+    /// Vertical wavenumber multiplier of the low octaves: below 1 = taller lobes.
+    #[persist(ui(min = 0.25, max = 2.0, format = "%.2f"))]
+    pub lobe_aniso: f32,
 }
 
 impl Default for FlameNoise {
@@ -37,7 +44,16 @@ impl Default for FlameNoise {
             scale_mode: 0.0,
             shaping_scale: 0.0,
             erosion_gain: 1.0,
+            lobe_scale: WAVE_LOBE_SCALE_DEFAULT,
+            lobe_aniso: 1.0,
         }
+    }
+}
+
+pub fn noise_lobe_shape(noise: &FlameNoise) -> WaveLobeShape {
+    WaveLobeShape {
+        scale: noise.lobe_scale,
+        aniso_y: noise.lobe_aniso,
     }
 }
 

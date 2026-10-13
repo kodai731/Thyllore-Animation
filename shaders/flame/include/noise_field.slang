@@ -48,9 +48,20 @@ public float flameRadialSupportRadius() {
   return flame.supportMotion.supportMargin * min(sqrt(2.0 / max(flame.radialSharpness, 1e-3)), FLAME_SHELL_SUPPORT_HEADROOM);
 }
 
-// Internal helper: compute the advect vector from style params and time.
-float3 flameNoiseAdvect() {
-    return float3(flame.windBend.windDirection.x, flame.warpStyle.riseSpeed, flame.windBend.windDirection.y) * flame.time;
+// Fire pool at the foot: radius gain baseSpread at h = 0 fading quadratically to 1 at baseSpreadHeight. Mirrored in flame/analytic/radial.rs.
+public float flameRadialBaseSpread(float height01) {
+    float spread = flame.edgeStyle.baseSpread;
+    if (spread == 0.0) {
+        return 1.0;
+    }
+    float fade = max(1.0 - height01 / max(flame.edgeStyle.baseSpreadHeight, 1e-3), 0.0);
+    return 1.0 + spread * fade * fade;
+}
+
+// Vertical advection grows with height as riseSpeed * (1 + riseAccel * h); h is constant per ray, so the closed forms stay exact.
+float3 flameNoiseAdvectAt(float h) {
+    float rise = flame.warpStyle.riseSpeed * (1.0 + flame.warpStyle.riseAccel * max(h, 0.0));
+    return float3(flame.windBend.windDirection.x, rise, flame.windBend.windDirection.y) * flame.time;
 }
 
 // Internal helper: anisotropic compression along the advection axis.
@@ -80,6 +91,21 @@ float2 flameBendOffsetAt(float h) {
     return flame.windBend.windDirection * flame.windBend.bendAmount * pow(h, flame.windBend.bendPower);
 }
 
+// Fluid motion at height01: (centre offset x, centre offset z, width scale), linear over the marker table. Mirrored in flame/flow.rs (flow_sample).
+public float3 flameFlowSample(float h) {
+    float gain = flame.flowField.gain;
+    if (gain == 0.0) {
+        return float3(0.0, 0.0, 1.0);
+    }
+    float position = clamp(h, 0.0, 1.0) * float(FLAME_FLOW_MARKER_COUNT - 1);
+    int index = min(int(floor(position)), FLAME_FLOW_MARKER_COUNT - 2);
+    float t = position - float(index);
+    float4 a = flame.flowField.markers[index];
+    float4 b = flame.flowField.markers[index + 1];
+    float3 marker = lerp(a.xyz, b.xyz, t);
+    return float3(gain * marker.xy, 1.0 + gain * (marker.z - 1.0));
+}
+
 // Animated meander: time-varying horizontal displacement of the centerline at
 // height h, with g(h) = h (base fixed, tip moves more). The mode table comes
 // from Rust (flame/constants.rs) through the UBO.
@@ -89,7 +115,7 @@ float2 flameMeanderOffsetAt(float h) {
         FlameMeanderMode mode = flame.meanderModes[j];
         offset += sin(mode.kappa * h - mode.omega * flame.time + mode.phase) * mode.direction;
     }
-    return flame.supportMotion.meanderAmp * h * offset;
+    return flame.supportMotion.meanderAmp * h * offset + flameFlowSample(h).xy;
 }
 
 // Meander-only shifted position for density/support evaluation.
@@ -232,7 +258,7 @@ public bool flameWaveCfActive() {
 void flameWaveCfPsiVectors(
     float3 pb, float3 dir, float h, out float3 psiVec, out float3 rateVec, out float ampDisp) {
     ampDisp = flameWarpStrength(h) / FLAME_WAVE_SHEAR_STRENGTH_SCALE;
-    float3 m0 = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvect();
+    float3 m0 = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvectAt(h);
     float3 dm0 = flameAnisoCompress(dir, 0.35) * flame.warpStyle.warpFreq;
     int base = FLAME_WAVE_WARP_BASE;
     int count = FLAME_WAVE_WARP_COUNT;
@@ -423,7 +449,7 @@ float3 flameWaveWarpOffset(float3 pb, float h) {
     if (amp == 0.0 || warpCount == 0) {
         return float3(0.0);
     }
-    float3 wp = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvect();
+    float3 wp = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvectAt(h);
     int base = FLAME_WAVE_WARP_BASE;
     float3 displacement = float3(0.0);
     for (int m = 0; m < warpCount; ++m) {
@@ -557,10 +583,10 @@ float3 flameWaveFlowWarp(float3 pb, float h) {
     if (strength == 0.0 || warpCount == 0) {
         return pb;
     }
-    float3 z = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvect();
+    float3 z = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvectAt(h);
     int base = cf ? FLAME_WAVE_CF_SHEAR_BASE : FLAME_WAVE_WARP_BASE;
     z = flameWarpMapZ(z, base, warpCount, strength);
-    return flameAnisoExpand(z / flame.warpStyle.warpFreq + flameNoiseAdvect() / flame.warpStyle.warpFreq, 0.35);
+    return flameAnisoExpand(z / flame.warpStyle.warpFreq + flameNoiseAdvectAt(h) / flame.warpStyle.warpFreq, 0.35);
 }
 
 // Flow-map warp rate: same shear composition as flameWaveFlowWarp but also
@@ -579,13 +605,13 @@ public float3 flameWaveFlowWarpRate(float3 pb, float3 dir, float h, out float3 w
 
     // M: warp space (same chain as flameWaveFlowWarp); v starts as dir
     // transformed by the linear part (no translation for a direction vector).
-    float3 z = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvect();
+    float3 z = flameAnisoCompress(pb, 0.35) * flame.warpStyle.warpFreq - flameNoiseAdvectAt(h);
     float3 v = flameAnisoCompress(dir, 0.35) * flame.warpStyle.warpFreq;
     int base = cf ? FLAME_WAVE_CF_SHEAR_BASE : FLAME_WAVE_WARP_BASE;
     flameWarpMapJvp(z, v, base, warpCount, strength);
 
     // M^-1: back to physical space
-    warpedPoint = flameAnisoExpand(z / flame.warpStyle.warpFreq + flameNoiseAdvect() / flame.warpStyle.warpFreq, 0.35);
+    warpedPoint = flameAnisoExpand(z / flame.warpStyle.warpFreq + flameNoiseAdvectAt(h) / flame.warpStyle.warpFreq, 0.35);
     return flameAnisoExpand(v / flame.warpStyle.warpFreq, 0.35);
 }
 
@@ -667,7 +693,7 @@ public FlameWarpFrame flameBuildWarpFrame(float3 p, float3 d, float h) {
     float3 ds = float3(dt.x * spread, dt.y * spreadY, dt.z * spread);
     float3 rateRaw = flameWaveFlowWarpRate(frame.pb, ds, h, frame.q);
     frame.w = flameAnisoCompress(frame.q, flame.temporalData.noiseAnisoY) * flame.noiseFrequency
-        - flameNoiseAdvect();
+        - flameNoiseAdvectAt(h);
     frame.rate = flameAnisoCompress(rateRaw, flame.temporalData.noiseAnisoY) * flame.noiseFrequency;
     return frame;
 }
@@ -689,12 +715,12 @@ public float flameEmitterSmoothDensityDisplacedAt(float3 c, float h, float wiggl
         return clamp(1.0 - max(d, 0.0) / shell, 0.0, 1.0) * thickness;
     }
     float hb = clamp(h / boundary.x, 0.0, 1.0);
-    float taperR = lerp(1.0, flame.edgeStyle.radiusTipRatio, pow(hb, flame.warpStyle.taperPower));
+    float taperR = lerp(1.0, flame.edgeStyle.radiusTipRatio, pow(hb, flame.warpStyle.taperPower)) * flameRadialBaseSpread(hb);
     float rm = flame.emitterParams.kind >= 0.5 ? flame.emitterParams.ringMajorRatio : 0.0;
     float minorScale = flame.emitterParams.kind >= 0.5 ? max(1.0 - rm, 1e-3) : 1.0;
     float rho = (length(c.xz) - rm) / minorScale;
     float rn = abs(rho) / max(taperR * wiggle * boundary.y, 1e-4);
-    float u = rn / flameRadialSupportRadius();
+    float u = rn / (flameRadialSupportRadius() * flameFlowSample(hb).z);
     uSquared = u * u;
    return evaluateHeightFalloff(hb) * flameBiweight(uSquared) * flameCapFade(h, boundary.x);
 }
@@ -708,10 +734,29 @@ public float flameEmitterSmoothDensityAt(float3 c, float h, float wiggle) {
     return flameEmitterSmoothDensityDisplacedAt(c, h, wiggle, flameBoundaryDisplacement(c.xz));
 }
 
+// Puff train density at trunk-local ps: the gaps thin to 1 - gain, each Gaussian puff core restores it, and the factor fades to 1 toward the support edge (u) so the silhouette never moves. Mirrored in flame/puff.rs (puff_density_factor).
+public float flamePuffDensityFactor(float3 ps, float u) {
+    int count = int(flame.puffField.count + 0.5);
+    if (count <= 0) { return 1.0; }
+    float sum = 0.0;
+    for (int i = 0; i < FLAME_PUFF_MAX_COUNT; ++i) {
+        if (i >= count) { break; }
+        float4 puff = flame.puffField.puffs[i];
+        float dy = (ps.y - puff.x) * flame.puffField.aspect;
+        float r2 = (ps.x * ps.x + ps.z * ps.z) / max(puff.y * puff.y, 1e-6)
+            + dy * dy / max(puff.w * puff.w, 1e-6);
+        sum += puff.z * exp(-r2);
+    }
+    float interior = lerp(1.0 - flame.puffField.gain, 1.0, min(sum, 1.0));
+    return lerp(interior, 1.0, smoothstep(0.6, 0.95, u));
+}
+
 public float flameMixingDegree(float carrierZ, float h, float uSquared) {
     float carveSign = flame.noiseAmplitude < 0.0 ? -1.0 : 1.0;
     float mixNoise = smoothstep(flame.mixParams.lo, flame.mixParams.hi,
         carveSign * carrierZ * flame.mixParams.invCarrierStd);
+    float coreRadius = flame.mixParams.coreRadius;
+    mixNoise *= coreRadius > 0.0 ? smoothstep(0.25 * coreRadius * coreRadius, coreRadius * coreRadius, uSquared) : 1.0;
     float mixHeight = flame.mixParams.heightGain * h * h;
     float mixRadial = flame.mixParams.radialGain * uSquared;
     return clamp(mixNoise + mixHeight + mixRadial, 0.0, 1.0);

@@ -14,9 +14,10 @@ use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
     clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
-    TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings, UiWidgetState,
-    WeightHeatmapState, MAX_UI_SCALE, MIN_UI_SCALE, UI_SETTINGS_PATH,
+    PostProcessPreview, TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings,
+    UiWidgetState, WeightHeatmapState, MAX_UI_SCALE, MIN_UI_SCALE, UI_SETTINGS_PATH,
 };
+use crate::ecs::systems::current_post_process_preview;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
@@ -263,6 +264,12 @@ fn build_gizmo_buttons(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
+    build_bone_gizmo_toggle(ui, ecs_world);
+    ui.same_line();
+    build_post_process_preview_toggle(ui, ecs_world);
+}
+
+fn build_bone_gizmo_toggle(ui: &imgui::Ui, ecs_world: &World) {
     let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() else {
         return;
     };
@@ -276,6 +283,18 @@ fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
     };
     if icon_button(ui, Icon::Bone, tooltip, state) {
         ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(!visible));
+    }
+}
+
+fn build_post_process_preview_toggle(ui: &imgui::Ui, ecs_world: &World) {
+    let preview = current_post_process_preview(ecs_world);
+
+    let (tooltip, state) = match preview {
+        PostProcessPreview::Enabled => ("Post Processing: on", ButtonState::Active),
+        PostProcessPreview::Disabled => ("Post Processing: off", ButtonState::Normal),
+    };
+    if icon_button(ui, Icon::Sparkles, tooltip, state) {
+        ecs_world.send_command(OverlayEvent::SetPostProcessPreview(preview.toggled()));
     }
 }
 

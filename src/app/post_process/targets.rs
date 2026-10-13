@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PostProcessFrameTargets;
+use crate::ecs::systems::post_process_preview_enabled;
 use crate::ecs::PassContext;
 use crate::hooks::pass::TransientSlot;
 use crate::vulkanr::resource::BloomMipTarget;
@@ -28,14 +29,17 @@ struct InputBinding {
 }
 
 pub fn is_dof_enabled(ctx: &PassContext) -> bool {
-    ctx.raytracing.dof_pipeline.is_some() && ctx.dof_buffer.is_some()
+    post_process_preview_enabled(ctx.world)
+        && ctx.raytracing.dof_pipeline.is_some()
+        && ctx.dof_buffer.is_some()
 }
 
 pub fn bloom_mip_count(ctx: &PassContext) -> usize {
-    let enabled = ctx
-        .world
-        .get_resource::<crate::ecs::resource::BloomSettings>()
-        .is_some_and(|settings| settings.enabled)
+    let enabled = post_process_preview_enabled(ctx.world)
+        && ctx
+            .world
+            .get_resource::<crate::ecs::resource::BloomSettings>()
+            .is_some_and(|settings| settings.enabled)
         && ctx.raytracing.bloom_downsample_pipeline.is_some();
     if !enabled {
         return 0;

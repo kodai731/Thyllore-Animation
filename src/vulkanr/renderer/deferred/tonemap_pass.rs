@@ -1,7 +1,19 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::resource::{
+    BloomSettings, Exposure, LensEffects, PostProcessPreview, SceneBrightness, ToneMapOperator,
+    ToneMapping,
+};
+use crate::ecs::systems::current_post_process_preview;
 use crate::ecs::PassContext;
+
+struct TonemapSettings {
+    tonemap: ToneMapping,
+    exposure: Exposure,
+    lens: LensEffects,
+    bloom: BloomSettings,
+}
 
 pub unsafe fn record_tonemap_to_offscreen(
     ctx: &PassContext,
@@ -27,38 +39,10 @@ pub unsafe fn record_tonemap_to_offscreen(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("ToneMap descriptor not initialized"))?;
 
-    let tonemap_default = crate::ecs::resource::ToneMapping::default();
-    let exposure_default = crate::ecs::resource::Exposure::default();
-    let lens_default = crate::ecs::resource::LensEffects::default();
-    let bloom_default = crate::ecs::resource::BloomSettings::default();
-
-    let tonemap = ctx
-        .world
-        .get_resource::<crate::ecs::resource::ToneMapping>();
-    let exposure = ctx.world.get_resource::<crate::ecs::resource::Exposure>();
-    let lens = ctx
-        .world
-        .get_resource::<crate::ecs::resource::LensEffects>();
-    let bloom = ctx
-        .world
-        .get_resource::<crate::ecs::resource::BloomSettings>();
-
-    let tonemap_ref = tonemap.as_deref().unwrap_or(&tonemap_default);
-    let brightness = ctx
-        .world
-        .get_resource::<crate::ecs::resource::SceneBrightness>()
-        .map(|b| *b)
-        .unwrap_or_default();
-    let displayed_exposure = crate::ecs::resource::Exposure {
-        exposure_value: exposure
-            .as_deref()
-            .unwrap_or(&exposure_default)
-            .display_multiplier(brightness),
-        ..exposure_default.clone()
+    let settings = match current_post_process_preview(ctx.world) {
+        PostProcessPreview::Enabled => collect_configured_tonemap_settings(ctx),
+        PostProcessPreview::Disabled => neutral_tonemap_settings(),
     };
-    let exposure_ref = &displayed_exposure;
-    let lens_ref = lens.as_deref().unwrap_or(&lens_default);
-    let bloom_ref = bloom.as_deref().unwrap_or(&bloom_default);
 
     let render = ctx.frame_render_context(image_index);
 
@@ -83,10 +67,10 @@ pub unsafe fn record_tonemap_to_offscreen(
         pipeline,
         descriptor,
         frame_slot,
-        tonemap_ref,
-        exposure_ref,
-        lens_ref,
-        bloom_ref,
+        &settings.tonemap,
+        &settings.exposure,
+        &settings.lens,
+        &settings.bloom,
         extent,
         command_buffer,
         plume_data,
@@ -96,4 +80,66 @@ pub unsafe fn record_tonemap_to_offscreen(
     thyllore_vulkan_core::renderer::end_tonemap_render_pass(&render, command_buffer);
 
     Ok(())
+}
+
+fn collect_configured_tonemap_settings(ctx: &PassContext) -> TonemapSettings {
+    let tonemap = ctx
+        .world
+        .get_resource::<ToneMapping>()
+        .map(|tonemap| tonemap.clone())
+        .unwrap_or_default();
+    let exposure = ctx
+        .world
+        .get_resource::<Exposure>()
+        .map(|exposure| exposure.clone())
+        .unwrap_or_default();
+    let lens = ctx
+        .world
+        .get_resource::<LensEffects>()
+        .map(|lens| lens.clone())
+        .unwrap_or_default();
+    let bloom = ctx
+        .world
+        .get_resource::<BloomSettings>()
+        .map(|bloom| bloom.clone())
+        .unwrap_or_default();
+    let brightness = ctx
+        .world
+        .get_resource::<SceneBrightness>()
+        .map(|b| *b)
+        .unwrap_or_default();
+
+    let displayed_exposure = Exposure {
+        exposure_value: exposure.display_multiplier(brightness),
+        ..Exposure::default()
+    };
+
+    TonemapSettings {
+        tonemap,
+        exposure: displayed_exposure,
+        lens,
+        bloom,
+    }
+}
+
+fn neutral_tonemap_settings() -> TonemapSettings {
+    TonemapSettings {
+        tonemap: ToneMapping {
+            operator: ToneMapOperator::None,
+            ..ToneMapping::default()
+        },
+        exposure: Exposure {
+            exposure_value: 1.0,
+            ..Exposure::default()
+        },
+        lens: LensEffects {
+            vignette_enabled: false,
+            chromatic_aberration_enabled: false,
+            ..LensEffects::default()
+        },
+        bloom: BloomSettings {
+            enabled: false,
+            ..BloomSettings::default()
+        },
+    }
 }

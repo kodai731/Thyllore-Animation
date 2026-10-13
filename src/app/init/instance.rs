@@ -1267,6 +1267,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::BloomSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::PostProcessPreview>(data);
         crate::hooks::effect_defaults::apply_effect_default_resources(&mut data.ecs_world);
     }
 

@@ -4,7 +4,7 @@ use crate::ecs::component::{
     ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
     SpringJointParam, WithSpringBone,
 };
-use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::{HierarchyState, SpringBoneEditorState};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
 use crate::platform::ui::theme::section_header;
@@ -232,44 +232,40 @@ fn build_add_chain_row(
 ) {
     ui.text("Add Chain");
 
-    thread_local! {
-        static ADD_CHAIN_ROOT_BONE: std::cell::RefCell<BoneId> = const { std::cell::RefCell::new(0) };
-        static ADD_CHAIN_LENGTH: std::cell::RefCell<i32> = const { std::cell::RefCell::new(3) };
-    }
-
-    let mut root_bone_val = ADD_CHAIN_ROOT_BONE.with(|v| *v.borrow());
-    let mut chain_length_val = ADD_CHAIN_LENGTH.with(|v| *v.borrow());
-    let root_bone = &mut root_bone_val;
-    let chain_length = &mut chain_length_val;
+    let state = world.resource::<SpringBoneEditorState>();
+    let mut root_bone = state.add_chain_root_bone;
+    let mut chain_length = state.add_chain_length;
+    drop(state);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
         world,
         "Root Bone##add_chain",
-        *root_bone,
+        root_bone,
         bone_list,
         hierarchy_state,
     ) {
-        *root_bone = bone;
+        root_bone = bone;
     }
 
     ui.set_next_item_width(100.0);
     ui.input_int_config("Chain Length##add")
         .step(1)
-        .build(chain_length);
-    *chain_length = (*chain_length).max(1);
+        .build(&mut chain_length);
+    chain_length = chain_length.max(1);
 
     ui.same_line();
     if ui.button("Add Chain") {
         world.send_command(SpringBoneEvent::ChainAdd {
             entity,
-            root_bone_id: *root_bone,
-            chain_length: *chain_length as u32,
+            root_bone_id: root_bone,
+            chain_length: chain_length as u32,
         });
     }
 
-    ADD_CHAIN_ROOT_BONE.with(|v| *v.borrow_mut() = *root_bone);
-    ADD_CHAIN_LENGTH.with(|v| *v.borrow_mut() = *chain_length);
+    let mut editor_state = world.resource_mut::<SpringBoneEditorState>();
+    editor_state.add_chain_root_bone = root_bone;
+    editor_state.add_chain_length = chain_length;
 }
 
 fn build_collider_list(
@@ -405,19 +401,14 @@ fn build_add_collider_row(
     entity: Entity,
     bone_list: &[(BoneId, String)],
 ) {
-    thread_local! {
-        static ADD_COLLIDER_BONE: std::cell::RefCell<BoneId> = const { std::cell::RefCell::new(0) };
-        static ADD_COLLIDER_SHAPE_IDX: std::cell::RefCell<i32> = const { std::cell::RefCell::new(0) };
-    }
-
-    let mut bone_val = ADD_COLLIDER_BONE.with(|v| *v.borrow());
-    let mut shape_idx_val = ADD_COLLIDER_SHAPE_IDX.with(|v| *v.borrow());
-    let bone = &mut bone_val;
-    let shape_idx = &mut shape_idx_val;
+    let state = world.resource::<SpringBoneEditorState>();
+    let mut bone = state.add_collider_bone;
+    let mut shape_idx = state.add_collider_shape_index;
+    drop(state);
 
     let current_name = bone_list
         .iter()
-        .find(|(id, _)| *id == *bone)
+        .find(|(id, _)| *id == bone)
         .map(|(_, name)| name.as_str())
         .unwrap_or("(none)");
 
@@ -425,9 +416,9 @@ fn build_add_collider_row(
     ui.set_next_item_width(-1.0);
     if let Some(token) = ui.begin_combo("Bone##add_collider", current_name) {
         for (bone_id, bone_name) in bone_list {
-            let selected = *bone_id == *bone;
+            let selected = *bone_id == bone;
             if ui.selectable_config(bone_name).selected(selected).build() {
-                *bone = *bone_id;
+                bone = *bone_id;
             }
         }
         token.end();
@@ -435,12 +426,12 @@ fn build_add_collider_row(
 
     let shape_names = ["Sphere", "Capsule"];
     ui.set_next_item_width(100.0);
-    let label = shape_names[*shape_idx as usize];
+    let label = shape_names[shape_idx as usize];
     if let Some(token) = ui.begin_combo("Shape##add_collider", label) {
         for (i, name) in shape_names.iter().enumerate() {
-            let selected = i as i32 == *shape_idx;
+            let selected = i as i32 == shape_idx;
             if ui.selectable_config(name).selected(selected).build() {
-                *shape_idx = i as i32;
+                shape_idx = i as i32;
             }
         }
         token.end();
@@ -448,7 +439,7 @@ fn build_add_collider_row(
 
     ui.same_line();
     if ui.button("Add Collider") {
-        let shape = match *shape_idx {
+        let shape = match shape_idx {
             0 => ColliderShape::Sphere { radius: 0.1 },
             _ => ColliderShape::Capsule {
                 radius: 0.1,
@@ -457,13 +448,14 @@ fn build_add_collider_row(
         };
         world.send_command(SpringBoneEvent::ColliderAdd {
             entity,
-            bone_id: *bone,
+            bone_id: bone,
             shape,
         });
     }
 
-    ADD_COLLIDER_BONE.with(|v| *v.borrow_mut() = *bone);
-    ADD_COLLIDER_SHAPE_IDX.with(|v| *v.borrow_mut() = *shape_idx);
+    let mut editor_state = world.resource_mut::<SpringBoneEditorState>();
+    editor_state.add_collider_bone = bone;
+    editor_state.add_collider_shape_index = shape_idx;
 }
 
 fn build_collider_group_list(
@@ -547,22 +539,23 @@ fn build_collider_group_list(
 }
 
 fn build_add_collider_group_row(ui: &imgui::Ui, world: &World, entity: Entity) {
-    thread_local! {
-        static GROUP_NAME_BUF: std::cell::RefCell<String> = std::cell::RefCell::new("NewGroup".to_string());
+    let mut name_buf = world
+        .resource::<SpringBoneEditorState>()
+        .new_group_name
+        .clone();
+
+    ui.set_next_item_width(150.0);
+    ui.input_text("##new_group_name", &mut name_buf).build();
+
+    ui.same_line();
+    if ui.button("Add Group") {
+        world.send_command(SpringBoneEvent::ColliderGroupAdd {
+            entity,
+            name: name_buf.clone(),
+        });
     }
 
-    GROUP_NAME_BUF.with_borrow_mut(|name_buf| {
-        ui.set_next_item_width(150.0);
-        ui.input_text("##new_group_name", name_buf).build();
-
-        ui.same_line();
-        if ui.button("Add Group") {
-            world.send_command(SpringBoneEvent::ColliderGroupAdd {
-                entity,
-                name: name_buf.to_string(),
-            });
-        }
-    });
+    world.resource_mut::<SpringBoneEditorState>().new_group_name = name_buf;
 }
 
 fn build_gizmo_toggle(ui: &imgui::Ui, world: &World) {

@@ -660,8 +660,6 @@ impl App {
                 pipeline.pipeline,
             );
 
-            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,

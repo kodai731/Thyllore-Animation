@@ -31,7 +31,7 @@ use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::param_widgets::EditedScalars;
+use super::param_widgets::{edit_resource_copy, EditedScalars};
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
@@ -558,37 +558,31 @@ fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
 
     if section_header(ui, ecs_world, "Depth of Field", SectionDefault::Closed) {
-        if let Some(dof) = ecs_world.get_resource::<DepthOfField>() {
-            let mut dof_copy = dof.clone();
-            drop(dof);
-
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "DOF Enabled",
-                &mut dof_copy.enabled,
-            );
-
-            ui.slider_config("Focus Distance", 0.1, 100.0)
-                .build(&mut dof_copy.focus_distance);
-
-            ui.slider_config("Max Blur Radius", 1.0, 32.0)
-                .build(&mut dof_copy.max_blur_radius);
-
-            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(dof_copy));
+        if let Some(edited) = edit_resource_copy::<DepthOfField>(ecs_world, |value| {
+            let mut changed = false;
+            changed |= toggle_switch(ui, ecs_world, "DOF Enabled", &mut value.enabled);
+            changed |= ui
+                .slider_config("Focus Distance", 0.1, 100.0)
+                .build(&mut value.focus_distance);
+            changed |= ui
+                .slider_config("Max Blur Radius", 1.0, 32.0)
+                .build(&mut value.max_blur_radius);
+            changed
+        }) {
+            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(edited));
         }
 
-        if let Some(params) = ecs_world.get_resource::<PhysicalCameraParameters>() {
-            let mut params_copy = params.clone();
-            drop(params);
-
-            ui.slider_config("Aperture (f-stops)", 1.0, 22.0)
-                .build(&mut params_copy.aperture_f_stops);
-
-            ui.slider_config("Focal Length (mm)", 10.0, 200.0)
-                .build(&mut params_copy.focal_length_mm);
-
-            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(params_copy));
+        if let Some(edited) = edit_resource_copy::<PhysicalCameraParameters>(ecs_world, |value| {
+            let mut changed = false;
+            changed |= ui
+                .slider_config("Aperture (f-stops)", 1.0, 22.0)
+                .build(&mut value.aperture_f_stops);
+            changed |= ui
+                .slider_config("Focal Length (mm)", 10.0, 200.0)
+                .build(&mut value.focal_length_mm);
+            changed
+        }) {
+            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(edited));
         }
     }
 }
@@ -616,41 +610,44 @@ fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{AutoExposure, Exposure};
 
     if section_header(ui, ecs_world, "Auto Exposure", SectionDefault::Closed) {
-        if let Some(ae) = ecs_world.get_resource::<AutoExposure>() {
-            let mut ae_copy = ae.clone();
-            drop(ae);
+        if let Some(edited) = edit_resource_copy::<AutoExposure>(ecs_world, |value| {
+            let mut changed = false;
+            changed |= toggle_switch(ui, ecs_world, "Auto Exposure Enabled", &mut value.enabled);
 
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "Auto Exposure Enabled",
-                &mut ae_copy.enabled,
-            );
+            let metering_before = value.metering;
+            build_exposure_metering_combo(ui, &mut value.metering);
+            changed |= value.metering != metering_before;
 
-            build_exposure_metering_combo(ui, &mut ae_copy.metering);
+            changed |= ui
+                .slider_config("White Level", 0.05, 1.0)
+                .build(&mut value.white_level);
 
-            ui.slider_config("White Level", 0.05, 1.0)
-                .build(&mut ae_copy.white_level);
+            changed |= ui
+                .slider_config("Min EV", -10.0, 10.0)
+                .build(&mut value.min_ev);
 
-            ui.slider_config("Min EV", -10.0, 10.0)
-                .build(&mut ae_copy.min_ev);
+            changed |= ui
+                .slider_config("Max EV", 0.0, 30.0)
+                .build(&mut value.max_ev);
 
-            ui.slider_config("Max EV", 0.0, 30.0)
-                .build(&mut ae_copy.max_ev);
+            changed |= ui
+                .slider_config("Speed Up", 0.1, 10.0)
+                .build(&mut value.adaptation_speed_up);
 
-            ui.slider_config("Speed Up", 0.1, 10.0)
-                .build(&mut ae_copy.adaptation_speed_up);
+            changed |= ui
+                .slider_config("Speed Down", 0.1, 10.0)
+                .build(&mut value.adaptation_speed_down);
 
-            ui.slider_config("Speed Down", 0.1, 10.0)
-                .build(&mut ae_copy.adaptation_speed_down);
+            changed |= ui
+                .slider_config("Low Percent", 0.0, 0.5)
+                .build(&mut value.low_percent);
 
-            ui.slider_config("Low Percent", 0.0, 0.5)
-                .build(&mut ae_copy.low_percent);
-
-            ui.slider_config("High Percent", 0.5, 1.0)
-                .build(&mut ae_copy.high_percent);
-
-            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(ae_copy));
+            changed |= ui
+                .slider_config("High Percent", 0.5, 1.0)
+                .build(&mut value.high_percent);
+            changed
+        }) {
+            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(edited));
         }
 
         if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
@@ -664,43 +661,46 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::OnionSkinningConfig;
 
     if section_header(ui, ecs_world, "Onion Skinning", SectionDefault::Closed) {
-        if let Some(config) = ecs_world.get_resource::<OnionSkinningConfig>() {
-            let mut config_copy = config.clone();
-            drop(config);
+        if let Some(edited) = edit_resource_copy::<OnionSkinningConfig>(ecs_world, |value| {
+            let mut changed = false;
+            changed |= toggle_switch(ui, ecs_world, "Onion Skin Enabled", &mut value.enabled);
 
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "Onion Skin Enabled",
-                &mut config_copy.enabled,
-            );
-
-            let mut past = config_copy.past_count as i32;
+            let mut past = value.past_count as i32;
             if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
-                config_copy.past_count = past.max(0) as u32;
+                changed = true;
+                value.past_count = past.max(0) as u32;
             }
 
-            let mut future = config_copy.future_count as i32;
+            let mut future = value.future_count as i32;
             if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
-                config_copy.future_count = future.max(0) as u32;
+                changed = true;
+                value.future_count = future.max(0) as u32;
             }
 
-            ui.slider_config("Frame Step", 0.001, 0.2)
+            changed |= ui
+                .slider_config("Frame Step", 0.001, 0.2)
                 .display_format(numeric_format("%.3f"))
-                .build(&mut config_copy.frame_step);
+                .build(&mut value.frame_step);
 
-            ui.slider_config("Ghost Opacity", 0.0, 1.0)
-                .build(&mut config_copy.opacity);
+            changed |= ui
+                .slider_config("Ghost Opacity", 0.0, 1.0)
+                .build(&mut value.opacity);
 
-            ui.color_edit3("Past Color", &mut config_copy.past_color);
-            ui.color_edit3("Future Color", &mut config_copy.future_color);
+            let past_color = value.past_color;
+            ui.color_edit3("Past Color", &mut value.past_color);
+            changed |= value.past_color != past_color;
+            let future_color = value.future_color;
+            ui.color_edit3("Future Color", &mut value.future_color);
+            changed |= value.future_color != future_color;
 
             ui.text(format!(
                 "Total ghosts: {}",
-                crate::ecs::compute_total_ghost_count(&config_copy)
+                crate::ecs::compute_total_ghost_count(&value)
             ));
 
-            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(config_copy));
+            changed
+        }) {
+            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(edited));
         }
     }
 }

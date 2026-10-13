@@ -201,4 +201,8 @@ impl<T: GpuBlock> GpuResource for UniformBuffer<T> {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.buffer.is_destroyed()
+    }
 }

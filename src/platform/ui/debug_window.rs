@@ -12,7 +12,7 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -52,7 +52,7 @@ pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
 }
 
 fn build_camera_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
-    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), "Camera:");
+    ui.text_colored(srgb_to_linear_rgba(TEXT_SECONDARY), "Camera:");
     ui.same_line_with_spacing(0.0, 4.0);
     if icon_button(ui, Icon::Undo, "Reset Camera", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::ResetCamera);
@@ -68,7 +68,7 @@ fn build_camera_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
 
     toolbar_divider(ui);
 
-    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), "Debug Primitives:");
+    ui.text_colored(srgb_to_linear_rgba(TEXT_SECONDARY), "Debug Primitives:");
     ui.same_line_with_spacing(0.0, 4.0);
     if icon_button(ui, Icon::Box, "Spawn Cube", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::SpawnDebugPrimitive {

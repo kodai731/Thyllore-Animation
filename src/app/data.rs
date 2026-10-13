@@ -10,6 +10,7 @@ use crate::vulkanr::resource::{GpuBufferRegistry, GpuResource, PipelineStorage};
 use thyllore_vulkan_core::renderer::{FrameTransients, ImageStateTracker};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct AppData {
     pub graphics_resources: GraphicsResources,

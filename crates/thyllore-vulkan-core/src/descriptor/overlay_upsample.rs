@@ -65,15 +65,21 @@ impl OverlayUpsampleDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.layout.destroy(device);
-        device.destroy_sampler(self.reduced_color_sampler, None);
-        device.destroy_sampler(self.scene_depth_sampler, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        self.layout.destroy(rrdevice);
+        self.reduced_color_sampler.destroy_gpu(rrdevice);
+        self.scene_depth_sampler.destroy_gpu(rrdevice);
     }
 }
 
 impl GpuResource for OverlayUpsampleDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.layout.is_destroyed()
+            && self.reduced_color_sampler.is_destroyed()
+            && self.scene_depth_sampler.is_destroyed()
     }
 }

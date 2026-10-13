@@ -20,11 +20,12 @@ pub mod pipeline_storage;
 pub mod raytracing_data;
 pub mod render_target_storage;
 pub mod render_target_transient;
+pub mod sampled_texture;
 pub mod uniform_buffer;
 pub mod volume_image;
 
 pub use accumulation_target::AccumulationTarget;
-pub use auto_exposure_buffers::{AutoExposureBuffers, LUMINANCE_BUFFER_SIZE};
+pub use auto_exposure_buffers::{AutoExposureBuffers, AutoExposureReadback, LUMINANCE_BUFFER_SIZE};
 pub use bloom_chain::{BloomChain, BloomMipTarget};
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
@@ -47,5 +48,6 @@ pub use render_target_storage::{RenderTargetEntry, RenderTargetKey, RenderTarget
 pub use render_target_transient::{
     RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,
 };
+pub use sampled_texture::{PixelRegion, SampledTexture};
 pub use uniform_buffer::{Placement, UniformBuffer};
 pub use volume_image::VolumeImage;

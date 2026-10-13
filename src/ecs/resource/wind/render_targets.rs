@@ -41,6 +41,7 @@ impl WindRenderTargets {
 }
 
 /// Pipelines, descriptor sets and the per-instance UBO of the wind passes.
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct WindGpuState {
     pub ubo: Option<UniformBuffer<WindUBO>>,

@@ -58,15 +58,12 @@ pub(super) fn build_selected_key_fields(
     curves: &[(&PropertyCurve, [f32; 4], &str)],
     track_ref: CurveTrackRef,
 ) {
-    if editor_state.selected_keyframes.is_empty() {
-        return;
-    }
-
     let selected_keys = collect_selected_keys(&editor_state.selected_keyframes, curves);
     let shared_time = shared_value(selected_keys.iter().map(|(_, key)| key.time));
     let shared_key_value = shared_value(selected_keys.iter().map(|(_, key)| key.value));
 
     ui.same_line_with_spacing(0.0, 20.0);
+    let _disabled = ui.begin_disabled_with_cond(selected_keys.is_empty());
     let time_edit = build_numeric_field(ui, "Time", &mut editor_state.time_field, shared_time);
     ui.same_line();
     let value_edit =

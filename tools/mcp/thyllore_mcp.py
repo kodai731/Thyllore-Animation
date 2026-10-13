@@ -302,14 +302,21 @@ def anim_state(frames: int = 2, camera: str = "", include: str = "", scene: str 
 
 @mcp.tool()
 def debug_action(
-    actions: str,
+    actions: str = "",
     frames: int = 120,
     screenshot: bool = True,
     camera: str = "",
+    at: str = "",
 ) -> str:
     """Execute debug-window actions headlessly and (by default) return a
     screenshot so the effect is visible. `actions` is a semicolon-separated
-    list; run `list_debug_actions` for the full set. Examples:
+    list applied at startup; `at` is a semicolon-separated list of
+    `<frame>:<action>` entries applied once the frame clock reaches the frame
+    (`"10:add_flame;30:focus_window=Hierarchy;32:press_key=Ctrl+Shift+Delete"`),
+    which is how key input is measured: `focus_window=<title>` focuses an imgui
+    window and `press_key=<chord>` presses an `imgui::Key` by variant name with
+    optional Ctrl / Shift / Alt, held for one frame. Run `list_debug_actions`
+    for the full set. Examples:
     `view_mode=normal` (G-buffer normal view), `view_mode=object_id`,
     `reset_camera`, `camera_to_model`, `add_flame`, `open_flame_curves`,
     `flame_clip_preview=<end_seconds>` (draw the first flame's timeline clip
@@ -322,10 +329,15 @@ def debug_action(
     `screenshot` is true)."""
     args, png_path = _batch_base_args(frames, camera, "", screenshot)
     names = [s.strip() for s in actions.split(";") if s.strip()]
-    if not names:
-        return _error("actions must contain at least one action name")
+    scheduled = [s.strip() for s in at.split(";") if s.strip()]
+    if not names and not scheduled:
+        return _error("actions or at must contain at least one action")
     for name in names:
         args += ["--batch-debug-action", name]
+    for entry in scheduled:
+        if ":" not in entry:
+            return _error(f"at entries must be <frame>:<action>, got '{entry}'")
+        args += ["--batch-debug-action-at", entry]
     return _run_batch_with_dump(args, screenshot, png_path)
 
 
@@ -541,7 +553,7 @@ def fringe_field_patch(dump: str, out: str = "", res: int = 128, rect: str = "-1
     """Fringe probe + beat-table analysis of a flame dump.
 
     dump: path to a flame JSONL dump (from profile or batch).
-    out: output patch path; defaults to log/flame/fringe_patch_<unixtime>.json.
+    out: output patch path; defaults to log/flame/fringe_patch.json (overwritten).
     res: probe resolution (default 128).
     rect: screen-space rectangle as "x0,y0,x1,y1" (default "-1,-1,1,1").
 
@@ -550,7 +562,7 @@ def fringe_field_patch(dump: str, out: str = "", res: int = 128, rect: str = "-1
     "report": {...}} where report is the beat-table JSON from flame_fringe_beats.py.
     """
     if not out:
-        out = f"log/flame/fringe_patch_{int(time.time())}.json"
+        out = "log/flame/fringe_patch.json"
 
     result1 = subprocess.run(
         ["./target/debug/fringe_probe", "--dump", dump, "--out", out,
@@ -597,9 +609,11 @@ def _run_water_script(command: list[str], timeout: int = _WATER_SCRIPT_TIMEOUT_S
     return lines[-1]
 
 
-def _latest_water_debug_json() -> Path | None:
-    dumps = sorted(_repo_root().glob("log/water/water_debug_*.json"), key=lambda p: p.stat().st_mtime)
-    return dumps[-1] if dumps else None
+def _latest_water_debug_json() -> tuple[Path, float] | None:
+    dumps = sorted(_repo_root().glob("log/water/debug_*.json"), key=lambda p: p.stat().st_mtime)
+    if not dumps:
+        return None
+    return dumps[-1], dumps[-1].stat().st_mtime
 
 
 @mcp.tool()
@@ -655,9 +669,10 @@ def water_dump(scene: str = "assets/scenes/default.scene.ron", camera: str = "",
     if result.returncode != 0:
         return _error((result.stderr or result.stdout).strip()[-800:])
 
-    dump_path = _latest_water_debug_json()
-    if dump_path is None or dump_path == dump_before_run:
-        return _error("no new log/water/water_debug_*.json produced by the run")
+    latest = _latest_water_debug_json()
+    if latest is None or latest == dump_before_run:
+        return _error("no new log/water/debug_*.json produced by the run")
+    dump_path, _ = latest
     try:
         dump = json.loads(dump_path.read_text())
     except (OSError, json.JSONDecodeError) as failure:

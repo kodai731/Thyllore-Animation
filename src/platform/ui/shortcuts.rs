@@ -151,15 +151,15 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let command_palette = std::iter::once(ShortcutEntry {
         scope: ShortcutScope::Global,
         chord: format_chord(
-            PALETTE_KEY_BINDING.modifier,
-            imgui_key_name(PALETTE_KEY_BINDING.key),
+            PALETTE_KEY_BINDING.chord.modifiers,
+            imgui_key_name(PALETTE_KEY_BINDING.chord.key),
         ),
         label: PALETTE_KEY_BINDING.label,
     });
 
     let hierarchy = TREE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Hierarchy,
-        chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+        chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
         label: binding.label,
     });
 
@@ -173,7 +173,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 
     let scene_gizmo = GIZMO_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::SceneGizmo,
-        chord: format_chord(ModifierKeys::none(), imgui_key_name(binding.key)),
+        chord: format_chord(binding.chord.modifiers, imgui_key_name(binding.chord.key)),
         label: binding.label,
     });
 

@@ -24,6 +24,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
+use crate::platform::key_bindings::{dispatch_bindings, Binding, KeyChord, ModifierKeys};
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
@@ -45,27 +46,30 @@ const DENSITY_OPTIONS: [(UiDensity, &str); 2] = [
     (UiDensity::Default, "Default"),
 ];
 
-pub(super) struct GizmoKeyBinding {
-    pub(super) key: imgui::Key,
-    pub(super) label: &'static str,
-    mode: TransformGizmoMode,
-}
-
-pub(super) const GIZMO_KEY_BINDINGS: &[GizmoKeyBinding] = &[
-    GizmoKeyBinding {
-        key: imgui::Key::W,
+pub(super) const GIZMO_KEY_BINDINGS: &[Binding<TransformGizmoMode>] = &[
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::W,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Translate",
-        mode: TransformGizmoMode::Translate,
+        action: TransformGizmoMode::Translate,
     },
-    GizmoKeyBinding {
-        key: imgui::Key::E,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::E,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Rotate",
-        mode: TransformGizmoMode::Rotate,
+        action: TransformGizmoMode::Rotate,
     },
-    GizmoKeyBinding {
-        key: imgui::Key::R,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::R,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Scale",
-        mode: TransformGizmoMode::Scale,
+        action: TransformGizmoMode::Scale,
     },
 ];
 
@@ -289,10 +293,8 @@ fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
         return;
     }
 
-    for binding in GIZMO_KEY_BINDINGS {
-        if ui.is_key_pressed(binding.key) {
-            ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(binding.mode));
-        }
+    if let Some(mode) = dispatch_bindings(ui, GIZMO_KEY_BINDINGS) {
+        ecs_world.send_command(OverlayEvent::SetTransformGizmoMode(mode));
     }
 }
 

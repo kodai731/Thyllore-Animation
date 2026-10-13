@@ -7,12 +7,10 @@ use crate::ecs::component::{
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{bone_picker, bone_picker_with_hierarchy, section_header};
 
-use super::constraint_inspector::{
-    build_bone_combo, build_bone_combo_with_select, build_offset_vector3, collect_bone_list,
-};
+use super::constraint_inspector::{build_offset_vector3, collect_bone_list};
 
 pub fn build_spring_bone_section(
     ui: &imgui::Ui,
@@ -168,7 +166,7 @@ fn build_joint_fields(
     let mut modified = joint.clone();
     let mut changed = false;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Bone",
@@ -242,7 +240,7 @@ fn build_add_chain_row(
     let root_bone = &mut root_bone_val;
     let chain_length = &mut chain_length_val;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Root Bone##add_chain",
@@ -326,7 +324,7 @@ fn build_collider_fields(
     let mut modified = collider.clone();
     let mut changed = false;
 
-    if let Some(bone) = build_bone_combo_with_select(
+    if let Some(bone) = bone_picker_with_hierarchy(
         ui,
         world,
         "Bone##collider",
@@ -415,22 +413,8 @@ fn build_add_collider_row(
     let bone = &mut bone_val;
     let shape_idx = &mut shape_idx_val;
 
-    let current_name = bone_list
-        .iter()
-        .find(|(id, _)| *id == *bone)
-        .map(|(_, name)| name.as_str())
-        .unwrap_or("(none)");
-
-    ui.text("Add Collider");
-    ui.set_next_item_width(-1.0);
-    if let Some(token) = ui.begin_combo("Bone##add_collider", current_name) {
-        for (bone_id, bone_name) in bone_list {
-            let selected = *bone_id == *bone;
-            if ui.selectable_config(bone_name).selected(selected).build() {
-                *bone = *bone_id;
-            }
-        }
-        token.end();
+    if let Some(selected_bone) = bone_picker(ui, "Add Collider", *bone, bone_list) {
+        *bone = selected_bone;
     }
 
     let shape_names = ["Sphere", "Capsule"];

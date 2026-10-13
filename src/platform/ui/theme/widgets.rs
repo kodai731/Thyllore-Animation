@@ -3,7 +3,9 @@ use std::borrow::Cow;
 
 use imgui::{DrawCornerFlags, DrawListMut, StyleVar, Ui};
 
-use crate::ecs::resource::UiWidgetState;
+use crate::animation::BoneId;
+use crate::ecs::resource::{HierarchyState, UiWidgetState};
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::World;
 use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer};
 
@@ -767,4 +769,85 @@ fn segment_corner_flags(is_first: bool, is_last: bool) -> DrawCornerFlags {
     flags.set(DrawCornerFlags::LEFT, is_first);
     flags.set(DrawCornerFlags::RIGHT, is_last);
     flags
+}
+
+pub fn bone_picker_with_hierarchy(
+    ui: &imgui::Ui,
+    world: &World,
+    label: &str,
+    current_bone: BoneId,
+    bone_list: &[(BoneId, String)],
+    hierarchy_state: &HierarchyState,
+) -> Option<BoneId> {
+    let current_name = bone_list
+        .iter()
+        .find(|(id, _)| *id == current_bone)
+        .map(|(_, name)| name.as_str())
+        .unwrap_or("(none)");
+
+    let mut result = None;
+
+    ui.text(label);
+
+    if let Some(selected_bone) = hierarchy_state.selected_bone_id {
+        ui.same_line();
+        if ui.small_button(&format!("<##use_{}", label)) {
+            result = Some(selected_bone);
+        }
+        item_tooltip(ui, "Use selected bone from Hierarchy");
+    }
+
+    ui.set_next_item_width(-1.0);
+    if let Some(combo_token) = ui.begin_combo(&format!("##{}", label), current_name) {
+        for (bone_id, bone_name) in bone_list {
+            let selected = *bone_id == current_bone;
+            let highlighted = hierarchy_state.selected_bone_id == Some(*bone_id);
+            let display_name = if highlighted {
+                format!("* {}", bone_name)
+            } else {
+                bone_name.clone()
+            };
+
+            if ui
+                .selectable_config(&display_name)
+                .selected(selected)
+                .build()
+            {
+                result = Some(*bone_id);
+                world.send_command(HierarchyEvent::SelectBone(*bone_id));
+            }
+        }
+        combo_token.end();
+    }
+
+    result
+}
+
+pub fn bone_picker(
+    ui: &imgui::Ui,
+    label: &str,
+    current_bone: BoneId,
+    bone_list: &[(BoneId, String)],
+) -> Option<BoneId> {
+    let current_name = bone_list
+        .iter()
+        .find(|(id, _)| *id == current_bone)
+        .map(|(_, name)| name.as_str())
+        .unwrap_or("(none)");
+
+    let mut result = None;
+
+    ui.text(label);
+    ui.set_next_item_width(-1.0);
+    if let Some(combo_token) = ui.begin_combo(&format!("##{}", label), current_name) {
+        for (bone_id, bone_name) in bone_list {
+            let selected = *bone_id == current_bone;
+            if ui.selectable_config(bone_name).selected(selected).build() {
+                result = Some(*bone_id);
+            }
+        }
+        combo_token.end();
+    }
+
+    result
 }

@@ -4,6 +4,7 @@ use std::path::Path;
 use imgui::{Condition, StyleVar};
 use thyllore_anim_core::editable::PropertyType;
 
+use super::key_modifier::current_key_modifier;
 use super::pointer::read_ui_pointer;
 #[cfg(feature = "auto-rig")]
 use super::text_to_animation_dialog::TextToAnimationDialogState;
@@ -282,7 +283,7 @@ fn build_overlay_buttons(ui: &imgui::Ui, ecs_world: &World) {
 fn apply_gizmo_hotkeys(ui: &imgui::Ui, ecs_world: &World) {
     let scene_view_focused = ecs_world.resource::<ViewportInput>().focused;
     let gizmo_hotkeys_enabled = scene_view_focused
-        && !ui.io().key_ctrl()
+        && !current_key_modifier(ui).ctrl
         && !read_ui_pointer(ui).is_down(imgui::MouseButton::Right);
     if !gizmo_hotkeys_enabled {
         return;

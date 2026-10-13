@@ -2,6 +2,7 @@ use crate::animation::editable::{PropertyCurve, PropertyType};
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveValueDisplay, FrameRequest,
 };
+use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::pointer::UiPointer;
 
 const PAN_SPEED: f32 = 30.0;
@@ -156,13 +157,12 @@ pub(super) fn handle_wheel_input(
         return;
     }
 
-    let ctrl = ui.io().key_ctrl();
+    let modifiers = current_key_modifier(ui);
 
-    if ctrl {
+    if modifiers.ctrl {
         zoom_at_mouse(editor_state, mouse_pos, wheel, vt);
     } else {
-        let shift = ui.io().key_shift();
-        pan_with_wheel(editor_state, wheel, shift, vt);
+        pan_with_wheel(editor_state, wheel, modifiers.shift, vt);
     }
 }
 

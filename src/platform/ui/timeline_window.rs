@@ -22,6 +22,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
+use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
 };
@@ -1142,23 +1143,23 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
 }
 
 fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
-    let io = ui.io();
+    let modifiers = current_key_modifier(ui);
     let focused = ui.is_window_focused_with_flags(imgui::FocusedFlags::ROOT_AND_CHILD_WINDOWS);
     if !focused || ui.is_any_item_active() {
         return;
     }
 
-    if io.key_ctrl() && ui.is_key_pressed(imgui::Key::C) {
+    if modifiers.ctrl && ui.is_key_pressed(imgui::Key::C) {
         world.send_command(TimelineEvent::CopyKeyframes);
     }
 
-    if io.key_ctrl() && !io.key_shift() && ui.is_key_pressed(imgui::Key::V) {
+    if modifiers.ctrl && !modifiers.shift && ui.is_key_pressed(imgui::Key::V) {
         world.send_command(TimelineEvent::PasteKeyframes {
             paste_time: state.current_time,
         });
     }
 
-    if io.key_ctrl() && io.key_shift() && ui.is_key_pressed(imgui::Key::V) {
+    if modifiers.ctrl && modifiers.shift && ui.is_key_pressed(imgui::Key::V) {
         world.send_command(TimelineEvent::MirrorPaste {
             paste_time: state.current_time,
         });

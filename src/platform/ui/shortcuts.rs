@@ -7,6 +7,7 @@ use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys
 use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
+use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
 use crate::platform::ui::theme::{
     draw_raised_window_frame, property_label, push_raised_window_style, section_header,
@@ -150,7 +151,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let command_palette = std::iter::once(ShortcutEntry {
         scope: ShortcutScope::Global,
         chord: format_chord(
-            PALETTE_KEY_BINDING.modifier.into(),
+            PALETTE_KEY_BINDING.modifier,
             imgui_key_name(PALETTE_KEY_BINDING.key),
         ),
         label: PALETTE_KEY_BINDING.label,
@@ -158,7 +159,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 
     let hierarchy = TREE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Hierarchy,
-        chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
+        chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
         label: binding.label,
     });
 
@@ -166,7 +167,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         .iter()
         .map(|binding| ShortcutEntry {
             scope: ShortcutScope::CurveEditor,
-            chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
+            chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
             label: binding.label,
         });
 
@@ -185,9 +186,9 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 }
 
 fn toggle_shortcuts_panel_on_hotkey(ui: &imgui::Ui, world: &World) {
-    let io = ui.io();
-    let toggle_pressed = !io.want_text_input()
-        && (io.key_shift() || io.key_ctrl())
+    let modifiers = current_key_modifier(ui);
+    let toggle_pressed = !ui.io().want_text_input()
+        && (modifiers.shift || modifiers.ctrl)
         && ui.is_key_pressed(imgui::Key::Slash);
     if !toggle_pressed {
         return;
@@ -251,7 +252,6 @@ crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::ui::key_modifier::KeyModifier;
 
     #[test]
     fn test_collect_shortcuts_contains_all_scopes() {
@@ -310,20 +310,9 @@ mod tests {
 
     #[test]
     fn test_format_chord_ctrl_shift() {
-        let both = ModifierKeys {
-            ctrl: true,
-            shift: true,
-        };
-        assert_eq!(format_chord(both, "Z"), "Ctrl+Shift+Z");
-    }
-
-    #[test]
-    fn test_imgui_modifier_maps_onto_global_modifiers() {
-        assert_eq!(ModifierKeys::from(KeyModifier::Ctrl), ModifierKeys::ctrl());
         assert_eq!(
-            ModifierKeys::from(KeyModifier::Shift),
-            ModifierKeys::shift()
+            format_chord(ModifierKeys::ctrl_shift(), "Z"),
+            "Ctrl+Shift+Z"
         );
-        assert_eq!(ModifierKeys::from(KeyModifier::None), ModifierKeys::none());
     }
 }

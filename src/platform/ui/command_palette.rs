@@ -1,6 +1,6 @@
 use imgui::{Condition, Key};
 
-use super::key_modifier::{current_key_modifier, KeyModifier};
+use super::key_modifier::current_key_modifier;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     CommandPaletteSession, CommandPaletteState, HierarchyState, UiWidgetState,
@@ -9,7 +9,7 @@ use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
-use crate::platform::key_bindings::default_bindings;
+use crate::platform::key_bindings::{default_bindings, ModifierKeys};
 use crate::platform::ui::shortcuts::format_chord;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
@@ -31,13 +31,13 @@ const CONSECUTIVE_BONUS: u32 = 1;
 
 pub(crate) struct PaletteKeyBinding {
     pub(crate) key: Key,
-    pub(crate) modifier: KeyModifier,
+    pub(crate) modifier: ModifierKeys,
     pub(crate) label: &'static str,
 }
 
 pub(crate) const PALETTE_KEY_BINDING: PaletteKeyBinding = PaletteKeyBinding {
     key: Key::K,
-    modifier: KeyModifier::Ctrl,
+    modifier: ModifierKeys::ctrl(),
     label: "Command palette",
 };
 

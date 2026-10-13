@@ -61,6 +61,7 @@ pub(crate) fn dispatch_keyboard_input(
     let modifiers = ModifierKeys {
         ctrl: modifiers_res.ctrl,
         shift: modifiers_res.shift,
+        alt: modifiers_res.alt,
     };
     drop(modifiers_res);
 

@@ -1,7 +1,7 @@
 use crate::platform::ui::numeric_format::numeric_format;
 use imgui::{Condition, Key};
 
-use super::key_modifier::{current_key_modifier, KeyModifier};
+use super::key_modifier::current_key_modifier;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
@@ -11,6 +11,7 @@ use crate::ecs::systems::{
     query_bone_rows, query_hierarchy_tree, CameraMotion, TreeMove, TreeNavigation,
 };
 use crate::ecs::world::World;
+use crate::platform::key_bindings::ModifierKeys;
 use crate::platform::ui::theme::{
     entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
 };
@@ -20,7 +21,7 @@ use crate::ecs::resource::LayoutSnapshot;
 
 pub(crate) struct TreeKeyBinding {
     pub(crate) key: Key,
-    pub(crate) modifier: KeyModifier,
+    pub(crate) modifier: ModifierKeys,
     pub(crate) label: &'static str,
     navigation: TreeNavigation,
 }
@@ -28,85 +29,85 @@ pub(crate) struct TreeKeyBinding {
 pub(crate) const TREE_KEY_BINDINGS: &[TreeKeyBinding] = &[
     TreeKeyBinding {
         key: Key::DownArrow,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Move selection down",
         navigation: TreeNavigation::Move(TreeMove::Next),
     },
     TreeKeyBinding {
         key: Key::UpArrow,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Move selection up",
         navigation: TreeNavigation::Move(TreeMove::Prev),
     },
     TreeKeyBinding {
         key: Key::DownArrow,
-        modifier: KeyModifier::Shift,
+        modifier: ModifierKeys::shift(),
         label: "Extend selection down",
         navigation: TreeNavigation::Extend(TreeMove::Next),
     },
     TreeKeyBinding {
         key: Key::UpArrow,
-        modifier: KeyModifier::Shift,
+        modifier: ModifierKeys::shift(),
         label: "Extend selection up",
         navigation: TreeNavigation::Extend(TreeMove::Prev),
     },
     TreeKeyBinding {
         key: Key::Home,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Select first item",
         navigation: TreeNavigation::Move(TreeMove::First),
     },
     TreeKeyBinding {
         key: Key::End,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Select last item",
         navigation: TreeNavigation::Move(TreeMove::Last),
     },
     TreeKeyBinding {
         key: Key::PageDown,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Page down",
         navigation: TreeNavigation::Move(TreeMove::PageDown),
     },
     TreeKeyBinding {
         key: Key::PageUp,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Page up",
         navigation: TreeNavigation::Move(TreeMove::PageUp),
     },
     TreeKeyBinding {
         key: Key::RightArrow,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Expand or descend",
         navigation: TreeNavigation::ExpandOrDescend,
     },
     TreeKeyBinding {
         key: Key::LeftArrow,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Collapse or ascend",
         navigation: TreeNavigation::CollapseOrAscend,
     },
     TreeKeyBinding {
         key: Key::RightArrow,
-        modifier: KeyModifier::Shift,
+        modifier: ModifierKeys::shift(),
         label: "Expand all children",
         navigation: TreeNavigation::ExpandRecursive,
     },
     TreeKeyBinding {
         key: Key::LeftArrow,
-        modifier: KeyModifier::Shift,
+        modifier: ModifierKeys::shift(),
         label: "Collapse all children",
         navigation: TreeNavigation::CollapseRecursive,
     },
     TreeKeyBinding {
         key: Key::KeypadMultiply,
-        modifier: KeyModifier::None,
+        modifier: ModifierKeys::none(),
         label: "Expand siblings",
         navigation: TreeNavigation::ExpandSiblings,
     },
     TreeKeyBinding {
         key: Key::A,
-        modifier: KeyModifier::Ctrl,
+        modifier: ModifierKeys::ctrl(),
         label: "Select all visible",
         navigation: TreeNavigation::SelectAllVisible,
     },
@@ -201,8 +202,7 @@ fn resolve_tree_response(response: TreeRowResponse, ui: &imgui::Ui) -> RowClick 
     match response {
         TreeRowResponse::None => RowClick::None,
         TreeRowResponse::Clicked => {
-            let ctrl = current_key_modifier(ui) == KeyModifier::Ctrl;
-            if ctrl {
+            if current_key_modifier(ui).ctrl {
                 RowClick::ToggleSelect
             } else {
                 RowClick::Select
@@ -383,7 +383,7 @@ fn handle_tree_keyboard(ui: &imgui::Ui, world: &World, state: &HierarchyState) {
         }
     }
 
-    if modifier == KeyModifier::None {
+    if modifier == ModifierKeys::none() {
         handle_tree_activation_keys(ui, world, state);
         handle_type_ahead(ui, world);
     }

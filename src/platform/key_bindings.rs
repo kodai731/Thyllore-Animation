@@ -11,32 +11,44 @@ use crate::ecs::world::World;
 pub struct ModifierKeys {
     pub ctrl: bool,
     pub shift: bool,
+    pub alt: bool,
 }
 
 impl ModifierKeys {
-    pub fn none() -> Self {
+    pub const fn none() -> Self {
         Self {
             ctrl: false,
             shift: false,
+            alt: false,
         }
     }
 
-    pub fn ctrl() -> Self {
+    pub const fn ctrl() -> Self {
         Self {
             ctrl: true,
             shift: false,
+            alt: false,
         }
     }
 
-    pub fn shift() -> Self {
+    pub const fn shift() -> Self {
         Self {
             ctrl: false,
             shift: true,
+            alt: false,
+        }
+    }
+
+    pub const fn ctrl_shift() -> Self {
+        Self {
+            ctrl: true,
+            shift: true,
+            alt: false,
         }
     }
 
     pub fn has_any(&self) -> bool {
-        self.ctrl || self.shift
+        self.ctrl || self.shift || self.alt
     }
 }
 

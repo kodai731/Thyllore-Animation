@@ -2,6 +2,7 @@ use crate::animation::editable::{
     align_opposite_handle, BezierHandle, PropertyCurve, TangentContinuity,
 };
 use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
+use crate::platform::ui::key_modifier::current_key_modifier;
 
 use super::view::ViewTransform;
 
@@ -50,7 +51,7 @@ pub(super) fn resolve_axis_lock(
 
 #[must_use]
 pub(super) fn current_time_snap(ui: &imgui::Ui, frame_rate: f32) -> TimeSnap {
-    if ui.io().key_ctrl() {
+    if current_key_modifier(ui).ctrl {
         TimeSnap::Free
     } else {
         TimeSnap::Frame(frame_rate)

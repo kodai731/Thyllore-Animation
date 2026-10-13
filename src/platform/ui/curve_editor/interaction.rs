@@ -15,6 +15,7 @@ use crate::ecs::world::World;
 use crate::platform::ui::curve_editor::context_menu::{
     build_curve_editor_context_menu, build_keyframe_context_menu,
 };
+use crate::platform::ui::key_modifier::current_key_modifier;
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion, UiPointer,
 };
@@ -180,9 +181,10 @@ pub(super) fn handle_mouse_interaction(
         && in_curve_area
         && matches!(editor_state.interaction, CurveInteractionMode::Idle)
     {
-        let modifier = if ui.io().key_ctrl() {
+        let modifiers = current_key_modifier(ui);
+        let modifier = if modifiers.ctrl {
             SelectionModifier::Toggle
-        } else if ui.io().key_shift() {
+        } else if modifiers.shift {
             SelectionModifier::Range
         } else {
             SelectionModifier::None
@@ -232,7 +234,7 @@ pub(super) fn handle_mouse_interaction(
             mouse_pos[0] - editor_state.drag_start_mouse_pos[0],
             mouse_pos[1] - editor_state.drag_start_mouse_pos[1],
         ];
-        *axis_lock = resolve_axis_lock(*axis_lock, ui.io().key_shift(), pixel_delta);
+        *axis_lock = resolve_axis_lock(*axis_lock, current_key_modifier(ui).shift, pixel_delta);
     }
 
     if access.accepts_wheel {

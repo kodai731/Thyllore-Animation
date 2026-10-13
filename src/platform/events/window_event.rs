@@ -1,7 +1,7 @@
 use winit::event::{ElementState, WindowEvent};
 
 use crate::app::App;
-use crate::ecs::resource::MouseInput;
+use crate::ecs::resource::{KeyboardModifiers, MouseInput};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 
 pub(crate) fn dispatch_window_event(
@@ -54,6 +54,11 @@ pub(crate) fn dispatch_window_event(
                     }
                 }
             }
+        }
+
+        WindowEvent::ModifiersChanged(modifiers) => {
+            *app.data.ecs_world.resource_mut::<KeyboardModifiers>() =
+                super::input::keyboard_modifiers_from_winit(modifiers.state());
         }
 
         WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {

@@ -1,5 +1,3 @@
-use imgui::Condition;
-
 use super::window::build_curve_editor_tab;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
@@ -7,7 +5,7 @@ use crate::ecs::resource::{
     TimelineState,
 };
 use crate::ecs::world::World;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
+use crate::platform::ui::theme::{show_floating_window, FloatingPlacement};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const WINDOW_TITLE: &str = "Curve Editor";
@@ -30,12 +28,12 @@ fn build_floating_curve_editor(
 
     editor_state.is_open = true;
     let mut keep_open = true;
-    let _raised = push_raised_window_style(ui);
-    ui.window(WINDOW_TITLE)
-        .size(INITIAL_SIZE, Condition::FirstUseEver)
-        .opened(&mut keep_open)
-        .build(|| {
-            draw_raised_window_frame(ui);
+    show_floating_window(
+        ui,
+        WINDOW_TITLE,
+        FloatingPlacement::Sized(INITIAL_SIZE),
+        &mut keep_open,
+        || {
             build_curve_editor_tab(
                 ui,
                 world,
@@ -45,7 +43,8 @@ fn build_floating_curve_editor(
                 &curve_buffer,
                 &mut pose_library,
             );
-        });
+        },
+    );
 
     if !keep_open {
         editor_state.placement = CurveEditorPlacement::TimelineTab;

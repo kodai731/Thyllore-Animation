@@ -6,7 +6,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::numeric_format::numeric_format;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
+use crate::platform::ui::theme::{show_floating_window, FloatingPlacement};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToAnimationDialogState {
@@ -41,12 +41,14 @@ fn draw_text_to_animation_dialog(
     let snapshot = snapshot_state(world);
 
     let mut should_close = false;
+    let mut is_open = true;
 
-    let _raised = push_raised_window_style(ui);
-    ui.window("Text to Animation")
-        .size([420.0, 360.0], imgui::Condition::FirstUseEver)
-        .build(|| {
-            draw_raised_window_frame(ui);
+    show_floating_window(
+        ui,
+        "Text to Animation",
+        FloatingPlacement::Sized([420.0, 360.0]),
+        &mut is_open,
+        || {
             build_input_section(
                 ui,
                 world,
@@ -57,9 +59,10 @@ fn draw_text_to_animation_dialog(
             );
             ui.separator();
             build_status_section(ui, &snapshot);
-        });
+        },
+    );
 
-    if should_close {
+    if !is_open || should_close {
         dialog.open = false;
     }
 }

@@ -1,7 +1,9 @@
 use crate::platform::ui::numeric_format::numeric_format;
 use imgui::{Condition, MouseButton};
 
-use crate::animation::editable::{BlendMode, SourceClipId};
+use crate::animation::editable::{
+    compute_snap_threshold_time, snap_time, BlendMode, SnapSettings, SourceClipId,
+};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
@@ -544,7 +546,15 @@ fn build_clip_tracks_section(
         && ui_pointer_begin(ui, world, UiPointerOwnerId::Timeline, PointerRegion::Window);
     let mouse_double_clicked = mouse_clicked && pointer.is_double_clicked(MouseButton::Left);
 
-    handle_clip_drag_release(world, interaction, mouse_pos, mouse_down, pixels_per_second);
+    handle_clip_drag_release(
+        world,
+        interaction,
+        &state.snap_settings,
+        snapshot,
+        mouse_pos,
+        mouse_down,
+        pixels_per_second,
+    );
 
     let mut clicked_any_block = false;
     let solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)> =
@@ -604,6 +614,8 @@ fn build_clip_tracks_section(
                 mouse_pos,
                 mouse_down,
                 pixels_per_second,
+                &state.snap_settings,
+                snapshot,
             );
             let block_x = track_origin[0] + draw_start * pixels_per_second;
             let block_w = ((draw_end - draw_start) * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
@@ -906,18 +918,26 @@ fn build_clip_length_field(
 fn handle_clip_drag_release(
     world: &World,
     interaction: &mut TimelineInteractionState,
+    snap_settings: &SnapSettings,
+    snapshot: &ClipTrackSnapshot,
     mouse_pos: [f32; 2],
     mouse_down: bool,
     pixels_per_second: f32,
 ) {
     if !mouse_down {
         if let Some(drag) = interaction.dragging_clip.take() {
-            let delta_x = mouse_pos[0] - drag.drag_start_x;
-            let delta_time = delta_x / pixels_per_second;
+            let delta_time = (mouse_pos[0] - drag.drag_start_x) / pixels_per_second;
+            let snapped_value = snapped_clip_drag_value(
+                &drag,
+                delta_time,
+                snap_settings,
+                snapshot,
+                pixels_per_second,
+            );
 
             match drag.drag_type {
                 ClipDragType::Move => {
-                    let new_start = (drag.original_value + delta_time).max(0.0);
+                    let new_start = snapped_value.max(0.0);
                     world.send_command(ClipInstanceEvent::Move {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
@@ -925,7 +945,7 @@ fn handle_clip_drag_release(
                     });
                 }
                 ClipDragType::TrimStart => {
-                    let new_clip_in = (drag.original_value + delta_time).max(0.0);
+                    let new_clip_in = snapped_value.max(0.0);
                     world.send_command(ClipInstanceEvent::TrimStart {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
@@ -933,7 +953,7 @@ fn handle_clip_drag_release(
                     });
                 }
                 ClipDragType::TrimEnd => {
-                    let new_clip_out = (drag.original_value + delta_time).max(0.0);
+                    let new_clip_out = snapped_value.max(0.0);
                     world.send_command(ClipInstanceEvent::TrimEnd {
                         entity: drag.entity,
                         instance_id: drag.instance_id,
@@ -943,6 +963,41 @@ fn handle_clip_drag_release(
             }
         }
     }
+}
+
+fn snapped_clip_drag_value(
+    drag: &ClipDragState,
+    delta_time: f32,
+    snap_settings: &SnapSettings,
+    snapshot: &ClipTrackSnapshot,
+    pixels_per_second: f32,
+) -> f32 {
+    let nearby_times = match drag.drag_type {
+        ClipDragType::Move => collect_other_clip_edge_times(snapshot, drag),
+        ClipDragType::TrimStart | ClipDragType::TrimEnd => Vec::new(),
+    };
+    let threshold_time =
+        compute_snap_threshold_time(snap_settings.snap_threshold_px, pixels_per_second);
+
+    snap_time(
+        drag.original_value + delta_time,
+        snap_settings,
+        &nearby_times,
+        threshold_time,
+    )
+}
+
+fn collect_other_clip_edge_times(snapshot: &ClipTrackSnapshot, drag: &ClipDragState) -> Vec<f32> {
+    snapshot
+        .entries
+        .iter()
+        .flat_map(|entry| {
+            entry.instances.iter().filter(move |inst| {
+                !(entry.entity == drag.entity && inst.instance_id == drag.instance_id)
+            })
+        })
+        .flat_map(|inst| [inst.start_time, inst.end_time])
+        .collect()
 }
 
 fn begin_clip_drag(
@@ -992,6 +1047,8 @@ fn clip_block_display_times(
     mouse_pos: [f32; 2],
     mouse_down: bool,
     pixels_per_second: f32,
+    snap_settings: &SnapSettings,
+    snapshot: &ClipTrackSnapshot,
 ) -> (f32, f32) {
     if let Some(preview) = &interaction.drag_preview {
         if preview.entity == entity && preview.instance_id == inst.instance_id {
@@ -1003,10 +1060,17 @@ fn clip_block_display_times(
         if let Some(drag) = &interaction.dragging_clip {
             if drag.entity == entity && drag.instance_id == inst.instance_id {
                 let delta_time = (mouse_pos[0] - drag.drag_start_x) / pixels_per_second;
+                let snapped_value = snapped_clip_drag_value(
+                    drag,
+                    delta_time,
+                    snap_settings,
+                    snapshot,
+                    pixels_per_second,
+                );
                 return clip_drag_preview_times(
                     &drag.drag_type,
                     drag.original_value,
-                    delta_time,
+                    snapped_value - drag.original_value,
                     inst.start_time,
                     inst.end_time,
                     inst.clip_in,
@@ -1372,3 +1436,95 @@ fn build_timeline_window(
 }
 
 crate::ui_window!("timeline", Bottom, 0, build_timeline_window);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DRAGGED_ENTITY: crate::ecs::world::Entity = 1;
+    const DRAGGED_INSTANCE: u64 = 10;
+    const PIXELS_PER_SECOND: f32 = 100.0;
+
+    fn instance_snapshot(instance_id: u64, start_time: f32, end_time: f32) -> ClipInstanceSnapshot {
+        ClipInstanceSnapshot {
+            instance_id,
+            source_id: 0,
+            clip_name: String::new(),
+            start_time,
+            end_time,
+            clip_in: 0.0,
+            clip_out: end_time - start_time,
+            muted: false,
+            weight: 1.0,
+            blend_mode: BlendMode::default(),
+            group_id: None,
+        }
+    }
+
+    fn snapshot_with_neighbor_ending_at(neighbor_end: f32) -> ClipTrackSnapshot {
+        ClipTrackSnapshot {
+            entries: vec![ClipTrackEntry {
+                entity: DRAGGED_ENTITY,
+                entity_name: String::new(),
+                mesh_bone_id: None,
+                instances: vec![
+                    instance_snapshot(DRAGGED_INSTANCE, 0.0, 1.0),
+                    instance_snapshot(DRAGGED_INSTANCE + 1, 0.0, neighbor_end),
+                ],
+                groups: Vec::new(),
+            }],
+        }
+    }
+
+    fn drag_state(drag_type: ClipDragType, original_value: f32) -> ClipDragState {
+        ClipDragState {
+            entity: DRAGGED_ENTITY,
+            instance_id: DRAGGED_INSTANCE,
+            drag_type,
+            original_value,
+            drag_start_x: 0.0,
+        }
+    }
+
+    fn snap_to_frame_and_key() -> SnapSettings {
+        SnapSettings {
+            snap_to_frame: true,
+            snap_to_key: true,
+            frame_rate: 30.0,
+            snap_threshold_px: 8.0,
+        }
+    }
+
+    #[test]
+    fn move_snaps_to_other_clip_edge() {
+        let neighbor_end = 2.01;
+        let snapshot = snapshot_with_neighbor_ending_at(neighbor_end);
+        let drag = drag_state(ClipDragType::Move, 1.0);
+
+        let snapped = snapped_clip_drag_value(
+            &drag,
+            1.0,
+            &snap_to_frame_and_key(),
+            &snapshot,
+            PIXELS_PER_SECOND,
+        );
+
+        assert_eq!(snapped, neighbor_end);
+    }
+
+    #[test]
+    fn trim_ignores_other_clip_edges_and_snaps_to_frame() {
+        let neighbor_end = 2.01;
+        let snapshot = snapshot_with_neighbor_ending_at(neighbor_end);
+        let settings = snap_to_frame_and_key();
+
+        for drag_type in [ClipDragType::TrimStart, ClipDragType::TrimEnd] {
+            let drag = drag_state(drag_type, 1.0);
+
+            let snapped =
+                snapped_clip_drag_value(&drag, 1.0, &settings, &snapshot, PIXELS_PER_SECOND);
+
+            assert_eq!(snapped, 2.0);
+        }
+    }
+}

@@ -5,7 +5,8 @@ use crate::animation::editable::{
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
 
 use super::super::drag::{
-    compute_dragged_tangent, dragged_key_delta, dragged_key_position, TimeSnap,
+    collect_unselected_key_times, compute_dragged_tangent, dragged_key_delta, dragged_key_position,
+    KeyTimeSnap,
 };
 use super::super::view::ViewTransform;
 
@@ -17,7 +18,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     selected_keyframes: &[CurveSelectedKeyframe],
     axis_lock: Option<AxisLock>,
-    time_snap: TimeSnap,
+    time_snap: &KeyTimeSnap,
 ) {
     for sel in selected_keyframes {
         let curve = match curves_to_draw
@@ -30,12 +31,14 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
         let curve_vt = vt.for_curve(curve);
 
         let delta = dragged_key_delta(&curve_vt, drag_start, mouse_pos);
+        let nearby_times = collect_unselected_key_times(curve, selected_keyframes);
 
         let [preview_time, preview_value] = dragged_key_position(
             [sel.original_time, sel.original_value],
             delta,
             axis_lock,
             time_snap,
+            &nearby_times,
         );
         let preview_x = curve_vt.time_to_x(preview_time).clamp(
             curve_vt.curve_origin[0],

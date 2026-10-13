@@ -13,7 +13,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::clip_schedule_systems::clip_schedule_switch_source;
 use crate::ecs::systems::timeline::{
     timeline_apply_selection, timeline_select_clip, timeline_set_keyframe_selection,
-    timeline_toggle_track_expanded, timeline_zoom_in, timeline_zoom_out,
+    timeline_toggle_track_expanded, timeline_zoom_at, timeline_zoom_in, timeline_zoom_out,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -125,6 +125,12 @@ pub enum TimelineEvent {
     },
     ZoomOut {
         min_zoom: f32,
+    },
+    ZoomAt {
+        cursor_time: f32,
+        factor: f32,
+        min_zoom: f32,
+        max_zoom: f32,
     },
     SetPreview(ClipPreview),
     SetCurveExtrapolation {
@@ -277,6 +283,12 @@ fn apply_view_event(
         }
         TimelineEvent::ZoomIn { max_zoom } => timeline_zoom_in(timeline_state, *max_zoom),
         TimelineEvent::ZoomOut { min_zoom } => timeline_zoom_out(timeline_state, *min_zoom),
+        TimelineEvent::ZoomAt {
+            cursor_time,
+            factor,
+            min_zoom,
+            max_zoom,
+        } => timeline_zoom_at(timeline_state, *cursor_time, *factor, *min_zoom, *max_zoom),
         TimelineEvent::SetPreview(preview) => timeline_state.preview = *preview,
         _ => {}
     }

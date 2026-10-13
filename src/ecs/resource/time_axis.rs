@@ -1,4 +1,5 @@
 pub const BASE_PIXELS_PER_SECOND: f32 = 80.0;
+pub const WHEEL_ZOOM_STEP: f32 = 1.15;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TimeAxis {
@@ -80,5 +81,17 @@ mod tests {
 
         let time_after = axis.x_to_time(0.0);
         assert!((time_after - time_before + 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn wheel_zoom_step_keeps_cursor_time_invariant() {
+        let mut axis = TimeAxis::new(BASE_PIXELS_PER_SECOND);
+        let cursor_x = 320.0;
+        let time_before = axis.x_to_time(cursor_x);
+
+        axis.zoom_at(cursor_x, WHEEL_ZOOM_STEP);
+
+        let time_after = axis.x_to_time(cursor_x);
+        assert!((time_after - time_before).abs() < 1e-6);
     }
 }

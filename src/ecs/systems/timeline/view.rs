@@ -2,6 +2,7 @@ use crate::animation::editable::SourceClipId;
 use crate::animation::BoneId;
 use crate::ecs::resource::{
     ClipDragType, ClipLibrary, SelectedKeyframe, SelectionModifier, TimelineState,
+    BASE_PIXELS_PER_SECOND,
 };
 
 pub fn timeline_select_clip(
@@ -103,6 +104,21 @@ pub fn timeline_zoom_out(state: &mut TimelineState, min_zoom: f32) {
     state.zoom_level = (state.zoom_level / 1.2).max(min_zoom);
 }
 
+pub fn timeline_zoom_at(
+    state: &mut TimelineState,
+    cursor_time: f32,
+    factor: f32,
+    min_zoom: f32,
+    max_zoom: f32,
+) {
+    let new_zoom = (state.zoom_level * factor).clamp(min_zoom, max_zoom);
+    let cursor_shift_x = cursor_time * BASE_PIXELS_PER_SECOND * (new_zoom - state.zoom_level);
+
+    state.zoom_level = new_zoom;
+    state.scroll_offset = (state.scroll_offset + cursor_shift_x).max(0.0);
+    state.pan_pending_delta_x += cursor_shift_x;
+}
+
 /// Timeline (start, end) a dragged clip block should be drawn at while the drag
 /// is in progress. Mirrors the clamps the commit events apply on release
 /// (`ClipInstanceMove`/`TrimStart`/`TrimEnd`), so the live preview always shows
@@ -150,8 +166,35 @@ mod tests {
     use super::*;
     use crate::animation::editable::{EditableAnimationClip, PropertyType, SourceClip};
     use crate::ecs::component::ClipSchedule;
+    use crate::ecs::resource::WHEEL_ZOOM_STEP;
     use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
+
+    #[test]
+    fn zoom_at_keeps_cursor_time_under_cursor() {
+        let mut state = TimelineState::new();
+        state.zoom_level = 1.0;
+        state.scroll_offset = 200.0;
+        let cursor_x = 120.0;
+        let cursor_time = (cursor_x + state.scroll_offset) / BASE_PIXELS_PER_SECOND;
+
+        timeline_zoom_at(&mut state, cursor_time, WHEEL_ZOOM_STEP, 0.01, 100.0);
+
+        let pixels_per_second = BASE_PIXELS_PER_SECOND * state.zoom_level;
+        let time_under_cursor = (cursor_x + state.scroll_offset) / pixels_per_second;
+        assert!((state.zoom_level - WHEEL_ZOOM_STEP).abs() < 1e-6);
+        assert!((time_under_cursor - cursor_time).abs() < 1e-4);
+    }
+
+    #[test]
+    fn zoom_at_respects_zoom_limits() {
+        let mut state = TimelineState::new();
+        state.zoom_level = 1.0;
+
+        timeline_zoom_at(&mut state, 2.0, WHEEL_ZOOM_STEP, 0.5, 1.05);
+
+        assert!((state.zoom_level - 1.05).abs() < 1e-6);
+    }
 
     #[test]
     fn set_keyframe_selection_replace() {

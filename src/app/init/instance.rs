@@ -322,6 +322,8 @@ impl App {
 
     fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
         data.ecs_world.insert_resource(Camera::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::ActiveSceneCamera::default());
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());

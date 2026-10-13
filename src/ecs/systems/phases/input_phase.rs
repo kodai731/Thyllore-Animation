@@ -10,9 +10,9 @@ use crate::ecs::resource::gizmo::transform::TransformGizmoHandle;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
-    BonePoseOverride, CameraFlyInput, ClipLibrary, HierarchyDisplayMode, ImGuiInputCapture,
-    KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose, TimelineState,
-    TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
+    ActiveSceneCamera, BonePoseOverride, CameraFlyInput, ClipLibrary, HierarchyDisplayMode,
+    ImGuiInputCapture, KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose,
+    TimelineState, TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
 };
 use crate::ecs::systems::{
     apply_mesh_selection, camera_anchor_pivot_to_focus, camera_move_to_pose,
@@ -85,7 +85,8 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
             mouse_pos[1] - viewport_pos[1],
         ];
         let screen_size = [ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32];
-        let is_alt_held = ctx.world.resource::<KeyboardModifiers>().alt;
+        let is_alt_held = ctx.world.resource::<KeyboardModifiers>().alt
+            && !ctx.world.resource::<ActiveSceneCamera>().view_enabled;
         let fly = ctx.world.resource::<CameraFlyInput>().clone();
         request_camera_focus_pick(ctx, is_right_clicked, mouse_wheel, &fly);
         let mut camera = ctx.camera_mut();

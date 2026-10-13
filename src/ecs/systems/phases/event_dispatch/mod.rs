@@ -12,5 +12,6 @@ pub mod overlay;
 pub mod pose_library;
 pub mod scalar_curve;
 pub mod scene;
+pub mod scene_camera;
 pub mod spring_bone;
 pub mod timeline;

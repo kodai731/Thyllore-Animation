@@ -3,6 +3,7 @@ use winit::keyboard::Key;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
+use crate::ecs::systems::phases::event_dispatch::scene_camera::SceneCameraEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
@@ -112,6 +113,13 @@ pub fn default_bindings() -> Vec<KeyBinding> {
             scope: BindingScope::SceneView,
             label: "Frame selection",
             send: |world| world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased)),
+        },
+        KeyBinding {
+            key: "0",
+            modifiers: ModifierKeys::none(),
+            scope: BindingScope::SceneView,
+            label: "Toggle camera view",
+            send: |world| world.send_command(SceneCameraEvent::ToggleCameraView),
         },
     ]
 }

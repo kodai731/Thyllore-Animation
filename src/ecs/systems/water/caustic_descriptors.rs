@@ -132,14 +132,18 @@ impl RRWaterCausticDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.splat_layout.destroy(device);
-        self.apply_layout.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        self.splat_layout.destroy(rrdevice);
+        self.apply_layout.destroy(rrdevice);
     }
 }
 
 impl GpuResource for RRWaterCausticDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.splat_layout.is_destroyed() && self.apply_layout.is_destroyed()
     }
 }

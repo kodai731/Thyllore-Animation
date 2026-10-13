@@ -8,6 +8,10 @@ pub const CAMERA_FRAMING_SECONDS: f32 = 0.25;
 pub const FLY_SPEED_WHEEL_FACTOR: f32 = 1.08;
 pub const FLY_SPEED_INDICATOR_SECONDS: f32 = 1.5;
 const FLY_SPEED_SCALE_RANGE: (f32, f32) = (0.05, 50.0);
+/// Blender's default clip start is 0.01 m at a 1 m working distance; the ceiling is Unreal's 10 cm default.
+pub const NEAR_PLANE_DISTANCE_RATIO: f32 = 0.01;
+pub const NEAR_PLANE_RANGE: (f32, f32) = (0.001, 0.1);
+pub const FLY_SPEED_MIN_DISTANCE: f32 = 0.01;
 
 pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
     let diff = position - target;
@@ -21,7 +25,7 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         pitch,
         distance,
         fov_y: Deg(45.0),
-        near_plane: 0.1,
+        near_plane: near_plane_for_distance(distance),
         initial_pivot: target,
         initial_yaw: yaw,
         initial_pitch: pitch,
@@ -30,6 +34,14 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         fly_speed_scale: Camera::DEFAULT_FLY_SPEED_SCALE,
         fly_speed_indicator_seconds: 0.0,
     }
+}
+
+pub fn near_plane_for_distance(distance: f32) -> f32 {
+    (distance * NEAR_PLANE_DISTANCE_RATIO).clamp(NEAR_PLANE_RANGE.0, NEAR_PLANE_RANGE.1)
+}
+
+pub fn update_camera_near_plane(camera: &mut Camera) {
+    camera.near_plane = near_plane_for_distance(camera.distance);
 }
 
 pub fn compute_camera_backward(camera: &Camera) -> Vector3<f32> {
@@ -76,7 +88,7 @@ pub fn camera_input_system_inner(
         || mouse_wheel != 0.0
         || (is_right_clicked && fly_direction_is_active(fly));
     if any_input {
-        camera.transition = None;
+        finish_camera_transition(camera);
     }
 
     if is_right_clicked && mouse_wheel != 0.0 {
@@ -124,7 +136,7 @@ pub fn camera_look(camera: &mut Camera, mouse_diff: Vector2<f32>) {
     camera.pivot = position - compute_camera_backward(camera) * camera.distance;
 }
 
-fn fly_direction_is_active(fly: &CameraFlyInput) -> bool {
+pub fn fly_direction_is_active(fly: &CameraFlyInput) -> bool {
     fly.forward != 0.0 || fly.right != 0.0 || fly.up != 0.0
 }
 
@@ -141,7 +153,7 @@ pub fn camera_fly_move(camera: &mut Camera, fly: &CameraFlyInput) {
 }
 
 pub fn camera_fly_speed(camera: &Camera) -> f32 {
-    camera.distance.max(0.5) * camera.fly_speed_scale
+    camera.distance.max(FLY_SPEED_MIN_DISTANCE) * camera.fly_speed_scale
 }
 
 pub fn adjust_fly_speed(camera: &mut Camera, mouse_wheel: f32) {
@@ -190,6 +202,12 @@ pub fn camera_move_to_pose(camera: &mut Camera, target: CameraPose, motion: Came
     }
 }
 
+pub fn finish_camera_transition(camera: &mut Camera) {
+    if let Some(transition) = camera.transition.take() {
+        camera.set_pose(transition.to);
+    }
+}
+
 pub fn advance_camera_transition(camera: &mut Camera, delta_seconds: f32) {
     let Some(mut transition) = camera.transition else {
         return;
@@ -218,6 +236,36 @@ fn lerp_camera_pose(from: CameraPose, to: CameraPose, t: f32) -> CameraPose {
 pub fn tick_fly_speed_indicator(camera: &mut Camera, delta_seconds: f32) {
     camera.fly_speed_indicator_seconds =
         (camera.fly_speed_indicator_seconds - delta_seconds.max(0.0)).max(0.0);
+}
+
+/// The pose that turns the camera towards the focus point without moving it.
+pub fn camera_pose_looking_at(camera: &Camera, focus: Vector3<f32>) -> Option<CameraPose> {
+    let position = compute_camera_position(camera);
+    let diff = position - focus;
+    let distance = diff.magnitude();
+    if distance <= camera.near_plane * 2.0 {
+        return None;
+    }
+
+    Some(CameraPose {
+        pivot: focus,
+        yaw: diff.x.atan2(diff.z),
+        pitch: (diff.y / distance).asin(),
+        distance,
+    })
+}
+
+/// Moves the pivot onto the focus point's depth plane so pan and zoom scale with the distance
+/// between the camera and the focused object; the camera position and orientation stay put.
+pub fn camera_anchor_pivot_to_focus(camera: &mut Camera, focus: Vector3<f32>) {
+    let position = compute_camera_position(camera);
+    let depth = (focus - position).dot(compute_camera_direction(camera));
+    if depth <= camera.near_plane * 2.0 {
+        return;
+    }
+
+    camera.pivot = position + compute_camera_direction(camera) * depth;
+    camera.distance = depth;
 }
 
 pub fn camera_pan(camera: &mut Camera, mouse_diff: Vector2<f32>, screen_size: Vector2<f32>) {
@@ -373,10 +421,72 @@ mod tests {
     }
 
     #[test]
+    fn anchoring_to_a_focus_point_keeps_the_camera_where_it_is() {
+        let mut camera = Camera::default();
+        let position_before = compute_camera_position(&camera);
+        let direction = compute_camera_direction(&camera);
+        let focus = position_before + direction * 3.0 + compute_camera_right(&camera) * 0.7;
+
+        camera_anchor_pivot_to_focus(&mut camera, focus);
+
+        let position_after = compute_camera_position(&camera);
+        assert!((position_after - position_before).magnitude() < 1e-4);
+        assert!(approx(camera.distance, 3.0));
+        assert!(approx((camera.pivot - position_after).dot(direction), 3.0));
+    }
+
+    #[test]
+    fn anchoring_ignores_a_focus_point_behind_the_camera() {
+        let mut camera = Camera::default();
+        let pose_before = camera.pose();
+        let focus = compute_camera_position(&camera) + compute_camera_backward(&camera) * 2.0;
+
+        camera_anchor_pivot_to_focus(&mut camera, focus);
+
+        assert_eq!(camera.pose(), pose_before);
+    }
+
+    #[test]
+    fn zoom_step_follows_the_anchored_focus_distance() {
+        let mut near = Camera::default();
+        let mut far = Camera::default();
+        let direction = compute_camera_direction(&near);
+        let position = compute_camera_position(&near);
+        camera_anchor_pivot_to_focus(&mut near, position + direction * 2.0);
+        camera_anchor_pivot_to_focus(&mut far, position + direction * 20.0);
+
+        let screen = Vector2::new(100.0, 100.0);
+        let cursor = Vector2::new(50.0, 50.0);
+        camera_zoom(&mut near, 1.0, cursor, screen);
+        camera_zoom(&mut far, 1.0, cursor, screen);
+
+        let moved_near = (compute_camera_position(&near) - position).magnitude();
+        let moved_far = (compute_camera_position(&far) - position).magnitude();
+        assert!(approx(moved_far / moved_near, 10.0));
+    }
+
+    #[test]
+    fn looking_at_a_focus_point_keeps_the_camera_position() {
+        let camera = Camera::default();
+        let position = compute_camera_position(&camera);
+        let focus = Vector3::new(-2.0, 0.5, 1.0);
+
+        let pose = camera_pose_looking_at(&camera, focus).expect("focus in range");
+
+        let mut turned = Camera::default();
+        turned.set_pose(pose);
+        assert!((compute_camera_position(&turned) - position).magnitude() < 1e-4);
+        assert_eq!(turned.pivot, focus);
+        let to_focus = (focus - position).normalize();
+        assert!((compute_camera_direction(&turned) - to_focus).magnitude() < 1e-4);
+    }
+
+    #[test]
     fn input_cancels_a_running_transition() {
         let mut camera = Camera::default();
-        let current_pose = camera.pose();
-        camera_move_to_pose(&mut camera, current_pose, CameraMotion::Eased);
+        let mut target = camera.pose();
+        target.distance += 1.0;
+        camera_move_to_pose(&mut camera, target, CameraMotion::Eased);
         let fly = CameraFlyInput::default();
         camera_input_system_inner(
             &mut camera,
@@ -390,5 +500,7 @@ mod tests {
             [100.0, 100.0],
         );
         assert!(camera.transition.is_none());
+        assert!(camera.distance < target.distance);
+        assert!(camera.distance > target.distance * 0.8);
     }
 }

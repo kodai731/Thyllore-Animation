@@ -6,25 +6,22 @@ impl App {
         let Some(sink) = self.data.ecs_world.get_resource::<ExposureDumpSink>() else {
             return;
         };
-        let exposure_value = self
+        let exposure = self
             .data
             .ecs_world
             .get_resource::<Exposure>()
-            .map(|e| e.exposure_value)
-            .unwrap_or(1.0);
+            .map(|e| e.clone())
+            .unwrap_or_default();
 
-        let adapted_text = match adapted {
-            Some(value) => value.to_string(),
-            None => "0.0".to_string(),
-        };
-        let line = format!(
-            "{{\"frame\":{},\"adapted\":{},\"exposure_value\":{},\"ae_enabled\":{}}}\n",
-            frame,
-            adapted_text,
-            exposure_value,
-            adapted.is_some()
-        );
-        append_jsonl(&sink.path, &line);
+        let line = serde_json::json!({
+            "frame": frame,
+            "adapted": adapted.unwrap_or(0.0),
+            "exposure_value": exposure.exposure_value,
+            "ev100": exposure.ev100,
+            "metered_luminance": exposure.metered_luminance,
+            "ae_enabled": adapted.is_some(),
+        });
+        append_jsonl(&sink.path, &format!("{line}\n"));
     }
 }
 

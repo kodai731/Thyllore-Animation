@@ -35,6 +35,7 @@ impl LightningRenderTargets {
 }
 
 /// Pipeline, descriptor set and the per-instance UBOs of the lightning resolve pass.
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct LightningGpuState {
     pub ubo: Option<UniformBuffer<LightningUBO>>,

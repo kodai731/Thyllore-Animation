@@ -58,6 +58,10 @@ impl GpuResource for LightningRenderTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         destroy_render_targets(self, &rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.framebuffer.is_destroyed() && self.render_pass.is_destroyed()
+    }
 }
 
 unsafe fn destroy_render_targets(

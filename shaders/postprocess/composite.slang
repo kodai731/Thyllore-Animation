@@ -191,7 +191,7 @@ float4 fragmentMain(Varyings input, out float fragDepth : SV_Depth) : SV_Target0
         attenuation = 1.0 / (1.0 + 0.01 * lightDistance + 0.001 * lightDistance * lightDistance);
     }
 
-    float ambient = 0.3;
+    float ambient = sceneData.lightColor.w;
 
     float shadowFactor = lerp(1.0, shadowMask, sceneData.shadowStrength);
 

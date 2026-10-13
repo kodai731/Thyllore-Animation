@@ -320,7 +320,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 light_color.x,
                 light_color.y,
                 light_color.z,
-                1.0,
+                thyllore_render_core::AMBIENT_INTENSITY,
             ),
             view,
             proj,

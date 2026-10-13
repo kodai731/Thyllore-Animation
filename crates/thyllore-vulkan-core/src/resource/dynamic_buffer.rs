@@ -1,10 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::descriptor_allocator::PoolSignature;
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
 
@@ -128,81 +127,6 @@ impl<T: Copy> Drop for DynamicUniformBuffer<T> {
     fn drop(&mut self) {
         if self.buffer != vk::Buffer::null() {
             log_warn!("DynamicUniformBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct DynamicDescriptorSet {
-    pub layout: vk::DescriptorSetLayout,
-    pub set: vk::DescriptorSet,
-}
-
-impl DynamicDescriptorSet {
-    pub unsafe fn new(rrdevice: &RRDevice, buffer: vk::Buffer, buffer_range: u64) -> Result<Self> {
-        let binding = vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build();
-        let layout = Self::create_layout(rrdevice, &[binding])?;
-        let signature = PoolSignature::from_bindings(&[binding]);
-        let set = rrdevice
-            .allocate_descriptor_sets(layout, &signature, 1)?
-            .pop()
-            .ok_or_else(|| anyhow!("descriptor allocator returned no set"))?;
-        Self::write_descriptor(rrdevice, set, buffer, buffer_range);
-
-        Ok(Self { layout, set })
-    }
-
-    unsafe fn create_layout(
-        rrdevice: &RRDevice,
-        bindings: &[vk::DescriptorSetLayoutBinding],
-    ) -> Result<vk::DescriptorSetLayout> {
-        let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
-        Ok(rrdevice.device.create_descriptor_set_layout(&info, None)?)
-    }
-
-    unsafe fn write_descriptor(
-        rrdevice: &RRDevice,
-        set: vk::DescriptorSet,
-        buffer: vk::Buffer,
-        buffer_range: u64,
-    ) {
-        let buffer_info = vk::DescriptorBufferInfo::builder()
-            .buffer(buffer)
-            .offset(0)
-            .range(buffer_range);
-
-        let buffer_infos = &[buffer_info];
-        let write = vk::WriteDescriptorSet::builder()
-            .dst_set(set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-            .buffer_info(buffer_infos);
-
-        rrdevice
-            .device
-            .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.layout != vk::DescriptorSetLayout::null() {
-            rrdevice
-                .device
-                .destroy_descriptor_set_layout(self.layout, None);
-            self.layout = vk::DescriptorSetLayout::null();
-        }
-    }
-}
-
-impl Drop for DynamicDescriptorSet {
-    fn drop(&mut self) {
-        if self.layout != vk::DescriptorSetLayout::null() {
-            log_warn!("DynamicDescriptorSet dropped without calling destroy()");
         }
     }
 }

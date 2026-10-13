@@ -100,25 +100,25 @@ pub(super) fn curve_value_range(curve: &PropertyCurve) -> Option<(f32, f32)> {
     Some((min, max))
 }
 
+/// Fits the view to the clip once; afterwards only pan, zoom and frame requests move it, so a
+/// clip that grows while a key is dragged keeps the time scale under the cursor.
 pub(super) fn initialize_view_range(
     editor_state: &mut CurveEditorState,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     clip_duration: f32,
 ) {
-    let (global_min, global_max) = calculate_global_value_range(curves_to_draw);
-    let display_duration = clip_duration;
-
-    if !editor_state.view_initialized {
-        editor_state.view_value_offset = global_min;
-        editor_state.view_val_range = global_max - global_min;
-        editor_state.view_duration = display_duration;
-        editor_state.view_time_offset = 0.0;
-        editor_state.zoom_x = 1.0;
-        editor_state.zoom_y = 1.0;
-        editor_state.view_initialized = true;
-    } else {
-        editor_state.view_duration = editor_state.view_duration.max(display_duration);
+    if editor_state.view_initialized {
+        return;
     }
+
+    let (global_min, global_max) = calculate_global_value_range(curves_to_draw);
+    editor_state.view_value_offset = global_min;
+    editor_state.view_val_range = global_max - global_min;
+    editor_state.view_duration = clip_duration;
+    editor_state.view_time_offset = 0.0;
+    editor_state.zoom_x = 1.0;
+    editor_state.zoom_y = 1.0;
+    editor_state.view_initialized = true;
 }
 
 pub(super) fn handle_panning(
@@ -461,6 +461,19 @@ mod tests {
             value_display: CurveValueDisplay::Normalized,
             ..build_editor_state(FrameRequest::All)
         }
+    }
+
+    #[test]
+    fn view_time_scale_stays_put_while_the_clip_grows() {
+        let curve = build_curve(&[(0.0, 0.0), (2.4, 1.0)]);
+        let curves = [(&curve, [1.0; 4], "x")];
+        let mut editor_state = CurveEditorState::default();
+
+        initialize_view_range(&mut editor_state, &curves, 2.4);
+        initialize_view_range(&mut editor_state, &curves, 3.1);
+
+        assert!((editor_state.view_duration - 2.4).abs() < TOLERANCE);
+        assert!(editor_state.view_initialized);
     }
 
     #[test]

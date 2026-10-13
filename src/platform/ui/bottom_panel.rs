@@ -26,29 +26,43 @@ fn draw_bottom_panel(
         .movable(false)
         .collapsible(false)
         .bring_to_front_on_focus(false)
-        .build(|| {
-            let msg_tab_label = build_message_tab_label(message_log);
+        .build(|| draw_bottom_tabs(ui, ecs_world, message_log));
+}
 
-            imgui::TabBar::new("bottom_tabs").build(ui, || {
-                let mut tab = imgui::TabItem::new(&msg_tab_label);
-                if message_log.select_tab_requested {
-                    tab = tab.flags(imgui::TabItemFlags::SET_SELECTED);
-                    message_log.select_tab_requested = false;
-                }
-                tab.build(ui, || {
-                    ui.child_window("messages_content").build(ui, || {
-                        build_message_window_content(ui, ecs_world, message_log);
-                    });
-                });
+fn draw_bottom_tabs(ui: &imgui::Ui, ecs_world: &World, message_log: &mut MessageLog) {
+    let Some(_tab_bar) = ui.tab_bar("bottom_tabs") else {
+        return;
+    };
 
-                #[cfg(debug_assertions)]
-                imgui::TabItem::new("Debug").build(ui, || {
-                    ui.child_window("debug_content").build(ui, || {
-                        build_debug_panel_content(ui, ecs_world);
-                    });
-                });
-            });
-        });
+    draw_messages_tab(ui, ecs_world, message_log);
+    #[cfg(debug_assertions)]
+    draw_debug_tab(ui, ecs_world);
+}
+
+fn draw_messages_tab(ui: &imgui::Ui, ecs_world: &World, message_log: &mut MessageLog) {
+    let label = build_message_tab_label(message_log);
+    let flags = if message_log.select_tab_requested {
+        imgui::TabItemFlags::SET_SELECTED
+    } else {
+        imgui::TabItemFlags::empty()
+    };
+    message_log.select_tab_requested = false;
+
+    let Some(_tab) = ui.tab_item_with_flags(&label, None, flags) else {
+        return;
+    };
+    ui.child_window("messages_content").build(ui, || {
+        build_message_window_content(ui, ecs_world, message_log)
+    });
+}
+
+#[cfg(debug_assertions)]
+fn draw_debug_tab(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(_tab) = ui.tab_item("Debug") else {
+        return;
+    };
+    ui.child_window("debug_content")
+        .build(ui, || build_debug_panel_content(ui, ecs_world));
 }
 
 fn build_message_tab_label(message_log: &MessageLog) -> String {

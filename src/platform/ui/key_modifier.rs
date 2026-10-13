@@ -1,3 +1,5 @@
+use crate::platform::key_bindings::ModifierKeys;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum KeyModifier {
     None,
@@ -13,5 +15,15 @@ pub(crate) fn current_key_modifier(ui: &imgui::Ui) -> KeyModifier {
         KeyModifier::Shift
     } else {
         KeyModifier::None
+    }
+}
+
+impl From<KeyModifier> for ModifierKeys {
+    fn from(modifier: KeyModifier) -> Self {
+        match modifier {
+            KeyModifier::None => ModifierKeys::none(),
+            KeyModifier::Shift => ModifierKeys::shift(),
+            KeyModifier::Ctrl => ModifierKeys::ctrl(),
+        }
     }
 }

@@ -3,18 +3,21 @@ use imgui::Condition;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{PanelVisibility, UiWidgetState};
 use crate::ecs::world::World;
-use crate::platform::key_bindings::{default_bindings, ModifierKeys};
+use crate::platform::key_bindings::{default_bindings, BindingScope, ModifierKeys};
 use crate::platform::ui::command_palette::PALETTE_KEY_BINDING;
 use crate::platform::ui::curve_editor::CURVE_EDITOR_KEY_BINDINGS;
 use crate::platform::ui::hierarchy_window::TREE_KEY_BINDINGS;
-use crate::platform::ui::key_modifier::KeyModifier;
 use crate::platform::ui::scene_overlay::GIZMO_KEY_BINDINGS;
-use crate::platform::ui::theme::{property_label, section_header, SectionDefault};
+use crate::platform::ui::theme::{
+    draw_raised_window_frame, property_label, push_raised_window_style, section_header,
+    SectionDefault,
+};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
-const SHORTCUT_SCOPES: [ShortcutScope; 4] = [
+const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
     ShortcutScope::Global,
+    ShortcutScope::SceneView,
     ShortcutScope::Hierarchy,
     ShortcutScope::CurveEditor,
     ShortcutScope::SceneGizmo,
@@ -23,6 +26,7 @@ const SHORTCUT_SCOPES: [ShortcutScope; 4] = [
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShortcutScope {
     Global,
+    SceneView,
     Hierarchy,
     CurveEditor,
     SceneGizmo,
@@ -32,6 +36,7 @@ impl ShortcutScope {
     fn label(self) -> &'static str {
         match self {
             ShortcutScope::Global => "Global",
+            ShortcutScope::SceneView => "Scene View",
             ShortcutScope::Hierarchy => "Hierarchy",
             ShortcutScope::CurveEditor => "Curve Editor",
             ShortcutScope::SceneGizmo => "Scene Gizmo",
@@ -46,22 +51,16 @@ pub struct ShortcutEntry {
     pub label: &'static str,
 }
 
-pub(crate) fn format_chord(modifier: KeyModifier, key_name: &str) -> String {
-    match modifier {
-        KeyModifier::None => key_name.to_string(),
-        KeyModifier::Shift => format!("Shift+{}", key_name),
-        KeyModifier::Ctrl => format!("Ctrl+{}", key_name),
+pub(crate) fn format_chord(modifiers: ModifierKeys, key_name: &str) -> String {
+    let mut chord = String::new();
+    if modifiers.ctrl {
+        chord.push_str("Ctrl+");
     }
-}
-
-pub(crate) fn format_global_chord(modifiers: ModifierKeys, key: &str) -> String {
-    let upper = key.to_uppercase();
-    match (modifiers.ctrl, modifiers.shift) {
-        (false, false) => upper,
-        (true, false) => format!("Ctrl+{}", upper),
-        (false, true) => format!("Shift+{}", upper),
-        (true, true) => format!("Ctrl+Shift+{}", upper),
+    if modifiers.shift {
+        chord.push_str("Shift+");
     }
+    chord.push_str(key_name);
+    chord
 }
 
 fn imgui_key_name(key: imgui::Key) -> &'static str {
@@ -140,15 +139,18 @@ fn imgui_key_name(key: imgui::Key) -> &'static str {
 
 pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let global = default_bindings().into_iter().map(|binding| ShortcutEntry {
-        scope: ShortcutScope::Global,
-        chord: format_global_chord(binding.modifiers, binding.key),
+        scope: match binding.scope {
+            BindingScope::Global => ShortcutScope::Global,
+            BindingScope::SceneView => ShortcutScope::SceneView,
+        },
+        chord: format_chord(binding.modifiers, &binding.key.to_uppercase()),
         label: binding.label,
     });
 
     let command_palette = std::iter::once(ShortcutEntry {
         scope: ShortcutScope::Global,
         chord: format_chord(
-            PALETTE_KEY_BINDING.modifier,
+            PALETTE_KEY_BINDING.modifier.into(),
             imgui_key_name(PALETTE_KEY_BINDING.key),
         ),
         label: PALETTE_KEY_BINDING.label,
@@ -156,7 +158,7 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
 
     let hierarchy = TREE_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::Hierarchy,
-        chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+        chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
         label: binding.label,
     });
 
@@ -164,13 +166,13 @@ pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
         .iter()
         .map(|binding| ShortcutEntry {
             scope: ShortcutScope::CurveEditor,
-            chord: format_chord(binding.modifier, imgui_key_name(binding.key)),
+            chord: format_chord(binding.modifier.into(), imgui_key_name(binding.key)),
             label: binding.label,
         });
 
     let scene_gizmo = GIZMO_KEY_BINDINGS.iter().map(|binding| ShortcutEntry {
         scope: ShortcutScope::SceneGizmo,
-        chord: format_chord(KeyModifier::None, imgui_key_name(binding.key)),
+        chord: format_chord(ModifierKeys::none(), imgui_key_name(binding.key)),
         label: binding.label,
     });
 
@@ -224,6 +226,7 @@ fn build_shortcuts_window(
 
     let display_size = ui.io().display_size();
     let mut is_open = true;
+    let _raised = push_raised_window_style(ui);
     ui.window(SHORTCUTS_WINDOW_TITLE)
         .position(
             [display_size[0] * 0.5, display_size[1] * 0.5],
@@ -233,7 +236,10 @@ fn build_shortcuts_window(
         .always_auto_resize(true)
         .collapsible(false)
         .opened(&mut is_open)
-        .build(|| draw_shortcut_sections(ui, world));
+        .build(|| {
+            draw_raised_window_frame(ui);
+            draw_shortcut_sections(ui, world);
+        });
 
     if !is_open || ui.is_key_pressed(imgui::Key::Escape) {
         world.resource_mut::<UiWidgetState>().shortcuts_panel = PanelVisibility::Hidden;
@@ -245,12 +251,14 @@ crate::ui_window!("keyboard_shortcuts", Floating, 5, build_shortcuts_window);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::ui::key_modifier::KeyModifier;
 
     #[test]
     fn test_collect_shortcuts_contains_all_scopes() {
         let shortcuts = collect_shortcuts();
         let scopes: Vec<ShortcutScope> = shortcuts.iter().map(|e| e.scope).collect();
         assert!(scopes.contains(&ShortcutScope::Global));
+        assert!(scopes.contains(&ShortcutScope::SceneView));
         assert!(scopes.contains(&ShortcutScope::Hierarchy));
         assert!(scopes.contains(&ShortcutScope::CurveEditor));
         assert!(scopes.contains(&ShortcutScope::SceneGizmo));
@@ -287,16 +295,35 @@ mod tests {
 
     #[test]
     fn test_format_chord_none() {
-        assert_eq!(format_chord(KeyModifier::None, "F"), "F");
+        assert_eq!(format_chord(ModifierKeys::none(), "F"), "F");
     }
 
     #[test]
     fn test_format_chord_shift() {
-        assert_eq!(format_chord(KeyModifier::Shift, "E"), "Shift+E");
+        assert_eq!(format_chord(ModifierKeys::shift(), "E"), "Shift+E");
     }
 
     #[test]
     fn test_format_chord_ctrl() {
-        assert_eq!(format_chord(KeyModifier::Ctrl, "Z"), "Ctrl+Z");
+        assert_eq!(format_chord(ModifierKeys::ctrl(), "Z"), "Ctrl+Z");
+    }
+
+    #[test]
+    fn test_format_chord_ctrl_shift() {
+        let both = ModifierKeys {
+            ctrl: true,
+            shift: true,
+        };
+        assert_eq!(format_chord(both, "Z"), "Ctrl+Shift+Z");
+    }
+
+    #[test]
+    fn test_imgui_modifier_maps_onto_global_modifiers() {
+        assert_eq!(ModifierKeys::from(KeyModifier::Ctrl), ModifierKeys::ctrl());
+        assert_eq!(
+            ModifierKeys::from(KeyModifier::Shift),
+            ModifierKeys::shift()
+        );
+        assert_eq!(ModifierKeys::from(KeyModifier::None), ModifierKeys::none());
     }
 }

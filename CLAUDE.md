@@ -104,6 +104,13 @@ saved in wrong locations.
 ```
 20260315_new_file.md
 ```
+- A report with child files is one date-prefixed directory with `index.md` inside it; never leave the
+  parent md beside the directory, so listings such as `ExploreHistory/` show directories only:
+```
+20260315_new_report/
+  index.md
+  details.md
+```
 
 ## Issue History
 

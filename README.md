@@ -168,7 +168,7 @@ Key dependencies used in this project:
 | [winit](https://crates.io/crates/winit)           | Cross-platform windowing    |
 | [gltf](https://crates.io/crates/gltf)             | glTF model loading          |
 | [ufbx](https://crates.io/crates/ufbx)             | FBX model loading           |
-| [imgui](https://github.com/imgui-rs/imgui-rs)     | Immediate mode GUI          |
+| [dear-imgui-rs](https://github.com/Latias94/dear-imgui-rs) | Immediate mode GUI |
 | [cgmath](https://crates.io/crates/cgmath)         | Linear algebra              |
 | [ort](https://crates.io/crates/ort)               | ONNX Runtime (ML inference) |
 

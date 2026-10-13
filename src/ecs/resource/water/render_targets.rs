@@ -19,6 +19,7 @@ pub struct WaterBindingKey {
     pub trace_generation: u64,
 }
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct WaterRenderTargets {
     pub history: HistoryTargets,
@@ -31,6 +32,7 @@ pub struct WaterRenderTargets {
 
 gpu_resource!(WaterRenderTargets);
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct WaterGpuState {
     pub shading_pipeline: Option<RRPipeline>,

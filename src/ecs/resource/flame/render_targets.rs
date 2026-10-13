@@ -4,11 +4,13 @@ use thyllore_effect_core::FlameUBO;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, HistoryTargets, RRImage, UniformBuffer};
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct FlameRenderTargets {
     pub history: HistoryTargets,
 }
 
+#[must_use]
 #[derive(Debug, Default, GpuResource)]
 pub struct FlameGpuState {
     pub shading_pipeline: Option<RRPipeline>,

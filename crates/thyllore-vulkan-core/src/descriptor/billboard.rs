@@ -7,6 +7,7 @@ use crate::descriptor::shader_bindings::billboard;
 use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
+#[must_use]
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRBillboardDescriptorSet {
     pub layout: ReflectedSetLayout,

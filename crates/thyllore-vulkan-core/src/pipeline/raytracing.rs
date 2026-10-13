@@ -394,6 +394,10 @@ impl GpuResource for RRRayTracingPipeline {
         self.sbt_buffer = vk::Buffer::null();
         self.sbt_memory = vk::DeviceMemory::null();
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.pipeline.is_destroyed() && self.sbt_buffer.is_destroyed()
+    }
 }
 
 #[cfg(test)]

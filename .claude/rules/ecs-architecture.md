@@ -198,7 +198,7 @@ after).
   `begin_frame`; readbacks of the finished image are Last (Bevy `PostUpdate` egui output, Unreal
   `ProcessLocalPlayerSlateOperations` after the world tick)
 - **Commands are queued by stage, not returned**: a dispatcher or system pushes to the `CommandQueue<C>`
-  resource of its command type (`src/ecs/resource/app_command.rs`) and never returns commands to its
+  resource of its command type (`src/ecs/resource/app/command.rs`) and never returns commands to its
   caller. One queue exists per stage whose order is required, and `App` drains them in that order
   (`src/app/command.rs::apply_queued_commands`): `EntityRemovalQueue` (ids of the scene before any load)
   → `SceneLoadQueue` (model loads, spawns) → `AssetEditQueue` (edits of the loaded model's assets) →

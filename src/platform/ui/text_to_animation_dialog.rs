@@ -6,6 +6,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::numeric_format::numeric_format;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR};
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -175,7 +176,7 @@ fn build_status_section(ui: &imgui::Ui, snapshot: &StateSnapshot) {
     }
 
     if let Some(err) = &snapshot.error_message {
-        ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Error: {}", err));
+        ui.text_colored(srgb_to_linear_rgba(ERROR), format!("Error: {}", err));
     }
 }
 

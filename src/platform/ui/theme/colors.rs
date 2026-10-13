@@ -29,6 +29,15 @@ pub const AXIS_X: [f32; 4] = rgb_hex(0xFF453A);
 pub const AXIS_Y: [f32; 4] = rgb_hex(0x30D158);
 pub const AXIS_Z: [f32; 4] = rgb_hex(0x0A84FF);
 
+pub const ERROR: [f32; 4] = rgb_hex(0xFF4C4C);
+pub const WARNING: [f32; 4] = rgb_hex(0xFFD633);
+pub const SUCCESS: [f32; 4] = rgb_hex(0x30D158);
+pub const INFO: [f32; 4] = rgb_hex(0xCCCCCC);
+
+pub fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
+    [color[0], color[1], color[2], color[3] * alpha]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

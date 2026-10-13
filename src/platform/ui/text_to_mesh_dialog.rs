@@ -6,6 +6,7 @@ use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::World;
 use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
 use crate::hooks::ui_window::init_window_state;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR};
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -264,7 +265,7 @@ fn build_image_picker(ui: &imgui::Ui, dialog: &mut TextToMeshDialogState) {
     }
 
     if let Some(ref err) = dialog.image_load_error {
-        ui.text_colored([1.0, 0.3, 0.3, 1.0], err);
+        ui.text_colored(srgb_to_linear_rgba(ERROR), err);
     }
 }
 
@@ -303,7 +304,7 @@ fn build_status_section(
     }
 
     if let Some(err) = error_msg {
-        ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Error: {}", err));
+        ui.text_colored(srgb_to_linear_rgba(ERROR), format!("Error: {}", err));
     }
 }
 

@@ -2,10 +2,8 @@ use crate::ecs::resource::{MessageFilter, MessageLog};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::logger::message_buffer::MessageLevel;
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR, INFO, WARNING};
 
-const COLOR_INFO: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
-pub(crate) const COLOR_WARNING: [f32; 4] = [1.0, 0.9, 0.3, 1.0];
-pub(crate) const COLOR_ERROR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const BUTTON_ACTIVE_COLOR: [f32; 4] = [0.3, 0.5, 0.7, 1.0];
 
 pub fn build_message_window_content(ui: &imgui::Ui, world: &World, message_log: &mut MessageLog) {
@@ -85,9 +83,9 @@ fn build_message_list(ui: &imgui::Ui, message_log: &MessageLog) {
     ui.child_window("message_list").build(ui, || {
         for msg in &filtered {
             let color = match msg.level {
-                MessageLevel::Info => COLOR_INFO,
-                MessageLevel::Warning => COLOR_WARNING,
-                MessageLevel::Error => COLOR_ERROR,
+                MessageLevel::Info => srgb_to_linear_rgba(INFO),
+                MessageLevel::Warning => srgb_to_linear_rgba(WARNING),
+                MessageLevel::Error => srgb_to_linear_rgba(ERROR),
             };
             let prefix = match msg.level {
                 MessageLevel::Info => "[I]",

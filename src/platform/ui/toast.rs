@@ -3,7 +3,7 @@ use imgui::{Condition, StyleVar};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{advance_toast, ToastMessage, UiToast, ViewportInput};
 use crate::ecs::world::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE2, TEXT};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, with_alpha, SURFACE2, TEXT};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -13,10 +13,6 @@ const TOAST_BOTTOM_MARGIN: f32 = 24.0;
 
 fn compute_fade_alpha(remaining_secs: f32) -> f32 {
     (remaining_secs / TOAST_FADE_SECS).clamp(0.0, 1.0)
-}
-
-fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
-    srgb_to_linear_rgba([color[0], color[1], color[2], color[3] * alpha])
 }
 
 fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMessage) {
@@ -49,7 +45,11 @@ fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMess
             let pill_min = ui.window_pos();
             let pill_max = [pill_min[0] + pill_size[0], pill_min[1] + pill_size[1]];
             draw_list
-                .add_rect(pill_min, pill_max, with_alpha(SURFACE2, alpha))
+                .add_rect(
+                    pill_min,
+                    pill_max,
+                    srgb_to_linear_rgba(with_alpha(SURFACE2, alpha)),
+                )
                 .rounding(pill_rounding)
                 .filled(true)
                 .build();
@@ -58,7 +58,7 @@ fn draw_toast_pill(ui: &imgui::Ui, viewport: &ViewportInput, message: &ToastMess
                     pill_min[0] + TOAST_PADDING[0],
                     pill_min[1] + TOAST_PADDING[1],
                 ],
-                with_alpha(TEXT, alpha),
+                srgb_to_linear_rgba(with_alpha(TEXT, alpha)),
                 &message.text,
             );
         });

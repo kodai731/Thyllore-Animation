@@ -12,7 +12,7 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ERROR, TEXT_SECONDARY};
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -302,7 +302,7 @@ fn build_grpc_server_panel(ui: &imgui::Ui, ecs_world: &World) {
     } else {
         ui.text_colored([0.7, 0.7, 0.7, 1.0], "Stopped");
         if let Some(err) = &server.last_error {
-            ui.text_colored([1.0, 0.3, 0.3, 1.0], err);
+            ui.text_colored(srgb_to_linear_rgba(ERROR), err);
         }
         if ui.button("Start Server") {
             let working_dir = find_training_repo_path();

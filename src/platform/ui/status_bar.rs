@@ -7,7 +7,7 @@ use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
-use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
+use crate::platform::ui::theme::colors::{ERROR, WARNING};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
@@ -195,9 +195,9 @@ fn draw_status_bar(
 
 fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
     if errors > 0 {
-        COLOR_ERROR
+        ERROR
     } else if warnings > 0 {
-        COLOR_WARNING
+        WARNING
     } else {
         TEXT_COLOR
     }
@@ -284,17 +284,17 @@ mod tests {
     #[test]
     fn validation_status_color_errors_red() {
         let color = validation_status_color(1, 0);
-        assert_eq!(color, COLOR_ERROR);
+        assert_eq!(color, ERROR);
         let color = validation_status_color(5, 3);
-        assert_eq!(color, COLOR_ERROR);
+        assert_eq!(color, ERROR);
     }
 
     #[test]
     fn validation_status_color_warnings_yellow() {
         let color = validation_status_color(0, 1);
-        assert_eq!(color, COLOR_WARNING);
+        assert_eq!(color, WARNING);
         let color = validation_status_color(0, 10);
-        assert_eq!(color, COLOR_WARNING);
+        assert_eq!(color, WARNING);
     }
 
     #[test]

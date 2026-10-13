@@ -898,7 +898,7 @@ fn build_clip_length_field(
     item_tooltip(
         ui,
         "Clip length: keyframes extend it, this value keeps it at least this long \
-                     (drag to lengthen the loop of a clip without keys)",
+         (drag to lengthen the loop of a clip without keys)",
     );
 }
 

@@ -315,9 +315,9 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             item_tooltip(
                 ui,
                 "Apply the selected style file's parameters (Style-owned only, \
-                              dimensionless: lengths scale with the flame's radius, opacity \
-                              via tau0). Fields the style leaves unset keep their current \
-                              values",
+                 dimensionless: lengths scale with the flame's radius, opacity \
+                 via tau0). Fields the style leaves unset keep their current \
+                 values",
             );
             if let Some(selected_flame) = selected_flame_entity {
                 if let Some(applied) = ecs_world
@@ -340,8 +340,8 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
             item_tooltip(
                 ui,
                 "Save the selected flame's current look as \
-                              assets/flames/styles/<name>.style.ron (all Style-owned \
-                              parameters, lengths over r0, opacity as tau0)",
+                 assets/flames/styles/<name>.style.ron (all Style-owned \
+                 parameters, lengths over r0, opacity as tau0)",
             );
 
             if let Some(selected_flame) = selected_flame_entity {

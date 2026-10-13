@@ -27,7 +27,7 @@ use crate::platform::ui::pointer::{
 };
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{
-    icon_button, segmented_control, toolbar_divider, ButtonState,
+    icon_button, item_tooltip, segmented_control, toolbar_divider, ButtonState,
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -895,12 +895,11 @@ fn build_clip_length_field(
     {
         world.send_command(ScalarCurveEvent::ClipSetMinDuration { source_id, seconds });
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Clip length: keyframes extend it, this value keeps it at least this long \
-             (drag to lengthen the loop of a clip without keys)",
-        );
-    }
+    item_tooltip(
+        ui,
+        "Clip length: keyframes extend it, this value keeps it at least this long \
+                     (drag to lengthen the loop of a clip without keys)",
+    );
 }
 
 fn handle_clip_drag_release(

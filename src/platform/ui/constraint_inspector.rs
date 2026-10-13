@@ -9,8 +9,8 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{item_tooltip, section_header};
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -570,9 +570,7 @@ pub fn build_bone_combo_with_select(
         if ui.small_button(&format!("<##use_{}", label)) {
             result = Some(selected_bone);
         }
-        if ui.is_item_hovered() {
-            ui.tooltip_text("Use selected bone from Hierarchy");
-        }
+        item_tooltip(ui, "Use selected bone from Hierarchy");
     }
 
     ui.set_next_item_width(-1.0);

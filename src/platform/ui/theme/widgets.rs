@@ -23,6 +23,12 @@ const TOOLBAR_DIVIDER_HEIGHT: f32 = 18.0;
 const SEGMENT_PADDING_X: f32 = 8.0;
 const SEGMENT_ROUNDING: f32 = 6.0;
 
+pub fn item_tooltip(ui: &Ui, text: &str) {
+    if !text.is_empty() && ui.is_item_hovered() {
+        ui.tooltip_text(text);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonState {
     Normal,

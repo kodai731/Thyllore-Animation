@@ -6,7 +6,9 @@ use thyllore_effect_core::{
 use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
 
 use crate::ecs::World;
-use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
+use crate::platform::ui::theme::{
+    item_tooltip, property_label, section_header, vector3_field, SectionDefault,
+};
 
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
@@ -67,7 +69,7 @@ fn draw_scalar<C>(
     {
         (scalar.set)(component, value);
     }
-    show_tooltip(ui, meta.tooltip);
+    item_tooltip(ui, meta.tooltip);
     after_item(ui, &[(scalar.name, value)]);
 }
 
@@ -130,7 +132,7 @@ fn draw_color<C>(
             ..ColorPickerOptions::default()
         })
         .build();
-    show_tooltip(ui, &mapping.tooltip(meta.tooltip));
+    item_tooltip(ui, &mapping.tooltip(meta.tooltip));
 
     let written = if changed {
         let clamped = mapping
@@ -179,7 +181,7 @@ fn draw_offset<C>(
     let mut dragged = stored;
     property_label(ui, &meta.display_label());
     let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
-    show_tooltip(ui, meta.tooltip);
+    item_tooltip(ui, meta.tooltip);
 
     let written = if changed {
         let clamped = dragged.map(|value| value.clamp(meta.min, meta.max));
@@ -197,12 +199,6 @@ fn draw_offset<C>(
         (channels[2].name, written[2]),
     ];
     after_item(ui, &edited);
-}
-
-fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {
-    if !tooltip.is_empty() && ui.is_item_hovered() {
-        ui.tooltip_text(tooltip);
-    }
 }
 
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.

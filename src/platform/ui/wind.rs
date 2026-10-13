@@ -10,8 +10,8 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
 use crate::ecs::World;
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{item_tooltip, section_header};
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -111,11 +111,10 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
         if ui.button("Dump Debug") {
             ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(WindDebugCapture)));
         }
-        if ui.is_item_hovered() {
-            ui.tooltip_text(
-                "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
-            );
-        }
+        item_tooltip(
+            ui,
+            "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
+        );
     }
 }
 

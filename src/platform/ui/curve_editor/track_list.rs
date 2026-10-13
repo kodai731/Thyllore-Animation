@@ -10,6 +10,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::item_tooltip;
 
 pub(super) fn collect_humanoid_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
     world
@@ -184,9 +185,7 @@ pub(super) fn build_scalar_curve_selector_inline(
             world.send_command(ScalarCurveEvent::InsertScalarKeyAtPlayhead { property_type });
             editor_state.visible_curves.insert(property_type);
         }
-        if ui.is_item_hovered() {
-            ui.tooltip_text("Insert key at playhead (current value)");
-        }
+        item_tooltip(ui, "Insert key at playhead (current value)");
     }
 
     if ui.small_button("All##scalar") {

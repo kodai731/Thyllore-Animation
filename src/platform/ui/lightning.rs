@@ -15,8 +15,8 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
+use crate::platform::ui::theme::{item_tooltip, section_header};
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -133,11 +133,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     if ui.button("Dump Debug") {
         ecs_world.send_command(CameraEvent::CaptureNow(Rc::new(LightningDebugCapture)));
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Write lightning parameters, UBO, render settings, camera and a screenshot to log/lightning/",
-        );
-    }
+    item_tooltip(ui, "Write lightning parameters, UBO, render settings, camera and a screenshot to log/lightning/");
 }
 
 /// The bolt's end point row: the linked locator's name, or a button that creates one. While a
@@ -162,9 +158,10 @@ fn draw_lightning_target_row(
             if ui.button("Add Target") {
                 ecs_world.send_command(LightningUiCommand::AddTarget);
             }
-            if ui.is_item_hovered() {
-                ui.tooltip_text("Spawn a locator at the end point; move it to aim the bolt");
-            }
+            item_tooltip(
+                ui,
+                "Spawn a locator at the end point; move it to aim the bolt",
+            );
         }
     }
     target_name
@@ -187,11 +184,10 @@ fn draw_lightning_path_rows(ui: &imgui::Ui, ecs_world: &World, lightning: Entity
     if ui.button("Add Waypoint") {
         ecs_world.send_command(LightningUiCommand::AddWaypoint);
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Spawn a locator halfway to the end point; the bolt passes through waypoints in order",
-        );
-    }
+    item_tooltip(
+        ui,
+        "Spawn a locator halfway to the end point; the bolt passes through waypoints in order",
+    );
 }
 
 fn draw_lightning_render_settings(ui: &imgui::Ui, ecs_world: &World) {

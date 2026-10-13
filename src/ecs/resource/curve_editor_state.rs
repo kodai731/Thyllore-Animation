@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use super::timeline_state::CurveTrackRef;
-use crate::animation::editable::{BezierHandle, KeyframeId, PropertyType, TweenKind};
+use crate::animation::editable::{
+    BezierHandle, EditableAnimationClip, KeyframeId, PropertyType, TweenKind,
+};
 use crate::animation::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -153,6 +155,23 @@ impl CurveEditorState {
 
     pub fn select_bone(&mut self, bone_id: BoneId) {
         self.selected_target = Some(CurveEditorTarget::Bone(bone_id));
+    }
+
+    /// Opens the editor on `clip`, keeping the selected bone when the clip still animates it and
+    /// falling back to the clip's first track otherwise.
+    pub fn open_for_clip(&mut self, clip: Option<&EditableAnimationClip>) {
+        self.is_open = true;
+        self.needs_focus = true;
+        let selected_bone_exists = clip
+            .zip(self.selected_bone_id())
+            .is_some_and(|(clip, id)| clip.tracks.contains_key(&id));
+
+        if !selected_bone_exists {
+            if let Some(first_bone_id) = clip.and_then(|clip| clip.tracks.keys().min().copied()) {
+                self.select_bone(first_bone_id);
+            }
+        }
+        self.view_initialized = false;
     }
 
     pub fn select_scalars(&mut self) {

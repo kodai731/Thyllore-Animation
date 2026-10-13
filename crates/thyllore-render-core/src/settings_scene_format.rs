@@ -1,8 +1,8 @@
 use thyllore_scene_core::declare_scene_format;
 
 use crate::settings::{
-    AutoExposure, BloomSettings, DepthOfField, Exposure, LensEffects, PhysicalCameraParameters,
-    ToneMapOperator, ToneMapping,
+    AutoExposure, BloomSettings, DepthOfField, Exposure, ExposureMetering, LensEffects,
+    PhysicalCameraParameters, SceneBrightness, ToneMapOperator, ToneMapping,
 };
 
 declare_scene_format! {
@@ -21,6 +21,22 @@ declare_scene_format! {
         aperture_f_stops: f32 { get: |p| p.aperture_f_stops, set: |p, v| p.aperture_f_stops = v },
         shutter_speed_s: f32 { get: |p| p.shutter_speed_s, set: |p, v| p.shutter_speed_s = v },
         sensitivity_iso: f32 { get: |p| p.sensitivity_iso, set: |p, v| p.sensitivity_iso = v },
+    },
+    runtime {},
+}
+
+declare_scene_format! {
+    component: SceneBrightness,
+    record: SceneBrightnessSceneRecord,
+    items {
+        key: "scene_brightness",
+        snapshot: scene_brightness_parameter_snapshot,
+        scalars: SCENE_BRIGHTNESS_SCALAR_PARAMS,
+        ui: SCENE_BRIGHTNESS_UI_PARAMS,
+        overwrite: overwrite_scene_brightness_persisted_fields,
+    },
+    persisted {
+        ev: f32 { get: |b| b.ev, set: |b, v| b.ev = v },
     },
     runtime {},
 }
@@ -145,6 +161,15 @@ declare_scene_format! {
     },
     persisted {
         enabled: bool { get: |a| a.enabled, set: |a, v| a.enabled = v },
+        metering: String {
+            get: |a| a.metering.name().to_string(),
+            set: |a, v| {
+                if let Some(metering) = ExposureMetering::from_name(&v) {
+                    a.metering = metering;
+                }
+            },
+        },
+        white_level: f32 { get: |a| a.white_level, set: |a, v| a.white_level = v },
         min_ev: f32 { get: |a| a.min_ev, set: |a, v| a.min_ev = v },
         max_ev: f32 { get: |a| a.max_ev, set: |a, v| a.max_ev = v },
         adaptation_speed_up: f32 {
@@ -189,6 +214,6 @@ mod tests {
         assert_eq!(target.min_ev, 1.5);
         assert_eq!(target.saved_manual_exposure, Some(2.0));
         assert_eq!(target.min_log_luminance, -5.0);
-        assert_eq!(AutoExposure::PERSISTED_FIELDS.len(), 7);
+        assert_eq!(AutoExposure::PERSISTED_FIELDS.len(), 9);
     }
 }

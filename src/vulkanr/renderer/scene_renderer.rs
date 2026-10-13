@@ -59,8 +59,6 @@ pub unsafe fn render_scene_objects(
             pipeline.pipeline,
         );
 
-        rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
         rrdevice
             .device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);

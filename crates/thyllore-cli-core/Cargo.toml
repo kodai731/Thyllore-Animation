@@ -2,7 +2,10 @@
 name = "thyllore-cli-core"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+authors = ["kodai731"]
 description = "Pure CLI argument parsing functions for ThylloreAnimation. Depends on nothing in the workspace"
+repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
 anyhow = "1"

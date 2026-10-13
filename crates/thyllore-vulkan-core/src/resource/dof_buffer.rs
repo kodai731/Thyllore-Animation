@@ -156,4 +156,8 @@ impl GpuResource for DofBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.sampler.is_destroyed() && self.render_pass.is_destroyed()
+    }
 }

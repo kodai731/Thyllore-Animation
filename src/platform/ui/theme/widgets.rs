@@ -9,8 +9,8 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 
 use super::anim::ui_anim;
 use super::colors::{
-    srgb_to_linear, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT,
-    TEXT_SECONDARY,
+    srgb_to_linear_rgba, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3,
+    TEXT, TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
 use super::icons::Icon;
@@ -47,8 +47,8 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
     let rect_max = ui.item_rect_max();
 
     let bg_color = match state {
-        ButtonState::Active => srgb_to_linear([ACCENT[0], ACCENT[1], ACCENT[2], 0.3]),
-        ButtonState::Normal if hovered => srgb_to_linear(SURFACE3),
+        ButtonState::Active => srgb_to_linear_rgba([ACCENT[0], ACCENT[1], ACCENT[2], 0.3]),
+        ButtonState::Normal if hovered => srgb_to_linear_rgba(SURFACE3),
         ButtonState::Normal => [0.0, 0.0, 0.0, 0.0],
     };
 
@@ -59,8 +59,8 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
         .build();
 
     let icon_color = match state {
-        ButtonState::Active => srgb_to_linear(ACCENT),
-        ButtonState::Normal => srgb_to_linear(TEXT),
+        ButtonState::Active => srgb_to_linear_rgba(ACCENT),
+        ButtonState::Normal => srgb_to_linear_rgba(TEXT),
     };
 
     let center_x = rect_min[0] + (size - text_size[0]) * 0.5;
@@ -85,7 +85,7 @@ pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
 
 pub fn property_label(ui: &Ui, label: &str) {
     let display = fit_label_to_column(ui, label);
-    ui.text_colored(srgb_to_linear(TEXT_SECONDARY), &display);
+    ui.text_colored(srgb_to_linear_rgba(TEXT_SECONDARY), &display);
     if matches!(display, Cow::Owned(_)) && ui.is_item_hovered() {
         ui.tooltip_text(label);
     }
@@ -116,7 +116,7 @@ pub fn vector3_field(ui: &Ui, id: &str, values: &mut [f32; 3], speed: f32, forma
         if index > 0 {
             ui.same_line_with_spacing(0.0, 0.0);
         }
-        ui.text_colored(srgb_to_linear(axis_color), axis_label);
+        ui.text_colored(srgb_to_linear_rgba(axis_color), axis_label);
         ui.same_line_with_spacing(0.0, AXIS_LABEL_GAP);
 
         let label_width = ui.calc_text_size(axis_label)[0] + AXIS_LABEL_GAP;
@@ -142,7 +142,7 @@ pub fn toolbar_divider(ui: &Ui) {
         .add_line(
             [line_x, line_top],
             [line_x, line_top + TOOLBAR_DIVIDER_HEIGHT],
-            srgb_to_linear(OUTLINE),
+            srgb_to_linear_rgba(OUTLINE),
         )
         .thickness(1.0)
         .build();
@@ -191,7 +191,7 @@ pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -
 
         let draw_list = ui.get_window_draw_list();
         draw_list
-            .add_rect(rect_min, rect_max, srgb_to_linear(fill))
+            .add_rect(rect_min, rect_max, srgb_to_linear_rgba(fill))
             .rounding(rounding)
             .flags(segment_corner_flags(is_first, is_last))
             .filled(true)
@@ -200,7 +200,7 @@ pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -
             rect_min[0] + SEGMENT_PADDING_X,
             rect_min[1] + (ICON_BUTTON_SIZE - text_size[1]) * 0.5,
         ];
-        draw_list.add_text(text_pos, srgb_to_linear(TEXT), option);
+        draw_list.add_text(text_pos, srgb_to_linear_rgba(TEXT), option);
     }
 
     clicked
@@ -275,9 +275,9 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
 
     let draw_list = ui.get_window_draw_list();
     let bg_color = if hovered {
-        srgb_to_linear(SURFACE3)
+        srgb_to_linear_rgba(SURFACE3)
     } else {
-        srgb_to_linear(SURFACE1)
+        srgb_to_linear_rgba(SURFACE1)
     };
     draw_list
         .add_rect(rect_min, rect_max, bg_color)
@@ -294,7 +294,7 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     ];
     let points = triangle_points(triangle_center, triangle_size, angle_rad);
     draw_list
-        .add_triangle(points[0], points[1], points[2], srgb_to_linear(TEXT))
+        .add_triangle(points[0], points[1], points[2], srgb_to_linear_rgba(TEXT))
         .filled(true)
         .build();
 
@@ -304,9 +304,9 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     ];
     if let Some(fonts) = world.get_resource::<UiFonts>() {
         let _font_stack = ui.push_font(fonts.heading);
-        draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+        draw_list.add_text(text_pos, srgb_to_linear_rgba(TEXT), display_label);
     } else {
-        draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+        draw_list.add_text(text_pos, srgb_to_linear_rgba(TEXT), display_label);
     }
 
     is_open
@@ -339,9 +339,9 @@ pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> b
     let pill_left = origin[0];
     let pill_top = origin[1] + (row_height - pill_height) * 0.5;
     let pill_color = if *value {
-        srgb_to_linear(ACCENT)
+        srgb_to_linear_rgba(ACCENT)
     } else {
-        srgb_to_linear(SURFACE3)
+        srgb_to_linear_rgba(SURFACE3)
     };
     draw_list
         .add_rect(
@@ -366,7 +366,7 @@ pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> b
         origin[0] + pill_width + spacing,
         origin[1] + (row_height - font_height) * 0.5,
     ];
-    draw_list.add_text(text_pos, srgb_to_linear(TEXT), display_label);
+    draw_list.add_text(text_pos, srgb_to_linear_rgba(TEXT), display_label);
 
     clicked
 }
@@ -441,7 +441,7 @@ pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
         field_min[0] + icon_gutter * 0.5,
         field_min[1] + field_height * 0.5,
     ];
-    draw_search_icon(&draw_list, icon_center, srgb_to_linear(TEXT_SECONDARY));
+    draw_search_icon(&draw_list, icon_center, srgb_to_linear_rgba(TEXT_SECONDARY));
 
     if !text.is_empty() {
         ui.same_line();
@@ -450,9 +450,9 @@ pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
             changed = true;
         }
         let cross_color = if ui.is_item_hovered() {
-            srgb_to_linear(TEXT)
+            srgb_to_linear_rgba(TEXT)
         } else {
-            srgb_to_linear(TEXT_SECONDARY)
+            srgb_to_linear_rgba(TEXT_SECONDARY)
         };
         draw_clear_cross(
             &draw_list,
@@ -516,7 +516,7 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
 
     if hovered {
         draw_list
-            .add_rect(rect_min, rect_max, srgb_to_linear(SURFACE3))
+            .add_rect(rect_min, rect_max, srgb_to_linear_rgba(SURFACE3))
             .rounding(6.0)
             .filled(true)
             .build();
@@ -525,7 +525,7 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
     if spec.selected {
         let accent_alpha = [ACCENT[0], ACCENT[1], ACCENT[2], 0.25];
         draw_list
-            .add_rect(rect_min, rect_max, srgb_to_linear(accent_alpha))
+            .add_rect(rect_min, rect_max, srgb_to_linear_rgba(accent_alpha))
             .rounding(6.0)
             .filled(true)
             .build();
@@ -536,7 +536,7 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
             .add_rect(
                 [bar_left, rect_min[1]],
                 [bar_right, rect_max[1]],
-                srgb_to_linear(ACCENT),
+                srgb_to_linear_rgba(ACCENT),
             )
             .filled(true)
             .build();
@@ -552,17 +552,17 @@ pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
         let triangle_size = ui.text_line_height() * 0.5;
         let points = triangle_points(triangle_center, triangle_size, angle_rad);
         draw_list
-            .add_triangle(points[0], points[1], points[2], srgb_to_linear(TEXT))
+            .add_triangle(points[0], points[1], points[2], srgb_to_linear_rgba(TEXT))
             .filled(true)
             .build();
     }
 
     let text_y = rect_min[1] + ui.clone_style().frame_padding()[1];
     let icon_x = indent_x + TREE_INDENT;
-    draw_list.add_text([icon_x, text_y], srgb_to_linear(TEXT), spec.icon);
+    draw_list.add_text([icon_x, text_y], srgb_to_linear_rgba(TEXT), spec.icon);
 
     let label_x = icon_x + ui.calc_text_size(spec.icon)[0] + 4.0;
-    draw_list.add_text([label_x, text_y], srgb_to_linear(TEXT), spec.label);
+    draw_list.add_text([label_x, text_y], srgb_to_linear_rgba(TEXT), spec.label);
 
     response
 }

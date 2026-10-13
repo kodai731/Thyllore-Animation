@@ -166,6 +166,10 @@ impl GpuResource for ReducedResolveTarget {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.render_pass.is_destroyed()
+    }
 }
 
 #[cfg(test)]

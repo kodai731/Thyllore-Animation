@@ -431,6 +431,10 @@ impl GpuResource for RenderTargetTransient {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy_all(&rrdevice.device);
     }
+
+    fn is_destroyed(&self) -> bool {
+        self.pooled_count() == 0 && self.framebuffers.is_empty()
+    }
 }
 
 #[cfg(test)]

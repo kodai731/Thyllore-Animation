@@ -4,14 +4,13 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::ecs::FrameContext;
 use crate::ecs::component::LineMesh;
-use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
+use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{
     Camera, Exposure, FlashLightState, GpuPassTimings, GpuTimingsSink, SceneBrightness,
     TransformGizmoState,
@@ -21,6 +20,7 @@ use crate::ecs::systems::render_data_systems::{
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
     transform_gizmo_render_data,
 };
+use crate::ecs::FrameContext;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,

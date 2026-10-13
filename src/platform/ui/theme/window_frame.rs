@@ -5,6 +5,7 @@ use super::elevation::{draw_raised_window_frame, push_raised_window_style};
 #[derive(Clone, Copy, Debug)]
 pub enum WindowKind {
     Docked { position: [f32; 2], size: [f32; 2] },
+    Overlay { position: [f32; 2], size: [f32; 2] },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -23,6 +24,13 @@ pub fn window_frame<'ui>(ui: &'ui Ui, name: &'ui str, kind: WindowKind) -> Windo
             .movable(false)
             .collapsible(false)
             .bring_to_front_on_focus(false),
+        WindowKind::Overlay { position, size } => ui
+            .window(name)
+            .position(position, Condition::Always)
+            .size(size, Condition::Always)
+            .no_decoration()
+            .focus_on_appearing(false)
+            .save_settings(false),
     }
 }
 

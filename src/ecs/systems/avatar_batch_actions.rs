@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 
+use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
@@ -159,10 +160,57 @@ impl BatchAction for DumpMorphTrackSamples {
     }
 }
 
+#[derive(Debug)]
+pub struct FitBodyColliders {
+    params: CapsuleFitParams,
+}
+
+impl BatchAction for FitBodyColliders {
+    fn name(&self) -> &'static str {
+        "fit_body_colliders"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::FitBodyColliders {
+            params: self.params.clone(),
+        });
+    }
+}
+
+const FIT_BODY_COLLIDERS_USAGE: &str = "fit_body_colliders expects fit_body_colliders=<min_weight>,<radius_percentile>,<radius_scale>,<min_vertex_count>";
+
+fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("fit_body_colliders=")?;
+    let parts: Vec<&str> = spec.split(',').collect();
+    if parts.len() != 4 {
+        return Some(Err(anyhow!("{FIT_BODY_COLLIDERS_USAGE}")));
+    }
+    let parsed = (
+        parts[0].trim().parse::<f32>().ok(),
+        parts[1].trim().parse::<f32>().ok(),
+        parts[2].trim().parse::<f32>().ok(),
+        parts[3].trim().parse::<usize>().ok(),
+    );
+
+    Some(match parsed {
+        (Some(min_weight), Some(radius_percentile), Some(radius_scale), Some(min_vertex_count)) => {
+            Ok(Box::new(FitBodyColliders {
+                params: CapsuleFitParams {
+                    min_weight,
+                    radius_percentile,
+                    radius_scale,
+                    min_vertex_count,
+                },
+            }))
+        }
+        _ => Err(anyhow!("{FIT_BODY_COLLIDERS_USAGE}")),
+    })
+}
+
 crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
 crate::batch_action!("add_spring_chains", add_spring_chains_parse);
+crate::batch_action!("fit_body_colliders", fit_body_colliders_parse);
 crate::batch_action!(
     "export_unity_avatar",
     unit_action_parse::<ExportUnityAvatar>
@@ -246,6 +294,31 @@ mod tests {
             .expect("prefix matches")
             .is_err());
         assert!(add_spring_chains_parse("add_spring_chains= ")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_fit_body_colliders_parses_correct_format() {
+        let action = fit_body_colliders_parse("fit_body_colliders=0.5,0.9,0.85,8")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(
+            format!("{:?}", action),
+            "FitBodyColliders { params: CapsuleFitParams { min_weight: 0.5, radius_percentile: 0.9, radius_scale: 0.85, min_vertex_count: 8 } }"
+        );
+    }
+
+    #[test]
+    fn test_fit_body_colliders_rejects_malformed_specs() {
+        assert!(fit_body_colliders_parse("fit_body_colliders=0.5,0.9,0.85")
+            .expect("prefix matches")
+            .is_err());
+        assert!(fit_body_colliders_parse("fit_body_colliders=0.5,0.9")
+            .expect("prefix matches")
+            .is_err());
+        assert!(fit_body_colliders_parse("fit_body_colliders=a,0.9,0.85,8")
             .expect("prefix matches")
             .is_err());
     }

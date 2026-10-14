@@ -217,7 +217,7 @@ fn build_chain_joints(
     joints
 }
 
-fn reset_spring_bone_state(world: &mut World) {
+pub(crate) fn reset_spring_bone_state(world: &mut World) {
     if let Some(mut state) = world.get_resource_mut::<SpringBoneState>() {
         state.initialized = false;
     }

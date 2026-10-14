@@ -26,16 +26,20 @@ use thyllore_avatar_core::vrchat::sidecar::{
 };
 use thyllore_model_core::MeshMorph;
 
-use crate::animation::{BoneId, Skeleton};
+use crate::animation::{BoneId, Skeleton, SkinData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
+use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
     AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
 };
-use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
+use crate::ecs::systems::spring_bone_edit_systems::{
+    handle_spring_chain_add, reset_spring_bone_state,
+};
 use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+
+use crate::animation::spring_bone::{fit_bone_capsules, replace_fitted_body_colliders};
 
 pub(crate) fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
@@ -284,6 +288,47 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
             skeleton,
         );
     }
+}
+
+pub fn fit_body_colliders(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    params: &CapsuleFitParams,
+) {
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        msg_error!("Cannot fit body colliders: no skeleton loaded");
+        return;
+    };
+
+    let skin_data: Vec<&SkinData> = graphics
+        .meshes
+        .iter()
+        .filter_map(|m| m.skin_data.as_ref())
+        .filter(|skin| skin.skeleton_id == skeleton.id)
+        .collect();
+
+    if skin_data.is_empty() {
+        msg_error!("Cannot fit body colliders: no skinned meshes found for this skeleton");
+        return;
+    }
+
+    let fitted = fit_bone_capsules(&skin_data, skeleton, params);
+
+    let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+        msg_error!("Cannot fit body colliders: no animated model loaded");
+        return;
+    };
+
+    let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(spring_entity) else {
+        msg_error!("Cannot fit body colliders: spring bone setup missing");
+        return;
+    };
+    replace_fitted_body_colliders(&mut setup, &fitted);
+
+    reset_spring_bone_state(world);
+
+    msg_info!("Fitted {} body colliders", fitted.len());
 }
 
 fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {

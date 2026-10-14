@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -77,6 +79,48 @@ impl UiCommand for SpringBoneEvent {
     }
 }
 
+#[derive(Debug)]
+pub struct DumpSpringTails {
+    pub path: PathBuf,
+    pub sample_rate: f32,
+}
+
+impl UiCommand for DumpSpringTails {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_bake_systems::{simulate_spring_tails, BakeConfig};
+
+        let inputs = match find_spring_bake_inputs(world, assets) {
+            Some(i) => i,
+            None => return,
+        };
+
+        let config = BakeConfig {
+            start_time: 0.0,
+            end_time: inputs.anim_clip.duration,
+            sample_rate: self.sample_rate,
+        };
+
+        let samples = simulate_spring_tails(
+            &config,
+            &inputs.setup,
+            &inputs.skeleton,
+            &inputs.anim_clip,
+            inputs.constraints.as_ref(),
+            inputs.looping,
+        );
+
+        let csv = crate::animation::spring_bone::format_tail_csv(&samples);
+        match std::fs::write(&self.path, &csv) {
+            Ok(()) => log!(
+                "Wrote {} spring tail samples to {:?}",
+                samples.len(),
+                self.path
+            ),
+            Err(e) => msg_warn!("Failed to write spring tails to {:?}: {}", self.path, e),
+        }
+    }
+}
+
 fn dispatch_spring_bone_bake_events(
     events: &[SpringBoneEvent],
     world: &mut World,
@@ -110,19 +154,25 @@ pub fn transition_to_baked_override_if_needed(world: &mut World) {
     }
 }
 
-fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
+struct SpringBakeInputs {
+    skeleton: crate::animation::Skeleton,
+    setup: crate::ecs::component::SpringBoneSetup,
+    constraints: Option<crate::ecs::component::ConstraintSet>,
+    source_id: Option<u64>,
+    looping: bool,
+    anim_clip: crate::animation::AnimationClip,
+    source_editable: crate::animation::editable::EditableAnimationClip,
+}
+
+fn find_spring_bake_inputs(world: &World, assets: &AssetStorage) -> Option<SpringBakeInputs> {
     use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
     use crate::ecs::resource::TimelineState;
-    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
-    use crate::ecs::systems::spring_bone_bake_systems::{
-        merge_bake_into_clip, spring_bone_bake, BakeConfig,
-    };
 
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => skel_asset.skeleton.clone(),
         None => {
             msg_warn!("Spring bone bake failed: no skeleton found");
-            return;
+            return None;
         }
     };
 
@@ -133,14 +183,14 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
 
     let Some(entity) = spring_entity else {
         msg_warn!("Spring bone bake failed: no WithSpringBone entity");
-        return;
+        return None;
     };
 
     let setup = match world.get_component::<SpringBoneSetup>(entity) {
         Some(s) => s.clone(),
         None => {
             msg_warn!("Spring bone bake failed: no SpringBoneSetup");
-            return;
+            return None;
         }
     };
 
@@ -160,28 +210,50 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         None => {
             drop(clip_library);
             msg_warn!("Spring bone bake failed: no current clip");
-            return;
+            return None;
         }
     };
     drop(clip_library);
 
+    Some(SpringBakeInputs {
+        skeleton,
+        setup,
+        constraints,
+        source_id,
+        looping,
+        anim_clip,
+        source_editable,
+    })
+}
+
+fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState, TimelineState};
+    use crate::ecs::systems::spring_bone_bake_systems::{
+        merge_bake_into_clip, spring_bone_bake, BakeConfig,
+    };
+
+    let inputs = match find_spring_bake_inputs(world, assets) {
+        Some(i) => i,
+        None => return,
+    };
+
     let config = BakeConfig {
         start_time: 0.0,
-        end_time: anim_clip.duration,
+        end_time: inputs.anim_clip.duration,
         sample_rate: 30.0,
     };
 
     let bake_result = spring_bone_bake(
         &config,
-        &setup,
-        &skeleton,
-        &anim_clip,
-        constraints.as_ref(),
-        looping,
+        &inputs.setup,
+        &inputs.skeleton,
+        &inputs.anim_clip,
+        inputs.constraints.as_ref(),
+        inputs.looping,
     );
 
-    let mut merged = source_editable;
-    merge_bake_into_clip(&mut merged, &bake_result, &skeleton);
+    let mut merged = inputs.source_editable;
+    merge_bake_into_clip(&mut merged, &bake_result, &inputs.skeleton);
     merged.name = format!("{}_spring_baked", merged.name);
 
     log!(
@@ -196,7 +268,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         merged.duration
     );
 
-    let new_id = register_baked_clip_and_update_schedules(world, assets, merged, source_id);
+    let new_id = register_baked_clip_and_update_schedules(world, assets, merged, inputs.source_id);
 
     let baked_bone_ids = bake_result.baked_bone_ids.clone();
 
@@ -204,7 +276,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     spring_state.mode = SpringBoneMode::Baked;
     spring_state.baked_clip_source_id = Some(new_id);
     spring_state.baked_bone_ids = bake_result.baked_bone_ids;
-    spring_state.original_clip_source_id = source_id;
+    spring_state.original_clip_source_id = inputs.source_id;
 
     let mut timeline_state = world.resource_mut::<TimelineState>();
     timeline_state.current_clip_id = Some(new_id);

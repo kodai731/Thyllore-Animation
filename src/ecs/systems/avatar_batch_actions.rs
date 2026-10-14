@@ -1,9 +1,12 @@
+use std::path::PathBuf;
+
 use anyhow::{anyhow, Result};
 
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::DumpSpringTails;
 use crate::ecs::world::{Entity, World};
 
 use super::avatar_export_systems::dump_morph_track_samples;
@@ -161,6 +164,45 @@ impl BatchAction for DumpMorphTrackSamples {
 }
 
 #[derive(Debug)]
+pub struct DumpSpringTailsAction {
+    path: PathBuf,
+    sample_rate: f32,
+}
+
+impl BatchAction for DumpSpringTailsAction {
+    fn name(&self) -> &'static str {
+        "dump_spring_tails"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(DumpSpringTails {
+            path: self.path.clone(),
+            sample_rate: self.sample_rate,
+        });
+    }
+}
+
+fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("dump_spring_tails=")?;
+    let parts: Vec<&str> = suffix.split(',').collect();
+    if parts.len() != 2 {
+        return Some(Err(anyhow!(
+            "dump_spring_tails requires exactly 2 comma-separated values: path,sample_rate"
+        )));
+    }
+    let path = PathBuf::from(parts[0].trim());
+    if path.as_os_str().is_empty() {
+        return Some(Err(anyhow!("dump_spring_tails: path must not be empty")));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "dump_spring_tails: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    Some(Ok(Box::new(DumpSpringTailsAction { path, sample_rate })))
+}
+
+#[derive(Debug)]
 pub struct FitBodyColliders {
     params: CapsuleFitParams,
 }
@@ -219,6 +261,7 @@ crate::batch_action!(
     "dump_morph_track_samples",
     unit_action_parse::<DumpMorphTrackSamples>
 );
+crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
 
 #[cfg(test)]
 mod tests {
@@ -319,6 +362,25 @@ mod tests {
             .expect("prefix matches")
             .is_err());
         assert!(fit_body_colliders_parse("fit_body_colliders=a,0.9,0.85,8")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_dump_spring_tails_parses_correct_format() {
+        let action = dump_spring_tails_parse("dump_spring_tails=output.csv,60.0")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(action.name(), "dump_spring_tails");
+    }
+
+    #[test]
+    fn test_dump_spring_tails_rejects_malformed_specs() {
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,abc")
             .expect("prefix matches")
             .is_err());
     }

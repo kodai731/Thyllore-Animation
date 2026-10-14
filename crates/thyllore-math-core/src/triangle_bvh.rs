@@ -1,4 +1,5 @@
 use crate::bounds::Aabb;
+use crate::coordinate_system::ray_to_triangle_barycentric;
 use crate::triangle_closest_point::closest_point_on_triangle;
 use cgmath::{InnerSpace, Vector3};
 
@@ -16,6 +17,13 @@ struct BvhNode {
     first: u32,
     count: u32,
     left_child: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RayHit {
+    pub triangle: u32,
+    pub distance: f32,
+    pub barycentric: Vector3<f32>,
 }
 
 impl BvhNode {
@@ -226,6 +234,86 @@ impl TriangleBvh {
             distance_sq: best_dist_sq,
         })
     }
+
+    pub fn raycast(
+        &self,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        max_distance: f32,
+    ) -> Option<RayHit> {
+        if self.triangles.is_empty() {
+            return None;
+        }
+        let inverse_direction =
+            Vector3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z);
+        let mut best_t = max_distance;
+        let mut best_triangle: u32 = 0;
+        let mut best_barycentric = Vector3::new(0.0, 0.0, 0.0);
+        let mut stack: Vec<u32> = vec![0];
+        while let Some(node_idx) = stack.pop() {
+            let node = &self.nodes[node_idx as usize];
+            if let Some(entry) = ray_aabb_entry(&node.bounds, origin, inverse_direction) {
+                if entry >= best_t {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+            if node.count > 0 {
+                for i in 0..node.count {
+                    let tri_idx = self.triangle_order[(node.first + i) as usize];
+                    let tri = self.triangles[tri_idx as usize];
+                    let a = self.positions[tri[0] as usize];
+                    let b = self.positions[tri[1] as usize];
+                    let c = self.positions[tri[2] as usize];
+                    if let Some((t, u, v)) = ray_to_triangle_barycentric(origin, direction, a, b, c)
+                    {
+                        if t < best_t {
+                            best_t = t;
+                            best_triangle = tri_idx;
+                            best_barycentric = Vector3::new(1.0 - u - v, u, v);
+                        }
+                    }
+                }
+            } else {
+                let left = node.left_child;
+                let right = left + 1;
+                let left_entry =
+                    ray_aabb_entry(&self.nodes[left as usize].bounds, origin, inverse_direction);
+                let right_entry = ray_aabb_entry(
+                    &self.nodes[right as usize].bounds,
+                    origin,
+                    inverse_direction,
+                );
+                match (left_entry, right_entry) {
+                    (Some(le), Some(re)) if le <= re => {
+                        stack.push(right);
+                        stack.push(left);
+                    }
+                    (Some(_), Some(_)) => {
+                        stack.push(left);
+                        stack.push(right);
+                    }
+                    (Some(_), None) => {
+                        stack.push(left);
+                    }
+                    (None, Some(_)) => {
+                        stack.push(right);
+                    }
+                    (None, None) => {}
+                }
+            }
+        }
+        if best_t < max_distance {
+            Some(RayHit {
+                triangle: best_triangle,
+                distance: best_t,
+                barycentric: best_barycentric,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 fn aabb_distance_sq(aabb: &Aabb, point: Vector3<f32>) -> f32 {
@@ -251,6 +339,41 @@ fn aabb_distance_sq(aabb: &Aabb, point: Vector3<f32>) -> f32 {
         0.0
     };
     dx * dx + dy * dy + dz * dz
+}
+
+fn ray_aabb_entry(
+    bounds: &Aabb,
+    origin: Vector3<f32>,
+    inverse_direction: Vector3<f32>,
+) -> Option<f32> {
+    let t_min_x = (bounds.min.x - origin.x) * inverse_direction.x;
+    let t_max_x = (bounds.max.x - origin.x) * inverse_direction.x;
+    let mut t_enter = t_min_x.min(t_max_x);
+    let mut t_exit = t_min_x.max(t_max_x);
+
+    let t_min_y = (bounds.min.y - origin.y) * inverse_direction.y;
+    let t_max_y = (bounds.max.y - origin.y) * inverse_direction.y;
+    t_enter = t_enter.max(t_min_y.min(t_max_y));
+    t_exit = t_exit.min(t_min_y.max(t_max_y));
+
+    if t_enter > t_exit {
+        return None;
+    }
+
+    let t_min_z = (bounds.min.z - origin.z) * inverse_direction.z;
+    let t_max_z = (bounds.max.z - origin.z) * inverse_direction.z;
+    t_enter = t_enter.max(t_min_z.min(t_max_z));
+    t_exit = t_exit.min(t_min_z.max(t_max_z));
+
+    if t_enter > t_exit {
+        return None;
+    }
+
+    if t_exit < 0.0 {
+        return None;
+    }
+
+    Some(t_enter)
 }
 
 #[cfg(test)]
@@ -339,5 +462,117 @@ mod tests {
         assert!(pos_diff.dot(pos_diff) < 1e-12);
         let bar_diff = result.barycentric - expected.barycentric;
         assert!(bar_diff.dot(bar_diff) < 1e-12);
+    }
+
+    #[test]
+    fn test_raycast_random_matches_brute_force() {
+        let mut rng = Rng::with_seed(11);
+        let n_vertices: usize = 300;
+        let vertices: Vec<Vector3<f32>> = (0..n_vertices)
+            .map(|_| {
+                Vector3::new(
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                )
+            })
+            .collect();
+        let n_triangles: usize = 200;
+        let triangles: Vec<[u32; 3]> = (0..n_triangles)
+            .map(|_| {
+                [
+                    rng.u32(..n_vertices as u32),
+                    rng.u32(..n_vertices as u32),
+                    rng.u32(..n_vertices as u32),
+                ]
+            })
+            .collect();
+        let queries: Vec<(Vector3<f32>, Vector3<f32>)> = (0..100)
+            .map(|_| {
+                let origin = Vector3::new(
+                    rng.f32() * 4.0 - 2.0,
+                    rng.f32() * 4.0 - 2.0,
+                    rng.f32() * 4.0 - 2.0,
+                );
+                let direction = Vector3::new(
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                );
+                (origin, direction)
+            })
+            .collect();
+        let bvh = TriangleBvh::build(&vertices, &triangles);
+        for (origin, direction) in &queries {
+            let bvh_result = bvh.raycast(*origin, *direction, f32::MAX);
+            let mut best_t: Option<f32> = None;
+            for tri in &triangles {
+                let a = vertices[tri[0] as usize];
+                let b = vertices[tri[1] as usize];
+                let c = vertices[tri[2] as usize];
+                if let Some((t, _, _)) = ray_to_triangle_barycentric(*origin, *direction, a, b, c) {
+                    match best_t {
+                        Some(bt) if t < bt => best_t = Some(t),
+                        None => best_t = Some(t),
+                        _ => {}
+                    }
+                }
+            }
+            match (bvh_result, best_t) {
+                (Some(hit), Some(bt)) => {
+                    assert!(
+                        (hit.distance - bt).abs() < 1e-5,
+                        "query {:?}/{:?}: bvh={:.8} brute={:.8}",
+                        origin,
+                        direction,
+                        hit.distance,
+                        bt
+                    );
+                }
+                (None, None) => {}
+                (Some(hit), None) => {
+                    panic!(
+                        "query {:?}/{:?}: bvh hit triangle {} at {:.8} but brute force found none",
+                        origin, direction, hit.triangle, hit.distance
+                    );
+                }
+                (None, Some(bt)) => {
+                    panic!(
+                        "query {:?}/{:?}: bvh found none but brute force found t={:.8}",
+                        origin, direction, bt
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_raycast_back_facing_only_returns_none() {
+        let positions: Vec<Vector3<f32>> = vec![
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+        ];
+        let triangles: Vec<[u32; 3]> = vec![[0, 1, 2]];
+        let bvh = TriangleBvh::build(&positions, &triangles);
+        let origin = Vector3::new(0.5, 0.5, -1.0);
+        let direction = Vector3::new(0.0, 0.0, -1.0);
+        assert!(bvh.raycast(origin, direction, f32::MAX).is_none());
+    }
+
+    #[test]
+    fn test_raycast_max_distance_clips() {
+        let positions: Vec<Vector3<f32>> = vec![
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+        ];
+        let triangles: Vec<[u32; 3]> = vec![[0, 1, 2]];
+        let bvh = TriangleBvh::build(&positions, &triangles);
+        let origin = Vector3::new(0.5, 0.5, -10.0);
+        let direction = Vector3::new(0.0, 0.0, 1.0);
+        assert!(bvh.raycast(origin, direction, 5.0).is_none());
+        let hit = bvh.raycast(origin, direction, f32::MAX).unwrap();
+        assert!((hit.distance - 10.0).abs() < 1e-5);
     }
 }

@@ -5,6 +5,7 @@ use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
+    StaticLineMesh,
 };
 use crate::ecs::resource::gizmo::grid::GridGizmoData;
 use crate::ecs::resource::gizmo::light::LightGizmoData;
@@ -13,6 +14,7 @@ use crate::math::{
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };
 use crate::render::{BufferMemoryType, IndexBufferHandle, RenderBackend, VertexBufferHandle};
+use thyllore_render_core::FRAMES_IN_FLIGHT;
 
 pub fn create_axis_gizmo_mesh_data(axis_length: f32, origin_color: [f32; 3]) -> MeshData {
     let positions = vec![
@@ -75,9 +77,8 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
         mesh: LineMesh {
             vertices,
             indices,
-            vertex_buffer_handles: [VertexBufferHandle::INVALID; 2],
-            index_buffer_handles: [IndexBufferHandle::INVALID; 2],
-            last_written_slot: 0,
+            vertex_buffer_handles: [VertexBufferHandle::INVALID; FRAMES_IN_FLIGHT],
+            index_buffer_handles: [IndexBufferHandle::INVALID; FRAMES_IN_FLIGHT],
         },
         render_info: RenderInfo::default(),
         position: GizmoPosition { position },
@@ -115,12 +116,11 @@ pub fn create_grid_gizmo() -> GridGizmoData {
     let indices = vec![0, 1, 0, 2, 0, 3];
 
     GridGizmoData {
-        mesh: LineMesh {
+        mesh: StaticLineMesh {
             vertices,
             indices,
-            vertex_buffer_handles: [VertexBufferHandle::INVALID; 2],
-            index_buffer_handles: [IndexBufferHandle::INVALID; 2],
-            last_written_slot: 0,
+            vertex_buffer_handle: VertexBufferHandle::INVALID,
+            index_buffer_handle: IndexBufferHandle::INVALID,
         },
         render_info: RenderInfo::default(),
     }
@@ -312,17 +312,29 @@ pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelec
     changed
 }
 
-pub unsafe fn gizmo_create_buffers(
-    mesh: &mut LineMesh,
+pub unsafe fn gizmo_create_static_buffers(
+    mesh: &mut StaticLineMesh,
     backend: &mut dyn RenderBackend,
-    frame_slot: usize,
     memory_type: BufferMemoryType,
 ) -> Result<()> {
-    backend.create_gizmo_buffers(mesh, frame_slot, memory_type)
+    backend.create_static_line_buffers(mesh, memory_type)
 }
 
-pub unsafe fn gizmo_destroy_buffers(mesh: &mut LineMesh, backend: &mut dyn RenderBackend) {
-    backend.destroy_gizmo_buffers(mesh);
+pub unsafe fn gizmo_create_buffers_for_every_slot(
+    mesh: &mut LineMesh,
+    backend: &mut dyn RenderBackend,
+) -> Result<()> {
+    for frame_slot in 0..FRAMES_IN_FLIGHT {
+        backend.update_or_create_line_buffers(mesh, frame_slot)?;
+    }
+    Ok(())
+}
+
+pub unsafe fn gizmo_destroy_static_buffers(
+    mesh: &mut StaticLineMesh,
+    backend: &mut dyn RenderBackend,
+) {
+    backend.destroy_static_line_buffers(mesh);
 }
 
 pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn RenderBackend) {
@@ -353,7 +365,6 @@ pub unsafe fn run_vertical_lines_update(ctx: &mut crate::ecs::FrameContext) -> R
         let mut gizmo = ctx.light_gizmo_mut();
         gizmo.vertical_lines.vertex_buffer_handles = mesh_clone.vertex_buffer_handles;
         gizmo.vertical_lines.index_buffer_handles = mesh_clone.index_buffer_handles;
-        gizmo.vertical_lines.last_written_slot = mesh_clone.last_written_slot;
     }
 
     Ok(())

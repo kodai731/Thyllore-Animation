@@ -9,7 +9,7 @@ use crate::ecs::resource::gizmo::{
 };
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::World;
-use thyllore_render_core::DynamicMesh;
+use thyllore_render_core::MeshBuffers;
 use thyllore_vulkan_core::renderer::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
 };
@@ -307,16 +307,16 @@ impl<'a> OverlayRenderer<'a> {
         Ok(())
     }
 
-    unsafe fn record_alpha_mesh<V>(
+    unsafe fn record_alpha_mesh(
         &self,
         ctx: &FrameRenderContext<'_>,
-        mesh: &DynamicMesh<V>,
+        mesh: &dyn MeshBuffers,
         render_info: &RenderInfo,
         alpha: f32,
         options: LineMeshDrawOptions,
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        if mesh.indices.is_empty() {
+        if mesh.index_count() == 0 {
             return Ok(());
         }
         let Some(pipeline_id) = render_info.pipeline_id else {

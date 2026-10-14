@@ -563,21 +563,19 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
         };
 
         let render_data_vec = vec![
-            crate::ecs::systems::render_data_systems::grid_mesh_render_data(
-                &self.resource::<GridMeshData>(),
-            ),
-            crate::ecs::systems::render_data_systems::gizmo_mesh_render_data(
-                &self.resource::<GridGizmoData>(),
-            ),
-            crate::ecs::systems::render_data_systems::gizmo_selectable_render_data(
+            grid_mesh_render_data(&self.resource::<GridMeshData>()),
+            gizmo_mesh_render_data(&self.resource::<GridGizmoData>()),
+            gizmo_selectable_render_data(
                 &self.resource::<LightGizmoData>(),
                 camera_pos,
+                frame_slot,
             ),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
@@ -741,6 +739,7 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
@@ -749,7 +748,11 @@ impl App {
         let render_data_vec = vec![
             grid_mesh_render_data(&self.resource::<GridMeshData>()),
             gizmo_mesh_render_data(&self.resource::<GridGizmoData>()),
-            gizmo_selectable_render_data(&self.resource::<LightGizmoData>(), camera_pos),
+            gizmo_selectable_render_data(
+                &self.resource::<LightGizmoData>(),
+                camera_pos,
+                frame_slot,
+            ),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
@@ -778,7 +781,7 @@ impl App {
         let vertex_buffer = match self
             .data
             .buffer_registry
-            .get_vertex_buffer(billboard.mesh.current_vertex_buffer_handle())
+            .get_vertex_buffer(billboard.mesh.vertex_buffer_handle)
         {
             Some(b) => b,
             None => return,
@@ -786,7 +789,7 @@ impl App {
         let index_buffer = match self
             .data
             .buffer_registry
-            .get_index_buffer(billboard.mesh.current_index_buffer_handle())
+            .get_index_buffer(billboard.mesh.index_buffer_handle)
         {
             Some(b) => b,
             None => return,

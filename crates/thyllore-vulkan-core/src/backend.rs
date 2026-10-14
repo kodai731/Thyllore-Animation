@@ -6,7 +6,7 @@ use cgmath::{Matrix4, Vector3, Vector4};
 
 use thyllore_render_core::{
     BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
-    ObjectUBO, ProjectionData, RenderBackend, VertexBufferHandle, FRAMES_IN_FLIGHT,
+    ObjectUBO, ProjectionData, RenderBackend, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
 use crate::command::RRCommandPool;
@@ -132,55 +132,44 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn create_gizmo_buffers(
+    unsafe fn create_static_line_buffers(
         &mut self,
-        mesh: &mut LineMesh,
-        frame_slot: usize,
+        mesh: &mut StaticLineMesh,
         memory_type: BufferMemoryType,
     ) -> Result<()> {
-        let vertex_handle = if memory_type == BufferMemoryType::DeviceLocal {
-            self.buffer_registry.create_vertex_buffer(
+        mesh.vertex_buffer_handle = match memory_type {
+            BufferMemoryType::DeviceLocal => self.buffer_registry.create_vertex_buffer(
                 self.instance,
                 self.device,
                 self.command_pool.as_ref(),
                 &mesh.vertices,
                 BufferMemoryType::DeviceLocal,
-            )?
-        } else {
-            self.buffer_registry.create_host_visible_vertex_buffer(
-                self.instance,
-                self.device,
-                &mesh.vertices,
-                0,
-            )?
+            )?,
+            BufferMemoryType::HostVisible => self
+                .buffer_registry
+                .create_host_visible_vertex_buffer(self.instance, self.device, &mesh.vertices, 0)?,
         };
-        mesh.vertex_buffer_handles[frame_slot] = vertex_handle;
 
-        let index_handle = self.buffer_registry.create_index_buffer(
+        mesh.index_buffer_handle = self.buffer_registry.create_index_buffer(
             self.instance,
             self.device,
             self.command_pool.as_ref(),
             &mesh.indices,
         )?;
-        mesh.index_buffer_handles[frame_slot] = index_handle;
-
-        mesh.last_written_slot = frame_slot;
 
         Ok(())
     }
 
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh) {
-        for slot in 0..FRAMES_IN_FLIGHT {
-            if mesh.vertex_buffer_handles[slot].is_valid() {
-                self.buffer_registry
-                    .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handles[slot]);
-                mesh.vertex_buffer_handles[slot] = VertexBufferHandle::INVALID;
-            }
-            if mesh.index_buffer_handles[slot].is_valid() {
-                self.buffer_registry
-                    .destroy_index_buffer(self.device, mesh.index_buffer_handles[slot]);
-                mesh.index_buffer_handles[slot] = IndexBufferHandle::INVALID;
-            }
+    unsafe fn destroy_static_line_buffers(&mut self, mesh: &mut StaticLineMesh) {
+        if mesh.vertex_buffer_handle.is_valid() {
+            self.buffer_registry
+                .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
+            mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
+        }
+        if mesh.index_buffer_handle.is_valid() {
+            self.buffer_registry
+                .destroy_index_buffer(self.device, mesh.index_buffer_handle);
+            mesh.index_buffer_handle = IndexBufferHandle::INVALID;
         }
     }
 
@@ -235,8 +224,6 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             self.buffer_registry
                 .update_index_buffer(self.device, *ihandle, &mesh.indices)?;
         }
-
-        mesh.last_written_slot = frame_slot;
 
         Ok(())
     }

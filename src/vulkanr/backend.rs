@@ -10,16 +10,15 @@ pub use thyllore_vulkan_core::backend::VulkanBackend;
 
 impl<'a> BillboardBackend for VulkanBackend<'a> {
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {
-        billboard.mesh.vertex_buffer_handles[0] =
+        billboard.mesh.vertex_buffer_handle =
             self.buffer_registry.create_host_visible_vertex_buffer(
                 self.instance,
                 self.device,
                 &billboard.mesh.vertices,
                 256,
             )?;
-        billboard.mesh.last_written_slot = 0;
 
-        billboard.mesh.index_buffer_handles[0] =
+        billboard.mesh.index_buffer_handle =
             self.buffer_registry.create_host_visible_index_buffer(
                 self.instance,
                 self.device,

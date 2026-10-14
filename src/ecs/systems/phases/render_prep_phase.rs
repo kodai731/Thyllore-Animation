@@ -359,30 +359,31 @@ fn collect_gizmo_render_data(
     ctx: &FrameContext,
     camera_position: Vector3<f32>,
 ) -> Vec<crate::ecs::component::RenderData> {
+    let frame_slot = ctx.frame_slot;
     let mut render_data_vec = vec![
         grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
-        gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
+        gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position, frame_slot),
     ];
 
     if ctx.world.contains_resource::<BoneGizmoData>() {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         if bone_gizmo.visible {
-            render_data_vec.extend(bone_gizmo_render_data(&bone_gizmo));
+            render_data_vec.extend(bone_gizmo_render_data(&bone_gizmo, frame_slot));
         }
     }
 
     if ctx.world.contains_resource::<ConstraintGizmoData>() {
         let cg = ctx.world.resource::<ConstraintGizmoData>();
         if cg.visible {
-            render_data_vec.extend(constraint_gizmo_render_data(&cg));
+            render_data_vec.extend(constraint_gizmo_render_data(&cg, frame_slot));
         }
     }
 
     if ctx.world.contains_resource::<SpringBoneGizmoData>() {
         let sg = ctx.world.resource::<SpringBoneGizmoData>();
         if sg.visible {
-            render_data_vec.extend(spring_bone_gizmo_render_data(&sg));
+            render_data_vec.extend(spring_bone_gizmo_render_data(&sg, frame_slot));
         }
     }
 
@@ -397,6 +398,7 @@ fn collect_gizmo_render_data(
             &tg,
             camera_position,
             gizmo_scale,
+            frame_slot,
         ));
     }
 
@@ -645,7 +647,6 @@ unsafe fn update_stick_bone_mesh(
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
         bone_gizmo.stick_mesh.vertex_buffer_handles = mesh_clone.vertex_buffer_handles;
         bone_gizmo.stick_mesh.index_buffer_handles = mesh_clone.index_buffer_handles;
-        bone_gizmo.stick_mesh.last_written_slot = mesh_clone.last_written_slot;
     }
 
     Ok(())

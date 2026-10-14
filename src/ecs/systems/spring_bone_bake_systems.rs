@@ -1,4 +1,5 @@
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
+use crate::animation::spring_bone::SpringCollisionMode;
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::math::quaternion_to_euler_degrees;
@@ -235,6 +236,7 @@ mod tests {
             next_chain_id: 1,
             next_collider_id: 0,
             next_group_id: 0,
+            collision_mode: SpringCollisionMode::VrmCompatible,
         }
     }
 
@@ -268,6 +270,7 @@ mod tests {
             next_chain_id: 0,
             next_collider_id: 0,
             next_group_id: 0,
+            collision_mode: SpringCollisionMode::VrmCompatible,
         };
         let clip = AnimationClip::new("test");
 

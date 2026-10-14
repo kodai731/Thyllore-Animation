@@ -22,6 +22,56 @@ pub fn resolve_all_segment_collisions(
     resolved_tail
 }
 
+pub fn resolve_all_tail_collisions(
+    tail: Vector3<f32>,
+    joint_radius: f32,
+    colliders: &[WorldCollider],
+) -> Vector3<f32> {
+    let mut resolved_tail = tail;
+    for collider in colliders {
+        resolved_tail = resolve_tail_collision(resolved_tail, joint_radius, collider);
+    }
+    resolved_tail
+}
+
+fn resolve_tail_collision(
+    tail: Vector3<f32>,
+    joint_radius: f32,
+    collider: &WorldCollider,
+) -> Vector3<f32> {
+    let closest = match collider.tail {
+        Some(capsule_tail) => closest_point_on_segment(tail, collider.center, capsule_tail),
+        None => collider.center,
+    };
+    let diff = tail - closest;
+    let distance = diff.magnitude();
+    let min_distance = joint_radius + collider.radius;
+
+    if distance >= min_distance {
+        return tail;
+    }
+
+    let penetration = min_distance - distance;
+    let push_direction = if distance < 1e-8 {
+        Vector3::new(0.0, 1.0, 0.0)
+    } else {
+        diff / distance
+    };
+
+    tail + push_direction * penetration
+}
+
+fn closest_point_on_segment(p: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -> Vector3<f32> {
+    let ab = b - a;
+    let len_sq = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z;
+    if len_sq < 1e-8 {
+        return a;
+    }
+    let t = ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y + (p.z - a.z) * ab.z) / len_sq;
+    let clamped_t = t.max(0.0).min(1.0);
+    a + ab * clamped_t
+}
+
 fn resolve_segment_collision(
     head: Vector3<f32>,
     tail: Vector3<f32>,
@@ -271,5 +321,46 @@ mod tests {
         let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
         let expected = Vector3::new(1.0, 3.8, 3.0);
         assert!(approx_eq(result, expected, 1e-4));
+    }
+
+    #[test]
+    fn test_tail_collision_distant_sphere_unchanged() {
+        let tail = Vector3::new(5.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
+    }
+
+    #[test]
+    fn test_tail_collision_penetrating_sphere_pushed_out() {
+        let tail = Vector3::new(0.3, 0.0, 0.0);
+        let center = Vector3::new(0.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        let dist = magnitude(result - center);
+        assert!((dist - 0.6).abs() < 1e-4);
+        assert!(result.x > 0.0);
+    }
+
+    #[test]
+    fn test_tail_collision_capsule_pushed_perpendicular_from_axis_center() {
+        let tail = Vector3::new(0.3, 1.0, 0.0);
+        let capsule_head = Vector3::new(0.0, 0.0, 0.0);
+        let capsule_tail = Vector3::new(0.0, 2.0, 0.0);
+        let colliders = [WorldCollider {
+            center: capsule_head,
+            radius: 0.5,
+            tail: Some(capsule_tail),
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        assert!(approx_eq(result, Vector3::new(0.6, 1.0, 0.0), 1e-4));
     }
 }

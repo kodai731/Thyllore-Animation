@@ -3,6 +3,8 @@ use cgmath::{EuclideanSpace, InnerSpace, Point3, Transform, Vector3};
 use thyllore_math_core::{fit_principal_axis, PrincipalAxis};
 use thyllore_model_core::{Bone, BoneId, Skeleton, SkinData};
 
+use super::setup::{ColliderShape, SpringBoneSetup, SpringColliderDef, SpringColliderGroup};
+
 #[derive(Clone, Debug)]
 pub struct CapsuleFitParams {
     pub min_weight: f32,
@@ -17,6 +19,66 @@ pub struct FittedCapsule {
     pub head: Vector3<f32>,
     pub tail: Vector3<f32>,
     pub radius: f32,
+}
+
+pub const FITTED_BODY_GROUP_NAME: &str = "Fitted Body";
+
+pub fn replace_fitted_body_colliders(setup: &mut SpringBoneSetup, capsules: &[FittedCapsule]) {
+    remove_existing_fitted_group(setup);
+    let new_group_id = add_new_colliders_and_group(setup, capsules);
+    append_group_to_chains(setup, new_group_id);
+}
+
+fn remove_existing_fitted_group(setup: &mut SpringBoneSetup) {
+    if let Some(group_pos) = setup
+        .collider_groups
+        .iter()
+        .position(|g| g.name == FITTED_BODY_GROUP_NAME)
+    {
+        let group = &setup.collider_groups[group_pos];
+        let group_id = group.id;
+        for cid in &group.collider_ids {
+            setup.colliders.retain(|c| c.id != *cid);
+        }
+        setup.collider_groups.remove(group_pos);
+        for chain in &mut setup.chains {
+            chain.collider_group_ids.retain(|&gid| gid != group_id);
+        }
+    }
+}
+
+fn add_new_colliders_and_group(setup: &mut SpringBoneSetup, capsules: &[FittedCapsule]) -> u32 {
+    let mut collider_ids = Vec::new();
+    for cap in capsules {
+        let id = setup.next_collider_id;
+        setup.next_collider_id += 1;
+        collider_ids.push(id);
+        setup.colliders.push(SpringColliderDef {
+            id,
+            bone_id: cap.bone_id,
+            offset: cap.head,
+            shape: ColliderShape::Capsule {
+                radius: cap.radius,
+                tail: cap.tail,
+            },
+        });
+    }
+    let group_id = setup.next_group_id;
+    setup.next_group_id += 1;
+    setup.collider_groups.push(SpringColliderGroup {
+        id: group_id,
+        name: FITTED_BODY_GROUP_NAME.to_string(),
+        collider_ids,
+    });
+    group_id
+}
+
+fn append_group_to_chains(setup: &mut SpringBoneSetup, group_id: u32) {
+    for chain in &mut setup.chains {
+        if !chain.collider_group_ids.contains(&group_id) {
+            chain.collider_group_ids.push(group_id);
+        }
+    }
 }
 
 pub fn fit_bone_capsules(
@@ -130,6 +192,7 @@ fn compute_radius(points: &[Vector3<f32>], axis: &PrincipalAxis, params: &Capsul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spring_bone::{SpringChain, SpringColliderGroup, SpringJointParam};
     use cgmath::{Matrix4, SquareMatrix, Vector4};
 
     fn make_cylinder_points(radius: f32, length: f32, samples: usize) -> Vec<Vector3<f32>> {
@@ -328,5 +391,149 @@ mod tests {
             cap_full.radius,
             cap_split.radius
         );
+    }
+
+    #[test]
+    fn test_replace_fitted_body_colliders_basic() {
+        let mut setup = SpringBoneSetup::default();
+        setup.chains.push(SpringChain {
+            id: 0,
+            name: "chain0".to_string(),
+            joints: vec![SpringJointParam {
+                bone_id: 0,
+                ..Default::default()
+            }],
+            collider_group_ids: Vec::new(),
+            center_bone_id: None,
+            enabled: true,
+        });
+        setup.next_chain_id = 1;
+
+        let capsules = vec![
+            FittedCapsule {
+                bone_id: 0,
+                head: Vector3::new(0.0, 0.0, 0.0),
+                tail: Vector3::new(0.0, 1.0, 0.0),
+                radius: 0.1,
+            },
+            FittedCapsule {
+                bone_id: 1,
+                head: Vector3::new(0.0, 1.0, 0.0),
+                tail: Vector3::new(0.0, 2.0, 0.0),
+                radius: 0.08,
+            },
+        ];
+
+        replace_fitted_body_colliders(&mut setup, &capsules);
+
+        assert_eq!(setup.colliders.len(), 2);
+        assert_eq!(setup.collider_groups.len(), 1);
+        let group = &setup.collider_groups[0];
+        assert_eq!(group.name, FITTED_BODY_GROUP_NAME);
+        assert_eq!(group.collider_ids.len(), 2);
+        assert_eq!(setup.chains[0].collider_group_ids.len(), 1);
+        assert_eq!(setup.chains[0].collider_group_ids[0], group.id);
+    }
+
+    #[test]
+    fn test_replace_fitted_body_colliders_idempotent() {
+        let mut setup = SpringBoneSetup::default();
+        setup.chains.push(SpringChain {
+            id: 0,
+            name: "chain0".to_string(),
+            joints: vec![SpringJointParam {
+                bone_id: 0,
+                ..Default::default()
+            }],
+            collider_group_ids: Vec::new(),
+            center_bone_id: None,
+            enabled: true,
+        });
+        setup.next_chain_id = 1;
+
+        let capsules = vec![
+            FittedCapsule {
+                bone_id: 0,
+                head: Vector3::new(0.0, 0.0, 0.0),
+                tail: Vector3::new(0.0, 1.0, 0.0),
+                radius: 0.1,
+            },
+            FittedCapsule {
+                bone_id: 1,
+                head: Vector3::new(0.0, 1.0, 0.0),
+                tail: Vector3::new(0.0, 2.0, 0.0),
+                radius: 0.08,
+            },
+        ];
+
+        replace_fitted_body_colliders(&mut setup, &capsules);
+        let first_count = setup.colliders.len();
+        let first_group_count = setup.collider_groups.len();
+        let first_ref_count = setup.chains[0].collider_group_ids.len();
+
+        replace_fitted_body_colliders(&mut setup, &capsules);
+
+        assert_eq!(setup.colliders.len(), first_count);
+        assert_eq!(setup.collider_groups.len(), first_group_count);
+        assert_eq!(setup.chains[0].collider_group_ids.len(), first_ref_count);
+    }
+
+    #[test]
+    fn test_replace_fitted_body_colliders_preserves_other_groups() {
+        let mut setup = SpringBoneSetup::default();
+        setup.chains.push(SpringChain {
+            id: 0,
+            name: "chain0".to_string(),
+            joints: vec![SpringJointParam {
+                bone_id: 0,
+                ..Default::default()
+            }],
+            collider_group_ids: Vec::new(),
+            center_bone_id: None,
+            enabled: true,
+        });
+        setup.next_chain_id = 1;
+
+        setup.colliders.push(SpringColliderDef {
+            id: 0,
+            bone_id: 2,
+            offset: Vector3::new(1.0, 0.0, 0.0),
+            shape: ColliderShape::Sphere { radius: 0.2 },
+        });
+        setup.next_collider_id = 1;
+        setup.collider_groups.push(SpringColliderGroup {
+            id: 0,
+            name: "User Group".to_string(),
+            collider_ids: vec![0],
+        });
+        setup.next_group_id = 1;
+        setup.chains[0].collider_group_ids.push(0);
+
+        let capsules = vec![FittedCapsule {
+            bone_id: 0,
+            head: Vector3::new(0.0, 0.0, 0.0),
+            tail: Vector3::new(0.0, 1.0, 0.0),
+            radius: 0.1,
+        }];
+
+        replace_fitted_body_colliders(&mut setup, &capsules);
+
+        assert_eq!(setup.collider_groups.len(), 2);
+        let user_group = setup
+            .collider_groups
+            .iter()
+            .find(|g| g.name == "User Group")
+            .expect("User Group should still exist");
+        assert_eq!(user_group.collider_ids, vec![0]);
+        let fitted_group = setup
+            .collider_groups
+            .iter()
+            .find(|g| g.name == FITTED_BODY_GROUP_NAME)
+            .expect("Fitted Body group should exist");
+        assert_eq!(fitted_group.collider_ids.len(), 1);
+        assert!(setup.chains[0].collider_group_ids.contains(&user_group.id));
+        assert!(setup.chains[0]
+            .collider_group_ids
+            .contains(&fitted_group.id));
     }
 }

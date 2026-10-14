@@ -3942,6 +3942,7 @@ dependencies = [
  "gltf",
  "imgui-winit-support",
  "inventory",
+ "libloading 0.8.9",
  "log",
  "once_cell",
  "ort",
@@ -4200,6 +4201,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thyllore-scratch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thyllore-animation",
 ]
 
 [[package]]

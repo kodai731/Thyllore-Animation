@@ -1219,6 +1219,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
+        Self::insert_default_if_missing::<crate::scratch::loader::ScratchHost>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::InjectedInput>(data);

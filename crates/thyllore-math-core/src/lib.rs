@@ -26,6 +26,7 @@ mod torus_intersect;
 mod torus_projection;
 #[cfg(test)]
 mod torus_tests;
+mod triangle_closest_point;
 mod vector;
 mod winding;
 
@@ -54,6 +55,7 @@ pub use random::*;
 pub use smooth_step::*;
 pub use torus_intersect::*;
 pub use torus_projection::*;
+pub use triangle_closest_point::*;
 pub use vector::*;
 pub use winding::*;
 

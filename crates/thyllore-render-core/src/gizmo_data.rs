@@ -4,7 +4,7 @@ use thyllore_model_core::SkeletonId;
 
 use crate::{
     BoneDisplayStyle, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, MeshScale,
-    RenderInfo,
+    RenderInfo, StaticLineMesh,
 };
 
 #[derive(Clone, Debug)]
@@ -64,7 +64,7 @@ impl Default for BoneGizmoData {
 
 #[derive(Clone, Debug, Default)]
 pub struct GridMeshData {
-    pub mesh: LineMesh,
+    pub mesh: StaticLineMesh,
     pub render_info: RenderInfo,
     pub scale: MeshScale,
     pub show_y_axis_grid: bool,
@@ -96,6 +96,6 @@ pub struct LightGizmoData {
     pub selectable: GizmoSelectable,
     pub draggable: GizmoDraggable,
     pub drag_active: bool,
-    pub ray_to_model: LineMesh,
     pub vertical_lines: LineMesh,
+    pub pending_uploads: usize,
 }

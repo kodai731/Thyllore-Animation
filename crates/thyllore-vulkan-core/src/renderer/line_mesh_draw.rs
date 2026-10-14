@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::GpuBufferRegistry;
-use thyllore_render_core::{DynamicMesh, RenderInfo};
+use thyllore_render_core::{MeshBuffers, RenderInfo};
 
 pub struct LineMeshDrawOptions {
     pub index_count_override: Option<u32>,
@@ -24,18 +24,20 @@ impl Default for LineMeshDrawOptions {
     }
 }
 
-pub unsafe fn record_line_mesh_draw<V>(
+pub unsafe fn record_line_mesh_draw(
     ctx: &FrameRenderContext,
-    mesh: &DynamicMesh<V>,
+    mesh: &dyn MeshBuffers,
     render_info: &RenderInfo,
     options: &LineMeshDrawOptions,
     cmd: vk::CommandBuffer,
 ) -> Result<bool> {
     let buffers: &GpuBufferRegistry = ctx.buffers;
-    let Some(vertex_buffer) = buffers.get_vertex_buffer(mesh.current_vertex_buffer_handle()) else {
+    let frame_slot = ctx.frame_slot;
+    let Some(vertex_buffer) = buffers.get_vertex_buffer(mesh.vertex_buffer_handle(frame_slot))
+    else {
         return Ok(false);
     };
-    let Some(index_buffer) = buffers.get_index_buffer(mesh.current_index_buffer_handle()) else {
+    let Some(index_buffer) = buffers.get_index_buffer(mesh.index_buffer_handle(frame_slot)) else {
         return Ok(false);
     };
     let pipeline_id = options
@@ -56,9 +58,7 @@ pub unsafe fn record_line_mesh_draw<V>(
         cmd,
     );
 
-    let index_count = options
-        .index_count_override
-        .unwrap_or_else(|| mesh.indices.len() as u32);
+    let index_count = options.index_count_override.unwrap_or(mesh.index_count());
 
     let device = &ctx.device.device;
     device.cmd_draw_indexed(cmd, index_count, 1, 0, 0, 0);

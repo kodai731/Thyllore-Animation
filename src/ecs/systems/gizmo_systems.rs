@@ -1,10 +1,11 @@
 use anyhow::Result;
-use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
+use cgmath::{vec3, Deg, InnerSpace, Vector2, Vector3};
 
 use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
+    StaticLineMesh,
 };
 use crate::ecs::resource::gizmo::grid::GridGizmoData;
 use crate::ecs::resource::gizmo::light::LightGizmoData;
@@ -13,6 +14,7 @@ use crate::math::{
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };
 use crate::render::{BufferMemoryType, IndexBufferHandle, RenderBackend, VertexBufferHandle};
+use thyllore_render_core::FRAMES_IN_FLIGHT;
 
 pub fn create_axis_gizmo_mesh_data(axis_length: f32, origin_color: [f32; 3]) -> MeshData {
     let positions = vec![
@@ -75,17 +77,16 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
         mesh: LineMesh {
             vertices,
             indices,
-            vertex_buffer_handles: [VertexBufferHandle::INVALID; 2],
-            index_buffer_handles: [IndexBufferHandle::INVALID; 2],
-            last_written_slot: 0,
+            vertex_buffer_handles: [VertexBufferHandle::INVALID; FRAMES_IN_FLIGHT],
+            index_buffer_handles: [IndexBufferHandle::INVALID; FRAMES_IN_FLIGHT],
         },
         render_info: RenderInfo::default(),
         position: GizmoPosition { position },
         selectable: GizmoSelectable::default(),
         draggable: GizmoDraggable::default(),
         drag_active: false,
-        ray_to_model: LineMesh::default(),
         vertical_lines: LineMesh::default(),
+        pending_uploads: 0,
     }
 }
 
@@ -115,12 +116,11 @@ pub fn create_grid_gizmo() -> GridGizmoData {
     let indices = vec![0, 1, 0, 2, 0, 3];
 
     GridGizmoData {
-        mesh: LineMesh {
+        mesh: StaticLineMesh {
             vertices,
             indices,
-            vertex_buffer_handles: [VertexBufferHandle::INVALID; 2],
-            index_buffer_handles: [IndexBufferHandle::INVALID; 2],
-            last_written_slot: 0,
+            vertex_buffer_handle: VertexBufferHandle::INVALID,
+            index_buffer_handle: IndexBufferHandle::INVALID,
         },
         render_info: RenderInfo::default(),
     }
@@ -282,109 +282,59 @@ pub fn gizmo_update_position_with_constraint(
     }
 }
 
-pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelectable) {
+pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelectable) -> bool {
     let yellow = [1.0, 1.0, 0.0];
     let highlight = [1.0, 1.0, 0.5];
 
-    mesh.vertices[0].color = yellow;
-    mesh.vertices[1].color = [1.0, 0.0, 0.0];
-    mesh.vertices[2].color = [0.0, 1.0, 0.0];
-    mesh.vertices[3].color = [0.0, 0.0, 1.0];
+    let mut new_colors: [[f32; 3]; 4] = [yellow, [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
     match selectable.selected_axis {
         GizmoAxis::None => {}
         GizmoAxis::Center => {
-            mesh.vertices[0].color = highlight;
+            new_colors[0] = highlight;
         }
         GizmoAxis::X => {
-            mesh.vertices[1].color = [1.0, 0.5, 0.0];
+            new_colors[1] = [1.0, 0.5, 0.0];
         }
         GizmoAxis::Y => {
-            mesh.vertices[2].color = [0.5, 1.0, 0.0];
+            new_colors[2] = [0.5, 1.0, 0.0];
         }
         GizmoAxis::Z => {
-            mesh.vertices[3].color = [0.0, 0.5, 1.0];
+            new_colors[3] = [0.0, 0.5, 1.0];
         }
     }
+
+    let mut changed = false;
+    for (vertex, color) in mesh.vertices.iter_mut().zip(new_colors) {
+        changed |= vertex.color != color;
+        vertex.color = color;
+    }
+    changed
 }
 
-pub fn gizmo_update_rotation(mesh: &mut LineMesh, rotation_matrix: &Matrix3<f32>) {
-    let axis_length = 0.15;
-
-    let x_axis = rotation_matrix * vec3(axis_length, 0.0, 0.0);
-    let y_axis = rotation_matrix * vec3(0.0, axis_length, 0.0);
-    let z_axis = rotation_matrix * vec3(0.0, 0.0, axis_length);
-
-    mesh.vertices[1].pos = [x_axis.x, x_axis.y, x_axis.z];
-    mesh.vertices[2].pos = [y_axis.x, y_axis.y, y_axis.z];
-    mesh.vertices[3].pos = [z_axis.x, z_axis.y, z_axis.z];
-}
-
-pub unsafe fn gizmo_create_buffers(
-    mesh: &mut LineMesh,
+pub unsafe fn gizmo_create_static_buffers(
+    mesh: &mut StaticLineMesh,
     backend: &mut dyn RenderBackend,
-    frame_slot: usize,
     memory_type: BufferMemoryType,
 ) -> Result<()> {
-    backend.create_gizmo_buffers(mesh, frame_slot, memory_type)
+    backend.create_static_line_buffers(mesh, memory_type)
 }
 
-pub unsafe fn gizmo_update_vertex_buffer(
-    mesh: &LineMesh,
-    backend: &dyn RenderBackend,
-) -> Result<()> {
-    backend.update_gizmo_vertex_buffer(mesh)
-}
-
-pub unsafe fn gizmo_destroy_buffers(mesh: &mut LineMesh, backend: &mut dyn RenderBackend) {
-    backend.destroy_gizmo_buffers(mesh);
-}
-
-pub fn gizmo_update_ray_to_model(
-    ray: &mut LineMesh,
-    position: &GizmoPosition,
-    model_positions: &[Vector3<f32>],
-) {
-    if model_positions.is_empty() {
-        ray.vertices.clear();
-        ray.indices.clear();
-        return;
-    }
-
-    let gizmo_pos = position.position;
-
-    let mut closest_point = model_positions[0];
-    let mut min_distance = (closest_point - gizmo_pos).magnitude();
-
-    for pos in model_positions.iter() {
-        let distance = (*pos - gizmo_pos).magnitude();
-        if distance < min_distance {
-            min_distance = distance;
-            closest_point = *pos;
-        }
-    }
-
-    let bright_yellow = [1.0, 1.0, 0.0];
-
-    let vertex_0 = ColorVertex {
-        pos: [gizmo_pos.x, gizmo_pos.y, gizmo_pos.z],
-        color: bright_yellow,
-    };
-    let vertex_1 = ColorVertex {
-        pos: [closest_point.x, closest_point.y, closest_point.z],
-        color: bright_yellow,
-    };
-
-    ray.vertices = vec![vertex_0, vertex_1];
-    ray.indices = vec![0, 1];
-}
-
-pub unsafe fn gizmo_update_or_create_ray_buffers(
-    ray: &mut LineMesh,
+pub unsafe fn gizmo_create_buffers_for_every_slot(
+    mesh: &mut LineMesh,
     backend: &mut dyn RenderBackend,
-    frame_slot: usize,
 ) -> Result<()> {
-    backend.update_or_create_line_buffers(ray, frame_slot)
+    for frame_slot in 0..FRAMES_IN_FLIGHT {
+        backend.update_or_create_line_buffers(mesh, frame_slot)?;
+    }
+    Ok(())
+}
+
+pub unsafe fn gizmo_destroy_static_buffers(
+    mesh: &mut StaticLineMesh,
+    backend: &mut dyn RenderBackend,
+) {
+    backend.destroy_static_line_buffers(mesh);
 }
 
 pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn RenderBackend) {
@@ -415,7 +365,6 @@ pub unsafe fn run_vertical_lines_update(ctx: &mut crate::ecs::FrameContext) -> R
         let mut gizmo = ctx.light_gizmo_mut();
         gizmo.vertical_lines.vertex_buffer_handles = mesh_clone.vertex_buffer_handles;
         gizmo.vertical_lines.index_buffer_handles = mesh_clone.index_buffer_handles;
-        gizmo.vertical_lines.last_written_slot = mesh_clone.last_written_slot;
     }
 
     Ok(())
@@ -472,4 +421,24 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
     backend: &mut dyn RenderBackend,
 ) {
     backend.destroy_line_buffers(lines);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_selection_color_reports_change_only_once_per_axis() {
+        let mut mesh = LineMesh {
+            vertices: vec![ColorVertex::default(); 4],
+            ..Default::default()
+        };
+        let selectable = GizmoSelectable {
+            is_selected: true,
+            selected_axis: GizmoAxis::X,
+        };
+
+        assert!(gizmo_update_selection_color(&mut mesh, &selectable));
+        assert!(!gizmo_update_selection_color(&mut mesh, &selectable));
+    }
 }

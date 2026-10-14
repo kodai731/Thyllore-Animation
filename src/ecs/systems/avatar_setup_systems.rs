@@ -22,8 +22,9 @@ use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
 use thyllore_avatar_core::vrchat::sidecar::{
     build_sidecar, count_viseme_channels, sidecar_path, write_sidecar_json, AvatarSidecar,
-    SidecarInput, SidecarSpringChain,
+    SidecarInput,
 };
+use thyllore_avatar_core::vrchat::sidecar_spring::build_sidecar_spring;
 use thyllore_model_core::MeshMorph;
 
 use crate::animation::{BoneId, Skeleton, SkinData};
@@ -388,8 +389,8 @@ fn build_avatar_sidecar(
                 .collect()
         })
         .unwrap_or_default();
-    let spring_chains = find_spring_bone_setup(world)
-        .map(|setup| collect_sidecar_spring_chains(setup, &state.bones))
+    let spring = find_spring_bone_setup(world)
+        .map(|setup| build_sidecar_spring(setup, &state.bones))
         .unwrap_or_default();
     let materials: BTreeMap<String, String> = world
         .resource::<MaterialTextureState>()
@@ -408,7 +409,7 @@ fn build_avatar_sidecar(
         channel_names: &channel_names,
         expression_mesh_name: expression_morph.map(|morph| morph.source_mesh.as_str()),
         library: &library_state.library,
-        spring_chains: &spring_chains,
+        spring: &spring,
         materials: &materials,
         stats: &state.stats,
     })
@@ -439,27 +440,6 @@ pub(crate) fn find_expression_morph<'a>(
 ) -> Option<&'a MeshMorph> {
     let entity = find_expression_morph_entity(world, assets, graphics)?;
     find_mesh_morph(world, entity, assets, graphics)
-}
-
-fn collect_sidecar_spring_chains(
-    setup: &SpringBoneSetup,
-    bones: &[BoneInput],
-) -> Vec<SidecarSpringChain> {
-    setup
-        .chains
-        .iter()
-        .filter_map(|chain| {
-            let first_joint = chain.joints.first()?;
-            let root = bones.get(first_joint.bone_id as usize)?;
-            Some(SidecarSpringChain {
-                root: root.name.clone(),
-                stiffness: first_joint.stiffness,
-                gravity: first_joint.gravity_power,
-                drag: first_joint.drag_force,
-                colliders: Vec::new(),
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]

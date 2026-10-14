@@ -7,9 +7,10 @@ use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::stats::components::stats::AvatarStats;
 use crate::vrchat::blink::find_blink_candidates;
+use crate::vrchat::sidecar_spring::SidecarSpring;
 use crate::vrchat::viseme::VISEME_CHANNELS;
 
-pub const SIDECAR_SCHEMA_VERSION: u32 = 2;
+pub const SIDECAR_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -20,7 +21,7 @@ pub struct AvatarSidecar {
     pub blink: SidecarBlink,
     pub expression_mesh: Option<String>,
     pub expressions: Vec<SidecarExpression>,
-    pub spring_chains: Vec<SidecarSpringChain>,
+    pub spring: SidecarSpring,
     /// Base colour texture per material name, as a `/` separated path relative to the model.
     pub materials: BTreeMap<String, String>,
     pub stats: AvatarStats,
@@ -41,23 +42,13 @@ pub struct SidecarExpression {
     pub weights: BTreeMap<String, f32>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct SidecarSpringChain {
-    pub root: String,
-    pub stiffness: f32,
-    pub gravity: f32,
-    pub drag: f32,
-    pub colliders: Vec<String>,
-}
-
 pub struct SidecarInput<'a> {
     pub mapping: &'a HumanoidMapping,
     pub bones: &'a [BoneInput],
     pub channel_names: &'a [String],
     pub expression_mesh_name: Option<&'a str>,
     pub library: &'a ExpressionLibrary,
-    pub spring_chains: &'a [SidecarSpringChain],
+    pub spring: &'a SidecarSpring,
     pub materials: &'a BTreeMap<String, String>,
     pub stats: &'a AvatarStats,
 }
@@ -76,7 +67,7 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
         blink,
         expression_mesh,
         expressions,
-        spring_chains: input.spring_chains.to_vec(),
+        spring: input.spring.clone(),
         materials: input.materials.clone(),
         stats: input.stats.clone(),
     }
@@ -221,7 +212,7 @@ mod tests {
             channel_names: &channel_names,
             expression_mesh_name: Some("face_expression"),
             library: &library,
-            spring_chains: &[],
+            spring: &SidecarSpring::default(),
             materials: &materials,
             stats: &stats,
         };
@@ -230,7 +221,7 @@ mod tests {
 
         let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
 
-        assert_eq!(value["schema"], 2);
+        assert_eq!(value["schema"], 3);
         assert_eq!(value["materials"]["face"], "../PNG/face.png");
 
         assert_eq!(value["humanoid"]["Hips"], "Hips");
@@ -272,7 +263,7 @@ mod tests {
             },
             expression_mesh: None,
             expressions: vec![],
-            spring_chains: vec![],
+            spring: SidecarSpring::default(),
             materials: BTreeMap::new(),
             stats: AvatarStats::default(),
         };
@@ -282,6 +273,6 @@ mod tests {
         let data = fs::read_to_string(&path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-        assert_eq!(parsed["schema"], 2);
+        assert_eq!(parsed["schema"], 3);
     }
 }

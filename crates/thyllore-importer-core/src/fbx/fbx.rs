@@ -458,6 +458,10 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
     mesh_to_node
 }
 
+fn key_time(time: f64, time_begin: f64) -> f32 {
+    (time - time_begin) as f32
+}
+
 fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
     for anim_stack in &scene.anim_stacks {
         let raw_name = anim_stack.element.name.to_string();
@@ -482,7 +486,8 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
             }
         };
 
-        let duration = (anim_stack.time_end - anim_stack.time_begin) as f32;
+        let time_begin = anim_stack.time_begin;
+        let duration = (anim_stack.time_end - time_begin) as f32;
 
         let mut bone_animations = HashMap::new();
 
@@ -502,7 +507,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .translation_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
@@ -511,7 +516,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .rotation_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: Quaternion::new(
                         k.value.w as f32,
                         k.value.x as f32,
@@ -525,7 +530,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .scale_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
@@ -1074,5 +1079,11 @@ mod tests {
             (axes.coord_axis, axes.coord_axis_sign),
             (default_axes.coord_axis, default_axes.coord_axis_sign)
         );
+    }
+
+    #[test]
+    fn test_key_time() {
+        assert_eq!(key_time(1.0 / 30.0, 1.0 / 30.0), 0.0);
+        assert_eq!(key_time(0.5, 0.25), 0.25);
     }
 }

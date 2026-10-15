@@ -211,8 +211,6 @@ fn update_single_joint(
         parent_world_rot,
         joint_state.initial_local_rotation,
         joint_state.bone_axis,
-        joint_state.bone_length,
-        head_pos,
         dt,
     );
 

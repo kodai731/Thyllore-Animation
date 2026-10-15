@@ -93,6 +93,29 @@ pub fn find_hidden_triangle_indices(
         .collect()
 }
 
+pub fn order_visible_triangles_first(indices: &[u32], hidden_triangles: &[u32]) -> (Vec<u32>, u32) {
+    let num_triangles = indices.len() / 3;
+    let mut is_hidden = vec![false; num_triangles];
+    for &t in hidden_triangles {
+        if t < num_triangles as u32 {
+            is_hidden[t as usize] = true;
+        }
+    }
+    let mut reordered = Vec::with_capacity(indices.len());
+    for t in 0..num_triangles {
+        if !is_hidden[t] {
+            reordered.extend_from_slice(&indices[3 * t..3 * t + 3]);
+        }
+    }
+    let visible_count = (reordered.len() as u32);
+    for t in 0..num_triangles {
+        if is_hidden[t] {
+            reordered.extend_from_slice(&indices[3 * t..3 * t + 3]);
+        }
+    }
+    (reordered, visible_count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +258,29 @@ mod tests {
             hidden.is_empty(),
             "no body triangles should be hidden when garment is far"
         );
+    }
+
+    #[test]
+    fn test_order_visible_triangles_first_empty() {
+        let indices: Vec<u32> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8];
+        let (reordered, visible_count) = order_visible_triangles_first(&indices, &[]);
+        assert_eq!(reordered, indices);
+        assert_eq!(visible_count, 9);
+    }
+
+    #[test]
+    fn test_order_visible_triangles_first_one_hidden() {
+        let indices: Vec<u32> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8];
+        let (reordered, visible_count) = order_visible_triangles_first(&indices, &[1]);
+        assert_eq!(reordered, [0, 1, 2, 6, 7, 8, 3, 4, 5]);
+        assert_eq!(visible_count, 6);
+    }
+
+    #[test]
+    fn test_order_visible_triangles_first_out_of_bounds_and_duplicates() {
+        let indices: Vec<u32> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8];
+        let (reordered, visible_count) = order_visible_triangles_first(&indices, &[1, 1, 99]);
+        assert_eq!(reordered, [0, 1, 2, 6, 7, 8, 3, 4, 5]);
+        assert_eq!(visible_count, 6);
     }
 }

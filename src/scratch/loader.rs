@@ -37,10 +37,18 @@ impl ScratchHost {
             let symbol: libloading::Symbol<ScratchEntryFn> = lib.get(SCRATCH_ENTRY_SYMBOL)?;
             *symbol
         };
-        let job = entry_fn(job, args)?;
-        self.libraries.push(lib);
-        self.running.push(RunningJob { job, reply });
-        Ok(())
+        match entry_fn(job, args) {
+            Ok(job) => {
+                self.libraries.push(lib);
+                self.running.push(RunningJob { job, reply });
+                Ok(())
+            }
+            Err(e) => {
+                let message = format!("{e:#}");
+                drop(e);
+                Err(anyhow::anyhow!(message))
+            }
+        }
     }
 
     pub fn step_running_jobs(&mut self, ctx: &mut ScratchContext) {

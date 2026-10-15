@@ -1,7 +1,8 @@
 """Operator registration collation.
 
-- ``curve_copilot`` (PyO3) is the only operator shipped in the distribution
-  ZIP. It depends only on ``thyllore_ml_core`` and never imports gRPC.
+- ``curve_copilot`` (PyO3) and ``skin_weight_transfer`` are shipped in the
+  distribution ZIP. They depend only on ``thyllore_ml_core`` / numpy and never
+  import gRPC.
 - ``text_to_motion``, ``auto_rig`` and ``text_to_mesh`` are unshipped
   gRPC-backed operators, excluded from the ZIP by
   ``scripts/build_blender_addon.sh/.ps1``.
@@ -14,11 +15,12 @@ from __future__ import annotations
 import bpy
 
 from .. import _ghost_overlay
-from . import curve_copilot
+from . import curve_copilot, skin_weight_transfer
 
 _OPERATORS: list[type] = [
     curve_copilot.THYLLORE_OT_CurveCopilot,
     curve_copilot.THYLLORE_OT_CurveCopilotClear,
+    skin_weight_transfer.THYLLORE_OT_TransferSkinWeights,
 ]
 _HAS_TEXT_TO_MOTION = False
 _HAS_TIER_A = False

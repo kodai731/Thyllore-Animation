@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from blender_addon.common.skin_weight_transfer import (
+    barycentric_coordinates,
     cotangent_laplacian,
     find_matched_vertices,
     inpaint_weights,
@@ -99,3 +100,32 @@ def test_interpolate_weights_barycentric_vertex_zero():
     result = interpolate_weights(source_weights, face_vertex_indices, barycentric)
 
     np.testing.assert_allclose(result, [[1.0, 0.0]])
+
+
+def test_barycentric_coordinates_vertex_midpoint_centroid():
+    """Barycentric coordinates: vertex -> (1,0,0), edge midpoint -> (0.5,0.5,0), centroid -> (1/3,1/3,1/3)."""
+    a = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+    b = np.array([2.0, 0.0, 0.0], dtype=np.float64)
+    c = np.array([0.0, 2.0, 0.0], dtype=np.float64)
+
+    vertex = a.copy()
+    midpoint = (a + b) / 2.0
+    centroid = (a + b + c) / 3.0
+
+    points = np.vstack([vertex, midpoint, centroid])
+    result = barycentric_coordinates(points, a, b, c)
+
+    np.testing.assert_allclose(result[0], [1.0, 0.0, 0.0], atol=1e-6)
+    np.testing.assert_allclose(result[1], [0.5, 0.5, 0.0], atol=1e-6)
+    np.testing.assert_allclose(result[2], [1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0], atol=1e-6)
+
+
+def test_barycentric_coordinates_two_triangles():
+    """Barycentric coordinates: two triangles at once — each row is correct."""
+    a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
+    b = np.array([[2.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float64)
+    c = np.array([[0.0, 2.0, 0.0], [1.0, 2.0, 0.0]], dtype=np.float64)
+    points = np.array([[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=np.float64)
+    result = barycentric_coordinates(points, a, b, c)
+    np.testing.assert_allclose(result[0], [0.5, 0.5, 0.0], atol=1e-6)
+    np.testing.assert_allclose(result[1], [0.5, 0.0, 0.5], atol=1e-6)

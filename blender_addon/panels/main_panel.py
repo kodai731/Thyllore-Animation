@@ -121,6 +121,25 @@ class THYLLORE_PT_CurveCopilot(Panel):
         layout.operator("thyllore.curve_copilot", text="Preview Forecast (Shift+C)", icon="FCURVE")
         layout.operator("thyllore.curve_copilot_clear", text="Clear Preview", icon="X")
 
+class THYLLORE_PT_SkinWeightTransfer(Panel):
+    bl_label = "Skin Weight Transfer"
+    bl_idname = "THYLLORE_PT_skin_weight_transfer"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = _CATEGORY
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            layout.label(text="Select a mesh", icon="ERROR")
+            return
+        selected = [o for o in context.selected_objects if o != obj and o.type == "MESH"]
+        layout.label(text=f"Source: {obj.name}")
+        for target_obj in selected:
+            layout.label(text=f"Target: {target_obj.name}")
+        layout.operator("thyllore.transfer_skin_weights", icon="MOD_VERTEX_WEIGHT")
+
 
 # ---------------------------------------------------------------------------
 # Placeholder sub-panel (shown only when license or ABI verification fails).
@@ -167,6 +186,7 @@ def _resolve_main_panels() -> tuple[type[Panel], ...]:
     if operators.has_text_to_motion():
         panels.append(THYLLORE_PT_TextToMotion)
     panels.append(THYLLORE_PT_CurveCopilot)
+    panels.append(THYLLORE_PT_SkinWeightTransfer)
     return tuple(panels)
 
 

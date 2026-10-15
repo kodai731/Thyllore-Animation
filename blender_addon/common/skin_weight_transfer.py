@@ -37,6 +37,26 @@ def interpolate_weights(
     return np.einsum("vc,vcb->vb", barycentric, corner_weights)
 
 
+def barycentric_coordinates(
+    points: NDArray[np.floating],
+    a: NDArray[np.floating],
+    b: NDArray[np.floating],
+    c: NDArray[np.floating],
+) -> NDArray[np.floating]:
+    ab = b - a
+    ac = c - a
+    n = np.cross(ab, ac)
+    denom = np.sum(n * n, axis=-1)
+    w1 = np.sum(np.cross(points - a, ac) * n, axis=-1) / denom
+    w2 = np.sum(np.cross(ab, points - a) * n, axis=-1) / denom
+    w0 = 1.0 - w1 - w2
+    mask = denom <= DEGENERATE_AREA_EPSILON
+    w0[mask] = 1.0
+    w1[mask] = 0.0
+    w2[mask] = 0.0
+    return np.stack([w0, w1, w2], axis=-1)
+
+
 def cotangent_laplacian(
     vertices: NDArray[np.floating],
     triangles: NDArray[np.integer],

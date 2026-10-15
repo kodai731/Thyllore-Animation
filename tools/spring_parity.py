@@ -1,6 +1,6 @@
 """Spring-bone parity: run engine and Unity spring simulation on the same model, compare tails.
 
-    python3 tools/spring_parity.py --dood [--max-rms <float>] [--work-dir <path>]
+    python3 tools/spring_parity.py --dood [--max-rms <float, default 1e-4>] [--work-dir <path>]
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ UNIVRM_MANIFEST_ENTRIES = {
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--dood", action="store_true", help="run engine inside docker (dood)")
-    p.add_argument("--max-rms", type=float, default=None, help="max RMS threshold for spring_tail_compare")
+    p.add_argument("--max-rms", type=float, default=1e-4, help="max RMS threshold for spring_tail_compare (default 1e-4 m)")
     p.add_argument("--work-dir", default=DEFAULT_WORK_DIR, help="working directory (default: target/spring_parity)")
     return p.parse_args()
 
@@ -203,15 +203,14 @@ def run_unity_check(work_dir: Path) -> None:
     assert (work_dir / "unity" / "unity_tails.csv").exists(), "Unity did not write unity_tails.csv"
 
 
-def compare(work_dir: Path, max_rms: float | None) -> int:
+def compare(work_dir: Path, max_rms: float) -> int:
     """Run spring_tail_compare on engine vs Unity tails."""
     bin_path = repo_root() / "target" / "debug" / "spring_tail_compare"
     if not bin_path.exists():
         subprocess.run(["cargo", "build", "--bin", "spring_tail_compare"], cwd=repo_root(), check=True)
 
-    cmd = [str(bin_path), str(work_dir / "engine_tails.csv"), str(work_dir / "unity" / "unity_tails.csv")]
-    if max_rms is not None:
-        cmd += ["--max-rms", str(max_rms)]
+    cmd = [str(bin_path), str(work_dir / "engine_tails.csv"),
+           str(work_dir / "unity" / "unity_tails.csv"), "--max-rms", str(max_rms)]
 
     result = subprocess.run(cmd, cwd=repo_root())
     return result.returncode

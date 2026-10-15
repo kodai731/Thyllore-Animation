@@ -428,6 +428,7 @@ fn build_avatar_sidecar(
         materials: &materials,
         stats: &state.stats,
         submesh_roles: &state.submesh_roles,
+        hidden_triangles: &state.hidden_triangles,
     })
 }
 

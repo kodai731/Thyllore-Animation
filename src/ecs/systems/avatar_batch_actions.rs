@@ -2,14 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
-
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{DumpSpringTails, FitSpringParams};
 use crate::ecs::world::{Entity, World};
+use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 
 use super::avatar_export_systems::dump_morph_track_samples;
 use super::batch_run_systems::{unit_action_parse, BatchAction};
@@ -389,6 +389,64 @@ fn submesh_role_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     }
 }
 
+#[derive(Debug)]
+pub struct HideCoveredSkin {
+    params: HiddenMaskParams,
+}
+
+impl BatchAction for HideCoveredSkin {
+    fn name(&self) -> &'static str {
+        "hide_covered_skin"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::ComputeHiddenTriangles {
+            params: self.params.clone(),
+        });
+    }
+}
+
+const HIDE_COVERED_SKIN_USAGE: &str = "hide_covered_skin expects hide_covered_skin=<cover_distance>,<cone_angle_deg>,<ray_count>,<hidden_ratio>";
+
+fn hide_covered_skin_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("hide_covered_skin=")?;
+    let parts: Vec<&str> = spec.split(',').collect();
+    if parts.len() != 4 {
+        return Some(Err(anyhow!("{HIDE_COVERED_SKIN_USAGE}")));
+    }
+    let parsed = (
+        parts[0].trim().parse::<f32>().ok(),
+        parts[1].trim().parse::<f32>().ok(),
+        parts[2].trim().parse::<usize>().ok(),
+        parts[3].trim().parse::<f32>().ok(),
+    );
+
+    Some(match parsed {
+        (Some(cover_distance), Some(cone_angle_deg), Some(ray_count), Some(hidden_ratio)) => {
+            if cover_distance <= 0.0 {
+                return Some(Err(anyhow!("cover_distance must be > 0")));
+            }
+            if cone_angle_deg < 0.0 || cone_angle_deg > 90.0 {
+                return Some(Err(anyhow!("cone_angle_deg must be in range [0, 90]")));
+            }
+            if ray_count < 1 {
+                return Some(Err(anyhow!("ray_count must be >= 1")));
+            }
+            if hidden_ratio < 0.0 || hidden_ratio > 1.0 {
+                return Some(Err(anyhow!("hidden_ratio must be in range [0, 1]")));
+            }
+            Ok(Box::new(HideCoveredSkin {
+                params: HiddenMaskParams {
+                    cover_distance,
+                    cone_angle_deg,
+                    ray_count,
+                    hidden_ratio,
+                },
+            }))
+        }
+        _ => Err(anyhow!("{HIDE_COVERED_SKIN_USAGE}")),
+    })
+}
+
 crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
@@ -405,6 +463,7 @@ crate::batch_action!(
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
 crate::batch_action!("fit_spring_params", fit_spring_params_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
+crate::batch_action!("hide_covered_skin", hide_covered_skin_parse);
 
 #[cfg(test)]
 mod tests {
@@ -574,5 +633,29 @@ mod tests {
                 .expect("prefix matches")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn test_hide_covered_skin_parses_correct_format() {
+        let result = hide_covered_skin_parse("hide_covered_skin=0.5,45.0,8,0.5");
+        assert!(result.is_some());
+        let action: Box<dyn BatchAction> = result.unwrap().unwrap();
+        assert_eq!(action.name(), "hide_covered_skin");
+    }
+
+    #[test]
+    fn test_hide_covered_skin_rejects_out_of_range() {
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.0,45.0,8,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,91.0,8,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,45.0,0,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,45.0,8,1.5")
+            .expect("prefix matches")
+            .is_err());
     }
 }

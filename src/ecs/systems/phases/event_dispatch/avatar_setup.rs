@@ -1,4 +1,5 @@
 use crate::ecs::component::CapsuleFitParams;
+use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::vrchat::rank::Platform;
@@ -6,9 +7,9 @@ use thyllore_avatar_core::vrchat::rank::Platform;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
 use crate::ecs::systems::{
-    add_spring_chains_by_prefix, export_unity_avatar, fit_body_colliders, invalidate_humanoid_rig,
-    open_avatar_setup, save_humanoid_mapping, save_material_textures, set_avatar_rank_platform,
-    set_humanoid_role, set_material_texture, set_submesh_role,
+    add_spring_chains_by_prefix, compute_hidden_triangles, export_unity_avatar, fit_body_colliders,
+    invalidate_humanoid_rig, open_avatar_setup, save_humanoid_mapping, save_material_textures,
+    set_avatar_rank_platform, set_humanoid_role, set_material_texture, set_submesh_role,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -39,6 +40,9 @@ pub enum AvatarSetupEvent {
     SetSubmeshRole {
         key: SubmeshKey,
         role: SubmeshRole,
+    },
+    ComputeHiddenTriangles {
+        params: HiddenMaskParams,
     },
 }
 
@@ -76,6 +80,9 @@ impl UiCommand for AvatarSetupEvent {
             }
             AvatarSetupEvent::SaveMaterialTextures => save_material_textures(world),
             AvatarSetupEvent::SetSubmeshRole { key, role } => set_submesh_role(world, key, role),
+            AvatarSetupEvent::ComputeHiddenTriangles { params } => {
+                compute_hidden_triangles(world, assets, graphics, &params)
+            }
         }
     }
 }

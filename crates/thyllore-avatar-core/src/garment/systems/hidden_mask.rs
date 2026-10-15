@@ -1,6 +1,6 @@
 use cgmath::{InnerSpace, Vector3};
 
-use crate::garment::components::hidden_mask::HiddenMaskParams;
+use crate::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_math_core::TriangleBvh;
 
 fn cone_directions(normal: Vector3<f32>, cone_angle_deg: f32, count: usize) -> Vec<Vector3<f32>> {
@@ -67,6 +67,29 @@ pub fn find_hidden_body_triangles(triangles: &[[u32; 3]], hidden_vertices: &[boo
                 && hidden_vertices[tri[1] as usize]
                 && hidden_vertices[tri[2] as usize]
         })
+        .collect()
+}
+
+pub fn find_hidden_triangle_indices(
+    body: &MaskMesh,
+    garments: &MaskMesh,
+    params: &HiddenMaskParams,
+) -> Vec<u32> {
+    if garments.positions.is_empty() {
+        return Vec::new();
+    }
+    let garment_bvh = TriangleBvh::build(&garments.positions, &garments.triangles);
+    let hidden_vertices =
+        find_hidden_body_vertices(&body.positions, &body.normals, &garment_bvh, params);
+    body.triangles
+        .iter()
+        .enumerate()
+        .filter(|(_, tri)| {
+            hidden_vertices[tri[0] as usize]
+                && hidden_vertices[tri[1] as usize]
+                && hidden_vertices[tri[2] as usize]
+        })
+        .map(|(i, _)| i as u32)
         .collect()
 }
 
@@ -164,5 +187,53 @@ mod tests {
         assert!(!hidden_triangles[1], "triangle [0,2,3] vertex 3 not hidden");
         assert!(!hidden_triangles[2], "triangle [0,3,4] vertex 3 not hidden");
         assert!(hidden_triangles[3], "triangle [1,2,5] all hidden");
+    }
+
+    #[test]
+    fn test_find_hidden_triangle_indices_covered_and_not_covered() {
+        let body = MaskMesh {
+            positions: vec![
+                Vector3::new(-0.5, 0.0, -0.5),
+                Vector3::new(0.5, 0.0, -0.5),
+                Vector3::new(0.5, 0.0, 0.5),
+                Vector3::new(-0.5, 0.0, 0.5),
+            ],
+            normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+            triangles: vec![[0, 1, 2], [0, 2, 3]],
+        };
+        let params = HiddenMaskParams {
+            cover_distance: 0.1,
+            cone_angle_deg: 30.0,
+            ray_count: 5,
+            hidden_ratio: 0.6,
+        };
+        let garment_covering = MaskMesh {
+            positions: vec![
+                Vector3::new(-1.0, 0.05, -1.0),
+                Vector3::new(1.0, 0.05, -1.0),
+                Vector3::new(1.0, 0.05, 1.0),
+                Vector3::new(-1.0, 0.05, 1.0),
+            ],
+            normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+            triangles: vec![[0, 1, 2], [0, 2, 3]],
+        };
+        let hidden = find_hidden_triangle_indices(&body, &garment_covering, &params);
+        assert_eq!(hidden, vec![0, 1], "both body triangles should be hidden");
+
+        let garment_far = MaskMesh {
+            positions: vec![
+                Vector3::new(-1.0, 1.0, -1.0),
+                Vector3::new(1.0, 1.0, -1.0),
+                Vector3::new(1.0, 1.0, 1.0),
+                Vector3::new(-1.0, 1.0, 1.0),
+            ],
+            normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+            triangles: vec![[0, 1, 2], [0, 2, 3]],
+        };
+        let hidden = find_hidden_triangle_indices(&body, &garment_far, &params);
+        assert!(
+            hidden.is_empty(),
+            "no body triangles should be hidden when garment is far"
+        );
     }
 }

@@ -4,6 +4,7 @@ pub mod animation_debug_dump;
 mod auto_rig_systems;
 mod avatar_batch_actions;
 mod avatar_export_systems;
+mod avatar_hidden_mask_systems;
 mod avatar_setup_systems;
 mod avatar_submesh_role_systems;
 mod batch_run_systems;
@@ -92,6 +93,7 @@ pub use animation::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_systems::*;
 pub use avatar_export_systems::*;
+pub use avatar_hidden_mask_systems::*;
 pub use avatar_setup_systems::*;
 pub use avatar_submesh_role_systems::*;
 pub use batch_run_systems::*;

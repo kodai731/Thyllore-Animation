@@ -12,7 +12,18 @@ pub(crate) fn collect_submesh_keys(
     graphics: &GraphicsResources,
     nodes: &[NodeData],
 ) -> Vec<SubmeshKey> {
-    let mut keys: Vec<SubmeshKey> = assets
+    collect_submesh_meshes(assets, graphics, nodes)
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect()
+}
+
+pub(crate) fn collect_submesh_meshes(
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    nodes: &[NodeData],
+) -> Vec<(SubmeshKey, usize)> {
+    let mut pairs: Vec<(SubmeshKey, usize)> = assets
         .meshes
         .values()
         .map(|mesh_asset| {
@@ -21,12 +32,13 @@ pub(crate) fn collect_submesh_keys(
                 .and_then(|node_index| nodes.get(node_index))
                 .map(|node| node.name.as_str());
             let material_name = find_material_name(graphics, mesh_asset.graphics_mesh_index);
-            build_submesh_key(mesh_asset, node_name, material_name)
+            let key = build_submesh_key(mesh_asset, node_name, material_name);
+            (key, mesh_asset.graphics_mesh_index)
         })
         .collect();
-    keys.sort();
-    keys.dedup();
-    keys
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    pairs.dedup_by(|a, b| a.0 == b.0);
+    pairs
 }
 
 fn find_material_name(graphics: &GraphicsResources, graphics_mesh_index: usize) -> Option<&str> {

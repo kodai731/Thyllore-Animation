@@ -54,6 +54,16 @@ pub fn compute_hidden_triangles(
         .collect();
     let total: usize = hidden_triangles.values().map(Vec::len).sum();
 
+    let meshes: Vec<(usize, Vec<u32>)> = skin_submeshes
+        .iter()
+        .map(|(key, mesh_index)| {
+            (
+                *mesh_index,
+                hidden_triangles.get(key).cloned().unwrap_or_default(),
+            )
+        })
+        .collect();
+
     world.resource_mut::<AvatarSetupState>().hidden_triangles = hidden_triangles;
 
     msg_info!(
@@ -61,6 +71,10 @@ pub fn compute_hidden_triangles(
         total,
         skin_submeshes.len()
     );
+
+    world
+        .resource_mut::<crate::ecs::resource::OutputQueue>()
+        .push(crate::ecs::resource::OutputCommand::ApplyHiddenTriangles { meshes });
 }
 
 fn mesh_to_mask_mesh(vertex_data: &VertexData) -> MaskMesh {

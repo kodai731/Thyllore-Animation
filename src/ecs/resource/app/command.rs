@@ -96,4 +96,7 @@ pub enum OutputCommand {
     ExportModelGltf {
         path: PathBuf,
     },
+    ApplyHiddenTriangles {
+        meshes: Vec<(usize, Vec<u32>)>,
+    },
 }

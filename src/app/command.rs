@@ -5,6 +5,7 @@ use crate::ecs::resource::{
 };
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -202,5 +203,49 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+
+        OutputCommand::ApplyHiddenTriangles { meshes } => {
+            if let Err(e) = apply_hidden_triangles(app, meshes) {
+                msg_error!("Failed to apply hidden triangles: {:?}", e);
+            }
+        }
     }
+}
+
+unsafe fn apply_hidden_triangles(
+    app: &mut App,
+    meshes: Vec<(usize, Vec<u32>)>,
+) -> anyhow::Result<()> {
+    use thyllore_avatar_core::garment::systems::hidden_mask::order_visible_triangles_first;
+
+    app.rrdevice.device.device_wait_idle()?;
+    let pool = app
+        .resource::<crate::vulkanr::context::CommandState>()
+        .pool
+        .clone();
+
+    let mut total_hidden = 0u32;
+    for (mesh_index, hidden) in &meshes {
+        let mesh = &mut app.data.graphics_resources.meshes[*mesh_index];
+        let (ordered, visible_count) =
+            order_visible_triangles_first(&mesh.vertex_data.indices, hidden);
+        total_hidden += hidden.len() as u32;
+        mesh.index_buffer
+            .overwrite(&app.instance, &app.rrdevice, &pool, &ordered)?;
+        mesh.index_buffer.indices = visible_count;
+    }
+
+    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
+        &app.instance,
+        &app.rrdevice,
+        &mut app.data,
+        &pool,
+    )?;
+
+    msg_info!(
+        "Applied hidden triangles to {} meshes ({} triangles hidden)",
+        meshes.len(),
+        total_hidden
+    );
+    Ok(())
 }

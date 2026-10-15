@@ -145,7 +145,7 @@ def main() -> None:
     data = response["data"]
     if args.clip and args.pose is None:
         data = select_clip(data, args.clip)
-    if "samples" in data and not args.out:
+    if "samples" in data and not args.out and request.get("kind") == "timings":
         print_summary(summarize_samples(data["samples"]))
         return
 

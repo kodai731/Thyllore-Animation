@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
+
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
@@ -254,6 +256,48 @@ fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> 
     })
 }
 
+#[derive(Debug)]
+pub struct SubmeshRoleAction {
+    role: SubmeshRole,
+    mesh: String,
+    material: String,
+}
+
+impl BatchAction for SubmeshRoleAction {
+    fn name(&self) -> &'static str {
+        "submesh_role"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::SetSubmeshRole {
+            key: SubmeshKey {
+                mesh: self.mesh.clone(),
+                material: self.material.clone(),
+            },
+            role: self.role,
+        });
+    }
+}
+
+fn submesh_role_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("submesh_role=")?;
+    let (role_str, rest) = match spec.split_once(':') {
+        Some(parts) => parts,
+        None => return Some(Err(anyhow!("submesh_role expects role:mesh/material"))),
+    };
+    let (mesh, material) = match rest.rsplit_once('/') {
+        Some((m, mat)) => (m.to_string(), mat.to_string()),
+        None => (rest.to_string(), String::new()),
+    };
+    match serde_json::from_value::<SubmeshRole>(serde_json::Value::String(role_str.to_string())) {
+        Ok(role) => Some(Ok(Box::new(SubmeshRoleAction {
+            role,
+            mesh,
+            material,
+        }))),
+        Err(e) => Some(Err(anyhow!("unknown submesh role {:?}: {}", role_str, e))),
+    }
+}
+
 crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
@@ -268,6 +312,7 @@ crate::batch_action!(
     unit_action_parse::<DumpMorphTrackSamples>
 );
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
+crate::batch_action!("submesh_role", submesh_role_parse);
 
 #[cfg(test)]
 mod tests {
@@ -393,6 +438,29 @@ mod tests {
             .expect("prefix matches")
             .is_err());
         assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,-1")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_submesh_role_parses_correct_format() {
+        let action: Box<dyn BatchAction> = submesh_role_parse("submesh_role=hair:Body/Hair_mat")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(action.name(), "submesh_role");
+        assert_eq!(
+            format!("{:?}", action),
+            "SubmeshRoleAction { role: Hair, mesh: \"Body\", material: \"Hair_mat\" }"
+        );
+    }
+
+    #[test]
+    fn test_submesh_role_rejects_malformed_specs() {
+        assert!(submesh_role_parse("submesh_role=fur:Body/x")
+            .expect("prefix matches")
+            .is_err());
+        assert!(submesh_role_parse("submesh_role=skin")
             .expect("prefix matches")
             .is_err());
     }

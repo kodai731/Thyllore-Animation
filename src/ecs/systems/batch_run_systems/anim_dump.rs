@@ -12,8 +12,10 @@ use crate::ecs::component::{
     ScalarChannelDomain,
 };
 use crate::ecs::resource::{
-    AnimationType, ClipLibrary, HumanoidRigState, TimelineState, UiFocusState,
+    AnimationType, ClipLibrary, HierarchyDisplayMode, HierarchyState, HumanoidRigState,
+    TimelineState, UiFocusState,
 };
+use crate::ecs::systems::hierarchy_systems::query_hierarchy_tree;
 use crate::ecs::world::{Entity, World};
 
 #[derive(Serialize)]
@@ -114,6 +116,24 @@ struct UiJson {
 }
 
 #[derive(Serialize)]
+struct HierarchyRowJson {
+    entity: Entity,
+    name: String,
+    depth: usize,
+    selected: bool,
+}
+
+#[derive(Serialize)]
+struct HierarchyJson {
+    display_mode: String,
+    selected_entity: Option<Entity>,
+    selected_bone_id: Option<BoneId>,
+    expanded_bone_ids: Vec<BoneId>,
+    scroll_to_selected: bool,
+    rows: Vec<HierarchyRowJson>,
+}
+
+#[derive(Serialize)]
 struct AnimDumpJson {
     entities: Vec<EntityJson>,
     clips: Vec<ClipJson>,
@@ -121,6 +141,35 @@ struct AnimDumpJson {
     models: Vec<ModelJson>,
     ui: Option<UiJson>,
     curve_editor: serde_json::Value,
+    hierarchy: Option<HierarchyJson>,
+}
+
+fn hierarchy_dump(world: &World) -> Option<HierarchyJson> {
+    let state = world.get_resource::<HierarchyState>()?;
+    let display_mode = match state.display_mode {
+        HierarchyDisplayMode::Entities => "entities",
+        HierarchyDisplayMode::Bones => "bones",
+    };
+    let mut expanded_bone_ids: Vec<BoneId> = state.expanded_bone_ids.iter().copied().collect();
+    expanded_bone_ids.sort_unstable();
+    let rows = query_hierarchy_tree(world, &state)
+        .into_iter()
+        .map(|row| HierarchyRowJson {
+            entity: row.entity,
+            name: row.name,
+            depth: row.depth,
+            selected: row.selected,
+        })
+        .collect();
+
+    Some(HierarchyJson {
+        display_mode: display_mode.to_string(),
+        selected_entity: state.selected_entity,
+        selected_bone_id: state.selected_bone_id,
+        expanded_bone_ids,
+        scroll_to_selected: state.scroll_to_selected,
+        rows,
+    })
 }
 
 fn schedule_instances_json(world: &World, entity: Entity) -> Vec<ScheduleInstanceJson> {
@@ -330,6 +379,7 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
             focused_window: focus.focused_window.clone(),
         }),
         curve_editor: crate::ecs::systems::live_dump::curve_editor_json(world),
+        hierarchy: hierarchy_dump(world),
     };
     serde_json::to_value(&dump).expect("AnimDumpJson serialization")
 }

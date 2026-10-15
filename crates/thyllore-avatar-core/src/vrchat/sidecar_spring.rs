@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::humanoid::components::skeleton_input::BoneInput;
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, SpringBoneSetup, SpringColliderId, SpringCollisionMode, FITTED_BODY_GROUP_NAME,
+    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderId, SpringCollisionMode,
+    FITTED_BODY_GROUP_NAME,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -170,7 +171,7 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
         .chains
         .iter()
         .map(|chain| {
-            let joints: Vec<SidecarSpringJoint> = chain
+            let mut joints: Vec<SidecarSpringJoint> = chain
                 .joints
                 .iter()
                 .filter_map(|joint| {
@@ -189,6 +190,13 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
                     })
                 })
                 .collect();
+
+            if let Some(tail) = joints
+                .last()
+                .and_then(|last| build_tail_joint(chain, last, bones))
+            {
+                joints.push(tail);
+            }
 
             let center = chain
                 .center_bone_id
@@ -214,6 +222,29 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
             }
         })
         .collect()
+}
+
+fn find_first_child<'a>(bones: &'a [BoneInput], parent: usize) -> Option<&'a BoneInput> {
+    bones
+        .iter()
+        .find(|b| b.parent.map(|p| p == parent).unwrap_or(false))
+}
+
+fn build_tail_joint(
+    chain: &SpringChain,
+    last: &SidecarSpringJoint,
+    bones: &[BoneInput],
+) -> Option<SidecarSpringJoint> {
+    let chain_last = chain.joints.last()?;
+    let last_bone_id = chain_last.bone_id as usize;
+    if bones.get(last_bone_id).is_none() {
+        return None;
+    }
+    let child = find_first_child(bones, last_bone_id)?;
+    Some(SidecarSpringJoint {
+        bone: child.name.clone(),
+        ..last.clone()
+    })
 }
 
 #[cfg(test)]
@@ -434,5 +465,88 @@ mod tests {
 
         assert_eq!(sidecar.collider_groups.len(), 1);
         assert_eq!(sidecar.collider_groups[0].colliders, vec!["Spine#1"]);
+    }
+
+    #[test]
+    fn test_tail_joint_appended_when_child_exists() {
+        let bones = make_bones(&["Hips", "Spine", "Tail1", "Tail2", "TailTip"]);
+
+        let mut setup = SpringBoneSetup::default();
+
+        setup.chains.push(SpringChain {
+            id: 0,
+            name: "Tail".to_string(),
+            joints: vec![
+                SpringJointParam {
+                    bone_id: 1,
+                    stiffness: 0.8,
+                    drag_force: 0.5,
+                    gravity_power: 1.0,
+                    gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                    hit_radius: 0.02,
+                },
+                SpringJointParam {
+                    bone_id: 2,
+                    stiffness: 0.6,
+                    drag_force: 0.4,
+                    gravity_power: 0.5,
+                    gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                    hit_radius: 0.01,
+                },
+            ],
+            collider_group_ids: vec![],
+            center_bone_id: None,
+            enabled: true,
+        });
+
+        let sidecar = build_sidecar_spring(&setup, &bones);
+
+        assert_eq!(sidecar.chains.len(), 1);
+        let chain = &sidecar.chains[0];
+        assert_eq!(chain.joints.len(), 3);
+        assert_eq!(chain.joints[0].bone, "Spine");
+        assert_eq!(chain.joints[1].bone, "Tail1");
+        assert_eq!(chain.joints[2].bone, "Tail2");
+    }
+
+    #[test]
+    fn test_no_tail_joint_when_no_child() {
+        let bones = make_bones(&["Hips", "Spine", "Tail1"]);
+
+        let mut setup = SpringBoneSetup::default();
+
+        setup.chains.push(SpringChain {
+            id: 0,
+            name: "Tail".to_string(),
+            joints: vec![
+                SpringJointParam {
+                    bone_id: 1,
+                    stiffness: 0.8,
+                    drag_force: 0.5,
+                    gravity_power: 1.0,
+                    gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                    hit_radius: 0.02,
+                },
+                SpringJointParam {
+                    bone_id: 2,
+                    stiffness: 0.6,
+                    drag_force: 0.4,
+                    gravity_power: 0.5,
+                    gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                    hit_radius: 0.01,
+                },
+            ],
+            collider_group_ids: vec![],
+            center_bone_id: None,
+            enabled: true,
+        });
+
+        let sidecar = build_sidecar_spring(&setup, &bones);
+
+        assert_eq!(sidecar.chains.len(), 1);
+        let chain = &sidecar.chains[0];
+        assert_eq!(chain.joints.len(), 2);
+        assert_eq!(chain.joints[0].bone, "Spine");
+        assert_eq!(chain.joints[1].bone, "Tail1");
     }
 }

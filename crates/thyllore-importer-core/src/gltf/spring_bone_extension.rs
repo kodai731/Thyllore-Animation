@@ -175,6 +175,7 @@ fn convert_springs(
         let joints: Vec<SpringJointParam> = vs
             .joints
             .iter()
+            .take(vs.joints.len().saturating_sub(1))
             .filter_map(|vj| {
                 let bone_id = resolve_bone_id(vj.node);
                 if bone_id.is_none() {
@@ -219,4 +220,54 @@ fn convert_springs(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_three_joint_spring_chain_has_two_joints() {
+        let node_to_bone: [u32; 4] = [0, 1, 2, 3];
+        let resolve = |node: u32| -> Option<u32> { node_to_bone.get(node as usize).copied() };
+
+        let springs: [VrmcSpring; 1] = [VrmcSpring {
+            name: Some("test".to_string()),
+            joints: vec![
+                VrmcJoint {
+                    node: 0,
+                    hit_radius: Some(0.01),
+                    stiffness: Some(0.8),
+                    gravity_power: Some(0.0),
+                    gravity_dir: None,
+                    drag_force: Some(0.5),
+                },
+                VrmcJoint {
+                    node: 1,
+                    hit_radius: Some(0.01),
+                    stiffness: Some(0.6),
+                    gravity_power: Some(0.0),
+                    gravity_dir: None,
+                    drag_force: Some(0.5),
+                },
+                VrmcJoint {
+                    node: 2,
+                    hit_radius: Some(0.01),
+                    stiffness: Some(0.4),
+                    gravity_power: Some(0.0),
+                    gravity_dir: None,
+                    drag_force: Some(0.5),
+                },
+            ],
+            collider_groups: None,
+            center: None,
+        }];
+
+        let chains = convert_springs(&springs, &resolve);
+
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].joints.len(), 2);
+        assert_eq!(chains[0].joints[0].bone_id, 0);
+        assert_eq!(chains[0].joints[1].bone_id, 1);
+    }
 }

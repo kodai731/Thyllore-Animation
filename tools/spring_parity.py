@@ -1,14 +1,6 @@
 """Spring-bone parity: run engine and Unity spring simulation on the same model, compare tails.
 
-For each run this script:
-  1. Builds a rigged FBX via Blender (synthetic_avatar.fbx with sway animation + Left_braid bones)
-  2. Runs the engine to add spring chains, export avatar sidecar, and dump spring tails (engine_tails.csv)
-  3. Sets up a Unity project with the FBX + sidecar and runs SpringParityCheck (unity_tails.csv)
-  4. Compares engine vs Unity tail trajectories via spring_tail_compare
-
     python3 tools/spring_parity.py --dood [--max-rms <float>] [--work-dir <path>]
-
-Exit code follows spring_tail_compare: 0 = within threshold, 1 = mismatch or missing binary.
 """
 
 from __future__ import annotations
@@ -97,11 +89,39 @@ def _unity_docker_args(work_dir: Path, env: dict[str, str]) -> list[str]:
         "docker", "run", "--rm",
         "--user", f"{os.getuid()}:{os.getgid()}",
         "-e", f"HOME={container_home}",
-        "-v", f"{work_dir}:/work",
+        "-v", f"{work_dir}/unity:/work",
         "-v", f"{license_dir}:{container_home}/.config/unity3d/Unity/licenses:ro",
         "-v", "/etc/machine-id:/etc/machine-id:ro",
-        "-w", "/work/project",
+        "-w", "/work",
     ]
+
+
+def ensure_unity_dirs(work_dir: Path) -> None:
+    """Create directories that docker bind-mounts need before the first container run."""
+    (work_dir / "unity" / "project").mkdir(parents=True, exist_ok=True)
+    (work_dir / "unity" / "home" / ".config" / "unity3d" / "Unity").mkdir(parents=True, exist_ok=True)
+    (work_dir / "unity" / "home" / ".local" / "share").mkdir(parents=True, exist_ok=True)
+
+
+def install_vrchat_sdk(work_dir: Path) -> None:
+    """Install com.vrchat.avatars inside the Unity container when Packages/com.vrchat.avatars is missing."""
+    project = work_dir / "unity" / "project"
+    if (project / "Packages" / "com.vrchat.avatars").exists():
+        return
+    cmd = _unity_docker_args(work_dir, {}) + [
+        "--entrypoint", "bash", UNITY_IMAGE_TAG, "-c",
+        "cd /work/project && vrc-get install com.vrchat.avatars --yes",
+    ]
+    subprocess.run(cmd, check=True)
+
+
+def add_univrm_packages(manifest_path: Path) -> None:
+    """Add UniVRM entries to manifest.json if missing."""
+    data = json.loads(manifest_path.read_text())
+    for name, url in UNIVRM_MANIFEST_ENTRIES.items():
+        if name not in data.get("dependencies", {}):
+            data.setdefault("dependencies", {})[name] = url
+    manifest_path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def prepare_unity_project(work_dir: Path, fbx_path: Path) -> None:
@@ -113,29 +133,14 @@ def prepare_unity_project(work_dir: Path, fbx_path: Path) -> None:
             ["docker", "build", "-t", UNITY_IMAGE_TAG, str(docker_dir)],
             cwd=repo_root(), check=True,
         )
-        (work_dir / "unity" / "home").mkdir(parents=True, exist_ok=True)
         cmd = _unity_docker_args(work_dir, {}) + [UNITY_IMAGE_TAG, "unity-editor",
                                                    "-batchmode", "-nographics", "-quit",
                                                    "-createProject", "/work/project",
                                                    "-logFile", "/work/create.log"]
         subprocess.run(cmd, check=True)
 
-    manifest = project / "Packages" / "manifest.json"
-    pkg = json.loads(manifest.read_text())
-    for name, url in UNIVRM_MANIFEST_ENTRIES.items():
-        if name not in pkg.get("dependencies", {}):
-            subprocess.run(
-                ["vrc-get", "install", "com.vrchat.avatars", "--yes"],
-                cwd=project, check=True,
-            )
-            break
-
-    manifest = json.loads(manifest.read_text())
-    for name, url in UNIVRM_MANIFEST_ENTRIES.items():
-        if name not in manifest.get("dependencies", {}):
-            manifest.setdefault("dependencies", {})[name] = url
-    manifest["dependencies"]["com.unity.test-framework"] = "1.1.33"
-    manifest.write_text(json.dumps(manifest, indent=2) + "\n")
+    install_vrchat_sdk(work_dir)
+    add_univrm_packages(project / "Packages" / "manifest.json")
 
     sync_sh = repo_root() / "unity" / "sync_package.sh"
     subprocess.run(["bash", str(sync_sh), str(work_dir / "unity")], cwd=repo_root(), check=True)
@@ -160,13 +165,13 @@ def prepare_unity_project(work_dir: Path, fbx_path: Path) -> None:
     shutil.copy2(fbx_path, check_dir / fbx_path.name)
 
     sidecar_src = fbx_path.parent / (fbx_path.stem + ".avatar.json")
-    sidecar_dst = work_dir / "sidecar.json"
+    sidecar_dst = work_dir / "unity" / "sidecar.json"
     shutil.copy2(sidecar_src, sidecar_dst)
 
 
 def run_unity_check(work_dir: Path) -> None:
     """Run Unity SpringParityCheck and verify it succeeds."""
-    log_path = work_dir / "parity.log"
+    log_path = work_dir / "unity" / "parity.log"
 
     cmd = _unity_docker_args(work_dir, {}) + [
         UNITY_IMAGE_TAG, "unity-editor",
@@ -191,7 +196,7 @@ def run_unity_check(work_dir: Path) -> None:
                 print(line)
         raise SystemExit(f"Unity SpringParityCheck failed (exit {result.returncode})")
 
-    assert (work_dir / "unity_tails.csv").exists(), "Unity did not write unity_tails.csv"
+    assert (work_dir / "unity" / "unity_tails.csv").exists(), "Unity did not write unity_tails.csv"
 
 
 def compare(work_dir: Path, max_rms: float | None) -> int:
@@ -200,7 +205,7 @@ def compare(work_dir: Path, max_rms: float | None) -> int:
     if not bin_path.exists():
         subprocess.run(["cargo", "build", "--bin", "spring_tail_compare"], cwd=repo_root(), check=True)
 
-    cmd = [str(bin_path), str(work_dir / "engine_tails.csv"), str(work_dir / "unity_tails.csv")]
+    cmd = [str(bin_path), str(work_dir / "engine_tails.csv"), str(work_dir / "unity" / "unity_tails.csv")]
     if max_rms is not None:
         cmd += ["--max-rms", str(max_rms)]
 
@@ -215,6 +220,7 @@ def main() -> None:
 
     fbx_path = build_rig(work_dir)
     run_engine(work_dir, fbx_path, args.dood)
+    ensure_unity_dirs(work_dir)
     prepare_unity_project(work_dir, fbx_path)
     run_unity_check(work_dir)
     sys.exit(compare(work_dir, args.max_rms))

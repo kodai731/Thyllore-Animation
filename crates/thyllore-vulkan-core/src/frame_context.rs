@@ -7,4 +7,5 @@ pub struct FrameRenderContext<'a> {
     pub buffers: &'a GpuBufferRegistry,
     pub pipelines: &'a PipelineStorage,
     pub image_index: usize,
+    pub frame_slot: usize,
 }

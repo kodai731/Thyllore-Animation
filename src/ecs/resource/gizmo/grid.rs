@@ -1,7 +1,7 @@
-use crate::ecs::component::{LineMesh, RenderInfo};
+use crate::ecs::component::{RenderInfo, StaticLineMesh};
 
 #[derive(Clone, Debug, Default)]
 pub struct GridGizmoData {
-    pub mesh: LineMesh,
+    pub mesh: StaticLineMesh,
     pub render_info: RenderInfo,
 }

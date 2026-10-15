@@ -1,14 +1,10 @@
 use anyhow::Result;
 
-use cgmath::Matrix4;
-
-use crate::animation::SkeletonId;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{AnimationType, UpdatePhaseTimings};
+use crate::ecs::resource::UpdatePhaseTimings;
 use crate::ecs::systems::phases::{
     run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase, run_input_phase,
-    run_onion_skin_phase, run_render_prep_phase, run_timeline_phase, run_transform_propagate_phase,
-    run_view_phase_ecs, run_view_phase_gpu,
+    run_onion_skin_phase, run_render_prep_phase, run_timeline_phase, run_transform_phase_ecs,
 };
 use crate::ecs::FrameContext;
 
@@ -17,10 +13,9 @@ pub enum FramePhase {
     EventDispatch,
     First,
     Input,
-    View,
+    Transform,
     Timeline,
     Animation,
-    TransformPropagate,
     OnionSkin,
     RenderPrep,
     Last,
@@ -32,10 +27,9 @@ impl FramePhase {
             Self::EventDispatch => "event_dispatch",
             Self::First => "first",
             Self::Input => "input",
-            Self::View => "view",
+            Self::Transform => "transform",
             Self::Timeline => "timeline",
             Self::Animation => "animation",
-            Self::TransformPropagate => "transform_propagate",
             Self::OnionSkin => "onion_skin",
             Self::RenderPrep => "render_prep",
             Self::Last => "last",
@@ -47,14 +41,13 @@ impl FramePhase {
     }
 }
 
-pub const FRAME_SCHEDULE: [FramePhase; 10] = [
+pub const FRAME_SCHEDULE: [FramePhase; 9] = [
     FramePhase::EventDispatch,
     FramePhase::First,
     FramePhase::Input,
-    FramePhase::View,
+    FramePhase::Transform,
     FramePhase::Timeline,
     FramePhase::Animation,
-    FramePhase::TransformPropagate,
     FramePhase::OnionSkin,
     FramePhase::RenderPrep,
     FramePhase::Last,
@@ -69,14 +62,12 @@ pub fn update_phases() -> impl Iterator<Item = FramePhase> {
 
 struct Carry {
     updated_meshes: Vec<usize>,
-    bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
 }
 
 impl Carry {
     fn new() -> Self {
         Self {
             updated_meshes: Vec::new(),
-            bone_transforms: None,
         }
     }
 }
@@ -115,7 +106,7 @@ unsafe fn run_update_phase(
             };
             run_input_phase(&mut ecs_ctx)?;
         }
-        FramePhase::View => {
+        FramePhase::Transform => {
             let mut ecs_ctx = EcsContext {
                 time: ctx.time,
                 delta_time: ctx.delta_time,
@@ -124,7 +115,7 @@ unsafe fn run_update_phase(
                 world: ctx.world,
                 assets: ctx.assets,
             };
-            run_view_phase_ecs(&mut ecs_ctx);
+            run_transform_phase_ecs(&mut ecs_ctx);
         }
         FramePhase::Timeline => {
             run_timeline_phase(ctx);
@@ -133,16 +124,11 @@ unsafe fn run_update_phase(
             let animation_updates = run_animation_phase_ecs(ctx);
             run_animation_phase_gpu(ctx, &animation_updates)?;
             carry.updated_meshes = animation_updates.updated_meshes;
-            carry.bone_transforms = animation_updates.bone_transforms;
-        }
-        FramePhase::TransformPropagate => {
-            run_transform_propagate_phase(ctx, carry.bone_transforms.take());
         }
         FramePhase::OnionSkin => {
             run_onion_skin_phase(ctx, &carry.updated_meshes)?;
         }
         FramePhase::RenderPrep => {
-            run_view_phase_gpu(ctx)?;
             run_render_prep_phase(ctx)?;
         }
         FramePhase::EventDispatch | FramePhase::Last => {
@@ -167,17 +153,5 @@ mod tests {
         let update: Vec<FramePhase> = update_phases().collect();
         assert_eq!(update, FRAME_SCHEDULE[1..FRAME_SCHEDULE.len() - 1]);
         assert!(update.iter().all(|phase| phase.runs_in_update()));
-    }
-
-    #[test]
-    fn transform_propagate_runs_right_after_animation() {
-        let animation_index = FRAME_SCHEDULE
-            .iter()
-            .position(|phase| *phase == FramePhase::Animation)
-            .unwrap();
-        assert_eq!(
-            FRAME_SCHEDULE[animation_index + 1],
-            FramePhase::TransformPropagate
-        );
     }
 }

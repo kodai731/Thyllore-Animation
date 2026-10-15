@@ -1,7 +1,9 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::{BufferMemoryType, DistanceAttenuation, LineMesh, MeshId, ProjectionData};
+use crate::{
+    BufferMemoryType, DistanceAttenuation, LineMesh, MeshId, ProjectionData, StaticLineMesh,
+};
 
 pub trait RenderBackend {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()>;
@@ -10,16 +12,13 @@ pub trait RenderBackend {
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()>;
 
-    unsafe fn create_gizmo_buffers(
+    unsafe fn create_static_line_buffers(
         &mut self,
-        mesh: &mut LineMesh,
-        frame_slot: usize,
+        mesh: &mut StaticLineMesh,
         memory_type: BufferMemoryType,
     ) -> Result<()>;
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()>;
-
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh);
+    unsafe fn destroy_static_line_buffers(&mut self, mesh: &mut StaticLineMesh);
 
     unsafe fn update_or_create_line_buffers(
         &mut self,

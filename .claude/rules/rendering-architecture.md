@@ -83,6 +83,14 @@ Descriptor sets that read a transient image exist once per frame slot (`MAX_FRAM
 `src/app/init/instance.rs`). Never update a single descriptor set that a pending command buffer may still
 bind; either keep one set per frame slot or wait idle first (resize path).
 
+CPU-written meshes follow the same rule. A `DynamicMesh` (`thyllore-render-core` `mesh.rs`) keeps one vertex
+and index buffer per frame slot: a system writes `handles[frame_slot]` and every draw reads
+`handles[frame_slot]` through `MeshBuffers` and `FrameRenderContext.frame_slot`, so the slot the GPU may
+still be reading is never the one being written, whether the mesh is rewritten every frame (bone gizmos)
+or only when its content changes (the light gizmo, which then uploads once per slot). A mesh written once
+at creation is a `StaticMesh` with a single buffer (grid, grid gizmo, billboard); a mesh never records
+which slot it last wrote.
+
 ## Pass order (`src/app/command_recording.rs`)
 
 ```

@@ -6,7 +6,8 @@ use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
-    create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
+    create_grid_mesh, create_light_gizmo, gizmo_create_buffers_for_every_slot,
+    gizmo_create_static_buffers,
 };
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
@@ -682,10 +683,9 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
+            gizmo_create_static_buffers(
                 &mut gizmo_data.mesh,
                 &mut backend,
-                0,
                 crate::render::BufferMemoryType::DeviceLocal,
             )
             .expect("Failed to create gizmo buffers");
@@ -704,13 +704,8 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
-                &mut light_gizmo_data.mesh,
-                &mut backend,
-                0,
-                crate::render::BufferMemoryType::HostVisible,
-            )
-            .expect("Failed to create light gizmo buffers");
+            gizmo_create_buffers_for_every_slot(&mut light_gizmo_data.mesh, &mut backend)
+                .expect("Failed to create light gizmo buffers");
         }
 
         Self::setup_bone_gizmo_resources(pipeline_ids, data);
@@ -991,16 +986,15 @@ impl App {
         let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
-        grid_mesh.vertex_buffer_handles[0] = data.buffer_registry.create_vertex_buffer(
+        grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             instance,
             rrdevice,
             rrcommand_pool,
             &grid_mesh.vertices,
             crate::render::BufferMemoryType::DeviceLocal,
         )?;
-        grid_mesh.last_written_slot = 0;
 
-        grid_mesh.index_buffer_handles[0] = data.buffer_registry.create_index_buffer(
+        grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
             instance,
             rrdevice,
             rrcommand_pool,

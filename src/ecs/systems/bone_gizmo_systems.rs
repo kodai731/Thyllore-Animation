@@ -4,7 +4,9 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
 use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
+use crate::ecs::resource::gizmo::{
+    BoneGizmoData, BoneSelectionState, ConstraintGizmoData, SpringBoneGizmoData,
+};
 use crate::ecs::resource::MeshAssets;
 use crate::ecs::world::World;
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
@@ -1859,10 +1861,8 @@ pub fn bone_gizmo_reset_for_loaded_model(
     bone_gizmo.wire_mesh.indices.clear();
 
     let Some(skeleton_asset) = assets.skeletons.values().next() else {
-        bone_gizmo.visible = false;
-        bone_gizmo.cached_skeleton_id = None;
-        bone_gizmo.cached_global_transforms.clear();
-        bone_gizmo.bone_local_offsets.clear();
+        drop(bone_gizmo);
+        skeleton_gizmos_clear(world);
         return;
     };
 
@@ -1873,6 +1873,33 @@ pub fn bone_gizmo_reset_for_loaded_model(
     bone_gizmo.mesh_scale = bone_gizmo_mesh_scale(loaded.load_result);
     bone_gizmo.bone_local_offsets = compute_bone_local_offsets(skeleton, &rest_globals);
     bone_gizmo.cached_global_transforms = rest_globals;
+}
+
+pub fn skeleton_gizmos_clear(world: &mut World) {
+    {
+        let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
+        bone_gizmo.visible = false;
+        bone_gizmo.cached_skeleton_id = None;
+        bone_gizmo.cached_global_transforms.clear();
+        bone_gizmo.bone_local_offsets.clear();
+        bone_gizmo.stick_mesh.vertices.clear();
+        bone_gizmo.stick_mesh.indices.clear();
+        bone_gizmo.solid_mesh.vertices.clear();
+        bone_gizmo.solid_mesh.indices.clear();
+        bone_gizmo.wire_mesh.vertices.clear();
+        bone_gizmo.wire_mesh.indices.clear();
+    }
+
+    if let Some(mut spring_gizmo) = world.get_resource_mut::<SpringBoneGizmoData>() {
+        spring_gizmo.wire_mesh.vertices.clear();
+        spring_gizmo.wire_mesh.indices.clear();
+    }
+
+    if let Some(mut constraint_gizmo) = world.get_resource_mut::<ConstraintGizmoData>() {
+        constraint_gizmo.visible = false;
+        constraint_gizmo.wire_mesh.vertices.clear();
+        constraint_gizmo.wire_mesh.indices.clear();
+    }
 }
 
 fn bone_gizmo_mesh_scale(load_result: &ModelLoadResult) -> f32 {

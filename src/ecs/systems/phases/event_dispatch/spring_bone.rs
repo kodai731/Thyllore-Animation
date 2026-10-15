@@ -166,7 +166,7 @@ struct SpringBakeInputs {
 
 fn find_spring_bake_inputs(world: &World, assets: &AssetStorage) -> Option<SpringBakeInputs> {
     use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
-    use crate::ecs::resource::TimelineState;
+    use crate::ecs::resource::{BakedHumanoidClips, TimelineState};
 
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => skel_asset.skeleton.clone(),
@@ -202,24 +202,61 @@ fn find_spring_bake_inputs(world: &World, assets: &AssetStorage) -> Option<Sprin
     drop(timeline_state);
 
     let clip_library = world.resource::<ClipLibrary>();
-    let (anim_clip, source_editable) = match source_id.and_then(|id| clip_library.get(id)) {
-        Some(editable) => (
-            crate::animation::editable::clip_to_animation(editable),
-            editable.clone(),
-        ),
+    let source_editable = match source_id.and_then(|id| clip_library.get(id)) {
+        Some(editable) => editable.clone(),
         None => {
             drop(clip_library);
             msg_warn!("Spring bone bake failed: no current clip");
             return None;
         }
     };
+
+    let baked = match world.get_resource::<BakedHumanoidClips>() {
+        Some(b) => b,
+        None => {
+            drop(clip_library);
+            msg_warn!("Spring bone bake failed: no BakedHumanoidClips resource");
+            return None;
+        }
+    };
+
+    let source_id = match source_id {
+        Some(id) => id,
+        None => {
+            drop(clip_library);
+            msg_warn!("Spring bone bake failed: no current clip id");
+            return None;
+        }
+    };
+
+    let asset_id = match crate::ecs::systems::animation::collect::resolve_playable_asset(
+        source_id,
+        entity,
+        &clip_library,
+        &baked,
+    ) {
+        Some(id) => id,
+        None => {
+            drop(clip_library);
+            msg_warn!("Spring bone bake failed: no playable asset for source");
+            return None;
+        }
+    };
     drop(clip_library);
+
+    let anim_clip = match assets.animation_clips.get(&asset_id) {
+        Some(entry) => entry.clip.clone(),
+        None => {
+            msg_warn!("Spring bone bake failed: animation clip asset not found");
+            return None;
+        }
+    };
 
     Some(SpringBakeInputs {
         skeleton,
         setup,
         constraints,
-        source_id,
+        source_id: Some(source_id),
         looping,
         anim_clip,
         source_editable,

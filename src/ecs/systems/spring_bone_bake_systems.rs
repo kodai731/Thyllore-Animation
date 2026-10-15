@@ -1,5 +1,5 @@
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
-use crate::animation::spring_bone::{SpringCollisionMode, SpringTailSample};
+use crate::animation::spring_bone::SpringTailSample;
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::math::quaternion_to_euler_degrees;
@@ -272,6 +272,7 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::spring_bone::SpringCollisionMode;
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
     use cgmath::{Matrix4, Vector3};

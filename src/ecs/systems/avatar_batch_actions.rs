@@ -199,6 +199,12 @@ fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
             parts[1]
         )));
     };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "dump_spring_tails: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
     Some(Ok(Box::new(DumpSpringTailsAction { path, sample_rate })))
 }
 
@@ -381,6 +387,12 @@ mod tests {
             .expect("prefix matches")
             .is_err());
         assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,abc")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,0")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,-1")
             .expect("prefix matches")
             .is_err());
     }

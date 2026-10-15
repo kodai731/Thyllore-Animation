@@ -2,18 +2,26 @@ use thyllore_avatar_core::garment::components::submesh_role::{
     merge_guessed_roles, SubmeshKey, SubmeshRole, SubmeshRoleEntry, SubmeshRoleSource,
 };
 
-use crate::asset::AssetStorage;
+use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::MaterialId;
+use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
-pub(crate) fn collect_submesh_keys(assets: &AssetStorage) -> Vec<SubmeshKey> {
+pub(crate) fn collect_submesh_keys(
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    nodes: &[NodeData],
+) -> Vec<SubmeshKey> {
     let mut keys: Vec<SubmeshKey> = assets
         .meshes
         .values()
-        .map(|mesh| SubmeshKey {
-            mesh: mesh.name.clone(),
-            material: find_material_name(assets, mesh.material_id),
+        .map(|mesh_asset| {
+            let node_name = mesh_asset
+                .node_index
+                .and_then(|node_index| nodes.get(node_index))
+                .map(|node| node.name.as_str());
+            let material_name = find_material_name(graphics, mesh_asset.graphics_mesh_index);
+            build_submesh_key(mesh_asset, node_name, material_name)
         })
         .collect();
     keys.sort();
@@ -21,20 +29,32 @@ pub(crate) fn collect_submesh_keys(assets: &AssetStorage) -> Vec<SubmeshKey> {
     keys
 }
 
-fn find_material_name(assets: &AssetStorage, material_id: Option<MaterialId>) -> String {
-    material_id
-        .and_then(|id| {
-            assets
-                .materials
-                .values()
-                .find(|material| material.material_id == id)
-        })
-        .map(|material| material.name.clone())
-        .unwrap_or_default()
+fn find_material_name(graphics: &GraphicsResources, graphics_mesh_index: usize) -> Option<&str> {
+    let material_id = graphics.mesh_material_ids.get(graphics_mesh_index)?;
+    graphics
+        .materials
+        .get(*material_id)
+        .map(|material| material.name.as_str())
 }
 
-pub fn refresh_submesh_roles(state: &mut AvatarSetupState, assets: &AssetStorage) {
-    let keys = collect_submesh_keys(assets);
+fn build_submesh_key(
+    mesh_asset: &MeshAsset,
+    node_name: Option<&str>,
+    material_name: Option<&str>,
+) -> SubmeshKey {
+    SubmeshKey {
+        mesh: node_name.unwrap_or(&mesh_asset.name).to_string(),
+        material: material_name.unwrap_or_default().to_string(),
+    }
+}
+
+pub fn refresh_submesh_roles(
+    state: &mut AvatarSetupState,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    nodes: &[NodeData],
+) {
+    let keys = collect_submesh_keys(assets, graphics, nodes);
     state.submesh_roles = merge_guessed_roles(&state.submesh_roles, &keys);
 }
 
@@ -57,25 +77,18 @@ pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::{MaterialAsset, MeshAsset};
 
-    fn add_submesh(assets: &mut AssetStorage, mesh: &str, material: &str, material_id: MaterialId) {
-        assets.add_material(MaterialAsset {
+    fn make_mesh_asset(name: &str) -> MeshAsset {
+        MeshAsset {
             id: 0,
-            name: material.to_string(),
-            material_id,
-            properties: Default::default(),
-        });
-        assets.add_mesh(MeshAsset {
-            id: 0,
-            name: mesh.to_string(),
+            name: name.to_string(),
             graphics_mesh_index: 0,
             object_index: 0,
-            material_id: Some(material_id),
+            material_id: None,
             skeleton_id: None,
             node_index: None,
             render_to_gbuffer: true,
-        });
+        }
     }
 
     fn key(mesh: &str, material: &str) -> SubmeshKey {
@@ -86,32 +99,58 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_submesh_keys_splits_same_mesh_by_material() {
-        let mut assets = AssetStorage::default();
-        add_submesh(&mut assets, "Body", "Skin", 1);
-        add_submesh(&mut assets, "Body", "Shirt", 2);
+    fn test_build_submesh_key_uses_node_and_material_names() {
+        let mesh_asset = make_mesh_asset("test_humanoid_01");
 
-        let keys = collect_submesh_keys(&assets);
+        let submesh_key = build_submesh_key(&mesh_asset, Some("Body"), Some("Skin"));
 
-        assert_eq!(keys, vec![key("Body", "Shirt"), key("Body", "Skin")]);
+        assert_eq!(submesh_key, key("Body", "Skin"));
+    }
+
+    #[test]
+    fn test_build_submesh_key_falls_back_to_mesh_asset_name_without_node() {
+        let mesh_asset = make_mesh_asset("test_humanoid_01");
+
+        let submesh_key = build_submesh_key(&mesh_asset, None, Some("Skin"));
+
+        assert_eq!(submesh_key, key("test_humanoid_01", "Skin"));
+    }
+
+    #[test]
+    fn test_build_submesh_key_leaves_material_empty_without_material() {
+        let mesh_asset = make_mesh_asset("test_humanoid_01");
+
+        let submesh_key = build_submesh_key(&mesh_asset, Some("Body"), None);
+
+        assert_eq!(submesh_key, key("Body", ""));
+    }
+
+    #[test]
+    fn test_build_submesh_key_without_node_and_material() {
+        let mesh_asset = make_mesh_asset("test_humanoid_01");
+
+        let submesh_key = build_submesh_key(&mesh_asset, None, None);
+
+        assert_eq!(submesh_key, key("test_humanoid_01", ""));
     }
 
     #[test]
     fn test_refresh_submesh_roles_keeps_user_choice() {
         let mut assets = AssetStorage::default();
-        add_submesh(&mut assets, "Body", "Skin", 1);
-        add_submesh(&mut assets, "Body", "Shirt", 2);
+        assets.add_mesh(make_mesh_asset("Body"));
+        assets.add_mesh(make_mesh_asset("Hair"));
+        let graphics = GraphicsResources::default();
         let mut state = AvatarSetupState::default();
-        refresh_submesh_roles(&mut state, &assets);
+        refresh_submesh_roles(&mut state, &assets, &graphics, &[]);
 
         let user_entry = SubmeshRoleEntry {
             role: SubmeshRole::Accessory,
             source: SubmeshRoleSource::User,
         };
-        state.submesh_roles.insert(key("Body", "Skin"), user_entry);
-        refresh_submesh_roles(&mut state, &assets);
+        state.submesh_roles.insert(key("Body", ""), user_entry);
+        refresh_submesh_roles(&mut state, &assets, &graphics, &[]);
 
         assert_eq!(state.submesh_roles.len(), 2);
-        assert_eq!(state.submesh_roles[&key("Body", "Skin")], user_entry);
+        assert_eq!(state.submesh_roles[&key("Body", "")], user_entry);
     }
 }

@@ -3,6 +3,7 @@ use std::path::Path;
 
 use cgmath::Matrix4;
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
+use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
@@ -31,7 +32,7 @@ use crate::animation::{BoneId, Skeleton, SkinData};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
-    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
+    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState, NodeAssets,
 };
 use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
 use crate::ecs::systems::spring_bone_edit_systems::{
@@ -167,12 +168,13 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
         load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
     let stats = count_avatar_stats(graphics, Some(skeleton), find_spring_bone_setup(world));
 
+    let node_assets = world.resource::<NodeAssets>();
     let mut state = world.resource_mut::<AvatarSetupState>();
     state.bones = bones;
     state.mapping = mapping;
     state.missing_bone_names = missing_bone_names;
     state.stats = stats;
-    refresh_submesh_roles(&mut state, assets);
+    refresh_submesh_roles(&mut state, assets, graphics, &node_assets.nodes);
     refresh_avatar_validation(&mut state);
     state.source_model_path = model_path;
 }
@@ -317,6 +319,17 @@ pub fn fit_body_colliders(
     }
 
     let fitted = fit_bone_capsules(&skin_data, skeleton, params);
+
+    let allowed = body_collider_bone_indices(&world.resource::<AvatarSetupState>().mapping);
+    let fitted: Vec<_> = fitted
+        .into_iter()
+        .filter(|c| allowed.contains(&(c.bone_id as usize)))
+        .collect();
+
+    if fitted.is_empty() {
+        msg_error!("Cannot fit body colliders: no humanoid body bones are mapped");
+        return;
+    }
 
     let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
         msg_error!("Cannot fit body colliders: no animated model loaded");

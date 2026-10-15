@@ -11,7 +11,7 @@ use crate::ecs::{
 };
 use crate::math::calculate_billboard_click_rect;
 
-pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
+pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
     {
         let delta_time = ctx.delta_time;
         let mut camera = ctx.camera_mut();

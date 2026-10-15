@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::expression::components::preset::ExpressionLibrary;
+use crate::garment::components::submesh_role::{SubmeshKey, SubmeshRole, SubmeshRoleEntry};
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::stats::components::stats::AvatarStats;
@@ -24,7 +25,16 @@ pub struct AvatarSidecar {
     pub spring: SidecarSpring,
     /// Base colour texture per material name, as a `/` separated path relative to the model.
     pub materials: BTreeMap<String, String>,
+    pub submesh_roles: Vec<SidecarSubmeshRole>,
     pub stats: AvatarStats,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SidecarSubmeshRole {
+    pub mesh: String,
+    pub material: String,
+    pub role: SubmeshRole,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -50,6 +60,7 @@ pub struct SidecarInput<'a> {
     pub library: &'a ExpressionLibrary,
     pub spring: &'a SidecarSpring,
     pub materials: &'a BTreeMap<String, String>,
+    pub submesh_roles: &'a BTreeMap<SubmeshKey, SubmeshRoleEntry>,
     pub stats: &'a AvatarStats,
 }
 
@@ -69,6 +80,7 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
         expressions,
         spring: input.spring.clone(),
         materials: input.materials.clone(),
+        submesh_roles: build_submesh_roles(input.submesh_roles),
         stats: input.stats.clone(),
     }
 }
@@ -117,6 +129,17 @@ fn build_expressions(library: &ExpressionLibrary) -> Vec<SidecarExpression> {
         .map(|preset| SidecarExpression {
             name: preset.name.clone(),
             weights: preset.weights.clone(),
+        })
+        .collect()
+}
+
+fn build_submesh_roles(roles: &BTreeMap<SubmeshKey, SubmeshRoleEntry>) -> Vec<SidecarSubmeshRole> {
+    roles
+        .iter()
+        .map(|(key, entry)| SidecarSubmeshRole {
+            mesh: key.mesh.clone(),
+            material: key.material.clone(),
+            role: entry.role,
         })
         .collect()
 }
@@ -214,6 +237,7 @@ mod tests {
             library: &library,
             spring: &SidecarSpring::default(),
             materials: &materials,
+            submesh_roles: &BTreeMap::new(),
             stats: &stats,
         };
 
@@ -265,6 +289,7 @@ mod tests {
             expressions: vec![],
             spring: SidecarSpring::default(),
             materials: BTreeMap::new(),
+            submesh_roles: vec![],
             stats: AvatarStats::default(),
         };
 
@@ -274,5 +299,44 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
 
         assert_eq!(parsed["schema"], 3);
+    }
+
+    #[test]
+    fn test_submesh_roles_in_json() {
+        let mut roles = BTreeMap::new();
+        roles.insert(
+            SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Skin".to_string(),
+            },
+            SubmeshRoleEntry {
+                role: SubmeshRole::Skin,
+                source: crate::garment::components::submesh_role::SubmeshRoleSource::User,
+            },
+        );
+
+        let sidecar = AvatarSidecar {
+            schema: SIDECAR_SCHEMA_VERSION,
+            humanoid: BTreeMap::new(),
+            visemes: BTreeMap::new(),
+            blink: SidecarBlink {
+                both: None,
+                left: None,
+                right: None,
+            },
+            expression_mesh: None,
+            expressions: vec![],
+            spring: SidecarSpring::default(),
+            materials: BTreeMap::new(),
+            submesh_roles: build_submesh_roles(&roles),
+            stats: AvatarStats::default(),
+        };
+
+        let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
+        let array = value["submesh_roles"].as_array().unwrap();
+        assert_eq!(array.len(), 1);
+        assert_eq!(array[0]["mesh"], "Body");
+        assert_eq!(array[0]["material"], "Skin");
+        assert_eq!(array[0]["role"], "skin");
     }
 }

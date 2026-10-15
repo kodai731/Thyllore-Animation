@@ -33,6 +33,7 @@ use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
     AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
 };
+use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
 use crate::ecs::systems::spring_bone_edit_systems::{
     handle_spring_chain_add, reset_spring_bone_state,
 };
@@ -171,6 +172,7 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     state.mapping = mapping;
     state.missing_bone_names = missing_bone_names;
     state.stats = stats;
+    refresh_submesh_roles(&mut state, assets);
     refresh_avatar_validation(&mut state);
     state.source_model_path = model_path;
 }
@@ -412,6 +414,7 @@ fn build_avatar_sidecar(
         spring: &spring,
         materials: &materials,
         stats: &state.stats,
+        submesh_roles: &state.submesh_roles,
     })
 }
 

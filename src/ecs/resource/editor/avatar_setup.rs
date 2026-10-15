@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRoleEntry};
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping::{HumanoidMapping, UnresolvedRole};
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
@@ -21,4 +24,5 @@ pub struct AvatarSetupState {
     pub platform: Platform,
     pub rank: Option<RankReport>,
     pub spring_prefix: String,
+    pub submesh_roles: BTreeMap<SubmeshKey, SubmeshRoleEntry>,
 }

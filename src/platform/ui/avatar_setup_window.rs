@@ -1,21 +1,27 @@
-use imgui::Condition;
-use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
-use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
-use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
-use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
-
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use imgui::Condition;
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshRole, SubmeshRoleSource};
+use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
+use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
+use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
+use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
+use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
 const NO_TEXTURE_LABEL: &str = "(from model)";
+const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [
+    SubmeshRole::Skin,
+    SubmeshRole::Garment,
+    SubmeshRole::Hair,
+    SubmeshRole::Accessory,
+];
 
 fn draw_avatar_setup_window(
     ui: &imgui::Ui,
@@ -43,6 +49,9 @@ fn draw_avatar_setup_window(
             }
             if let Some(_tab) = ui.tab_item("Materials") {
                 build_materials_tab(ui, world, material_textures);
+            }
+            if let Some(_tab) = ui.tab_item("Submeshes") {
+                build_submeshes_tab(ui, world, state);
             }
             if let Some(_tab) = ui.tab_item("Validation") {
                 build_validation_tab(ui, state);
@@ -173,6 +182,51 @@ fn build_materials_tab(ui: &imgui::Ui, world: &World, material_textures: &Materi
             world.send_command(AvatarSetupEvent::ClearMaterialTexture {
                 material: slot.material.clone(),
             });
+        }
+    }
+}
+
+fn submesh_role_label(role: SubmeshRole) -> &'static str {
+    match role {
+        SubmeshRole::Skin => "Skin",
+        SubmeshRole::Garment => "Garment",
+        SubmeshRole::Hair => "Hair",
+        SubmeshRole::Accessory => "Accessory",
+    }
+}
+
+fn build_submeshes_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) {
+    if state.submesh_roles.is_empty() {
+        ui.text_disabled("No submeshes");
+        return;
+    }
+
+    for (index, (key, entry)) in state.submesh_roles.iter().enumerate() {
+        let label = format!("{}/{}", key.mesh, key.material);
+        let current_role = entry.role;
+        let preview = submesh_role_label(current_role);
+
+        ui.text(&label);
+        if entry.source == SubmeshRoleSource::Guessed {
+            ui.same_line();
+            ui.text_disabled("(guessed)");
+        }
+        ui.same_line();
+        ui.set_next_item_width(-1.0);
+        let combo_id = format!("##submesh_role_{}", index);
+        if let Some(_combo) = ui.begin_combo(&combo_id, preview) {
+            for role in SUBMESH_ROLE_CHOICES {
+                if ui
+                    .selectable_config(submesh_role_label(role))
+                    .selected(current_role == role)
+                    .build()
+                {
+                    world.send_command(AvatarSetupEvent::SetSubmeshRole {
+                        key: key.clone(),
+                        role,
+                    });
+                }
+            }
         }
     }
 }

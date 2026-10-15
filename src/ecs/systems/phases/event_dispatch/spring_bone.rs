@@ -121,6 +121,88 @@ impl UiCommand for DumpSpringTails {
     }
 }
 
+#[derive(Debug)]
+pub struct FitSpringParams {
+    pub reference: PathBuf,
+    pub sample_rate: f32,
+    pub params: thyllore_math_core::NelderMeadParams,
+}
+
+impl UiCommand for FitSpringParams {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_bake_systems::BakeConfig;
+        use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+        use crate::ecs::systems::spring_bone_fit_systems::{fit_spring_params, SpringFitInputs};
+
+        let Some(reference) = read_spring_reference(&self.reference) else {
+            return;
+        };
+
+        let inputs = match find_spring_bake_inputs(world, assets) {
+            Some(i) => i,
+            None => return,
+        };
+
+        let config = BakeConfig {
+            start_time: 0.0,
+            end_time: inputs.anim_clip.duration,
+            sample_rate: self.sample_rate,
+        };
+
+        let spring_fit_inputs = SpringFitInputs {
+            config: &config,
+            skeleton: &inputs.skeleton,
+            clip: &inputs.anim_clip,
+            constraints: inputs.constraints.as_ref(),
+            looping: inputs.looping,
+            reference: &reference,
+        };
+
+        let (fitted_setup, fits) =
+            fit_spring_params(&spring_fit_inputs, &inputs.setup, &self.params);
+
+        if fits.is_empty() {
+            msg_warn!("Spring parameter estimation: no chains to fit");
+            return;
+        }
+
+        for fit in &fits {
+            msg_info!(
+                "Fitted spring chain {}: rms {:.4} -> {:.4} (stiffness {:.3}, drag {:.3}, gravity {:.3})",
+                fit.chain,
+                fit.before_rms,
+                fit.after_rms,
+                fit.stiffness,
+                fit.drag_force,
+                fit.gravity_power
+            );
+        }
+
+        world.insert_component(inputs.entity, fitted_setup);
+        reset_spring_bone_state(world);
+    }
+}
+
+fn read_spring_reference(
+    path: &PathBuf,
+) -> Option<Vec<crate::animation::spring_bone::SpringTailSample>> {
+    let csv = match std::fs::read_to_string(path) {
+        Ok(csv) => csv,
+        Err(e) => {
+            msg_error!("Failed to read spring reference CSV {:?}: {}", path, e);
+            return None;
+        }
+    };
+
+    match crate::animation::spring_bone::parse_tail_csv(&csv) {
+        Ok(samples) => Some(samples),
+        Err(e) => {
+            msg_error!("Failed to parse spring reference CSV {:?}: {}", path, e);
+            None
+        }
+    }
+}
+
 fn dispatch_spring_bone_bake_events(
     events: &[SpringBoneEvent],
     world: &mut World,
@@ -155,6 +237,7 @@ pub fn transition_to_baked_override_if_needed(world: &mut World) {
 }
 
 struct SpringBakeInputs {
+    entity: Entity,
     skeleton: crate::animation::Skeleton,
     setup: crate::ecs::component::SpringBoneSetup,
     constraints: Option<crate::ecs::component::ConstraintSet>,
@@ -253,6 +336,7 @@ fn find_spring_bake_inputs(world: &World, assets: &AssetStorage) -> Option<Sprin
     };
 
     Some(SpringBakeInputs {
+        entity,
         skeleton,
         setup,
         constraints,

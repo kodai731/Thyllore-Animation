@@ -8,7 +8,7 @@ use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
-use crate::ecs::systems::phases::event_dispatch::spring_bone::DumpSpringTails;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::{DumpSpringTails, FitSpringParams};
 use crate::ecs::world::{Entity, World};
 
 use super::avatar_export_systems::dump_morph_track_samples;
@@ -211,6 +211,97 @@ fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
 }
 
 #[derive(Debug)]
+pub struct FitSpringParamsAction {
+    reference: PathBuf,
+    sample_rate: f32,
+    initial_step: f32,
+    max_iterations: usize,
+    tolerance: f32,
+}
+
+impl BatchAction for FitSpringParamsAction {
+    fn name(&self) -> &'static str {
+        "fit_spring_params"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(FitSpringParams {
+            reference: self.reference.clone(),
+            sample_rate: self.sample_rate,
+            params: thyllore_math_core::NelderMeadParams {
+                initial_step: self.initial_step,
+                max_iterations: self.max_iterations,
+                tolerance: self.tolerance,
+            },
+        });
+    }
+}
+
+fn fit_spring_params_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("fit_spring_params=")?;
+    let parts: Vec<&str> = suffix.split(',').collect();
+    if parts.len() != 5 {
+        return Some(Err(anyhow!(
+            "fit_spring_params requires exactly 5 comma-separated values: reference,sample_rate,initial_step,max_iterations,tolerance"
+        )));
+    }
+    let reference = PathBuf::from(parts[0].trim());
+    if reference.as_os_str().is_empty() {
+        return Some(Err(anyhow!(
+            "fit_spring_params: reference path must not be empty"
+        )));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
+    let Ok(initial_step) = parts[2].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid initial_step '{}'",
+            parts[2]
+        )));
+    };
+    if initial_step <= 0.0 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: initial_step must be positive, got {}",
+            initial_step
+        )));
+    }
+    let Ok(max_iterations) = parts[3].trim().parse::<usize>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid max_iterations '{}'",
+            parts[3]
+        )));
+    };
+    if max_iterations < 1 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: max_iterations must be at least 1, got {}",
+            max_iterations
+        )));
+    }
+    let Ok(tolerance) = parts[4].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid tolerance '{}'",
+            parts[4]
+        )));
+    };
+    Some(Ok(Box::new(FitSpringParamsAction {
+        reference,
+        sample_rate,
+        initial_step,
+        max_iterations,
+        tolerance,
+    })))
+}
+
+#[derive(Debug)]
 pub struct FitBodyColliders {
     params: CapsuleFitParams,
 }
@@ -312,6 +403,7 @@ crate::batch_action!(
     unit_action_parse::<DumpMorphTrackSamples>
 );
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
+crate::batch_action!("fit_spring_params", fit_spring_params_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
 
 #[cfg(test)]
@@ -463,5 +555,24 @@ mod tests {
         assert!(submesh_role_parse("submesh_role=skin")
             .expect("prefix matches")
             .is_err());
+    }
+
+    #[test]
+    fn test_fit_spring_params_parses_correct_format() {
+        let action: Box<dyn BatchAction> =
+            fit_spring_params_parse("fit_spring_params=reference.csv,30.0,1.0,100,0.001")
+                .expect("prefix matches")
+                .expect("spec is valid");
+
+        assert_eq!(action.name(), "fit_spring_params");
+    }
+
+    #[test]
+    fn test_fit_spring_params_rejects_insufficient_elements() {
+        assert!(
+            fit_spring_params_parse("fit_spring_params=reference.csv,30.0")
+                .expect("prefix matches")
+                .is_err()
+        );
     }
 }

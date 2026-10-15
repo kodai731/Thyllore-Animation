@@ -42,8 +42,8 @@ def build_rig(work_dir: Path) -> Path:
         "bash", "blender/docker/run_background.sh",
         "-b", "--python", "unity/verify/rig.py", "--", str(tmp), "--sway",
     ]
-    env = dict(os.environ, TMPDIR=str(tmp))
-    subprocess.run(cmd, cwd=repo_root(), env=env, check=True)
+    os.environ["TMPDIR"] = str(tmp)
+    subprocess.run(cmd, cwd=repo_root(), check=True)
 
     fbx = work_dir / "synthetic_avatar.fbx"
     shutil.copy2(tmp / "synthetic_avatar.fbx", fbx)
@@ -85,7 +85,7 @@ def _unity_docker_args(work_dir: Path, env: dict[str, str]) -> list[str]:
     home = Path.home()
     license_dir = os.environ.get("UNITY_LICENSE_DIR", str(home / ".config/unity3d/Unity/licenses"))
     container_home = "/work/" + "home"
-    return [
+    args: list[str] = [
         "docker", "run", "--rm",
         "--user", f"{os.getuid()}:{os.getgid()}",
         "-e", f"HOME={container_home}",
@@ -94,6 +94,9 @@ def _unity_docker_args(work_dir: Path, env: dict[str, str]) -> list[str]:
         "-v", "/etc/machine-id:/etc/machine-id:ro",
         "-w", "/work",
     ]
+    for k, v in env.items():
+        args.extend(["-e", f"{k}={v}"])
+    return args
 
 
 def ensure_unity_dirs(work_dir: Path) -> None:
@@ -173,7 +176,15 @@ def run_unity_check(work_dir: Path) -> None:
     """Run Unity SpringParityCheck and verify it succeeds."""
     log_path = work_dir / "unity" / "parity.log"
 
-    cmd = _unity_docker_args(work_dir, {}) + [
+    unity_env = {
+        "THYLLORE_FBX_ASSET": "Assets/Check/synthetic_avatar.fbx",
+        "THYLLORE_SIDECAR": "/work/sidecar.json",
+        "THYLLORE_TAILS_OUT": "/work/unity_tails.csv",
+        "THYLLORE_SAMPLE_RATE": "30",
+        "THYLLORE_FRAME_COUNT": "31",
+    }
+
+    cmd = _unity_docker_args(work_dir, unity_env) + [
         UNITY_IMAGE_TAG, "unity-editor",
         "-batchmode", "-nographics",
         "-projectPath", "/work/project",
@@ -181,14 +192,7 @@ def run_unity_check(work_dir: Path) -> None:
         "-logFile", "/work/parity.log",
     ]
 
-    env = dict(os.environ,
-               THYLLORE_FBX_ASSET="Assets/Check/synthetic_avatar.fbx",
-               THYLLORE_SIDECAR="/work/sidecar.json",
-               THYLLORE_TAILS_OUT="/work/unity_tails.csv",
-               THYLLORE_SAMPLE_RATE="30",
-               THYLLORE_FRAME_COUNT="31")
-
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         log = log_path.read_text() if log_path.exists() else "(missing)"
         for line in log.splitlines():

@@ -66,20 +66,22 @@ fn azimuth_bin(azimuth: f32, bin_count: usize) -> usize {
     ((normalized * bin_count as f32) as usize).min(bin_count - 1)
 }
 
-fn count_azimuth_modes(frames: &[VertexFrame]) -> usize {
+fn smoothed_azimuth_histogram(frames: &[VertexFrame]) -> Vec<f32> {
     let mut histogram = [0usize; AZIMUTH_BIN_COUNT];
     for frame in frames {
         histogram[azimuth_bin(frame.azimuth, AZIMUTH_BIN_COUNT)] += 1;
     }
-
-    let smoothed: Vec<f32> = (0..AZIMUTH_BIN_COUNT)
+    (0..AZIMUTH_BIN_COUNT)
         .map(|bin| {
             let left = histogram[(bin + AZIMUTH_BIN_COUNT - 1) % AZIMUTH_BIN_COUNT];
             let right = histogram[(bin + 1) % AZIMUTH_BIN_COUNT];
             (left + histogram[bin] + right) as f32 / 3.0
         })
-        .collect();
+        .collect()
+}
 
+fn count_azimuth_modes(frames: &[VertexFrame]) -> usize {
+    let smoothed = smoothed_azimuth_histogram(frames);
     let mode_count = (0..AZIMUTH_BIN_COUNT)
         .filter(|&bin| {
             let left = smoothed[(bin + AZIMUTH_BIN_COUNT - 1) % AZIMUTH_BIN_COUNT];
@@ -116,7 +118,11 @@ fn compute_circular_mean(azimuths: impl Iterator<Item = f32>) -> Option<f32> {
 }
 
 fn cluster_azimuths(frames: &[VertexFrame], count: usize) -> Vec<usize> {
-    let start = frames.first().map_or(0.0, |frame| frame.azimuth);
+    let histogram = smoothed_azimuth_histogram(frames);
+    let peak_bin = (0..AZIMUTH_BIN_COUNT)
+        .max_by(|a, b| histogram[*a].total_cmp(&histogram[*b]))
+        .unwrap_or(0);
+    let start = TAU * (peak_bin as f32 + 0.5) / AZIMUTH_BIN_COUNT as f32;
     let mut centers: Vec<f32> = (0..count)
         .map(|index| start + TAU * index as f32 / count as f32)
         .collect();
@@ -723,6 +729,49 @@ mod tests {
                 joints[i].head.y,
                 i - 1,
                 joints[i - 1].head.y
+            );
+        }
+    }
+
+    #[test]
+    fn reversed_vertex_order_same_joints() {
+        let positions: Vec<Vector3<f32>> = (0..6)
+            .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
+            .collect();
+        let triangles = vec![[0u32, 1, 2], [2, 3, 4], [4, 5, 0]];
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+
+        let chains = place_chains(&input, &build_hair_params(2)).unwrap();
+        let original_joints: Vec<Vector3<f32>> = chains[0].joints.iter().map(|j| j.head).collect();
+
+        let reversed_positions: Vec<Vector3<f32>> = positions.iter().rev().cloned().collect();
+        let reversed_triangles = vec![[5u32, 4, 3], [3, 2, 0], [0, 1, 5]];
+        let reversed_input = ChainGenInput {
+            positions: &reversed_positions,
+            triangles: &reversed_triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+
+        let reversed_chains = place_chains(&reversed_input, &build_hair_params(2)).unwrap();
+        let reversed_joints: Vec<Vector3<f32>> =
+            reversed_chains[0].joints.iter().map(|j| j.head).collect();
+
+        assert_eq!(original_joints.len(), reversed_joints.len());
+        for (i, (a, b)) in original_joints.iter().zip(&reversed_joints).enumerate() {
+            let diff = (a.x - b.x).hypot(a.y - b.y).hypot(a.z - b.z);
+            assert!(
+                diff < 1e-5,
+                "joint[{}] head differs: original={:?}, reversed={:?}, diff={:.6}",
+                i,
+                a,
+                b,
+                diff
             );
         }
     }

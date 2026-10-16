@@ -151,20 +151,20 @@ def collect_deleted_bones(armature_obj, humanoid_set):
     return deleted
 
 
-def collect_vertex_weights(mesh_obj, deleted_bone_names, humanoid_set, bone_map):
+def collect_vertex_weights(mesh_obj, deleted_bone_names):
     entries = []
-    if not hasattr(mesh_obj.data, "vertices"):
-        return entries
     for vert in mesh_obj.data.vertices:
         for vg in vert.groups:
             if vg.group < len(mesh_obj.vertex_groups):
                 vg_name = mesh_obj.vertex_groups[vg.group].name
                 if vg_name in deleted_bone_names:
+                    v = mesh_obj.matrix_world @ vert.co
                     entries.append({
                         "mesh": mesh_obj.name,
                         "vertex": vert.index,
                         "bone": vg_name,
                         "weight": round(vg.weight, 6),
+                        "position": [round(v[0], 6), round(v[1], 6), round(v[2], 6)],
                     })
     return entries
 
@@ -225,12 +225,6 @@ def delete_bones(armature_obj, humanoid_set):
         edit_bones.remove(edit_bones[name])
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    for obj in bpy.data.objects:
-        if obj.type == "MESH":
-            for vg in list(obj.vertex_groups):
-                if vg.name in to_delete:
-                    obj.vertex_groups.remove(vg)
-
 
 def write_fbx(meshes, armature_obj, output_path):
     for obj in bpy.data.objects:
@@ -285,7 +279,7 @@ def main():
 
     vertex_weights = []
     for mesh_obj in meshes:
-        vertex_weights.extend(collect_vertex_weights(mesh_obj, deleted_bone_names, humanoid_set, bone_map))
+        vertex_weights.extend(collect_vertex_weights(mesh_obj, deleted_bone_names))
 
     for mesh_obj in meshes:
         redistribute_weights(mesh_obj, deleted_bone_names, humanoid_set, bone_map)

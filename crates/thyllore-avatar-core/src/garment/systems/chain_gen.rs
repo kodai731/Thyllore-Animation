@@ -42,24 +42,16 @@ fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     (reference, up.cross(reference))
 }
 
-fn compute_vertex_frames(
-    input: &ChainGenInput,
-    vertices: &[u32],
-    role: ChainRole,
-) -> Vec<VertexFrame> {
+fn compute_vertex_frames(input: &ChainGenInput, vertices: &[u32]) -> Vec<VertexFrame> {
     let (reference, side) = build_azimuth_basis(input.up);
     let up_normalized = input.up.normalize();
 
     vertices
         .iter()
         .map(|&vertex| {
-            let offset = input.positions[vertex as usize] - input.root_position;
-            let progress = match role {
-                ChainRole::Skirt => {
-                    (input.root_position - input.positions[vertex as usize]).dot(up_normalized)
-                }
-                ChainRole::Hair => offset.magnitude(),
-            };
+            let position = input.positions[vertex as usize];
+            let offset = position - input.root_position;
+            let progress = (input.root_position - position).dot(up_normalized);
             VertexFrame {
                 vertex,
                 azimuth: offset.dot(side).atan2(offset.dot(reference)),
@@ -274,7 +266,7 @@ pub fn place_chains(
         anyhow::bail!("chain generation found no target vertices");
     }
 
-    let frames = compute_vertex_frames(input, &vertices, params.role);
+    let frames = compute_vertex_frames(input, &vertices);
     let chains = split_columns(&frames, params)
         .into_iter()
         .enumerate()
@@ -704,5 +696,34 @@ mod tests {
             "vertex 0 root weight = {:.6}, expected 1.0",
             root_weight
         );
+    }
+
+    #[test]
+    fn hair_joints_y_monotonically_decreasing() {
+        let positions: Vec<Vector3<f32>> = (0..6)
+            .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
+            .collect();
+        let triangles = vec![[0u32, 1, 2], [2, 3, 4], [4, 5, 0]];
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+
+        let chains = place_chains(&input, &build_hair_params(3)).unwrap();
+        assert_eq!(chains.len(), 1);
+        let joints = &chains[0].joints;
+
+        for i in 1..joints.len() {
+            assert!(
+                joints[i].head.y < joints[i - 1].head.y,
+                "joint[{}].head.y ({:.4}) >= joint[{}].head.y ({:.4})",
+                i,
+                joints[i].head.y,
+                i - 1,
+                joints[i - 1].head.y
+            );
+        }
     }
 }

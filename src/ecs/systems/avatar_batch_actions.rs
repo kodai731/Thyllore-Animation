@@ -8,6 +8,7 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{DumpSpringTails, FitSpringParams};
 use crate::ecs::world::{Entity, World};
+use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
 use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 
@@ -348,6 +349,62 @@ fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> 
 }
 
 #[derive(Debug)]
+pub struct GenerateChainBones {
+    request: ChainGenRequest,
+}
+
+impl BatchAction for GenerateChainBones {
+    fn name(&self) -> &'static str {
+        "generate_chain_bones"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::GenerateChainBones {
+            request: self.request.clone(),
+        });
+    }
+}
+
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>/<material>,<root_bone>,<joints>,<columns>";
+
+fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("generate_chain_bones=")?;
+    let parts: Vec<&str> = spec.splitn(4, ',').collect();
+    if parts.len() != 4 {
+        return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
+    }
+
+    let mesh_material = parts[0].trim();
+    let (mesh, material) = match mesh_material.rsplit_once('/') {
+        Some((m, mat)) => (m.to_string(), mat.to_string()),
+        None => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    };
+
+    let root_bone = parts[1].trim().to_string();
+    if root_bone.is_empty() {
+        return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
+    }
+
+    let joint_count: usize = match parts[2].trim().parse() {
+        Ok(n) if n > 0 => n,
+        _ => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    };
+
+    let column_count: usize = match parts[3].trim().parse() {
+        Ok(n) => n,
+        Err(_) => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    };
+
+    let request = ChainGenRequest {
+        submesh: SubmeshKey { mesh, material },
+        root_bone,
+        joint_count,
+        column_count,
+    };
+
+    Some(Ok(Box::new(GenerateChainBones { request })))
+}
+
+#[derive(Debug)]
 pub struct SubmeshRoleAction {
     role: SubmeshRole,
     mesh: String,
@@ -462,6 +519,7 @@ crate::batch_action!(
 );
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
 crate::batch_action!("fit_spring_params", fit_spring_params_parse);
+crate::batch_action!("generate_chain_bones", generate_chain_bones_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
 crate::batch_action!("hide_covered_skin", hide_covered_skin_parse);
 
@@ -657,5 +715,27 @@ mod tests {
         assert!(hide_covered_skin_parse("hide_covered_skin=0.5,45.0,8,1.5")
             .expect("prefix matches")
             .is_err());
+    }
+
+    #[test]
+    fn test_generate_chain_bones_parses_correct_format() {
+        let result = generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine,3,2");
+        assert!(result.is_some());
+        let action: Box<dyn BatchAction> = result.unwrap().unwrap();
+        assert_eq!(action.name(), "generate_chain_bones");
+    }
+
+    #[test]
+    fn test_generate_chain_bones_rejects_malformed_specs() {
+        assert!(
+            generate_chain_bones_parse("generate_chain_bones=garment/cloth,,3,2")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine,0,2")
+                .expect("prefix matches")
+                .is_err()
+        );
     }
 }

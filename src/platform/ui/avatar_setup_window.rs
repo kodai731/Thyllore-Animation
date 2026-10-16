@@ -5,7 +5,10 @@ use crate::ecs::world::World;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use imgui::Condition;
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshRole, SubmeshRoleSource};
+use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRole, SubmeshRoleSource,
+};
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
@@ -226,6 +229,34 @@ fn build_submeshes_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) 
                         role,
                     });
                 }
+            }
+        }
+
+        if current_role == SubmeshRole::Hair || current_role == SubmeshRole::Garment {
+            let humanoid_role = match current_role {
+                SubmeshRole::Hair => HumanoidRole::Head,
+                SubmeshRole::Garment => HumanoidRole::Hips,
+                _ => unreachable!(),
+            };
+            if let Some(&bone_index) = state.mapping.by_role.get(&humanoid_role) {
+                let root_bone = &state.bones[bone_index as usize].name;
+                ui.same_line();
+                if ui.button("Generate chains##chain") {
+                    world.send_command(AvatarSetupEvent::GenerateChainBones {
+                        request: ChainGenRequest {
+                            submesh: SubmeshKey {
+                                mesh: key.mesh.clone(),
+                                material: key.material.clone(),
+                            },
+                            root_bone: root_bone.clone(),
+                            joint_count: 4,
+                            column_count: 0,
+                        },
+                    });
+                }
+            } else {
+                ui.same_line();
+                ui.text_disabled("Generate chains");
             }
         }
     }

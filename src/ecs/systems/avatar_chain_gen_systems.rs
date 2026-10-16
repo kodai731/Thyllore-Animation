@@ -88,12 +88,21 @@ fn resolve_submesh(
 ) -> anyhow::Result<(usize, ChainRole)> {
     let node_assets = world.resource::<NodeAssets>();
     let pairs = collect_submesh_meshes(assets, graphics, &node_assets.nodes);
+    let available: Vec<String> = pairs
+        .iter()
+        .map(|(k, _)| format!("{}/{}", k.mesh, k.material))
+        .collect();
     let mesh_index = pairs
         .iter()
         .find(|(key, _)| key == submesh)
         .map(|(_, i)| *i)
         .ok_or_else(|| {
-            anyhow::anyhow!("submesh not found: {}:{}", submesh.mesh, submesh.material)
+            anyhow::anyhow!(
+                "submesh not found: {}/{}; available: {}",
+                submesh.mesh,
+                submesh.material,
+                available.join(", ")
+            )
         })?;
 
     let state = world.resource::<AvatarSetupState>();

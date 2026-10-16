@@ -142,6 +142,7 @@ struct AnimDumpJson {
     ui: Option<UiJson>,
     curve_editor: serde_json::Value,
     hierarchy: Option<HierarchyJson>,
+    chain_gen: Option<thyllore_avatar_core::garment::components::chain_gen::ChainGenReport>,
 }
 
 fn hierarchy_dump(world: &World) -> Option<HierarchyJson> {
@@ -380,6 +381,9 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
         }),
         curve_editor: crate::ecs::systems::live_dump::curve_editor_json(world),
         hierarchy: hierarchy_dump(world),
+        chain_gen: world
+            .get_resource::<crate::ecs::resource::AvatarSetupState>()
+            .and_then(|state| state.chain_gen_report.clone()),
     };
     serde_json::to_value(&dump).expect("AnimDumpJson serialization")
 }

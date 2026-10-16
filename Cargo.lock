@@ -3991,6 +3991,7 @@ dependencies = [
  "thyllore-anim-core",
  "thyllore-importer-core",
  "thyllore-math-core",
+ "thyllore-model-core",
  "toml",
 ]
 

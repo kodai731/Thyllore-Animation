@@ -3992,6 +3992,7 @@ dependencies = [
  "thyllore-importer-core",
  "thyllore-math-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "toml",
 ]
 
@@ -4151,6 +4152,7 @@ dependencies = [
  "thyllore-avatar-core",
  "thyllore-ml-api",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "ureq 2.12.1",
 ]
 

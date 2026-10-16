@@ -134,22 +134,20 @@ mod tests {
             ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
                 .expect("Failed to load exported with ufbx");
 
-        let orig_axes = &original_scene.settings.axes;
         let exp_axes = &exported_scene.settings.axes;
         assert_eq!(
-            orig_axes.up as i32, exp_axes.up as i32,
-            "UpAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.up, exp_axes.up
-        );
-        assert_eq!(
-            orig_axes.front as i32, exp_axes.front as i32,
-            "FrontAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.front, exp_axes.front
-        );
-        assert_eq!(
-            orig_axes.right as i32, exp_axes.right as i32,
-            "CoordAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.right, exp_axes.right
+            (
+                exp_axes.up as i32,
+                exp_axes.front as i32,
+                exp_axes.right as i32
+            ),
+            (
+                ufbx::CoordinateAxis::PositiveY as i32,
+                ufbx::CoordinateAxis::PositiveZ as i32,
+                ufbx::CoordinateAxis::PositiveX as i32
+            ),
+            "the export always writes the engine's Y-up axes, got {:?}",
+            exp_axes
         );
 
         let orig_non_root_nodes: Vec<_> =

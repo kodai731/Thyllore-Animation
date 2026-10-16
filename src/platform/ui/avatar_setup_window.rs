@@ -2,10 +2,13 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::param_widgets::draw_params;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use imgui::Condition;
-use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::garment::components::chain_gen::{
+    ChainGenRequest, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+};
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshRoleSource,
 };
@@ -198,11 +201,31 @@ fn submesh_role_label(role: SubmeshRole) -> &'static str {
     }
 }
 
+fn draw_chain_gen_settings(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) {
+    let names: Vec<&str> = CHAIN_GEN_UI_PARAMS.iter().map(|p| p.name).collect();
+    let mut settings = state.chain_gen.clone();
+    draw_params(
+        ui,
+        &names,
+        &CHAIN_GEN_UI_PARAMS,
+        &CHAIN_GEN_SCALAR_PARAMS,
+        &mut settings,
+        |_, _| {},
+    );
+    if settings != state.chain_gen {
+        world.send_command(AvatarSetupEvent::SetChainGenSettings { settings });
+    }
+}
+
 fn build_submeshes_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) {
     if state.submesh_roles.is_empty() {
         ui.text_disabled("No submeshes");
         return;
     }
+
+    ui.text("Chain generation");
+    draw_chain_gen_settings(ui, world, state);
+    ui.separator();
 
     for (index, (key, entry)) in state.submesh_roles.iter().enumerate() {
         let label = format!("{}/{}", key.mesh, key.material);
@@ -249,8 +272,7 @@ fn build_submeshes_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) 
                                 material: key.material.clone(),
                             },
                             root_bone: root_bone.clone(),
-                            joint_count: 4,
-                            column_count: 0,
+                            settings: state.chain_gen.clone(),
                         },
                     });
                 }

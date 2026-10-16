@@ -1,9 +1,12 @@
 """Pure Python helpers for chain bone generation output.
 
-No bpy imports — these functions work on the data returned by the wheel's
-generate_chains call and are consumed by the addon's bpy operator.
+No bpy imports: these functions work on the data returned by the wheel's
+generate_chains call (engine coordinates, Y-up metres) and are consumed by the
+addon's bpy operator, which converts to Blender space with ``coordinates``.
 """
 from __future__ import annotations
+
+from .coordinates import engine_to_blender_point
 
 
 def submesh_triangles(
@@ -25,6 +28,26 @@ def submesh_triangles(
                 [triangle_vertices[i], triangle_vertices[i + 1], triangle_vertices[i + 2]]
             )
     return result
+
+
+def output_to_blender(output: dict) -> dict:
+    """The same output with every joint head and chain tail converted to Blender space."""
+    chains = [
+        {
+            **chain,
+            "joints": [
+                {**joint, "head": engine_to_blender_point(joint["head"])} for joint in chain["joints"]
+            ],
+            "tail": engine_to_blender_point(chain["tail"]),
+        }
+        for chain in output["chains"]
+    ]
+    return {**output, "chains": chains}
+
+
+def settings_from_properties(ui_params: list[dict], owner) -> dict[str, float]:
+    """Read every setting of the table from the attributes of ``owner`` (an operator or property group)."""
+    return {param["name"]: float(getattr(owner, param["name"])) for param in ui_params}
 
 
 def bone_specs(

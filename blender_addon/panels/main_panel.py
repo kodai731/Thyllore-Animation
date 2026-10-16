@@ -154,12 +154,14 @@ class THYLLORE_PT_ChainBones(Panel):
         if obj is None or obj.type != "MESH":
             layout.label(text="Select a mesh", icon="ERROR")
             return
+        from ..operators import chain_bones
+
         op = layout.operator("thyllore.generate_chain_bones", icon="ARMATURE_DATA")
         layout.prop(op, "role")
         layout.prop(op, "material_index")
         layout.prop(op, "root_bone")
-        layout.prop(op, "joint_count")
-        layout.prop(op, "column_count")
+        for param in chain_bones.CHAIN_GEN_UI_PARAMS:
+            layout.prop(op, param["name"])
 
 
 # ---------------------------------------------------------------------------

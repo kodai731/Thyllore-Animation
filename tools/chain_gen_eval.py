@@ -4,8 +4,8 @@
         [--reference-scale 1.0] [--generated-scale 1.0] [--miss-radius 0.03] [--match-tolerance 0.002]
         [--deform-generated <csv> --deform-reference <csv>]
 
-The reference is written by scripts/blender/strip_secondary_bones.py (Blender world, Z-up) and is converted
-to Y-up; the scales bring both sides to meters. Writes <out>/chain_gen_eval.json and chain_gen_eval.md with
+The reference is written by scripts/blender/strip_secondary_bones.py in engine coordinates (Y-up, "space"
+field); this tool knows no other space. The scales bring both sides to meters. Writes <out>/chain_gen_eval.json and chain_gen_eval.md with
 joint, weight and (when both CSVs are given) deformation metrics. It reports numbers only; the thresholds are
 the user's to set.
 
@@ -13,7 +13,7 @@ Procedure:
 1. Run strip_secondary_bones.py on the purchased model (the user runs it) to get <name>_humanoid_only.fbx and
     <name>_secondary_reference.json.
 2. Load the copy in the engine with submesh_role=<role>:<mesh>/<material> and
-    generate_chain_bones=<mesh>/<material>,<root_bone>,<joints>,<columns>, and keep --batch-anim-dump.
+    generate_chain_bones=<mesh>/<material>,<root_bone>[,<setting>=<value>...], and keep --batch-anim-dump.
 3. For the deformation RMS, give both models the same spring values and colliders and the same sway clip,
     and take dump_skinned_vertices=<csv>,30,<mesh>/<material> from each.
 4. Run this tool on the outputs.
@@ -107,10 +107,7 @@ def _dist(a: tuple, b: tuple) -> float:
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
 
 
-def reference_to_yup(position: list, scale: float) -> tuple:
-    """Convert Blender Z-up position to engine Y-up meters: (x*s, z*s, -y*s)."""
-    x, y, z = position
-    return (x * scale, z * scale, -y * scale)
+REFERENCE_SPACE = "engine_y_up_m"
 
 
 def scale_position(position: list, scale: float) -> tuple:
@@ -421,12 +418,17 @@ def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, gener
              miss_radius: float = 0.03, match_tolerance: float = 0.002,
              deform_generated: str | None = None, deform_reference: str | None = None) -> dict:
     """Evaluate chain generation accuracy against reference data."""
+    if ref_data.get("space") != REFERENCE_SPACE:
+        raise ValueError(
+            f"reference JSON must declare space={REFERENCE_SPACE!r} (written by strip_secondary_bones.py), "
+            f"got {ref_data.get('space')!r}"
+        )
     deleted_bones = ref_data.get("deleted_bones", [])
     chain_gen = gen_data.get("chain_gen", {})
     gen_bones = chain_gen.get("bones", [])
 
     ref_chains = reference_chains(deleted_bones)
-    ref_head_lookup = {b["name"]: reference_to_yup(list(b["head"]), reference_scale) for b in deleted_bones}
+    ref_head_lookup = {b["name"]: scale_position(b["head"], reference_scale) for b in deleted_bones}
     ref_chains_yup = chain_heads(ref_chains, ref_head_lookup)
 
     gen_bones_scaled = [{"name": b["name"], "parent": b.get("parent", ""), "head": scale_position(b["head"], generated_scale)} for b in gen_bones]
@@ -439,7 +441,7 @@ def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, gener
     ref_weights = ref_data.get("vertex_weights", [])
     gen_weights = chain_gen.get("vertex_weights", [])
     transformed_ref_weights = [
-        {**entry, "position": list(reference_to_yup(entry["position"], reference_scale))}
+        {**entry, "position": list(scale_position(entry["position"], reference_scale))}
         for entry in ref_weights
     ]
     transformed_gen_weights = [

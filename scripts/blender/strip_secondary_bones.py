@@ -6,6 +6,16 @@ import sys
 
 import bpy
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+sys.path.insert(0, REPO_ROOT)
+from blender_addon.common.coordinates import blender_to_engine_point  # noqa: E402
+
+REFERENCE_SPACE = "engine_y_up_m"
+
+
+def engine_position(vector):
+    return [round(v, 6) for v in blender_to_engine_point(tuple(vector))]
+
 
 def parse_args():
     argv = sys.argv
@@ -139,13 +149,11 @@ def collect_deleted_bones(armature_obj, humanoid_set):
                 kind = "chain"
             else:
                 kind = "single"
-            world_head = list(armature_obj.matrix_world @ bone.head_local)
-            world_tail = list(armature_obj.matrix_world @ bone.tail_local)
             deleted.append({
                 "name": bone.name,
                 "parent": bone.parent.name if bone.parent else None,
-                "head": [round(v, 6) for v in world_head],
-                "tail": [round(v, 6) for v in world_tail],
+                "head": engine_position(armature_obj.matrix_world @ bone.head_local),
+                "tail": engine_position(armature_obj.matrix_world @ bone.tail_local),
                 "kind": kind,
             })
     return deleted
@@ -158,13 +166,12 @@ def collect_vertex_weights(mesh_obj, deleted_bone_names):
             if vg.group < len(mesh_obj.vertex_groups):
                 vg_name = mesh_obj.vertex_groups[vg.group].name
                 if vg_name in deleted_bone_names:
-                    v = mesh_obj.matrix_world @ vert.co
                     entries.append({
                         "mesh": mesh_obj.name,
                         "vertex": vert.index,
                         "bone": vg_name,
                         "weight": round(vg.weight, 6),
-                        "position": [round(v[0], 6), round(v[1], 6), round(v[2], 6)],
+                        "position": engine_position(mesh_obj.matrix_world @ vert.co),
                     })
     return entries
 
@@ -246,6 +253,7 @@ def write_fbx(meshes, armature_obj, output_path):
 
 def write_reference_json(deleted_bones, vertex_weights, humanoid_bone_names, output_path):
     data = {
+        "space": REFERENCE_SPACE,
         "deleted_bones": sorted(deleted_bones, key=lambda b: b["name"]),
         "vertex_weights": sorted(vertex_weights, key=lambda e: (e["mesh"], e["vertex"], e["bone"])),
         "humanoid_bones": sorted(humanoid_bone_names),

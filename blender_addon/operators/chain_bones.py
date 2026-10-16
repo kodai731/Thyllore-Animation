@@ -13,18 +13,40 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..common.chain_bones import bone_specs, group_weights, submesh_triangles
+from ..common import coordinates
+from ..common.chain_bones import (
+    bone_specs,
+    group_weights,
+    output_to_blender,
+    settings_from_properties,
+    submesh_triangles,
+)
+from ..common.effect_properties import build_param_properties
+
+CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
 
 
-def _root_world(arm, root_bone: str) -> tuple[float, float, float]:
-    """World-space position of the root bone."""
+def _setting_annotations() -> dict[str, object]:
+    annotations: dict[str, object] = {}
+    for param in CHAIN_GEN_UI_PARAMS:
+        annotations.update(build_param_properties({**param, "kind": "scalar"}))
+    return annotations
+
+
+def _armature_of(obj):
+    for mod in obj.modifiers:
+        if mod.type == "ARMATURE":
+            return mod.object
+    return None
+
+
+def _root_engine_position(arm, root_bone: str) -> tuple[float, float, float]:
     head = arm.data.bones[root_bone].head_local
-    world = arm.matrix_world @ head
-    return (world[0], world[1], world[2])
+    return coordinates.blender_to_engine_point(tuple(arm.matrix_world @ head))
 
 
 def _add_bones(context, arm, specs):
-    """Add bones in edit mode from (name, parent, head, tail) specs."""
+    """Add bones in edit mode from (name, parent, head, tail) specs in Blender world space."""
     for name, *_ in specs:
         if name in arm.data.bones:
             raise ValueError(f"Bone {name!r} already exists")
@@ -71,34 +93,24 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     )
     material_index: bpy.props.IntProperty(default=0, min=0)
     root_bone: bpy.props.StringProperty(default="Head")
-    joint_count: bpy.props.IntProperty(default=4, min=1)
-    column_count: bpy.props.IntProperty(default=0, min=0)
+
+    __annotations__.update(_setting_annotations())
 
     @classmethod
     def poll(cls, context):
         obj = context.active_object
         if obj is None or obj.type != "MESH":
             return False
-        arm = None
-        for mod in obj.modifiers:
-            if mod.type == "ARMATURE":
-                arm = mod.object
-                break
-        if arm is None:
-            return False
-        return _TML_AVAILABLE
+        return _TML_AVAILABLE and _armature_of(obj) is not None
 
     def execute(self, context):
         obj = context.active_object
         mesh = obj.data
-        arm = None
-        for mod in obj.modifiers:
-            if mod.type == "ARMATURE":
-                arm = mod.object
-                break
+        arm = _armature_of(obj)
 
-        positions = [tuple(obj.matrix_world @ v.co) for v in mesh.vertices]
-
+        positions = [
+            coordinates.blender_to_engine_point(tuple(obj.matrix_world @ v.co)) for v in mesh.vertices
+        ]
         mesh.calc_loop_triangles()
         triangle_vertices = []
         triangle_materials = []
@@ -106,21 +118,18 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             triangle_vertices.extend(lt.vertices)
             triangle_materials.append(lt.material_index)
         triangles = submesh_triangles(triangle_vertices, triangle_materials, self.material_index)
-        root_position = _root_world(arm, self.root_bone)
-        up = (0.0, 0.0, 1.0)
 
         output = tml.generate_chains(
             positions,
             triangles,
-            root_position,
-            up,
+            _root_engine_position(arm, self.root_bone),
             self.role,
-            self.joint_count,
-            self.column_count,
+            settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
         )
 
-        specs = bone_specs(output, self.root_bone)
-        groups = group_weights(output, self.root_bone)
+        blender_output = output_to_blender(output)
+        specs = bone_specs(blender_output, self.root_bone)
+        groups = group_weights(blender_output, self.root_bone)
 
         try:
             _add_bones(context, arm, specs)

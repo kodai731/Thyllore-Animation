@@ -1,8 +1,12 @@
 use cgmath::Vector3;
 use thyllore_avatar_core::garment::components::chain_gen::{
-    ChainGenInput, ChainGenParams, ChainRole,
+    ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
+    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
+use thyllore_avatar_core::garment::systems::chain_gen::{
+    apply_setting_assignments, compute_chain_weights, place_chains,
+};
+use thyllore_scene_core::{find_scalar_param, UiParam};
 
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
@@ -30,6 +34,44 @@ pub struct WeightOut {
     pub influences: Vec<(String, f32)>,
 }
 
+/// One row of the settings table as the addon sees it: the declaration plus the default value.
+#[derive(serde::Serialize)]
+pub struct ChainGenParamOut {
+    pub name: &'static str,
+    pub label: String,
+    pub min: f32,
+    pub max: f32,
+    pub format: &'static str,
+    pub tooltip: &'static str,
+    pub default: f32,
+}
+
+pub fn chain_gen_params() -> Vec<ChainGenParamOut> {
+    let defaults = ChainGenSettings::default();
+    CHAIN_GEN_UI_PARAMS
+        .iter()
+        .map(|param: &UiParam| {
+            let scalar = find_scalar_param(&CHAIN_GEN_SCALAR_PARAMS, param.name)
+                .expect("every ui param has a scalar entry");
+            ChainGenParamOut {
+                name: param.name,
+                label: param.display_label().into_owned(),
+                min: param.min,
+                max: param.max,
+                format: param.format,
+                tooltip: param.tooltip,
+                default: (scalar.get)(&defaults),
+            }
+        })
+        .collect()
+}
+
+pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSettings> {
+    let mut settings = ChainGenSettings::default();
+    apply_setting_assignments(&mut settings, pairs)?;
+    Ok(settings)
+}
+
 fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
     match role {
         "hair" => Ok(ChainRole::Hair),
@@ -46,10 +88,8 @@ pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
     root_position: [f32; 3],
-    up: [f32; 3],
     role: &str,
-    joint_count: usize,
-    column_count: usize,
+    settings: ChainGenSettings,
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
 
@@ -57,22 +97,12 @@ pub fn run_chain_gen(
         .iter()
         .map(|p| Vector3::new(p[0], p[1], p[2]))
         .collect();
-    let root_position = Vector3::new(root_position[0], root_position[1], root_position[2]);
-    let up = Vector3::new(up[0], up[1], up[2]);
-
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
-        root_position,
-        up,
+        root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
     };
-
-    let params = ChainGenParams {
-        role,
-        joint_count,
-        column_count,
-        root_blend_width: None,
-    };
+    let params = ChainGenParams { role, settings };
 
     let chains = place_chains(&input, &params)?;
     let weights = compute_chain_weights(&input, &params, &chains);
@@ -103,10 +133,9 @@ pub fn run_chain_gen(
                 .into_iter()
                 .map(|(target, weight)| {
                     let name = match target {
-                        thyllore_avatar_core::garment::components::chain_gen::InfluenceTarget::Root => "root".to_string(),
-                        thyllore_avatar_core::garment::components::chain_gen::InfluenceTarget::Joint { chain, joint } => {
-                            let chain = &chains_out[chain];
-                            chain.joints[joint].name.clone()
+                        InfluenceTarget::Root => "root".to_string(),
+                        InfluenceTarget::Joint { chain, joint } => {
+                            chains_out[chain].joints[joint].name.clone()
                         }
                     };
                     (name, weight)
@@ -128,16 +157,17 @@ mod tests {
     #[test]
     fn straight_strand_single_chain() {
         let positions: [[f32; 3]; 4] = [
-            [0.0, 1.0, 0.0],
-            [-0.5, 0.5, 0.0],
-            [0.5, 0.5, 0.0],
-            [0.0, 0.0, 0.0],
+            [0.0, -0.1, 0.0],
+            [-0.5, -0.5, 0.0],
+            [0.5, -0.5, 0.0],
+            [0.0, -1.0, 0.0],
         ];
         let triangles: [[u32; 3]; 2] = [[0, 1, 2], [1, 3, 2]];
-        let root_position = [0.0, 1.0, 0.0];
-        let up = [0.0, -1.0, 0.0];
+        let settings =
+            settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
+                .unwrap();
 
-        let output = run_chain_gen(&positions, &triangles, root_position, up, "hair", 2, 1)
+        let output = run_chain_gen(&positions, &triangles, [0.0, 0.0, 0.0], "hair", settings)
             .expect("chain generation should succeed");
 
         assert_eq!(output.chains.len(), 1, "should have exactly 1 chain");
@@ -154,5 +184,18 @@ mod tests {
                 weight.vertex
             );
         }
+    }
+
+    #[test]
+    fn unknown_setting_is_rejected() {
+        assert!(settings_from_pairs(&[("joints".into(), 2.0)]).is_err());
+    }
+
+    #[test]
+    fn params_table_carries_defaults() {
+        let params = chain_gen_params();
+        let joint_count = params.iter().find(|p| p.name == "joint_count").unwrap();
+        assert_eq!(joint_count.default, 4.0);
+        assert_eq!(joint_count.label, "Joint Count");
     }
 }

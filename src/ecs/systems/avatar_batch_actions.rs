@@ -10,9 +10,11 @@ use crate::ecs::systems::phases::event_dispatch::spring_bone::{
     DumpSkinnedVertices, DumpSpringTails, FitSpringParams,
 };
 use crate::ecs::world::{Entity, World};
-use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
 use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::garment::systems::chain_gen;
+use thyllore_cli_core::scalar_assignment_parse;
 
 use super::avatar_export_systems::dump_morph_track_samples;
 use super::batch_run_systems::{unit_action_parse, BatchAction};
@@ -429,43 +431,47 @@ impl BatchAction for GenerateChainBones {
     }
 }
 
-const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>/<material>,<root_bone>,<joints>,<columns>";
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>/<material>,<root_bone>[,<setting>=<value>...]";
 
 fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     let spec = text.strip_prefix("generate_chain_bones=")?;
-    let parts: Vec<&str> = spec.splitn(4, ',').collect();
-    if parts.len() != 4 {
+    let mut parts = spec.split(',');
+    let (Some(mesh_material), Some(root_bone)) = (parts.next(), parts.next()) else {
         return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
-    }
+    };
 
-    let mesh_material = parts[0].trim();
-    let (mesh, material) = match mesh_material.rsplit_once('/') {
+    let (mesh, material) = match mesh_material.trim().rsplit_once('/') {
         Some((m, mat)) => (m.to_string(), mat.to_string()),
         None => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
     };
-
-    let root_bone = parts[1].trim().to_string();
+    let root_bone = root_bone.trim().to_string();
     if root_bone.is_empty() {
         return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
     }
 
-    let joint_count: usize = match parts[2].trim().parse() {
-        Ok(n) if n > 0 => n,
-        _ => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    let setting_names = chain_gen::setting_names();
+    let assignments: Vec<(String, f32)> = match parts
+        .map(|part| scalar_assignment_parse(part.trim(), &setting_names))
+        .collect::<std::result::Result<_, String>>()
+    {
+        Ok(assignments) => assignments,
+        Err(message) => return Some(Err(anyhow!("generate_chain_bones: {message}"))),
     };
-
-    let column_count: usize = match parts[3].trim().parse() {
-        Ok(n) => n,
-        Err(_) => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
-    };
+    let mut settings = ChainGenSettings::default();
+    if let Err(e) = chain_gen::apply_setting_assignments(&mut settings, &assignments) {
+        return Some(Err(e));
+    }
+    if settings.joint_count == 0 {
+        return Some(Err(anyhow!(
+            "generate_chain_bones: joint_count must be at least 1"
+        )));
+    }
 
     let request = ChainGenRequest {
         submesh: SubmeshKey { mesh, material },
         root_bone,
-        joint_count,
-        column_count,
+        settings,
     };
-
     Some(Ok(Box::new(GenerateChainBones { request })))
 }
 
@@ -784,25 +790,34 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_chain_bones_parses_correct_format() {
-        let result = generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine,3,2");
-        assert!(result.is_some());
-        let action: Box<dyn BatchAction> = result.unwrap().unwrap();
+    fn test_generate_chain_bones_parses_submesh_root_and_settings() {
+        let action = generate_chain_bones_parse(
+            "generate_chain_bones=garment/cloth,spine,joint_count=3,column_count=2",
+        )
+        .expect("prefix matches")
+        .expect("spec is valid");
         assert_eq!(action.name(), "generate_chain_bones");
+
+        let defaults_only = generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine")
+            .expect("prefix matches");
+        assert!(defaults_only.is_ok());
     }
 
     #[test]
     fn test_generate_chain_bones_rejects_malformed_specs() {
-        assert!(
-            generate_chain_bones_parse("generate_chain_bones=garment/cloth,,3,2")
-                .expect("prefix matches")
-                .is_err()
-        );
-        assert!(
-            generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine,0,2")
-                .expect("prefix matches")
-                .is_err()
-        );
+        for spec in [
+            "generate_chain_bones=garment/cloth,,joint_count=3",
+            "generate_chain_bones=garment/cloth,spine,joint_count=0",
+            "generate_chain_bones=garment/cloth,spine,joints=3",
+            "generate_chain_bones=garment,spine",
+        ] {
+            assert!(
+                generate_chain_bones_parse(spec)
+                    .expect("prefix matches")
+                    .is_err(),
+                "{spec}"
+            );
+        }
     }
 
     #[test]

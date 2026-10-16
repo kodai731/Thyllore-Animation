@@ -7,13 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from chain_gen_eval import reference_chains, generated_chains, chain_heads, joint_metrics, weight_metrics, deform_metrics, evaluate, reference_to_yup, scale_position
-
-
-def _zup_to_yup(p: tuple) -> tuple:
-    """Convert Blender Z-up (x,y,z) to engine Y-up (x,z,-y)."""
-    x, y, z = p
-    return (x, z, -y)
+from chain_gen_eval import reference_chains, generated_chains, chain_heads, joint_metrics, weight_metrics, deform_metrics, evaluate, scale_position, REFERENCE_SPACE
 
 
 def test_reference_chains_single_strand() -> None:
@@ -115,29 +109,6 @@ def test_joint_metrics_chain_count_diff() -> None:
     assert metrics["ref_chain_count"] == 1
     assert metrics["gen_chain_count"] == 2
     assert metrics["chain_count_diff"] == 1
-
-
-def test_joint_metrics_zup_to_yup_roundtrip() -> None:
-    """Reference joints in Z-up converted to Y-up match generated joints in Y-up."""
-    ref_bones = [
-        {"name": "Skirt_Back_1", "parent": "Hips", "head": [0.0, 0.9, -0.1], "tail": [0.0, 0.8, -0.2], "kind": "chain"},
-        {"name": "Skirt_Back_2", "parent": "Skirt_Back_1", "head": [0.0, 0.8, -0.2], "tail": [0.0, 0.7, -0.3], "kind": "chain"},
-    ]
-    ref_chains = reference_chains(ref_bones)
-    ref_head_lookup = {b["name"]: _zup_to_yup(tuple(b["head"])) for b in ref_bones}
-    ref_yup = chain_heads(ref_chains, ref_head_lookup)
-
-    gen_bones = [
-        {"name": "skirt_01_00", "parent": "", "head": [0.0, -0.1, -0.9]},
-        {"name": "skirt_01_01", "parent": "skirt_01_00", "head": [0.0, -0.2, -0.8]},
-    ]
-    gen_chains = generated_chains(gen_bones)
-    gen_head_lookup = {b["name"]: tuple(b["head"]) for b in gen_bones}
-    gen_yup = chain_heads(gen_chains, gen_head_lookup)
-
-    metrics = joint_metrics(gen_yup, ref_yup)
-    assert metrics["rms_distance"] < 1e-10
-    assert metrics["max_distance"] < 1e-10
 
 
 def test_joint_metrics_correspondence() -> None:
@@ -246,52 +217,51 @@ def test_deform_metrics_offset() -> None:
     assert metrics["max_error"] == 0.1
 
 
-def test_evaluate_zup_scale_roundtrip() -> None:
-    """Reference in Z-up (Blender) with reference_scale=0.01 and generated in Y-up with generated_scale=1.0.
-
-    The reference positions are the Z-up form of the generated Y-up positions:
-      gen_yup = (x, y, z) -> ref_zup = (x, -z, y)
-    With reference_scale=0.01, reference_to_yup(ref_zup, 0.01) = (x*0.01, z*0.01, -(-z)*0.01) = (x*0.01, z*0.01, z*0.01)
-    Wait, that's not right. Let me recalculate:
-      reference_to_yup([rx, ry, rz], scale) = (rx*scale, rz*scale, -ry*scale)
-    For ref_zup = (x, -z, y): reference_to_yup = (x*0.01, y*0.01, -(-z)*0.01) = (x*0.01, y*0.01, z*0.01)
-    And scale_position(gen_yup, 1.0) = (x, y, z)
-
-    So they won't match unless reference_scale=1.0. Let me use reference_scale=1.0 for the roundtrip test."""
-    gen_yup_0 = (0.0, 0.9, -0.1)
-    gen_yup_1 = (0.0, 0.8, -0.2)
-
-    ref_zup_0 = (0.0, 0.1, 0.9)
-    ref_zup_1 = (0.0, 0.2, 0.8)
-
-    assert reference_to_yup(list(ref_zup_0), 1.0) == gen_yup_0
-    assert reference_to_yup(list(ref_zup_1), 1.0) == gen_yup_1
-
+def _reference_and_generated(space: str | None) -> tuple[dict, dict]:
+    head_0 = [0.0, 0.9, -0.1]
+    head_1 = [0.0, 0.8, -0.2]
     ref_data = {
         "deleted_bones": [
-            {"name": "Skirt_Back_1", "parent": "Hips", "head": list(ref_zup_0), "tail": [0.0, 0.0, 0.0], "kind": "chain"},
-            {"name": "Skirt_Back_2", "parent": "Skirt_Back_1", "head": list(ref_zup_1), "tail": [0.0, 0.0, 0.0], "kind": "chain"},
+            {"name": "Skirt_Back_1", "parent": "Hips", "head": head_0, "tail": [0.0, 0.0, 0.0], "kind": "chain"},
+            {"name": "Skirt_Back_2", "parent": "Skirt_Back_1", "head": head_1, "tail": [0.0, 0.0, 0.0], "kind": "chain"},
         ],
         "vertex_weights": [
-            {"mesh": "skirt", "vertex": 0, "bone": "Skirt_Back_1", "weight": 0.5, "position": list(ref_zup_0)},
-            {"mesh": "skirt", "vertex": 0, "bone": "Skirt_Back_2", "weight": 0.5, "position": list(ref_zup_0)},
+            {"mesh": "skirt", "vertex": 0, "bone": "Skirt_Back_1", "weight": 0.5, "position": head_0},
+            {"mesh": "skirt", "vertex": 0, "bone": "Skirt_Back_2", "weight": 0.5, "position": head_0},
         ],
     }
-
+    if space is not None:
+        ref_data["space"] = space
     gen_data = {
         "chain_gen": {
             "bones": [
-                {"name": "skirt_01_00", "parent": "", "head": list(gen_yup_0)},
-                {"name": "skirt_01_01", "parent": "skirt_01_00", "head": list(gen_yup_1)},
+                {"name": "skirt_01_00", "parent": "", "head": head_0},
+                {"name": "skirt_01_01", "parent": "skirt_01_00", "head": head_1},
             ],
             "vertex_weights": [
-                {"mesh": "skirt", "vertex": 0, "bone": "skirt_01_00", "weight": 0.5, "position": list(gen_yup_0)},
-                {"mesh": "skirt", "vertex": 0, "bone": "skirt_01_01", "weight": 0.5, "position": list(gen_yup_0)},
+                {"mesh": "skirt", "vertex": 0, "bone": "skirt_01_00", "weight": 0.5, "position": head_0},
+                {"mesh": "skirt", "vertex": 0, "bone": "skirt_01_01", "weight": 0.5, "position": head_0},
             ],
         },
     }
+    return ref_data, gen_data
+
+
+def test_evaluate_matches_reference_written_in_engine_space() -> None:
+    ref_data, gen_data = _reference_and_generated(REFERENCE_SPACE)
 
     output = evaluate(ref_data, gen_data, reference_scale=1.0, generated_scale=1.0)
+
+    assert output["joint"]["rms_distance"] < 1e-10
     assert output["weight"]["matched_vertices"] == 1
     assert output["weight"]["unmatched_vertices"] == 0
     assert output["weight"]["dominant_chain_agreement"] == 1.0
+
+
+def test_evaluate_rejects_reference_without_engine_space() -> None:
+    import pytest
+
+    for space in (None, "blender_z_up"):
+        ref_data, gen_data = _reference_and_generated(space)
+        with pytest.raises(ValueError):
+            evaluate(ref_data, gen_data)

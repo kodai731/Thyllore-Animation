@@ -36,6 +36,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::chain_gen_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::build_feedback_record, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_feedback_batch, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;

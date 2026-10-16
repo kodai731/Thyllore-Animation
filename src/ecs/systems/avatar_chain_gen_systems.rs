@@ -1,7 +1,7 @@
 use cgmath::SquareMatrix;
 use thyllore_avatar_core::garment::components::chain_gen::{
-    ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainRole, ChainWeightRecord,
-    GeneratedBoneRecord, GeneratedChain, InfluenceTarget, VertexInfluences,
+    ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainGenSettings, ChainRole,
+    ChainWeightRecord, GeneratedBoneRecord, GeneratedChain, InfluenceTarget, VertexInfluences,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::garment::systems::chain_bones::{
@@ -57,13 +57,10 @@ pub fn generate_chain_bones(
         positions: &positions,
         triangles: &triangles,
         root_position,
-        up: cgmath::Vector3::new(0.0, 1.0, 0.0),
     };
     let params = ChainGenParams {
         role,
-        joint_count: request.joint_count,
-        column_count: request.column_count,
-        root_blend_width: None,
+        settings: request.settings.clone(),
     };
     let chains = place_chains(&input, &params)?;
     let influences = compute_chain_weights(&input, &params, &chains);
@@ -283,15 +280,18 @@ fn sync_fbx_clusters(
     let clusters = clusters_from_skin_data(skin, skeleton);
 
     let mut fbx_cache = world.resource_mut::<FbxModelCache>();
+    let Some(fbx_data_index) = fbx_cache.fbx_data_index(mesh_index) else {
+        msg_error!(
+            "graphics mesh {} is not part of the loaded FBX model; its generated bones will not reach the FBX export",
+            mesh_index
+        );
+        return;
+    };
     if let Some(fbx_model) = fbx_cache.fbx_model_mut() {
-        if fbx_model.fbx_data.len() <= mesh_index {
-            msg_warn!(
-                "fbx_data has {} entries, mesh_index is {}",
-                fbx_model.fbx_data.len(),
-                mesh_index
-            );
-            return;
-        }
-        fbx_model.fbx_data[mesh_index].clusters = clusters;
+        fbx_model.fbx_data[fbx_data_index].clusters = clusters;
     }
+}
+
+pub fn set_chain_gen_settings(world: &mut World, settings: ChainGenSettings) {
+    world.resource_mut::<AvatarSetupState>().chain_gen = settings;
 }

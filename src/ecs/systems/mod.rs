@@ -93,7 +93,9 @@ mod world;
 pub use animation::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_systems::*;
-pub use avatar_chain_gen_systems::{apply_chain_generation, generate_chain_bones};
+pub use avatar_chain_gen_systems::{
+    apply_chain_generation, generate_chain_bones, set_chain_gen_settings,
+};
 pub use avatar_export_systems::*;
 pub use avatar_hidden_mask_systems::*;
 pub use avatar_setup_systems::*;

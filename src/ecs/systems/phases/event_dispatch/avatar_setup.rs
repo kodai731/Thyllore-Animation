@@ -6,6 +6,7 @@ use thyllore_avatar_core::vrchat::rank::Platform;
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
+use crate::ecs::resource::OutputQueue;
 use crate::ecs::systems::{
     add_spring_chains_by_prefix, compute_hidden_triangles, export_unity_avatar, fit_body_colliders,
     invalidate_humanoid_rig, open_avatar_setup, save_humanoid_mapping, save_material_textures,
@@ -13,6 +14,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
 
 #[derive(Clone, Debug)]
 pub enum AvatarSetupEvent {
@@ -40,6 +42,9 @@ pub enum AvatarSetupEvent {
     SetSubmeshRole {
         key: SubmeshKey,
         role: SubmeshRole,
+    },
+    GenerateChainBones {
+        request: ChainGenRequest,
     },
     ComputeHiddenTriangles {
         params: HiddenMaskParams,
@@ -80,6 +85,11 @@ impl UiCommand for AvatarSetupEvent {
             }
             AvatarSetupEvent::SaveMaterialTextures => save_material_textures(world),
             AvatarSetupEvent::SetSubmeshRole { key, role } => set_submesh_role(world, key, role),
+            AvatarSetupEvent::GenerateChainBones { request } => {
+                world
+                    .resource_mut::<OutputQueue>()
+                    .push(crate::ecs::resource::OutputCommand::GenerateChainBones { request });
+            }
             AvatarSetupEvent::ComputeHiddenTriangles { params } => {
                 compute_hidden_triangles(world, assets, graphics, &params)
             }

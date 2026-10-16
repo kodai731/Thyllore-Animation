@@ -5,6 +5,7 @@ use crate::ecs::resource::{
 };
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use crate::ecs::systems::{apply_chain_generation, generate_chain_bones};
 use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
@@ -203,6 +204,20 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+
+        OutputCommand::GenerateChainBones { request } => {
+            match generate_chain_bones(
+                &app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                &request,
+            ) {
+                Ok(report) => {
+                    apply_chain_generation(&mut app.data.ecs_world, &app.data.ecs_assets, report);
+                }
+                Err(e) => msg_error!("Failed to generate chain bones: {:?}", e),
+            }
+        }
 
         OutputCommand::ApplyHiddenTriangles { meshes } => {
             if let Err(e) = apply_hidden_triangles(app, meshes) {

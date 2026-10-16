@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
+
 use crate::hooks::batch_capture::BatchCapture;
 
 /// Commands recorded during event dispatch and applied by `App`, one queue per stage of the apply order.
@@ -95,6 +97,9 @@ pub enum OutputCommand {
     },
     ExportModelGltf {
         path: PathBuf,
+    },
+    GenerateChainBones {
+        request: ChainGenRequest,
     },
     ApplyHiddenTriangles {
         meshes: Vec<(usize, Vec<u32>)>,

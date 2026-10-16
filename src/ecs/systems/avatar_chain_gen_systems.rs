@@ -10,19 +10,25 @@ use thyllore_avatar_core::garment::systems::chain_bones::{
 use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{AvatarSetupState, BoneGizmoData, NodeAssets};
+use crate::ecs::resource::{AvatarSetupState, BoneGizmoData, FbxModelCache, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::avatar_submesh_role_systems::collect_submesh_meshes;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::World;
+use crate::exporter::fbx_exporter::clusters_from_skin_data;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+
+pub struct GeneratedChainBones {
+    pub mesh_index: usize,
+    pub report: ChainGenReport,
+}
 
 pub fn generate_chain_bones(
     world: &World,
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
     request: &ChainGenRequest,
-) -> anyhow::Result<ChainGenReport> {
+) -> anyhow::Result<GeneratedChainBones> {
     let (mesh_index, role) = resolve_submesh(world, assets, graphics, &request.submesh)?;
 
     let mesh = &graphics.meshes[mesh_index];
@@ -77,7 +83,7 @@ pub fn generate_chain_bones(
         write_chain_weights(skin, root, &bone_ids, &influences);
     }
 
-    Ok(report)
+    Ok(GeneratedChainBones { mesh_index, report })
 }
 
 fn resolve_submesh(
@@ -213,8 +219,16 @@ fn build_report(
     }
 }
 
-pub fn apply_chain_generation(world: &mut World, assets: &AssetStorage, report: ChainGenReport) {
+pub fn apply_chain_generation(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    generated: GeneratedChainBones,
+) {
+    let report = generated.report;
     let bone_count = report.bones.len();
+
+    sync_fbx_clusters(world, assets, graphics, generated.mesh_index);
 
     reset_spring_bone_state(world);
 
@@ -248,4 +262,36 @@ pub fn apply_chain_generation(world: &mut World, assets: &AssetStorage, report: 
     }
 
     msg_info!("Generated {} chain bones", bone_count);
+}
+
+fn sync_fbx_clusters(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    mesh_index: usize,
+) {
+    let skin = match graphics.meshes[mesh_index].skin_data.as_ref() {
+        Some(s) => s,
+        None => return,
+    };
+    let skeleton_id = skin.skeleton_id;
+    let skeleton = match assets.get_skeleton_by_skeleton_id(skeleton_id) {
+        Some(s) => s,
+        None => return,
+    };
+
+    let clusters = clusters_from_skin_data(skin, skeleton);
+
+    let mut fbx_cache = world.resource_mut::<FbxModelCache>();
+    if let Some(fbx_model) = fbx_cache.fbx_model_mut() {
+        if fbx_model.fbx_data.len() <= mesh_index {
+            msg_warn!(
+                "fbx_data has {} entries, mesh_index is {}",
+                fbx_model.fbx_data.len(),
+                mesh_index
+            );
+            return;
+        }
+        fbx_model.fbx_data[mesh_index].clusters = clusters;
+    }
 }

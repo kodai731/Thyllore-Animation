@@ -29,6 +29,13 @@ impl FbxModelCache {
         }
     }
 
+    pub fn fbx_model_mut(&mut self) -> Option<&mut FbxModel> {
+        match self {
+            Self::Loaded { fbx_model, .. } => Some(fbx_model),
+            Self::Empty => None,
+        }
+    }
+
     pub fn source_path(&self) -> Option<&str> {
         match self {
             Self::Loaded { source_path, .. } => Some(source_path),

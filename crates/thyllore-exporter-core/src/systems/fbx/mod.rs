@@ -7,7 +7,10 @@ pub(crate) mod file_identity;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;
+pub mod skin_clusters;
 pub(crate) mod writer;
+
+pub use skin_clusters::clusters_from_skin_data;
 
 use std::path::Path;
 

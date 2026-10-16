@@ -213,7 +213,12 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
                 &request,
             ) {
                 Ok(report) => {
-                    apply_chain_generation(&mut app.data.ecs_world, &app.data.ecs_assets, report);
+                    apply_chain_generation(
+                        &mut app.data.ecs_world,
+                        &app.data.ecs_assets,
+                        &app.data.graphics_resources,
+                        report,
+                    );
                 }
                 Err(e) => msg_error!("Failed to generate chain bones: {:?}", e),
             }

@@ -6,7 +6,9 @@ use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
-use crate::ecs::systems::phases::event_dispatch::spring_bone::{DumpSpringTails, FitSpringParams};
+use crate::ecs::systems::phases::event_dispatch::spring_bone::{
+    DumpSkinnedVertices, DumpSpringTails, FitSpringParams,
+};
 use crate::ecs::world::{Entity, World};
 use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
 use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
@@ -209,6 +211,69 @@ fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
         )));
     }
     Some(Ok(Box::new(DumpSpringTailsAction { path, sample_rate })))
+}
+
+#[derive(Debug)]
+pub struct DumpSkinnedVerticesAction {
+    path: PathBuf,
+    sample_rate: f32,
+    submesh: SubmeshKey,
+}
+
+impl BatchAction for DumpSkinnedVerticesAction {
+    fn name(&self) -> &'static str {
+        "dump_skinned_vertices"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(DumpSkinnedVertices {
+            path: self.path.clone(),
+            sample_rate: self.sample_rate,
+            submesh: self.submesh.clone(),
+        });
+    }
+}
+
+fn dump_skinned_vertices_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("dump_skinned_vertices=")?;
+    let parts: Vec<&str> = suffix.splitn(3, ',').collect();
+    if parts.len() != 3 {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices requires exactly 3 comma-separated values: path,sample_rate,mesh/material"
+        )));
+    }
+    let path = PathBuf::from(parts[0].trim());
+    if path.as_os_str().is_empty() {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: path must not be empty"
+        )));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
+    let mesh_material = parts[2].trim();
+    let (mesh, material) = match mesh_material.rsplit_once('/') {
+        Some((m, mat)) => (m.to_string(), mat.to_string()),
+        None => {
+            return Some(Err(anyhow!(
+                "dump_skinned_vertices: submesh must be in mesh/material format"
+            )))
+        }
+    };
+    let submesh = SubmeshKey { mesh, material };
+    Some(Ok(Box::new(DumpSkinnedVerticesAction {
+        path,
+        sample_rate,
+        submesh,
+    })))
 }
 
 #[derive(Debug)]
@@ -518,6 +583,7 @@ crate::batch_action!(
     unit_action_parse::<DumpMorphTrackSamples>
 );
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
+crate::batch_action!("dump_skinned_vertices", dump_skinned_vertices_parse);
 crate::batch_action!("fit_spring_params", fit_spring_params_parse);
 crate::batch_action!("generate_chain_bones", generate_chain_bones_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
@@ -734,6 +800,39 @@ mod tests {
         );
         assert!(
             generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine,0,2")
+                .expect("prefix matches")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_dump_skinned_vertices_parses_correct_format() {
+        let action = dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0,Body/Skin")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(action.name(), "dump_skinned_vertices");
+    }
+
+    #[test]
+    fn test_dump_skinned_vertices_rejects_malformed_specs() {
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,abc,Body/Skin")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,0,Body/Skin")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0,Bare")
                 .expect("prefix matches")
                 .is_err()
         );

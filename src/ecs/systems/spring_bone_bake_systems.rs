@@ -1,3 +1,5 @@
+use cgmath::Vector3;
+
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
 use crate::animation::spring_bone::SpringTailSample;
 use crate::animation::{AnimationClip, BoneId, Skeleton};
@@ -103,16 +105,78 @@ pub fn simulate_spring_tails(
     constraints: Option<&ConstraintSet>,
     looping: bool,
 ) -> Vec<SpringTailSample> {
+    let mut samples = Vec::new();
+
+    for_each_spring_frame(
+        config,
+        setup,
+        skeleton,
+        base_clip,
+        constraints,
+        looping,
+        |frame_index, sb_state, _| {
+            samples.extend(collect_tail_samples(frame_index, setup, sb_state, skeleton));
+        },
+    );
+
+    samples
+}
+
+pub fn simulate_skinned_positions(
+    config: &BakeConfig,
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    base_clip: &AnimationClip,
+    constraints: Option<&ConstraintSet>,
+    looping: bool,
+    skin: &thyllore_model_core::SkinData,
+) -> Vec<Vec<Vector3<f32>>> {
+    let mut frames = Vec::with_capacity(count_bake_frames(config));
+
+    for_each_spring_frame(
+        config,
+        setup,
+        skeleton,
+        base_clip,
+        constraints,
+        looping,
+        |_, _, globals| {
+            let mut positions = skin.base_positions.clone();
+            let mut normals = skin.base_normals.clone();
+            thyllore_model_core::apply_skinning(
+                skin,
+                globals,
+                skeleton,
+                &mut positions,
+                &mut normals,
+            );
+            frames.push(positions);
+        },
+    );
+
+    frames
+}
+
+fn count_bake_frames(config: &BakeConfig) -> usize {
+    ((config.end_time - config.start_time) * config.sample_rate) as usize + 1
+}
+
+fn for_each_spring_frame(
+    config: &BakeConfig,
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    base_clip: &AnimationClip,
+    constraints: Option<&ConstraintSet>,
+    looping: bool,
+    mut visit_frame: impl FnMut(usize, &crate::ecs::resource::SpringBoneState, &[cgmath::Matrix4<f32>]),
+) {
     let mut pose = create_pose_from_rest(skeleton);
     let mut globals = compute_pose_global_transforms(skeleton, &pose);
     let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
 
-    let frame_count = ((config.end_time - config.start_time) * config.sample_rate) as usize + 1;
     let dt = 1.0 / config.sample_rate;
 
-    let mut samples = Vec::new();
-
-    for frame_index in 0..frame_count {
+    for frame_index in 0..count_bake_frames(config) {
         let sample_time = config.start_time + frame_index as f32 * dt;
 
         step_spring_frame(
@@ -129,15 +193,8 @@ pub fn simulate_spring_tails(
             dt,
         );
 
-        samples.extend(collect_tail_samples(
-            frame_index,
-            setup,
-            &sb_state,
-            skeleton,
-        ));
+        visit_frame(frame_index, &sb_state, &globals);
     }
-
-    samples
 }
 
 fn collect_tail_samples(

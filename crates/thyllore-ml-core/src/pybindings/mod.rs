@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+mod chain_gen;
 #[cfg(feature = "debug-log")]
 mod debuglog;
 mod error;
@@ -34,6 +35,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         v2_curve_copilot::degraded_context_length,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::build_feedback_record, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_feedback_batch, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;

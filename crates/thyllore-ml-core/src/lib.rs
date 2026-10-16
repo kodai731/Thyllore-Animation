@@ -1,3 +1,4 @@
+pub mod chain_gen_bridge;
 pub mod copilot;
 #[cfg(feature = "debug-log")]
 pub mod debug_log;

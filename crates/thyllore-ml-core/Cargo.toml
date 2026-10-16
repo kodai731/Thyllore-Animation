@@ -22,6 +22,7 @@ debug-log = []
 thyllore-ml-api = { path = "../thyllore-ml-api" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-anim-core = { path = "../thyllore-anim-core" }
+thyllore-avatar-core = { path = "../thyllore-avatar-core" }
 ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "load-dynamic", "download-binaries", "copy-dylibs", "tls-native"] }
 anyhow = "1"
 base64 = "0.22"

@@ -4148,6 +4148,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
  "thyllore-ml-api",
  "thyllore-model-core",
  "ureq 2.12.1",

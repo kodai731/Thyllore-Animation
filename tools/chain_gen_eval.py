@@ -1,28 +1,25 @@
-"""Chain bone generation accuracy measurement tool.
+"""Measure generated chain bones against the secondary bones of a hand-rigged model.
 
-Measures how well generated chain bones (from engine --batch-anim-dump) match the reference
-secondary bones (from S1 scripts/blender/strip_secondary_bones.py output JSON).
+    python3 tools/chain_gen_eval.py --reference <secondary_reference.json> --generated <anim_dump.json> --out <dir>
+        [--reference-scale 1.0] [--generated-scale 1.0] [--miss-radius 0.03] [--match-tolerance 0.002]
+        [--deform-generated <csv> --deform-reference <csv>]
 
-Computes joint metrics: chain counts, nearest-neighbor distances between generated and reference
-chain joints, miss rate (reference joints without a nearby generated joint), and per-chain
-correspondence via nearest-neighbor voting.
+The reference is written by scripts/blender/strip_secondary_bones.py (Blender world, Z-up) and is converted
+to Y-up; the scales bring both sides to meters. Writes <out>/chain_gen_eval.json and chain_gen_eval.md with
+joint, weight and (when both CSVs are given) deformation metrics. It reports numbers only; the thresholds are
+the user's to set.
 
-    python3 tools/chain_gen_eval.py --reference <json> --generated <json> --out <dir> \
-        [--reference-scale] [--generated-scale] [--miss-radius]
-
-Writes joint metrics to <out>/chain_gen_eval.json. Weight and deformation metrics are added later.
-
-Future execution procedure (after implementation):
-1. S1: Make a copy of Shinano model and generate reference JSON (user runs strip_secondary_bones.py).
-2. Engine: Load the copy with submesh_role + generate_chain_bones + --batch-anim-dump.
-  For deformation RMS, attach the same spring values as add_spring_chains and the same sway clip,
-   then take dump_skinned_vertices=<csv>,30,<mesh>/<material> for both models.
-3. This tool: Run chain_gen_eval.py against the outputs.
+Procedure:
+1. Run strip_secondary_bones.py on the purchased model (the user runs it) to get <name>_humanoid_only.fbx and
+    <name>_secondary_reference.json.
+2. Load the copy in the engine with submesh_role=<role>:<mesh>/<material> and
+    generate_chain_bones=<mesh>/<material>,<root_bone>,<joints>,<columns>, and keep --batch-anim-dump.
+3. For the deformation RMS, give both models the same spring values and colliders and the same sway clip,
+    and take dump_skinned_vertices=<csv>,30,<mesh>/<material> from each.
+4. Run this tool on the outputs.
 """
 
 from __future__ import annotations
-
-import numpy as np
 
 import argparse
 import json
@@ -30,6 +27,8 @@ import math
 import os
 import sys
 from pathlib import Path
+
+import numpy as np
 
 
 def reference_chains(deleted_bones: list[dict]) -> list[list[str]]:

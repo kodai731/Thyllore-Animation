@@ -48,3 +48,15 @@ pub struct GeneratedChain {
 pub fn joint_name(role: ChainRole, column: usize, joint: usize) -> String {
     format!("{}_{:02}_{:02}", role.bone_prefix(), column, joint)
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InfluenceTarget {
+    Root,
+    Joint { chain: usize, joint: usize },
+}
+
+#[derive(Debug, Clone)]
+pub struct VertexInfluences {
+    pub vertex: u32,
+    pub influences: Vec<(InfluenceTarget, f32)>,
+}

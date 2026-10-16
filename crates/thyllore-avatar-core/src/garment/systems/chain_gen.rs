@@ -5,6 +5,7 @@ use cgmath::{InnerSpace, Vector3};
 
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainRole, GeneratedChain, GeneratedJoint,
+    InfluenceTarget, VertexInfluences,
 };
 
 const AZIMUTH_BIN_COUNT: usize = 36;
@@ -289,6 +290,148 @@ pub fn place_chains(
     Ok(chains)
 }
 
+fn polyline_arc_positions(joints: &[GeneratedJoint], tail: Vector3<f32>) -> (Vec<f32>, f32) {
+    let mut arc = vec![0.0];
+    let mut current = joints[0].head;
+    for joint in &joints[1..] {
+        let segment = joint.head - current;
+        let length = segment.magnitude();
+        current = joint.head;
+        arc.push(arc.last().copied().unwrap() + length);
+    }
+    let last_joint = joints.last().unwrap().head;
+    let tail_segment = tail - last_joint;
+    let total_length = arc.last().copied().unwrap() + tail_segment.magnitude();
+    (arc, total_length)
+}
+
+fn project_to_polyline_arc(
+    point: Vector3<f32>,
+    joints: &[GeneratedJoint],
+    tail: Vector3<f32>,
+    arc: &[f32],
+    total_length: f32,
+) -> f32 {
+    let nearest = joints
+        .iter()
+        .enumerate()
+        .map(|(i, joint)| {
+            let (next_pos, next_arc) = match joints.get(i + 1) {
+                Some(next_joint) => (next_joint.head, arc[i + 1]),
+                None => (tail, total_length),
+            };
+            let (t, proj) = line_projection(point, joint.head, next_pos);
+            let dist_sq = (point - proj).magnitude2();
+            (dist_sq, arc[i] + t * (next_arc - arc[i]))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    nearest.map_or(0.0, |(_, s)| s).clamp(0.0, total_length)
+}
+
+fn line_projection(point: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -> (f32, Vector3<f32>) {
+    let ab = b - a;
+    let ap = point - a;
+    let len_sq = ab.magnitude2();
+    if len_sq < 1e-10 {
+        return (0.0, a);
+    }
+    let t = (ap.dot(ab) / len_sq).clamp(0.0, 1.0);
+    (t, a + ab * t)
+}
+
+fn joint_weights_at_arc(s: f32, arc: &[f32], total_length: f32) -> Vec<(usize, f32)> {
+    let last_joint_index = arc.len() - 1;
+
+    if s >= total_length {
+        return vec![(last_joint_index, 1.0)];
+    }
+
+    for (i, &arc_i) in arc.iter().enumerate() {
+        if i == last_joint_index {
+            return vec![(i, 1.0)];
+        }
+        let arc_next = arc[i + 1];
+        if s < arc_next {
+            let segment_length = arc_next - arc_i;
+            if segment_length < 1e-10 {
+                return vec![(i, 1.0)];
+            }
+            let f = (s - arc_i) / segment_length;
+            return vec![(i, 1.0 - f), (i + 1, f)];
+        }
+    }
+
+    vec![(last_joint_index, 1.0)]
+}
+
+pub fn compute_chain_weights(
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+    chains: &[GeneratedChain],
+) -> Vec<VertexInfluences> {
+    let mut result = Vec::new();
+
+    for (chain_index, chain) in chains.iter().enumerate() {
+        let (arc, total_length) = polyline_arc_positions(&chain.joints, chain.tail);
+        let joint_count = chain.joints.len();
+
+        let root_blend_width = if let Some(w) = params.root_blend_width {
+            w
+        } else if joint_count == 1 {
+            total_length
+        } else {
+            arc[1] - arc[0]
+        };
+
+        for &vertex in &chain.vertices {
+            let s = project_to_polyline_arc(
+                input.positions[vertex as usize],
+                &chain.joints,
+                chain.tail,
+                &arc,
+                total_length,
+            );
+
+            let mut influences: Vec<(InfluenceTarget, f32)> =
+                joint_weights_at_arc(s, &arc, total_length)
+                    .into_iter()
+                    .map(|(joint_index, weight)| {
+                        (
+                            InfluenceTarget::Joint {
+                                chain: chain_index,
+                                joint: joint_index,
+                            },
+                            weight,
+                        )
+                    })
+                    .collect();
+
+            if s < root_blend_width {
+                let blend_factor = s / root_blend_width;
+                let root_weight = 1.0 - blend_factor;
+                for influence in &mut influences {
+                    influence.1 *= blend_factor;
+                }
+                influences.push((InfluenceTarget::Root, root_weight));
+            }
+            influences.retain(|(_, weight)| *weight > 0.0);
+
+            let sum: f32 = influences.iter().map(|(_, w)| w).sum();
+            if sum > 1e-8 {
+                for influence in &mut influences {
+                    influence.1 /= sum;
+                }
+            }
+
+            result.push(VertexInfluences { vertex, influences });
+        }
+    }
+
+    result.sort_by_key(|a| a.vertex);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,5 +597,112 @@ mod tests {
 
         let chains = place_chains(&input, &params).unwrap();
         assert_eq!(chains.len(), 2);
+    }
+
+    #[test]
+    fn weights_sum_to_one() {
+        let (positions, triangles) = build_straight_strand();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+
+        let chains = place_chains(&input, &build_hair_params(4)).unwrap();
+        let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+
+        for entry in &weights {
+            let sum: f32 = entry.influences.iter().map(|(_, w)| w).sum();
+            assert!(
+                (sum - 1.0).abs() < 1e-5,
+                "vertex {}: weight sum = {:.6}",
+                entry.vertex,
+                sum
+            );
+        }
+    }
+
+    #[test]
+    fn midpoint_vertex_has_equal_joint_weights() {
+        let (mut positions, triangles) = build_straight_strand();
+        let mut chains = place_chains(
+            &ChainGenInput {
+                positions: &positions,
+                triangles: &triangles,
+                root_position: Vector3::new(0.0, 0.0, 0.0),
+                up: Vector3::unit_y(),
+            },
+            &build_hair_params(4),
+        )
+        .unwrap();
+
+        let midpoint_vertex = positions.len() as u32;
+        positions.push(Vector3::new(0.0, -0.25, 0.0));
+        chains[0].vertices.push(midpoint_vertex);
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+        let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+
+        let midpoint_entry = weights
+            .iter()
+            .find(|e| e.vertex == midpoint_vertex)
+            .expect("midpoint vertex not found");
+        let mut joint1_weight = 0.0f32;
+        let mut joint2_weight = 0.0f32;
+        for (target, w) in &midpoint_entry.influences {
+            match *target {
+                InfluenceTarget::Joint { chain: _, joint } => match joint {
+                    1 => joint1_weight = *w,
+                    2 => joint2_weight = *w,
+                    _ => {}
+                },
+                InfluenceTarget::Root => {}
+            }
+        }
+        assert!(
+            (joint1_weight - 0.5).abs() < 1e-4,
+            "joint1 weight = {:.6}, expected ~0.5",
+            joint1_weight
+        );
+        assert!(
+            (joint2_weight - 0.5).abs() < 1e-4,
+            "joint2 weight = {:.6}, expected ~0.5",
+            joint2_weight
+        );
+    }
+
+    #[test]
+    fn first_vertex_has_full_root_weight() {
+        let (positions, triangles) = build_straight_strand();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::unit_y(),
+        };
+
+        let chains = place_chains(&input, &build_hair_params(4)).unwrap();
+        let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+
+        let first_entry = weights
+            .iter()
+            .find(|e| e.vertex == 0)
+            .expect("vertex 0 not found");
+        let mut root_weight = 0.0f32;
+        for (target, w) in &first_entry.influences {
+            if let InfluenceTarget::Root = target {
+                root_weight = *w;
+            }
+        }
+        assert!(
+            (root_weight - 1.0).abs() < 1e-5,
+            "vertex 0 root weight = {:.6}, expected 1.0",
+            root_weight
+        );
     }
 }

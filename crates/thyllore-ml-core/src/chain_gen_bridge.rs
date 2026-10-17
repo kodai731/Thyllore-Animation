@@ -84,23 +84,30 @@ fn vector3_to_array(v: Vector3<f32>) -> [f32; 3] {
     [v.x, v.y, v.z]
 }
 
+fn to_vectors(points: &[[f32; 3]]) -> Vec<Vector3<f32>> {
+    points
+        .iter()
+        .map(|p| Vector3::new(p[0], p[1], p[2]))
+        .collect()
+}
+
 pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
     root_position: [f32; 3],
     role: &str,
     settings: ChainGenSettings,
+    attachment_positions: &[[f32; 3]],
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
 
-    let positions_vec: Vec<Vector3<f32>> = positions
-        .iter()
-        .map(|p| Vector3::new(p[0], p[1], p[2]))
-        .collect();
+    let positions_vec = to_vectors(positions);
+    let attachment_vec = to_vectors(attachment_positions);
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
         root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
+        attachment_positions: &attachment_vec,
     };
     let params = ChainGenParams { role, settings };
 
@@ -167,8 +174,22 @@ mod tests {
             settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
                 .unwrap();
 
-        let output = run_chain_gen(&positions, &triangles, [0.0, 0.0, 0.0], "hair", settings)
-            .expect("chain generation should succeed");
+        let head: [[f32; 3]; 4] = [
+            [0.2, 0.1, 0.0],
+            [-0.2, 0.1, 0.0],
+            [0.0, 0.1, 0.2],
+            [0.0, 0.1, -0.2],
+        ];
+
+        let output = run_chain_gen(
+            &positions,
+            &triangles,
+            [0.0, 0.0, 0.0],
+            "hair",
+            settings,
+            &head,
+        )
+        .expect("chain generation should succeed");
 
         assert_eq!(output.chains.len(), 1, "should have exactly 1 chain");
         let chain = &output.chains[0];

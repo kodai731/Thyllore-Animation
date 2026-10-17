@@ -40,6 +40,9 @@ pub struct ChainGenSettings {
     /// Distance band in model units over which a vertex blends with the neighbouring column; 0 keeps columns hard
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
     pub column_blend_width: f32,
+    /// Shift of the hair root band in model units from the widest cross-section of the skin under the root bone
+    #[persist(ui(min = -100.0, max = 100.0, format = "%.3f"))]
+    pub root_band_offset: f32,
 }
 
 impl Default for ChainGenSettings {
@@ -49,6 +52,7 @@ impl Default for ChainGenSettings {
             column_count: 0,
             root_blend_width: 0.0,
             column_blend_width: 0.0,
+            root_band_offset: 0.0,
         }
     }
 }
@@ -79,6 +83,8 @@ pub struct ChainGenInput<'a> {
     pub positions: &'a [Vector3<f32>],
     pub triangles: &'a [[u32; 3]],
     pub root_position: Vector3<f32>,
+    /// Skin vertices the root bone drives, in the same space as `positions`; empty falls back to `positions`
+    pub attachment_positions: &'a [Vector3<f32>],
 }
 
 #[derive(Debug, Clone)]
@@ -154,7 +160,8 @@ mod tests {
                 "joint_count",
                 "column_count",
                 "root_blend_width",
-                "column_blend_width"
+                "column_blend_width",
+                "root_band_offset"
             ]
         );
         let scalar_names: Vec<&str> = CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect();

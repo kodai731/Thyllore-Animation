@@ -20,9 +20,10 @@ pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &chain_gen_params())
 }
 
-/// Positions and the root position are engine coordinates (Y-up, metres); `settings` maps setting names to values.
+/// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
+/// `settings` maps setting names to values.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, settings))]
+#[pyo3(signature = (positions, triangles, root_position, role, settings, attachment_positions = Vec::new()))]
 pub fn generate_chains<'py>(
     py: Python<'py>,
     positions: Vec<[f32; 3]>,
@@ -30,6 +31,7 @@ pub fn generate_chains<'py>(
     root_position: [f32; 3],
     role: &str,
     settings: &Bound<'py, PyDict>,
+    attachment_positions: Vec<[f32; 3]>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs: Vec<(String, f32)> = settings
         .iter()
@@ -38,7 +40,16 @@ pub fn generate_chains<'py>(
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
 
     let output = py
-        .detach(|| run_chain_gen(&positions, &triangles, root_position, role, settings))
+        .detach(|| {
+            run_chain_gen(
+                &positions,
+                &triangles,
+                root_position,
+                role,
+                settings,
+                &attachment_positions,
+            )
+        })
         .map_err(anyhow_to_pyerr)?;
 
     pythonize_value(py, &output)

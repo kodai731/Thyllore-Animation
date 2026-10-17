@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::f32::consts::{PI, TAU};
 
@@ -14,12 +15,26 @@ use crate::garment::components::chain_gen::{
 const AZIMUTH_BIN_COUNT: usize = 36;
 const KMEANS_ITERATION_COUNT: usize = 16;
 const MAX_INFLUENCES_PER_VERTEX: usize = 4;
+const ROOT_BAND_SLICE_COUNT: usize = 64;
+const MIN_STRAND_AZIMUTH_CONCENTRATION: f32 = 0.5;
 
 #[derive(Debug, Clone, Copy)]
 struct VertexFrame {
     vertex: u32,
     azimuth: f32,
     progress: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AzimuthSample {
+    azimuth: f32,
+    weight: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RootBand {
+    progress: f32,
+    center: Vector3<f32>,
 }
 
 fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
@@ -45,7 +60,71 @@ fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     (reference, up.cross(reference))
 }
 
-fn compute_vertex_frames(input: &ChainGenInput, vertices: &[u32]) -> Vec<VertexFrame> {
+fn progress_of(position: Vector3<f32>, root_position: Vector3<f32>, up: Vector3<f32>) -> f32 {
+    -(position - root_position).dot(up)
+}
+
+fn horizontal_radius(offset: Vector3<f32>, up: Vector3<f32>) -> f32 {
+    (offset - up * offset.dot(up)).magnitude()
+}
+
+fn mean_position(positions: &[Vector3<f32>]) -> Vector3<f32> {
+    positions
+        .iter()
+        .fold(Vector3::new(0.0, 0.0, 0.0), |sum, p| sum + p)
+        / positions.len().max(1) as f32
+}
+
+/// The widest horizontal cross-section of the attachment surface, shifted by the setting.
+fn estimate_root_band(
+    attachment: &[Vector3<f32>],
+    root_position: Vector3<f32>,
+    offset: f32,
+) -> RootBand {
+    let up = world_y_axis();
+    let center = mean_position(attachment);
+    let progresses: Vec<f32> = attachment
+        .iter()
+        .map(|&p| progress_of(p, root_position, up))
+        .collect();
+    let min_progress = progresses.iter().copied().reduce(f32::min).unwrap_or(0.0);
+    let max_progress = progresses.iter().copied().reduce(f32::max).unwrap_or(0.0);
+    let slice_width = (max_progress - min_progress) / ROOT_BAND_SLICE_COUNT as f32;
+
+    let slice_of = |progress: f32| -> usize {
+        if slice_width > 0.0 {
+            (((progress - min_progress) / slice_width) as usize).min(ROOT_BAND_SLICE_COUNT - 1)
+        } else {
+            0
+        }
+    };
+    let mut widest_radius = vec![0.0f32; ROOT_BAND_SLICE_COUNT];
+    for (&p, &progress) in attachment.iter().zip(&progresses) {
+        let slice = slice_of(progress);
+        widest_radius[slice] = widest_radius[slice].max(horizontal_radius(p - center, up));
+    }
+    let widest_slice = (0..ROOT_BAND_SLICE_COUNT)
+        .max_by(|a, b| widest_radius[*a].total_cmp(&widest_radius[*b]))
+        .unwrap_or(0);
+
+    let slice_members: Vec<Vector3<f32>> = attachment
+        .iter()
+        .zip(&progresses)
+        .filter(|(_, &progress)| slice_of(progress) == widest_slice)
+        .map(|(&p, _)| p)
+        .collect();
+
+    RootBand {
+        progress: min_progress + (widest_slice as f32 + 0.5) * slice_width + offset,
+        center: mean_position(&slice_members),
+    }
+}
+
+fn compute_vertex_frames(
+    input: &ChainGenInput,
+    vertices: &[u32],
+    azimuth_center: Vector3<f32>,
+) -> Vec<VertexFrame> {
     let up = world_y_axis();
     let (reference, side) = build_azimuth_basis(up);
 
@@ -53,11 +132,11 @@ fn compute_vertex_frames(input: &ChainGenInput, vertices: &[u32]) -> Vec<VertexF
         .iter()
         .map(|&vertex| {
             let position = input.positions[vertex as usize];
-            let offset = position - input.root_position;
+            let offset = position - azimuth_center;
             VertexFrame {
                 vertex,
                 azimuth: offset.dot(side).atan2(offset.dot(reference)),
-                progress: -offset.dot(up),
+                progress: progress_of(position, input.root_position, up),
             }
         })
         .collect()
@@ -68,22 +147,22 @@ fn azimuth_bin(azimuth: f32, bin_count: usize) -> usize {
     ((normalized * bin_count as f32) as usize).min(bin_count - 1)
 }
 
-fn smoothed_azimuth_histogram(frames: &[VertexFrame]) -> Vec<f32> {
-    let mut histogram = [0usize; AZIMUTH_BIN_COUNT];
-    for frame in frames {
-        histogram[azimuth_bin(frame.azimuth, AZIMUTH_BIN_COUNT)] += 1;
+fn smoothed_azimuth_histogram(samples: &[AzimuthSample]) -> Vec<f32> {
+    let mut histogram = [0.0f32; AZIMUTH_BIN_COUNT];
+    for sample in samples {
+        histogram[azimuth_bin(sample.azimuth, AZIMUTH_BIN_COUNT)] += sample.weight;
     }
     (0..AZIMUTH_BIN_COUNT)
         .map(|bin| {
             let left = histogram[(bin + AZIMUTH_BIN_COUNT - 1) % AZIMUTH_BIN_COUNT];
             let right = histogram[(bin + 1) % AZIMUTH_BIN_COUNT];
-            (left + histogram[bin] + right) as f32 / 3.0
+            (left + histogram[bin] + right) / 3.0
         })
         .collect()
 }
 
-fn count_azimuth_modes(frames: &[VertexFrame]) -> usize {
-    let smoothed = smoothed_azimuth_histogram(frames);
+fn count_azimuth_modes(samples: &[AzimuthSample]) -> usize {
+    let smoothed = smoothed_azimuth_histogram(samples);
     let mode_count = (0..AZIMUTH_BIN_COUNT)
         .filter(|&bin| {
             let left = smoothed[(bin + AZIMUTH_BIN_COUNT - 1) % AZIMUTH_BIN_COUNT];
@@ -111,36 +190,80 @@ fn find_nearest_center(azimuth: f32, centers: &[f32]) -> usize {
         .unwrap_or(0)
 }
 
-fn compute_circular_mean(azimuths: impl Iterator<Item = f32>) -> Option<f32> {
-    let (sin_sum, cos_sum, count) = azimuths
-        .fold((0.0f32, 0.0f32, 0usize), |(s, c, n), azimuth| {
-            (s + azimuth.sin(), c + azimuth.cos(), n + 1)
+/// Weighted circular mean and the mean resultant length (1 = one direction, 0 = spread over the circle).
+fn circular_mean_and_concentration(
+    azimuths: impl Iterator<Item = (f32, f32)>,
+) -> Option<(f32, f32)> {
+    let (sin_sum, cos_sum, weight_sum) =
+        azimuths.fold((0.0f32, 0.0f32, 0.0f32), |(s, c, n), (azimuth, weight)| {
+            (
+                s + azimuth.sin() * weight,
+                c + azimuth.cos() * weight,
+                n + weight,
+            )
         });
-    (count > 0).then(|| sin_sum.atan2(cos_sum))
+    (weight_sum > 0.0).then(|| (sin_sum.atan2(cos_sum), sin_sum.hypot(cos_sum) / weight_sum))
 }
 
-fn cluster_azimuths(frames: &[VertexFrame], count: usize) -> Vec<usize> {
-    let histogram = smoothed_azimuth_histogram(frames);
-    let peak_bin = (0..AZIMUTH_BIN_COUNT)
-        .max_by(|a, b| histogram[*a].total_cmp(&histogram[*b]))
-        .unwrap_or(0);
-    let start = TAU * (peak_bin as f32 + 0.5) / AZIMUTH_BIN_COUNT as f32;
+fn compute_circular_mean(azimuths: impl Iterator<Item = (f32, f32)>) -> Option<f32> {
+    circular_mean_and_concentration(azimuths).map(|(mean, _)| mean)
+}
+
+/// Start and angular extent of the occupied arc: the full circle when no bin is empty, otherwise the
+/// complement of the widest empty gap, so every initial center lands on populated azimuths.
+fn occupied_azimuth_arc(histogram: &[f32]) -> (f32, f32) {
+    let bin_width = TAU / AZIMUTH_BIN_COUNT as f32;
+    let empty = |bin: usize| histogram[bin % AZIMUTH_BIN_COUNT] <= 0.0;
+    let Some(first_filled) = (0..AZIMUTH_BIN_COUNT).find(|&bin| !empty(bin)) else {
+        return (0.0, TAU);
+    };
+
+    let mut widest_gap: Option<(usize, usize)> = None;
+    let mut bin = first_filled;
+    while bin < first_filled + AZIMUTH_BIN_COUNT {
+        if !empty(bin) {
+            bin += 1;
+            continue;
+        }
+        let gap_start = bin;
+        while bin < first_filled + AZIMUTH_BIN_COUNT && empty(bin) {
+            bin += 1;
+        }
+        let gap_length = bin - gap_start;
+        if widest_gap.is_none_or(|(_, length)| gap_length > length) {
+            widest_gap = Some((gap_start, gap_length));
+        }
+    }
+
+    match widest_gap {
+        None => (0.0, TAU),
+        Some((gap_start, gap_length)) => {
+            let arc_start = (gap_start + gap_length) as f32 * bin_width;
+            let arc_extent = (AZIMUTH_BIN_COUNT - gap_length) as f32 * bin_width;
+            (arc_start, arc_extent)
+        }
+    }
+}
+
+fn cluster_azimuths(samples: &[AzimuthSample], count: usize) -> Vec<usize> {
+    let histogram = smoothed_azimuth_histogram(samples);
+    let (arc_start, arc_extent) = occupied_azimuth_arc(&histogram);
     let mut centers: Vec<f32> = (0..count)
-        .map(|index| start + TAU * index as f32 / count as f32)
+        .map(|index| arc_start + arc_extent * (index as f32 + 0.5) / count as f32)
         .collect();
-    let mut columns = vec![0usize; frames.len()];
+    let mut columns = vec![0usize; samples.len()];
 
     for _ in 0..KMEANS_ITERATION_COUNT {
-        for (column, frame) in columns.iter_mut().zip(frames) {
-            *column = find_nearest_center(frame.azimuth, &centers);
+        for (column, sample) in columns.iter_mut().zip(samples) {
+            *column = find_nearest_center(sample.azimuth, &centers);
         }
 
         for (center_index, center) in centers.iter_mut().enumerate() {
-            let members = frames
+            let members = samples
                 .iter()
                 .zip(&columns)
                 .filter(|(_, &column)| column == center_index)
-                .map(|(frame, _)| frame.azimuth);
+                .map(|(sample, _)| (sample.azimuth, sample.weight));
             if let Some(mean) = compute_circular_mean(members) {
                 *center = mean;
             }
@@ -150,29 +273,132 @@ fn cluster_azimuths(frames: &[VertexFrame], count: usize) -> Vec<usize> {
     columns
 }
 
-fn assign_skirt_columns(frames: &[VertexFrame], count: usize) -> Vec<usize> {
-    frames
-        .iter()
-        .map(|frame| azimuth_bin(frame.azimuth + PI / count as f32, count))
-        .collect()
-}
-
-fn split_columns(frames: &[VertexFrame], params: &ChainGenParams) -> Vec<Vec<usize>> {
-    let column_count = match params.settings.column_count as usize {
-        0 => count_azimuth_modes(frames),
-        count => count,
-    };
-    let assigned_columns = match params.role {
-        ChainRole::Hair => cluster_azimuths(frames, column_count),
-        ChainRole::Skirt => assign_skirt_columns(frames, column_count),
-    };
-
+fn group_into_columns(assigned: &[(usize, Vec<usize>)], column_count: usize) -> Vec<Vec<usize>> {
     let mut columns = vec![Vec::new(); column_count];
-    for (frame_index, &column) in assigned_columns.iter().enumerate() {
-        columns[column].push(frame_index);
+    for (column, frame_indices) in assigned {
+        columns[*column].extend(frame_indices.iter().copied());
     }
     columns.retain(|members| !members.is_empty());
     columns
+}
+
+fn split_skirt_columns(frames: &[VertexFrame], params: &ChainGenParams) -> Vec<Vec<usize>> {
+    let samples: Vec<AzimuthSample> = frames
+        .iter()
+        .map(|frame| AzimuthSample {
+            azimuth: frame.azimuth,
+            weight: 1.0,
+        })
+        .collect();
+    let column_count = match params.settings.column_count as usize {
+        0 => count_azimuth_modes(&samples),
+        count => count,
+    };
+    let assigned: Vec<(usize, Vec<usize>)> = frames
+        .iter()
+        .enumerate()
+        .map(|(frame_index, frame)| {
+            let column = azimuth_bin(frame.azimuth + PI / column_count as f32, column_count);
+            (column, vec![frame_index])
+        })
+        .collect();
+    group_into_columns(&assigned, column_count)
+}
+
+fn find_component_root(parent: &mut [usize], vertex: usize) -> usize {
+    let mut root = vertex;
+    while parent[root] != root {
+        root = parent[root];
+    }
+    let mut current = vertex;
+    while parent[current] != root {
+        let next = parent[current];
+        parent[current] = root;
+        current = next;
+    }
+    root
+}
+
+fn label_connected_components(input: &ChainGenInput, frames: &[VertexFrame]) -> Vec<usize> {
+    let mut parent: Vec<usize> = (0..input.positions.len()).collect();
+    for triangle in input.triangles {
+        for edge in [(triangle[0], triangle[1]), (triangle[1], triangle[2])] {
+            let a = find_component_root(&mut parent, edge.0 as usize);
+            let b = find_component_root(&mut parent, edge.1 as usize);
+            parent[a.max(b)] = a.min(b);
+        }
+    }
+    frames
+        .iter()
+        .map(|frame| find_component_root(&mut parent, frame.vertex as usize))
+        .collect()
+}
+
+/// Strands below the root band, one column per azimuth cluster; a connected component never splits,
+/// and a component spread around the head (the scalp shell) stays on the root.
+fn split_hair_columns(
+    input: &ChainGenInput,
+    frames: &[VertexFrame],
+    band: RootBand,
+    params: &ChainGenParams,
+) -> Vec<Vec<usize>> {
+    let strand_frames: Vec<usize> = (0..frames.len())
+        .filter(|&index| frames[index].progress > band.progress)
+        .collect();
+    let strand_samples: Vec<AzimuthSample> = strand_frames
+        .iter()
+        .map(|&index| AzimuthSample {
+            azimuth: frames[index].azimuth,
+            weight: 1.0,
+        })
+        .collect();
+    let column_count = match params.settings.column_count as usize {
+        0 => count_azimuth_modes(&strand_samples),
+        count => count,
+    };
+
+    let component_labels = label_connected_components(input, frames);
+    let component_count = component_labels.iter().collect::<BTreeSet<_>>().len();
+    if component_count < 2 {
+        let columns = cluster_azimuths(&strand_samples, column_count);
+        let assigned: Vec<(usize, Vec<usize>)> = columns
+            .into_iter()
+            .zip(strand_frames)
+            .map(|(column, frame_index)| (column, vec![frame_index]))
+            .collect();
+        return group_into_columns(&assigned, column_count);
+    }
+
+    let mut strands_by_component: Vec<(usize, Vec<usize>)> = Vec::new();
+    for &frame_index in &strand_frames {
+        let label = component_labels[frame_index];
+        match strands_by_component.binary_search_by_key(&label, |(l, _)| *l) {
+            Ok(slot) => strands_by_component[slot].1.push(frame_index),
+            Err(slot) => strands_by_component.insert(slot, (label, vec![frame_index])),
+        }
+    }
+    let strands_by_component: Vec<(f32, Vec<usize>)> = strands_by_component
+        .into_iter()
+        .filter_map(|(_, members)| {
+            let (mean, concentration) =
+                circular_mean_and_concentration(members.iter().map(|&i| (frames[i].azimuth, 1.0)))?;
+            (concentration >= MIN_STRAND_AZIMUTH_CONCENTRATION).then_some((mean, members))
+        })
+        .collect();
+    let component_samples: Vec<AzimuthSample> = strands_by_component
+        .iter()
+        .map(|(azimuth, members)| AzimuthSample {
+            azimuth: *azimuth,
+            weight: members.len() as f32,
+        })
+        .collect();
+    let columns = cluster_azimuths(&component_samples, column_count);
+    let assigned: Vec<(usize, Vec<usize>)> = columns
+        .into_iter()
+        .zip(strands_by_component)
+        .map(|(column, (_, members))| (column, members))
+        .collect();
+    group_into_columns(&assigned, column_count)
 }
 
 fn build_centerline(
@@ -262,6 +488,22 @@ fn build_chain(
     }
 }
 
+fn attachment_or_target<'a>(
+    input: &ChainGenInput<'a>,
+    vertices: &[u32],
+) -> Cow<'a, [Vector3<f32>]> {
+    if input.attachment_positions.is_empty() {
+        Cow::Owned(
+            vertices
+                .iter()
+                .map(|&vertex| input.positions[vertex as usize])
+                .collect(),
+        )
+    } else {
+        Cow::Borrowed(input.attachment_positions)
+    }
+}
+
 pub fn place_chains(
     input: &ChainGenInput,
     params: &ChainGenParams,
@@ -274,8 +516,24 @@ pub fn place_chains(
         anyhow::bail!("chain generation found no target vertices");
     }
 
-    let frames = compute_vertex_frames(input, &vertices);
-    let chains = split_columns(&frames, params)
+    let root_band = match params.role {
+        ChainRole::Hair => Some(estimate_root_band(
+            &attachment_or_target(input, &vertices),
+            input.root_position,
+            params.settings.root_band_offset,
+        )),
+        ChainRole::Skirt => None,
+    };
+    let azimuth_center = root_band.map_or(input.root_position, |band| band.center);
+    let frames = compute_vertex_frames(input, &vertices, azimuth_center);
+    let columns = match root_band {
+        Some(band) => split_hair_columns(input, &frames, band, params),
+        None => split_skirt_columns(&frames, params),
+    };
+    if columns.is_empty() {
+        anyhow::bail!("chain generation found no vertex below the root band");
+    }
+    let chains = columns
         .into_iter()
         .enumerate()
         .map(|(column, members)| {
@@ -537,6 +795,20 @@ pub fn compute_chain_weights(
         })
         .collect();
 
+    let chained: BTreeSet<u32> = chains
+        .iter()
+        .flat_map(|chain| chain.vertices.iter().copied())
+        .collect();
+    result.extend(
+        collect_target_vertices(input)
+            .into_iter()
+            .filter(|vertex| !chained.contains(vertex))
+            .map(|vertex| VertexInfluences {
+                vertex,
+                influences: vec![(InfluenceTarget::Root, 1.0)],
+            }),
+    );
+
     result.sort_by_key(|a| a.vertex);
     result
 }
@@ -567,13 +839,71 @@ mod tests {
         build_params(ChainRole::Hair, joint_count, 1)
     }
 
+    fn head_attachment() -> Vec<Vector3<f32>> {
+        (0..8)
+            .map(|i| {
+                let angle = TAU * i as f32 / 8.0;
+                Vector3::new(0.2 * angle.cos(), 0.1, 0.2 * angle.sin())
+            })
+            .collect()
+    }
+
+    fn build_cap_with_two_cards() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+        let mut positions = Vec::new();
+        let mut triangles = Vec::new();
+
+        let cap_ring = |y: f32, radius: f32| -> Vec<Vector3<f32>> {
+            (0..12)
+                .map(|i| {
+                    let angle = TAU * i as f32 / 12.0;
+                    Vector3::new(radius * angle.cos(), y, radius * angle.sin())
+                })
+                .collect()
+        };
+        for (upper, lower) in [(0.25f32, 0.1), (0.15, 0.2)]
+            .iter()
+            .zip([(0.15f32, 0.2), (0.05, 0.22)])
+        {
+            let base = positions.len() as u32;
+            positions.extend(cap_ring(upper.0, upper.1));
+            positions.extend(cap_ring(lower.0, lower.1));
+            for i in 0..12u32 {
+                let next = (i + 1) % 12;
+                triangles.push([base + i, base + next, base + 12 + i]);
+                triangles.push([base + next, base + 12 + next, base + 12 + i]);
+            }
+        }
+
+        for angle in [PI * 0.75, -PI * 0.75] {
+            let base = positions.len() as u32;
+            let (sin, cos) = angle.sin_cos();
+            for step in 0..5 {
+                let y = 0.05 - 0.08 * step as f32;
+                positions.push(Vector3::new(0.21 * cos, y, 0.21 * sin));
+                positions.push(Vector3::new(
+                    0.21 * cos + 0.01 * sin,
+                    y,
+                    0.21 * sin - 0.01 * cos,
+                ));
+            }
+            for step in 0..4u32 {
+                let a = base + 2 * step;
+                triangles.push([a, a + 1, a + 2]);
+                triangles.push([a + 1, a + 3, a + 2]);
+            }
+        }
+        (positions, triangles)
+    }
+
     #[test]
     fn straight_strand_places_heads_at_equal_spacing() {
+        let head = head_attachment();
         let (positions, triangles) = build_straight_strand();
         let input = ChainGenInput {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -595,11 +925,13 @@ mod tests {
 
     #[test]
     fn zero_joint_count_is_rejected() {
+        let head = head_attachment();
         let (positions, triangles) = build_straight_strand();
         let input = ChainGenInput {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         assert!(place_chains(&input, &build_hair_params(0)).is_err());
@@ -640,6 +972,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
         };
         let params = build_params(ChainRole::Skirt, 2, 8);
 
@@ -668,6 +1001,7 @@ mod tests {
 
     #[test]
     fn hair_azimuth_mode_detection() {
+        let head = head_attachment();
         let mut positions: Vec<Vector3<f32>> = Vec::new();
         let mut triangles: Vec<[u32; 3]> = Vec::new();
 
@@ -693,6 +1027,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
         let params = build_params(ChainRole::Hair, 2, 0);
 
@@ -702,11 +1037,13 @@ mod tests {
 
     #[test]
     fn weights_sum_to_one() {
+        let head = head_attachment();
         let (positions, triangles) = build_straight_strand();
         let input = ChainGenInput {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -725,12 +1062,14 @@ mod tests {
 
     #[test]
     fn midpoint_vertex_has_equal_joint_weights() {
+        let head = head_attachment();
         let (mut positions, triangles) = build_straight_strand();
         let mut chains = place_chains(
             &ChainGenInput {
                 positions: &positions,
                 triangles: &triangles,
                 root_position: Vector3::new(0.0, 0.0, 0.0),
+                attachment_positions: &head,
             },
             &build_hair_params(4),
         )
@@ -743,6 +1082,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
         let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
 
@@ -776,11 +1116,13 @@ mod tests {
 
     #[test]
     fn first_vertex_has_full_root_weight() {
+        let head = head_attachment();
         let (positions, triangles) = build_straight_strand();
         let input = ChainGenInput {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -805,6 +1147,7 @@ mod tests {
 
     #[test]
     fn hair_joints_y_monotonically_decreasing() {
+        let head = head_attachment();
         let positions: Vec<Vector3<f32>> = (0..6)
             .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
             .collect();
@@ -813,6 +1156,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let chains = place_chains(&input, &build_hair_params(3)).unwrap();
@@ -833,6 +1177,7 @@ mod tests {
 
     #[test]
     fn reversed_vertex_order_same_joints() {
+        let head = head_attachment();
         let positions: Vec<Vector3<f32>> = (0..6)
             .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
             .collect();
@@ -841,6 +1186,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let chains = place_chains(&input, &build_hair_params(2)).unwrap();
@@ -852,6 +1198,7 @@ mod tests {
             positions: &reversed_positions,
             triangles: &reversed_triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
         };
 
         let reversed_chains = place_chains(&reversed_input, &build_hair_params(2)).unwrap();
@@ -907,6 +1254,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
         };
         let params = build_params(ChainRole::Skirt, 3, 2);
 
@@ -929,6 +1277,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
         };
         let mut params = build_params(ChainRole::Skirt, 3, 2);
         let mut chains = place_chains(&input_for_chains, &params).unwrap();
@@ -941,6 +1290,7 @@ mod tests {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
         };
 
         let weights = compute_chain_weights(&input, &params, &chains);
@@ -958,5 +1308,87 @@ mod tests {
 
         let far_vertex = weights.iter().find(|e| e.vertex == 0).unwrap();
         assert_eq!(total_weight_on_chain(far_vertex, 1), 0.0);
+    }
+
+    #[test]
+    fn cap_stays_on_root_and_each_card_is_one_column() {
+        let (positions, triangles) = build_cap_with_two_cards();
+        let head = head_attachment();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
+        };
+        let params = build_params(ChainRole::Hair, 3, 0);
+
+        let chains = place_chains(&input, &params).unwrap();
+        let weights = compute_chain_weights(&input, &params, &chains);
+
+        assert_eq!(chains.len(), 2, "one column per card");
+        let card_start = 48u32;
+        for chain in &chains {
+            assert!(
+                chain.vertices.iter().all(|&v| v >= card_start),
+                "cap vertex in a chain"
+            );
+            let first_card = (chain.vertices[0] - card_start) / 10;
+            assert!(
+                chain
+                    .vertices
+                    .iter()
+                    .all(|&v| (v - card_start) / 10 == first_card),
+                "card split across columns: {:?}",
+                chain.vertices
+            );
+            for joint in &chain.joints {
+                assert!(
+                    joint.head.y < 0.1,
+                    "joint above the root band: {:?}",
+                    joint.head
+                );
+            }
+        }
+        for entry in weights.iter().filter(|e| e.vertex < card_start) {
+            assert_eq!(entry.influences, vec![(InfluenceTarget::Root, 1.0)]);
+        }
+    }
+
+    #[test]
+    fn root_band_offset_moves_the_band_down() {
+        let (positions, triangles) = build_cap_with_two_cards();
+        let head = head_attachment();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
+        };
+        let mut params = build_params(ChainRole::Hair, 3, 2);
+        let baseline = place_chains(&input, &params).unwrap();
+        params.settings.root_band_offset = 0.2;
+
+        let shifted = place_chains(&input, &params).unwrap();
+
+        let strand_count =
+            |chains: &[GeneratedChain]| -> usize { chains.iter().map(|c| c.vertices.len()).sum() };
+        assert!(strand_count(&shifted) < strand_count(&baseline));
+        assert!(shifted[0].joints[0].head.y < baseline[0].joints[0].head.y);
+    }
+
+    #[test]
+    fn root_band_without_attachment_uses_the_widest_slice_of_the_target() {
+        let (positions, triangles) = build_cap_with_two_cards();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
+        };
+
+        let chains = place_chains(&input, &build_params(ChainRole::Hair, 3, 2)).unwrap();
+
+        assert_eq!(chains.len(), 2);
+        assert!(chains.iter().all(|c| c.vertices.iter().all(|&v| v >= 48)));
     }
 }

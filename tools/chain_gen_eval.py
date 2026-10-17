@@ -170,14 +170,19 @@ def weight_metrics(gen_weights: list[dict], ref_weights: list[dict], corresponde
     """Compute weight-level metrics between generated and reference vertex weights.
 
     Matches generated vertices to reference vertices by nearest neighbor within tolerance,
-    computes dominant chain agreement and arc weight L1 for matched vertices.
+    computes dominant chain agreement and arc weight L1 for matched vertices that carry a chain bone.
+    A generated vertex weighted to the root only (the scalp shell) counts as root_only and agrees when
+    the reference also puts it on a non-chain bone (hub or humanoid).
     """
     if not gen_weights:
         return {
             "matched_vertices": 0,
             "unmatched_vertices": 0,
+            "chain_vertices": 0,
             "dominant_chain_agreement": 0.0,
             "arc_weight_l1": 0.0,
+            "root_only_vertices": 0,
+            "root_only_agreement": 0.0,
         }
 
     corr_map = {c["gen_chain"]: c["matched_ref_chain"] for c in correspondence}
@@ -199,7 +204,10 @@ def weight_metrics(gen_weights: list[dict], ref_weights: list[dict], corresponde
 
     matched_count = 0
     unmatched_count = 0
+    chain_vertex_count = 0
     agreement_count = 0
+    root_only_count = 0
+    root_only_agreement_count = 0
     total_l1 = 0.0
     l1_count = 0
 
@@ -213,7 +221,11 @@ def weight_metrics(gen_weights: list[dict], ref_weights: list[dict], corresponde
 
         gen_dc = dominant_chain(gen_weights_dict, gen_bone_to_chain)
         if gen_dc is None:
+            root_only_count += 1
+            if dominant_chain(ref_weights_dict, ref_bone_to_chain) is None:
+                root_only_agreement_count += 1
             continue
+        chain_vertex_count += 1
 
         ref_chain_i = corr_map.get(gen_dc)
         if ref_chain_i is None:
@@ -232,14 +244,18 @@ def weight_metrics(gen_weights: list[dict], ref_weights: list[dict], corresponde
                 total_l1 += abs(gen_t - ref_t)
                 l1_count += 1
 
-    dominant_chain_agreement = agreement_count / matched_count if matched_count > 0 else 0.0
+    dominant_chain_agreement = agreement_count / chain_vertex_count if chain_vertex_count > 0 else 0.0
     arc_weight_l1 = total_l1 / l1_count if l1_count > 0 else 0.0
+    root_only_agreement = root_only_agreement_count / root_only_count if root_only_count > 0 else 0.0
 
     return {
         "matched_vertices": matched_count,
         "unmatched_vertices": unmatched_count,
+        "chain_vertices": chain_vertex_count,
         "dominant_chain_agreement": round(dominant_chain_agreement, 6),
         "arc_weight_l1": round(arc_weight_l1, 6),
+        "root_only_vertices": root_only_count,
+        "root_only_agreement": round(root_only_agreement, 6),
     }
 
 
@@ -343,6 +359,7 @@ def joint_metrics(gen_chains: list[list[tuple]], ref_chains: list[list[tuple]], 
       - max_distance: maximum nearest-neighbor distance
       - miss_rate: fraction of reference joints without a generated joint within miss_radius
       - chain_correspondence: per generated chain, the best-matching reference chain by nearest-neighbor vote
+      - root_height_diff: mean height (y) of the generated first joints minus that of the reference first joints
     """
     all_ref_joints = []
     for i, chain in enumerate(ref_chains):
@@ -367,6 +384,7 @@ def joint_metrics(gen_chains: list[list[tuple]], ref_chains: list[list[tuple]], 
             "max_distance": 0.0,
             "miss_rate": 1.0 if all_ref_joints else 0.0,
             "chain_correspondence": [],
+            "root_height_diff": 0.0,
         }
 
     distances = []
@@ -405,6 +423,9 @@ def joint_metrics(gen_chains: list[list[tuple]], ref_chains: list[list[tuple]], 
                 "vote_count": votes[best_match],
             })
 
+    gen_root_height = sum(chain[0][1] for chain in gen_chains) / gen_chain_count
+    ref_root_height = sum(chain[0][1] for chain in ref_chains) / ref_chain_count
+
     return {
         "ref_chain_count": ref_chain_count,
         "gen_chain_count": gen_chain_count,
@@ -413,6 +434,7 @@ def joint_metrics(gen_chains: list[list[tuple]], ref_chains: list[list[tuple]], 
         "max_distance": round(max_distance, 6),
         "miss_rate": round(miss_rate, 6),
         "chain_correspondence": chain_correspondence,
+        "root_height_diff": round(gen_root_height - ref_root_height, 6),
     }
 
 

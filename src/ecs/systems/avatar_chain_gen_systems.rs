@@ -46,25 +46,25 @@ pub fn generate_chain_bones(
     let (submeshes, role) = resolve_target(world, assets, graphics, &request.target)?;
     let (parts, positions, triangles, skeleton_id) = merge_submesh_geometry(graphics, submeshes)?;
 
+    let root = find_root_bone(assets, skeleton_id, &request.root_bone)?;
+    let attachment_geometry =
+        collect_skin_vertices_of_bone(world, assets, graphics, skeleton_id, root);
     let skeleton = find_skeleton_mut(assets, skeleton_id)?;
-    let root = *skeleton
-        .bone_name_to_id
-        .get(&request.root_bone)
-        .ok_or_else(|| anyhow::anyhow!("root bone '{}' not found", request.root_bone))?;
     let root_global = compute_bone_global_transform(skeleton, root as usize);
     let geometry_to_model = root_global * skeleton.bones[root as usize].inverse_bind_pose;
     let model_to_geometry = geometry_to_model
         .invert()
         .ok_or_else(|| anyhow::anyhow!("geometry transform of the skin is singular"))?;
 
-    let model_positions: Vec<cgmath::Vector3<f32>> = positions
-        .iter()
-        .map(|p| (geometry_to_model * p.extend(1.0)).truncate())
-        .collect();
+    let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
+    let model_positions: Vec<cgmath::Vector3<f32>> = positions.iter().map(to_model).collect();
+    let attachment_positions: Vec<cgmath::Vector3<f32>> =
+        attachment_geometry.iter().map(to_model).collect();
     let input = ChainGenInput {
         positions: &model_positions,
         triangles: &triangles,
         root_position: root_global.w.truncate(),
+        attachment_positions: &attachment_positions,
     };
     let params = ChainGenParams {
         role,
@@ -170,6 +170,60 @@ fn resolve_target(
     Ok((selected, role))
 }
 
+fn dominant_bone(indices: cgmath::Vector4<u32>, weights: cgmath::Vector4<f32>) -> Option<u32> {
+    let candidates = [
+        (indices.x, weights.x),
+        (indices.y, weights.y),
+        (indices.z, weights.z),
+        (indices.w, weights.w),
+    ];
+    candidates
+        .into_iter()
+        .filter(|(_, weight)| *weight > 0.0)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(bone, _)| bone)
+}
+
+/// Geometry-space positions of the skin-role vertices the bone drives most, the surface the chains hang from.
+fn collect_skin_vertices_of_bone(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    skeleton_id: crate::animation::SkeletonId,
+    bone: thyllore_model_core::BoneId,
+) -> Vec<cgmath::Vector3<f32>> {
+    let node_assets = world.resource::<NodeAssets>();
+    let state = world.resource::<AvatarSetupState>();
+    let skin_meshes = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
+        .into_iter()
+        .filter(|(key, _)| {
+            state
+                .submesh_roles
+                .get(key)
+                .is_some_and(|entry| entry.role == SubmeshRole::Skin)
+        })
+        .map(|(_, mesh_index)| mesh_index);
+
+    let mut positions = Vec::new();
+    for mesh_index in skin_meshes {
+        let Some(skin) = graphics.meshes[mesh_index].skin_data.as_ref() else {
+            continue;
+        };
+        if skin.skeleton_id != skeleton_id {
+            continue;
+        }
+        positions.extend(
+            skin.base_positions
+                .iter()
+                .zip(&skin.bone_indices)
+                .zip(&skin.bone_weights)
+                .filter(|((_, indices), weights)| dominant_bone(**indices, **weights) == Some(bone))
+                .map(|((position, _), _)| *position),
+        );
+    }
+    positions
+}
+
 type MergedGeometry = (
     Vec<ChainGenPart>,
     Vec<cgmath::Vector3<f32>>,
@@ -239,6 +293,24 @@ fn influences_of_part(
             influences: influence.influences.clone(),
         })
         .collect()
+}
+
+fn find_root_bone(
+    assets: &AssetStorage,
+    skeleton_id: crate::animation::SkeletonId,
+    root_bone: &str,
+) -> anyhow::Result<thyllore_model_core::BoneId> {
+    let skeleton = assets
+        .skeletons
+        .values()
+        .find(|sa| sa.skeleton_id == skeleton_id)
+        .map(|sa| &sa.skeleton)
+        .ok_or_else(|| anyhow::anyhow!("skeleton not found: {:?}", skeleton_id))?;
+    skeleton
+        .bone_name_to_id
+        .get(root_bone)
+        .copied()
+        .ok_or_else(|| anyhow::anyhow!("root bone '{}' not found", root_bone))
 }
 
 fn find_skeleton_mut(

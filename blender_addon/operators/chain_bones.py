@@ -80,6 +80,23 @@ def _write_weights(obj, groups):
             vg.add([v_idx], weight, "REPLACE")
 
 
+def _skin_engine_positions(skin_obj, root_bone):
+    """Engine-space positions of the skin vertices whose heaviest vertex group is the root bone."""
+    if skin_obj is None or skin_obj.type != "MESH":
+        return []
+    group_index = skin_obj.vertex_groups.find(root_bone)
+    if group_index < 0:
+        return []
+    positions = []
+    for v in skin_obj.data.vertices:
+        if not v.groups:
+            continue
+        heaviest = max(v.groups, key=lambda g: g.weight)
+        if heaviest.group == group_index and heaviest.weight > 0.0:
+            positions.append(coordinates.blender_to_engine_point(tuple(skin_obj.matrix_world @ v.co)))
+    return positions
+
+
 class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     """Generate chain bones from mesh surface."""
 
@@ -93,6 +110,10 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     )
     material_index: bpy.props.IntProperty(default=0, min=0)
     root_bone: bpy.props.StringProperty(default="Head")
+    skin_object: bpy.props.StringProperty(
+        default="",
+        description="Mesh object of the skin; its vertices driven by the root bone give the root band",
+    )
 
     __annotations__.update(_setting_annotations())
 
@@ -125,6 +146,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             _root_engine_position(arm, self.root_bone),
             self.role,
             settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
+            _skin_engine_positions(bpy.data.objects.get(self.skin_object), self.root_bone),
         )
 
         blender_output = output_to_blender(output)

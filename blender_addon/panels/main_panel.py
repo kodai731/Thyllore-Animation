@@ -160,6 +160,7 @@ class THYLLORE_PT_ChainBones(Panel):
         layout.prop(op, "role")
         layout.prop(op, "material_index")
         layout.prop(op, "root_bone")
+        layout.prop_search(op, "skin_object", bpy.data, "objects")
         for param in chain_bones.CHAIN_GEN_UI_PARAMS:
             layout.prop(op, param["name"])
 

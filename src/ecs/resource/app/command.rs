@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use cgmath::Vector3;
+
 use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
 
 use crate::hooks::batch_capture::BatchCapture;
@@ -60,8 +62,25 @@ pub enum SceneLoadCommand {
 /// Applied after the loads: these edit assets of the model that is loaded.
 #[derive(Clone, Debug)]
 pub enum AssetEditCommand {
-    LoadClipFromFile { path: PathBuf },
-    AssignMaterialTexture { material: String, path: PathBuf },
+    LoadClipFromFile {
+        path: PathBuf,
+    },
+    AssignMaterialTexture {
+        material: String,
+        path: PathBuf,
+    },
+    AddBone {
+        parent: String,
+        name: String,
+        local_offset: Vector3<f32>,
+    },
+    RemoveBone {
+        bone: String,
+    },
+    SetBoneOffset {
+        bone: String,
+        local_offset: Vector3<f32>,
+    },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.

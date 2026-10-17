@@ -106,6 +106,43 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             }
         }
 
+        AssetEditCommand::AddBone {
+            parent,
+            name,
+            local_offset,
+        } => {
+            if let Err(e) = crate::ecs::systems::add_skeleton_bone(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &app.data.graphics_resources,
+                &parent,
+                &name,
+                local_offset,
+            ) {
+                msg_error!("Failed to add bone: {}", e);
+            }
+        }
+        AssetEditCommand::RemoveBone { bone } => {
+            if let Err(e) = crate::ecs::systems::remove_skeleton_bone(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                &bone,
+            ) {
+                msg_error!("Failed to remove bone: {}", e);
+            }
+        }
+        AssetEditCommand::SetBoneOffset { bone, local_offset } => {
+            if let Err(e) = crate::ecs::systems::set_skeleton_bone_offset(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &app.data.graphics_resources,
+                &bone,
+                local_offset,
+            ) {
+                msg_error!("Failed to move bone: {}", e);
+            }
+        }
         AssetEditCommand::AssignMaterialTexture { material, path } => {
             crate::ecs::systems::set_material_texture(
                 &mut app.data.ecs_world,

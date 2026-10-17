@@ -10,16 +10,13 @@ use thyllore_avatar_core::garment::systems::chain_bones::{
 use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{AvatarSetupState, BoneGizmoData, FbxModelCache, NodeAssets};
-use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
+use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_submesh_role_systems::collect_submesh_meshes;
-use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::systems::skeleton_edit_systems::refresh_after_skeleton_edit;
 use crate::ecs::world::World;
-use crate::exporter::fbx_exporter::clusters_from_skin_data;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct GeneratedChainBones {
-    pub mesh_index: usize,
     pub report: ChainGenReport,
 }
 
@@ -80,7 +77,7 @@ pub fn generate_chain_bones(
         write_chain_weights(skin, root, &bone_ids, &influences);
     }
 
-    Ok(GeneratedChainBones { mesh_index, report })
+    Ok(GeneratedChainBones { report })
 }
 
 fn resolve_submesh(
@@ -225,71 +222,10 @@ pub fn apply_chain_generation(
     let report = generated.report;
     let bone_count = report.bones.len();
 
-    sync_fbx_clusters(world, assets, graphics, generated.mesh_index);
-
-    reset_spring_bone_state(world);
-
-    let skeleton_id = world.resource::<BoneGizmoData>().cached_skeleton_id;
-
-    if let Some(skeleton_id) = skeleton_id {
-        if let Some(skeleton) = assets.get_skeleton_by_skeleton_id(skeleton_id) {
-            let rest_globals = crate::ecs::compute_pose_global_transforms(
-                skeleton,
-                &crate::ecs::create_pose_from_rest(skeleton),
-            );
-            if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
-                bone_gizmo.bone_local_offsets =
-                    crate::ecs::systems::bone_gizmo_systems::compute_bone_local_offsets(
-                        skeleton,
-                        &rest_globals,
-                    );
-                bone_gizmo.cached_global_transforms = rest_globals;
-            }
-        }
-    }
-
-    {
-        let mut state = world.resource_mut::<AvatarSetupState>();
-        if let Some(skeleton_id) = skeleton_id {
-            if let Some(skeleton_asset) = assets.get_skeleton_by_skeleton_id(skeleton_id) {
-                state.bones = skeleton_to_bone_inputs(skeleton_asset);
-            }
-        }
-        state.chain_gen_report = Some(report);
-    }
+    refresh_after_skeleton_edit(world, assets, graphics);
+    world.resource_mut::<AvatarSetupState>().chain_gen_report = Some(report);
 
     msg_info!("Generated {} chain bones", bone_count);
-}
-
-fn sync_fbx_clusters(
-    world: &mut World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-    mesh_index: usize,
-) {
-    let skin = match graphics.meshes[mesh_index].skin_data.as_ref() {
-        Some(s) => s,
-        None => return,
-    };
-    let skeleton_id = skin.skeleton_id;
-    let skeleton = match assets.get_skeleton_by_skeleton_id(skeleton_id) {
-        Some(s) => s,
-        None => return,
-    };
-
-    let clusters = clusters_from_skin_data(skin, skeleton);
-
-    let mut fbx_cache = world.resource_mut::<FbxModelCache>();
-    let Some(fbx_data_index) = fbx_cache.fbx_data_index(mesh_index) else {
-        msg_error!(
-            "graphics mesh {} is not part of the loaded FBX model; its generated bones will not reach the FBX export",
-            mesh_index
-        );
-        return;
-    };
-    if let Some(fbx_model) = fbx_cache.fbx_model_mut() {
-        fbx_model.fbx_data[fbx_data_index].clusters = clusters;
-    }
 }
 
 pub fn set_chain_gen_settings(world: &mut World, settings: ChainGenSettings) {

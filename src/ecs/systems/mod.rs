@@ -70,6 +70,8 @@ pub mod render_data_systems;
 pub mod scalar_clip_systems;
 pub mod scheduled_clip_systems;
 mod selection_bounds;
+mod skeleton_batch_actions;
+pub mod skeleton_edit_systems;
 mod skeleton_pose_systems;
 pub mod spring_bone_bake_systems;
 pub mod spring_bone_edit_systems;
@@ -153,6 +155,9 @@ pub use render_data_systems::*;
 pub use scalar_clip_systems::*;
 pub use scheduled_clip_systems::*;
 pub use selection_bounds::*;
+pub use skeleton_edit_systems::{
+    add_skeleton_bone, refresh_after_skeleton_edit, remove_skeleton_bone, set_skeleton_bone_offset,
+};
 pub use skeleton_pose_systems::*;
 pub use spring_bone_gizmo_systems::*;
 pub use spring_bone_systems::*;

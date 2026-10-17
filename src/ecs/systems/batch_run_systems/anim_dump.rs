@@ -12,8 +12,8 @@ use crate::ecs::component::{
     ScalarChannelDomain,
 };
 use crate::ecs::resource::{
-    AnimationType, ClipLibrary, HierarchyDisplayMode, HierarchyState, HumanoidRigState,
-    TimelineState, UiFocusState,
+    AnimationType, AvatarSetupState, ClipLibrary, HierarchyDisplayMode, HierarchyState,
+    HumanoidRigState, TimelineState, UiFocusState,
 };
 use crate::ecs::systems::hierarchy_systems::query_hierarchy_tree;
 use crate::ecs::world::{Entity, World};
@@ -134,6 +134,13 @@ struct HierarchyJson {
 }
 
 #[derive(Serialize)]
+struct SkeletonBoneJson {
+    name: String,
+    parent: Option<String>,
+    rest_position: [f32; 3],
+}
+
+#[derive(Serialize)]
 struct AnimDumpJson {
     entities: Vec<EntityJson>,
     clips: Vec<ClipJson>,
@@ -142,7 +149,23 @@ struct AnimDumpJson {
     ui: Option<UiJson>,
     curve_editor: serde_json::Value,
     hierarchy: Option<HierarchyJson>,
+    skeleton_bones: Vec<SkeletonBoneJson>,
     chain_gen: Option<thyllore_avatar_core::garment::components::chain_gen::ChainGenReport>,
+}
+
+fn skeleton_bones_dump(world: &World) -> Vec<SkeletonBoneJson> {
+    let Some(setup) = world.get_resource::<AvatarSetupState>() else {
+        return Vec::new();
+    };
+    setup
+        .bones
+        .iter()
+        .map(|bone| SkeletonBoneJson {
+            name: bone.name.clone(),
+            parent: bone.parent.map(|parent| setup.bones[parent].name.clone()),
+            rest_position: bone.rest_position,
+        })
+        .collect()
 }
 
 fn hierarchy_dump(world: &World) -> Option<HierarchyJson> {
@@ -381,6 +404,7 @@ pub fn batch_anim_dump_json(world: &World, include_tracks: bool) -> serde_json::
         }),
         curve_editor: crate::ecs::systems::live_dump::curve_editor_json(world),
         hierarchy: hierarchy_dump(world),
+        skeleton_bones: skeleton_bones_dump(world),
         chain_gen: world
             .get_resource::<crate::ecs::resource::AvatarSetupState>()
             .and_then(|state| state.chain_gen_report.clone()),

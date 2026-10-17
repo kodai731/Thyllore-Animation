@@ -12,8 +12,9 @@ the user's to set.
 Procedure:
 1. Run strip_secondary_bones.py on the purchased model (the user runs it) to get <name>_humanoid_only.fbx and
     <name>_secondary_reference.json.
-2. Load the copy in the engine with submesh_role=<role>:<mesh>/<material> and
-    generate_chain_bones=<mesh>/<material>,<root_bone>[,<setting>=<value>...], and keep --batch-anim-dump.
+2. Load the copy in the engine with submesh_role=<role>:<mesh>[/<material>] and
+    generate_chain_bones=<mesh>[/<material>],<root_bone>[,<setting>=<value>...], and keep --batch-anim-dump.
+    Without the material the whole mesh is one generation target.
 3. For the deformation RMS, give both models the same spring values and colliders and the same sway clip,
     and take dump_skinned_vertices=<csv>,30,<mesh>/<material> from each.
 4. Run this tool on the outputs.
@@ -34,33 +35,34 @@ import numpy as np
 def reference_chains(deleted_bones: list[dict]) -> list[list[str]]:
     """Build chains from reference deleted_bones.
 
-    Only kind=="chain" bones are included. Bones are connected by parent-child relationships.
-    A chain starts at a bone whose parent is not a chain bone (or has no parent).
+    Only kind=="chain" bones are included. A chain starts at a bone whose parent is not a chain bone or
+    is a hub with several chain children (Hair_root -> 22 strands), and follows single children to the
+    tip or the next hub. Hubs themselves are not part of any chain.
     Returns list of chains, each chain is a list of bone names in order from root to tip.
     """
     chain_bones = [b for b in deleted_bones if b.get("kind") == "chain"]
     bone_by_name = {b["name"]: b for b in chain_bones}
-    chain_names = set(bone_by_name.keys())
-
-    heads = []
+    children_by_parent: dict[str, list[str]] = {}
     for b in chain_bones:
-        parent = b.get("parent")
-        if parent is None or parent not in chain_names:
-            heads.append(b["name"])
+        children_by_parent.setdefault(b.get("parent"), []).append(b["name"])
+
+    def is_hub(name: str) -> bool:
+        return len(children_by_parent.get(name, [])) > 1
+
+    heads = [
+        b["name"]
+        for b in chain_bones
+        if b.get("parent") not in bone_by_name or is_hub(b["parent"])
+    ]
 
     chains = []
     for head_name in heads:
-        chain = []
-        current = head_name
-        while current is not None:
-            bone = bone_by_name.get(current)
-            if bone is None:
-                break
-            chain.append(bone["name"])
-            children = [c["name"] for c in chain_bones if c.get("parent") == current]
+        chain = [head_name]
+        while not is_hub(chain[-1]):
+            children = children_by_parent.get(chain[-1], [])
             if not children:
                 break
-            current = children[0]
+            chain.append(children[0])
         if len(chain) >= 2:
             chains.append(chain)
 
@@ -414,6 +416,54 @@ def joint_metrics(gen_chains: list[list[tuple]], ref_chains: list[list[tuple]], 
     }
 
 
+def generated_mesh_names(gen_weights: list[dict]) -> set[str]:
+    """Mesh names the generation wrote weights to; the engine labels a part as <mesh>:<material>."""
+    return {entry["mesh"].split(":", 1)[0] for entry in gen_weights}
+
+
+def generated_root_bone(gen_bones: list[dict]) -> str | None:
+    """The humanoid bone the generated chains hang from: the one parent that is not a generated bone."""
+    generated = {b["name"] for b in gen_bones}
+    roots = {b["parent"] for b in gen_bones if b.get("parent") not in generated}
+    return next(iter(roots)) if len(roots) == 1 else None
+
+
+def humanoid_ancestor(bone_name: str, bone_by_name: dict[str, dict]) -> str | None:
+    """Walk up the deleted bones to the first parent that is not a deleted bone."""
+    current = bone_name
+    while current in bone_by_name:
+        current = bone_by_name[current].get("parent")
+    return current
+
+
+def reference_for_meshes(ref_data: dict, mesh_names: set[str], root_bone: str | None = None) -> tuple[list[dict], list[dict]]:
+    """Restrict the reference to the hand-rigged bones that weight the given meshes and hang from root_bone.
+
+    Returns (deleted_bones, vertex_weights). Chains whose bones never touch those meshes, or that hang
+    from another humanoid bone (breast bones weighting a dress), belong to another garment and would only
+    count as misses. Without a mesh overlap the whole reference is used."""
+    all_bones = ref_data.get("deleted_bones", [])
+    all_weights = ref_data.get("vertex_weights", [])
+    mesh_weights = [entry for entry in all_weights if entry["mesh"] in mesh_names]
+    if not mesh_weights:
+        return all_bones, all_weights
+
+    bone_by_name = {b["name"]: b for b in all_bones}
+    touched = {entry["bone"] for entry in mesh_weights}
+    under_root = {name for name in touched if humanoid_ancestor(name, bone_by_name) == root_bone}
+    if under_root:
+        touched = under_root
+    kept = set()
+    for name in touched:
+        current = name
+        while current in bone_by_name and current not in kept:
+            kept.add(current)
+            current = bone_by_name[current].get("parent")
+    bones = [b for b in all_bones if b["name"] in kept]
+    weights = [entry for entry in mesh_weights if entry["bone"] in kept]
+    return bones, weights
+
+
 def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, generated_scale: float = 1.0,
              miss_radius: float = 0.03, match_tolerance: float = 0.002,
              deform_generated: str | None = None, deform_reference: str | None = None) -> dict:
@@ -423,9 +473,13 @@ def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, gener
             f"reference JSON must declare space={REFERENCE_SPACE!r} (written by strip_secondary_bones.py), "
             f"got {ref_data.get('space')!r}"
         )
-    deleted_bones = ref_data.get("deleted_bones", [])
     chain_gen = gen_data.get("chain_gen", {})
     gen_bones = chain_gen.get("bones", [])
+    gen_weights = chain_gen.get("vertex_weights", [])
+
+    deleted_bones, ref_weights = reference_for_meshes(
+        ref_data, generated_mesh_names(gen_weights), generated_root_bone(gen_bones)
+    )
 
     ref_chains = reference_chains(deleted_bones)
     ref_head_lookup = {b["name"]: scale_position(b["head"], reference_scale) for b in deleted_bones}
@@ -438,8 +492,6 @@ def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, gener
 
     joint_m = joint_metrics(gen_chains_yup, ref_chains_yup, miss_radius)
 
-    ref_weights = ref_data.get("vertex_weights", [])
-    gen_weights = chain_gen.get("vertex_weights", [])
     transformed_ref_weights = [
         {**entry, "position": list(scale_position(entry["position"], reference_scale))}
         for entry in ref_weights

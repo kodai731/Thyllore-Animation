@@ -249,10 +249,8 @@ pub fn save_humanoid_mapping(world: &World) {
     let state = world.resource::<AvatarSetupState>();
 
     if !state.issues.is_empty() {
-        msg_error!(
-            "Cannot save humanoid mapping: {} structural issue(s)",
-            state.issues.len()
-        );
+        let issue_list: Vec<String> = state.issues.iter().map(|issue| issue.to_string()).collect();
+        msg_error!("Cannot save humanoid mapping: {}", issue_list.join("; "));
         return;
     }
 

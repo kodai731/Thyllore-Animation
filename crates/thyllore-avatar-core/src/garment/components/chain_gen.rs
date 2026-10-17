@@ -3,9 +3,9 @@ use std::sync::LazyLock;
 use cgmath::Vector3;
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
-use super::submesh_role::SubmeshKey;
+use super::submesh_role::SubmeshSelector;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainRole {
     Hair,
     Skirt,
@@ -129,14 +129,14 @@ pub struct ChainWeightRecord {
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct ChainGenReport {
-    pub submesh: String,
+    pub target: String,
     pub bones: Vec<GeneratedBoneRecord>,
     pub vertex_weights: Vec<ChainWeightRecord>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChainGenRequest {
-    pub submesh: SubmeshKey,
+    pub target: SubmeshSelector,
     pub root_bone: String,
     pub settings: ChainGenSettings,
 }

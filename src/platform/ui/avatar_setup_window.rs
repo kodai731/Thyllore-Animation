@@ -13,10 +13,9 @@ use thyllore_avatar_core::garment::components::chain_gen::{
     ChainGenRequest, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshRoleSource,
+    SubmeshKey, SubmeshRole, SubmeshRoleSource, SubmeshSelector,
 };
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
@@ -270,10 +269,7 @@ fn build_submeshes_tab(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) 
                 if ui.button("Generate chains##chain") {
                     world.send_command(AvatarSetupEvent::GenerateChainBones {
                         request: ChainGenRequest {
-                            submesh: SubmeshKey {
-                                mesh: key.mesh.clone(),
-                                material: key.material.clone(),
-                            },
+                            target: SubmeshSelector::Submesh(key.clone()),
                             root_bone: root_bone.clone(),
                             settings: state.chain_gen.clone(),
                         },
@@ -293,7 +289,7 @@ fn build_validation_tab(ui: &imgui::Ui, state: &AvatarSetupState) {
 
     ui.text(format!("Issues: {}", state.issues.len()));
     for issue in &state.issues {
-        ui.bullet_text(format_mapping_issue(issue));
+        ui.bullet_text(issue.to_string());
     }
     ui.separator();
 
@@ -314,32 +310,6 @@ fn format_rest_pose(rest_pose: RestPose) -> &'static str {
         RestPose::TPose => "T-pose",
         RestPose::APose => "A-pose",
         RestPose::Unknown => "Unknown",
-    }
-}
-
-fn format_mapping_issue(issue: &MappingIssue) -> String {
-    match issue {
-        MappingIssue::MissingRequired(role) => {
-            format!("Missing required role {}", role.unity_name())
-        }
-        MappingIssue::HierarchyOrder {
-            child,
-            expected_ancestor,
-        } => format!(
-            "{} is not under {}",
-            child.unity_name(),
-            expected_ancestor.unity_name()
-        ),
-        MappingIssue::MirroredRolesShareBone { left, right } => format!(
-            "{} and {} share the same bone",
-            left.unity_name(),
-            right.unity_name()
-        ),
-        MappingIssue::BoneInTwoRoles { roles, .. } => format!(
-            "bone used by both {} and {}",
-            roles[0].unity_name(),
-            roles[1].unity_name()
-        ),
     }
 }
 

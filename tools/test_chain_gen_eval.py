@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from chain_gen_eval import reference_chains, generated_chains, chain_heads, joint_metrics, weight_metrics, deform_metrics, evaluate, scale_position, REFERENCE_SPACE
+from chain_gen_eval import reference_chains, generated_chains, reference_for_meshes, chain_heads, joint_metrics, weight_metrics, deform_metrics, evaluate, scale_position, REFERENCE_SPACE
 
 
 def test_reference_chains_single_strand() -> None:
@@ -33,6 +33,40 @@ def test_reference_chains_skips_single_kind() -> None:
     ]
     chains = reference_chains(deleted_bones)
     assert len(chains) == 0
+
+
+def test_reference_chains_branch_from_hub() -> None:
+    """A hub bone with several chain children yields one chain per branch and is itself excluded."""
+    deleted_bones = [
+        {"name": "Hair_root", "parent": "Head", "head": [0.0, 1.6, 0.0], "tail": [0.0, 1.7, 0.0], "kind": "chain"},
+        {"name": "Hair_A1", "parent": "Hair_root", "head": [0.1, 1.7, 0.0], "tail": [0.1, 1.6, 0.0], "kind": "chain"},
+        {"name": "Hair_A2", "parent": "Hair_A1", "head": [0.1, 1.6, 0.0], "tail": [0.1, 1.5, 0.0], "kind": "chain"},
+        {"name": "Hair_B1", "parent": "Hair_root", "head": [-0.1, 1.7, 0.0], "tail": [-0.1, 1.6, 0.0], "kind": "chain"},
+        {"name": "Hair_B2", "parent": "Hair_B1", "head": [-0.1, 1.6, 0.0], "tail": [-0.1, 1.5, 0.0], "kind": "chain"},
+        {"name": "Hair_B3", "parent": "Hair_B2", "head": [-0.1, 1.5, 0.0], "tail": [-0.1, 1.4, 0.0], "kind": "chain"},
+    ]
+    chains = reference_chains(deleted_bones)
+    assert sorted(chains) == [["Hair_A1", "Hair_A2"], ["Hair_B1", "Hair_B2", "Hair_B3"]]
+
+
+def test_reference_for_meshes_keeps_only_chains_under_root_touching_mesh() -> None:
+    """Breast bones weighting the skirt mesh hang from Chest and are dropped for a Hips generation."""
+    ref_data = {
+        "deleted_bones": [
+            {"name": "Skirt_root", "parent": "Hips", "head": [0, 0.9, 0], "tail": [0, 0.8, 0], "kind": "chain"},
+            {"name": "Skirt_A1", "parent": "Skirt_root", "head": [0, 0.8, 0], "tail": [0, 0.7, 0], "kind": "chain"},
+            {"name": "Breast_1", "parent": "Chest", "head": [0, 1.0, 0], "tail": [0, 1.0, 0.1], "kind": "chain"},
+            {"name": "Hair_A1", "parent": "Head", "head": [0, 1.5, 0], "tail": [0, 1.4, 0], "kind": "chain"},
+        ],
+        "vertex_weights": [
+            {"mesh": "Cloth_skirt", "vertex": 0, "bone": "Skirt_A1", "weight": 1.0, "position": [0, 0.75, 0]},
+            {"mesh": "Cloth_skirt", "vertex": 1, "bone": "Breast_1", "weight": 1.0, "position": [0, 1.0, 0]},
+            {"mesh": "Hair_back", "vertex": 0, "bone": "Hair_A1", "weight": 1.0, "position": [0, 1.45, 0]},
+        ],
+    }
+    bones, weights = reference_for_meshes(ref_data, {"Cloth_skirt"}, "Hips")
+    assert sorted(b["name"] for b in bones) == ["Skirt_A1", "Skirt_root"]
+    assert [w["bone"] for w in weights] == ["Skirt_A1"]
 
 
 def test_generated_chains_single_column() -> None:

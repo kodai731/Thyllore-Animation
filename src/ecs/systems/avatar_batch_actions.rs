@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
-use crate::ecs::resource::{OutputCommand, OutputQueue};
+use crate::ecs::resource::{AvatarSetupState, OutputCommand, OutputQueue};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
@@ -13,7 +13,9 @@ use crate::ecs::systems::phases::event_dispatch::spring_bone::{
 use crate::ecs::world::{Entity, World};
 use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
 use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRole, SubmeshSelector,
+};
 use thyllore_avatar_core::garment::systems::chain_gen;
 use thyllore_cli_core::scalar_assignment_parse;
 
@@ -462,18 +464,18 @@ fn export_model_fbx_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     })))
 }
 
-const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>/<material>,<root_bone>[,<setting>=<value>...]";
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root_bone>[,<setting>=<value>...]";
 
 fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     let spec = text.strip_prefix("generate_chain_bones=")?;
     let mut parts = spec.split(',');
-    let (Some(mesh_material), Some(root_bone)) = (parts.next(), parts.next()) else {
+    let (Some(target_text), Some(root_bone)) = (parts.next(), parts.next()) else {
         return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
     };
 
-    let (mesh, material) = match mesh_material.trim().rsplit_once('/') {
-        Some((m, mat)) => (m.to_string(), mat.to_string()),
-        None => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    let target = match target_text.parse::<SubmeshSelector>() {
+        Ok(target) => target,
+        Err(_) => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
     };
     let root_bone = root_bone.trim().to_string();
     if root_bone.is_empty() {
@@ -499,7 +501,7 @@ fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>
     }
 
     let request = ChainGenRequest {
-        submesh: SubmeshKey { mesh, material },
+        target,
         root_bone,
         settings,
     };
@@ -509,8 +511,7 @@ fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>
 #[derive(Debug)]
 pub struct SubmeshRoleAction {
     role: SubmeshRole,
-    mesh: String,
-    material: String,
+    target: SubmeshSelector,
 }
 
 impl BatchAction for SubmeshRoleAction {
@@ -518,34 +519,43 @@ impl BatchAction for SubmeshRoleAction {
         "submesh_role"
     }
     fn apply(&self, world: &mut World) {
-        world.send_command(AvatarSetupEvent::SetSubmeshRole {
-            key: SubmeshKey {
-                mesh: self.mesh.clone(),
-                material: self.material.clone(),
-            },
-            role: self.role,
-        });
+        let keys: Vec<SubmeshKey> = world
+            .resource::<AvatarSetupState>()
+            .submesh_roles
+            .keys()
+            .filter(|key| self.target.matches(key))
+            .cloned()
+            .collect();
+        if keys.is_empty() {
+            log_warn!("submesh_role: no submesh matches {}", self.target);
+        }
+        for key in keys {
+            world.send_command(AvatarSetupEvent::SetSubmeshRole {
+                key,
+                role: self.role,
+            });
+        }
     }
 }
 
+const SUBMESH_ROLE_USAGE: &str = "submesh_role expects submesh_role=<role>:<mesh>[/<material>]";
+
 fn submesh_role_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     let spec = text.strip_prefix("submesh_role=")?;
-    let (role_str, rest) = match spec.split_once(':') {
-        Some(parts) => parts,
-        None => return Some(Err(anyhow!("submesh_role expects role:mesh/material"))),
+    Some(submesh_role_spec_parse(spec).map(|action| Box::new(action) as Box<dyn BatchAction>))
+}
+
+fn submesh_role_spec_parse(spec: &str) -> Result<SubmeshRoleAction> {
+    let Some((role_str, target_text)) = spec.split_once(':') else {
+        return Err(anyhow!("{SUBMESH_ROLE_USAGE}"));
     };
-    let (mesh, material) = match rest.rsplit_once('/') {
-        Some((m, mat)) => (m.to_string(), mat.to_string()),
-        None => (rest.to_string(), String::new()),
-    };
-    match serde_json::from_value::<SubmeshRole>(serde_json::Value::String(role_str.to_string())) {
-        Ok(role) => Some(Ok(Box::new(SubmeshRoleAction {
-            role,
-            mesh,
-            material,
-        }))),
-        Err(e) => Some(Err(anyhow!("unknown submesh role {:?}: {}", role_str, e))),
-    }
+    let target = target_text
+        .parse::<SubmeshSelector>()
+        .map_err(|_| anyhow!("{SUBMESH_ROLE_USAGE}"))?;
+    let role =
+        serde_json::from_value::<SubmeshRole>(serde_json::Value::String(role_str.to_string()))
+            .map_err(|e| anyhow!("unknown submesh role {:?}: {}", role_str, e))?;
+    Ok(SubmeshRoleAction { role, target })
 }
 
 #[derive(Debug)]
@@ -756,15 +766,22 @@ mod tests {
     }
 
     #[test]
-    fn test_submesh_role_parses_correct_format() {
-        let action: Box<dyn BatchAction> = submesh_role_parse("submesh_role=hair:Body/Hair_mat")
-            .expect("prefix matches")
-            .expect("spec is valid");
-
-        assert_eq!(action.name(), "submesh_role");
+    fn test_submesh_role_parses_submesh_and_whole_mesh() {
+        let submesh = submesh_role_spec_parse("hair:Body/Hair_mat").expect("spec is valid");
+        assert_eq!(submesh.role, SubmeshRole::Hair);
         assert_eq!(
-            format!("{:?}", action),
-            "SubmeshRoleAction { role: Hair, mesh: \"Body\", material: \"Hair_mat\" }"
+            submesh.target,
+            SubmeshSelector::Submesh(SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Hair_mat".to_string(),
+            })
+        );
+
+        let whole_mesh = submesh_role_spec_parse("garment:Cloth_skirt").expect("spec is valid");
+        assert_eq!(whole_mesh.role, SubmeshRole::Garment);
+        assert_eq!(
+            whole_mesh.target,
+            SubmeshSelector::Mesh("Cloth_skirt".to_string())
         );
     }
 
@@ -833,6 +850,10 @@ mod tests {
         let defaults_only = generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine")
             .expect("prefix matches");
         assert!(defaults_only.is_ok());
+
+        let whole_mesh = generate_chain_bones_parse("generate_chain_bones=garment,spine")
+            .expect("prefix matches");
+        assert!(whole_mesh.is_ok());
     }
 
     #[test]
@@ -841,7 +862,7 @@ mod tests {
             "generate_chain_bones=garment/cloth,,joint_count=3",
             "generate_chain_bones=garment/cloth,spine,joint_count=0",
             "generate_chain_bones=garment/cloth,spine,joints=3",
-            "generate_chain_bones=garment,spine",
+            "generate_chain_bones=,spine",
         ] {
             assert!(
                 generate_chain_bones_parse(spec)

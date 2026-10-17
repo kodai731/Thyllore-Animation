@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -7,8 +8,17 @@ import sys
 import bpy
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-sys.path.insert(0, REPO_ROOT)
-from blender_addon.common.coordinates import blender_to_engine_point  # noqa: E402
+
+
+def load_coordinates_module():
+    path = os.path.join(REPO_ROOT, "blender_addon", "common", "coordinates.py")
+    spec = importlib.util.spec_from_file_location("thyllore_coordinates", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+blender_to_engine_point = load_coordinates_module().blender_to_engine_point
 
 REFERENCE_SPACE = "engine_y_up_m"
 

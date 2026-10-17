@@ -149,7 +149,7 @@ pub(crate) unsafe fn append_model_to_scene(
 
     let parent_entity = entities::spawn_model_part_entity(part_name, world);
     entities::spawn_mesh_entities(
-        part_name,
+        &entities::mesh_entity_names(part_name, &load_result.meshes, mesh_index_offset),
         graphics,
         world,
         assets,

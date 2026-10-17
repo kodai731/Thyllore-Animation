@@ -2,9 +2,34 @@ use anyhow::{anyhow, Result};
 use cgmath::Vector3;
 
 use crate::ecs::resource::{AssetEditCommand, AssetEditQueue};
+use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::world::World;
 
-use super::batch_run_systems::BatchAction;
+use super::batch_run_systems::{unit_action_parse, BatchAction};
+
+#[derive(Debug, Default)]
+struct Undo;
+
+impl BatchAction for Undo {
+    fn name(&self) -> &'static str {
+        "undo"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(EditHistoryEvent::Undo);
+    }
+}
+
+#[derive(Debug, Default)]
+struct Redo;
+
+impl BatchAction for Redo {
+    fn name(&self) -> &'static str {
+        "redo"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(EditHistoryEvent::Redo);
+    }
+}
 
 #[derive(Debug)]
 struct QueuedSkeletonEdit {
@@ -105,6 +130,8 @@ fn set_bone_offset_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
 crate::batch_action!("add_bone", add_bone_parse);
 crate::batch_action!("remove_bone", remove_bone_parse);
 crate::batch_action!("set_bone_offset", set_bone_offset_parse);
+crate::batch_action!("undo", unit_action_parse::<Undo>);
+crate::batch_action!("redo", unit_action_parse::<Redo>);
 
 #[cfg(test)]
 mod tests {

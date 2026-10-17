@@ -1,5 +1,8 @@
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
+use crate::ecs::events::{send_dialog_request, DialogRequest};
+use crate::ecs::resource::{
+    AvatarSetupState, FbxModelCache, MaterialTextureSaveState, MaterialTextureState,
+};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::param_widgets::draw_params;
@@ -418,6 +421,18 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
         world.send_command(AvatarSetupEvent::ExportUnityAvatar);
     }
     ui.text_disabled("sidecar JSON, expression .anim files, current clip .anim");
+
+    let has_fbx_model = world
+        .get_resource::<FbxModelCache>()
+        .map_or(false, |cache| cache.fbx_model().is_some());
+    if has_fbx_model {
+        if ui.button("Export FBX") {
+            send_dialog_request(world, DialogRequest::ExportModelFbx);
+        }
+        ui.text_disabled("mesh, skeleton and skin weights as loaded and edited, no clip");
+    } else {
+        ui.text_disabled("Export FBX (needs an FBX model)");
+    }
     ui.separator();
 
     ui.input_text("Bone name prefix", &mut state.spring_prefix)

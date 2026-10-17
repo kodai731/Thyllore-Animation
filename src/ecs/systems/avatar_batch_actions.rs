@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
+use crate::ecs::resource::{OutputCommand, OutputQueue};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
@@ -431,6 +432,36 @@ impl BatchAction for GenerateChainBones {
     }
 }
 
+#[derive(Debug)]
+pub struct ExportModelFbx {
+    path: PathBuf,
+}
+
+impl BatchAction for ExportModelFbx {
+    fn name(&self) -> &'static str {
+        "export_model_fbx"
+    }
+    fn apply(&self, world: &mut World) {
+        world
+            .resource_mut::<OutputQueue>()
+            .push(OutputCommand::ExportModelFbx {
+                path: self.path.clone(),
+            });
+    }
+}
+
+fn export_model_fbx_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("export_model_fbx=")?.trim();
+    if spec.is_empty() {
+        return Some(Err(anyhow!(
+            "export_model_fbx expects export_model_fbx=<path.fbx>"
+        )));
+    }
+    Some(Ok(Box::new(ExportModelFbx {
+        path: PathBuf::from(spec),
+    })))
+}
+
 const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>/<material>,<root_bone>[,<setting>=<value>...]";
 
 fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
@@ -592,6 +623,7 @@ crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
 crate::batch_action!("dump_skinned_vertices", dump_skinned_vertices_parse);
 crate::batch_action!("fit_spring_params", fit_spring_params_parse);
 crate::batch_action!("generate_chain_bones", generate_chain_bones_parse);
+crate::batch_action!("export_model_fbx", export_model_fbx_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
 crate::batch_action!("hide_covered_skin", hide_covered_skin_parse);
 

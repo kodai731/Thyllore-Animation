@@ -5,9 +5,9 @@ use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::resource::{
-    AvatarSetupState, BoneGizmoData, BonePoseOverride, BoneSelectionState, CurveEditorState,
-    CurveEditorTarget, FbxModelCache, HierarchyState, SpringBoneState, TimelineState,
-    TransformGizmoData,
+    AvatarSetupState, BoneGizmoData, BonePoseOverride, BoneSelectionState, ClipLibrary,
+    CurveEditorState, CurveEditorTarget, EditHistory, FbxModelCache, HierarchyState,
+    SkeletonSnapshot, SkinSnapshot, SpringBoneState, TimelineState, TransformGizmoData,
 };
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::humanoid_rig_systems::invalidate_humanoid_rig;
@@ -41,11 +41,14 @@ pub fn add_skeleton_bone(
     name: &str,
     local_offset: Vector3<f32>,
 ) -> anyhow::Result<BoneId> {
+    let before = capture_skeleton_snapshot(world, assets, graphics);
+
     let (_, skeleton) = edited_skeleton_mut(assets)?;
     let parent = resolve_bone(skeleton, parent_name)?;
     let bone_id = skeleton.add_child_bone(parent, name, local_offset)?;
 
     refresh_after_skeleton_edit(world, assets, graphics);
+    record_skeleton_edit(world, assets, graphics, before, "Add bone");
     msg_info!("Added bone \"{}\" under \"{}\"", name, parent_name);
     Ok(bone_id)
 }
@@ -71,6 +74,8 @@ pub fn remove_skeleton_bone(
     graphics: &mut GraphicsResources,
     bone_name: &str,
 ) -> anyhow::Result<()> {
+    let before = capture_skeleton_snapshot(world, assets, graphics);
+
     let (skeleton_id, skeleton) = edited_skeleton_mut(assets)?;
     let bone_id = resolve_bone(skeleton, bone_name)?;
     let removed = skeleton.remove_bone(bone_id)?;
@@ -87,12 +92,179 @@ pub fn remove_skeleton_bone(
     remap_bone_references(world, &removed.remap);
 
     refresh_after_skeleton_edit(world, assets, graphics);
+    record_skeleton_edit(world, assets, graphics, before, "Remove bone");
     msg_info!(
         "Removed bone \"{}\" and {} descendants",
         bone_name,
         removed.removed.len() - 1
     );
     Ok(())
+}
+
+/// The state a skeleton edit can touch, or `None` when no skeleton is loaded.
+pub fn capture_skeleton_snapshot(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> Option<SkeletonSnapshot> {
+    let skeleton_asset = assets.skeletons.values().next()?;
+    let skeleton_id = skeleton_asset.skeleton_id;
+
+    let skins = graphics
+        .meshes
+        .iter()
+        .enumerate()
+        .filter_map(|(mesh_index, mesh)| {
+            let skin = mesh
+                .skin_data
+                .as_ref()
+                .filter(|s| s.skeleton_id == skeleton_id)?;
+            Some(SkinSnapshot {
+                mesh_index,
+                bone_indices: skin.bone_indices.clone(),
+                bone_weights: skin.bone_weights.clone(),
+            })
+        })
+        .collect();
+    let clip_tracks = world
+        .resource::<ClipLibrary>()
+        .source_clips
+        .iter()
+        .map(|(id, source)| (*id, source.editable_clip.tracks.clone()))
+        .collect();
+
+    Some(SkeletonSnapshot {
+        skeleton: skeleton_asset.skeleton.clone(),
+        skins,
+        spring_setups: world
+            .iter_components::<SpringBoneSetup>()
+            .map(|(entity, setup)| (entity, setup.clone()))
+            .collect(),
+        constraint_sets: world
+            .iter_components::<ConstraintSet>()
+            .map(|(entity, set)| (entity, set.clone()))
+            .collect(),
+        clip_tracks,
+    })
+}
+
+fn record_skeleton_edit(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    before: Option<SkeletonSnapshot>,
+    description: &'static str,
+) {
+    let (Some(before), Some(after)) = (before, capture_skeleton_snapshot(world, assets, graphics))
+    else {
+        return;
+    };
+    if let Some(mut history) = world.get_resource_mut::<EditHistory>() {
+        history.push_skeleton_edit(before, after, description);
+    }
+}
+
+/// Writes a snapshot back over the skeleton, its skin weights and every bone reference, then refreshes.
+pub fn restore_skeleton_snapshot(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &mut GraphicsResources,
+    snapshot: SkeletonSnapshot,
+) {
+    let Some(skeleton_asset) = assets.skeletons.values_mut().next() else {
+        msg_error!("Cannot restore a skeleton snapshot: no skeleton is loaded");
+        return;
+    };
+    let skeleton_id = skeleton_asset.skeleton_id;
+    let bone_count = snapshot.skeleton.bone_count();
+    skeleton_asset.skeleton = snapshot.skeleton;
+
+    for skin_snapshot in snapshot.skins {
+        let Some(skin) = graphics
+            .meshes
+            .get_mut(skin_snapshot.mesh_index)
+            .and_then(|mesh| mesh.skin_data.as_mut())
+            .filter(|s| s.skeleton_id == skeleton_id)
+        else {
+            msg_error!(
+                "Skeleton snapshot names graphics mesh {} which has no skin for this skeleton",
+                skin_snapshot.mesh_index
+            );
+            continue;
+        };
+        restore_skin_weights(skin, &skin_snapshot);
+    }
+    for (entity, setup) in snapshot.spring_setups {
+        if let Some(current) = world.get_component_mut::<SpringBoneSetup>(entity) {
+            *current = setup;
+        }
+    }
+    for (entity, set) in snapshot.constraint_sets {
+        if let Some(current) = world.get_component_mut::<ConstraintSet>(entity) {
+            *current = set;
+        }
+    }
+    {
+        let mut clips = world.resource_mut::<ClipLibrary>();
+        for (id, tracks) in snapshot.clip_tracks {
+            if let Some(source) = clips.source_clips.get_mut(&id) {
+                source.editable_clip.tracks = tracks;
+            }
+        }
+    }
+    drop_bone_state_beyond(world, bone_count as BoneId);
+    invalidate_humanoid_rig(world);
+
+    refresh_after_skeleton_edit(world, assets, graphics);
+}
+
+pub fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
+    if snapshot.bone_indices.len() != skin.bone_indices.len() {
+        msg_error!(
+            "Skeleton snapshot has {} skinned vertices for mesh {}, the mesh has {}",
+            snapshot.bone_indices.len(),
+            snapshot.mesh_index,
+            skin.bone_indices.len()
+        );
+        return;
+    }
+    skin.bone_indices.clone_from(&snapshot.bone_indices);
+    skin.bone_weights.clone_from(&snapshot.bone_weights);
+}
+
+/// Editor state that names a bone the restored skeleton does not have is cleared.
+fn drop_bone_state_beyond(world: &mut World, bone_count: BoneId) {
+    let keep = |bone: BoneId| bone < bone_count;
+    if let Some(mut hierarchy) = world.get_resource_mut::<HierarchyState>() {
+        hierarchy.selected_bone_id = hierarchy.selected_bone_id.filter(|&b| keep(b));
+        hierarchy.expanded_bone_ids.retain(|&b| keep(b));
+    }
+    if let Some(mut selection) = world.get_resource_mut::<BoneSelectionState>() {
+        selection
+            .selected_bone_indices
+            .retain(|&b| keep(b as BoneId));
+        selection.active_bone_index = selection.active_bone_index.filter(|&b| keep(b as BoneId));
+    }
+    if let Some(mut timeline) = world.get_resource_mut::<TimelineState>() {
+        timeline.expanded_tracks.retain(|&b| keep(b));
+        timeline.baked_bone_ids.retain(|&b| keep(b));
+    }
+    if let Some(mut spring) = world.get_resource_mut::<SpringBoneState>() {
+        spring.baked_bone_ids.retain(|&b| keep(b));
+    }
+    if let Some(mut overrides) = world.get_resource_mut::<BonePoseOverride>() {
+        overrides.overrides.retain(|&b, _| keep(b));
+    }
+    if let Some(mut curve) = world.get_resource_mut::<CurveEditorState>() {
+        if let Some(CurveEditorTarget::Bone(bone)) = curve.selected_target {
+            if !keep(bone) {
+                curve.selected_target = None;
+            }
+        }
+    }
+    if let Some(mut gizmo) = world.get_resource_mut::<TransformGizmoData>() {
+        gizmo.target_bone_id = gizmo.target_bone_id.filter(|&b| keep(b));
+    }
 }
 
 /// Gives the removed subtree's weight to the parent it hung from and renumbers the surviving bones.
@@ -156,7 +328,7 @@ fn remap_bone_references(world: &mut World, remap: &BoneRemap) {
             .retain_mut(|entry| remap_constraint(&mut entry.constraint, remap));
     }
 
-    let mut clips = world.resource_mut::<crate::ecs::resource::ClipLibrary>();
+    let mut clips = world.resource_mut::<ClipLibrary>();
     for source in clips.source_clips.values_mut() {
         let tracks = std::mem::take(&mut source.editable_clip.tracks);
         source.editable_clip.tracks = tracks
@@ -435,6 +607,21 @@ mod tests {
 
         assert_eq!(skin.bone_indices[0], Vector4::new(0, 0, 0, 0));
         assert!((skin.bone_weights[0].x - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn restore_skin_weights_writes_the_snapshot_back_when_sizes_match() {
+        let mut skin = build_skin(&[[(0, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]]);
+        let snapshot = SkinSnapshot {
+            mesh_index: 0,
+            bone_indices: vec![Vector4::new(2, 1, 0, 0)],
+            bone_weights: vec![Vector4::new(0.5, 0.5, 0.0, 0.0)],
+        };
+
+        restore_skin_weights(&mut skin, &snapshot);
+
+        assert_eq!(skin.bone_indices[0], Vector4::new(2, 1, 0, 0));
+        assert_eq!(skin.bone_weights[0], Vector4::new(0.5, 0.5, 0.0, 0.0));
     }
 
     #[test]

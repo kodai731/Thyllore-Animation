@@ -1,5 +1,6 @@
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
+use crate::ecs::resource::SkeletonSnapshot;
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -23,6 +24,10 @@ pub enum EditCommand {
         removed: SourceClip,
         description: &'static str,
     },
+    SkeletonModified {
+        before: SkeletonSnapshot,
+        description: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +35,7 @@ pub enum EditCommandAfter {
     Clip(EditableAnimationClip),
     Schedule(ClipSchedule),
     ClipCreated(SourceClip),
+    Skeleton(SkeletonSnapshot),
     Empty,
 }
 
@@ -128,6 +134,22 @@ impl EditHistory {
         self.push_entry(entry);
     }
 
+    pub fn push_skeleton_edit(
+        &mut self,
+        before: SkeletonSnapshot,
+        after: SkeletonSnapshot,
+        description: &'static str,
+    ) {
+        let entry = EditEntry {
+            command: EditCommand::SkeletonModified {
+                before,
+                description,
+            },
+            after: EditCommandAfter::Skeleton(after),
+        };
+        self.push_entry(entry);
+    }
+
     fn push_entry(&mut self, entry: EditEntry) {
         self.redo_stack.clear();
         self.undo_stack.push(entry);
@@ -177,6 +199,7 @@ impl EditCommand {
             EditCommand::ScheduleModified { description, .. } => description,
             EditCommand::ClipAdded { description, .. } => description,
             EditCommand::ClipRemoved { description, .. } => description,
+            EditCommand::SkeletonModified { description, .. } => description,
         }
     }
 }
@@ -305,12 +328,28 @@ mod tests {
                 removed: SourceClip::new(1, make_dummy_clip("removed")),
                 description: "Remove clip",
             },
+            EditCommand::SkeletonModified {
+                before: SkeletonSnapshot {
+                    skeleton: crate::animation::Skeleton::new("s"),
+                    skins: Vec::new(),
+                    spring_setups: Vec::new(),
+                    constraint_sets: Vec::new(),
+                    clip_tracks: Vec::new(),
+                },
+                description: "Remove bone",
+            },
         ];
 
         let descriptions: Vec<&str> = commands.iter().map(EditCommand::description).collect();
         assert_eq!(
             descriptions,
-            ["Move keyframe", "Move clip", "Add clip", "Remove clip"]
+            [
+                "Move keyframe",
+                "Move clip",
+                "Add clip",
+                "Remove clip",
+                "Remove bone"
+            ]
         );
     }
 }

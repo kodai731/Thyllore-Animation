@@ -5,6 +5,7 @@ use cgmath::Vector3;
 
 use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
 
+use crate::ecs::resource::SkeletonSnapshot;
 use crate::hooks::batch_capture::BatchCapture;
 
 /// Commands recorded during event dispatch and applied by `App`, one queue per stage of the apply order.
@@ -81,6 +82,9 @@ pub enum AssetEditCommand {
         bone: String,
         local_offset: Vector3<f32>,
     },
+    RestoreSkeletonSnapshot {
+        snapshot: Box<SkeletonSnapshot>,
+    },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.
@@ -115,6 +119,9 @@ pub enum OutputCommand {
         path: PathBuf,
     },
     ExportModelGltf {
+        path: PathBuf,
+    },
+    ExportModelFbx {
         path: PathBuf,
     },
     GenerateChainBones {

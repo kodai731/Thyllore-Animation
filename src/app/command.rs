@@ -143,6 +143,14 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
                 msg_error!("Failed to move bone: {}", e);
             }
         }
+        AssetEditCommand::RestoreSkeletonSnapshot { snapshot } => {
+            crate::ecs::systems::restore_skeleton_snapshot(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                *snapshot,
+            );
+        }
         AssetEditCommand::AssignMaterialTexture { material, path } => {
             crate::ecs::systems::set_material_texture(
                 &mut app.data.ecs_world,
@@ -241,6 +249,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+        OutputCommand::ExportModelFbx { path } => export_actions::export_model_fbx(app, &path),
 
         OutputCommand::GenerateChainBones { request } => {
             match generate_chain_bones(

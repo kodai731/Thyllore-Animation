@@ -242,7 +242,9 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportClipFbx { source_id, path } => {
-            export_actions::export_clip_fbx(app, source_id, &path)
+            if bake_entity_scale_for_export(app) {
+                export_actions::export_clip_fbx(app, source_id, &path)
+            }
         }
 
         OutputCommand::ExportClipGltf { source_id, path } => {
@@ -254,7 +256,11 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
-        OutputCommand::ExportModelFbx { path } => export_actions::export_model_fbx(app, &path),
+        OutputCommand::ExportModelFbx { path } => {
+            if bake_entity_scale_for_export(app) {
+                export_actions::export_model_fbx(app, &path)
+            }
+        }
 
         OutputCommand::GenerateChainBones { request } => {
             match generate_chain_bones(
@@ -279,6 +285,27 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
             if let Err(e) = apply_hidden_triangles(app, meshes) {
                 msg_error!("Failed to apply hidden triangles: {:?}", e);
             }
+        }
+    }
+}
+
+/// An FBX carries no entity transform, so a scaled model root is baked into the assets before it is written.
+unsafe fn bake_entity_scale_for_export(app: &mut App) -> bool {
+    let pending = match crate::ecs::systems::pending_entity_scale(&app.data.ecs_world) {
+        Ok(pending) => pending,
+        Err(e) => {
+            msg_error!("FBX export failed: {}", e);
+            return false;
+        }
+    };
+    let Some(factor) = pending else {
+        return true;
+    };
+    match apply_model_scale_command(app, factor, ScaleHistory::Record) {
+        Ok(()) => true,
+        Err(e) => {
+            msg_error!("FBX export failed: could not bake entity scale: {:?}", e);
+            false
         }
     }
 }

@@ -133,12 +133,37 @@ fn model_space_bone_filter(world: &World) -> impl Fn(BoneId) -> bool {
     move |bone| !humanoid_bones.contains(&bone)
 }
 
-fn reset_model_root_scales(world: &mut World) {
-    let roots: Vec<Entity> = world
+/// Entities whose `Transform` scales the loaded meshes: the parents of the mesh entities.
+pub fn model_root_entities(world: &World) -> Vec<Entity> {
+    let mut roots: Vec<Entity> = world
         .iter_components::<MeshRef>()
         .filter_map(|(entity, _)| world.get_component::<Parent>(entity).map(|parent| parent.0))
         .collect();
-    for root in roots {
+    roots.sort_unstable();
+    roots.dedup();
+    roots
+}
+
+/// The entity scale an export has to bake first, or None when the model is already at scale 1.
+pub fn pending_entity_scale(world: &World) -> anyhow::Result<Option<f32>> {
+    let mut pending = None;
+    for root in model_root_entities(world) {
+        let Some(scale) = world
+            .get_component::<Transform>(root)
+            .map(|transform| transform.scale)
+        else {
+            continue;
+        };
+        let factor = uniform_scale_factor(scale)?;
+        if (factor - 1.0).abs() > UNIFORM_SCALE_TOLERANCE {
+            pending = Some(factor);
+        }
+    }
+    Ok(pending)
+}
+
+fn reset_model_root_scales(world: &mut World) {
+    for root in model_root_entities(world) {
         if let Some(transform) = world.get_component_mut::<Transform>(root) {
             transform.scale = Vector3::new(1.0, 1.0, 1.0);
         }
@@ -158,6 +183,30 @@ mod tests {
         assert!(uniform_scale_factor(Vector3::new(1.0, 2.0, 1.0)).is_err());
         assert!(uniform_scale_factor(Vector3::new(0.0, 0.0, 0.0)).is_err());
         assert!(uniform_scale_factor(Vector3::new(-1.0, -1.0, -1.0)).is_err());
+    }
+
+    #[test]
+    fn pending_entity_scale_reads_the_mesh_parent_and_ignores_scale_one() {
+        let mut world = World::new();
+        let root = world
+            .entity()
+            .with_name("model")
+            .with_transform(Transform::default())
+            .build();
+        world
+            .entity()
+            .with_name("mesh")
+            .with_parent(root)
+            .with_mesh(0, 0)
+            .build();
+
+        assert_eq!(pending_entity_scale(&world).unwrap(), None);
+
+        world.get_component_mut::<Transform>(root).unwrap().scale = Vector3::new(0.01, 0.01, 0.01);
+        assert_eq!(pending_entity_scale(&world).unwrap(), Some(0.01));
+
+        world.get_component_mut::<Transform>(root).unwrap().scale = Vector3::new(1.0, 2.0, 1.0);
+        assert!(pending_entity_scale(&world).is_err());
     }
 
     #[test]

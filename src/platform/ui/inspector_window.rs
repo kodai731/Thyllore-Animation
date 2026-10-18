@@ -129,12 +129,6 @@ fn build_transform_section(
                     cgmath::Vector3::new(scl[0], scl[1], scl[2]),
                 ));
             }
-            if data.icon == EntityIcon::Model {
-                ui.same_line();
-                if ui.button("Apply scale") {
-                    world.send_command(HierarchyEvent::ApplyEntityScale(data.entity));
-                }
-            }
         }
     }
 }

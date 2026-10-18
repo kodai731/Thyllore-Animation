@@ -462,7 +462,9 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
     ui.input_text("Bone name prefix", &mut state.spring_prefix)
         .build();
     let prefix = state.spring_prefix.trim();
-    if ui.button("Add spring chains") && !prefix.is_empty() {
+    if prefix.is_empty() {
+        ui.text_disabled("Add spring chains (enter the bone name prefix, e.g. hair)");
+    } else if ui.button("Add spring chains") {
         world.send_command(AvatarSetupEvent::AddSpringChainsByPrefix {
             prefix: prefix.to_string(),
         });

@@ -282,6 +282,7 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
         return;
     }
 
+    let chain_count = roots.len();
     for chain in roots {
         handle_spring_chain_add(
             world,
@@ -291,6 +292,11 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
             skeleton,
         );
     }
+    msg_info!(
+        "Added {} spring chains for prefix \"{}\"",
+        chain_count,
+        prefix
+    );
 }
 
 pub fn fit_body_colliders(

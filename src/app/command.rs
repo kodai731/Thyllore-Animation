@@ -1,6 +1,6 @@
 use crate::app::{features::export_actions, App};
 use crate::ecs::resource::{
-    AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand,
+    AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand, ScaleHistory,
     SceneLoadCommand,
 };
 #[cfg(feature = "auto-rig")]
@@ -151,6 +151,11 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
                 *snapshot,
             );
         }
+        AssetEditCommand::ApplyModelScale { factor, history } => {
+            if let Err(e) = apply_model_scale_command(app, factor, history) {
+                msg_error!("Failed to apply model scale: {:?}", e);
+            }
+        }
         AssetEditCommand::AssignMaterialTexture { material, path } => {
             crate::ecs::systems::set_material_texture(
                 &mut app.data.ecs_world,
@@ -276,6 +281,49 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
             }
         }
     }
+}
+
+unsafe fn apply_model_scale_command(
+    app: &mut App,
+    factor: f32,
+    history: ScaleHistory,
+) -> anyhow::Result<()> {
+    app.rrdevice.device.device_wait_idle()?;
+    let pool = app
+        .resource::<crate::vulkanr::context::CommandState>()
+        .pool
+        .clone();
+
+    crate::ecs::systems::apply_model_scale(
+        &mut app.data.ecs_world,
+        &mut app.data.ecs_assets,
+        &mut app.data.graphics_resources,
+        factor,
+    )?;
+
+    for mesh_index in 0..app.data.graphics_resources.mesh_count() {
+        app.data.graphics_resources.upload_mesh_vertices(
+            &app.instance,
+            &app.rrdevice,
+            &pool,
+            mesh_index,
+        )?;
+    }
+    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
+        &app.instance,
+        &app.rrdevice,
+        &mut app.data,
+        &pool,
+    )?;
+
+    if history == ScaleHistory::Record {
+        app.data
+            .ecs_world
+            .resource_mut::<crate::ecs::resource::EditHistory>()
+            .push_model_scale(factor, "Apply model scale");
+    }
+    msg_info!("Applied model scale {}", factor);
+    Ok(())
 }
 
 unsafe fn apply_hidden_triangles(

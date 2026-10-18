@@ -3,8 +3,9 @@ use thyllore_avatar_core::garment::components::submesh_role::{
 };
 
 use crate::asset::{AssetStorage, MeshAsset};
-use crate::ecs::resource::AvatarSetupState;
-use crate::ecs::world::World;
+use crate::ecs::resource::{AvatarSetupState, HierarchyState, NodeAssets};
+use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
+use crate::ecs::world::{Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
 pub(crate) fn collect_submesh_keys(
@@ -86,6 +87,42 @@ pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
     };
 }
 
+/// The scene entity that renders the submesh, found through its mesh asset.
+pub fn find_submesh_entity(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    key: &SubmeshKey,
+) -> Option<Entity> {
+    let nodes = &world.resource::<NodeAssets>().nodes;
+    let (_, mesh_index) = collect_submesh_meshes(assets, graphics, nodes)
+        .into_iter()
+        .find(|(candidate, _)| candidate == key)?;
+    let asset_id = assets
+        .meshes
+        .iter()
+        .find(|(_, mesh_asset)| mesh_asset.graphics_mesh_index == mesh_index)
+        .map(|(id, _)| *id)?;
+    world
+        .iter_components::<MeshRef>()
+        .find(|(_, mesh_ref)| mesh_ref.mesh_asset_id == asset_id)
+        .map(|(entity, _)| entity)
+}
+
+pub fn select_submesh_entity(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    key: &SubmeshKey,
+) {
+    let Some(entity) = find_submesh_entity(world, assets, graphics, key) else {
+        log_warn!("No entity renders submesh ({}, {})", key.mesh, key.material);
+        return;
+    };
+    hierarchy_select(&mut world.resource_mut::<HierarchyState>(), entity);
+    hierarchy_reveal_entity(world, entity);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +181,33 @@ mod tests {
         let submesh_key = build_submesh_key(&mesh_asset, None, None);
 
         assert_eq!(submesh_key, key("test_humanoid_01", ""));
+    }
+
+    #[test]
+    fn select_submesh_entity_selects_and_reveals_the_mesh_entity() {
+        let mut world = World::new();
+        world.insert_resource(NodeAssets::default());
+        world.insert_resource(HierarchyState::default());
+        let mut assets = AssetStorage::new();
+        let graphics = GraphicsResources::default();
+        let asset_id = assets.add_mesh(make_mesh_asset("test_humanoid_01"));
+        let parent = world.entity().with_name("model").build();
+        let entity = world
+            .entity()
+            .with_name("test_humanoid_01")
+            .with_parent(parent)
+            .with_mesh(asset_id, 0)
+            .build();
+
+        select_submesh_entity(&mut world, &assets, &graphics, &key("test_humanoid_01", ""));
+
+        let state = world.resource::<HierarchyState>();
+        assert_eq!(state.selected_entity, Some(entity));
+        assert!(state.scroll_to_selected);
+        assert_eq!(
+            find_submesh_entity(&world, &assets, &graphics, &key("missing", "")),
+            None
+        );
     }
 
     #[test]

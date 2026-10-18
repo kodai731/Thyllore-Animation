@@ -1,8 +1,8 @@
-use cgmath::SquareMatrix;
+use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_avatar_core::garment::components::chain_gen::{
     ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainGenSettings, ChainRole,
     ChainWeightRecord, GeneratedBoneRecord, GeneratedChain, GeneratedJoint, InfluenceTarget,
-    VertexInfluences,
+    RootBandRecord, VertexInfluences,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -10,7 +10,10 @@ use thyllore_avatar_core::garment::components::submesh_role::{
 use thyllore_avatar_core::garment::systems::chain_bones::{
     append_chain_bones, write_chain_weights,
 };
-use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
+use thyllore_avatar_core::garment::systems::chain_gen::{
+    component_labels, compute_chain_weights, hair_root_band, place_chains, RootBand,
+};
+use thyllore_math_core::world_y_axis;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
@@ -93,12 +96,16 @@ pub fn generate_chain_bones(
     let report = build_report(
         skeleton,
         &request.target,
-        &parts,
-        &chains,
-        &bone_ids,
-        root,
-        &influences,
-        &model_positions,
+        ReportSource {
+            parts: &parts,
+            chains: &chains,
+            bone_ids: &bone_ids,
+            root,
+            influences: &influences,
+            input: &input,
+            root_band: hair_root_band(&input, &params),
+            component_labels: &component_labels(&input),
+        },
     );
 
     for part in &parts {
@@ -325,60 +332,110 @@ fn find_skeleton_mut(
         .ok_or_else(|| anyhow::anyhow!("skeleton not found: {:?}", skeleton_id))
 }
 
-fn build_report(
-    skeleton: &thyllore_model_core::Skeleton,
-    target: &SubmeshSelector,
-    parts: &[ChainGenPart],
-    chains: &[GeneratedChain],
-    bone_ids: &[Vec<thyllore_model_core::BoneId>],
+struct ReportSource<'a> {
+    parts: &'a [ChainGenPart],
+    chains: &'a [GeneratedChain],
+    bone_ids: &'a [Vec<thyllore_model_core::BoneId>],
     root: thyllore_model_core::BoneId,
-    influences: &[VertexInfluences],
-    positions: &[cgmath::Vector3<f32>],
-) -> ChainGenReport {
-    let bones: Vec<GeneratedBoneRecord> = chains
+    influences: &'a [VertexInfluences],
+    input: &'a ChainGenInput<'a>,
+    root_band: Option<RootBand>,
+    component_labels: &'a [usize],
+}
+
+fn to_array(p: cgmath::Vector3<f32>) -> [f32; 3] {
+    [p.x, p.y, p.z]
+}
+
+fn root_band_record(band: RootBand, root_position: cgmath::Vector3<f32>) -> RootBandRecord {
+    let root_height = root_position.dot(world_y_axis());
+    RootBandRecord {
+        equator_height: root_height - band.equator_progress,
+        height: root_height - band.progress,
+        center: to_array(band.center),
+    }
+}
+
+fn bone_records(
+    skeleton: &thyllore_model_core::Skeleton,
+    source: &ReportSource,
+) -> Vec<GeneratedBoneRecord> {
+    source
+        .chains
         .iter()
         .enumerate()
         .flat_map(|(ci, chain)| {
+            let last_joint = chain.joints.len().saturating_sub(1);
             chain.joints.iter().enumerate().map(move |(ji, joint)| {
-                let parent_id = if ji == 0 { root } else { bone_ids[ci][ji - 1] };
-                let parent_name = &skeleton.bones[parent_id as usize].name;
+                let parent_id = if ji == 0 {
+                    source.root
+                } else {
+                    source.bone_ids[ci][ji - 1]
+                };
                 GeneratedBoneRecord {
                     name: joint.name.clone(),
-                    parent: parent_name.clone(),
-                    head: [joint.head.x, joint.head.y, joint.head.z],
+                    parent: skeleton.bones[parent_id as usize].name.clone(),
+                    head: to_array(joint.head),
+                    tail: (ji == last_joint).then(|| to_array(chain.tail)),
                 }
             })
         })
-        .collect();
+        .collect()
+}
 
-    let mut vertex_weights: Vec<ChainWeightRecord> = Vec::new();
-    for part in parts {
+fn weight_records(
+    skeleton: &thyllore_model_core::Skeleton,
+    source: &ReportSource,
+) -> Vec<ChainWeightRecord> {
+    let bone_name_of = |target_bone: &InfluenceTarget| match target_bone {
+        InfluenceTarget::Root => skeleton.bones[source.root as usize].name.clone(),
+        InfluenceTarget::Joint { chain, joint } => {
+            let bid = source.bone_ids[*chain][*joint];
+            skeleton.bones[bid as usize].name.clone()
+        }
+    };
+
+    let mut vertex_weights = Vec::new();
+    for part in source.parts {
         let part_label = format!("{}:{}", part.key.mesh, part.key.material);
-        for influence in influences_of_part(part, influences) {
-            let pos = positions[(influence.vertex + part.vertex_offset) as usize];
-            for (target_bone, weight) in &influence.influences {
-                let bone_name = match target_bone {
-                    InfluenceTarget::Root => skeleton.bones[root as usize].name.clone(),
-                    InfluenceTarget::Joint { chain, joint } => {
-                        let bid = bone_ids[*chain][*joint];
-                        skeleton.bones[bid as usize].name.clone()
-                    }
-                };
-                vertex_weights.push(ChainWeightRecord {
+        for influence in influences_of_part(part, source.influences) {
+            let merged_vertex = (influence.vertex + part.vertex_offset) as usize;
+            let position = to_array(source.input.positions[merged_vertex]);
+            let component = source.component_labels[merged_vertex] as u32;
+            vertex_weights.extend(influence.influences.iter().map(|(target_bone, weight)| {
+                ChainWeightRecord {
                     mesh: part_label.clone(),
                     vertex: influence.vertex,
-                    bone: bone_name,
+                    component,
+                    bone: bone_name_of(target_bone),
                     weight: *weight,
-                    position: [pos.x, pos.y, pos.z],
-                });
-            }
+                    position,
+                }
+            }));
         }
     }
+    vertex_weights
+}
 
+fn build_report(
+    skeleton: &thyllore_model_core::Skeleton,
+    target: &SubmeshSelector,
+    source: ReportSource,
+) -> ChainGenReport {
     ChainGenReport {
         target: target.to_string(),
-        bones,
-        vertex_weights,
+        bones: bone_records(skeleton, &source),
+        vertex_weights: weight_records(skeleton, &source),
+        root_band: source
+            .root_band
+            .map(|band| root_band_record(band, source.input.root_position)),
+        attachment_positions: source
+            .input
+            .attachment_positions
+            .iter()
+            .copied()
+            .map(to_array)
+            .collect(),
     }
 }
 

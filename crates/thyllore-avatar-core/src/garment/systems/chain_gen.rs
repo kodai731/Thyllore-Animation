@@ -31,10 +31,12 @@ struct AzimuthSample {
     weight: f32,
 }
 
+/// The hair root band in root-relative progress (distance down the up axis from the root bone).
 #[derive(Debug, Clone, Copy)]
-struct RootBand {
-    progress: f32,
-    center: Vector3<f32>,
+pub struct RootBand {
+    pub equator_progress: f32,
+    pub progress: f32,
+    pub center: Vector3<f32>,
 }
 
 fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
@@ -114,9 +116,26 @@ fn estimate_root_band(
         .map(|(&p, _)| p)
         .collect();
 
+    let equator_progress = min_progress + (widest_slice as f32 + 0.5) * slice_width;
     RootBand {
-        progress: min_progress + (widest_slice as f32 + 0.5) * slice_width + offset,
+        equator_progress,
+        progress: equator_progress + offset,
         center: mean_position(&slice_members),
+    }
+}
+
+/// The root band a hair generation uses; a skirt has none.
+pub fn hair_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<RootBand> {
+    match params.role {
+        ChainRole::Hair => {
+            let vertices = collect_target_vertices(input);
+            Some(estimate_root_band(
+                &attachment_or_target(input, &vertices),
+                input.root_position,
+                params.settings.root_band_offset,
+            ))
+        }
+        ChainRole::Skirt => None,
     }
 }
 
@@ -319,7 +338,8 @@ fn find_component_root(parent: &mut [usize], vertex: usize) -> usize {
     root
 }
 
-fn label_connected_components(input: &ChainGenInput, frames: &[VertexFrame]) -> Vec<usize> {
+/// Connected component label per vertex: the smallest vertex index of its component.
+pub fn component_labels(input: &ChainGenInput) -> Vec<usize> {
     let mut parent: Vec<usize> = (0..input.positions.len()).collect();
     for triangle in input.triangles {
         for edge in [(triangle[0], triangle[1]), (triangle[1], triangle[2])] {
@@ -328,9 +348,16 @@ fn label_connected_components(input: &ChainGenInput, frames: &[VertexFrame]) -> 
             parent[a.max(b)] = a.min(b);
         }
     }
+    (0..input.positions.len())
+        .map(|vertex| find_component_root(&mut parent, vertex))
+        .collect()
+}
+
+fn label_connected_components(input: &ChainGenInput, frames: &[VertexFrame]) -> Vec<usize> {
+    let labels = component_labels(input);
     frames
         .iter()
-        .map(|frame| find_component_root(&mut parent, frame.vertex as usize))
+        .map(|frame| labels[frame.vertex as usize])
         .collect()
 }
 
@@ -516,14 +543,7 @@ pub fn place_chains(
         anyhow::bail!("chain generation found no target vertices");
     }
 
-    let root_band = match params.role {
-        ChainRole::Hair => Some(estimate_root_band(
-            &attachment_or_target(input, &vertices),
-            input.root_position,
-            params.settings.root_band_offset,
-        )),
-        ChainRole::Skirt => None,
-    };
+    let root_band = hair_root_band(input, params);
     let azimuth_center = root_band.map_or(input.root_position, |band| band.center);
     let frames = compute_vertex_frames(input, &vertices, azimuth_center);
     let columns = match root_band {
@@ -1390,5 +1410,48 @@ mod tests {
 
         assert_eq!(chains.len(), 2);
         assert!(chains.iter().all(|c| c.vertices.iter().all(|&v| v >= 48)));
+    }
+
+    #[test]
+    fn component_labels_separate_the_cap_from_each_card() {
+        let (positions, triangles) = build_cap_with_two_cards();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &[],
+        };
+
+        let labels = component_labels(&input);
+
+        assert_eq!(labels.len(), positions.len());
+        let distinct: BTreeSet<usize> = labels.iter().copied().collect();
+        assert_eq!(distinct.len(), 4, "two cap rings and two cards");
+        assert!(labels[48..58].iter().all(|&l| l == 48));
+        assert!(labels[58..68].iter().all(|&l| l == 58));
+    }
+
+    #[test]
+    fn hair_root_band_reports_the_equator_and_the_offset_band() {
+        let (positions, triangles) = build_cap_with_two_cards();
+        let head = head_attachment();
+        let input = ChainGenInput {
+            positions: &positions,
+            triangles: &triangles,
+            root_position: Vector3::new(0.0, 0.0, 0.0),
+            attachment_positions: &head,
+        };
+        let mut params = build_params(ChainRole::Hair, 3, 2);
+        params.settings.root_band_offset = 0.05;
+
+        let band = hair_root_band(&input, &params).unwrap();
+
+        assert!((band.progress - band.equator_progress - 0.05).abs() < 1e-6);
+        assert!(
+            (band.center.y - 0.1).abs() < 1e-6,
+            "ring height {:?}",
+            band.center
+        );
+        assert!(hair_root_band(&input, &build_params(ChainRole::Skirt, 3, 2)).is_none());
     }
 }

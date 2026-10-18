@@ -28,6 +28,10 @@ pub enum EditCommand {
         before: SkeletonSnapshot,
         description: &'static str,
     },
+    ModelScaled {
+        factor: f32,
+        description: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -150,6 +154,16 @@ impl EditHistory {
         self.push_entry(entry);
     }
 
+    pub fn push_model_scale(&mut self, factor: f32, description: &'static str) {
+        self.push_entry(EditEntry {
+            command: EditCommand::ModelScaled {
+                factor,
+                description,
+            },
+            after: EditCommandAfter::Empty,
+        });
+    }
+
     fn push_entry(&mut self, entry: EditEntry) {
         self.redo_stack.clear();
         self.undo_stack.push(entry);
@@ -200,6 +214,7 @@ impl EditCommand {
             EditCommand::ClipAdded { description, .. } => description,
             EditCommand::ClipRemoved { description, .. } => description,
             EditCommand::SkeletonModified { description, .. } => description,
+            EditCommand::ModelScaled { description, .. } => description,
         }
     }
 }

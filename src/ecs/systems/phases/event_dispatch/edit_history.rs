@@ -4,7 +4,7 @@ use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
     AssetEditCommand, AssetEditQueue, ClipLibrary, EditCommand, EditCommandAfter, EditEntry,
-    EditHistory, SkeletonSnapshot, ToastMessage, UiToast,
+    EditHistory, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
 };
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -148,6 +148,17 @@ fn dispatch_undo(world: &mut World) {
                 .push_to_redo(entry.clone());
             log!("Undo: {}", description);
         }
+
+        EditCommand::ModelScaled {
+            factor,
+            description,
+        } => {
+            queue_model_scale(world, 1.0 / factor);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_redo(entry.clone());
+            log!("Undo: {}", description);
+        }
     }
 
     show_history_toast(world, "Undo", entry.command.description());
@@ -215,6 +226,20 @@ fn dispatch_redo(world: &mut World) {
             log!("Redo: {}", description);
         }
 
+        (
+            EditCommand::ModelScaled {
+                factor,
+                description,
+            },
+            EditCommandAfter::Empty,
+        ) => {
+            queue_model_scale(world, *factor);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_undo(entry.clone());
+            log!("Redo: {}", description);
+        }
+
         _ => return,
     }
 
@@ -227,6 +252,15 @@ fn queue_skeleton_restore(world: &mut World, target: &SkeletonSnapshot) {
         .resource_mut::<AssetEditQueue>()
         .push(AssetEditCommand::RestoreSkeletonSnapshot {
             snapshot: Box::new(target.clone()),
+        });
+}
+
+fn queue_model_scale(world: &mut World, factor: f32) {
+    world
+        .resource_mut::<AssetEditQueue>()
+        .push(AssetEditCommand::ApplyModelScale {
+            factor,
+            history: ScaleHistory::Replay,
         });
 }
 

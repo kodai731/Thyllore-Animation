@@ -85,6 +85,17 @@ pub enum AssetEditCommand {
     RestoreSkeletonSnapshot {
         snapshot: Box<SkeletonSnapshot>,
     },
+    ApplyModelScale {
+        factor: f32,
+        history: ScaleHistory,
+    },
+}
+
+/// Whether a model scale is a new edit or the replay of one through undo / redo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScaleHistory {
+    Record,
+    Replay,
 }
 
 /// Applied last: these only read the scene the earlier stages produced.

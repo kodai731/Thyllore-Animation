@@ -1,6 +1,7 @@
 use imgui::Condition;
 
 use crate::asset::AssetStorage;
+use crate::ecs::component::EntityIcon;
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
@@ -127,6 +128,12 @@ fn build_transform_section(
                     data.entity,
                     cgmath::Vector3::new(scl[0], scl[1], scl[2]),
                 ));
+            }
+            if data.icon == EntityIcon::Model {
+                ui.same_line();
+                if ui.button("Apply scale") {
+                    world.send_command(HierarchyEvent::ApplyEntityScale(data.entity));
+                }
             }
         }
     }

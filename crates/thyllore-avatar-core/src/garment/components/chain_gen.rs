@@ -122,15 +122,26 @@ pub struct GeneratedBoneRecord {
     pub name: String,
     pub parent: String,
     pub head: [f32; 3],
+    /// The chain end point, present on the last joint of each chain
+    pub tail: Option<[f32; 3]>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct ChainWeightRecord {
     pub mesh: String,
     pub vertex: u32,
+    pub component: u32,
     pub bone: String,
     pub weight: f32,
     pub position: [f32; 3],
+}
+
+/// The hair root band as model-space heights along the up axis
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct RootBandRecord {
+    pub equator_height: f32,
+    pub height: f32,
+    pub center: [f32; 3],
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -138,6 +149,8 @@ pub struct ChainGenReport {
     pub target: String,
     pub bones: Vec<GeneratedBoneRecord>,
     pub vertex_weights: Vec<ChainWeightRecord>,
+    pub root_band: Option<RootBandRecord>,
+    pub attachment_positions: Vec<[f32; 3]>,
 }
 
 #[derive(Debug, Clone)]

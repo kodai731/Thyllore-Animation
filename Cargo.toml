@@ -45,6 +45,7 @@ thyllore-anim-core = { path = "crates/thyllore-anim-core" }
 thyllore-ml-core = { path = "crates/thyllore-ml-core", optional = true }
 thyllore-importer-core = { path = "crates/thyllore-importer-core" }
 thyllore-exporter-core = { path = "crates/thyllore-exporter-core" }
+thyllore-file-format-core = { path = "crates/thyllore-file-format-core" }
 thyllore-effect-core = { path = "crates/thyllore-effect-core" }
 thyllore-avatar-core = { path = "crates/thyllore-avatar-core" }
 thyllore-scene-core = { path = "crates/thyllore-scene-core" }

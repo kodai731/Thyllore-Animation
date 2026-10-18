@@ -1,13 +1,14 @@
-"""Measure generated chain bones against the secondary bones of a hand-rigged model.
+"""Measure generated chain bones: reference-free quality always, and accuracy against a hand-rigged model when given.
 
-    python3 tools/chain_gen_eval.py --reference <secondary_reference.json> --generated <anim_dump.json> --out <dir>
+    python3 tools/chain_gen_eval.py --generated <anim_dump.json> --out <dir> [--reference <secondary_reference.json>]
         [--reference-scale 1.0] [--generated-scale 1.0] [--miss-radius 0.03] [--match-tolerance 0.002]
-        [--deform-generated <csv> --deform-reference <csv>]
+        [--empty-column-fraction 0.05] [--deform-generated <csv> --deform-reference <csv>]
 
-The reference is written by scripts/blender/strip_secondary_bones.py in engine coordinates (Y-up, "space"
-field); this tool knows no other space. The scales bring both sides to meters. Writes <out>/chain_gen_eval.json and chain_gen_eval.md with
-joint, weight and (when both CSVs are given) deformation metrics. It reports numbers only; the thresholds are
-the user's to set.
+The reference-free metrics (tools/chain_gen_quality.py) read only the dump: skull intrusion, shell rigidity,
+component splits, tail reach, root height against the equator, empty columns. The reference is written by
+scripts/blender/strip_secondary_bones.py in engine coordinates (Y-up, "space" field); this tool knows no other
+space. The scales bring both sides to meters. Writes <out>/chain_gen_eval.json and chain_gen_eval.md. It reports
+numbers only; the thresholds are the user's to set.
 
 Procedure:
 1. Run strip_secondary_bones.py on the purchased model (the user runs it) to get <name>_humanoid_only.fbx and
@@ -30,6 +31,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chain_gen_quality import quality_markdown_rows, quality_metrics
 
 
 def reference_chains(deleted_bones: list[dict]) -> list[list[str]]:
@@ -486,10 +490,14 @@ def reference_for_meshes(ref_data: dict, mesh_names: set[str], root_bone: str | 
     return bones, weights
 
 
-def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, generated_scale: float = 1.0,
+def evaluate(ref_data: dict | None, gen_data: dict, reference_scale: float = 1.0, generated_scale: float = 1.0,
              miss_radius: float = 0.03, match_tolerance: float = 0.002,
-             deform_generated: str | None = None, deform_reference: str | None = None) -> dict:
-    """Evaluate chain generation accuracy against reference data."""
+             deform_generated: str | None = None, deform_reference: str | None = None,
+             empty_column_fraction: float = 0.05) -> dict:
+    """Reference-free quality of the generation, plus its accuracy against the reference when one is given."""
+    quality = quality_metrics(gen_data.get("chain_gen", {}), generated_scale, empty_column_fraction)
+    if ref_data is None:
+        return {"quality": quality}
     if ref_data.get("space") != REFERENCE_SPACE:
         raise ValueError(
             f"reference JSON must declare space={REFERENCE_SPACE!r} (written by strip_secondary_bones.py), "
@@ -532,7 +540,7 @@ def evaluate(ref_data: dict, gen_data: dict, reference_scale: float = 1.0, gener
         deform_m = deform_metrics(gen_rows, ref_rows, match_tolerance,
                                   gen_scale=generated_scale, ref_scale=reference_scale)
 
-    output = {"joint": joint_m, "weight": weight_m}
+    output = {"quality": quality, "joint": joint_m, "weight": weight_m}
     if deform_m is not None:
         output["deform"] = deform_m
     return output
@@ -542,26 +550,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Measure chain bone generation accuracy against reference."
     )
-    parser.add_argument("--reference", required=True, help="Path to reference JSON (S1 strip_secondary_bones.py output)")
+    parser.add_argument("--reference", help="Path to reference JSON (S1 strip_secondary_bones.py output); omit for reference-free metrics only")
     parser.add_argument("--generated", required=True, help="Path to generated JSON (engine --batch-anim-dump output)")
     parser.add_argument("--out", required=True, help="Output directory")
     parser.add_argument("--reference-scale", type=float, default=1.0, help="Scale factor for reference positions (default 1.0)")
     parser.add_argument("--generated-scale", type=float, default=1.0, help="Scale factor for generated positions (default 1.0)")
     parser.add_argument("--miss-radius", type=float, default=0.03, help="Radius in meters for miss detection (default 0.03)")
     parser.add_argument("--match-tolerance", type=float, default=0.002, help="Tolerance for vertex matching in weight/deform metrics (default 0.002)")
+    parser.add_argument("--empty-column-fraction", type=float, default=0.05, help="A chain dominating fewer than this share of chained vertices counts as an empty column (default 0.05)")
     parser.add_argument("--deform-generated", help="Path to generated skinned vertices CSV (for deformation metrics)")
     parser.add_argument("--deform-reference", help="Path to reference skinned vertices CSV (for deformation metrics)")
     args = parser.parse_args()
 
-    ref_data = json.loads(Path(args.reference).read_text())
+    ref_data = json.loads(Path(args.reference).read_text()) if args.reference else None
     gen_data = json.loads(Path(args.generated).read_text())
 
     output = evaluate(ref_data, gen_data, args.reference_scale, args.generated_scale,
-                      args.miss_radius, args.match_tolerance, args.deform_generated, args.deform_reference)
-
-    joint_m = output["joint"]
-    weight_m = output["weight"]
-    deform_m = output.get("deform")
+                      args.miss_radius, args.match_tolerance, args.deform_generated, args.deform_reference,
+                      args.empty_column_fraction)
 
     os.makedirs(args.out, exist_ok=True)
     out_path = os.path.join(args.out, "chain_gen_eval.json")
@@ -569,27 +575,25 @@ def main() -> None:
         json.dump(output, f, indent=2, ensure_ascii=False, sort_keys=True)
 
     md_path = os.path.join(args.out, "chain_gen_eval.md")
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write("# Chain Generation Evaluation\n\n")
-        f.write("## Joint Metrics\n\n")
-        f.write("| Metric | Value |\n")
-        f.write("|--------|-------|\n")
-        for k, v in sorted(joint_m.items()):
-            if k != "chain_correspondence":
-                f.write(f"| {k} | {v} |\n")
-        f.write("\n## Weight Metrics\n\n")
-        f.write("| Metric | Value |\n")
-        f.write("|--------|-------|\n")
-        for k, v in sorted(weight_m.items()):
-            f.write(f"| {k} | {v} |\n")
-        if deform_m is not None:
-            f.write("\n## Deformation Metrics\n\n")
-            f.write("| Metric | Value |\n")
-            f.write("|--------|-------|\n")
-            for k, v in sorted(deform_m.items()):
-                f.write(f"| {k} | {v} |\n")
+    Path(md_path).write_text(render_markdown(output), encoding="utf-8")
 
-    print(json.dumps(output))
+    summary = {key: value for key, value in output.items() if key != "quality"}
+    summary["quality"] = {k: v for k, v in output["quality"].items()
+                          if k not in ("tail_gaps", "column_vertex_counts", "skull_intrusion_joints", "empty_columns")}
+    print(json.dumps(summary))
+
+
+def render_markdown(output: dict) -> str:
+    lines = ["# Chain Generation Evaluation", "", "## Quality Metrics (reference-free)", "",
+             "| Metric | Value |", "|--------|-------|", *quality_markdown_rows(output["quality"])]
+    sections = (("joint", "Joint Metrics"), ("weight", "Weight Metrics"), ("deform", "Deformation Metrics"))
+    for key, title in sections:
+        metrics = output.get(key)
+        if metrics is None:
+            continue
+        lines += ["", f"## {title}", "", "| Metric | Value |", "|--------|-------|"]
+        lines += [f"| {k} | {v} |" for k, v in sorted(metrics.items()) if k != "chain_correspondence"]
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":

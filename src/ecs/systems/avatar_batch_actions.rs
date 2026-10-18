@@ -4,12 +4,15 @@ use anyhow::{anyhow, Result};
 
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
-use crate::ecs::resource::{AvatarSetupState, OutputCommand, OutputQueue};
+use crate::ecs::resource::{
+    AssetEditCommand, AssetEditQueue, AvatarSetupState, OutputCommand, OutputQueue, ScaleHistory,
+};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
     DumpSkinnedVertices, DumpSpringTails, FitSpringParams,
 };
+use crate::ecs::systems::validate_scale_factor;
 use crate::ecs::world::{Entity, World};
 use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
 use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
@@ -134,6 +137,37 @@ impl BatchAction for AddSpringChains {
             prefix: self.prefix.clone(),
         });
     }
+}
+
+#[derive(Debug)]
+pub struct ApplyModelScale {
+    factor: f32,
+}
+
+impl BatchAction for ApplyModelScale {
+    fn name(&self) -> &'static str {
+        "apply_model_scale"
+    }
+    fn apply(&self, world: &mut World) {
+        world
+            .resource_mut::<AssetEditQueue>()
+            .push(AssetEditCommand::ApplyModelScale {
+                factor: self.factor,
+                history: ScaleHistory::Record,
+            });
+    }
+}
+
+fn apply_model_scale_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("apply_model_scale=")?.trim();
+    Some(
+        spec.parse::<f32>()
+            .map_err(|_| anyhow!("apply_model_scale expects apply_model_scale=<factor>"))
+            .and_then(|factor| {
+                validate_scale_factor(factor)?;
+                Ok(Box::new(ApplyModelScale { factor }) as Box<dyn BatchAction>)
+            }),
+    )
 }
 
 fn add_spring_chains_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
@@ -620,6 +654,7 @@ crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
 crate::batch_action!("add_spring_chains", add_spring_chains_parse);
+crate::batch_action!("apply_model_scale", apply_model_scale_parse);
 crate::batch_action!("fit_body_colliders", fit_body_colliders_parse);
 crate::batch_action!(
     "export_unity_avatar",

@@ -9,13 +9,13 @@ use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
     AssetEditCommand, AssetEditQueue, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue,
-    HierarchyState, TimelineState,
+    HierarchyState, ScaleHistory, TimelineState,
 };
 use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone,
     hierarchy_toggle_selection, navigate_hierarchy, rename_entity, resolve_mesh_bone_id,
-    resolve_transform_entity, update_entity_scale, update_entity_translation,
+    resolve_transform_entity, uniform_scale_factor, update_entity_scale, update_entity_translation,
     update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
@@ -41,6 +41,7 @@ pub enum HierarchyEvent {
     SetEntityTranslation(Entity, Vector3<f32>),
     SetEntityRotation(Entity, Quaternion<f32>),
     SetEntityScale(Entity, Vector3<f32>),
+    ApplyEntityScale(Entity),
     RenameEntity(Entity, String),
     NavigateTree {
         navigation: TreeNavigation,
@@ -203,6 +204,10 @@ fn dispatch_hierarchy_entity_events(events: &[HierarchyEvent], world: &mut World
 
             HierarchyEvent::SetEntityScale(entity, scale) => {
                 update_entity_scale(world, *entity, *scale);
+            }
+
+            HierarchyEvent::ApplyEntityScale(entity) => {
+                queue_entity_scale_bake(world, *entity);
             }
 
             HierarchyEvent::RenameEntity(entity, new_name) => {
@@ -396,5 +401,26 @@ fn collect_entity_tree(world: &World, entity: Entity, out: &mut Vec<Entity>) {
 
     for child in children {
         collect_entity_tree(world, child, out);
+    }
+}
+
+fn queue_entity_scale_bake(world: &mut World, entity: Entity) {
+    let target = resolve_transform_entity(world, entity);
+    let Some(scale) = world
+        .get_component::<Transform>(target)
+        .map(|transform| transform.scale)
+    else {
+        return;
+    };
+    match uniform_scale_factor(scale) {
+        Ok(factor) => {
+            world
+                .resource_mut::<AssetEditQueue>()
+                .push(AssetEditCommand::ApplyModelScale {
+                    factor,
+                    history: ScaleHistory::Record,
+                })
+        }
+        Err(e) => msg_error!("Cannot apply scale: {}", e),
     }
 }

@@ -10,8 +10,8 @@ use crate::ecs::resource::OutputQueue;
 use crate::ecs::systems::{
     add_spring_chains_by_prefix, compute_hidden_triangles, export_unity_avatar, fit_body_colliders,
     invalidate_humanoid_rig, open_avatar_setup, save_humanoid_mapping, save_material_textures,
-    set_avatar_rank_platform, set_chain_gen_settings, set_humanoid_role, set_material_texture,
-    set_submesh_role,
+    select_submesh_entity, set_avatar_rank_platform, set_chain_gen_settings, set_humanoid_role,
+    set_material_texture, set_submesh_role,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -43,6 +43,9 @@ pub enum AvatarSetupEvent {
     SetSubmeshRole {
         key: SubmeshKey,
         role: SubmeshRole,
+    },
+    SelectSubmesh {
+        key: SubmeshKey,
     },
     GenerateChainBones {
         request: ChainGenRequest,
@@ -89,6 +92,9 @@ impl UiCommand for AvatarSetupEvent {
             }
             AvatarSetupEvent::SaveMaterialTextures => save_material_textures(world),
             AvatarSetupEvent::SetSubmeshRole { key, role } => set_submesh_role(world, key, role),
+            AvatarSetupEvent::SelectSubmesh { key } => {
+                select_submesh_entity(world, assets, graphics, &key)
+            }
             AvatarSetupEvent::GenerateChainBones { request } => {
                 world
                     .resource_mut::<OutputQueue>()

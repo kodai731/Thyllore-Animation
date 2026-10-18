@@ -216,6 +216,7 @@ fn draw_chain_gen_settings(ui: &imgui::Ui, world: &World, state: &AvatarSetupSta
     let mut settings = state.chain_gen.clone();
     draw_params(
         ui,
+        world,
         &names,
         &CHAIN_GEN_UI_PARAMS,
         &CHAIN_GEN_SCALAR_PARAMS,

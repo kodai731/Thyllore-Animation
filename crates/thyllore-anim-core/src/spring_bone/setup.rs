@@ -1,4 +1,8 @@
+use std::sync::LazyLock;
+
 use cgmath::Vector3;
+
+use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use crate::BoneId;
 
@@ -6,13 +10,19 @@ pub type SpringChainId = u32;
 pub type SpringColliderId = u32;
 pub type SpringColliderGroupId = u32;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, SceneFields)]
+#[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct SpringJointParam {
     pub bone_id: BoneId,
+    #[persist(ui(min = 0.0, max = 4.0))]
     pub stiffness: f32,
+    #[persist(ui(min = 0.0, max = 1.0))]
     pub drag_force: f32,
+    #[persist(ui(min = 0.0, max = 2.0))]
     pub gravity_power: f32,
+    #[persist(ui(kind = Offset, min = -1.0, max = 1.0))]
     pub gravity_dir: Vector3<f32>,
+    #[persist(ui(min = 0.0, max = 0.5, format = "%.3f"))]
     pub hit_radius: f32,
 }
 
@@ -28,6 +38,21 @@ impl Default for SpringJointParam {
         }
     }
 }
+
+pub static SPRING_JOINT_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<SpringJointParam>>> =
+    LazyLock::new(|| {
+        let mut out: Vec<ScalarParam<SpringJointParam>> = Vec::new();
+        SpringJointParam::collect_scalars::<SpringJointParam, RootPath<SpringJointParam>>(
+            "", &mut out,
+        );
+        out
+    });
+
+pub static SPRING_JOINT_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
+    let mut out: Vec<UiParam> = Vec::new();
+    SpringJointParam::collect_ui("", "", &mut out);
+    out
+});
 
 #[derive(Clone, Debug)]
 pub struct SpringChain {
@@ -89,4 +114,27 @@ pub struct SpringBoneSetup {
     pub next_collider_id: SpringColliderId,
     pub next_group_id: SpringColliderGroupId,
     pub collision_mode: SpringCollisionMode,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn joint_ui_params_follow_declaration_order() {
+        let names: Vec<&str> = SPRING_JOINT_UI_PARAMS
+            .iter()
+            .map(|p| p.name.as_ref())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "stiffness",
+                "drag_force",
+                "gravity_power",
+                "gravity_dir",
+                "hit_radius"
+            ]
+        );
+    }
 }

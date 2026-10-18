@@ -1,208 +1,28 @@
-use crate::platform::ui::numeric_format::numeric_format;
-use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
-use thyllore_effect_core::{
-    absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
-};
-use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiKind, UiParam};
+use thyllore_scene_core::{find_ui_param, ScalarParam, UiParam};
 
 use crate::ecs::World;
-use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
+use crate::platform::ui::theme::{section_header, SectionDefault};
 
-/// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
-pub type EditedScalars<'a> = &'a [(&'static str, f32)];
+use super::ui_rows::{draw_rows, UiRow};
+
+pub use super::ui_rows::EditedScalars;
 
 /// Names are validated against both tables by unit tests; an unresolved name is skipped.
 pub fn draw_params<C>(
     ui: &imgui::Ui,
+    world: &World,
     names: &[&str],
-    ui_params: &[UiParam],
-    scalars: &[ScalarParam<C>],
+    ui_params: &'static [UiParam],
+    scalars: &'static [ScalarParam<C>],
     component: &mut C,
-    mut after_item: impl FnMut(&imgui::Ui, EditedScalars),
+    after_item: impl FnMut(&imgui::Ui, EditedScalars),
 ) {
-    for name in names {
-        let Some(meta) = find_ui_param(ui_params, name) else {
-            continue;
-        };
-        match meta.kind {
-            UiKind::Scalar => draw_scalar(ui, meta, scalars, component, &mut after_item),
-            UiKind::Color => draw_color(
-                ui,
-                meta,
-                scalars,
-                component,
-                ColorMapping::Identity,
-                &mut after_item,
-            ),
-            UiKind::Absorption => draw_color(
-                ui,
-                meta,
-                scalars,
-                component,
-                ColorMapping::Transmitted,
-                &mut after_item,
-            ),
-            UiKind::Offset => draw_offset(ui, meta, scalars, component, &mut after_item),
-        }
-    }
-}
-
-fn draw_scalar<C>(
-    ui: &imgui::Ui,
-    meta: &UiParam,
-    scalars: &[ScalarParam<C>],
-    component: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
-) {
-    let Some(scalar) = find_scalar_param(scalars, meta.name) else {
-        return;
-    };
-
-    let mut value = (scalar.get)(component);
-    property_label(ui, &meta.display_label());
-    if ui
-        .slider_config(format!("##{}", meta.name), meta.min, meta.max)
-        .display_format(numeric_format(meta.format))
-        .build(&mut value)
-    {
-        (scalar.set)(component, value);
-    }
-    show_tooltip(ui, meta.tooltip);
-    after_item(ui, &[(scalar.name, value)]);
-}
-
-#[derive(Clone, Copy)]
-enum ColorMapping {
-    Identity,
-    Transmitted,
-}
-
-impl ColorMapping {
-    fn to_picker(self, stored: [f32; 3]) -> [f32; 3] {
-        match self {
-            ColorMapping::Identity => stored,
-            ColorMapping::Transmitted => {
-                absorption_to_transmitted_color(stored, ABSORPTION_REFERENCE_DISTANCE)
-            }
-        }
-    }
-
-    fn from_picker(self, picked: [f32; 3]) -> [f32; 3] {
-        match self {
-            ColorMapping::Identity => picked,
-            ColorMapping::Transmitted => {
-                transmitted_color_to_absorption(picked, ABSORPTION_REFERENCE_DISTANCE)
-            }
-        }
-    }
-
-    fn tooltip(self, base: &str) -> String {
-        match self {
-            ColorMapping::Identity => base.to_string(),
-            ColorMapping::Transmitted => {
-                format!("{base} (transmitted colour over {ABSORPTION_REFERENCE_DISTANCE} m)")
-            }
-        }
-    }
-}
-
-fn draw_color<C>(
-    ui: &imgui::Ui,
-    meta: &UiParam,
-    scalars: &[ScalarParam<C>],
-    component: &mut C,
-    mapping: ColorMapping,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
-) {
-    let component_names = meta.color_component_names();
-    let Some(channels) = resolve_channels(scalars, &component_names) else {
-        return;
-    };
-
-    let stored = channels.map(|channel| (channel.get)(component));
-    let mut picked = mapping.to_picker(stored);
-    property_label(ui, &meta.display_label());
-    let changed = ui
-        .color_picker3_config(format!("##{}", meta.name), &mut picked)
-        .flags(ColorPickerOptions {
-            flags: ColorPickerFlags::NO_ALPHA | ColorPickerFlags::NO_INPUTS,
-            data_type: Some(ColorDataType::Float),
-            ..ColorPickerOptions::default()
-        })
-        .build();
-    show_tooltip(ui, &mapping.tooltip(meta.tooltip));
-
-    let written = if changed {
-        let clamped = mapping
-            .from_picker(picked)
-            .map(|value| value.clamp(meta.min, meta.max));
-        for (channel, value) in channels.iter().zip(clamped) {
-            (channel.set)(component, value);
-        }
-        clamped
-    } else {
-        stored
-    };
-
-    let edited: [(&'static str, f32); 3] = [
-        (channels[0].name, written[0]),
-        (channels[1].name, written[1]),
-        (channels[2].name, written[2]),
-    ];
-    after_item(ui, &edited);
-}
-
-fn resolve_channels<'a, C>(
-    scalars: &'a [ScalarParam<C>],
-    names: &[String; 3],
-) -> Option<[&'a ScalarParam<C>; 3]> {
-    Some([
-        find_scalar_param(scalars, &names[0])?,
-        find_scalar_param(scalars, &names[1])?,
-        find_scalar_param(scalars, &names[2])?,
-    ])
-}
-
-fn draw_offset<C>(
-    ui: &imgui::Ui,
-    meta: &UiParam,
-    scalars: &[ScalarParam<C>],
-    component: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
-) {
-    let component_names = meta.offset_component_names();
-    let Some(channels) = resolve_channels(scalars, &component_names) else {
-        return;
-    };
-
-    let stored = channels.map(|channel| (channel.get)(component));
-    let mut dragged = stored;
-    property_label(ui, &meta.display_label());
-    let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
-    show_tooltip(ui, meta.tooltip);
-
-    let written = if changed {
-        let clamped = dragged.map(|value| value.clamp(meta.min, meta.max));
-        for (channel, value) in channels.iter().zip(clamped) {
-            (channel.set)(component, value);
-        }
-        clamped
-    } else {
-        stored
-    };
-
-    let edited: [(&'static str, f32); 3] = [
-        (channels[0].name, written[0]),
-        (channels[1].name, written[1]),
-        (channels[2].name, written[2]),
-    ];
-    after_item(ui, &edited);
-}
-
-fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {
-    if !tooltip.is_empty() && ui.is_item_hovered() {
-        ui.tooltip_text(tooltip);
-    }
+    let rows: Vec<UiRow<C>> = names
+        .iter()
+        .filter_map(|name| find_ui_param(ui_params, name))
+        .map(|param| UiRow::Scalar { param, scalars })
+        .collect();
+    draw_rows(ui, world, &rows, component, after_item);
 }
 
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.
@@ -248,8 +68,8 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
 pub fn draw_tiered_params<C>(
     ui: &imgui::Ui,
     world: &World,
-    ui_params: &[UiParam],
-    scalars: &[ScalarParam<C>],
+    ui_params: &'static [UiParam],
+    scalars: &'static [ScalarParam<C>],
     component: &mut C,
     hidden: &[&str],
     mut after_item: impl FnMut(&imgui::Ui, EditedScalars),
@@ -257,6 +77,7 @@ pub fn draw_tiered_params<C>(
     let primary_names = determine_primary_order(ui_params, hidden);
     draw_params(
         ui,
+        world,
         &primary_names,
         ui_params,
         scalars,
@@ -274,7 +95,15 @@ pub fn draw_tiered_params<C>(
         if let Some(group_heading) = heading {
             ui.text(group_heading);
         }
-        draw_params(ui, names, ui_params, scalars, component, &mut after_item);
+        draw_params(
+            ui,
+            world,
+            names,
+            ui_params,
+            scalars,
+            component,
+            &mut after_item,
+        );
     }
     true
 }
@@ -304,6 +133,7 @@ pub(super) fn draw_preset_combo(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_scene_core::UiKind;
 
     fn make_ui_param(name: &'static str, group: &'static str, primary: bool) -> UiParam {
         UiParam {

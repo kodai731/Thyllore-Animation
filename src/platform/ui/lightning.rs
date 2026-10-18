@@ -99,6 +99,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
     if target_name.is_none() {
         draw_params(
             ui,
+            ecs_world,
             &["shape_end_offset"],
             &thyllore_effect_core::LIGHTNING_UI_PARAMS,
             &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,

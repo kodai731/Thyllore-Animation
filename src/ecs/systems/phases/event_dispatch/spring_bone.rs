@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::animation::spring_bone::SpringSpace;
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -13,6 +14,7 @@ use crate::ecs::component::SpringColliderId;
 use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::ClipLibrary;
+use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -98,6 +100,7 @@ impl UiCommand for DumpSpringTails {
             start_time: 0.0,
             end_time: inputs.anim_clip.duration,
             sample_rate: self.sample_rate,
+            space: inputs.space,
         };
 
         let samples = simulate_spring_tails(
@@ -182,6 +185,7 @@ impl UiCommand for DumpSkinnedVertices {
             start_time: 0.0,
             end_time: inputs.anim_clip.duration,
             sample_rate: self.sample_rate,
+            space: inputs.space,
         };
 
         let frames = simulate_skinned_positions(
@@ -242,6 +246,7 @@ impl UiCommand for FitSpringParams {
             start_time: 0.0,
             end_time: inputs.anim_clip.duration,
             sample_rate: self.sample_rate,
+            space: inputs.space,
         };
 
         let spring_fit_inputs = SpringFitInputs {
@@ -333,6 +338,7 @@ pub fn transition_to_baked_override_if_needed(world: &mut World) {
 
 struct SpringBakeInputs {
     entity: Entity,
+    space: SpringSpace,
     skeleton: crate::animation::Skeleton,
     setup: crate::ecs::component::SpringBoneSetup,
     constraints: Option<crate::ecs::component::ConstraintSet>,
@@ -432,6 +438,7 @@ fn find_spring_bake_inputs(world: &World, assets: &AssetStorage) -> Option<Sprin
 
     Some(SpringBakeInputs {
         entity,
+        space: spring_space_for_entity(world, entity),
         skeleton,
         setup,
         constraints,
@@ -457,6 +464,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         start_time: 0.0,
         end_time: inputs.anim_clip.duration,
         sample_rate: 30.0,
+        space: inputs.space,
     };
 
     let bake_result = spring_bone_bake(

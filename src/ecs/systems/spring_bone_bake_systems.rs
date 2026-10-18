@@ -1,7 +1,7 @@
 use cgmath::Vector3;
 
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
-use crate::animation::spring_bone::SpringTailSample;
+use crate::animation::spring_bone::{SpringSpace, SpringTailSample};
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::math::quaternion_to_euler_degrees;
@@ -19,6 +19,7 @@ pub struct BakeConfig {
     pub start_time: f32,
     pub end_time: f32,
     pub sample_rate: f32,
+    pub space: SpringSpace,
 }
 
 impl Default for BakeConfig {
@@ -27,6 +28,7 @@ impl Default for BakeConfig {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         }
     }
 }
@@ -84,6 +86,7 @@ pub fn spring_bone_bake(
             setup,
             &affected_ids,
             dt,
+            config.space,
         );
 
         capture_rotation_keyframes(&pose, sample_time, &affected_ids, &mut editable);
@@ -191,6 +194,7 @@ fn for_each_spring_frame(
             setup,
             &[],
             dt,
+            config.space,
         );
 
         visit_frame(frame_index, &sb_state, &globals);
@@ -241,6 +245,7 @@ fn step_spring_frame(
     setup: &SpringBoneSetup,
     affected_ids: &[BoneId],
     dt: f32,
+    space: SpringSpace,
 ) {
     *pose = create_pose_from_rest(skeleton);
     sample_clip_to_pose(base_clip, sample_time, skeleton, pose, looping);
@@ -251,7 +256,7 @@ fn step_spring_frame(
 
     *globals = compute_pose_global_transforms(skeleton, pose);
 
-    spring_bone_update(setup, sb_state, skeleton, globals, pose, dt);
+    spring_bone_update(setup, sb_state, skeleton, globals, pose, dt, space);
     spring_bone_write_back_to_pose(skeleton, globals, pose, affected_ids);
 }
 
@@ -332,7 +337,7 @@ mod tests {
     use crate::animation::spring_bone::SpringCollisionMode;
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
-    use cgmath::{Matrix4, Vector3};
+    use cgmath::{InnerSpace, Matrix4, Vector3};
 
     fn create_test_skeleton() -> Skeleton {
         let bones = vec![
@@ -403,6 +408,72 @@ mod tests {
         }
     }
 
+    fn scale_skeleton_lengths(skeleton: &Skeleton, factor: f32) -> Skeleton {
+        let mut scaled = skeleton.clone();
+        for bone in &mut scaled.bones {
+            bone.local_transform.w.x *= factor;
+            bone.local_transform.w.y *= factor;
+            bone.local_transform.w.z *= factor;
+        }
+        scaled
+    }
+
+    #[test]
+    fn tails_are_scale_invariant_when_the_space_matches_the_skeleton_units() {
+        let unit_skeleton = create_test_skeleton();
+        let centimetre_skeleton = scale_skeleton_lengths(&unit_skeleton, 100.0);
+        let mut setup = create_test_setup();
+        setup.chains[0].joints[0] = SpringJointParam {
+            bone_id: 1,
+            stiffness: 0.5,
+            drag_force: 0.4,
+            gravity_power: 1.0,
+            gravity_dir: Vector3::new(1.0, 0.0, 0.0),
+            hit_radius: 0.0,
+        };
+        let clip = AnimationClip::new("test");
+
+        let unit_config = BakeConfig {
+            start_time: 0.0,
+            end_time: 1.0,
+            sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
+        };
+        let centimetre_config = BakeConfig {
+            space: SpringSpace::from_world_scale(0.01).expect("valid scale"),
+            ..unit_config
+        };
+
+        let unit_tails =
+            simulate_spring_tails(&unit_config, &setup, &unit_skeleton, &clip, None, false);
+        let centimetre_tails = simulate_spring_tails(
+            &centimetre_config,
+            &setup,
+            &centimetre_skeleton,
+            &clip,
+            None,
+            false,
+        );
+
+        assert_eq!(unit_tails.len(), centimetre_tails.len());
+        let bent = unit_tails
+            .iter()
+            .any(|sample| sample.position.x.abs() > 0.1);
+        assert!(bent, "gravity must visibly bend the chain in the test");
+        for (unit, centimetre) in unit_tails.iter().zip(&centimetre_tails) {
+            let rescaled = centimetre.position * 0.01;
+            let error = (rescaled - unit.position).magnitude();
+            assert!(
+                error < 1e-4,
+                "frame {} bone {}: unit {:?} vs rescaled {:?}",
+                unit.frame,
+                unit.bone,
+                unit.position,
+                rescaled
+            );
+        }
+    }
+
     #[test]
     fn test_bake_frame_count() {
         let skeleton = create_test_skeleton();
@@ -413,6 +484,7 @@ mod tests {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -441,6 +513,7 @@ mod tests {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -459,6 +532,7 @@ mod tests {
             start_time: 0.0,
             end_time: 0.1,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -490,6 +564,7 @@ mod tests {
             start_time: 0.0,
             end_time: 0.1,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let samples = simulate_spring_tails(&config, &setup, &skeleton, &clip, None, false);
@@ -555,6 +630,7 @@ mod tests {
             start_time: 0.0,
             end_time: 0.1,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let samples_with_disabled =

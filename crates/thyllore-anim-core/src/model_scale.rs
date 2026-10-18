@@ -4,11 +4,6 @@ use crate::spring_bone::{ColliderShape, SpringBoneSetup};
 use crate::BoneId;
 
 pub fn scale_spring_setup(setup: &mut SpringBoneSetup, factor: f32) {
-    for chain in &mut setup.chains {
-        for joint in &mut chain.joints {
-            joint.hit_radius *= factor;
-        }
-    }
     for collider in &mut setup.colliders {
         collider.offset *= factor;
         collider.shape = match collider.shape {
@@ -74,7 +69,7 @@ mod tests {
     use crate::spring_bone::{SpringChain, SpringColliderDef, SpringJointParam};
 
     #[test]
-    fn spring_setup_scale_touches_radii_and_offsets_only() {
+    fn spring_setup_scale_touches_collider_geometry_only() {
         let mut setup = SpringBoneSetup::default();
         setup.chains.push(SpringChain {
             joints: vec![SpringJointParam {
@@ -97,7 +92,7 @@ mod tests {
         scale_spring_setup(&mut setup, 100.0);
 
         let joint = &setup.chains[0].joints[0];
-        assert!((joint.hit_radius - 2.0).abs() < 1e-5);
+        assert_eq!(joint.hit_radius, 0.02);
         assert_eq!(joint.stiffness, 0.5);
         assert_eq!(setup.colliders[0].offset, Vector3::new(100.0, 0.0, 0.0));
         match setup.colliders[0].shape {

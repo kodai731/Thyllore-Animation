@@ -1,4 +1,6 @@
-use crate::animation::spring_bone::{compare_tail_trajectories, SpringBoneSetup, SpringTailSample};
+use crate::animation::spring_bone::{
+    compare_tail_trajectories, SpringBoneSetup, SpringSpace, SpringTailSample,
+};
 use crate::animation::{AnimationClip, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringChain};
 use thyllore_math_core::{minimize_nelder_mead, NelderMeadParams};
@@ -266,6 +268,7 @@ mod tests {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let reference =

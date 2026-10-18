@@ -3,14 +3,29 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
     integrate_joint, recompute_global_transform, resolve_all_segment_collisions,
-    resolve_all_tail_collisions, SpringCollisionMode, WorldCollider,
+    resolve_all_tail_collisions, SpringCollisionMode, SpringSpace, WorldCollider,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColliderShape, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneState, SpringChainState, SpringJointState};
-use crate::ecs::world::{Animator, World};
+use crate::ecs::world::{Animator, Entity, Parent, Transform, World};
 use crate::hooks::model_load::LoadedModel;
+
+const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
+
+/// The uniform scale the entity's ancestry applies to its skeleton, as the space the spring integrates in.
+pub fn spring_space_for_entity(world: &World, entity: Entity) -> SpringSpace {
+    let mut world_scale = 1.0;
+    let mut current = Some(entity);
+    while let Some(e) = current {
+        if let Some(transform) = world.get_component::<Transform>(e) {
+            world_scale *= (transform.scale.x + transform.scale.y + transform.scale.z) / 3.0;
+        }
+        current = world.get_component::<Parent>(e).map(|p| p.0);
+    }
+    SpringSpace::from_world_scale(world_scale).unwrap_or(SpringSpace::IDENTITY)
+}
 
 pub fn collider_shape_radius(shape: &ColliderShape) -> f32 {
     match shape {
@@ -130,6 +145,7 @@ pub fn spring_bone_update(
     global_transforms: &mut [Matrix4<f32>],
     pose: &SkeletonPose,
     dt: f32,
+    space: SpringSpace,
 ) {
     let dt = dt.min(state.max_delta_time);
     if dt <= 0.0 {
@@ -171,6 +187,7 @@ pub fn spring_bone_update(
                 &world_colliders,
                 should_log,
                 dt,
+                space,
                 setup.collision_mode,
             );
         }
@@ -188,6 +205,7 @@ fn update_single_joint(
     world_colliders: &[WorldCollider],
     should_log: bool,
     dt: f32,
+    space: SpringSpace,
     collision_mode: SpringCollisionMode,
 ) {
     let bone_id = joint_param.bone_id;
@@ -201,13 +219,17 @@ fn update_single_joint(
 
     let current_tail_before = joint_state.current_tail;
 
+    let stiffness = space.skeleton_length(joint_param.stiffness);
+    let gravity_power = space.skeleton_length(joint_param.gravity_power);
+    let hit_radius = space.skeleton_length(joint_param.hit_radius);
+
     let next_tail = integrate_joint(
         joint_state.current_tail,
         joint_state.prev_tail,
         joint_param.drag_force,
-        joint_param.stiffness,
+        stiffness,
         joint_param.gravity_dir,
-        joint_param.gravity_power,
+        gravity_power,
         parent_world_rot,
         joint_state.initial_local_rotation,
         joint_state.bone_axis,
@@ -218,14 +240,11 @@ fn update_single_joint(
 
     let collision_resolved = match collision_mode {
         SpringCollisionMode::VrmCompatible => {
-            resolve_all_tail_collisions(constrained_tail, joint_param.hit_radius, world_colliders)
+            resolve_all_tail_collisions(constrained_tail, hit_radius, world_colliders)
         }
-        SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
-            head_pos,
-            constrained_tail,
-            joint_param.hit_radius,
-            world_colliders,
-        ),
+        SpringCollisionMode::SegmentExtended => {
+            resolve_all_segment_collisions(head_pos, constrained_tail, hit_radius, world_colliders)
+        }
     };
     let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
     let resolved_tail =
@@ -248,8 +267,8 @@ fn update_single_joint(
     let velocity_mag_sq =
         velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
 
-    const VELOCITY_THRESHOLD_SQ: f32 = 1e-8;
-    if velocity_mag_sq < VELOCITY_THRESHOLD_SQ {
+    let rest_velocity = space.skeleton_length(REST_VELOCITY_WORLD_UNITS);
+    if velocity_mag_sq < rest_velocity * rest_velocity {
         joint_state.prev_tail = resolved_tail;
         joint_state.current_tail = resolved_tail;
     } else {

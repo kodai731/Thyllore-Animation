@@ -2,7 +2,8 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
-    integrate_joint, recompute_global_transform, resolve_all_collisions, WorldCollider,
+    integrate_joint, recompute_global_transform, resolve_all_segment_collisions,
+    resolve_all_tail_collisions, SpringCollisionMode, WorldCollider,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -170,6 +171,7 @@ pub fn spring_bone_update(
                 &world_colliders,
                 should_log,
                 dt,
+                setup.collision_mode,
             );
         }
     }
@@ -186,6 +188,7 @@ fn update_single_joint(
     world_colliders: &[WorldCollider],
     should_log: bool,
     dt: f32,
+    collision_mode: SpringCollisionMode,
 ) {
     let bone_id = joint_param.bone_id;
     let idx = bone_id as usize;
@@ -208,15 +211,22 @@ fn update_single_joint(
         parent_world_rot,
         joint_state.initial_local_rotation,
         joint_state.bone_axis,
-        joint_state.bone_length,
-        head_pos,
         dt,
     );
 
     let constrained_tail = apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
 
-    let collision_resolved =
-        resolve_all_collisions(constrained_tail, joint_param.hit_radius, world_colliders);
+    let collision_resolved = match collision_mode {
+        SpringCollisionMode::VrmCompatible => {
+            resolve_all_tail_collisions(constrained_tail, joint_param.hit_radius, world_colliders)
+        }
+        SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
+            head_pos,
+            constrained_tail,
+            joint_param.hit_radius,
+            world_colliders,
+        ),
+    };
     let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
     let resolved_tail =
         apply_length_constraint(head_pos, collision_resolved, joint_state.bone_length);

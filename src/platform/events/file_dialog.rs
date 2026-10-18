@@ -24,6 +24,7 @@ pub(super) fn queue_file_dialog_commands(app: &App) {
                 queue_command(app, open_clip_export_dialog(app, source_id, format))
             }
             DialogRequest::ExportModelGltf => queue_command(app, open_model_export_dialog(app)),
+            DialogRequest::ExportModelFbx => queue_command(app, open_model_fbx_export_dialog(app)),
             DialogRequest::SaveSpringBoneBake => {
                 queue_command(app, open_spring_bone_save_dialog(app))
             }
@@ -102,21 +103,32 @@ fn open_clip_export_dialog(
     })
 }
 
-fn open_model_export_dialog(app: &App) -> Option<OutputCommand> {
+fn loaded_model_stem(app: &App) -> String {
     let model_path = app
         .data
         .ecs_world
         .resource::<ModelState>()
         .model_path
         .clone();
-    let model_stem = std::path::Path::new(&model_path)
+    std::path::Path::new(&model_path)
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("model");
+        .unwrap_or("model")
+        .to_string()
+}
 
+fn open_model_export_dialog(app: &App) -> Option<OutputCommand> {
+    let model_stem = loaded_model_stem(app);
     let path = save_file_dialog("glTF Binary", "glb", &format!("{}.glb", model_stem))?;
 
     Some(OutputCommand::ExportModelGltf { path })
+}
+
+fn open_model_fbx_export_dialog(app: &App) -> Option<OutputCommand> {
+    let model_stem = loaded_model_stem(app);
+    let path = save_file_dialog("FBX Binary", "fbx", &format!("{}.fbx", model_stem))?;
+
+    Some(OutputCommand::ExportModelFbx { path })
 }
 
 fn open_spring_bone_save_dialog(app: &App) -> Option<OutputCommand> {

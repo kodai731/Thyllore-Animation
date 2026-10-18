@@ -130,6 +130,44 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
     }
 }
 
+/// The loaded FBX model with its current skeleton and skin weights, without any clip.
+pub(crate) fn export_model_fbx(app: &App, path: &Path) {
+    let fbx_model = app
+        .data
+        .ecs_world
+        .get_resource::<FbxModelCache>()
+        .and_then(|cache| cache.fbx_model().cloned());
+    let Some(fbx_model) = fbx_model else {
+        msg_error!("FBX export failed: the loaded model did not come from an FBX file");
+        return;
+    };
+    let Some(skeleton) = app
+        .data
+        .ecs_assets
+        .skeletons
+        .values()
+        .next()
+        .map(|asset| asset.skeleton.clone())
+    else {
+        msg_error!("FBX export failed: no skeleton is loaded");
+        return;
+    };
+
+    match crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, None, &skeleton, path) {
+        Ok(()) => {
+            msg_info!("FBX exported: {:?}", path);
+            copy_humanoid_sidecar(app, path);
+            crate::ecs::systems::export_avatar_sidecar_beside(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+                &app.data.graphics_resources,
+                path,
+            );
+        }
+        Err(e) => msg_error!("FBX export failed: {:?}", e),
+    }
+}
+
 pub(crate) fn export_model_gltf(app: &App, path: &Path) {
     let glb_bytes = app
         .data

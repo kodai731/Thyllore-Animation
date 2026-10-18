@@ -133,3 +133,12 @@ fn test_rodrigues_rotation() {
         assert!(result.is_ok());
     }
 }
+
+/// The same transform between two spaces that were both scaled by `factor`: rotation kept, translation scaled.
+pub fn scale_translation(m: &Matrix4<f32>, factor: f32) -> Matrix4<f32> {
+    let mut scaled = *m;
+    scaled.w.x *= factor;
+    scaled.w.y *= factor;
+    scaled.w.z *= factor;
+    scaled
+}

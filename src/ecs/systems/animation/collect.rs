@@ -11,7 +11,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 
-fn resolve_playable_asset(
+pub(crate) fn resolve_playable_asset(
     source_id: SourceClipId,
     entity: Entity,
     clip_library: &ClipLibrary,

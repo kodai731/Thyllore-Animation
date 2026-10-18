@@ -3,7 +3,8 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
-    ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory, ToastMessage, UiToast,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, EditCommand, EditCommandAfter, EditEntry,
+    EditHistory, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
 };
 use crate::ecs::world::{Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -133,6 +134,31 @@ fn dispatch_undo(world: &mut World) {
             world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
             log!("Undo: {}", description);
         }
+
+        EditCommand::SkeletonModified {
+            before,
+            description,
+        } => {
+            if !matches!(entry.after, EditCommandAfter::Skeleton(_)) {
+                return;
+            }
+            queue_skeleton_restore(world, before);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_redo(entry.clone());
+            log!("Undo: {}", description);
+        }
+
+        EditCommand::ModelScaled {
+            factor,
+            description,
+        } => {
+            queue_model_scale(world, 1.0 / factor);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_redo(entry.clone());
+            log!("Undo: {}", description);
+        }
     }
 
     show_history_toast(world, "Undo", entry.command.description());
@@ -192,10 +218,50 @@ fn dispatch_redo(world: &mut World) {
             redo_clip_removed(world, *clip_id, removed, description);
         }
 
+        (EditCommand::SkeletonModified { description, .. }, EditCommandAfter::Skeleton(after)) => {
+            queue_skeleton_restore(world, after);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_undo(entry.clone());
+            log!("Redo: {}", description);
+        }
+
+        (
+            EditCommand::ModelScaled {
+                factor,
+                description,
+            },
+            EditCommandAfter::Empty,
+        ) => {
+            queue_model_scale(world, *factor);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_undo(entry.clone());
+            log!("Redo: {}", description);
+        }
+
         _ => return,
     }
 
     show_history_toast(world, "Redo", entry.command.description());
+}
+
+/// A skeleton restore rewrites assets and skin data, so it is queued for `App` like the edit itself.
+fn queue_skeleton_restore(world: &mut World, target: &SkeletonSnapshot) {
+    world
+        .resource_mut::<AssetEditQueue>()
+        .push(AssetEditCommand::RestoreSkeletonSnapshot {
+            snapshot: Box::new(target.clone()),
+        });
+}
+
+fn queue_model_scale(world: &mut World, factor: f32) {
+    world
+        .resource_mut::<AssetEditQueue>()
+        .push(AssetEditCommand::ApplyModelScale {
+            factor,
+            history: ScaleHistory::Replay,
+        });
 }
 
 fn show_history_toast(world: &World, action: &str, description: &str) {

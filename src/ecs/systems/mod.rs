@@ -3,8 +3,11 @@ pub mod animation_debug_dump;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_systems;
 mod avatar_batch_actions;
+mod avatar_chain_gen_systems;
 mod avatar_export_systems;
+mod avatar_hidden_mask_systems;
 mod avatar_setup_systems;
+mod avatar_submesh_role_systems;
 mod batch_run_systems;
 mod billboard_systems;
 mod bone_gizmo_systems;
@@ -51,6 +54,7 @@ mod locator_systems;
 mod material_texture_systems;
 pub mod mesh_systems;
 pub mod message_log_systems;
+mod model_scale_systems;
 mod morph_track_systems;
 mod morph_weight_systems;
 pub mod motion_path_systems;
@@ -67,9 +71,12 @@ pub mod render_data_systems;
 pub mod scalar_clip_systems;
 pub mod scheduled_clip_systems;
 mod selection_bounds;
+mod skeleton_batch_actions;
+pub mod skeleton_edit_systems;
 mod skeleton_pose_systems;
 pub mod spring_bone_bake_systems;
 pub mod spring_bone_edit_systems;
+pub mod spring_bone_fit_systems;
 mod spring_bone_gizmo_systems;
 mod spring_bone_systems;
 pub mod temporal_history;
@@ -89,8 +96,13 @@ mod world;
 pub use animation::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_systems::*;
+pub use avatar_chain_gen_systems::{
+    apply_chain_generation, generate_chain_bones, set_chain_gen_settings,
+};
 pub use avatar_export_systems::*;
+pub use avatar_hidden_mask_systems::*;
 pub use avatar_setup_systems::*;
+pub use avatar_submesh_role_systems::*;
 pub use batch_run_systems::*;
 pub use billboard_systems::*;
 pub use bone_gizmo_systems::*;
@@ -129,6 +141,7 @@ pub use keyframe_clipboard_systems::*;
 pub use lightning::*;
 pub use material_texture_systems::*;
 pub use message_log_systems::*;
+pub use model_scale_systems::*;
 pub use morph_track_systems::*;
 pub use morph_weight_systems::*;
 pub use motion_path_systems::*;
@@ -144,6 +157,10 @@ pub use render_data_systems::*;
 pub use scalar_clip_systems::*;
 pub use scheduled_clip_systems::*;
 pub use selection_bounds::*;
+pub use skeleton_edit_systems::{
+    add_skeleton_bone, refresh_after_skeleton_edit, remove_skeleton_bone,
+    restore_skeleton_snapshot, set_skeleton_bone_offset,
+};
 pub use skeleton_pose_systems::*;
 pub use spring_bone_gizmo_systems::*;
 pub use spring_bone_systems::*;

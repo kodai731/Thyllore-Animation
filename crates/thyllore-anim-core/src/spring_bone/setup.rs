@@ -73,6 +73,13 @@ pub struct SpringColliderGroup {
     pub collider_ids: Vec<SpringColliderId>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpringCollisionMode {
+    #[default]
+    VrmCompatible,
+    SegmentExtended,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SpringBoneSetup {
     pub chains: Vec<SpringChain>,
@@ -81,4 +88,5 @@ pub struct SpringBoneSetup {
     pub next_chain_id: SpringChainId,
     pub next_collider_id: SpringColliderId,
     pub next_group_id: SpringColliderGroupId,
+    pub collision_mode: SpringCollisionMode,
 }

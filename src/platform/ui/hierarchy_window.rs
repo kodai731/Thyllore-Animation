@@ -2,6 +2,7 @@ use crate::platform::ui::numeric_format::numeric_format;
 use imgui::{Condition, Key};
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
+use crate::animation::{Bone, BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
@@ -12,9 +13,10 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{
-    entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
+    entity_icon, search_field, tree_row, vector3_field, Icon, TreeRowResponse, TreeRowSpec,
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use cgmath::{InnerSpace, Vector3};
 
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -283,6 +285,11 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
     ));
     ui.separator();
 
+    if let Some(bone_id) = state.selected_bone_id {
+        build_bone_editor(ui, world, skeleton, bone_id);
+        ui.separator();
+    }
+
     for bone_row in query_bone_rows(skeleton, state) {
         let spec = TreeRowSpec {
             id: &format!("bone_{}", bone_row.bone_id),
@@ -320,6 +327,57 @@ fn build_bone_tree(ui: &imgui::Ui, world: &World, state: &HierarchyState, assets
                 }
             }
         }
+    }
+}
+
+fn default_child_offset(bone: &Bone) -> Vector3<f32> {
+    let own_offset = bone.local_transform.w.truncate();
+    if own_offset.magnitude2() > 0.0 {
+        own_offset
+    } else {
+        Vector3::new(0.0, 0.1, 0.0)
+    }
+}
+
+fn default_child_name(skeleton: &Skeleton, bone: &Bone) -> String {
+    (1..)
+        .map(|index| format!("{}_{:02}", bone.name, index))
+        .find(|candidate| !skeleton.bone_name_to_id.contains_key(candidate))
+        .expect("the name sequence is unbounded")
+}
+
+fn build_bone_editor(ui: &imgui::Ui, world: &World, skeleton: &Skeleton, bone_id: BoneId) {
+    let Some(bone) = skeleton.get_bone(bone_id) else {
+        return;
+    };
+    let parent_name = bone
+        .parent_id
+        .and_then(|parent| skeleton.get_bone(parent))
+        .map_or("(root)", |parent| parent.name.as_str());
+    ui.text(format!("Bone: {}", bone.name));
+    ui.text_disabled(format!("Parent: {parent_name}"));
+
+    let mut offset: [f32; 3] = bone.local_transform.w.truncate().into();
+    ui.text("Offset from parent");
+    if vector3_field(ui, "bone_offset", &mut offset, 0.01, "%.3f") {
+        world.send_command(HierarchyEvent::SetBoneOffset(bone_id, offset.into()));
+    }
+
+    if ui.button("Add child bone") {
+        world.send_command(HierarchyEvent::AddChildBone {
+            parent: bone_id,
+            name: default_child_name(skeleton, bone),
+            local_offset: default_child_offset(bone),
+        });
+    }
+    ui.same_line();
+    if ui.button("Delete bone") {
+        world.send_command(HierarchyEvent::DeleteBone(bone_id));
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Children keep their rest pose and move to the parent; skin weights go to the parent",
+        );
     }
 }
 
@@ -397,10 +455,19 @@ fn handle_tree_activation_keys(ui: &imgui::Ui, world: &World, state: &HierarchyS
         world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
     }
 
-    let entities_selected =
-        state.display_mode == HierarchyDisplayMode::Entities && state.selected_entity.is_some();
-    if entities_selected && ui.is_key_pressed(Key::Delete) {
-        world.send_command(HierarchyEvent::DeleteSelectedEntities);
+    if !ui.is_key_pressed(Key::Delete) {
+        return;
+    }
+    match state.display_mode {
+        HierarchyDisplayMode::Entities if state.selected_entity.is_some() => {
+            world.send_command(HierarchyEvent::DeleteSelectedEntities);
+        }
+        HierarchyDisplayMode::Bones => {
+            if let Some(bone_id) = state.selected_bone_id {
+                world.send_command(HierarchyEvent::DeleteBone(bone_id));
+            }
+        }
+        HierarchyDisplayMode::Entities => {}
     }
 }
 

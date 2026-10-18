@@ -97,6 +97,7 @@ pub struct RRIndexBuffer {
     pub buffer: vk::Buffer,
     pub buffer_memory: vk::DeviceMemory,
     pub indices: u32,
+    pub capacity: usize,
 }
 
 impl RRIndexBuffer {
@@ -109,23 +110,6 @@ impl RRIndexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrindex_buffer = RRIndexBuffer::default();
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        )?;
-        let map_memory = rrdevice.device.map_memory(
-            staging_buffer_memory,
-            0,
-            size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-
-        memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
-
         let (index_buffer, index_buffer_memory) = create_buffer(
             instance,
             rrdevice,
@@ -137,22 +121,43 @@ impl RRIndexBuffer {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        copy_buffer(
+        upload_through_staging(
+            instance,
             rrdevice,
             rr_command_pool,
-            staging_buffer,
-            index_buffer,
+            data,
             size,
+            index_buffer,
         )?;
-
-        rrdevice.device.destroy_buffer(staging_buffer, None);
-        rrdevice.device.free_memory(staging_buffer_memory, None);
 
         rrindex_buffer.buffer = index_buffer;
         rrindex_buffer.buffer_memory = index_buffer_memory;
         rrindex_buffer.indices = length as u32;
+        rrindex_buffer.capacity = length;
 
         Ok(rrindex_buffer)
+    }
+
+    pub unsafe fn overwrite(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rr_command_pool: &RRCommandPool,
+        indices: &[u32],
+    ) -> Result<()> {
+        if indices.len() > self.capacity {
+            return Err(anyhow!("overwrite indices length exceeds buffer capacity"));
+        }
+        let size = (indices.len() * size_of::<u32>()) as u64;
+        upload_through_staging(
+            instance,
+            rrdevice,
+            rr_command_pool,
+            indices.as_ptr() as *const c_void,
+            size,
+            self.buffer,
+        )?;
+        Ok(())
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
@@ -410,6 +415,33 @@ pub unsafe fn create_buffer(
         .bind_buffer_memory(buffer, buffer_memory, 0)?;
 
     Ok((buffer, buffer_memory))
+}
+
+unsafe fn upload_through_staging(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    rr_command_pool: &RRCommandPool,
+    data: *const c_void,
+    size: u64,
+    destination: vk::Buffer,
+) -> Result<()> {
+    let (staging_buffer, staging_buffer_memory) = create_buffer(
+        instance,
+        rrdevice,
+        size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+    let map_memory =
+        rrdevice
+            .device
+            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    memcpy(data, map_memory.cast(), size as usize);
+    rrdevice.device.unmap_memory(staging_buffer_memory);
+    copy_buffer(rrdevice, rr_command_pool, staging_buffer, destination, size)?;
+    rrdevice.device.destroy_buffer(staging_buffer, None);
+    rrdevice.device.free_memory(staging_buffer_memory, None);
+    Ok(())
 }
 
 pub unsafe fn copy_buffer(

@@ -1,4 +1,7 @@
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Vector3};
+
+const DEGENERATE_SEGMENT_LENGTH_SQ: f32 = 1e-8;
+const MIN_TAIL_LEVER: f32 = 1e-3;
 
 pub struct WorldCollider {
     pub center: Vector3<f32>,
@@ -6,84 +9,140 @@ pub struct WorldCollider {
     pub tail: Option<Vector3<f32>>,
 }
 
-pub fn resolve_all_collisions(
-    position: Vector3<f32>,
+pub fn resolve_all_segment_collisions(
+    head: Vector3<f32>,
+    tail: Vector3<f32>,
     joint_radius: f32,
     colliders: &[WorldCollider],
 ) -> Vector3<f32> {
-    let mut resolved = position;
+    let mut resolved_tail = tail;
     for collider in colliders {
-        resolved = resolve_collision(resolved, joint_radius, collider);
+        resolved_tail = resolve_segment_collision(head, resolved_tail, joint_radius, collider);
     }
-    resolved
+    resolved_tail
 }
 
-fn resolve_collision(
-    position: Vector3<f32>,
+pub fn resolve_all_tail_collisions(
+    tail: Vector3<f32>,
+    joint_radius: f32,
+    colliders: &[WorldCollider],
+) -> Vector3<f32> {
+    let mut resolved_tail = tail;
+    for collider in colliders {
+        resolved_tail = resolve_tail_collision(resolved_tail, joint_radius, collider);
+    }
+    resolved_tail
+}
+
+fn resolve_tail_collision(
+    tail: Vector3<f32>,
     joint_radius: f32,
     collider: &WorldCollider,
 ) -> Vector3<f32> {
-    match collider.tail {
-        Some(tail) => resolve_sphere_vs_capsule(
-            position,
-            joint_radius,
-            collider.center,
-            tail,
-            collider.radius,
-        ),
-        None => resolve_sphere_vs_sphere(position, joint_radius, collider.center, collider.radius),
-    }
-}
-
-fn resolve_sphere_vs_sphere(
-    joint_pos: Vector3<f32>,
-    joint_radius: f32,
-    sphere_center: Vector3<f32>,
-    sphere_radius: f32,
-) -> Vector3<f32> {
-    let diff = joint_pos - sphere_center;
-    let distance = (diff.x * diff.x + diff.y * diff.y + diff.z * diff.z).sqrt();
-    let min_distance = joint_radius + sphere_radius;
+    let closest = match collider.tail {
+        Some(capsule_tail) => closest_point_on_segment(tail, collider.center, capsule_tail),
+        None => collider.center,
+    };
+    let diff = tail - closest;
+    let distance = diff.magnitude();
+    let min_distance = joint_radius + collider.radius;
 
     if distance >= min_distance {
-        return joint_pos;
+        return tail;
     }
 
-    if distance < 1e-8 {
-        return sphere_center + Vector3::new(0.0, min_distance, 0.0);
-    }
+    let penetration = min_distance - distance;
+    let push_direction = if distance < 1e-8 {
+        Vector3::new(0.0, 1.0, 0.0)
+    } else {
+        diff / distance
+    };
 
-    sphere_center + (diff / distance) * min_distance
+    tail + push_direction * penetration
 }
 
-fn resolve_sphere_vs_capsule(
-    joint_pos: Vector3<f32>,
+fn closest_point_on_segment(p: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -> Vector3<f32> {
+    let ab = b - a;
+    let len_sq = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z;
+    if len_sq < 1e-8 {
+        return a;
+    }
+    let t = ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y + (p.z - a.z) * ab.z) / len_sq;
+    let clamped_t = t.max(0.0).min(1.0);
+    a + ab * clamped_t
+}
+
+fn resolve_segment_collision(
+    head: Vector3<f32>,
+    tail: Vector3<f32>,
     joint_radius: f32,
-    capsule_head: Vector3<f32>,
-    capsule_tail: Vector3<f32>,
-    capsule_radius: f32,
+    collider: &WorldCollider,
 ) -> Vector3<f32> {
-    let closest = find_closest_point_on_segment(capsule_head, capsule_tail, joint_pos);
-    resolve_sphere_vs_sphere(joint_pos, joint_radius, closest, capsule_radius)
-}
+    let collider_tail = collider.tail.unwrap_or(collider.center);
+    let (s, t) = find_closest_segment_parameters(head, tail, collider.center, collider_tail);
+    let joint_point = head + (tail - head) * s;
+    let collider_point = collider.center + (collider_tail - collider.center) * t;
 
-fn find_closest_point_on_segment(
-    start: Vector3<f32>,
-    end: Vector3<f32>,
-    point: Vector3<f32>,
-) -> Vector3<f32> {
-    let seg = end - start;
-    let seg_len_sq = seg.x * seg.x + seg.y * seg.y + seg.z * seg.z;
+    let diff = joint_point - collider_point;
+    let distance = diff.magnitude();
+    let min_distance = joint_radius + collider.radius;
 
-    if seg_len_sq < 1e-8 {
-        return start;
+    if distance >= min_distance || s <= MIN_TAIL_LEVER {
+        return tail;
     }
 
-    let to_point = point - start;
-    let t = (to_point.x * seg.x + to_point.y * seg.y + to_point.z * seg.z) / seg_len_sq;
-    let t = t.clamp(0.0, 1.0);
+    let penetration = min_distance - distance;
+    let push_direction = if distance < 1e-8 {
+        Vector3::new(0.0, 1.0, 0.0)
+    } else {
+        diff / distance
+    };
 
-    start + seg * t
+    tail + push_direction * (penetration / s)
+}
+
+// Ericson, Real-Time Collision Detection 5.1.9.
+fn find_closest_segment_parameters(
+    p1: Vector3<f32>,
+    q1: Vector3<f32>,
+    p2: Vector3<f32>,
+    q2: Vector3<f32>,
+) -> (f32, f32) {
+    let d1 = q1 - p1;
+    let d2 = q2 - p2;
+    let r = p1 - p2;
+    let a = d1.dot(d1);
+    let e = d2.dot(d2);
+    let f = d2.dot(r);
+
+    if a <= DEGENERATE_SEGMENT_LENGTH_SQ && e <= DEGENERATE_SEGMENT_LENGTH_SQ {
+        return (0.0, 0.0);
+    }
+    if a <= DEGENERATE_SEGMENT_LENGTH_SQ {
+        return (0.0, (f / e).clamp(0.0, 1.0));
+    }
+
+    let c = d1.dot(r);
+    if e <= DEGENERATE_SEGMENT_LENGTH_SQ {
+        return ((-c / a).clamp(0.0, 1.0), 0.0);
+    }
+
+    let b = d1.dot(d2);
+    let denom = a * e - b * b;
+    let s = if denom > 0.0 {
+        ((b * f - c * e) / denom).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let t = (b * s + f) / e;
+
+    if t < 0.0 {
+        ((-c / a).clamp(0.0, 1.0), 0.0)
+    } else if t > 1.0 {
+        (((b - c) / a).clamp(0.0, 1.0), 1.0)
+    } else {
+        (s, t)
+    }
 }
 
 #[cfg(test)]
@@ -100,93 +159,208 @@ mod tests {
 
     #[test]
     fn test_no_collision_distant_spheres() {
-        let pos = Vector3::new(5.0, 0.0, 0.0);
-        let result = resolve_sphere_vs_sphere(pos, 0.1, Vector3::new(0.0, 0.0, 0.0), 0.5);
-        assert!(approx_eq(result, pos, 1e-5));
+        let head = Vector3::new(5.0, 0.0, 0.0);
+        let tail = Vector3::new(6.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
     }
 
     #[test]
     fn test_collision_penetrating_spheres() {
-        let pos = Vector3::new(0.3, 0.0, 0.0);
+        let head = Vector3::new(1.0, 0.0, 0.0);
+        let tail = Vector3::new(0.3, 0.0, 0.0);
         let center = Vector3::new(0.0, 0.0, 0.0);
-        let result = resolve_sphere_vs_sphere(pos, 0.1, center, 0.5);
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
 
         let dist = magnitude(result - center);
-        assert!((dist - 0.6).abs() < 1e-5);
+        assert!((dist - 0.6).abs() < 1e-4);
         assert!(result.x > 0.0);
     }
 
     #[test]
     fn test_no_collision_at_exact_contact() {
+        let head = Vector3::new(1.0, 0.0, 0.0);
+        let tail = Vector3::new(0.6, 0.0, 0.0);
         let center = Vector3::new(0.0, 0.0, 0.0);
-        let pos = Vector3::new(0.6, 0.0, 0.0);
-        let result = resolve_sphere_vs_sphere(pos, 0.1, center, 0.5);
-        assert!(approx_eq(result, pos, 1e-5));
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
     }
 
     #[test]
     fn test_capsule_collision_near_center() {
+        let head = Vector3::new(1.0, 1.0, 0.0);
+        let tail = Vector3::new(0.3, 1.0, 0.0);
         let capsule_head = Vector3::new(0.0, 0.0, 0.0);
         let capsule_tail = Vector3::new(0.0, 2.0, 0.0);
-        let pos = Vector3::new(0.3, 1.0, 0.0);
-
-        let result = resolve_sphere_vs_capsule(pos, 0.1, capsule_head, capsule_tail, 0.5);
-        let closest = find_closest_point_on_segment(capsule_head, capsule_tail, pos);
-        let dist = magnitude(result - closest);
-        assert!((dist - 0.6).abs() < 1e-5);
+        let colliders = [WorldCollider {
+            center: capsule_head,
+            radius: 0.5,
+            tail: Some(capsule_tail),
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let dist = magnitude(result - Vector3::new(0.0, 1.0, 0.0));
+        assert!((dist - 0.6).abs() < 1e-4);
     }
 
     #[test]
     fn test_capsule_collision_near_endpoint() {
+        let head = Vector3::new(1.0, -0.5, 0.0);
+        let tail = Vector3::new(0.3, -0.5, 0.0);
         let capsule_head = Vector3::new(0.0, 0.0, 0.0);
         let capsule_tail = Vector3::new(0.0, 2.0, 0.0);
-        let pos = Vector3::new(0.3, -0.5, 0.0);
-
-        let result = resolve_sphere_vs_capsule(pos, 0.1, capsule_head, capsule_tail, 0.5);
+        let colliders = [WorldCollider {
+            center: capsule_head,
+            radius: 0.5,
+            tail: Some(capsule_tail),
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
         let dist = magnitude(result - capsule_head);
-        assert!((dist - 0.6).abs() < 1e-5);
+        assert!((dist - 0.6).abs() < 1e-4);
     }
 
     #[test]
     fn test_degenerate_capsule_acts_as_sphere() {
+        let head = Vector3::new(1.0, 0.0, 0.0);
+        let tail = Vector3::new(0.3, 0.0, 0.0);
         let center = Vector3::new(0.0, 0.0, 0.0);
-        let pos = Vector3::new(0.3, 0.0, 0.0);
-
-        let sphere_result = resolve_sphere_vs_sphere(pos, 0.1, center, 0.5);
-        let capsule_result = resolve_sphere_vs_capsule(pos, 0.1, center, center, 0.5);
-
-        assert!(approx_eq(sphere_result, capsule_result, 1e-5));
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: Some(center),
+        }];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let dist = magnitude(result - center);
+        assert!((dist - 0.6).abs() < 1e-4);
     }
 
     #[test]
-    fn test_resolve_all_collisions_sequential() {
-        let colliders = vec![
-            WorldCollider {
-                center: Vector3::new(-2.0, 0.0, 0.0),
-                radius: 0.5,
-                tail: None,
-            },
-            WorldCollider {
-                center: Vector3::new(0.0, 0.0, 0.0),
-                radius: 0.5,
-                tail: None,
-            },
-        ];
-        let pos = Vector3::new(0.3, 0.0, 0.0);
+    fn test_segment_midpoint_penetrates_capsule() {
+        let head = Vector3::new(0.0, 0.0, 0.0);
+        let tail = Vector3::new(0.0, 4.0, 0.0);
+        let capsule_head = Vector3::new(1.5, 2.0, 0.0);
+        let capsule_tail = Vector3::new(-1.5, 2.0, 0.0);
+        let colliders = [WorldCollider {
+            center: capsule_head,
+            radius: 0.3,
+            tail: Some(capsule_tail),
+        }];
 
-        let result = resolve_all_collisions(pos, 0.1, &colliders);
+        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(segment_result, Vector3::new(0.0, 4.8, 0.0), 1e-4));
+    }
 
-        let dist1 = magnitude(result - colliders[1].center);
-        assert!((dist1 - 0.6).abs() < 1e-4);
+    #[test]
+    fn test_segment_far_from_collider_no_movement() {
+        let head = Vector3::new(0.0, 0.0, 0.0);
+        let tail = Vector3::new(0.0, 2.0, 0.0);
+        let colliders = [WorldCollider {
+            center: Vector3::new(10.0, 1.0, 0.0),
+            radius: 0.5,
+            tail: None,
+        }];
+
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
+    }
+
+    #[test]
+    fn test_only_tip_penetrates_matches_point_based() {
+        let head = Vector3::new(1.0, 0.0, 0.0);
+        let tail = Vector3::new(0.3, 0.0, 0.0);
+        let center = Vector3::new(0.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
+
+        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(segment_result, Vector3::new(0.6, 0.0, 0.0), 1e-4));
+    }
+
+    #[test]
+    fn test_head_inside_collider_tail_unchanged() {
+        let head = Vector3::new(0.0, 0.0, 0.0);
+        let tail = Vector3::new(0.0, 3.0, 0.0);
+        let colliders = [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 1.0,
+            tail: None,
+        }];
+
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
     }
 
     #[test]
     fn test_complete_overlap_default_direction() {
+        let head = Vector3::new(1.0, 1.4, 3.0);
+        let tail = Vector3::new(1.0, 2.6, 3.0);
         let center = Vector3::new(1.0, 2.0, 3.0);
-        let pos = center;
-        let result = resolve_sphere_vs_sphere(pos, 0.1, center, 0.5);
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
 
-        let expected = center + Vector3::new(0.0, 0.6, 0.0);
-        assert!(approx_eq(result, expected, 1e-5));
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let expected = Vector3::new(1.0, 3.8, 3.0);
+        assert!(approx_eq(result, expected, 1e-4));
+    }
+
+    #[test]
+    fn test_tail_collision_distant_sphere_unchanged() {
+        let tail = Vector3::new(5.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        assert!(approx_eq(result, tail, 1e-5));
+    }
+
+    #[test]
+    fn test_tail_collision_penetrating_sphere_pushed_out() {
+        let tail = Vector3::new(0.3, 0.0, 0.0);
+        let center = Vector3::new(0.0, 0.0, 0.0);
+        let colliders = [WorldCollider {
+            center,
+            radius: 0.5,
+            tail: None,
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        let dist = magnitude(result - center);
+        assert!((dist - 0.6).abs() < 1e-4);
+        assert!(result.x > 0.0);
+    }
+
+    #[test]
+    fn test_tail_collision_capsule_pushed_perpendicular_from_axis_center() {
+        let tail = Vector3::new(0.3, 1.0, 0.0);
+        let capsule_head = Vector3::new(0.0, 0.0, 0.0);
+        let capsule_tail = Vector3::new(0.0, 2.0, 0.0);
+        let colliders = [WorldCollider {
+            center: capsule_head,
+            radius: 0.5,
+            tail: Some(capsule_tail),
+        }];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        assert!(approx_eq(result, Vector3::new(0.6, 1.0, 0.0), 1e-4));
     }
 }

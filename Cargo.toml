@@ -3,6 +3,7 @@ members = [
     "crates/*",
     "crates/thyllore-scene-core/derive",
     "crates/thyllore-effect-core/derive",
+    "scratch",
 ]
 
 [package]
@@ -27,8 +28,12 @@ path = "src/bin/flame_param_fit.rs"
 name = "flame_sdf_bake"
 path = "src/bin/flame_sdf_bake.rs"
 
+[[bin]]
+name = "spring_tail_compare"
+path = "src/bin/spring_tail_compare.rs"
+
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["dylib", "rlib"]
 
 [dependencies]
 thyllore-cli-core = { path = "crates/thyllore-cli-core" }
@@ -40,6 +45,7 @@ thyllore-anim-core = { path = "crates/thyllore-anim-core" }
 thyllore-ml-core = { path = "crates/thyllore-ml-core", optional = true }
 thyllore-importer-core = { path = "crates/thyllore-importer-core" }
 thyllore-exporter-core = { path = "crates/thyllore-exporter-core" }
+thyllore-file-format-core = { path = "crates/thyllore-file-format-core" }
 thyllore-effect-core = { path = "crates/thyllore-effect-core" }
 thyllore-avatar-core = { path = "crates/thyllore-avatar-core" }
 thyllore-scene-core = { path = "crates/thyllore-scene-core" }
@@ -73,6 +79,7 @@ ron = "0.8"
 fbxcel = { version = "0.9", features = ["writer"] }
 ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "load-dynamic", "download-binaries", "copy-dylibs", "tls-native"], optional = true }
 clap = { version = "4", features = ["derive"] }
+libloading = "0.8"
 
 [features]
 default = ["ml"]
@@ -96,3 +103,6 @@ strip = true
 
 [profile.dev.package.thyllore-model-core]
 opt-level = 3
+
+[profile.dev.package.thyllore-scratch]
+opt-level = 2

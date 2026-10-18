@@ -1,25 +1,47 @@
+use crate::asset::AssetStorage;
+use crate::ecs::events::{send_dialog_request, DialogRequest};
+use crate::ecs::resource::{
+    AvatarSetupState, FbxModelCache, HierarchyState, MaterialTextureSaveState, MaterialTextureState,
+};
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
+use crate::ecs::systems::{find_submesh_entity, hierarchy_is_selected};
+use crate::ecs::world::World;
+use crate::platform::ui::param_widgets::draw_params;
+use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use imgui::Condition;
+use thyllore_avatar_core::garment::components::chain_gen::{
+    ChainGenRequest, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+};
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRole, SubmeshRoleSource, SubmeshSelector,
+};
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
 use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform};
 
-use crate::asset::AssetStorage;
-use crate::ecs::resource::{AvatarSetupState, MaterialTextureSaveState, MaterialTextureState};
-use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
-use crate::ecs::world::World;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-
 const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 const NO_BONE_LABEL: &str = "(none)";
+const GENERATE_CHAINS_LABEL: &str = "Generate chains";
 const NO_TEXTURE_LABEL: &str = "(from model)";
+const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [
+    SubmeshRole::Skin,
+    SubmeshRole::Garment,
+    SubmeshRole::Hair,
+    SubmeshRole::Accessory,
+];
+
+struct SceneAccess<'a> {
+    assets: &'a AssetStorage,
+    graphics: &'a GraphicsResources,
+}
 
 fn draw_avatar_setup_window(
     ui: &imgui::Ui,
     world: &World,
+    scene: &SceneAccess,
     state: &mut AvatarSetupState,
     material_textures: &MaterialTextureState,
 ) {
@@ -43,6 +65,9 @@ fn draw_avatar_setup_window(
             }
             if let Some(_tab) = ui.tab_item("Materials") {
                 build_materials_tab(ui, world, material_textures);
+            }
+            if let Some(_tab) = ui.tab_item("Submeshes") {
+                build_submeshes_tab(ui, world, scene, state);
             }
             if let Some(_tab) = ui.tab_item("Validation") {
                 build_validation_tab(ui, state);
@@ -177,13 +202,148 @@ fn build_materials_tab(ui: &imgui::Ui, world: &World, material_textures: &Materi
     }
 }
 
+fn submesh_role_label(role: SubmeshRole) -> &'static str {
+    match role {
+        SubmeshRole::Skin => "Skin",
+        SubmeshRole::Garment => "Garment",
+        SubmeshRole::Hair => "Hair",
+        SubmeshRole::Accessory => "Accessory",
+    }
+}
+
+fn draw_chain_gen_settings(ui: &imgui::Ui, world: &World, state: &AvatarSetupState) {
+    let names: Vec<&str> = CHAIN_GEN_UI_PARAMS.iter().map(|p| p.name).collect();
+    let mut settings = state.chain_gen.clone();
+    draw_params(
+        ui,
+        &names,
+        &CHAIN_GEN_UI_PARAMS,
+        &CHAIN_GEN_SCALAR_PARAMS,
+        &mut settings,
+        |_, _| {},
+    );
+    if settings != state.chain_gen {
+        world.send_command(AvatarSetupEvent::SetChainGenSettings { settings });
+    }
+}
+
+fn draw_submesh_label(
+    ui: &imgui::Ui,
+    world: &World,
+    scene: &SceneAccess,
+    key: &SubmeshKey,
+    label: &str,
+) {
+    let entity = find_submesh_entity(world, scene.assets, scene.graphics, key);
+    let is_selected = entity
+        .is_some_and(|entity| hierarchy_is_selected(&world.resource::<HierarchyState>(), entity));
+    let label_width = ui.calc_text_size(label)[0] + ui.clone_style().frame_padding()[0] * 2.0;
+    if ui
+        .selectable_config(label)
+        .selected(is_selected)
+        .size([label_width, 0.0])
+        .build()
+    {
+        world.send_command(AvatarSetupEvent::SelectSubmesh { key: key.clone() });
+    }
+}
+
+fn build_submeshes_tab(
+    ui: &imgui::Ui,
+    world: &World,
+    scene: &SceneAccess,
+    state: &AvatarSetupState,
+) {
+    if state.submesh_roles.is_empty() {
+        ui.text_disabled("No submeshes");
+        return;
+    }
+
+    ui.text("Chain generation");
+    draw_chain_gen_settings(ui, world, state);
+    ui.separator();
+
+    for (index, (key, entry)) in state.submesh_roles.iter().enumerate() {
+        let label = format!("{}/{}", key.mesh, key.material);
+        let current_role = entry.role;
+        let preview = submesh_role_label(current_role);
+
+        draw_submesh_label(ui, world, scene, key, &label);
+        if entry.source == SubmeshRoleSource::Guessed {
+            ui.same_line();
+            ui.text_disabled("(guessed)");
+        }
+        ui.same_line();
+        let chain_root = chain_root_role(current_role);
+        let style = ui.clone_style();
+        let button_width =
+            ui.calc_text_size(GENERATE_CHAINS_LABEL)[0] + style.frame_padding()[0] * 2.0;
+        let combo_width = match chain_root {
+            Some(_) => ui.content_region_avail()[0] - button_width - style.item_spacing()[0],
+            None => -1.0,
+        };
+        ui.set_next_item_width(combo_width);
+        let combo_id = format!("##submesh_role_{}", index);
+        if let Some(_combo) = ui.begin_combo(&combo_id, preview) {
+            for role in SUBMESH_ROLE_CHOICES {
+                if ui
+                    .selectable_config(submesh_role_label(role))
+                    .selected(current_role == role)
+                    .build()
+                {
+                    world.send_command(AvatarSetupEvent::SetSubmeshRole {
+                        key: key.clone(),
+                        role,
+                    });
+                }
+            }
+        }
+
+        if let Some(humanoid_role) = chain_root {
+            ui.same_line();
+            draw_generate_chains_button(ui, world, state, key, humanoid_role, index);
+        }
+    }
+}
+
+fn chain_root_role(role: SubmeshRole) -> Option<HumanoidRole> {
+    match role {
+        SubmeshRole::Hair => Some(HumanoidRole::Head),
+        SubmeshRole::Garment => Some(HumanoidRole::Hips),
+        SubmeshRole::Skin | SubmeshRole::Accessory => None,
+    }
+}
+
+fn draw_generate_chains_button(
+    ui: &imgui::Ui,
+    world: &World,
+    state: &AvatarSetupState,
+    key: &SubmeshKey,
+    humanoid_role: HumanoidRole,
+    index: usize,
+) {
+    let Some(&bone_index) = state.mapping.by_role.get(&humanoid_role) else {
+        ui.text_disabled(GENERATE_CHAINS_LABEL);
+        return;
+    };
+    if ui.button(format!("{GENERATE_CHAINS_LABEL}##chain_{index}")) {
+        world.send_command(AvatarSetupEvent::GenerateChainBones {
+            request: ChainGenRequest {
+                target: SubmeshSelector::Submesh(key.clone()),
+                root_bone: state.bones[bone_index as usize].name.clone(),
+                settings: state.chain_gen.clone(),
+            },
+        });
+    }
+}
+
 fn build_validation_tab(ui: &imgui::Ui, state: &AvatarSetupState) {
     ui.text(format!("Rest pose: {}", format_rest_pose(state.rest_pose)));
     ui.separator();
 
     ui.text(format!("Issues: {}", state.issues.len()));
     for issue in &state.issues {
-        ui.bullet_text(format_mapping_issue(issue));
+        ui.bullet_text(issue.to_string());
     }
     ui.separator();
 
@@ -204,32 +364,6 @@ fn format_rest_pose(rest_pose: RestPose) -> &'static str {
         RestPose::TPose => "T-pose",
         RestPose::APose => "A-pose",
         RestPose::Unknown => "Unknown",
-    }
-}
-
-fn format_mapping_issue(issue: &MappingIssue) -> String {
-    match issue {
-        MappingIssue::MissingRequired(role) => {
-            format!("Missing required role {}", role.unity_name())
-        }
-        MappingIssue::HierarchyOrder {
-            child,
-            expected_ancestor,
-        } => format!(
-            "{} is not under {}",
-            child.unity_name(),
-            expected_ancestor.unity_name()
-        ),
-        MappingIssue::MirroredRolesShareBone { left, right } => format!(
-            "{} and {} share the same bone",
-            left.unity_name(),
-            right.unity_name()
-        ),
-        MappingIssue::BoneInTwoRoles { roles, .. } => format!(
-            "bone used by both {} and {}",
-            roles[0].unity_name(),
-            roles[1].unity_name()
-        ),
     }
 }
 
@@ -311,12 +445,26 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
         world.send_command(AvatarSetupEvent::ExportUnityAvatar);
     }
     ui.text_disabled("sidecar JSON, expression .anim files, current clip .anim");
+
+    let has_fbx_model = world
+        .get_resource::<FbxModelCache>()
+        .map_or(false, |cache| cache.fbx_model().is_some());
+    if has_fbx_model {
+        if ui.button("Export FBX") {
+            send_dialog_request(world, DialogRequest::ExportModelFbx);
+        }
+        ui.text_disabled("mesh, skeleton and skin weights as loaded and edited, no clip");
+    } else {
+        ui.text_disabled("Export FBX (needs an FBX model)");
+    }
     ui.separator();
 
     ui.input_text("Bone name prefix", &mut state.spring_prefix)
         .build();
     let prefix = state.spring_prefix.trim();
-    if ui.button("Add spring chains") && !prefix.is_empty() {
+    if prefix.is_empty() {
+        ui.text_disabled("Add spring chains (enter the bone name prefix, e.g. hair)");
+    } else if ui.button("Add spring chains") {
         world.send_command(AvatarSetupEvent::AddSpringChainsByPrefix {
             prefix: prefix.to_string(),
         });
@@ -326,12 +474,13 @@ fn build_export_tab(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState)
 fn build_avatar_setup_window(
     ui: &imgui::Ui,
     world: &World,
-    _: &AssetStorage,
-    _: &GraphicsResources,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
 ) {
     let mut avatar_setup = world.resource_mut::<AvatarSetupState>();
     let material_textures = world.resource::<MaterialTextureState>();
-    draw_avatar_setup_window(ui, world, &mut avatar_setup, &material_textures);
+    let scene = SceneAccess { assets, graphics };
+    draw_avatar_setup_window(ui, world, &scene, &mut avatar_setup, &material_textures);
 }
 
 crate::ui_window!("avatar_setup", Floating, 1, build_avatar_setup_window);

@@ -8,13 +8,14 @@ use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
-    ClipLibrary, EntityRemovalCommand, EntityRemovalQueue, HierarchyState, TimelineState,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue,
+    HierarchyState, TimelineState,
 };
 use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone,
     hierarchy_toggle_selection, navigate_hierarchy, rename_entity, resolve_mesh_bone_id,
-    resolve_transform_entity, update_entity_scale, update_entity_translation,
+    resolve_transform_entity, uniform_scale_factor, update_entity_scale, update_entity_translation,
     update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
@@ -50,6 +51,13 @@ pub enum HierarchyEvent {
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
     SetBoneDistanceScaleFactor(f32),
+    AddChildBone {
+        parent: BoneId,
+        name: String,
+        local_offset: Vector3<f32>,
+    },
+    SetBoneOffset(BoneId, Vector3<f32>),
+    DeleteBone(BoneId),
 }
 
 impl UiCommand for HierarchyEvent {
@@ -61,8 +69,47 @@ impl UiCommand for HierarchyEvent {
 fn dispatch_hierarchy_events(events: &[HierarchyEvent], world: &mut World, assets: &AssetStorage) {
     dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
+    queue_skeleton_edits(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
     dispatch_hierarchy_navigation_events(events, world, assets);
+}
+
+fn bone_name(assets: &AssetStorage, bone_id: BoneId) -> Option<String> {
+    assets
+        .skeletons
+        .values()
+        .next()
+        .and_then(|asset| asset.skeleton.get_bone(bone_id))
+        .map(|bone| bone.name.clone())
+}
+
+/// Skeleton edits touch skin data, so they are queued for `App` instead of applied here.
+fn queue_skeleton_edits(events: &[HierarchyEvent], world: &mut World, assets: &AssetStorage) {
+    for event in events {
+        let command = match event {
+            HierarchyEvent::AddChildBone {
+                parent,
+                name,
+                local_offset,
+            } => bone_name(assets, *parent).map(|parent| AssetEditCommand::AddBone {
+                parent,
+                name: name.clone(),
+                local_offset: *local_offset,
+            }),
+            HierarchyEvent::SetBoneOffset(bone_id, local_offset) => bone_name(assets, *bone_id)
+                .map(|bone| AssetEditCommand::SetBoneOffset {
+                    bone,
+                    local_offset: *local_offset,
+                }),
+            HierarchyEvent::DeleteBone(bone_id) => {
+                bone_name(assets, *bone_id).map(|bone| AssetEditCommand::RemoveBone { bone })
+            }
+            _ => None,
+        };
+        if let Some(command) = command {
+            world.resource_mut::<AssetEditQueue>().push(command);
+        }
+    }
 }
 
 fn dispatch_hierarchy_navigation_events(

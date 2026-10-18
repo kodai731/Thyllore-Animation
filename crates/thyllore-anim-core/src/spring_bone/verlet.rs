@@ -12,15 +12,18 @@ pub fn integrate_joint(
     parent_world_rotation: Quaternion<f32>,
     initial_local_rotation: Quaternion<f32>,
     bone_axis: Vector3<f32>,
-    bone_length: f32,
-    head_position: Vector3<f32>,
     dt: f32,
 ) -> Vector3<f32> {
     let inertia = (current_tail - prev_tail) * (1.0 - drag_force);
 
     let rest_dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
-    let rest_tail = head_position + rest_dir * bone_length;
-    let stiffness_force = (rest_tail - current_tail) * stiffness * dt;
+    let rest_len = rest_dir.magnitude();
+    let rest_dir_normalized = if rest_len < 1e-8 {
+        Vector3::new(0.0, 1.0, 0.0)
+    } else {
+        rest_dir / rest_len
+    };
+    let stiffness_force = rest_dir_normalized * stiffness * dt;
 
     let external_force = gravity_dir * gravity_power * dt;
 
@@ -155,7 +158,6 @@ mod tests {
 
     #[test]
     fn test_integrate_joint_with_no_forces() {
-        let head = Vector3::new(0.0, 0.0, 0.0);
         let current = Vector3::new(0.0, 1.0, 0.0);
         let prev = Vector3::new(0.0, 1.0, 0.0);
 
@@ -169,8 +171,6 @@ mod tests {
             Quaternion::new(1.0, 0.0, 0.0, 0.0),
             Quaternion::new(1.0, 0.0, 0.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
-            1.0,
-            head,
             0.016,
         );
 
@@ -182,5 +182,27 @@ mod tests {
         let dir = Vector3::new(0.0, 1.0, 0.0);
         let q = rotation_between(dir, dir);
         assert!((q.s - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_integrate_joint_stiffness_only() {
+        let current = Vector3::new(0.0, 0.0, 0.0);
+        let prev = Vector3::new(0.0, 0.0, 0.0);
+
+        let result = integrate_joint(
+            current,
+            prev,
+            0.0,
+            2.0,
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            0.5,
+        );
+
+        let expected = Vector3::new(0.0, -1.0, 0.0);
+        assert!((result - expected).magnitude() < 1e-5);
     }
 }

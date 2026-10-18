@@ -18,6 +18,7 @@ pub struct TextureData {
 
 #[derive(Clone, Debug)]
 pub struct LoadedMesh {
+    pub name: Option<String>,
     pub vertex_data: VertexData,
     pub skin_data: Option<SkinData>,
     pub skeleton_id: Option<SkeletonId>,
@@ -32,6 +33,7 @@ pub struct LoadedMesh {
 impl Default for LoadedMesh {
     fn default() -> Self {
         Self {
+            name: None,
             vertex_data: VertexData::default(),
             skin_data: None,
             skeleton_id: None,
@@ -84,6 +86,7 @@ impl ModelLoadResult {
             .into_iter()
             .enumerate()
             .map(|(mesh_index, m)| LoadedMesh {
+                name: None,
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,
@@ -137,6 +140,7 @@ impl ModelLoadResult {
             .into_iter()
             .enumerate()
             .map(|(mesh_index, m)| LoadedMesh {
+                name: m.mesh_node_name,
                 vertex_data: m.vertex_data,
                 skin_data: m.skin_data,
                 skeleton_id: m.skeleton_id,

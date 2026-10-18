@@ -1,6 +1,7 @@
 use imgui::Condition;
 
 use crate::asset::AssetStorage;
+use crate::ecs::component::EntityIcon;
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
@@ -46,6 +47,11 @@ fn draw_inspector_window(
                 }
                 ui.separator();
 
+                if ui.button("Avatar Setup...") {
+                    world.send_command(AvatarSetupEvent::OpenAvatarSetup);
+                }
+                ui.separator();
+
                 build_transform_section(ui, world, &data);
 
                 build_mesh_section(ui, world, &data);
@@ -77,11 +83,6 @@ fn draw_inspector_window(
                 build_spring_bone_section(ui, world, entity, assets, state);
 
                 build_blend_shape_section(ui, world, entity, assets, graphics);
-
-                ui.separator();
-                if ui.button("Avatar Setup...") {
-                    world.send_command(AvatarSetupEvent::OpenAvatarSetup);
-                }
             } else {
                 ui.text("No entity selected");
             }

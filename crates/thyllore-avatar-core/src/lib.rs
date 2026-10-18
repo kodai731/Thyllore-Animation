@@ -1,4 +1,5 @@
 pub mod expression;
+pub mod garment;
 pub mod humanoid;
 pub mod material;
 pub mod motion;

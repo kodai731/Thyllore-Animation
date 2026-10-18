@@ -174,6 +174,19 @@ pub fn write_sidecar_json(path: &Path, sidecar: &AvatarSidecar) -> anyhow::Resul
     Ok(())
 }
 
+pub fn read_sidecar_json(path: &Path) -> anyhow::Result<AvatarSidecar> {
+    let content = fs::read_to_string(path)?;
+    let sidecar: AvatarSidecar = serde_json::from_str(&content)?;
+    if sidecar.schema != SIDECAR_SCHEMA_VERSION {
+        anyhow::bail!(
+            "sidecar schema {} is not the supported schema {}",
+            sidecar.schema,
+            SIDECAR_SCHEMA_VERSION
+        );
+    }
+    Ok(sidecar)
+}
+
 pub fn sidecar_path(model_path: &Path) -> PathBuf {
     let stem = model_path
         .file_stem()

@@ -2,6 +2,9 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRoleEntry, SubmeshRoleSource,
+};
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
@@ -22,10 +25,12 @@ use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
 use thyllore_avatar_core::vrchat::sidecar::{
-    build_sidecar, count_viseme_channels, sidecar_path, write_sidecar_json, AvatarSidecar,
-    SidecarInput,
+    build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,
+    AvatarSidecar, SidecarInput,
 };
-use thyllore_avatar_core::vrchat::sidecar_spring::build_sidecar_spring;
+use thyllore_avatar_core::vrchat::sidecar_spring::{
+    build_sidecar_spring, spring_setup_from_sidecar,
+};
 use thyllore_model_core::MeshMorph;
 
 use crate::animation::{BoneId, Skeleton, SkinData};
@@ -176,7 +181,61 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     state.stats = stats;
     refresh_submesh_roles(&mut state, assets, graphics, &node_assets.nodes);
     refresh_avatar_validation(&mut state);
-    state.source_model_path = model_path;
+    state.source_model_path = model_path.clone();
+    drop(state);
+    drop(node_assets);
+
+    apply_avatar_sidecar(world, Path::new(&model_path));
+}
+
+/// Restore the setup an earlier export wrote beside the model: submesh roles and spring bones.
+fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
+    let path = sidecar_path(model_path);
+    if !path.exists() {
+        return;
+    }
+    let sidecar = match read_sidecar_json(&path) {
+        Ok(sidecar) => sidecar,
+        Err(error) => {
+            msg_warn!("Ignoring avatar sidecar {}: {}", path.display(), error);
+            return;
+        }
+    };
+
+    let spring_setup = {
+        let mut state = world.resource_mut::<AvatarSetupState>();
+        for role in &sidecar.submesh_roles {
+            let key = SubmeshKey {
+                mesh: role.mesh.clone(),
+                material: role.material.clone(),
+            };
+            if let Some(entry) = state.submesh_roles.get_mut(&key) {
+                *entry = SubmeshRoleEntry {
+                    role: role.role,
+                    source: SubmeshRoleSource::User,
+                };
+            }
+        }
+        spring_setup_from_sidecar(&sidecar.spring, &state.bones)
+    };
+
+    let chain_count = spring_setup.chains.len();
+    let collider_count = spring_setup.colliders.len();
+    if chain_count > 0 || collider_count > 0 {
+        let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+            msg_warn!("Avatar sidecar has spring bones but no animated model entity");
+            return;
+        };
+        world.insert_component(spring_entity, spring_setup);
+        reset_spring_bone_state(world);
+    }
+    msg_info!(
+        "Applied avatar sidecar {}: {} submesh roles, {} spring chains, {} colliders",
+        path.display(),
+        sidecar.submesh_roles.len(),
+        chain_count,
+        collider_count
+    );
 }
 
 pub(crate) fn load_or_infer_mapping(
@@ -377,9 +436,18 @@ pub fn export_avatar_sidecar(world: &World, assets: &AssetStorage, graphics: &Gr
         msg_error!("Cannot export avatar sidecar: no model loaded");
         return;
     };
+    export_avatar_sidecar_beside(world, assets, graphics, Path::new(&model_path));
+}
 
+/// Write the sidecar next to `model_path`, the FBX the setup belongs to.
+pub fn export_avatar_sidecar_beside(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    model_path: &Path,
+) {
     let sidecar = build_avatar_sidecar(world, assets, graphics);
-    let path = sidecar_path(Path::new(&model_path));
+    let path = sidecar_path(model_path);
     match write_sidecar_json(&path, &sidecar) {
         Ok(()) => msg_info!("Exported avatar sidecar to {}", path.display()),
         Err(error) => msg_error!(

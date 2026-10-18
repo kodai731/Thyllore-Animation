@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::humanoid::components::skeleton_input::BoneInput;
+use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderId, SpringCollisionMode,
+    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
+    SpringColliderGroupId, SpringColliderId, SpringCollisionMode, SpringJointParam,
     FITTED_BODY_GROUP_NAME,
 };
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -59,6 +62,9 @@ pub struct SidecarSpringChain {
     pub center: Option<String>,
     pub collider_groups: Vec<String>,
     pub joints: Vec<SidecarSpringJoint>,
+    /// The bone of the appended VRM tail joint, which is not a simulated joint of the engine chain
+    #[serde(default)]
+    pub tail: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -191,12 +197,11 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
                 })
                 .collect();
 
-            if let Some(tail) = joints
+            let tail = joints
                 .last()
-                .and_then(|last| build_tail_joint(chain, last, bones))
-            {
-                joints.push(tail);
-            }
+                .and_then(|last| build_tail_joint(chain, last, bones));
+            let tail_bone = tail.as_ref().map(|joint| joint.bone.clone());
+            joints.extend(tail);
 
             let center = chain
                 .center_bone_id
@@ -219,9 +224,125 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
                 center,
                 collider_groups,
                 joints,
+                tail: tail_bone,
             }
         })
         .collect()
+}
+
+/// The engine setup a sidecar describes; joints and colliders on unknown bones are dropped.
+pub fn spring_setup_from_sidecar(spring: &SidecarSpring, bones: &[BoneInput]) -> SpringBoneSetup {
+    let bone_id_of = |name: &str| -> Option<BoneId> {
+        bones
+            .iter()
+            .position(|bone| bone.name == name)
+            .map(|index| index as BoneId)
+    };
+
+    let mut setup = SpringBoneSetup {
+        collision_mode: from_sidecar_collision_mode(&spring.collision_mode),
+        ..Default::default()
+    };
+
+    let mut collider_ids_by_name: Vec<(String, SpringColliderId)> = Vec::new();
+    for collider in &spring.colliders {
+        let Some(bone_id) = bone_id_of(&collider.bone) else {
+            continue;
+        };
+        let id = setup.next_collider_id;
+        setup.next_collider_id += 1;
+        setup.colliders.push(SpringColliderDef {
+            id,
+            bone_id,
+            offset: Vector3::from(collider.offset),
+            shape: match (&collider.shape, collider.tail) {
+                (SidecarColliderShape::Capsule, Some(tail)) => ColliderShape::Capsule {
+                    radius: collider.radius,
+                    tail: Vector3::from(tail),
+                },
+                (SidecarColliderShape::Capsule, None) | (SidecarColliderShape::Sphere, _) => {
+                    ColliderShape::Sphere {
+                        radius: collider.radius,
+                    }
+                }
+            },
+        });
+        collider_ids_by_name.push((collider.name.clone(), id));
+    }
+
+    let mut group_ids_by_name: Vec<(String, SpringColliderGroupId)> = Vec::new();
+    for group in &spring.collider_groups {
+        let id = setup.next_group_id;
+        setup.next_group_id += 1;
+        setup.collider_groups.push(SpringColliderGroup {
+            id,
+            name: group.name.clone(),
+            collider_ids: group
+                .colliders
+                .iter()
+                .filter_map(|name| {
+                    collider_ids_by_name
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, id)| *id)
+                })
+                .collect(),
+        });
+        group_ids_by_name.push((group.name.clone(), id));
+    }
+
+    for chain in &spring.chains {
+        let simulated = match &chain.tail {
+            Some(tail) if chain.joints.last().is_some_and(|last| &last.bone == tail) => {
+                &chain.joints[..chain.joints.len() - 1]
+            }
+            _ => &chain.joints[..],
+        };
+        let joints: Vec<SpringJointParam> = simulated
+            .iter()
+            .filter_map(|joint| {
+                Some(SpringJointParam {
+                    bone_id: bone_id_of(&joint.bone)?,
+                    stiffness: joint.stiffness,
+                    drag_force: joint.drag_force,
+                    gravity_power: joint.gravity_power,
+                    gravity_dir: Vector3::from(joint.gravity_dir),
+                    hit_radius: joint.hit_radius,
+                })
+            })
+            .collect();
+        if joints.is_empty() {
+            continue;
+        }
+        let id = setup.next_chain_id;
+        setup.next_chain_id += 1;
+        setup.chains.push(SpringChain {
+            id,
+            name: chain.name.clone(),
+            joints,
+            collider_group_ids: chain
+                .collider_groups
+                .iter()
+                .filter_map(|name| {
+                    group_ids_by_name
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, id)| *id)
+                })
+                .collect(),
+            center_bone_id: chain.center.as_deref().and_then(bone_id_of),
+            enabled: true,
+        });
+    }
+
+    setup
+}
+
+fn from_sidecar_collision_mode(mode: &SidecarCollisionMode) -> SpringCollisionMode {
+    match mode {
+        SidecarCollisionMode::VrmCompatible => SpringCollisionMode::VrmCompatible,
+        SidecarCollisionMode::SegmentExtended => SpringCollisionMode::SegmentExtended,
+    }
 }
 
 fn find_first_child<'a>(bones: &'a [BoneInput], parent: usize) -> Option<&'a BoneInput> {
@@ -406,6 +527,119 @@ mod tests {
         let c = &sidecar.colliders[0];
         assert_eq!(c.origin, SidecarColliderOrigin::Fitted);
         assert_eq!(c.name, format!("{FITTED_BODY_GROUP_NAME}/Hips"));
+    }
+
+    #[test]
+    fn setup_round_trips_through_the_sidecar() {
+        let bones = make_bones(&["Hips", "Spine", "Tail1", "Tail2", "Tail3"]);
+        let mut setup = SpringBoneSetup::default();
+        setup.collision_mode = SpringCollisionMode::SegmentExtended;
+        setup.colliders.push(SpringColliderDef {
+            id: 4,
+            bone_id: 0,
+            offset: Vector3::new(0.0, 0.1, 0.0),
+            shape: ColliderShape::Capsule {
+                radius: 0.05,
+                tail: Vector3::new(0.0, 0.2, 0.0),
+            },
+        });
+        setup.collider_groups.push(SpringColliderGroup {
+            id: 7,
+            name: "Body".to_string(),
+            collider_ids: vec![4],
+        });
+        setup.chains.push(SpringChain {
+            id: 2,
+            name: "tail".to_string(),
+            joints: vec![
+                SpringJointParam {
+                    bone_id: 2,
+                    stiffness: 0.3,
+                    hit_radius: 0.02,
+                    ..Default::default()
+                },
+                SpringJointParam {
+                    bone_id: 3,
+                    stiffness: 0.6,
+                    hit_radius: 0.03,
+                    ..Default::default()
+                },
+            ],
+            collider_group_ids: vec![7],
+            center_bone_id: Some(1),
+            enabled: true,
+        });
+        setup.next_chain_id = 3;
+        setup.next_collider_id = 5;
+        setup.next_group_id = 8;
+
+        let sidecar = build_sidecar_spring(&setup, &bones);
+        assert_eq!(sidecar.chains[0].joints.len(), 3, "tail joint appended");
+        assert_eq!(sidecar.chains[0].tail.as_deref(), Some("Tail3"));
+
+        let restored = spring_setup_from_sidecar(&sidecar, &bones);
+
+        assert_eq!(
+            restored.collision_mode,
+            SpringCollisionMode::SegmentExtended
+        );
+        assert_eq!(restored.chains.len(), 1);
+        let chain = &restored.chains[0];
+        assert_eq!(chain.name, "tail");
+        assert_eq!(chain.center_bone_id, Some(1));
+        let joint_bones: Vec<_> = chain.joints.iter().map(|j| j.bone_id).collect();
+        assert_eq!(joint_bones, vec![2, 3]);
+        assert_eq!(chain.joints[1].stiffness, 0.6);
+        assert_eq!(chain.joints[1].hit_radius, 0.03);
+        assert_eq!(
+            chain.collider_group_ids,
+            vec![restored.collider_groups[0].id]
+        );
+        assert_eq!(
+            restored.collider_groups[0].collider_ids,
+            vec![restored.colliders[0].id]
+        );
+        assert_eq!(restored.colliders[0].bone_id, 0);
+        match restored.colliders[0].shape {
+            ColliderShape::Capsule { radius, tail } => {
+                assert_eq!(radius, 0.05);
+                assert_eq!(tail, Vector3::new(0.0, 0.2, 0.0));
+            }
+            ColliderShape::Sphere { .. } => panic!("capsule lost"),
+        }
+        assert_eq!(restored.next_chain_id, 1);
+        assert_eq!(restored.next_collider_id, 1);
+        assert_eq!(restored.next_group_id, 1);
+    }
+
+    #[test]
+    fn chain_ending_at_a_leaf_keeps_every_joint_on_import() {
+        let bones = make_bones(&["Hips", "Hair0", "Hair1"]);
+        let mut setup = SpringBoneSetup::default();
+        setup.chains.push(SpringChain {
+            joints: vec![
+                SpringJointParam {
+                    bone_id: 1,
+                    ..Default::default()
+                },
+                SpringJointParam {
+                    bone_id: 2,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        });
+
+        let sidecar = build_sidecar_spring(&setup, &bones);
+        assert_eq!(sidecar.chains[0].tail, None);
+
+        let restored = spring_setup_from_sidecar(&sidecar, &bones);
+        let joint_bones: Vec<_> = restored.chains[0]
+            .joints
+            .iter()
+            .map(|j| j.bone_id)
+            .collect();
+        assert_eq!(joint_bones, vec![1, 2]);
     }
 
     #[test]

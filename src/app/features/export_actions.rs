@@ -157,6 +157,12 @@ pub(crate) fn export_model_fbx(app: &App, path: &Path) {
         Ok(()) => {
             msg_info!("FBX exported: {:?}", path);
             copy_humanoid_sidecar(app, path);
+            crate::ecs::systems::export_avatar_sidecar_beside(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+                &app.data.graphics_resources,
+                path,
+            );
         }
         Err(e) => msg_error!("FBX export failed: {:?}", e),
     }

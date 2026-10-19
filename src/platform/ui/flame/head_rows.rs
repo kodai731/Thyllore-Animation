@@ -4,6 +4,7 @@ use crate::ecs::systems::FLAME_SPAWN_HOOK;
 
 use super::super::effect_rows::{instance_options, preset_options};
 use super::super::ui_rows::{ChoiceOption, UiRow};
+use super::fit_browser::canonical_dir_or;
 use super::section_view::FlameSectionView;
 
 pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
@@ -91,10 +92,12 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
         label: "Browse Textures",
         enabled: |_world, _view| true,
         apply: |view| {
-            view.flame_ui.texture_fit_browser_open = true;
-            if view.flame_ui.texture_fit_browser_dir.is_empty() {
-                view.flame_ui.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
+            let browser = &mut view.flame_ui;
+            browser.texture_fit_browser_open = true;
+            if browser.texture_fit_browser_dir.is_empty() {
+                browser.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
             }
+            browser.texture_fit_browser_dir = canonical_dir_or(&browser.texture_fit_browser_dir);
         },
     });
 
@@ -172,7 +175,7 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
 
     rows.push(UiRow::Apply {
         label: "Apply Texture Fit",
-        enabled: |_world, view| view.has_selection,
+        enabled: |_world, view| view.selected.is_some(),
         apply: |view| {
             view.requests.apply_fit = true;
         },
@@ -244,7 +247,7 @@ pub(super) fn style_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>
 
     rows.push(UiRow::Apply {
         label: "Apply Style",
-        enabled: |_world, view| view.has_selection && !view.flame_ui.style_scan.is_empty(),
+        enabled: |_world, view| view.selected.is_some() && !view.flame_ui.style_scan.is_empty(),
         apply: |view| {
             view.requests.apply_style = true;
         },
@@ -273,7 +276,7 @@ pub(super) fn style_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>
     rows.push(UiRow::Apply {
         label: "Save Style",
         enabled: |_world, view| {
-            !view.flame_ui.style_save_name.trim().is_empty() && view.has_selection
+            !view.flame_ui.style_save_name.trim().is_empty() && view.selected.is_some()
         },
         apply: |view| {
             view.requests.save_style = true;
@@ -289,6 +292,7 @@ pub(super) fn style_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>
 
 #[cfg(test)]
 mod tests {
+    use super::super::body_rows::FlameBodyView;
     use super::super::section_view::FlameRequests;
     use super::*;
     use crate::ecs::resource::FlameUIState;
@@ -306,7 +310,8 @@ mod tests {
             preset: None,
             flame_ui,
             applied_style: None,
-            has_selection: true,
+            selected: Some(0),
+            body: FlameBodyView::default(),
             requests: FlameRequests::default(),
         }
     }

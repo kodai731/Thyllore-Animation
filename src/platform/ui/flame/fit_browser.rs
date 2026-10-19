@@ -1,4 +1,7 @@
+use crate::asset::AssetStorage;
 use crate::ecs::resource::FlameUIState;
+use crate::ecs::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::super::pointer::is_last_item_double_clicked;
 
@@ -41,7 +44,7 @@ const TEXTURE_FIT_BROWSER_MAX_ENTRIES: usize = 2000;
 /// confirm. Selection only fills the path field — applying stays on the
 /// explicit Apply button. Unreadable entries render disabled instead of
 /// failing the listing.
-pub(super) fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
+fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
     if !flame_ui.texture_fit_browser_open {
         return;
     }
@@ -187,3 +190,17 @@ pub(super) fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUISt
         flame_ui.texture_fit_browser_open = false;
     }
 }
+
+fn build_fit_browser_window(
+    ui: &imgui::Ui,
+    world: &World,
+    _: &AssetStorage,
+    _: &GraphicsResources,
+) {
+    let Some(mut flame_ui) = world.get_resource_mut::<FlameUIState>() else {
+        return;
+    };
+    build_texture_fit_browser(ui, &mut flame_ui);
+}
+
+crate::ui_window!("flame_fit_browser", Floating, 8, build_fit_browser_window);

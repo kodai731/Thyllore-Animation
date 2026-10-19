@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use crate::ecs::World;
-use crate::platform::ui::form_window::{CanvasSection, FormSection};
+use crate::platform::ui::form_window::FormSection;
 
 pub struct EffectSectionHook {
     pub key: &'static str,

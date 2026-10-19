@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
+use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{
     LightningDebugCapture, LightningDebugView, LightningRenderSettings, LightningShadingMode,
 };
@@ -10,6 +11,7 @@ use crate::ecs::systems::lightning::LightningUiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
+use crate::ecs::world::Entity;
 
 use super::effect_rows::{instance_options, preset_options};
 use super::ui_rows::{ChoiceOption, ListRows, UiRow};
@@ -21,6 +23,8 @@ pub struct LightningSectionView {
     pub preset: Option<String>,
     pub target_name: Option<String>,
     pub waypoints: Vec<String>,
+    pub selected: Option<Entity>,
+    pub effect: LightningEffect,
     pub render: LightningRenderSettings,
 }
 
@@ -226,6 +230,8 @@ mod tests {
             preset: None,
             target_name: None,
             waypoints: Vec::new(),
+            selected: None,
+            effect: LightningEffect::default(),
             render: LightningRenderSettings::default(),
         }
     }

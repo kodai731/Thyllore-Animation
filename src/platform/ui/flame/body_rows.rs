@@ -6,12 +6,12 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 
 use super::super::param_widgets::rows_from_params;
-use super::super::ui_rows::{ChoiceOption, UiRow};
+use super::super::ui_rows::{ChoiceOption, FieldRows, UiRow};
 
 const EMITTER_LABELS: [&str; 3] = ["Cylinder", "Ring", "Mesh SDF"];
 const RING_EMITTER_KIND: u32 = 1;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(super) struct FlameBodyView {
     pub effect: FlameEffect,
     pub trail_enabled: bool,
@@ -23,7 +23,18 @@ pub(super) struct FlameBodyView {
     pub gpu_timings: Vec<(String, f32)>,
 }
 
-pub(super) fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
+pub(super) fn body_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
+    let mut rows = emitter_rows(view);
+    rows.push(UiRow::Field(Box::new(FieldRows {
+        field: |view: &mut FlameBodyView| &mut view.effect,
+        rows: flame_param_rows(),
+    })));
+    rows.extend(body_action_rows());
+    rows.extend(debug_rows(view));
+    rows
+}
+
+fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
     let mut rows: Vec<UiRow<FlameBodyView>> = vec![
         UiRow::Vector3 {
             label: "Position",
@@ -77,7 +88,7 @@ pub(super) fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
     rows
 }
 
-pub(super) fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
+fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
     let mut rows = rows_from_params(
         &thyllore_effect_core::FLAME_UI_PARAMS,
         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
@@ -164,7 +175,7 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
     ]
 }
 
-pub(super) fn body_action_rows() -> Vec<UiRow<FlameBodyView>> {
+fn body_action_rows() -> Vec<UiRow<FlameBodyView>> {
     vec![
         UiRow::Action {
             label: "Clear Flame Keys",
@@ -219,7 +230,7 @@ fn draw_gpu_timings(ui: &imgui::Ui, _world: &World, view: &FlameBodyView) {
     }
 }
 
-pub(super) fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
+fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
     let mut rows: Vec<UiRow<FlameBodyView>> = vec![
         UiRow::Choice {
             label: "Shading Mode",
@@ -361,6 +372,19 @@ mod tests {
                 _ => None,
             })
             .unwrap_or_else(|| panic!("missing group {group_title}"))
+    }
+
+    #[test]
+    fn body_rows_run_emitter_params_actions_then_debug() {
+        let rows = body_rows(&body_view(0, FlameShadingMode::Analytic));
+        let labels = visible_labels(&rows);
+        assert_eq!(&labels[..2], ["Position", "Emitter"]);
+        assert_eq!(labels[labels.len() - 1], "Trail Fade");
+        assert!(matches!(rows[2], UiRow::Field(_)));
+        let UiRow::Group { title, .. } = rows.last().unwrap() else {
+            panic!("last row is not the debug group");
+        };
+        assert_eq!(&**title, "Flame Debug");
     }
 
     #[test]

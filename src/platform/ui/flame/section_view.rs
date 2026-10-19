@@ -24,11 +24,12 @@ pub(super) struct FlameSectionView {
     pub preset: Option<String>,
     pub flame_ui: FlameUIState,
     pub applied_style: Option<(String, u32)>,
-    pub has_selection: bool,
+    pub selected: Option<Entity>,
+    pub body: FlameBodyView,
     pub requests: FlameRequests,
 }
 
-pub(super) fn scan_flame_assets(flame_ui: &mut FlameUIState) {
+fn scan_flame_assets(flame_ui: &mut FlameUIState) {
     if !flame_ui.texture_fit_scan_done {
         let scan_dir = std::path::Path::new(FLAMES_TEXTURE_DIR);
         if let Ok(entries) = std::fs::read_dir(scan_dir) {
@@ -83,25 +84,30 @@ pub(super) fn read_flame_section_view(
             .map(|s| (s.name.clone(), s.version))
     });
 
-    let has_selection = selected.is_some();
-    let flame_ui = world.resource::<FlameUIState>().clone();
+    let mut flame_ui = world.resource::<FlameUIState>().clone();
+    scan_flame_assets(&mut flame_ui);
+    validate_fit_path(&mut flame_ui);
 
     FlameSectionView {
         instances,
         instance_index,
         preset,
         applied_style,
-        has_selection,
+        selected,
+        body: read_flame_body_view(world, selected),
         flame_ui,
         requests: FlameRequests::default(),
     }
 }
 
-pub(super) fn draw_fit_path_status(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
+fn validate_fit_path(flame_ui: &mut FlameUIState) {
     if flame_ui.texture_fit_path != flame_ui.texture_fit_path_validated {
         flame_ui.texture_fit_path_info = validate_texture_fit_path(&flame_ui.texture_fit_path);
         flame_ui.texture_fit_path_validated = flame_ui.texture_fit_path.clone();
     }
+}
+
+pub(super) fn draw_fit_path_status(ui: &imgui::Ui, flame_ui: &FlameUIState) {
     if flame_ui.texture_fit_path.is_empty() {
         ui.text_disabled("enter a texture path");
     } else if flame_ui.texture_fit_path_info.starts_with("ok:") {
@@ -132,7 +138,7 @@ fn requested_save_name(view: &FlameSectionView) -> Option<String> {
 }
 
 fn is_apply_sent(shown: &FlameSectionView, view: &FlameSectionView) -> bool {
-    view.has_selection
+    view.selected.is_some()
         && (chosen_preset(shown, view).is_some()
             || view.requests.apply_fit
             || requested_style_path(view).is_some())
@@ -149,7 +155,7 @@ pub(super) fn send_flame_requests(
             index: view.instance_index,
         });
     }
-    if !view.has_selection {
+    if view.selected.is_none() {
         return false;
     }
 
@@ -193,17 +199,20 @@ pub(super) fn send_flame_requests(
     is_apply_sent(shown, view)
 }
 
-pub(super) fn write_back_flame_ui(world: &World, flame_ui: FlameUIState) {
+fn write_back_flame_ui(world: &World, flame_ui: &FlameUIState) {
     if let Some(mut resource) = world.get_resource_mut::<FlameUIState>() {
-        *resource = flame_ui;
+        *resource = flame_ui.clone();
     }
 }
 
-pub(super) fn read_flame_body_view(
-    world: &World,
-    flame: Entity,
-    effect: crate::ecs::component::FlameEffect,
-) -> FlameBodyView {
+fn read_flame_body_view(world: &World, flame: Option<Entity>) -> FlameBodyView {
+    let Some(flame) = flame else {
+        return FlameBodyView::default();
+    };
+    let effect = world
+        .get_component::<crate::ecs::component::FlameEffect>(flame)
+        .cloned()
+        .unwrap_or_default();
     let trail = world
         .get_component::<crate::ecs::component::FlameTrail>(flame)
         .map(|t| (t.state.enabled, t.state.fade_seconds))
@@ -213,7 +222,10 @@ pub(super) fn read_flame_body_view(
         .map(|s| *s);
     let jitter = thyllore_effect_core::flame_wave::read_env_wave_jitter();
     let jitter_freq = thyllore_effect_core::flame_wave::read_env_wave_jitter_freq();
-    let viewport_size = world.resource::<ViewportInput>().size;
+    let viewport_size = world
+        .get_resource::<ViewportInput>()
+        .map(|viewport| viewport.size)
+        .unwrap_or_default();
     let gpu_timings = match world.get_resource::<GpuPassTimings>() {
         Some(t) => t.passes.clone(),
         None => Vec::new(),
@@ -230,7 +242,39 @@ pub(super) fn read_flame_body_view(
     }
 }
 
-pub(super) fn send_flame_body_changes(
+pub(super) fn commit_flame_view(world: &World, shown: &FlameSectionView, view: &FlameSectionView) {
+    let effect_applied_this_frame = send_flame_requests(world, shown, view);
+    if view.flame_ui != shown.flame_ui {
+        write_back_flame_ui(world, &view.flame_ui);
+    }
+    if let Some(flame) = view.selected {
+        send_flame_body_changes(
+            world,
+            flame,
+            &shown.body,
+            &view.body,
+            effect_applied_this_frame,
+        );
+    }
+}
+
+fn edited_effect(
+    shown: &FlameBodyView,
+    view: &FlameBodyView,
+) -> Option<crate::ecs::component::FlameEffect> {
+    if view.effect == shown.effect {
+        return None;
+    }
+    let mut effect = view.effect.clone();
+    let color_edited =
+        (effect.color.base, effect.color.tip) != (shown.effect.color.base, shown.effect.color.tip);
+    if color_edited {
+        effect.color.use_blackbody = false;
+    }
+    Some(effect)
+}
+
+fn send_flame_body_changes(
     world: &World,
     flame: Entity,
     shown: &FlameBodyView,
@@ -238,10 +282,12 @@ pub(super) fn send_flame_body_changes(
     effect_applied_this_frame: bool,
 ) {
     if !effect_applied_this_frame {
-        world.send_command(FlameUiCommand::UpdateEffect {
-            entity: flame,
-            effect: Box::new(view.effect.clone()),
-        });
+        if let Some(effect) = edited_effect(shown, view) {
+            world.send_command(FlameUiCommand::UpdateEffect {
+                entity: flame,
+                effect: Box::new(effect),
+            });
+        }
     }
     if view.trail_enabled != shown.trail_enabled {
         world.send_command(FlameUiCommand::UpdateTrailEnabled(view.trail_enabled));
@@ -271,7 +317,8 @@ mod tests {
             preset: preset.map(str::to_string),
             flame_ui: FlameUIState::default(),
             applied_style: None,
-            has_selection: true,
+            selected: Some(0),
+            body: FlameBodyView::default(),
             requests: FlameRequests::default(),
         }
     }
@@ -293,7 +340,7 @@ mod tests {
         );
         assert!(is_apply_sent(&shown, &view));
 
-        view.has_selection = false;
+        view.selected = None;
         assert!(!is_apply_sent(&shown, &view));
     }
 
@@ -342,11 +389,29 @@ mod tests {
 
         let view = read_flame_section_view(&world, &flames, Some(7));
         assert_eq!(view.instance_index, 1);
-        assert!(view.has_selection);
+        assert_eq!(view.selected, Some(7));
         assert_eq!(view.requests, FlameRequests::default());
 
         let view = read_flame_section_view(&world, &flames, None);
         assert_eq!(view.instance_index, 0);
-        assert!(!view.has_selection);
+        assert_eq!(view.selected, None);
+    }
+
+    #[test]
+    fn edited_effect_drops_blackbody_only_when_color_changes() {
+        let shown = FlameBodyView::default();
+        assert!(edited_effect(&shown, &shown.clone()).is_none());
+
+        let mut view = shown.clone();
+        view.effect.color.use_blackbody = true;
+        view.effect.wave_segments += 1;
+        let effect = edited_effect(&shown, &view).expect("changed effect");
+        assert!(effect.color.use_blackbody);
+
+        let mut view = shown.clone();
+        view.effect.color.use_blackbody = true;
+        view.effect.color.tip[0] += 0.1;
+        let effect = edited_effect(&shown, &view).expect("changed effect");
+        assert!(!effect.color.use_blackbody);
     }
 }

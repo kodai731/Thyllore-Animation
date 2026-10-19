@@ -5,10 +5,12 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::blend_shape_sections;
+use super::bone::bone_section;
 use super::constraint::constraint_section;
 use super::form_window::{FormPlacement, FormSection, FormWindow};
 use super::inspector_sections::{entity_sections, no_selection_section};
-use super::spring_bone::spring_bone_section;
+use super::inspector_target::{inspector_target, InspectorTarget};
+use super::spring_bone::{bone_spring_section, spring_bone_section};
 
 fn inspector_form(
     world: &World,
@@ -22,8 +24,8 @@ fn inspector_form(
     };
     let hierarchy_state = world.resource::<HierarchyState>().clone();
 
-    let sections = match hierarchy_state.selected_entity {
-        Some(entity) => {
+    let sections = match inspector_target(&hierarchy_state) {
+        Some(InspectorTarget::Entity(entity)) => {
             let data = collect_inspector_data(world, entity, assets, graphics);
             let mut sections: Vec<Box<dyn FormSection>> = entity_sections(world, &data);
             sections.push(constraint_section(world, assets, &hierarchy_state));
@@ -31,6 +33,11 @@ fn inspector_form(
             sections.extend(blend_shape_sections(world, entity, assets, graphics));
             sections
         }
+        Some(InspectorTarget::Bone(bone_id)) => vec![
+            bone_section(assets, bone_id),
+            bone_spring_section(world, assets, bone_id),
+            constraint_section(world, assets, &hierarchy_state),
+        ],
         None => vec![no_selection_section()],
     };
 

@@ -1,9 +1,15 @@
 use anyhow::{anyhow, Result};
 use cgmath::Vector3;
 
-use crate::ecs::resource::{AssetEditCommand, AssetEditQueue};
+use crate::asset::AssetStorage;
+use crate::ecs::events::UiCommand;
+use crate::ecs::resource::{
+    AssetEditCommand, AssetEditQueue, HierarchyDisplayMode, HierarchyState,
+};
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::batch_run_systems::{unit_action_parse, BatchAction};
 
@@ -127,7 +133,54 @@ fn set_bone_offset_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     }))
 }
 
+#[derive(Debug)]
+struct SelectBoneByName(String);
+
+impl UiCommand for SelectBoneByName {
+    fn apply(
+        self: Box<Self>,
+        world: &mut World,
+        assets: &mut AssetStorage,
+        graphics: &GraphicsResources,
+    ) {
+        let bone_id = assets
+            .skeletons
+            .values()
+            .next()
+            .and_then(|asset| asset.skeleton.bone_name_to_id.get(&self.0).copied());
+        let Some(bone_id) = bone_id else {
+            msg_warn!("select_bone: no bone named '{}'", self.0);
+            return;
+        };
+        world.resource_mut::<HierarchyState>().display_mode = HierarchyDisplayMode::Bones;
+        Box::new(HierarchyEvent::SelectBone(bone_id)).apply(world, assets, graphics);
+    }
+}
+
+#[derive(Debug)]
+struct SelectBone(String);
+
+impl BatchAction for SelectBone {
+    fn name(&self) -> &'static str {
+        "select_bone"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(SelectBoneByName(self.0.clone()));
+    }
+}
+
+const SELECT_BONE_USAGE: &str = "select_bone expects select_bone=<name>";
+
+fn select_bone_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("select_bone=")?;
+    Some(
+        non_empty(spec, SELECT_BONE_USAGE)
+            .map(|bone| Box::new(SelectBone(bone)) as Box<dyn BatchAction>),
+    )
+}
+
 crate::batch_action!("add_bone", add_bone_parse);
+crate::batch_action!("select_bone", select_bone_parse);
 crate::batch_action!("remove_bone", remove_bone_parse);
 crate::batch_action!("set_bone_offset", set_bone_offset_parse);
 crate::batch_action!("undo", unit_action_parse::<Undo>);

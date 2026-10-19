@@ -1,5 +1,6 @@
 mod avatar_setup;
 mod blend_shape_inspector;
+mod bone;
 mod bone_choice;
 mod bottom_panel;
 mod clip_browser_window;
@@ -13,6 +14,7 @@ mod flame;
 pub(crate) mod form_window;
 mod hierarchy_window;
 mod inspector_sections;
+mod inspector_target;
 mod inspector_window;
 mod key_modifier;
 mod lightning;

@@ -155,11 +155,18 @@ pub fn joint_rows() -> Vec<UiRow<JointView>> {
         },
     });
 
-    rows.extend(SPRING_JOINT_UI_PARAMS.iter().map(|param| UiRow::Scalar {
-        param,
-        scalars: &JOINT_SCALARS,
-    }));
+    rows.extend(joint_param_rows());
     rows
+}
+
+pub fn joint_param_rows() -> Vec<UiRow<JointView>> {
+    SPRING_JOINT_UI_PARAMS
+        .iter()
+        .map(|param| UiRow::Scalar {
+            param,
+            scalars: &JOINT_SCALARS,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -183,6 +190,17 @@ mod tests {
                 "hit_radius",
             ]
         );
+    }
+
+    #[test]
+    fn joint_param_rows_follow_the_declaration_order() {
+        let rows = joint_param_rows();
+        let labels = visible_labels(&rows);
+        let declared: Vec<&str> = SPRING_JOINT_UI_PARAMS
+            .iter()
+            .map(|param| param.name)
+            .collect();
+        assert_eq!(labels, declared);
     }
 
     #[test]

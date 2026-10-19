@@ -2,20 +2,23 @@ use crate::platform::ui::numeric_format::numeric_format;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FLAME_DOMAIN;
-use crate::ecs::resource::{FlameUIState, ViewportInput};
-use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
-use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::resource::ViewportInput;
+use crate::ecs::systems::flame::FlameUiCommand;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::super::param_widgets::{draw_preset_combo, rows_from_params, EditedScalars};
+use super::super::param_widgets::{rows_from_params, EditedScalars};
 use super::super::scene_overlay::send_key_button;
 use super::super::ui_rows::draw_rows;
-use super::fit_browser::{build_texture_fit_browser, canonical_dir_or, validate_texture_fit_path};
+use super::fit_browser::{build_texture_fit_browser, canonical_dir_or};
+use super::head_rows::{fit_rows, head_rows, style_rows};
 use super::render_settings::draw_flame_render_settings;
+use super::section_view::{
+    draw_fit_path_status, read_flame_section_view, scan_flame_assets, send_flame_requests,
+    write_back_flame_ui,
+};
 
 fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
@@ -101,256 +104,21 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
         let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
-        let clamped_index = selected_flame_entity
-            .and_then(|entity| flames.iter().position(|&e| e == entity))
-            .unwrap_or(0);
-
-        // Instance selector combo (when >1 flame)
-        if flames.len() > 1 {
-            let mut current = clamped_index;
-            let items: Vec<String> = flames
-                .iter()
-                .enumerate()
-                .map(|(i, &entity)| {
-                    ecs_world
-                        .get_component::<crate::ecs::world::Name>(entity)
-                        .map(|n| n.0.clone())
-                        .unwrap_or_else(|| format!("Flame {}", i + 1))
-                })
-                .collect();
-            if ui.combo_simple_string("Instance", &mut current, &items) {
-                ecs_world.send_command(OverlayEvent::SelectEffectInstance {
-                    key: FLAME_SPAWN_HOOK.key,
-                    index: current,
-                });
-            }
+        let shown = read_flame_section_view(ecs_world, &flames, selected_flame_entity);
+        let mut view = shown.clone();
+        scan_flame_assets(&mut view.flame_ui);
+        draw_rows(ui, ecs_world, &head_rows(&view), &mut view, |_, _| {});
+        draw_rows(ui, ecs_world, &fit_rows(&view), &mut view, |_, _| {});
+        draw_fit_path_status(ui, &mut view.flame_ui);
+        if view.flame_ui.texture_fit_browser_open && !shown.flame_ui.texture_fit_browser_open {
+            view.flame_ui.texture_fit_browser_dir =
+                canonical_dir_or(&view.flame_ui.texture_fit_browser_dir);
         }
-
-        let applied_preset = selected_flame_entity.and_then(|entity| {
-            ecs_world
-                .get_component::<crate::ecs::component::AppliedFlamePreset>(entity)
-                .map(|preset| preset.name.clone())
-        });
-        // The slider block below re-sends the (pre-apply) effect every frame;
-        // that send must be skipped on the frame an Apply button fires or it
-        // overwrites the applied preset/fit in the same dispatch.
-        let mut effect_applied_this_frame = false;
+        build_texture_fit_browser(ui, &mut view.flame_ui);
+        draw_rows(ui, ecs_world, &style_rows(&view), &mut view, |_, _| {});
+        let effect_applied_this_frame = send_flame_requests(ecs_world, &shown, &view);
+        write_back_flame_ui(ecs_world, view.flame_ui);
         {
-            let mut flame_ui = ecs_world.resource_mut::<FlameUIState>();
-            if let Some(chosen) = draw_preset_combo(
-                ui,
-                "Flame Preset",
-                thyllore_effect_core::FLAME_PRESET_NAMES,
-                applied_preset.as_deref(),
-            ) {
-                if selected_flame_entity.is_some() {
-                    // Keyed scalar curves re-stamp their channels every
-                    // frame and would silently pin the old look, so a
-                    // preset stamp also clears them (undo restores).
-                    ecs_world.send_command(ScalarCurveEvent::ClearScalarKeys);
-                    ecs_world.send_command(FlameUiCommand::ApplyPreset(chosen));
-                    effect_applied_this_frame = true;
-                }
-            }
-
-            ui.separator();
-            ui.text("Texture Fit");
-
-            // Scan textures on first frame
-            if !flame_ui.texture_fit_scan_done {
-                let scan_dir = std::path::Path::new(FLAMES_TEXTURE_DIR);
-                if let Ok(entries) = std::fs::read_dir(scan_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(ext) = entry.path().extension() {
-                            if ext == "png" {
-                                if let Some(name) = entry.file_name().to_str() {
-                                    flame_ui.texture_fit_scan.push(name.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-                flame_ui.texture_fit_scan_done = true;
-            }
-
-            // Combo box for texture selection
-            let mut scan_items: Vec<String> = vec!["(custom path)".to_string()];
-            scan_items.extend(flame_ui.texture_fit_scan.iter().cloned());
-            let mut scan_selected = 0usize;
-            if ui.combo_simple_string("Fit Texture", &mut scan_selected, &scan_items) {
-                if scan_selected > 0 {
-                    let name = &flame_ui.texture_fit_scan[scan_selected - 1];
-                    flame_ui.texture_fit_path = format!("{}/{}", FLAMES_TEXTURE_DIR, name);
-                } else {
-                    flame_ui.texture_fit_path.clear();
-                }
-            }
-            ui.same_line();
-            if ui.small_button("Rescan") {
-                flame_ui.texture_fit_scan_done = false;
-                flame_ui.texture_fit_scan.clear();
-            }
-
-            ui.input_text("Fit Image (png)", &mut flame_ui.texture_fit_path)
-                .build();
-            if ui.small_button("Browse...") {
-                flame_ui.texture_fit_browser_open = true;
-                if flame_ui.texture_fit_browser_dir.is_empty() {
-                    flame_ui.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
-                }
-                flame_ui.texture_fit_browser_dir =
-                    canonical_dir_or(&flame_ui.texture_fit_browser_dir);
-            }
-            ui.same_line();
-
-            // Validation indicator: existence plus a lightweight PNG header read,
-            // cached per path so the header is only parsed when the path changes.
-            if flame_ui.texture_fit_path != flame_ui.texture_fit_path_validated {
-                flame_ui.texture_fit_path_info =
-                    validate_texture_fit_path(&flame_ui.texture_fit_path);
-                flame_ui.texture_fit_path_validated = flame_ui.texture_fit_path.clone();
-            }
-            if flame_ui.texture_fit_path.is_empty() {
-                ui.text_disabled("enter a texture path");
-            } else if flame_ui.texture_fit_path_info.starts_with("ok:") {
-                ui.text_colored([0.3, 0.9, 0.3, 1.0], &flame_ui.texture_fit_path_info);
-            } else {
-                ui.text_colored([0.9, 0.3, 0.3, 1.0], &flame_ui.texture_fit_path_info);
-            }
-
-            build_texture_fit_browser(ui, &mut flame_ui);
-
-            ui.slider("Fit Blend", 0.0, 1.0, &mut flame_ui.texture_fit_blend);
-            ui.checkbox("Silhouette", &mut flame_ui.texture_fit_groups[0]);
-            ui.checkbox("Color", &mut flame_ui.texture_fit_groups[1]);
-            {
-                let _disabled = ui.begin_disabled_with_cond(flame_ui.texture_fit_profile);
-                ui.checkbox("Turbulence", &mut flame_ui.texture_fit_groups[2]);
-            }
-            if flame_ui.texture_fit_profile && ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Ignored in profile (reproduction) mode: the turbulence \
-                     estimate is far below the calibrated pattern amplitude \
-                     and would crush the noise",
-                );
-            }
-            ui.checkbox("Tilt", &mut flame_ui.texture_fit_groups[3]);
-
-            if ui.radio_button("statistics (projection)", !flame_ui.texture_fit_profile) {
-                flame_ui.texture_fit_profile = false;
-            }
-            ui.same_line();
-            if ui.radio_button("profile (reproduction)", flame_ui.texture_fit_profile) {
-                flame_ui.texture_fit_profile = true;
-            }
-
-            if ui.button("Apply Texture Fit") {
-                let path = flame_ui.texture_fit_path.clone();
-                let blend = flame_ui.texture_fit_blend;
-                let groups = thyllore_effect_core::TextureFitGroups {
-                    silhouette: flame_ui.texture_fit_groups[0],
-                    color: flame_ui.texture_fit_groups[1],
-                    turbulence: flame_ui.texture_fit_groups[2],
-                    tilt: flame_ui.texture_fit_groups[3],
-                };
-                if selected_flame_entity.is_some() {
-                    ecs_world.send_command(FlameUiCommand::ApplyTextureFit {
-                        path: path.clone(),
-                        blend,
-                        groups: [
-                            groups.silhouette,
-                            groups.color,
-                            groups.turbulence,
-                            groups.tilt,
-                        ],
-                        profile: flame_ui.texture_fit_profile,
-                    });
-                    effect_applied_this_frame = true;
-                }
-            }
-
-            ui.separator();
-            ui.text("Style");
-
-            if !flame_ui.style_scan_done {
-                let scan_dir = std::path::Path::new(FLAMES_STYLE_DIR);
-                if let Ok(entries) = std::fs::read_dir(scan_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if name.ends_with(".style.ron") {
-                                flame_ui.style_scan.push(name.to_string());
-                            }
-                        }
-                    }
-                    flame_ui.style_scan.sort();
-                }
-                flame_ui.style_scan_done = true;
-            }
-
-            if flame_ui.style_scan.is_empty() {
-                ui.text_disabled(format!("no styles in {}", FLAMES_STYLE_DIR));
-            } else {
-                let mut style_index = flame_ui.style_index.min(flame_ui.style_scan.len() - 1);
-                ui.combo_simple_string("Style File", &mut style_index, &flame_ui.style_scan);
-                flame_ui.style_index = style_index;
-            }
-            ui.same_line();
-            if ui.small_button("Rescan##style") {
-                flame_ui.style_scan_done = false;
-                flame_ui.style_scan.clear();
-            }
-
-            ui.checkbox("Motion##style", &mut flame_ui.style_groups[0]);
-            ui.same_line();
-            ui.checkbox("Texture##style", &mut flame_ui.style_groups[1]);
-            ui.same_line();
-            ui.checkbox("Optics##style", &mut flame_ui.style_groups[2]);
-
-            if ui.button("Apply Style") {
-                if let Some(name) = flame_ui.style_scan.get(flame_ui.style_index) {
-                    if selected_flame_entity.is_some() {
-                        ecs_world.send_command(FlameUiCommand::ApplyStyle {
-                            path: format!("{}/{}", FLAMES_STYLE_DIR, name),
-                            groups: flame_ui.style_groups,
-                        });
-                        effect_applied_this_frame = true;
-                    }
-                }
-            }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Apply the selected style file's parameters (Style-owned only, \
-                     dimensionless: lengths scale with the flame's radius, opacity \
-                     via tau0). Fields the style leaves unset keep their current \
-                     values",
-                );
-            }
-            if let Some(selected_flame) = selected_flame_entity {
-                if let Some(applied) = ecs_world
-                    .get_component::<crate::ecs::component::AppliedFlameStyle>(selected_flame)
-                {
-                    ui.same_line();
-                    ui.text_disabled(format!("applied: {} v{}", applied.name, applied.version));
-                }
-            }
-
-            ui.input_text("Save As##style", &mut flame_ui.style_save_name)
-                .build();
-            ui.same_line();
-            if ui.small_button("Save Style") {
-                let name = flame_ui.style_save_name.trim().to_string();
-                if !name.is_empty() && selected_flame_entity.is_some() {
-                    ecs_world.send_command(FlameUiCommand::SaveStyle { name });
-                }
-            }
-            if ui.is_item_hovered() {
-                ui.tooltip_text(
-                    "Save the selected flame's current look as \
-                     assets/flames/styles/<name>.style.ron (all Style-owned \
-                     parameters, lengths over r0, opacity as tau0)",
-                );
-            }
-
             if let Some(selected_flame) = selected_flame_entity {
                 if let Some(effect) = ecs_world.get_component::<FlameEffect>(selected_flame) {
                     let mut effect_copy = effect.clone();
@@ -419,9 +187,6 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     }
                     if ui.button("Curves") {
                         ecs_world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
-                    }
-                    if ui.button("Add Flame") {
-                        ecs_world.send_command(ScalarCurveEvent::AddEffect(FLAME_SPAWN_HOOK.key));
                     }
 
                     // Trail checkbox and slider

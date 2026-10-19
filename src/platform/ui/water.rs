@@ -80,7 +80,7 @@ fn water_tail_rows() -> Vec<UiRow<WaterSectionView>> {
             on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
         },
         UiRow::Group {
-            title: "Water Debug",
+            title: "Water Debug".into(),
             initially_open: false,
             rows: water_debug_rows(),
         },

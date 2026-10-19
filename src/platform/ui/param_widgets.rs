@@ -73,7 +73,7 @@ pub fn rows_from_params<C>(
         }
     }
     rows.push(UiRow::Group {
-        title: "Advanced",
+        title: "Advanced".into(),
         initially_open: false,
         rows: group_rows,
     });

@@ -85,17 +85,13 @@ pub(super) fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
     );
 
     let advanced_rows = rows.iter_mut().find_map(|row| match row {
-        UiRow::Group {
-            title: "Advanced",
-            rows,
-            ..
-        } => Some(rows),
+        UiRow::Group { title, rows, .. } if *title == "Advanced" => Some(rows),
         _ => None,
     });
     match advanced_rows {
         Some(advanced_rows) => advanced_rows.extend(manual_param_rows()),
         None => rows.push(UiRow::Group {
-            title: "Advanced",
+            title: "Advanced".into(),
             initially_open: false,
             rows: manual_param_rows(),
         }),
@@ -296,7 +292,7 @@ pub(super) fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
     ));
 
     vec![UiRow::Group {
-        title: "Flame Debug",
+        title: "Flame Debug".into(),
         initially_open: false,
         rows,
     }]

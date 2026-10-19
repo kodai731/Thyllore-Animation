@@ -13,9 +13,8 @@ use crate::ecs::systems::{
     find_morph_channel_names, find_morph_siblings,
 };
 use crate::ecs::world::{Children, Entity, World};
-use crate::platform::ui::theme::section_header;
-use crate::platform::ui::theme::SectionDefault;
-use crate::platform::ui::ui_rows::{draw_rows, ListRows, NamedValue, UiRow};
+use crate::platform::ui::form_window::{message_section, rows_section, FormSection};
+use crate::platform::ui::ui_rows::{ListRows, NamedValue, UiRow};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone)]
@@ -159,62 +158,61 @@ fn expression_save_command(_view: &ExpressionPresetsView) -> Box<dyn UiCommand> 
     Box::new(SaveExpressionLibraryCommand)
 }
 
-pub fn build_blend_shape_section(
-    ui: &imgui::Ui,
+pub fn blend_shape_sections(
     world: &World,
     entity: Entity,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
-) {
+) -> Vec<Box<dyn FormSection>> {
     let morph_entities = collect_morph_entities(world, entity);
     if morph_entities.is_empty() {
-        return;
+        return vec![message_section(
+            "Blend Shapes",
+            true,
+            "No blend shapes".to_string(),
+        )];
     }
 
     let representatives = collect_sibling_representatives(world, &morph_entities, assets, graphics);
 
-    for representative in representatives {
-        let Some(morph_weights) = world.get_component::<MorphWeights>(representative) else {
-            continue;
-        };
-        let Some(channel_names) = find_morph_channel_names(world, representative, assets, graphics)
-        else {
-            continue;
-        };
-        let deforming_channels =
-            find_deforming_morph_channels(world, representative, assets, graphics);
+    let (search, mirror_edit) = world
+        .get_resource::<BlendShapeInspectorState>()
+        .map(|state| (state.search.clone(), state.mirror_edit))
+        .unwrap_or_default();
 
-        let header = format!(
-            "Blend Shapes ({})###blend_shapes_{}",
-            format_section_title(world, representative, assets, graphics),
-            representative
-        );
-        if !section_header(ui, world, &header, SectionDefault::Open) {
-            continue;
-        }
+    let mut sections: Vec<Box<dyn FormSection>> = representatives
+        .into_iter()
+        .filter_map(|representative| {
+            let morph_weights = world.get_component::<MorphWeights>(representative)?;
+            let channel_names = find_morph_channel_names(world, representative, assets, graphics)?;
+            let deforming_channels =
+                find_deforming_morph_channels(world, representative, assets, graphics);
 
-        let (search, mirror_edit) = world
-            .get_resource::<BlendShapeInspectorState>()
-            .map(|state| (state.search.clone(), state.mirror_edit))
-            .unwrap_or_default();
-        let mut view = BlendShapeView {
-            entity: representative,
-            names: channel_names,
-            weights: morph_weights.weights.clone(),
-            deforming_channels,
-            search,
-            mirror_edit,
-        };
+            let view = BlendShapeView {
+                entity: representative,
+                names: channel_names,
+                weights: morph_weights.weights.clone(),
+                deforming_channels,
+                search: search.clone(),
+                mirror_edit,
+            };
 
-        let id_token = ui.push_id(representative as i32);
-        draw_rows(ui, world, &blend_shape_rows(), &mut view, |_, _| {});
-        id_token.pop();
-
-        if let Some(mut state) = world.get_resource_mut::<BlendShapeInspectorState>() {
-            state.search = view.search;
-            state.mirror_edit = view.mirror_edit;
-        }
-    }
+            Some(rows_section(
+                vec![UiRow::Group {
+                    title: format!(
+                        "Blend Shapes ({})###blend_shapes_{}",
+                        format_section_title(world, representative, assets, graphics),
+                        representative
+                    )
+                    .into(),
+                    initially_open: true,
+                    rows: blend_shape_rows(),
+                }],
+                view,
+                commit_blend_shape_view,
+            ))
+        })
+        .collect();
 
     if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
         let (capture_name, presets): (String, Vec<(String, usize)>) = world
@@ -230,16 +228,42 @@ pub fn build_blend_shape_section(
                 (capture_name, presets)
             })
             .unwrap_or((String::new(), Vec::new()));
-        let mut view = ExpressionPresetsView {
+        let view = ExpressionPresetsView {
             entity: expression_entity,
             presets,
             capture_name,
         };
-        if section_header(ui, world, "Expression Presets", SectionDefault::Closed) {
-            draw_rows(ui, world, &expression_presets_rows(), &mut view, |_, _| {});
+        sections.push(rows_section(
+            vec![UiRow::Group {
+                title: "Expression Presets".into(),
+                initially_open: false,
+                rows: expression_presets_rows(),
+            }],
+            view,
+            commit_expression_presets_view,
+        ));
+    }
+
+    sections
+}
+
+fn commit_blend_shape_view(world: &World, shown: &BlendShapeView, view: &BlendShapeView) {
+    if view.search != shown.search || view.mirror_edit != shown.mirror_edit {
+        if let Some(mut state) = world.get_resource_mut::<BlendShapeInspectorState>() {
+            state.search = view.search.clone();
+            state.mirror_edit = view.mirror_edit;
         }
+    }
+}
+
+fn commit_expression_presets_view(
+    world: &World,
+    shown: &ExpressionPresetsView,
+    view: &ExpressionPresetsView,
+) {
+    if view.capture_name != shown.capture_name {
         if let Some(mut state) = world.get_resource_mut::<ExpressionLibraryState>() {
-            state.capture_name = view.capture_name;
+            state.capture_name = view.capture_name.clone();
         }
     }
 }
@@ -590,5 +614,128 @@ mod tests {
         let items = preset_items(&World::new(), &view);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].0, "Empty Preset (empty)");
+    }
+
+    #[test]
+    fn commit_blend_shape_view_no_change_when_shown_equals_view() {
+        let mut world = World::new();
+        let initial_search = "test".to_string();
+        let state = BlendShapeInspectorState {
+            search: initial_search.clone(),
+            mirror_edit: true,
+        };
+        world.insert_resource(state);
+
+        let view = BlendShapeView {
+            entity: 0,
+            names: vec!["a".to_string()],
+            weights: vec![1.0],
+            deforming_channels: vec![0],
+            search: "test".to_string(),
+            mirror_edit: true,
+        };
+
+        commit_blend_shape_view(&world, &view, &view);
+
+        let stored = world.get_resource::<BlendShapeInspectorState>().unwrap();
+        assert_eq!(stored.search, initial_search);
+        assert_eq!(stored.mirror_edit, true);
+    }
+
+    #[test]
+    fn commit_blend_shape_view_reflects_search_change() {
+        let mut world = World::new();
+        let state = BlendShapeInspectorState {
+            search: "old".to_string(),
+            mirror_edit: false,
+        };
+        world.insert_resource(state);
+
+        let shown = BlendShapeView {
+            entity: 0,
+            names: vec!["a".to_string()],
+            weights: vec![1.0],
+            deforming_channels: vec![0],
+            search: "old".to_string(),
+            mirror_edit: false,
+        };
+
+        let mut view = shown.clone();
+        view.search = "new".to_string();
+
+        commit_blend_shape_view(&world, &shown, &view);
+
+        let stored = world.get_resource::<BlendShapeInspectorState>().unwrap();
+        assert_eq!(stored.search, "new");
+    }
+
+    #[test]
+    fn commit_blend_shape_view_reflects_mirror_edit_change() {
+        let mut world = World::new();
+        let state = BlendShapeInspectorState {
+            search: "test".to_string(),
+            mirror_edit: false,
+        };
+        world.insert_resource(state);
+
+        let shown = BlendShapeView {
+            entity: 0,
+            names: vec!["a".to_string()],
+            weights: vec![1.0],
+            deforming_channels: vec![0],
+            search: "test".to_string(),
+            mirror_edit: false,
+        };
+
+        let mut view = shown.clone();
+        view.mirror_edit = true;
+
+        commit_blend_shape_view(&world, &shown, &view);
+
+        let stored = world.get_resource::<BlendShapeInspectorState>().unwrap();
+        assert_eq!(stored.mirror_edit, true);
+    }
+
+    #[test]
+    fn commit_expression_presets_view_no_change_when_shown_equals_view() {
+        let mut world = World::new();
+        let initial_capture_name = String::new();
+        let state = ExpressionLibraryState::default();
+        world.insert_resource(state);
+
+        let view = ExpressionPresetsView {
+            entity: 0,
+            presets: vec![],
+            capture_name: "test".to_string(),
+        };
+
+        commit_expression_presets_view(&world, &view, &view);
+
+        let stored = world.get_resource::<ExpressionLibraryState>().unwrap();
+        assert_eq!(stored.capture_name, initial_capture_name);
+    }
+
+    #[test]
+    fn commit_expression_presets_view_reflects_capture_name_change() {
+        let mut world = World::new();
+        let state = ExpressionLibraryState::default();
+        world.insert_resource(state);
+
+        let shown = ExpressionPresetsView {
+            entity: 0,
+            presets: vec![],
+            capture_name: "old".to_string(),
+        };
+
+        let view = ExpressionPresetsView {
+            entity: 0,
+            presets: vec![],
+            capture_name: "new".to_string(),
+        };
+
+        commit_expression_presets_view(&world, &shown, &view);
+
+        let stored = world.get_resource::<ExpressionLibraryState>().unwrap();
+        assert_eq!(stored.capture_name, "new");
     }
 }

@@ -10,6 +10,7 @@ mod debug_window;
 mod effect_rows;
 mod effect_sections;
 mod flame;
+pub(crate) mod form_window;
 mod hierarchy_window;
 mod inspector_window;
 mod key_modifier;

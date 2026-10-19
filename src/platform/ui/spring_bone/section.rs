@@ -10,8 +10,6 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
-use crate::platform::ui::theme::section_header;
-use crate::platform::ui::theme::SectionDefault;
 
 use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;
@@ -19,7 +17,8 @@ use super::group_rows::group_list_row;
 use crate::animation::BoneId;
 
 use super::super::bone_choice::{bone_options, collect_bone_list};
-use super::super::ui_rows::{draw_rows, ChoiceOption, UiRow};
+use super::super::form_window::{message_section, rows_section, FormSection};
+use super::super::ui_rows::{ChoiceOption, UiRow};
 
 struct AddChainPath;
 
@@ -61,32 +60,23 @@ pub struct SpringView {
     pub gizmo_visible: bool,
 }
 
-pub fn build_spring_bone_section(
-    ui: &imgui::Ui,
+pub fn spring_bone_section(
     world: &World,
-    _entity: Entity,
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
-) {
-    if !section_header(ui, world, "Spring Bones", SectionDefault::Open) {
-        return;
-    }
-
+) -> Box<dyn FormSection> {
     let target_entity = find_spring_bone_entity(world);
     let Some(target_entity) = target_entity else {
-        ui.text("No spring bone entity");
-        return;
+        return message_section("Spring Bones", true, "No spring bone entity".to_string());
     };
-
-    let bone_list = collect_bone_list(assets);
 
     let setup = match world.get_component::<SpringBoneSetup>(target_entity) {
         Some(s) => s.clone(),
         None => {
-            ui.text("No SpringBoneSetup");
-            return;
+            return message_section("Spring Bones", true, "No SpringBoneSetup".to_string());
         }
     };
+    let bone_list = collect_bone_list(assets);
 
     let gizmo_visible = world
         .get_resource::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
@@ -95,7 +85,7 @@ pub fn build_spring_bone_section(
 
     let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
 
-    let mut view = SpringView {
+    let view = SpringView {
         entity: target_entity,
         chains: setup.chains,
         colliders: setup.colliders,
@@ -108,15 +98,30 @@ pub fn build_spring_bone_section(
         gizmo_visible,
     };
 
-    draw_rows(ui, world, &section_rows(), &mut view, |_, _| {});
+    rows_section(
+        vec![UiRow::Group {
+            title: "Spring Bones".into(),
+            initially_open: true,
+            rows: section_rows(),
+        }],
+        view,
+        commit_spring_view,
+    )
+}
 
-    if let Some(mut stored_state) = world.get_resource_mut::<SpringBoneInspectorState>() {
-        stored_state.add_chain = view.add_chain;
-        stored_state.add_collider = view.add_collider;
-        stored_state.add_collider_group_name = view.add_group_name;
+fn commit_spring_view(world: &World, shown: &SpringView, view: &SpringView) {
+    if view.add_chain != shown.add_chain
+        || view.add_collider != shown.add_collider
+        || view.add_group_name != shown.add_group_name
+    {
+        if let Some(mut stored_state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+            stored_state.add_chain = view.add_chain.clone();
+            stored_state.add_collider = view.add_collider.clone();
+            stored_state.add_collider_group_name = view.add_group_name.clone();
+        }
     }
 
-    if view.gizmo_visible != gizmo_visible {
+    if view.gizmo_visible != shown.gizmo_visible {
         world.send_command(SpringBoneEvent::ToggleGizmo(view.gizmo_visible));
     }
 }
@@ -239,4 +244,79 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
         },
     });
     rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::events::UiCommandQueue;
+
+    fn make_world() -> World {
+        let mut world = World::new();
+        world.insert_resource(SpringBoneInspectorState::default());
+        world.insert_resource(UiCommandQueue::default());
+        world
+    }
+
+    fn base_view(entity: Entity) -> SpringView {
+        SpringView {
+            entity,
+            chains: Vec::new(),
+            colliders: Vec::new(),
+            groups: Vec::new(),
+            bones: std::rc::Rc::new([]),
+            selected_bone: None,
+            add_chain: AddChainForm::default(),
+            add_collider: AddColliderForm::default(),
+            add_group_name: "NewGroup".to_string(),
+            gizmo_visible: false,
+        }
+    }
+
+    #[test]
+    fn no_change_when_shown_equals_view() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let view = base_view(entity);
+        let shown = view.clone();
+
+        commit_spring_view(&world, &shown, &view);
+
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert_eq!(state.add_chain, AddChainForm::default());
+        assert_eq!(state.add_collider, AddColliderForm::default());
+        assert_eq!(state.add_collider_group_name, "NewGroup");
+
+        let queue = world.resource::<UiCommandQueue>();
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn chain_length_change_is_reflected() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let shown = base_view(entity);
+        let mut view = shown.clone();
+        view.add_chain.chain_length = 5;
+
+        commit_spring_view(&world, &shown, &view);
+
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert_eq!(state.add_chain.chain_length, 5);
+    }
+
+    #[test]
+    fn gizmo_visible_toggle_sends_command() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let shown = base_view(entity);
+        let mut view = shown.clone();
+        view.gizmo_visible = true;
+
+        commit_spring_view(&world, &shown, &view);
+
+        let mut queue = world.get_resource_mut::<UiCommandQueue>().unwrap();
+        let drained: Vec<_> = queue.drain().collect();
+        assert_eq!(drained.len(), 1);
+    }
 }

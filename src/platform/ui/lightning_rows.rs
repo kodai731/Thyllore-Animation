@@ -162,7 +162,7 @@ pub fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
             on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
         },
         UiRow::Group {
-            title: "Lightning Debug",
+            title: "Lightning Debug".into(),
             initially_open: false,
             rows: lightning_debug_rows(),
         },
@@ -302,13 +302,11 @@ mod tests {
         let rows = lightning_tail_rows();
         let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
         assert_eq!(labels, ["Curves"]);
-        assert!(matches!(
-            rows.last(),
-            Some(UiRow::Group {
-                title: "Lightning Debug",
-                ..
-            })
-        ));
+        let last = rows.last().unwrap();
+        let UiRow::Group { title, .. } = last else {
+            panic!("last row is not a Group");
+        };
+        assert_eq!(&**title, "Lightning Debug");
     }
 
     #[test]

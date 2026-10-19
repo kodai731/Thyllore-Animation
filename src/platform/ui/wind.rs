@@ -107,7 +107,7 @@ fn wind_tail_rows() -> Vec<UiRow<WindSectionView>> {
             on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
         },
         UiRow::Group {
-            title: "Wind Debug",
+            title: "Wind Debug".into(),
             initially_open: false,
             rows: wind_debug_rows(),
         },

@@ -17,7 +17,7 @@ impl Default for AddChainForm {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct AddColliderForm {
     pub bone: BoneId,
     pub capsule: bool,

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
 use thyllore_effect_core::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
@@ -88,7 +90,7 @@ pub enum UiRow<C: 'static> {
         on_pick: fn(&C, &NamedChoice, usize) -> Box<dyn UiCommand>,
     },
     Group {
-        title: &'static str,
+        title: Cow<'static, str>,
         initially_open: bool,
         rows: Vec<UiRow<C>>,
     },
@@ -346,7 +348,7 @@ fn draw_row<C>(
             } else {
                 SectionDefault::Closed
             };
-            if !section_header(ui, world, title, default) {
+            if !section_header(ui, world, &title, default) {
                 return false;
             }
             let mut group_changed = false;

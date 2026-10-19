@@ -11,7 +11,8 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::{Animator, Entity, World};
 
 use super::super::bone_choice::collect_bone_list;
-use super::super::ui_rows::{draw_rows, ChoiceOption, ListRows, UiRow};
+use super::super::form_window::{message_section, rows_section, FormSection};
+use super::super::ui_rows::{ChoiceOption, ListRows, UiRow};
 use super::fields::{update_event, ConstraintFields, ConstraintView};
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
@@ -26,35 +27,17 @@ pub struct ConstraintSectionView {
     pub bake: BakeForm,
 }
 
-pub fn build_constraint_section(
-    ui: &imgui::Ui,
+pub fn constraint_section(
     world: &World,
-    _entity: Entity,
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
-) {
-    if !crate::platform::ui::theme::section_header(
-        ui,
-        world,
-        "Constraints",
-        crate::platform::ui::theme::SectionDefault::Open,
-    ) {
-        return;
-    }
-
+) -> Box<dyn FormSection> {
     let target_entity = find_animated_entity(world);
     let Some(target_entity) = target_entity else {
-        ui.text("No animated entity");
-        return;
+        return message_section("Constraints", true, "No animated entity".to_string());
     };
 
     let bone_list: Rc<[(BoneId, String)]> = collect_bone_list(assets).into();
-
-    if let Some(bone_id) = hierarchy_state.selected_bone_id {
-        if let Some((_, name)) = bone_list.iter().find(|(id, _)| *id == bone_id) {
-            ui.text(&format!("Selected: {}", name));
-        }
-    }
 
     let constraint_set = world.get_component::<ConstraintSet>(target_entity);
     let entries = match constraint_set {
@@ -63,7 +46,7 @@ pub fn build_constraint_section(
     };
 
     if entries.is_empty() {
-        ui.text("No constraints");
+        return message_section("Constraints", true, "No constraints".to_string());
     }
 
     let editor_state: Option<ConstraintEditorState> = world
@@ -74,7 +57,7 @@ pub fn build_constraint_section(
         None => (3, BakeForm::default()),
     };
 
-    let mut view = ConstraintSectionView {
+    let view = ConstraintSectionView {
         entity: target_entity,
         entries,
         bones: bone_list,
@@ -83,11 +66,27 @@ pub fn build_constraint_section(
         bake,
     };
 
-    draw_rows(ui, world, &section_rows(), &mut view, |_, _| {});
+    rows_section(
+        vec![UiRow::Group {
+            title: "Constraints".into(),
+            initially_open: true,
+            rows: section_rows(),
+        }],
+        view,
+        commit_constraint_view,
+    )
+}
 
-    if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
-        editor_state.add_type_index = view.add_type_index;
-        editor_state.bake = view.bake;
+fn commit_constraint_view(
+    world: &World,
+    shown: &ConstraintSectionView,
+    view: &ConstraintSectionView,
+) {
+    if view.add_type_index != shown.add_type_index || view.bake != shown.bake {
+        if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
+            editor_state.add_type_index = view.add_type_index;
+            editor_state.bake = view.bake.clone();
+        }
     }
 }
 
@@ -128,7 +127,7 @@ pub fn section_rows() -> Vec<UiRow<ConstraintSectionView>> {
         },
         UiRow::List(Box::new(
             ListRows::<ConstraintSectionView, ConstraintView> {
-                title: "Constraints",
+                title: "Entries",
                 items: |_, view: &ConstraintSectionView| constraint_items(view),
                 rows: constraint_rows,
                 on_change: |_, _, item| Box::new(update_event(&item)) as _,
@@ -232,7 +231,7 @@ mod tests {
             [
                 "Constraint Type",
                 "Add Constraint",
-                "Constraints",
+                "Entries",
                 "sample_fps",
                 "Bake Constraints",
             ]
@@ -243,5 +242,50 @@ mod tests {
     fn section_rows_no_duplicate_labels() {
         let rows = section_rows();
         assert!(find_duplicate_labels(&rows).is_empty());
+    }
+
+    fn make_world() -> World {
+        let mut world = World::new();
+        world.insert_resource(ConstraintEditorState::default());
+        world
+    }
+
+    fn base_view(entity: Entity) -> ConstraintSectionView {
+        ConstraintSectionView {
+            entity,
+            entries: Vec::new(),
+            bones: std::rc::Rc::new([]),
+            selected_bone: None,
+            add_type_index: 3,
+            bake: BakeForm::default(),
+        }
+    }
+
+    #[test]
+    fn no_change_when_shown_equals_view() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let view = base_view(entity);
+        let shown = view.clone();
+
+        commit_constraint_view(&world, &shown, &view);
+
+        let state = world.resource::<ConstraintEditorState>();
+        assert_eq!(state.add_type_index, 3);
+        assert_eq!(state.bake.sample_fps, 30.0);
+    }
+
+    #[test]
+    fn bake_sample_fps_change_is_reflected() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let shown = base_view(entity);
+        let mut view = shown.clone();
+        view.bake.sample_fps = 60.0;
+
+        commit_constraint_view(&world, &shown, &view);
+
+        let state = world.resource::<ConstraintEditorState>();
+        assert_eq!(state.bake.sample_fps, 60.0);
     }
 }

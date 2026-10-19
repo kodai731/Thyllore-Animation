@@ -7,7 +7,7 @@ use super::ui_rows::UiRow;
 
 fn general_group() -> UiRow<SceneSettingsView> {
     UiRow::Group {
-        title: "General",
+        title: "General".into(),
         initially_open: true,
         rows: vec![
             UiRow::FloatInput {
@@ -53,7 +53,7 @@ fn overlay_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
     }
 
     UiRow::Group {
-        title: "Overlay",
+        title: "Overlay".into(),
         initially_open: true,
         rows,
     }
@@ -121,7 +121,7 @@ fn transform_gizmo_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
     });
 
     UiRow::Group {
-        title: "Transform Gizmo",
+        title: "Transform Gizmo".into(),
         initially_open: true,
         rows,
     }
@@ -195,7 +195,7 @@ fn dof_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
     }
 
     UiRow::Group {
-        title: "Depth of Field",
+        title: "Depth of Field".into(),
         initially_open: false,
         rows,
     }
@@ -345,7 +345,7 @@ fn auto_exposure_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
     }
 
     UiRow::Group {
-        title: "Auto Exposure",
+        title: "Auto Exposure".into(),
         initially_open: false,
         rows,
     }
@@ -444,7 +444,7 @@ fn onion_skinning_group() -> UiRow<SceneSettingsView> {
     }));
 
     UiRow::Group {
-        title: "Onion Skinning",
+        title: "Onion Skinning".into(),
         initially_open: false,
         rows,
     }
@@ -531,7 +531,7 @@ mod tests {
             .enumerate()
             .map(|(i, row)| {
                 if let UiRow::Group { title, .. } = row {
-                    *title
+                    &**title
                 } else {
                     panic!("row {} is not a Group", i);
                 }

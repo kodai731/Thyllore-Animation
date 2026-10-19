@@ -14,9 +14,9 @@ use crate::platform::ui::theme::{entity_icon, Icon};
 use crate::platform::ui::theme::{property_label, vector3_field};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::blend_shape_inspector::build_blend_shape_section;
-use super::constraint::build_constraint_section;
-use super::spring_bone::build_spring_bone_section;
+use super::blend_shape_inspector::blend_shape_sections;
+use super::constraint::constraint_section;
+use super::spring_bone::spring_bone_section;
 use crate::ecs::resource::LayoutSnapshot;
 
 fn draw_inspector_window(
@@ -60,11 +60,15 @@ fn draw_inspector_window(
 
                 build_visible_section(ui, world, &data);
 
-                build_constraint_section(ui, world, entity, assets, state);
+                let section = constraint_section(world, assets, state);
+                section.draw(ui, world);
 
-                build_spring_bone_section(ui, world, entity, assets, state);
+                let section = spring_bone_section(world, assets, state);
+                section.draw(ui, world);
 
-                build_blend_shape_section(ui, world, entity, assets, graphics);
+                for section in blend_shape_sections(world, entity, assets, graphics) {
+                    section.draw(ui, world);
+                }
             } else {
                 ui.text("No entity selected");
             }

@@ -28,7 +28,7 @@ fn inspector_form(
         Some(InspectorTarget::Entity(entity)) => {
             let data = collect_inspector_data(world, entity, assets, graphics);
             let mut sections: Vec<Box<dyn FormSection>> = entity_sections(world, &data);
-            sections.push(constraint_section(world, assets, &hierarchy_state));
+            sections.push(constraint_section(world, assets, &hierarchy_state, None));
             sections.push(spring_bone_section(world, assets, &hierarchy_state));
             sections.extend(blend_shape_sections(world, entity, assets, graphics));
             sections
@@ -36,7 +36,7 @@ fn inspector_form(
         Some(InspectorTarget::Bone(bone_id)) => vec![
             bone_section(assets, bone_id),
             bone_spring_section(world, assets, bone_id),
-            constraint_section(world, assets, &hierarchy_state),
+            constraint_section(world, assets, &hierarchy_state, Some(bone_id)),
         ],
         None => vec![no_selection_section()],
     };

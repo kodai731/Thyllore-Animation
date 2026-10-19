@@ -24,6 +24,7 @@ pub struct ConstraintSectionView {
     pub bones: Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
     pub selected_bone_name: Option<String>,
+    pub default_bone: Option<BoneId>,
     pub add_type_index: usize,
     pub bake: BakeForm,
 }
@@ -32,6 +33,7 @@ pub fn constraint_section(
     world: &World,
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
+    default_bone: Option<BoneId>,
 ) -> Box<dyn FormSection> {
     let target_entity = find_animated_entity(world);
     let Some(target_entity) = target_entity else {
@@ -45,10 +47,6 @@ pub fn constraint_section(
         Some(set) => set.constraints.clone(),
         None => Vec::new(),
     };
-
-    if entries.is_empty() {
-        return message_section("Constraints", true, "No constraints".to_string());
-    }
 
     let editor_state: Option<ConstraintEditorState> = world
         .get_resource::<ConstraintEditorState>()
@@ -71,6 +69,7 @@ pub fn constraint_section(
         bones: bone_list,
         selected_bone: hierarchy_state.selected_bone_id,
         selected_bone_name,
+        default_bone,
         add_type_index,
         bake,
     };
@@ -79,7 +78,7 @@ pub fn constraint_section(
         vec![UiRow::Group {
             title: "Constraints".into(),
             initially_open: true,
-            rows: section_rows(),
+            rows: section_rows(&view),
         }],
         view,
         commit_constraint_view,
@@ -103,9 +102,22 @@ fn find_animated_entity(world: &World) -> Option<Entity> {
     world.component_entities::<Animator>().into_iter().next()
 }
 
-pub fn section_rows() -> Vec<UiRow<ConstraintSectionView>> {
+pub fn section_rows(view: &ConstraintSectionView) -> Vec<UiRow<ConstraintSectionView>> {
     let [sample_fps_param] = BAKE_UI_PARAMS.as_slice() else {
         unreachable!("BakeForm declares sample_fps");
+    };
+    let entries_row = if view.entries.is_empty() {
+        UiRow::Canvas(|ui, _, _: &ConstraintSectionView| ui.text("No constraints"))
+    } else {
+        UiRow::List(Box::new(
+            ListRows::<ConstraintSectionView, ConstraintView> {
+                title: "Entries",
+                items: |_, view: &ConstraintSectionView| constraint_items(view),
+                rows: constraint_rows,
+                on_change: |_, _, item| Box::new(update_event(&item)) as _,
+                initially_open: |_| false,
+            },
+        ))
     };
     vec![
         UiRow::Canvas(|ui, _, view: &ConstraintSectionView| {
@@ -136,18 +148,11 @@ pub fn section_rows() -> Vec<UiRow<ConstraintSectionView>> {
                 Box::new(ConstraintEvent::Add {
                     entity: view.entity,
                     constraint_type_index: view.add_type_index as u8,
+                    constrained_bone: view.default_bone,
                 }) as _
             },
         },
-        UiRow::List(Box::new(
-            ListRows::<ConstraintSectionView, ConstraintView> {
-                title: "Entries",
-                items: |_, view: &ConstraintSectionView| constraint_items(view),
-                rows: constraint_rows,
-                on_change: |_, _, item| Box::new(update_event(&item)) as _,
-                initially_open: |_| false,
-            },
-        )),
+        entries_row,
         UiRow::Scalar {
             param: sample_fps_param,
             scalars: &BAKE_SCALARS,
@@ -237,9 +242,24 @@ mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
+    fn view_with_entries(entries: Vec<ConstraintEntry>) -> ConstraintSectionView {
+        ConstraintSectionView {
+            entries,
+            ..base_view(0)
+        }
+    }
+
+    fn position_entry() -> ConstraintEntry {
+        ConstraintEntry {
+            id: 1,
+            constraint: ConstraintType::Position(Default::default()),
+            priority: 0,
+        }
+    }
+
     #[test]
     fn section_rows_label_order() {
-        let rows = section_rows();
+        let rows = section_rows(&view_with_entries(vec![position_entry()]));
         assert_eq!(
             visible_labels(&rows),
             [
@@ -253,8 +273,42 @@ mod tests {
     }
 
     #[test]
+    fn empty_set_still_offers_add_constraint() {
+        let rows = section_rows(&view_with_entries(Vec::new()));
+        assert_eq!(
+            visible_labels(&rows),
+            [
+                "Constraint Type",
+                "Add Constraint",
+                "sample_fps",
+                "Bake Constraints",
+            ]
+        );
+    }
+
+    #[test]
+    fn add_constraint_targets_the_default_bone() {
+        let view = ConstraintSectionView {
+            default_bone: Some(7),
+            ..base_view(0)
+        };
+        let rows = section_rows(&view);
+        let add = rows
+            .iter()
+            .find_map(|row| match row {
+                UiRow::Action {
+                    label, on_click, ..
+                } if *label == "Add Constraint" => Some(on_click),
+                _ => None,
+            })
+            .expect("Add Constraint row");
+        let command = format!("{:?}", add(&view));
+        assert!(command.contains("constrained_bone: Some(7)"), "{command}");
+    }
+
+    #[test]
     fn section_rows_no_duplicate_labels() {
-        let rows = section_rows();
+        let rows = section_rows(&view_with_entries(vec![position_entry()]));
         assert!(find_duplicate_labels(&rows).is_empty());
     }
 
@@ -271,6 +325,7 @@ mod tests {
             bones: std::rc::Rc::new([]),
             selected_bone: None,
             selected_bone_name: None,
+            default_bone: None,
             add_type_index: 3,
             bake: BakeForm::default(),
         }

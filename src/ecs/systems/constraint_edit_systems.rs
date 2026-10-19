@@ -1,15 +1,23 @@
 use crate::animation::{
-    AimConstraintData, ConstraintId, ConstraintType, IkConstraintData, ParentConstraintData,
-    PositionConstraintData, RotationConstraintData, ScaleConstraintData,
+    AimConstraintData, BoneId, ConstraintId, ConstraintType, IkConstraintData,
+    ParentConstraintData, PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
 use crate::ecs::component::{Constrained, ConstraintSet};
 use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::world::{Entity, World};
 
-pub fn handle_constraint_add(world: &mut World, entity: Entity, type_index: u8) {
-    let Some(constraint) = create_default_constraint(type_index) else {
+pub fn handle_constraint_add(
+    world: &mut World,
+    entity: Entity,
+    type_index: u8,
+    constrained_bone: Option<BoneId>,
+) {
+    let Some(mut constraint) = create_default_constraint(type_index) else {
         return;
     };
+    if let Some(bone) = constrained_bone {
+        constraint.set_constrained_bone_id(bone);
+    }
     let priority = constraint.default_priority();
 
     log!(
@@ -84,5 +92,31 @@ fn create_default_constraint(type_index: u8) -> Option<ConstraintType> {
             );
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn added_constraint(constrained_bone: Option<BoneId>) -> ConstraintType {
+        let mut world = World::new();
+        let entity = world.entity().with_name("rig").build();
+        handle_constraint_add(&mut world, entity, 3, constrained_bone);
+        let set = world
+            .get_component::<ConstraintSet>(entity)
+            .expect("ConstraintSet inserted on first add");
+        set.constraints[0].constraint.clone()
+    }
+
+    #[test]
+    fn add_applies_the_requested_constrained_bone() {
+        assert_eq!(added_constraint(Some(9)).constrained_bone_id(), 9);
+    }
+
+    #[test]
+    fn add_without_a_bone_keeps_the_type_default() {
+        let default_bone = PositionConstraintData::default().constrained_bone;
+        assert_eq!(added_constraint(None).constrained_bone_id(), default_bone);
     }
 }

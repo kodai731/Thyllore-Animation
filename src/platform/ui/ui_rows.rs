@@ -1,20 +1,23 @@
 use std::borrow::Cow;
 
 use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
+use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
 };
 use thyllore_scene_core::{find_scalar_param, ScalarParam, UiKind, UiParam};
 
+use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::events::UiCommand;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::theme::{
     property_label, property_label_colored, section_header, vector3_field, SectionDefault,
 };
 
-/// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
-pub type EditedScalars<'a> = &'a [(&'static str, f32)];
+/// Scalar rows whose name resolves in the domain get a key button after the widget.
+pub type KeyDomain = Option<&'static ScalarChannelDomain>;
 
 pub enum UiRow<C: 'static> {
     Scalar {
@@ -141,13 +144,7 @@ pub struct ListRows<C, I: 'static> {
 }
 
 pub trait DrawField<C> {
-    fn draw(
-        &self,
-        ui: &imgui::Ui,
-        world: &World,
-        value: &mut C,
-        after_item: &mut dyn FnMut(&imgui::Ui, EditedScalars),
-    ) -> bool;
+    fn draw(&self, ui: &imgui::Ui, world: &World, value: &mut C, keys: KeyDomain) -> bool;
 }
 
 pub struct FieldRows<C, I: 'static> {
@@ -156,15 +153,9 @@ pub struct FieldRows<C, I: 'static> {
 }
 
 impl<C: 'static, I: 'static> DrawField<C> for FieldRows<C, I> {
-    fn draw(
-        &self,
-        ui: &imgui::Ui,
-        world: &World,
-        value: &mut C,
-        after_item: &mut dyn FnMut(&imgui::Ui, EditedScalars),
-    ) -> bool {
+    fn draw(&self, ui: &imgui::Ui, world: &World, value: &mut C, keys: KeyDomain) -> bool {
         let item = (self.field)(value);
-        draw_rows(ui, world, &self.rows, item, after_item)
+        draw_rows(ui, world, &self.rows, item, keys)
     }
 }
 
@@ -206,7 +197,7 @@ impl<C: 'static, I: 'static> ListRows<C, I> {
             return;
         }
         let rows = (self.rows)(&item);
-        if draw_rows(ui, world, &rows, &mut item, |_, _| {}) {
+        if draw_rows(ui, world, &rows, &mut item, None) {
             world.send_boxed_command((self.on_change)(owner, index, item));
         }
     }
@@ -218,11 +209,11 @@ pub fn draw_rows<C>(
     world: &World,
     rows: &[UiRow<C>],
     value: &mut C,
-    mut after_item: impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     let mut changed = false;
     for row in rows {
-        changed |= draw_row(ui, world, row, value, &mut after_item);
+        changed |= draw_row(ui, world, row, value, keys);
     }
     changed
 }
@@ -232,10 +223,10 @@ fn draw_row<C>(
     world: &World,
     row: &UiRow<C>,
     value: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     match row {
-        UiRow::Scalar { param, scalars } => draw_scalar_row(ui, param, scalars, value, after_item),
+        UiRow::Scalar { param, scalars } => draw_scalar_row(ui, world, param, scalars, value, keys),
         UiRow::Toggle { label, get, set } => draw_toggle(ui, label, *get, *set, value),
         UiRow::Choice {
             label,
@@ -382,7 +373,7 @@ fn draw_row<C>(
             let _id = ui.push_id(title.as_ref());
             let mut group_changed = false;
             for row in rows {
-                group_changed |= draw_row(ui, world, row, value, after_item);
+                group_changed |= draw_row(ui, world, row, value, keys);
             }
             group_changed
         }
@@ -419,7 +410,7 @@ fn draw_row<C>(
             }
             false
         }
-        UiRow::Field(field) => field.draw(ui, world, value, after_item),
+        UiRow::Field(field) => field.draw(ui, world, value, keys),
     }
 }
 
@@ -549,46 +540,96 @@ fn draw_choices<C>(
 
 fn draw_scalar_row<C>(
     ui: &imgui::Ui,
+    world: &World,
     meta: &UiParam,
     scalars: &[ScalarParam<C>],
     component: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     match meta.kind {
-        UiKind::Scalar => draw_scalar(ui, meta, scalars, component, after_item),
+        UiKind::Scalar => draw_scalar(ui, world, meta, scalars, component, keys),
         UiKind::Color => draw_color(
             ui,
+            world,
             meta,
             scalars,
             component,
             ColorMapping::Identity,
-            after_item,
+            keys,
         ),
         UiKind::Absorption => draw_color(
             ui,
+            world,
             meta,
             scalars,
             component,
             ColorMapping::Transmitted,
-            after_item,
+            keys,
         ),
-        UiKind::Offset => draw_offset(ui, meta, scalars, component, after_item),
+        UiKind::Offset => draw_offset(ui, world, meta, scalars, component, keys),
+    }
+}
+
+const KEY_BUTTON_LABEL: &str = "K";
+
+/// Resolves the channels this widget edits to the curve properties a key button writes.
+fn key_targets<C>(keys: KeyDomain, channels: &[&ScalarParam<C>]) -> Vec<PropertyType> {
+    let Some(domain) = keys else {
+        return Vec::new();
+    };
+    channels
+        .iter()
+        .filter_map(|channel| domain.property_type_for_cli_name(channel.name))
+        .collect()
+}
+
+fn reserve_key_button_width(ui: &imgui::Ui, targets: &[PropertyType]) {
+    if targets.is_empty() {
+        return;
+    }
+    let style = ui.clone_style();
+    let button_width = ui.calc_text_size(KEY_BUTTON_LABEL)[0] + 2.0 * style.frame_padding()[0];
+    ui.set_next_item_width(-(button_width + style.item_spacing()[0]));
+}
+
+fn draw_key_button(
+    ui: &imgui::Ui,
+    world: &World,
+    id: &str,
+    targets: &[PropertyType],
+    values: &[f32],
+) {
+    if targets.is_empty() {
+        return;
+    }
+    ui.same_line();
+    if !ui.small_button(format!("{KEY_BUTTON_LABEL}##{id}")) {
+        return;
+    }
+    for (&property_type, &value) in targets.iter().zip(values) {
+        world.send_command(ScalarCurveEvent::InsertScalarKey {
+            property_type,
+            value,
+        });
     }
 }
 
 fn draw_scalar<C>(
     ui: &imgui::Ui,
+    world: &World,
     meta: &UiParam,
     scalars: &[ScalarParam<C>],
     component: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     let Some(scalar) = find_scalar_param(scalars, meta.name) else {
         return false;
     };
+    let targets = key_targets(keys, &[scalar]);
 
     let mut value = (scalar.get)(component);
     property_label(ui, &meta.display_label());
+    reserve_key_button_width(ui, &targets);
     let changed = ui
         .slider_config(format!("##{}", meta.name), meta.min, meta.max)
         .display_format(numeric_format(meta.format))
@@ -597,7 +638,7 @@ fn draw_scalar<C>(
         (scalar.set)(component, value);
     }
     show_tooltip(ui, meta.tooltip);
-    after_item(ui, &[(scalar.name, value)]);
+    draw_key_button(ui, world, meta.name, &targets, &[value]);
     changed
 }
 
@@ -638,20 +679,23 @@ impl ColorMapping {
 
 fn draw_color<C>(
     ui: &imgui::Ui,
+    world: &World,
     meta: &UiParam,
     scalars: &[ScalarParam<C>],
     component: &mut C,
     mapping: ColorMapping,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     let component_names = meta.color_component_names();
     let Some(channels) = resolve_channels(scalars, &component_names) else {
         return false;
     };
+    let targets = key_targets(keys, &channels);
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut picked = mapping.to_picker(stored);
     property_label(ui, &meta.display_label());
+    reserve_key_button_width(ui, &targets);
     let changed = ui
         .color_picker3_config(format!("##{}", meta.name), &mut picked)
         .flags(ColorPickerOptions {
@@ -674,12 +718,7 @@ fn draw_color<C>(
         stored
     };
 
-    let edited: [(&'static str, f32); 3] = [
-        (channels[0].name, written[0]),
-        (channels[1].name, written[1]),
-        (channels[2].name, written[2]),
-    ];
-    after_item(ui, &edited);
+    draw_key_button(ui, world, meta.name, &targets, &written);
     changed
 }
 
@@ -696,19 +735,22 @@ fn resolve_channels<'a, C>(
 
 fn draw_offset<C>(
     ui: &imgui::Ui,
+    world: &World,
     meta: &UiParam,
     scalars: &[ScalarParam<C>],
     component: &mut C,
-    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+    keys: KeyDomain,
 ) -> bool {
     let component_names = meta.offset_component_names();
     let Some(channels) = resolve_channels(scalars, &component_names) else {
         return false;
     };
+    let targets = key_targets(keys, &channels);
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut dragged = stored;
     property_label(ui, &meta.display_label());
+    reserve_key_button_width(ui, &targets);
     let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
     show_tooltip(ui, meta.tooltip);
 
@@ -722,12 +764,7 @@ fn draw_offset<C>(
         stored
     };
 
-    let edited: [(&'static str, f32); 3] = [
-        (channels[0].name, written[0]),
-        (channels[1].name, written[1]),
-        (channels[2].name, written[2]),
-    ];
-    after_item(ui, &edited);
+    draw_key_button(ui, world, meta.name, &targets, &written);
     changed
 }
 

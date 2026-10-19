@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use imgui::{Condition, StyleVar};
-use thyllore_anim_core::editable::PropertyType;
 
 use super::pointer::read_ui_pointer;
 #[cfg(feature = "auto-rig")]
@@ -20,7 +19,6 @@ use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
@@ -29,7 +27,6 @@ use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, 
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::form_window::{FormPlacement, FormWindow};
-use super::param_widgets::EditedScalars;
 use super::scene_settings::{read_scene_settings, send_scene_settings_changes};
 use super::scene_settings_rows::scene_settings_rows;
 
@@ -441,26 +438,6 @@ fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
             if ui.button("Dismiss##rig") {
                 ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
             }
-        }
-    }
-}
-
-pub(super) fn send_key_button(
-    ui: &imgui::Ui,
-    ecs_world: &World,
-    edited: EditedScalars,
-    keys: Vec<(PropertyType, f32)>,
-) {
-    let (Some((first_name, _)), false) = (edited.first(), keys.is_empty()) else {
-        return;
-    };
-    ui.same_line();
-    if ui.small_button(format!("K##{first_name}")) {
-        for (property_type, value) in keys {
-            ecs_world.send_command(ScalarCurveEvent::InsertScalarKey {
-                property_type,
-                value,
-            });
         }
     }
 }

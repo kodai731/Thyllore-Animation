@@ -1,13 +1,11 @@
 use std::rc::Rc;
 use std::sync::LazyLock;
 
-use thyllore_anim_core::editable::PropertyType;
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
 use super::effect_rows::{effect_instances, instance_options, preset_options};
 use super::form_window::{FormSection, RowsSection};
-use super::param_widgets::{rows_from_params, EditedScalars};
-use super::scene_overlay::send_key_button;
+use super::param_widgets::rows_from_params;
 use super::ui_rows::{ChoiceOption, FieldRows, UiRow};
 use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::{WindDebugCapture, WindDebugView, WindRenderSettings, WindShadingMode};
@@ -53,18 +51,6 @@ static RENDER_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     WindRenderSettings::collect_ui("", "", &mut out);
     out
 });
-
-fn wind_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WIND_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
 
 fn wind_head_rows(view: &WindSectionView) -> Vec<UiRow<WindSectionView>> {
     let mut rows = vec![UiRow::Action {
@@ -226,7 +212,7 @@ fn wind_section(world: &World) -> Option<Box<dyn FormSection>> {
         rows: vec![group],
         view,
         commit: commit_wind_view,
-        after_item: Some(wind_key_button),
+        keys: Some(&WIND_DOMAIN),
     }))
 }
 

@@ -1,12 +1,10 @@
 use std::rc::Rc;
 
-use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::WaterSecondaryRays;
 
 use super::effect_rows::{effect_instances, instance_options, preset_options};
 use super::form_window::{FormSection, RowsSection};
-use super::param_widgets::{rows_from_params, EditedScalars};
-use super::scene_overlay::send_key_button;
+use super::param_widgets::rows_from_params;
 use super::ui_rows::{ChoiceOption, FieldRows, UiRow};
 use crate::ecs::component::{AppliedWaterPreset, WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
@@ -25,18 +23,6 @@ struct WaterSectionView {
     selected: Option<Entity>,
     effect: WaterTorusEffect,
     render: WaterRenderSettings,
-}
-
-fn water_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            WATER_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
 }
 
 fn water_head_rows(view: &WaterSectionView) -> Vec<UiRow<WaterSectionView>> {
@@ -184,7 +170,7 @@ fn water_section(world: &World) -> Option<Box<dyn FormSection>> {
         rows: vec![group],
         view,
         commit: commit_water_view,
-        after_item: Some(water_key_button),
+        keys: Some(&WATER_DOMAIN),
     }))
 }
 

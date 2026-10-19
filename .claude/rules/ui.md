@@ -69,6 +69,9 @@ a declaration carries the label, the range and which `View` field or `UiCommand`
   resources, scanning directories and validating paths happen in the builder, not in a row.
 - Generated parameter tables are attached with `rows_from_params` inside a `UiRow::Field` that
   projects the view onto the effect struct; the hidden-parameter list is computed in the builder.
+  A section that can key its scalars declares `keys: Some(&<EFFECT>_DOMAIN)`; the renderer
+  reserves the key button's width before the widget and sends `InsertScalarKey` itself. Never
+  append a widget after a row from a callback.
 - `UiRow::Canvas` is for read-only drawing that no row covers (status text, timing lists). It
   receives `&View`, not `&mut View`, and must not call a value widget with a visible label.
 - Hand-written `build(ui, world, ..)` windows (`ui_window!` without `form =`) are only for

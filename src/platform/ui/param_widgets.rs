@@ -2,8 +2,6 @@ use thyllore_scene_core::{find_ui_param, ScalarParam, UiParam};
 
 use super::ui_rows::UiRow;
 
-pub use super::ui_rows::EditedScalars;
-
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.
 pub type ParamGroup = (Option<&'static str>, Vec<&'static str>);
 

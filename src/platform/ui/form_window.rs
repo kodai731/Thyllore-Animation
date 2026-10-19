@@ -4,8 +4,7 @@ use crate::ecs::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 
-use super::param_widgets::EditedScalars;
-use super::ui_rows::{draw_rows, UiRow};
+use super::ui_rows::{draw_rows, KeyDomain, UiRow};
 
 pub trait FormSection {
     fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World);
@@ -34,18 +33,14 @@ pub struct RowsSection<V: Clone + 'static> {
     pub rows: Vec<UiRow<V>>,
     pub view: V,
     pub commit: fn(&World, &V, &V),
-    pub after_item: Option<fn(&imgui::Ui, &World, EditedScalars)>,
+    pub keys: KeyDomain,
 }
 
 impl<V: Clone + 'static> FormSection for RowsSection<V> {
     fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World) {
         let shown = self.view.clone();
         let mut view = self.view;
-        draw_rows(ui, world, &self.rows, &mut view, |ui, edited| {
-            if let Some(ref after_item) = self.after_item {
-                after_item(ui, world, edited);
-            }
-        });
+        draw_rows(ui, world, &self.rows, &mut view, self.keys);
         (self.commit)(world, &shown, &view);
     }
 }
@@ -59,7 +54,7 @@ pub fn rows_section<V: Clone + 'static>(
         rows,
         view,
         commit,
-        after_item: None,
+        keys: None,
     })
 }
 

@@ -1,30 +1,14 @@
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::systems::resolve_selected_flame;
 use crate::ecs::World;
 
 use super::super::form_window::{FormSection, RowsSection};
-use super::super::param_widgets::EditedScalars;
-use super::super::scene_overlay::send_key_button;
 use super::super::ui_rows::{FieldRows, UiRow};
 use super::body_rows::body_rows;
 use super::head_rows::{fit_rows, head_rows, style_rows};
 use super::section_view::{
     commit_flame_view, draw_fit_path_status, read_flame_section_view, FlameSectionView,
 };
-
-fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            FLAME_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
 
 fn flame_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
     let mut rows = head_rows(view);
@@ -57,7 +41,7 @@ fn flame_section(world: &World) -> Option<Box<dyn FormSection>> {
         rows: vec![group],
         view,
         commit: commit_flame_view,
-        after_item: Some(flame_key_button),
+        keys: Some(&FLAME_DOMAIN),
     }))
 }
 

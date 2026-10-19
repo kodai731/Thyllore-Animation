@@ -1,5 +1,3 @@
-use thyllore_anim_core::editable::PropertyType;
-
 use crate::ecs::component::{
     AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, LIGHTNING_DOMAIN,
 };
@@ -14,21 +12,8 @@ use crate::ecs::World;
 use super::effect_rows::effect_instances;
 use super::form_window::{FormSection, RowsSection};
 use super::lightning_rows::{lightning_head_rows, lightning_tail_rows, LightningSectionView};
-use super::param_widgets::{rows_from_params, EditedScalars};
-use super::scene_overlay::send_key_button;
+use super::param_widgets::rows_from_params;
 use super::ui_rows::{FieldRows, UiRow};
-
-fn lightning_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
-    let keys: Vec<(PropertyType, f32)> = edited
-        .iter()
-        .filter_map(|(name, value)| {
-            LIGHTNING_DOMAIN
-                .property_type_for_cli_name(name)
-                .map(|property_type| (property_type, *value))
-        })
-        .collect();
-    send_key_button(ui, ecs_world, edited, keys);
-}
 
 fn read_lightning_section_view(
     ecs_world: &World,
@@ -114,7 +99,7 @@ fn lightning_section(world: &World) -> Option<Box<dyn FormSection>> {
         rows: vec![group],
         view,
         commit: commit_lightning_view,
-        after_item: Some(lightning_key_button),
+        keys: Some(&LIGHTNING_DOMAIN),
     }))
 }
 

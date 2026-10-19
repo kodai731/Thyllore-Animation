@@ -21,6 +21,8 @@ mod panel_splitter;
 mod param_widgets;
 pub(crate) mod pointer;
 mod scene_overlay;
+mod scene_settings;
+mod scene_settings_rows;
 mod shortcuts;
 mod spring_bone;
 mod status_bar;

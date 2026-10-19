@@ -96,6 +96,16 @@ pub enum UiRow<C: 'static> {
     Tooltip(&'static str),
     List(Box<dyn DrawList<C>>),
     Canvas(fn(&imgui::Ui, &World, &C)),
+    Switch {
+        label: &'static str,
+        get: fn(&C) -> bool,
+        set: fn(&mut C, bool),
+    },
+    Color3 {
+        label: &'static str,
+        get: fn(&C) -> [f32; 3],
+        set: fn(&mut C, [f32; 3]),
+    },
 }
 
 #[derive(Clone)]
@@ -359,6 +369,24 @@ fn draw_row<C>(
         }
         UiRow::Canvas(draw) => {
             draw(ui, world, value);
+            false
+        }
+        UiRow::Switch { label, get, set } => {
+            let mut v = (*get)(value);
+            if crate::platform::ui::theme::toggle_switch(ui, world, &format!("##{label}"), &mut v) {
+                (*set)(value, v);
+                return true;
+            }
+            false
+        }
+        UiRow::Color3 { label, get, set } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if ui.color_edit3(format!("##{}", label), &mut v) {
+                (*set)(value, v);
+                return true;
+            }
             false
         }
     }
@@ -713,7 +741,9 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::IntSlider { label, .. }
         | UiRow::IntInput { label, .. }
         | UiRow::FloatInput { label, .. }
-        | UiRow::Vector3 { label, .. } => Some(label),
+        | UiRow::Vector3 { label, .. }
+        | UiRow::Switch { label, .. }
+        | UiRow::Color3 { label, .. } => Some(label),
         UiRow::List(list) => Some(list.title()),
         UiRow::Canvas(_)
         | UiRow::Sliders { .. }
@@ -836,6 +866,40 @@ mod tests {
                 label: "uniq",
                 speed: 1.0,
                 format: "%.2f",
+                get: |_| [0.0, 0.0, 0.0],
+                set: |_, _| {},
+            },
+        ];
+        assert_eq!(find_duplicate_labels(&rows), ["dup"]);
+    }
+
+    #[test]
+    fn switch_and_color3_appear_in_visible_labels() {
+        let rows: Vec<UiRow<()>> = vec![
+            UiRow::Switch {
+                label: "SW",
+                get: |_| false,
+                set: |_, _| {},
+            },
+            UiRow::Color3 {
+                label: "C3",
+                get: |_| [0.0, 0.0, 0.0],
+                set: |_, _| {},
+            },
+        ];
+        assert_eq!(visible_labels(&rows), ["SW", "C3"]);
+    }
+
+    #[test]
+    fn switch_and_color3_duplicate_detection() {
+        let rows: Vec<UiRow<()>> = vec![
+            UiRow::Switch {
+                label: "dup",
+                get: |_| false,
+                set: |_, _| {},
+            },
+            UiRow::Color3 {
+                label: "dup",
                 get: |_| [0.0, 0.0, 0.0],
                 set: |_, _| {},
             },

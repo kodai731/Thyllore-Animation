@@ -1,4 +1,3 @@
-use crate::platform::ui::numeric_format::numeric_format;
 use std::path::Path;
 
 use imgui::{Condition, StyleVar};
@@ -14,8 +13,8 @@ use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
     clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
-    TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings, UiWidgetState,
-    WeightHeatmapState, MAX_UI_SCALE, MIN_UI_SCALE, UI_SETTINGS_PATH,
+    TransformGizmoMode, TransformGizmoState, UiDensity, UiSettings, UiWidgetState, MAX_UI_SCALE,
+    MIN_UI_SCALE, UI_SETTINGS_PATH,
 };
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 #[cfg(feature = "auto-rig")]
@@ -24,14 +23,15 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
-use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
-use crate::platform::ui::theme::SectionDefault;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::param_widgets::EditedScalars;
+use super::scene_settings::{read_scene_settings, send_scene_settings_changes};
+use super::scene_settings_rows::scene_settings_rows;
+use super::ui_rows::draw_rows;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
@@ -129,17 +129,16 @@ fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput)
         .build(|| {
             draw_window_shadow(ui, ui.clone_style().window_rounding());
 
-            build_general_section(ui, ecs_world);
-
-            build_overlay_section(ui, ecs_world);
-
-            build_transform_gizmo_section(ui, ecs_world);
-
-            build_dof_section(ui, ecs_world);
-
-            build_auto_exposure_section(ui, ecs_world);
-
-            build_onion_skinning_section(ui, ecs_world);
+            let shown = read_scene_settings(ecs_world);
+            let mut view = shown.clone();
+            draw_rows(
+                ui,
+                ecs_world,
+                &scene_settings_rows(&view),
+                &mut view,
+                |_, _| {},
+            );
+            send_scene_settings_changes(ecs_world, &shown, &view);
 
             for section in crate::platform::ui::effect_sections::collect_effect_sections() {
                 (section.draw)(ui, ecs_world);
@@ -471,236 +470,6 @@ pub(super) fn send_key_button(
                 property_type,
                 value,
             });
-        }
-    }
-}
-
-fn build_general_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::SceneBrightness;
-
-    if !section_header(ui, ecs_world, "General", SectionDefault::Open) {
-        return;
-    }
-    let Some(brightness) = ecs_world.get_resource::<SceneBrightness>() else {
-        return;
-    };
-    let mut edited = *brightness;
-    drop(brightness);
-
-    ui.input_float_config("Brightness (EV)")
-        .step(0.1)
-        .step_fast(1.0)
-        .build(&mut edited.ev);
-    if ui.is_item_hovered() {
-        ui.tooltip_text("Scene View brightness on top of the exposure; +1 doubles it");
-    }
-    ecs_world.send_command(OverlayEvent::UpdateSceneBrightness(edited));
-}
-
-fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
-    if section_header(ui, ecs_world, "Overlay", SectionDefault::Open) {
-        if let Some(bone_gizmo) = ecs_world.get_resource::<BoneGizmoData>() {
-            let mut visible = bone_gizmo.visible;
-            if crate::platform::ui::theme::toggle_switch(ui, ecs_world, "Show Bones", &mut visible)
-            {
-                ecs_world.send_command(OverlayEvent::SetBoneGizmoVisible(visible));
-            }
-        }
-        if let Some(heatmap) = ecs_world.get_resource::<WeightHeatmapState>() {
-            let mut enabled = heatmap.enabled;
-            if crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "Show Weight Heatmap (selected bone)",
-                &mut enabled,
-            ) {
-                ecs_world.send_command(OverlayEvent::SetWeightHeatmapEnabled(enabled));
-            }
-        }
-    }
-}
-
-fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
-    let Some(state) = ecs_world.get_resource::<TransformGizmoState>() else {
-        return;
-    };
-    let mut state_copy = state.clone();
-    drop(state);
-
-    if section_header(ui, ecs_world, "Transform Gizmo", SectionDefault::Open) {
-        let snap_edited = state_copy.snap_enabled
-            && match state_copy.mode {
-                TransformGizmoMode::Translate => ui
-                    .slider_config("Snap Value", 0.01, 10.0)
-                    .build(&mut state_copy.translate_snap_value),
-                TransformGizmoMode::Rotate => ui
-                    .slider_config("Snap Degrees", 1.0, 90.0)
-                    .build(&mut state_copy.rotate_snap_degrees),
-                TransformGizmoMode::Scale => ui
-                    .slider_config("Snap Value", 0.01, 1.0)
-                    .build(&mut state_copy.scale_snap_value),
-            };
-
-        let scale_edited = ui
-            .slider_config("Gizmo Scale", 0.01, 0.3)
-            .display_format(numeric_format("%.3f"))
-            .build(&mut state_copy.gizmo_scale);
-
-        if snap_edited || scale_edited {
-            ecs_world.send_command(OverlayEvent::UpdateTransformGizmoState(Box::new(
-                state_copy,
-            )));
-        }
-    }
-}
-
-fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
-
-    if section_header(ui, ecs_world, "Depth of Field", SectionDefault::Closed) {
-        if let Some(dof) = ecs_world.get_resource::<DepthOfField>() {
-            let mut dof_copy = dof.clone();
-            drop(dof);
-
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "DOF Enabled",
-                &mut dof_copy.enabled,
-            );
-
-            ui.slider_config("Focus Distance", 0.1, 100.0)
-                .build(&mut dof_copy.focus_distance);
-
-            ui.slider_config("Max Blur Radius", 1.0, 32.0)
-                .build(&mut dof_copy.max_blur_radius);
-
-            ecs_world.send_command(OverlayEvent::UpdateDepthOfField(dof_copy));
-        }
-
-        if let Some(params) = ecs_world.get_resource::<PhysicalCameraParameters>() {
-            let mut params_copy = params.clone();
-            drop(params);
-
-            ui.slider_config("Aperture (f-stops)", 1.0, 22.0)
-                .build(&mut params_copy.aperture_f_stops);
-
-            ui.slider_config("Focal Length (mm)", 10.0, 200.0)
-                .build(&mut params_copy.focal_length_mm);
-
-            ecs_world.send_command(OverlayEvent::UpdatePhysicalCamera(params_copy));
-        }
-    }
-}
-
-fn build_exposure_metering_combo(
-    ui: &imgui::Ui,
-    metering: &mut thyllore_render_core::ExposureMetering,
-) {
-    let Some(_token) = ui.begin_combo("Metering", metering.name()) else {
-        return;
-    };
-    for candidate in thyllore_render_core::ExposureMetering::ALL {
-        let selected = candidate == *metering;
-        if ui
-            .selectable_config(candidate.name())
-            .selected(selected)
-            .build()
-        {
-            *metering = candidate;
-        }
-    }
-}
-
-fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::{AutoExposure, Exposure};
-
-    if section_header(ui, ecs_world, "Auto Exposure", SectionDefault::Closed) {
-        if let Some(ae) = ecs_world.get_resource::<AutoExposure>() {
-            let mut ae_copy = ae.clone();
-            drop(ae);
-
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "Auto Exposure Enabled",
-                &mut ae_copy.enabled,
-            );
-
-            build_exposure_metering_combo(ui, &mut ae_copy.metering);
-
-            ui.slider_config("White Level", 0.05, 1.0)
-                .build(&mut ae_copy.white_level);
-
-            ui.slider_config("Min EV", -10.0, 10.0)
-                .build(&mut ae_copy.min_ev);
-
-            ui.slider_config("Max EV", 0.0, 30.0)
-                .build(&mut ae_copy.max_ev);
-
-            ui.slider_config("Speed Up", 0.1, 10.0)
-                .build(&mut ae_copy.adaptation_speed_up);
-
-            ui.slider_config("Speed Down", 0.1, 10.0)
-                .build(&mut ae_copy.adaptation_speed_down);
-
-            ui.slider_config("Low Percent", 0.0, 0.5)
-                .build(&mut ae_copy.low_percent);
-
-            ui.slider_config("High Percent", 0.5, 1.0)
-                .build(&mut ae_copy.high_percent);
-
-            ecs_world.send_command(OverlayEvent::UpdateAutoExposure(ae_copy));
-        }
-
-        if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
-            ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
-            ui.text(format!("Current EV100: {:.2}", exposure.ev100));
-        }
-    }
-}
-
-fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::OnionSkinningConfig;
-
-    if section_header(ui, ecs_world, "Onion Skinning", SectionDefault::Closed) {
-        if let Some(config) = ecs_world.get_resource::<OnionSkinningConfig>() {
-            let mut config_copy = config.clone();
-            drop(config);
-
-            crate::platform::ui::theme::toggle_switch(
-                ui,
-                ecs_world,
-                "Onion Skin Enabled",
-                &mut config_copy.enabled,
-            );
-
-            let mut past = config_copy.past_count as i32;
-            if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
-                config_copy.past_count = past.max(0) as u32;
-            }
-
-            let mut future = config_copy.future_count as i32;
-            if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
-                config_copy.future_count = future.max(0) as u32;
-            }
-
-            ui.slider_config("Frame Step", 0.001, 0.2)
-                .display_format(numeric_format("%.3f"))
-                .build(&mut config_copy.frame_step);
-
-            ui.slider_config("Ghost Opacity", 0.0, 1.0)
-                .build(&mut config_copy.opacity);
-
-            ui.color_edit3("Past Color", &mut config_copy.past_color);
-            ui.color_edit3("Future Color", &mut config_copy.future_color);
-
-            ui.text(format!(
-                "Total ghosts: {}",
-                crate::ecs::compute_total_ghost_count(&config_copy)
-            ));
-
-            ecs_world.send_command(OverlayEvent::UpdateOnionSkinning(config_copy));
         }
     }
 }

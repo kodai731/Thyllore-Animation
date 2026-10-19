@@ -1,13 +1,13 @@
 use std::sync::LazyLock;
 
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, RampScope, RampShape, SpringColliderDef, SpringColliderGroup,
-    CHAIN_RAMP_UI_PARAMS,
+    ColliderShape, RampShape, SpringColliderDef, SpringColliderGroup, CHAIN_RAMP_UI_PARAMS,
 };
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
+use crate::ecs::component::{ChainRamp, RampScope};
+use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringChainId, WithSpringBone};
 use crate::ecs::resource::{
     AddChainForm, AddColliderForm, HierarchyState, SpringBoneInspectorState,
 };
@@ -53,20 +53,20 @@ static ADD_CHAIN_UI_PARAMS: LazyLock<Vec<thyllore_scene_core::UiParam>> = LazyLo
 struct RampPath;
 
 impl FieldPath<SpringView> for RampPath {
-    type Field = crate::ecs::component::ChainRamp;
+    type Field = ChainRamp;
 
-    fn get(root: &SpringView) -> &crate::ecs::component::ChainRamp {
+    fn get(root: &SpringView) -> &ChainRamp {
         &root.ramp
     }
 
-    fn get_mut(root: &mut SpringView) -> &mut crate::ecs::component::ChainRamp {
+    fn get_mut(root: &mut SpringView) -> &mut ChainRamp {
         &mut root.ramp
     }
 }
 
 static RAMP_SCALARS: LazyLock<Vec<ScalarParam<SpringView>>> = LazyLock::new(|| {
     let mut out = Vec::new();
-    <crate::ecs::component::ChainRamp>::collect_scalars::<SpringView, RampPath>("", &mut out);
+    ChainRamp::collect_scalars::<SpringView, RampPath>("", &mut out);
     out
 });
 
@@ -74,6 +74,7 @@ static RAMP_SCALARS: LazyLock<Vec<ScalarParam<SpringView>>> = LazyLock::new(|| {
 pub struct SpringView {
     pub entity: Entity,
     pub chains: Vec<SpringChain>,
+    pub ramp_targets: Vec<Vec<SpringChainId>>,
     pub colliders: Vec<SpringColliderDef>,
     pub groups: Vec<SpringColliderGroup>,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
@@ -81,8 +82,8 @@ pub struct SpringView {
     pub add_chain: AddChainForm,
     pub add_collider: AddColliderForm,
     pub add_group_name: String,
-    pub ramp: crate::ecs::component::ChainRamp,
-    pub ramp_scope: crate::ecs::component::RampScope,
+    pub ramp: ChainRamp,
+    pub ramp_scope: RampScope,
     pub gizmo_visible: bool,
 }
 
@@ -111,9 +112,28 @@ pub fn spring_bone_section(
 
     let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
 
+    let ramp_targets: Vec<Vec<SpringChainId>> =
+        if let Some(skeleton_asset) = assets.skeletons.values().next() {
+            setup
+                .chains
+                .iter()
+                .map(|chain| {
+                    thyllore_anim_core::spring_bone::chains_in_scope(
+                        &setup,
+                        &skeleton_asset.skeleton,
+                        chain.id,
+                        inspector_state.ramp_scope,
+                    )
+                })
+                .collect()
+        } else {
+            setup.chains.iter().map(|chain| vec![chain.id]).collect()
+        };
+
     let view = SpringView {
         entity: target_entity,
         chains: setup.chains,
+        ramp_targets,
         colliders: setup.colliders,
         groups: setup.collider_groups,
         bones: bone_list.into(),
@@ -365,6 +385,7 @@ mod tests {
         SpringView {
             entity,
             chains: Vec::new(),
+            ramp_targets: Vec::new(),
             colliders: Vec::new(),
             groups: Vec::new(),
             bones: std::rc::Rc::new([]),
@@ -372,8 +393,8 @@ mod tests {
             add_chain: AddChainForm::default(),
             add_collider: AddColliderForm::default(),
             add_group_name: "NewGroup".to_string(),
-            ramp: crate::ecs::component::ChainRamp::default(),
-            ramp_scope: crate::ecs::component::RampScope::default(),
+            ramp: ChainRamp::default(),
+            ramp_scope: RampScope::default(),
             gizmo_visible: false,
         }
     }

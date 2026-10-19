@@ -4,8 +4,10 @@ use thyllore_anim_core::spring_bone::{SpringJointParam, SPRING_JOINT_UI_PARAMS};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::animation::BoneId;
-use crate::ecs::component::SpringChain;
-use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
+use crate::ecs::component::{ChainRamp, SpringChain, SpringChainId};
+use crate::ecs::systems::phases::event_dispatch::spring_bone::{
+    ApplyChainRamp, LoadChainRamp, SpringBoneEvent,
+};
 use crate::ecs::world::Entity;
 
 use super::super::bone_choice::bone_options;
@@ -16,6 +18,8 @@ use super::section::SpringView;
 pub struct ChainView {
     pub entity: Entity,
     pub chain: SpringChain,
+    pub ramp: ChainRamp,
+    pub ramp_targets: Vec<SpringChainId>,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
 }
@@ -53,11 +57,14 @@ pub fn chain_list_row() -> UiRow<SpringView> {
         items: |_, view: &SpringView| {
             view.chains
                 .iter()
-                .map(|chain| {
+                .zip(&view.ramp_targets)
+                .map(|(chain, targets)| {
                     let header = format!("Chain: {} (id:{})", chain.name, chain.id);
                     let item = ChainView {
                         entity: view.entity,
                         chain: chain.clone(),
+                        ramp: view.ramp.clone(),
+                        ramp_targets: targets.clone(),
                         bones: view.bones.clone(),
                         selected_bone: view.selected_bone,
                     };
@@ -117,6 +124,29 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
         },
         initially_open: |_| false,
     })));
+
+    rows.push(UiRow::Action {
+        label: "Load Ramp From Chain",
+        enabled: |_, _: &ChainView| true,
+        on_click: |view: &ChainView| {
+            Box::new(LoadChainRamp {
+                entity: view.entity,
+                chain_id: view.chain.id,
+            }) as _
+        },
+    });
+
+    rows.push(UiRow::Action {
+        label: "Apply Ramp",
+        enabled: |_, view: &ChainView| !view.ramp_targets.is_empty(),
+        on_click: |view: &ChainView| {
+            Box::new(ApplyChainRamp {
+                entity: view.entity,
+                chain_ids: view.ramp_targets.clone(),
+                ramp: view.ramp.clone(),
+            }) as _
+        },
+    });
 
     rows.push(UiRow::Action {
         label: "Remove Chain",
@@ -213,7 +243,16 @@ mod tests {
     fn chain_rows_label_order() {
         let rows = chain_rows();
         let labels = visible_labels(&rows);
-        assert_eq!(labels, ["Enabled", "Joints", "Remove Chain"]);
+        assert_eq!(
+            labels,
+            [
+                "Enabled",
+                "Joints",
+                "Load Ramp From Chain",
+                "Apply Ramp",
+                "Remove Chain"
+            ]
+        );
     }
 
     #[test]

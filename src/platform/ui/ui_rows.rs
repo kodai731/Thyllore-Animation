@@ -384,6 +384,7 @@ fn draw_row<C>(
             if !section_header(ui, world, &title, default) {
                 return false;
             }
+            let _id = ui.push_id(title.as_ref());
             let mut group_changed = false;
             for row in rows {
                 group_changed |= draw_row(ui, world, row, value, after_item);

@@ -143,5 +143,7 @@ pub(super) fn build_lightning_section(ui: &imgui::Ui, ecs_world: &World) {
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "lightning",
     order: 3,
-    draw: build_lightning_section,
+    section: |_| Some(Box::new(crate::platform::ui::form_window::CanvasSection {
+        draw: build_lightning_section
+    })),
 });

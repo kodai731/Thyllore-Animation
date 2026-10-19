@@ -210,7 +210,9 @@ pub(super) fn build_water_section(ui: &imgui::Ui, ecs_world: &World) {
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "water",
     order: 1,
-    draw: build_water_section,
+    section: |_| Some(Box::new(crate::platform::ui::form_window::CanvasSection {
+        draw: build_water_section
+    })),
 });
 
 #[cfg(test)]

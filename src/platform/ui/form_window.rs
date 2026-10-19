@@ -161,6 +161,16 @@ pub fn draw_form_window(ui: &imgui::Ui, world: &World, window: FormWindow) {
     }
 }
 
+pub struct CanvasSection {
+    pub draw: fn(&imgui::Ui, &World),
+}
+
+impl FormSection for CanvasSection {
+    fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World) {
+        (self.draw)(ui, world);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

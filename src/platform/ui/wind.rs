@@ -252,7 +252,9 @@ pub(super) fn build_wind_section(ui: &imgui::Ui, ecs_world: &World) {
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "wind",
     order: 2,
-    draw: build_wind_section,
+    section: |_| Some(Box::new(crate::platform::ui::form_window::CanvasSection {
+        draw: build_wind_section
+    })),
 });
 
 #[cfg(test)]

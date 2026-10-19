@@ -28,10 +28,10 @@ use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
+use super::form_window::{FormPlacement, FormWindow};
 use super::param_widgets::EditedScalars;
 use super::scene_settings::{read_scene_settings, send_scene_settings_changes};
 use super::scene_settings_rows::scene_settings_rows;
-use super::ui_rows::draw_rows;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
@@ -103,47 +103,38 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
     apply_gizmo_hotkeys(ui, ecs_world);
 }
 
-fn draw_scene_panel(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
-    if ecs_world.resource::<UiWidgetState>().scene_panel == PanelVisibility::Hidden {
-        return;
+fn scene_panel_form(world: &World, _: &AssetStorage, _: &GraphicsResources) -> Option<FormWindow> {
+    if world.resource::<UiWidgetState>().scene_panel == PanelVisibility::Hidden {
+        return None;
     }
 
+    let viewport = world.resource::<ViewportInput>();
     let pos_x = viewport.position[0] + viewport.size[0] - OVERLAY_WIDTH - OVERLAY_MARGIN;
     let pos_y = viewport.position[1] + TOOLBAR_HEIGHT + OVERLAY_MARGIN;
+    let max_height = viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN;
 
-    ui.window("Scene Panel")
-        .position([pos_x, pos_y], Condition::Always)
-        .size_constraints(
-            [OVERLAY_WIDTH, 0.0],
-            [
-                OVERLAY_WIDTH,
-                viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN,
-            ],
-        )
-        .always_auto_resize(true)
-        .no_decoration()
-        .bg_alpha(0.7)
-        .no_nav()
-        .focus_on_appearing(false)
-        .save_settings(false)
-        .build(|| {
-            draw_window_shadow(ui, ui.clone_style().window_rounding());
+    let mut sections: Vec<Box<dyn crate::platform::ui::form_window::FormSection>> =
+        vec![super::form_window::rows_section(
+            scene_settings_rows(&read_scene_settings(world)),
+            read_scene_settings(world),
+            send_scene_settings_changes,
+        )];
 
-            let shown = read_scene_settings(ecs_world);
-            let mut view = shown.clone();
-            draw_rows(
-                ui,
-                ecs_world,
-                &scene_settings_rows(&view),
-                &mut view,
-                |_, _| {},
-            );
-            send_scene_settings_changes(ecs_world, &shown, &view);
+    for hook in crate::platform::ui::effect_sections::collect_effect_sections() {
+        if let Some(section) = (hook.section)(world) {
+            sections.push(section);
+        }
+    }
 
-            for section in crate::platform::ui::effect_sections::collect_effect_sections() {
-                (section.draw)(ui, ecs_world);
-            }
-        });
+    Some(FormWindow {
+        title: "Scene Panel",
+        placement: FormPlacement::Overlay {
+            position: [pos_x, pos_y],
+            width: OVERLAY_WIDTH,
+            max_height,
+        },
+        sections,
+    })
 }
 
 fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
@@ -477,7 +468,7 @@ pub(super) fn send_key_button(
 fn build_scene_overlay(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     let viewport = world.resource::<ViewportInput>().clone();
     draw_scene_toolbar(ui, world, &viewport);
-    draw_scene_panel(ui, world, &viewport);
 }
 
 crate::ui_window!("scene_overlay", Overlay, 0, build_scene_overlay);
+crate::ui_window!("scene_panel", Overlay, 1, form = scene_panel_form);

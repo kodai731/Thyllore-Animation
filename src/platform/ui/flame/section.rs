@@ -90,5 +90,7 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "flame",
     order: 4,
-    draw: build_flame_section,
+    section: |_| Some(Box::new(crate::platform::ui::form_window::CanvasSection {
+        draw: build_flame_section
+    })),
 });

@@ -108,6 +108,7 @@ pub enum UiRow<C: 'static> {
         get: fn(&C) -> [f32; 3],
         set: fn(&mut C, [f32; 3]),
     },
+    Field(Box<dyn DrawField<C>>),
 }
 
 #[derive(Clone)]
@@ -137,6 +138,34 @@ pub struct ListRows<C, I: 'static> {
     pub rows: fn(&I) -> Vec<UiRow<I>>,
     pub on_change: fn(&C, usize, I) -> Box<dyn UiCommand>,
     pub initially_open: fn(&I) -> bool,
+}
+
+pub trait DrawField<C> {
+    fn draw(
+        &self,
+        ui: &imgui::Ui,
+        world: &World,
+        value: &mut C,
+        after_item: &mut dyn FnMut(&imgui::Ui, EditedScalars),
+    ) -> bool;
+}
+
+pub struct FieldRows<C, I: 'static> {
+    pub field: fn(&mut C) -> &mut I,
+    pub rows: Vec<UiRow<I>>,
+}
+
+impl<C: 'static, I: 'static> DrawField<C> for FieldRows<C, I> {
+    fn draw(
+        &self,
+        ui: &imgui::Ui,
+        world: &World,
+        value: &mut C,
+        after_item: &mut dyn FnMut(&imgui::Ui, EditedScalars),
+    ) -> bool {
+        let item = (self.field)(value);
+        draw_rows(ui, world, &self.rows, item, after_item)
+    }
 }
 
 pub trait DrawList<C> {
@@ -395,6 +424,7 @@ fn draw_row<C>(
             }
             false
         }
+        UiRow::Field(field) => field.draw(ui, world, value, after_item),
     }
 }
 
@@ -756,7 +786,8 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::Choices { .. }
         | UiRow::Group { .. }
         | UiRow::Heading(_)
-        | UiRow::Tooltip(_) => None,
+        | UiRow::Tooltip(_)
+        | UiRow::Field(_) => None,
     }
 }
 
@@ -911,5 +942,14 @@ mod tests {
             },
         ];
         assert_eq!(find_duplicate_labels(&rows), ["dup"]);
+    }
+
+    #[test]
+    fn field_rows_row_label_is_none() {
+        let rows: Vec<UiRow<()>> = vec![UiRow::Field(Box::new(FieldRows::<(), ()> {
+            field: |_| panic!("should not be called"),
+            rows: vec![],
+        }))];
+        assert_eq!(row_labels(&rows), [None]);
     }
 }

@@ -54,6 +54,13 @@ pub enum UiRow<C: 'static> {
         items: fn(&World, &C) -> Vec<NamedChoice>,
         on_pick: fn(&C, &NamedChoice, usize) -> Box<dyn UiCommand>,
     },
+    Group {
+        title: &'static str,
+        initially_open: bool,
+        rows: Vec<UiRow<C>>,
+    },
+    Heading(&'static str),
+    Tooltip(&'static str),
     List(Box<dyn DrawList<C>>),
     Canvas(fn(&imgui::Ui, &World, &C)),
 }
@@ -204,6 +211,33 @@ fn draw_row<C>(
                 apply(value);
             }
             clicked
+        }
+        UiRow::Group {
+            title,
+            initially_open,
+            rows,
+        } => {
+            let default = if *initially_open {
+                SectionDefault::Open
+            } else {
+                SectionDefault::Closed
+            };
+            if !section_header(ui, world, title, default) {
+                return false;
+            }
+            let mut group_changed = false;
+            for row in rows {
+                group_changed |= draw_row(ui, world, row, value, after_item);
+            }
+            group_changed
+        }
+        UiRow::Heading(label) => {
+            ui.text(label);
+            false
+        }
+        UiRow::Tooltip(tooltip) => {
+            show_tooltip(ui, tooltip);
+            false
         }
         UiRow::List(list) => {
             list.draw(ui, world, value);
@@ -530,6 +564,7 @@ fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {
     }
 }
 
+#[cfg(test)]
 pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
     let labels: Vec<&str> = row_labels(rows).into_iter().flatten().collect();
     let mut duplicates = Vec::new();
@@ -541,6 +576,7 @@ pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
     duplicates
 }
 
+#[cfg(test)]
 pub fn row_labels<C>(rows: &[UiRow<C>]) -> Vec<Option<&str>> {
     rows.iter().map(row_label).collect()
 }
@@ -550,6 +586,7 @@ pub fn visible_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
     row_labels(rows).into_iter().flatten().collect()
 }
 
+#[cfg(test)]
 fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
     match row {
         UiRow::Scalar { param, .. } => Some(param.name),
@@ -559,7 +596,12 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::Action { label, .. }
         | UiRow::Apply { label, .. } => Some(label),
         UiRow::List(list) => Some(list.title()),
-        UiRow::Canvas(_) | UiRow::Sliders { .. } | UiRow::Choices { .. } => None,
+        UiRow::Canvas(_)
+        | UiRow::Sliders { .. }
+        | UiRow::Choices { .. }
+        | UiRow::Group { .. }
+        | UiRow::Heading(_)
+        | UiRow::Tooltip(_) => None,
     }
 }
 

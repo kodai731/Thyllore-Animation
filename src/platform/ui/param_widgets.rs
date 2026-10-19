@@ -1,29 +1,8 @@
 use thyllore_scene_core::{find_ui_param, ScalarParam, UiParam};
 
-use crate::ecs::World;
-use crate::platform::ui::theme::{section_header, SectionDefault};
-
-use super::ui_rows::{draw_rows, UiRow};
+use super::ui_rows::UiRow;
 
 pub use super::ui_rows::EditedScalars;
-
-/// Names are validated against both tables by unit tests; an unresolved name is skipped.
-pub fn draw_params<C>(
-    ui: &imgui::Ui,
-    world: &World,
-    names: &[&str],
-    ui_params: &'static [UiParam],
-    scalars: &'static [ScalarParam<C>],
-    component: &mut C,
-    after_item: impl FnMut(&imgui::Ui, EditedScalars),
-) {
-    let rows: Vec<UiRow<C>> = names
-        .iter()
-        .filter_map(|name| find_ui_param(ui_params, name))
-        .map(|param| UiRow::Scalar { param, scalars })
-        .collect();
-    draw_rows(ui, world, &rows, component, after_item);
-}
 
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.
 pub type ParamGroup = (Option<&'static str>, Vec<&'static str>);
@@ -65,47 +44,40 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
     groups
 }
 
-pub fn draw_tiered_params<C>(
-    ui: &imgui::Ui,
-    world: &World,
+pub fn rows_from_params<C>(
     ui_params: &'static [UiParam],
     scalars: &'static [ScalarParam<C>],
-    component: &mut C,
     hidden: &[&str],
-    mut after_item: impl FnMut(&imgui::Ui, EditedScalars),
-) -> bool {
+) -> Vec<UiRow<C>> {
     let primary_names = determine_primary_order(ui_params, hidden);
-    draw_params(
-        ui,
-        world,
-        &primary_names,
-        ui_params,
-        scalars,
-        component,
-        &mut after_item,
-    );
+    let mut rows: Vec<UiRow<C>> = primary_names
+        .iter()
+        .filter_map(|name| find_ui_param(ui_params, name))
+        .map(|param| UiRow::Scalar { param, scalars })
+        .collect();
 
     let remaining_groups = group_remaining_params(ui_params, hidden);
-    if remaining_groups.is_empty() || !section_header(ui, world, "Advanced", SectionDefault::Closed)
-    {
-        return false;
+    if remaining_groups.is_empty() {
+        return rows;
     }
 
+    let mut group_rows: Vec<UiRow<C>> = Vec::new();
     for (heading, names) in &remaining_groups {
         if let Some(group_heading) = heading {
-            ui.text(group_heading);
+            group_rows.push(UiRow::Heading(group_heading));
         }
-        draw_params(
-            ui,
-            world,
-            names,
-            ui_params,
-            scalars,
-            component,
-            &mut after_item,
-        );
+        for name in names {
+            if let Some(param) = find_ui_param(ui_params, name) {
+                group_rows.push(UiRow::Scalar { param, scalars });
+            }
+        }
     }
-    true
+    rows.push(UiRow::Group {
+        title: "Advanced",
+        initially_open: false,
+        rows: group_rows,
+    });
+    rows
 }
 
 pub(super) fn draw_preset_combo(
@@ -207,5 +179,77 @@ mod tests {
         }
         drawn.sort_unstable();
         assert_eq!(drawn, ["a", "b", "c", "d", "e", "f"]);
+    }
+
+    fn describe_rows<C>(rows: &[super::super::ui_rows::UiRow<C>]) -> Vec<String> {
+        let mut out = Vec::new();
+        for row in rows {
+            match row {
+                super::super::ui_rows::UiRow::Scalar { param, .. } => {
+                    out.push(format!("Scalar({})", param.name));
+                }
+                super::super::ui_rows::UiRow::Heading(label) => {
+                    out.push(format!("Heading({})", label));
+                }
+                super::super::ui_rows::UiRow::Group { title, rows, .. } => {
+                    out.push(format!("Group({})", title));
+                    out.extend(describe_rows(rows));
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn rows_from_params_primary_then_advanced_group() {
+        let params: &'static [UiParam] = Box::leak(mixed_params().into());
+        let scalars: &'static [ScalarParam<()>] = &[];
+        let rows = rows_from_params::<()>(params, scalars, &[]);
+        let described = describe_rows(&rows);
+        assert_eq!(
+            described,
+            [
+                "Scalar(a)",
+                "Scalar(f)",
+                "Group(Advanced)",
+                "Heading(g1)",
+                "Scalar(b)",
+                "Scalar(e)",
+                "Heading(g2)",
+                "Scalar(d)",
+                "Scalar(c)",
+            ]
+        );
+    }
+
+    #[test]
+    fn rows_from_params_hidden_excluded() {
+        let params: &'static [UiParam] = Box::leak(mixed_params().into());
+        let scalars: &'static [ScalarParam<()>] = &[];
+        let rows = rows_from_params::<()>(params, scalars, &["a", "c"]);
+        let described = describe_rows(&rows);
+        assert_eq!(
+            described,
+            [
+                "Scalar(f)",
+                "Group(Advanced)",
+                "Heading(g1)",
+                "Scalar(b)",
+                "Scalar(e)",
+                "Heading(g2)",
+                "Scalar(d)",
+            ]
+        );
+    }
+
+    #[test]
+    fn rows_from_params_all_primary_has_no_group() {
+        let params: &'static [UiParam] =
+            Box::leak([make_ui_param("a", "g1", true), make_ui_param("b", "", true)].into());
+        let scalars: &'static [ScalarParam<()>] = &[];
+        let rows = rows_from_params::<()>(params, scalars, &[]);
+        let described = describe_rows(&rows);
+        assert_eq!(described, ["Scalar(a)", "Scalar(b)"]);
     }
 }

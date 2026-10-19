@@ -11,9 +11,10 @@ use crate::ecs::World;
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
+use super::param_widgets::{draw_preset_combo, rows_from_params, EditedScalars};
 use super::pointer::is_last_item_double_clicked;
 use super::scene_overlay::send_key_button;
+use super::ui_rows::draw_rows;
 
 fn flame_key_button(ui: &imgui::Ui, ecs_world: &World, edited: EditedScalars) {
     let keys: Vec<(PropertyType, f32)> = edited
@@ -382,16 +383,22 @@ pub(super) fn build_flame_section(ui: &imgui::Ui, ecs_world: &World) {
                     }
 
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    let advanced_open = draw_tiered_params(
-                        ui,
-                        ecs_world,
+                    let rows = rows_from_params::<thyllore_effect_core::FlameEffect>(
                         &thyllore_effect_core::FLAME_UI_PARAMS,
                         &thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
                         &[],
-                        |ui, edited| flame_key_button(ui, ecs_world, edited),
                     );
-                    if advanced_open {
+                    draw_rows(ui, ecs_world, &rows, &mut effect_copy, |ui, edited| {
+                        flame_key_button(ui, ecs_world, edited);
+                    });
+                    let advanced_open = ui.get_id("Advanced").raw();
+                    let is_advanced_open = match ecs_world
+                        .get_resource::<crate::ecs::resource::UiWidgetState>()
+                    {
+                        Some(state) => *state.section_open.get(&advanced_open).unwrap_or(&false),
+                        None => false,
+                    };
+                    if is_advanced_open {
                         draw_flame_manual_params(ui, &mut effect_copy);
                     }
                     if (effect_copy.color.base, effect_copy.color.tip) != colors_before {

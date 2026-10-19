@@ -23,6 +23,7 @@ pub struct ConstraintSectionView {
     pub entries: Vec<ConstraintEntry>,
     pub bones: Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
+    pub selected_bone_name: Option<String>,
     pub add_type_index: usize,
     pub bake: BakeForm,
 }
@@ -57,11 +58,19 @@ pub fn constraint_section(
         None => (3, BakeForm::default()),
     };
 
+    let selected_bone_name = hierarchy_state.selected_bone_id.and_then(|id| {
+        bone_list
+            .iter()
+            .find(|(bid, _)| *bid == id)
+            .map(|(_, name)| name.clone())
+    });
+
     let view = ConstraintSectionView {
         entity: target_entity,
         entries,
         bones: bone_list,
         selected_bone: hierarchy_state.selected_bone_id,
+        selected_bone_name,
         add_type_index,
         bake,
     };
@@ -99,6 +108,11 @@ pub fn section_rows() -> Vec<UiRow<ConstraintSectionView>> {
         unreachable!("BakeForm declares sample_fps");
     };
     vec![
+        UiRow::Canvas(|ui, _, view: &ConstraintSectionView| {
+            if let Some(name) = &view.selected_bone_name {
+                ui.text(format!("Selected: {name}"));
+            }
+        }),
         UiRow::Choice {
             label: "Constraint Type",
             options: |_, view: &ConstraintSectionView| {
@@ -256,6 +270,7 @@ mod tests {
             entries: Vec::new(),
             bones: std::rc::Rc::new([]),
             selected_bone: None,
+            selected_bone_name: None,
             add_type_index: 3,
             bake: BakeForm::default(),
         }

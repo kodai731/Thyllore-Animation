@@ -316,7 +316,11 @@ fn draw_row<C>(
             let mut v = (*get)(value);
             property_label(ui, label);
             ui.same_line();
-            if ui.input_float(format!("##{}", label), &mut v) {
+            if ui
+                .input_float_config(format!("##{}", label))
+                .display_format(numeric_format(format))
+                .build(&mut v)
+            {
                 (*set)(value, v);
                 return true;
             }

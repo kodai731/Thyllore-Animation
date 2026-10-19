@@ -11,6 +11,25 @@ pub trait FormSection {
     fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World);
 }
 
+pub struct TabsSection {
+    pub id: &'static str,
+    pub tabs: Vec<(&'static str, Vec<Box<dyn FormSection>>)>,
+}
+
+impl FormSection for TabsSection {
+    fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World) {
+        if let Some(_tab_bar) = ui.tab_bar(self.id) {
+            for (name, sections) in self.tabs {
+                if let Some(_tab) = ui.tab_item(name) {
+                    for section in sections {
+                        section.draw(ui, world);
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub struct RowsSection<V: Clone + 'static> {
     pub rows: Vec<UiRow<V>>,
     pub view: V,

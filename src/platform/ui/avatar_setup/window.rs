@@ -1,9 +1,8 @@
 use crate::ecs::resource::{AvatarSetupState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
-use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
+use crate::platform::ui::form_window::{FormPlacement, FormWindow, TabsSection};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use imgui::Condition;
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 
@@ -13,107 +12,155 @@ use super::material_rows::MaterialView;
 use super::stats_rows::StatsView;
 use super::submesh_rows::SubmeshesView;
 
-fn draw_avatar_setup_window(ui: &imgui::Ui, world: &World, state: &mut AvatarSetupState) {
+fn avatar_setup_form(
+    world: &World,
+    _assets: &crate::asset::AssetStorage,
+    _graphics: &GraphicsResources,
+) -> Option<FormWindow> {
+    let state = world.resource::<AvatarSetupState>().clone();
     if !state.is_open {
-        return;
+        return None;
     }
-
-    let mut is_open = state.is_open;
-    let _raised = push_raised_window_style(ui);
-    ui.window("Avatar Setup")
-        .size([520.0, 600.0], Condition::FirstUseEver)
-        .movable(true)
-        .opened(&mut is_open)
-        .build(|| {
-            draw_raised_window_frame(ui);
-            let Some(_tab_bar) = ui.tab_bar("##avatar_setup_tabs") else {
-                return;
-            };
-            if let Some(_tab) = ui.tab_item("Humanoid") {
-                let mut view = HumanoidView::from_state(state);
-                crate::platform::ui::draw_rows(
-                    ui,
-                    world,
-                    &super::humanoid_rows::rows(),
-                    &mut view,
-                    |_, _| {},
-                );
-            }
-            if let Some(_tab) = ui.tab_item("Materials") {
-                let material_textures = world.resource::<MaterialTextureState>();
-                let mut view = MaterialView::from_state(&material_textures);
-                crate::platform::ui::draw_rows(
-                    ui,
-                    world,
-                    &super::material_rows::rows(),
-                    &mut view,
-                    |_, _| {},
-                );
-            }
-            if let Some(_tab) = ui.tab_item("Submeshes") {
-                let mut view = SubmeshesView::from_state(state);
-                crate::platform::ui::draw_rows(
-                    ui,
-                    world,
-                    &super::submesh_rows::rows(),
-                    &mut view,
-                    |_, _| {},
-                );
-                if view.chain_gen != state.chain_gen {
-                    world.send_command(AvatarSetupEvent::SetChainGenSettings {
-                        settings: view.chain_gen,
-                    });
-                }
-            }
-            if let Some(_tab) = ui.tab_item("Validation") {
-                build_validation_tab(ui, state);
-            }
-            if let Some(_tab) = ui.tab_item("Stats") {
-                let mut view = StatsView::from_state(state);
-                crate::platform::ui::draw_rows(
-                    ui,
-                    world,
-                    &super::stats_rows::rows(),
-                    &mut view,
-                    |_, _| {},
-                );
-                if view.platform != state.platform {
-                    world.send_command(AvatarSetupEvent::SetAvatarRankPlatform(view.platform));
-                }
-            }
-            if let Some(_tab) = ui.tab_item("Export") {
-                let mut view = ExportView::from_state(state);
-                crate::platform::ui::draw_rows(
-                    ui,
-                    world,
-                    &super::export_rows::rows(),
-                    &mut view,
-                    |_, _| {},
-                );
-                state.spring_prefix = view.spring_prefix;
-            }
-        });
-    state.is_open = is_open;
+    let material_view = MaterialView::from_state(&world.resource::<MaterialTextureState>());
+    let tabs: Vec<(
+        &'static str,
+        Vec<Box<dyn crate::platform::ui::form_window::FormSection>>,
+    )> = vec![
+        (
+            "Humanoid",
+            vec![crate::platform::ui::form_window::rows_section(
+                super::humanoid_rows::rows(),
+                HumanoidView::from_state(&state),
+                |_, _, _| {},
+            )],
+        ),
+        (
+            "Materials",
+            vec![crate::platform::ui::form_window::rows_section(
+                super::material_rows::rows(),
+                material_view,
+                |_, _, _| {},
+            )],
+        ),
+        (
+            "Submeshes",
+            vec![crate::platform::ui::form_window::rows_section(
+                super::submesh_rows::rows(),
+                SubmeshesView::from_state(&state),
+                commit_submeshes,
+            )],
+        ),
+        (
+            "Validation",
+            vec![crate::platform::ui::form_window::rows_section(
+                validation_rows(),
+                ValidationView::from_state(&state),
+                |_, _, _| {},
+            )],
+        ),
+        (
+            "Stats",
+            vec![crate::platform::ui::form_window::rows_section(
+                super::stats_rows::rows(),
+                StatsView::from_state(&state),
+                commit_stats,
+            )],
+        ),
+        (
+            "Export",
+            vec![crate::platform::ui::form_window::rows_section(
+                super::export_rows::rows(),
+                ExportView::from_state(&state),
+                commit_export,
+            )],
+        ),
+    ];
+    Some(FormWindow {
+        title: "Avatar Setup",
+        placement: FormPlacement::Floating {
+            initial_size: [520.0, 600.0],
+            on_close: close_avatar_setup,
+        },
+        sections: vec![Box::new(TabsSection {
+            id: "##avatar_setup_tabs",
+            tabs,
+        })],
+    })
 }
 
-fn build_validation_tab(ui: &imgui::Ui, state: &AvatarSetupState) {
-    ui.text(format!("Rest pose: {}", format_rest_pose(state.rest_pose)));
+crate::ui_window!("avatar_setup", Floating, 1, form = avatar_setup_form);
+
+fn commit_submeshes(world: &World, shown: &SubmeshesView, view: &SubmeshesView) {
+    if view.chain_gen != shown.chain_gen {
+        world.send_command(AvatarSetupEvent::SetChainGenSettings {
+            settings: view.chain_gen.clone(),
+        });
+    }
+}
+
+fn commit_stats(world: &World, shown: &StatsView, view: &StatsView) {
+    if view.platform != shown.platform {
+        world.send_command(AvatarSetupEvent::SetAvatarRankPlatform(view.platform));
+    }
+}
+
+fn commit_export(world: &World, _shown: &ExportView, view: &ExportView) {
+    if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
+        state.spring_prefix = view.spring_prefix.clone();
+    }
+}
+
+fn close_avatar_setup(world: &World) {
+    if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
+        state.is_open = false;
+    }
+}
+
+#[derive(Clone)]
+pub struct ValidationView {
+    pub rest_pose: RestPose,
+    pub issues: Vec<String>,
+    pub warnings: Vec<String>,
+    pub missing_bones: Vec<String>,
+}
+
+impl ValidationView {
+    pub fn from_state(state: &AvatarSetupState) -> Self {
+        Self {
+            rest_pose: state.rest_pose,
+            issues: state.issues.iter().map(|i| i.to_string()).collect(),
+            warnings: state
+                .geometry_warnings
+                .iter()
+                .map(format_geometry_warning)
+                .collect(),
+            missing_bones: state.missing_bone_names.clone(),
+        }
+    }
+}
+
+fn validation_rows() -> Vec<crate::platform::ui::ui_rows::UiRow<ValidationView>> {
+    vec![crate::platform::ui::ui_rows::UiRow::Canvas(draw_validation)]
+}
+
+fn draw_validation(ui: &imgui::Ui, _world: &World, view: &ValidationView) {
+    ui.text(format!("Rest pose: {}", format_rest_pose(view.rest_pose)));
     ui.separator();
 
-    ui.text(format!("Issues: {}", state.issues.len()));
-    for issue in &state.issues {
-        ui.bullet_text(issue.to_string());
+    ui.text(format!("Issues: {}", view.issues.len()));
+    for issue in &view.issues {
+        ui.bullet_text(issue.clone());
     }
     ui.separator();
 
-    ui.text(format!("Warnings: {}", state.geometry_warnings.len()));
-    for warning in &state.geometry_warnings {
-        ui.bullet_text(format_geometry_warning(warning));
+    ui.text(format!("Warnings: {}", view.warnings.len()));
+    for warning in &view.warnings {
+        ui.bullet_text(warning.clone());
     }
     ui.separator();
 
-    ui.text(format!("Missing bones: {}", state.missing_bone_names.len()));
-    for bone_name in &state.missing_bone_names {
+    ui.text(format!("Missing bones: {}", view.missing_bones.len()));
+    for bone_name in &view.missing_bones {
         ui.bullet_text(bone_name);
     }
 }
@@ -154,22 +201,78 @@ fn format_geometry_warning(warning: &GeometryWarning) -> String {
     }
 }
 
-fn build_avatar_setup_window(
-    ui: &imgui::Ui,
-    world: &World,
-    _assets: &crate::asset::AssetStorage,
-    _graphics: &GraphicsResources,
-) {
-    let mut avatar_setup = world.resource::<AvatarSetupState>().clone();
-    draw_avatar_setup_window(ui, world, &mut avatar_setup);
-    write_back_avatar_setup_state(world, avatar_setup);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::resource::AvatarSetupState;
+    use thyllore_avatar_core::vrchat::rank::Platform;
 
-fn write_back_avatar_setup_state(world: &World, src: AvatarSetupState) {
-    if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
-        state.is_open = src.is_open;
-        state.spring_prefix = src.spring_prefix;
+    #[test]
+    fn test_commit_export_no_change() {
+        let mut world = World::new();
+        world.insert_resource(AvatarSetupState::default());
+        let prefix = world.resource::<AvatarSetupState>().spring_prefix.clone();
+
+        let view = ExportView {
+            spring_prefix: prefix.clone(),
+        };
+        commit_export(&world, &view, &view);
+
+        assert_eq!(world.resource::<AvatarSetupState>().spring_prefix, prefix);
+    }
+
+    #[test]
+    fn test_commit_export_change() {
+        let mut world = World::new();
+        world.insert_resource(AvatarSetupState::default());
+
+        let shown = ExportView {
+            spring_prefix: "old".to_string(),
+        };
+        let view = ExportView {
+            spring_prefix: "new".to_string(),
+        };
+        commit_export(&world, &shown, &view);
+
+        assert_eq!(world.resource::<AvatarSetupState>().spring_prefix, "new");
+    }
+
+    #[test]
+    fn test_commit_stats_no_change() {
+        let world = World::new();
+        let shown = StatsView {
+            platform: Platform::Pc,
+            rank: None,
+        };
+        commit_stats(&world, &shown, &shown);
+    }
+
+    #[test]
+    fn test_commit_stats_change() {
+        let mut world = World::new();
+        world.insert_resource(crate::ecs::events::queue::EventQueue::<
+            Box<dyn crate::ecs::events::UiCommand>,
+        >::default());
+        let shown = StatsView {
+            platform: Platform::Pc,
+            rank: None,
+        };
+        let view = StatsView {
+            platform: Platform::Quest,
+            rank: None,
+        };
+        commit_stats(&world, &shown, &view);
+    }
+
+    #[test]
+    fn test_close_avatar_setup() {
+        let mut world = World::new();
+        let mut state = AvatarSetupState::default();
+        state.is_open = true;
+        world.insert_resource(state);
+
+        close_avatar_setup(&world);
+
+        assert!(!world.resource::<AvatarSetupState>().is_open);
     }
 }
-
-crate::ui_window!("avatar_setup", Floating, 1, build_avatar_setup_window);

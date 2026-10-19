@@ -10,7 +10,7 @@ pub type SpringChainId = u32;
 pub type SpringColliderId = u32;
 pub type SpringColliderGroupId = u32;
 
-#[derive(Clone, Debug, SceneFields)]
+#[derive(Clone, Debug, PartialEq, SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct SpringJointParam {
     pub bone_id: BoneId,

@@ -44,6 +44,39 @@ pub enum UiRow<C: 'static> {
         enabled: fn(&World, &C) -> bool,
         apply: fn(&mut C),
     },
+    Slider {
+        label: &'static str,
+        min: f32,
+        max: f32,
+        format: &'static str,
+        get: fn(&C) -> f32,
+        set: fn(&mut C, f32),
+    },
+    IntSlider {
+        label: &'static str,
+        min: i32,
+        max: i32,
+        get: fn(&C) -> i32,
+        set: fn(&mut C, i32),
+    },
+    IntInput {
+        label: &'static str,
+        get: fn(&C) -> i32,
+        set: fn(&mut C, i32),
+    },
+    FloatInput {
+        label: &'static str,
+        format: &'static str,
+        get: fn(&C) -> f32,
+        set: fn(&mut C, f32),
+    },
+    Vector3 {
+        label: &'static str,
+        speed: f32,
+        format: &'static str,
+        get: fn(&C) -> [f32; 3],
+        set: fn(&mut C, [f32; 3]),
+    },
     Sliders {
         items: fn(&World, &C) -> Vec<NamedValue>,
         min: f32,
@@ -211,6 +244,87 @@ fn draw_row<C>(
                 apply(value);
             }
             clicked
+        }
+        UiRow::Slider {
+            label,
+            min,
+            max,
+            format,
+            get,
+            set,
+        } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if ui
+                .slider_config(format!("##{}", label), *min, *max)
+                .display_format(numeric_format(format))
+                .build(&mut v)
+            {
+                (*set)(value, v);
+                return true;
+            }
+            false
+        }
+        UiRow::IntSlider {
+            label,
+            min,
+            max,
+            get,
+            set,
+        } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if ui
+                .slider_config(format!("##{}", label), *min, *max)
+                .build(&mut v)
+            {
+                (*set)(value, v);
+                return true;
+            }
+            false
+        }
+        UiRow::IntInput { label, get, set } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if ui.input_int(format!("##{}", label), &mut v) {
+                (*set)(value, v);
+                return true;
+            }
+            false
+        }
+        UiRow::FloatInput {
+            label,
+            format,
+            get,
+            set,
+        } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if ui.input_float(format!("##{}", label), &mut v) {
+                (*set)(value, v);
+                return true;
+            }
+            false
+        }
+        UiRow::Vector3 {
+            label,
+            speed,
+            format,
+            get,
+            set,
+        } => {
+            let mut v = (*get)(value);
+            property_label(ui, label);
+            ui.same_line();
+            if vector3_field(ui, &format!("##{}", label), &mut v, *speed, format) {
+                (*set)(value, v);
+                return true;
+            }
+            false
         }
         UiRow::Group {
             title,
@@ -594,7 +708,12 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::Choice { label, .. }
         | UiRow::Text { label, .. }
         | UiRow::Action { label, .. }
-        | UiRow::Apply { label, .. } => Some(label),
+        | UiRow::Apply { label, .. }
+        | UiRow::Slider { label, .. }
+        | UiRow::IntSlider { label, .. }
+        | UiRow::IntInput { label, .. }
+        | UiRow::FloatInput { label, .. }
+        | UiRow::Vector3 { label, .. } => Some(label),
         UiRow::List(list) => Some(list.title()),
         UiRow::Canvas(_)
         | UiRow::Sliders { .. }
@@ -653,5 +772,74 @@ mod tests {
     fn canvas_rows_have_no_label() {
         let rows = [UiRow::Canvas(|_, _, _| {}), UiRow::Canvas(|_, _, _| {})];
         assert!(find_duplicate_labels::<()>(&rows).is_empty());
+    }
+
+    #[test]
+    fn new_variants_appear_in_visible_labels() {
+        let rows: Vec<UiRow<()>> = vec![
+            UiRow::Slider {
+                label: "S",
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                get: |_| 0.0,
+                set: |_, _| {},
+            },
+            UiRow::IntSlider {
+                label: "IS",
+                min: 0,
+                max: 10,
+                get: |_| 0,
+                set: |_, _| {},
+            },
+            UiRow::IntInput {
+                label: "II",
+                get: |_| 0,
+                set: |_, _| {},
+            },
+            UiRow::FloatInput {
+                label: "FI",
+                format: "%.3f",
+                get: |_| 0.0,
+                set: |_, _| {},
+            },
+            UiRow::Vector3 {
+                label: "V3",
+                speed: 1.0,
+                format: "%.2f",
+                get: |_| [0.0, 0.0, 0.0],
+                set: |_, _| {},
+            },
+        ];
+        assert_eq!(visible_labels(&rows), ["S", "IS", "II", "FI", "V3"]);
+    }
+
+    #[test]
+    fn new_variants_duplicate_detection() {
+        let rows: Vec<UiRow<()>> = vec![
+            UiRow::Slider {
+                label: "dup",
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                get: |_| 0.0,
+                set: |_, _| {},
+            },
+            UiRow::IntSlider {
+                label: "dup",
+                min: 0,
+                max: 10,
+                get: |_| 0,
+                set: |_, _| {},
+            },
+            UiRow::Vector3 {
+                label: "uniq",
+                speed: 1.0,
+                format: "%.2f",
+                get: |_| [0.0, 0.0, 0.0],
+                set: |_, _| {},
+            },
+        ];
+        assert_eq!(find_duplicate_labels(&rows), ["dup"]);
     }
 }

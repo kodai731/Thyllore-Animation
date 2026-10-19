@@ -1,9 +1,10 @@
 use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringChainId, SpringColliderDef,
-    SpringColliderGroup, SpringColliderGroupId, SpringColliderId, SpringJointParam,
+    apply_ramp, ChainRamp, ColliderShape, SpringBoneSetup, SpringChain, SpringChainId,
+    SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
+    SpringJointParam,
 };
-use crate::ecs::resource::SpringBoneState;
+use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
 use crate::ecs::world::{Entity, World};
 
 pub fn handle_spring_chain_add(
@@ -220,5 +221,133 @@ fn build_chain_joints(
 pub(crate) fn reset_spring_bone_state(world: &mut World) {
     if let Some(mut state) = world.get_resource_mut::<SpringBoneState>() {
         state.initialized = false;
+    }
+}
+
+pub fn handle_spring_chain_ramp_apply(
+    world: &mut World,
+    entity: Entity,
+    chain_ids: &[SpringChainId],
+    ramp: &ChainRamp,
+) {
+    let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
+        return;
+    };
+    for chain in &mut setup.chains {
+        if chain_ids.contains(&chain.id) {
+            *chain = apply_ramp(chain, ramp);
+        }
+    }
+
+    reset_spring_bone_state(world);
+}
+
+pub fn handle_spring_chain_ramp_load(world: &mut World, entity: Entity, chain_id: SpringChainId) {
+    let Some(setup) = world.get_component::<SpringBoneSetup>(entity) else {
+        return;
+    };
+    let Some(chain) = setup.chains.iter().find(|c| c.id == chain_id) else {
+        return;
+    };
+    if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+        state.ramp.load_ends(chain);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_chain(id: SpringChainId) -> SpringChain {
+        let first_bone = id * 3 + 1;
+        SpringChain {
+            id,
+            joints: (first_bone..first_bone + 3)
+                .map(|bone_id| SpringJointParam {
+                    bone_id,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn make_world_with_three_chains() -> (World, Entity) {
+        let mut world = World::new();
+        world.insert_resource(SpringBoneInspectorState::default());
+        let entity = world.entity().with_name("test").build();
+        let setup = SpringBoneSetup {
+            chains: (0..3).map(make_chain).collect(),
+            next_chain_id: 3,
+            ..Default::default()
+        };
+        world.insert_component(entity, setup);
+        (world, entity)
+    }
+
+    fn make_ramp() -> ChainRamp {
+        ChainRamp {
+            root: SpringJointParam {
+                stiffness: 2.0,
+                ..Default::default()
+            },
+            tip: SpringJointParam {
+                stiffness: 0.25,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn chain_joints(world: &World, entity: Entity, index: usize) -> Vec<SpringJointParam> {
+        world
+            .get_component::<SpringBoneSetup>(entity)
+            .unwrap()
+            .chains[index]
+            .joints
+            .clone()
+    }
+
+    #[test]
+    fn ramp_apply_changes_only_listed_chains() {
+        let (mut world, entity) = make_world_with_three_chains();
+        let ramp = make_ramp();
+        let untouched_before = chain_joints(&world, entity, 2);
+
+        handle_spring_chain_ramp_apply(&mut world, entity, &[0, 1], &ramp);
+
+        let setup = world.get_component::<SpringBoneSetup>(entity).unwrap();
+        for chain in &setup.chains[..2] {
+            assert_eq!(
+                chain.joints,
+                apply_ramp(&make_chain(chain.id), &ramp).joints
+            );
+            assert_eq!(chain.joints[0].stiffness, 2.0);
+            assert_eq!(chain.joints[2].stiffness, 0.25);
+        }
+        assert_eq!(chain_joints(&world, entity, 2), untouched_before);
+    }
+
+    #[test]
+    fn ramp_apply_ignores_unknown_ids() {
+        let (mut world, entity) = make_world_with_three_chains();
+        let before: Vec<_> = (0..3).map(|i| chain_joints(&world, entity, i)).collect();
+
+        handle_spring_chain_ramp_apply(&mut world, entity, &[99], &make_ramp());
+
+        let after: Vec<_> = (0..3).map(|i| chain_joints(&world, entity, i)).collect();
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn ramp_load_takes_first_and_last_joint() {
+        let (mut world, entity) = make_world_with_three_chains();
+
+        handle_spring_chain_ramp_load(&mut world, entity, 1);
+
+        let joints = chain_joints(&world, entity, 1);
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert_eq!(state.ramp.root, joints[0]);
+        assert_eq!(state.ramp.tip, joints[2]);
     }
 }

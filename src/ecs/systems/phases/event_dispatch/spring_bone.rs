@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::animation::spring_bone::SpringSpace;
+use crate::animation::spring_bone::{ChainRamp, RampEnd, SpringSpace};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -280,6 +280,48 @@ impl UiCommand for FitSpringParams {
 
         world.insert_component(inputs.entity, fitted_setup);
         reset_spring_bone_state(world);
+    }
+}
+
+#[derive(Debug)]
+pub struct ApplyChainRamp {
+    pub entity: Entity,
+    pub chain_ids: Vec<SpringChainId>,
+    pub ramp: ChainRamp,
+}
+
+impl UiCommand for ApplyChainRamp {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_ramp_apply;
+        handle_spring_chain_ramp_apply(world, self.entity, &self.chain_ids, &self.ramp);
+    }
+}
+
+#[derive(Debug)]
+pub struct LoadChainRamp {
+    pub entity: Entity,
+    pub chain_id: SpringChainId,
+}
+
+impl UiCommand for LoadChainRamp {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_ramp_load;
+        handle_spring_chain_ramp_load(world, self.entity, self.chain_id);
+    }
+}
+
+#[derive(Debug)]
+pub struct SetChainRampEnd {
+    pub end: RampEnd,
+    pub joint: SpringJointParam,
+}
+
+impl UiCommand for SetChainRampEnd {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::resource::SpringBoneInspectorState;
+        if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+            state.ramp.set_end(self.end, self.joint);
+        }
     }
 }
 

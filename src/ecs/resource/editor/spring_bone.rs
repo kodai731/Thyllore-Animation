@@ -1,4 +1,5 @@
 use crate::animation::BoneId;
+use crate::ecs::component::{ChainRamp, RampScope};
 
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
@@ -28,6 +29,8 @@ pub struct SpringBoneInspectorState {
     pub add_chain: AddChainForm,
     pub add_collider: AddColliderForm,
     pub add_collider_group_name: String,
+    pub ramp: ChainRamp,
+    pub ramp_scope: RampScope,
 }
 
 impl Default for SpringBoneInspectorState {
@@ -36,6 +39,8 @@ impl Default for SpringBoneInspectorState {
             add_chain: AddChainForm::default(),
             add_collider: AddColliderForm::default(),
             add_collider_group_name: "NewGroup".to_string(),
+            ramp: ChainRamp::default(),
+            ramp_scope: RampScope::default(),
         }
     }
 }

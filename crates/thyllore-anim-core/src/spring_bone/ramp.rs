@@ -37,6 +37,30 @@ pub struct ChainRamp {
     pub shape: RampShape,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RampEnd {
+    Root,
+    Tip,
+}
+
+impl ChainRamp {
+    pub fn set_end(&mut self, end: RampEnd, joint: SpringJointParam) {
+        match end {
+            RampEnd::Root => self.root = joint,
+            RampEnd::Tip => self.tip = joint,
+        }
+    }
+
+    pub fn load_ends(&mut self, chain: &SpringChain) {
+        let joints = &chain.joints;
+        if joints.is_empty() {
+            return;
+        }
+        self.root = joints[0].clone();
+        self.tip = joints[joints.len() - 1].clone();
+    }
+}
+
 fn lerp(from: f32, to: f32, weight: f32) -> f32 {
     from + (to - from) * weight
 }
@@ -386,5 +410,86 @@ mod tests {
 
         let result = chains_in_scope(&setup, &skeleton, 99, RampScope::SiblingChains);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn set_end_root() {
+        let mut ramp: ChainRamp = Default::default();
+        let joint = SpringJointParam {
+            bone_id: 5,
+            stiffness: 0.9,
+            ..Default::default()
+        };
+        ramp.set_end(RampEnd::Root, joint);
+        assert_eq!(ramp.root.bone_id, 5);
+        assert_eq!(ramp.root.stiffness, 0.9);
+    }
+
+    #[test]
+    fn set_end_tip() {
+        let mut ramp: ChainRamp = Default::default();
+        let joint = SpringJointParam {
+            bone_id: 7,
+            stiffness: 0.1,
+            ..Default::default()
+        };
+        ramp.set_end(RampEnd::Tip, joint);
+        assert_eq!(ramp.tip.bone_id, 7);
+        assert_eq!(ramp.tip.stiffness, 0.1);
+    }
+
+    #[test]
+    fn load_ends_normal_chain() {
+        let mut ramp: ChainRamp = Default::default();
+        let chain = SpringChain {
+            id: 0,
+            name: "test".to_string(),
+            joints: vec![
+                SpringJointParam {
+                    bone_id: 1,
+                    stiffness: 0.8,
+                    ..Default::default()
+                },
+                SpringJointParam {
+                    bone_id: 2,
+                    stiffness: 0.5,
+                    ..Default::default()
+                },
+                SpringJointParam {
+                    bone_id: 3,
+                    stiffness: 0.2,
+                    ..Default::default()
+                },
+            ],
+            collider_group_ids: Vec::new(),
+            center_bone_id: None,
+            enabled: true,
+        };
+        ramp.load_ends(&chain);
+        assert_eq!(ramp.root.bone_id, 1);
+        assert_eq!(ramp.root.stiffness, 0.8);
+        assert_eq!(ramp.tip.bone_id, 3);
+        assert_eq!(ramp.tip.stiffness, 0.2);
+    }
+
+    #[test]
+    fn load_ends_empty_chain_is_noop() {
+        let mut ramp: ChainRamp = Default::default();
+        ramp.root = SpringJointParam {
+            bone_id: 99,
+            stiffness: 0.5,
+            ..Default::default()
+        };
+        let chain = SpringChain {
+            id: 0,
+            name: "empty".to_string(),
+            joints: Vec::new(),
+            collider_group_ids: Vec::new(),
+            center_bone_id: None,
+            enabled: true,
+        };
+        ramp.load_ends(&chain);
+        assert_eq!(ramp.root.bone_id, 99);
+        assert_eq!(ramp.root.stiffness, 0.5);
     }
 }

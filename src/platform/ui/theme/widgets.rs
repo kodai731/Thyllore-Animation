@@ -103,7 +103,8 @@ pub fn property_label_colored(ui: &Ui, label: &str, color: [f32; 4]) {
 }
 
 fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {
-    let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= PROPERTY_LABEL_WIDTH;
+    let text_width = PROPERTY_LABEL_WIDTH - ui.clone_style().item_inner_spacing()[0];
+    let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= text_width;
     if fits(label) {
         return Cow::Borrowed(label);
     }

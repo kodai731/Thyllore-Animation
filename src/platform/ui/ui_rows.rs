@@ -296,7 +296,6 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if ui
                 .slider_config(format!("##{}", label), *min, *max)
                 .display_format(numeric_format(format))
@@ -316,7 +315,6 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if ui
                 .slider_config(format!("##{}", label), *min, *max)
                 .build(&mut v)
@@ -329,7 +327,6 @@ fn draw_row<C>(
         UiRow::IntInput { label, get, set } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if ui.input_int(format!("##{}", label), &mut v) {
                 (*set)(value, v);
                 return true;
@@ -344,7 +341,6 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if ui
                 .input_float_config(format!("##{}", label))
                 .display_format(numeric_format(format))
@@ -364,7 +360,6 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if vector3_field(ui, &format!("##{}", label), &mut v, *speed, format) {
                 (*set)(value, v);
                 return true;
@@ -418,7 +413,6 @@ fn draw_row<C>(
         UiRow::Color3 { label, get, set } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            ui.same_line();
             if ui.color_edit3(format!("##{}", label), &mut v) {
                 (*set)(value, v);
                 return true;

@@ -1,4 +1,7 @@
+use std::sync::LazyLock;
+
 use thyllore_model_core::{BoneId, Skeleton};
+use thyllore_scene_core::{SceneFields, UiParam};
 
 use crate::spring_bone::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 
@@ -30,9 +33,12 @@ impl RampShape {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, SceneFields)]
+#[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct ChainRamp {
+    #[nested]
     pub root: SpringJointParam,
+    #[nested]
     pub tip: SpringJointParam,
     pub shape: RampShape,
 }
@@ -144,6 +150,12 @@ pub fn chains_in_scope(
         }
     }
 }
+
+pub static CHAIN_RAMP_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
+    let mut out: Vec<UiParam> = Vec::new();
+    ChainRamp::collect_ui("", "", &mut out);
+    out
+});
 
 #[cfg(test)]
 mod tests {
@@ -491,5 +503,28 @@ mod tests {
         ramp.load_ends(&chain);
         assert_eq!(ramp.root.bone_id, 99);
         assert_eq!(ramp.root.stiffness, 0.5);
+    }
+
+    #[test]
+    fn chain_ramp_ui_params_names() {
+        let names: Vec<&str> = CHAIN_RAMP_UI_PARAMS
+            .iter()
+            .map(|p| p.name.as_ref())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "root_stiffness",
+                "root_drag_force",
+                "root_gravity_power",
+                "root_gravity_dir",
+                "root_hit_radius",
+                "tip_stiffness",
+                "tip_drag_force",
+                "tip_gravity_power",
+                "tip_gravity_dir",
+                "tip_hit_radius"
+            ]
+        );
     }
 }

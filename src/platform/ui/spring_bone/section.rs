@@ -1,6 +1,9 @@
 use std::sync::LazyLock;
 
-use thyllore_anim_core::spring_bone::{ColliderShape, SpringColliderDef, SpringColliderGroup};
+use thyllore_anim_core::spring_bone::{
+    ColliderShape, RampScope, RampShape, SpringColliderDef, SpringColliderGroup,
+    CHAIN_RAMP_UI_PARAMS,
+};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::asset::AssetStorage;
@@ -18,6 +21,7 @@ use crate::animation::BoneId;
 
 use super::super::bone_choice::{bone_options, collect_bone_list};
 use super::super::form_window::{message_section, rows_section, FormSection};
+use super::super::param_widgets::rows_from_params;
 use super::super::ui_rows::{ChoiceOption, UiRow};
 
 struct AddChainPath;
@@ -46,6 +50,26 @@ static ADD_CHAIN_UI_PARAMS: LazyLock<Vec<thyllore_scene_core::UiParam>> = LazyLo
     out
 });
 
+struct RampPath;
+
+impl FieldPath<SpringView> for RampPath {
+    type Field = crate::ecs::component::ChainRamp;
+
+    fn get(root: &SpringView) -> &crate::ecs::component::ChainRamp {
+        &root.ramp
+    }
+
+    fn get_mut(root: &mut SpringView) -> &mut crate::ecs::component::ChainRamp {
+        &mut root.ramp
+    }
+}
+
+static RAMP_SCALARS: LazyLock<Vec<ScalarParam<SpringView>>> = LazyLock::new(|| {
+    let mut out = Vec::new();
+    <crate::ecs::component::ChainRamp>::collect_scalars::<SpringView, RampPath>("", &mut out);
+    out
+});
+
 #[derive(Clone)]
 pub struct SpringView {
     pub entity: Entity,
@@ -57,6 +81,8 @@ pub struct SpringView {
     pub add_chain: AddChainForm,
     pub add_collider: AddColliderForm,
     pub add_group_name: String,
+    pub ramp: crate::ecs::component::ChainRamp,
+    pub ramp_scope: crate::ecs::component::RampScope,
     pub gizmo_visible: bool,
 }
 
@@ -95,6 +121,8 @@ pub fn spring_bone_section(
         add_chain: inspector_state.add_chain,
         add_collider: inspector_state.add_collider,
         add_group_name: inspector_state.add_collider_group_name,
+        ramp: inspector_state.ramp,
+        ramp_scope: inspector_state.ramp_scope,
         gizmo_visible,
     };
 
@@ -113,11 +141,15 @@ fn commit_spring_view(world: &World, shown: &SpringView, view: &SpringView) {
     if view.add_chain != shown.add_chain
         || view.add_collider != shown.add_collider
         || view.add_group_name != shown.add_group_name
+        || view.ramp != shown.ramp
+        || view.ramp_scope != shown.ramp_scope
     {
         if let Some(mut stored_state) = world.get_resource_mut::<SpringBoneInspectorState>() {
             stored_state.add_chain = view.add_chain.clone();
             stored_state.add_collider = view.add_collider.clone();
             stored_state.add_collider_group_name = view.add_group_name.clone();
+            stored_state.ramp = view.ramp.clone();
+            stored_state.ramp_scope = view.ramp_scope;
         }
     }
 
@@ -136,6 +168,13 @@ fn find_spring_bone_entity(world: &World) -> Option<Entity> {
 pub fn section_rows() -> Vec<UiRow<SpringView>> {
     let mut rows: Vec<UiRow<SpringView>> = Vec::new();
     rows.push(chain_list_row());
+
+    rows.push(UiRow::Group {
+        title: "Ramp".into(),
+        initially_open: false,
+        rows: ramp_rows(),
+    });
+
     rows.push(UiRow::Choice {
         label: "Root Bone",
         options: |_, view: &SpringView| {
@@ -246,6 +285,70 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     rows
 }
 
+fn ramp_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows = Vec::new();
+    rows.push(UiRow::Heading("Root"));
+    rows.extend(rows_from_params(
+        &CHAIN_RAMP_UI_PARAMS,
+        &RAMP_SCALARS,
+        &[
+            "tip_stiffness",
+            "tip_drag_force",
+            "tip_gravity_power",
+            "tip_gravity_dir",
+            "tip_hit_radius",
+        ],
+    ));
+    rows.push(UiRow::Heading("Tip"));
+    rows.extend(rows_from_params(
+        &CHAIN_RAMP_UI_PARAMS,
+        &RAMP_SCALARS,
+        &[
+            "root_stiffness",
+            "root_drag_force",
+            "root_gravity_power",
+            "root_gravity_dir",
+            "root_hit_radius",
+            "tip_gravity_dir",
+        ],
+    ));
+    rows.push(UiRow::Choice {
+        label: "Shape",
+        options: |_, view: &SpringView| {
+            RampShape::ALL
+                .iter()
+                .map(|shape| ChoiceOption {
+                    label: shape.label().to_string(),
+                    selected: view.ramp.shape == *shape,
+                })
+                .collect()
+        },
+        pick: |view: &mut SpringView, index: usize| {
+            if let Some(shape) = RampShape::ALL.get(index) {
+                view.ramp.shape = *shape;
+            }
+        },
+    });
+    rows.push(UiRow::Choice {
+        label: "Scope",
+        options: |_, view: &SpringView| {
+            RampScope::ALL
+                .iter()
+                .map(|scope| ChoiceOption {
+                    label: scope.label().to_string(),
+                    selected: view.ramp_scope == *scope,
+                })
+                .collect()
+        },
+        pick: |view: &mut SpringView, index: usize| {
+            if let Some(scope) = RampScope::ALL.get(index) {
+                view.ramp_scope = *scope;
+            }
+        },
+    });
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,6 +372,8 @@ mod tests {
             add_chain: AddChainForm::default(),
             add_collider: AddColliderForm::default(),
             add_group_name: "NewGroup".to_string(),
+            ramp: crate::ecs::component::ChainRamp::default(),
+            ramp_scope: crate::ecs::component::RampScope::default(),
             gizmo_visible: false,
         }
     }
@@ -318,5 +423,40 @@ mod tests {
         let mut queue = world.get_resource_mut::<UiCommandQueue>().unwrap();
         let drained: Vec<_> = queue.drain().collect();
         assert_eq!(drained.len(), 1);
+    }
+
+    #[test]
+    fn ramp_group_visible_labels_no_duplicates() {
+        use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+
+        let ramp = ramp_rows();
+
+        assert!(
+            find_duplicate_labels(&ramp).is_empty(),
+            "duplicate labels: {:?}",
+            find_duplicate_labels(&ramp)
+        );
+
+        let labels = visible_labels(&ramp);
+        assert!(labels.contains(&"Shape"));
+        assert!(labels.contains(&"Scope"));
+        assert!(!labels.contains(&"tip_gravity_dir"));
+    }
+
+    #[test]
+    fn ramp_stiffness_change_updates_state() {
+        let mut world = make_world();
+        let entity = world.entity().with_name("test").build();
+        let shown = base_view(entity);
+        let mut view = shown.clone();
+        view.ramp.root.stiffness = 2.0;
+
+        commit_spring_view(&world, &shown, &view);
+
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert_eq!(state.ramp.root.stiffness, 2.0);
+
+        let queue = world.resource::<UiCommandQueue>();
+        assert!(queue.is_empty());
     }
 }

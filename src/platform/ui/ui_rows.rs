@@ -37,6 +37,11 @@ pub enum UiRow<C: 'static> {
         enabled: fn(&World, &C) -> bool,
         on_click: fn(&C) -> Box<dyn UiCommand>,
     },
+    Apply {
+        label: &'static str,
+        enabled: fn(&World, &C) -> bool,
+        apply: fn(&mut C),
+    },
     List(Box<dyn DrawList<C>>),
     Canvas(fn(&imgui::Ui, &World, &C)),
 }
@@ -49,7 +54,7 @@ pub struct ChoiceOption {
 pub struct ListRows<C, I: 'static> {
     pub title: &'static str,
     pub items: fn(&World, &C) -> Vec<(String, I)>,
-    pub rows: fn() -> Vec<UiRow<I>>,
+    pub rows: fn(&I) -> Vec<UiRow<I>>,
     pub on_change: fn(&C, usize, I) -> Box<dyn UiCommand>,
 }
 
@@ -65,9 +70,8 @@ impl<C: 'static, I: 'static> DrawList<C> for ListRows<C, I> {
 
     fn draw(&self, ui: &imgui::Ui, world: &World, owner: &C) {
         ui.text(self.title);
-        let rows = (self.rows)();
         for (index, (name, item)) in (self.items)(world, owner).into_iter().enumerate() {
-            self.draw_item(ui, world, owner, &rows, index, &name, item);
+            self.draw_item(ui, world, owner, index, &name, item);
         }
     }
 }
@@ -78,7 +82,6 @@ impl<C: 'static, I: 'static> ListRows<C, I> {
         ui: &imgui::Ui,
         world: &World,
         owner: &C,
-        rows: &[UiRow<I>],
         index: usize,
         name: &str,
         mut item: I,
@@ -87,7 +90,8 @@ impl<C: 'static, I: 'static> ListRows<C, I> {
         if !section_header(ui, world, name, SectionDefault::Closed) {
             return;
         }
-        if draw_rows(ui, world, rows, &mut item, |_, _| {}) {
+        let rows = (self.rows)(&item);
+        if draw_rows(ui, world, &rows, &mut item, |_, _| {}) {
             world.send_boxed_command((self.on_change)(owner, index, item));
         }
     }
@@ -134,6 +138,18 @@ fn draw_row<C>(
                 world.send_boxed_command(on_click(value));
             }
             false
+        }
+        UiRow::Apply {
+            label,
+            enabled,
+            apply,
+        } => {
+            let _disabled = ui.begin_disabled_with_cond(!enabled(world, value));
+            let clicked = ui.button(label);
+            if clicked {
+                apply(value);
+            }
+            clicked
         }
         UiRow::List(list) => {
             list.draw(ui, world, value);
@@ -404,7 +420,7 @@ fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {
 }
 
 pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
-    let labels: Vec<&str> = rows.iter().filter_map(row_label).collect();
+    let labels: Vec<&str> = row_labels(rows).into_iter().flatten().collect();
     let mut duplicates = Vec::new();
     for (index, label) in labels.iter().enumerate() {
         if labels[..index].contains(label) && !duplicates.contains(label) {
@@ -414,13 +430,23 @@ pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
     duplicates
 }
 
+pub fn row_labels<C>(rows: &[UiRow<C>]) -> Vec<Option<&str>> {
+    rows.iter().map(row_label).collect()
+}
+
+#[cfg(test)]
+pub fn visible_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
+    row_labels(rows).into_iter().flatten().collect()
+}
+
 fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
     match row {
         UiRow::Scalar { param, .. } => Some(param.name),
         UiRow::Toggle { label, .. }
         | UiRow::Choice { label, .. }
         | UiRow::Text { label, .. }
-        | UiRow::Action { label, .. } => Some(label),
+        | UiRow::Action { label, .. }
+        | UiRow::Apply { label, .. } => Some(label),
         UiRow::List(list) => Some(list.title()),
         UiRow::Canvas(_) => None,
     }
@@ -442,7 +468,7 @@ mod tests {
         UiRow::List(Box::new(ListRows::<(), ()> {
             title,
             items: |_, _| Vec::new(),
-            rows: Vec::new,
+            rows: |_| Vec::new(),
             on_change: |_, _, _| unreachable!(),
         }))
     }

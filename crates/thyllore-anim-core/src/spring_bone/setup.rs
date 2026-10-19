@@ -83,6 +83,19 @@ pub enum ColliderShape {
     Capsule { radius: f32, tail: Vector3<f32> },
 }
 
+impl ColliderShape {
+    pub fn default_sphere() -> Self {
+        ColliderShape::Sphere { radius: 0.1 }
+    }
+
+    pub fn default_capsule() -> Self {
+        ColliderShape::Capsule {
+            radius: 0.1,
+            tail: Vector3::new(0.0, 0.1, 0.0),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SpringColliderDef {
     pub id: SpringColliderId,

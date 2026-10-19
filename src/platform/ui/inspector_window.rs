@@ -16,7 +16,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
 use super::constraint_inspector::build_constraint_section;
-use super::spring_bone_inspector::build_spring_bone_section;
+use super::spring_bone::build_spring_bone_section;
 use crate::ecs::resource::LayoutSnapshot;
 
 fn draw_inspector_window(

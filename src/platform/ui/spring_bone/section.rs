@@ -1,0 +1,242 @@
+use std::sync::LazyLock;
+
+use thyllore_anim_core::spring_bone::{ColliderShape, SpringColliderDef, SpringColliderGroup};
+use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
+
+use crate::asset::AssetStorage;
+use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
+use crate::ecs::resource::{
+    AddChainForm, AddColliderForm, HierarchyState, SpringBoneInspectorState,
+};
+use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
+use crate::ecs::world::{Entity, World};
+use crate::platform::ui::theme::section_header;
+use crate::platform::ui::theme::SectionDefault;
+
+use super::chain_rows::{bone_options, chain_list_row};
+use super::collider_rows::collider_list_row;
+use super::group_rows::group_list_row;
+use crate::animation::BoneId;
+
+use super::super::constraint_inspector::collect_bone_list;
+use super::super::ui_rows::{draw_rows, ChoiceOption, UiRow};
+
+struct AddChainPath;
+
+impl FieldPath<SpringView> for AddChainPath {
+    type Field = AddChainForm;
+
+    fn get(root: &SpringView) -> &AddChainForm {
+        &root.add_chain
+    }
+
+    fn get_mut(root: &mut SpringView) -> &mut AddChainForm {
+        &mut root.add_chain
+    }
+}
+
+static ADD_CHAIN_SCALARS: LazyLock<Vec<ScalarParam<SpringView>>> = LazyLock::new(|| {
+    let mut out = Vec::new();
+    AddChainForm::collect_scalars::<SpringView, AddChainPath>("", &mut out);
+    out
+});
+
+static ADD_CHAIN_UI_PARAMS: LazyLock<Vec<thyllore_scene_core::UiParam>> = LazyLock::new(|| {
+    let mut out = Vec::new();
+    AddChainForm::collect_ui("", "", &mut out);
+    out
+});
+
+#[derive(Clone)]
+pub struct SpringView {
+    pub entity: Entity,
+    pub chains: Vec<SpringChain>,
+    pub colliders: Vec<SpringColliderDef>,
+    pub groups: Vec<SpringColliderGroup>,
+    pub bones: std::rc::Rc<[(BoneId, String)]>,
+    pub selected_bone: Option<BoneId>,
+    pub add_chain: AddChainForm,
+    pub add_collider: AddColliderForm,
+    pub add_group_name: String,
+    pub gizmo_visible: bool,
+}
+
+pub fn build_spring_bone_section(
+    ui: &imgui::Ui,
+    world: &World,
+    _entity: Entity,
+    assets: &AssetStorage,
+    hierarchy_state: &HierarchyState,
+) {
+    if !section_header(ui, world, "Spring Bones", SectionDefault::Open) {
+        return;
+    }
+
+    let target_entity = find_spring_bone_entity(world);
+    let Some(target_entity) = target_entity else {
+        ui.text("No spring bone entity");
+        return;
+    };
+
+    let bone_list = collect_bone_list(assets);
+
+    let setup = match world.get_component::<SpringBoneSetup>(target_entity) {
+        Some(s) => s.clone(),
+        None => {
+            ui.text("No SpringBoneSetup");
+            return;
+        }
+    };
+
+    let gizmo_visible = world
+        .get_resource::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
+        .map(|g| g.visible)
+        .unwrap_or(false);
+
+    let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
+
+    let mut view = SpringView {
+        entity: target_entity,
+        chains: setup.chains,
+        colliders: setup.colliders,
+        groups: setup.collider_groups,
+        bones: bone_list.into(),
+        selected_bone: hierarchy_state.selected_bone_id,
+        add_chain: inspector_state.add_chain,
+        add_collider: inspector_state.add_collider,
+        add_group_name: inspector_state.add_collider_group_name,
+        gizmo_visible,
+    };
+
+    draw_rows(ui, world, &section_rows(), &mut view, |_, _| {});
+
+    if let Some(mut stored_state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+        stored_state.add_chain = view.add_chain;
+        stored_state.add_collider = view.add_collider;
+        stored_state.add_collider_group_name = view.add_group_name;
+    }
+
+    if view.gizmo_visible != gizmo_visible {
+        world.send_command(SpringBoneEvent::ToggleGizmo(view.gizmo_visible));
+    }
+}
+
+fn find_spring_bone_entity(world: &World) -> Option<Entity> {
+    world
+        .iter_components::<WithSpringBone>()
+        .next()
+        .map(|(e, _)| e)
+}
+
+pub fn section_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows: Vec<UiRow<SpringView>> = Vec::new();
+    rows.push(chain_list_row());
+    rows.push(UiRow::Choice {
+        label: "Root Bone",
+        options: |_, view: &SpringView| {
+            bone_options(&view.bones, view.selected_bone, view.add_chain.root_bone)
+        },
+        pick: |view: &mut SpringView, index: usize| {
+            if let Some((bone_id, _)) = view.bones.get(index) {
+                view.add_chain.root_bone = *bone_id;
+            }
+        },
+    });
+    rows.push(UiRow::Apply {
+        label: "Use Selected Bone",
+        enabled: |_, view: &SpringView| view.selected_bone.is_some(),
+        apply: |view: &mut SpringView| {
+            if let Some(bone_id) = view.selected_bone {
+                view.add_chain.root_bone = bone_id;
+            }
+        },
+    });
+    rows.extend(ADD_CHAIN_UI_PARAMS.iter().map(|param| UiRow::Scalar {
+        param,
+        scalars: &ADD_CHAIN_SCALARS,
+    }));
+    rows.push(UiRow::Action {
+        label: "Add Chain",
+        enabled: |_, view: &SpringView| !view.bones.is_empty(),
+        on_click: |view: &SpringView| {
+            Box::new(SpringBoneEvent::ChainAdd {
+                entity: view.entity,
+                root_bone_id: view.add_chain.root_bone,
+                chain_length: view.add_chain.chain_length,
+            }) as _
+        },
+    });
+    rows.push(collider_list_row());
+    rows.push(UiRow::Choice {
+        label: "Collider Bone",
+        options: |_, view: &SpringView| {
+            bone_options(&view.bones, view.selected_bone, view.add_collider.bone)
+        },
+        pick: |view: &mut SpringView, index: usize| {
+            if let Some((bone_id, _)) = view.bones.get(index) {
+                view.add_collider.bone = *bone_id;
+            }
+        },
+    });
+    rows.push(UiRow::Choice {
+        label: "Collider Shape",
+        options: |_, view: &SpringView| {
+            let sphere_selected = !view.add_collider.capsule;
+            vec![
+                ChoiceOption {
+                    label: "Sphere".to_string(),
+                    selected: sphere_selected,
+                },
+                ChoiceOption {
+                    label: "Capsule".to_string(),
+                    selected: !sphere_selected,
+                },
+            ]
+        },
+        pick: |view: &mut SpringView, index: usize| {
+            view.add_collider.capsule = index == 1;
+        },
+    });
+    rows.push(UiRow::Action {
+        label: "Add Collider",
+        enabled: |_, view: &SpringView| !view.bones.is_empty(),
+        on_click: |view: &SpringView| {
+            let shape = if view.add_collider.capsule {
+                ColliderShape::default_capsule()
+            } else {
+                ColliderShape::default_sphere()
+            };
+            Box::new(SpringBoneEvent::ColliderAdd {
+                entity: view.entity,
+                bone_id: view.add_collider.bone,
+                shape,
+            }) as _
+        },
+    });
+    rows.push(group_list_row());
+    rows.push(UiRow::Text {
+        label: "Group Name",
+        get: |view: &SpringView| &view.add_group_name,
+        set: |view: &mut SpringView, value: String| {
+            view.add_group_name = value;
+        },
+    });
+    rows.push(UiRow::Action {
+        label: "Add Group",
+        enabled: |_, _: &SpringView| true,
+        on_click: |view: &SpringView| {
+            Box::new(SpringBoneEvent::ColliderGroupAdd {
+                entity: view.entity,
+                name: view.add_group_name.clone(),
+            }) as _
+        },
+    });
+    rows.push(UiRow::Toggle {
+        label: "Show Collider Gizmos",
+        get: |view: &SpringView| view.gizmo_visible,
+        set: |view: &mut SpringView, value: bool| {
+            view.gizmo_visible = value;
+        },
+    });
+    rows
+}

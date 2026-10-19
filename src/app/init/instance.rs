@@ -792,7 +792,7 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+            .insert_resource(crate::ecs::resource::SpringBoneInspectorState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
         data.ecs_world

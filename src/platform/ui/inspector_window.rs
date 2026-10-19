@@ -2,7 +2,7 @@ use imgui::Condition;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::EntityIcon;
-use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
@@ -15,7 +15,7 @@ use crate::platform::ui::theme::{property_label, vector3_field};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape_inspector::build_blend_shape_section;
-use super::constraint_inspector::build_constraint_section;
+use super::constraint::build_constraint_section;
 use super::spring_bone::build_spring_bone_section;
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -60,25 +60,7 @@ fn draw_inspector_window(
 
                 build_visible_section(ui, world, &data);
 
-                let (mut add_type_index, mut bake_fps) = world
-                    .get_resource::<ConstraintEditorState>()
-                    .map(|s| (s.add_type_index, s.bake_fps))
-                    .unwrap_or((3, 30.0));
-
-                build_constraint_section(
-                    ui,
-                    world,
-                    entity,
-                    assets,
-                    state,
-                    &mut add_type_index,
-                    &mut bake_fps,
-                );
-
-                if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
-                    editor_state.add_type_index = add_type_index;
-                    editor_state.bake_fps = bake_fps;
-                }
+                build_constraint_section(ui, world, entity, assets, state);
 
                 build_spring_bone_section(ui, world, entity, assets, state);
 

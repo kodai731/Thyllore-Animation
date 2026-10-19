@@ -13,12 +13,12 @@ use crate::ecs::world::{Entity, World};
 use crate::platform::ui::theme::section_header;
 use crate::platform::ui::theme::SectionDefault;
 
-use super::chain_rows::{bone_options, chain_list_row};
+use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;
 use super::group_rows::group_list_row;
 use crate::animation::BoneId;
 
-use super::super::constraint_inspector::collect_bone_list;
+use super::super::bone_choice::{bone_options, collect_bone_list};
 use super::super::ui_rows::{draw_rows, ChoiceOption, UiRow};
 
 struct AddChainPath;

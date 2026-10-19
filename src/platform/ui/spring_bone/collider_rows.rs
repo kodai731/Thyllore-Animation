@@ -7,8 +7,8 @@ use crate::animation::BoneId;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
 
+use super::super::bone_choice::bone_options;
 use super::super::ui_rows::{ChoiceOption, ListRows, UiRow};
-use super::chain_rows::bone_options;
 use super::section::SpringView;
 
 #[derive(Clone)]
@@ -127,6 +127,7 @@ pub fn collider_list_row() -> UiRow<SpringView> {
                 collider,
             }) as _
         },
+        initially_open: |_| false,
     }))
 }
 

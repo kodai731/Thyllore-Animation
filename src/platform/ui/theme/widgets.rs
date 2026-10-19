@@ -83,15 +83,23 @@ pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
     Cow::Owned(truncated)
 }
 
-pub fn property_label(ui: &Ui, label: &str) {
+fn write_property_label(ui: &Ui, label: &str, color: [f32; 4]) {
     let display = fit_label_to_column(ui, label);
-    ui.text_colored(srgb_to_linear_rgba(TEXT_SECONDARY), &display);
+    ui.text_colored(color, &display);
     if matches!(display, Cow::Owned(_)) && ui.is_item_hovered() {
         ui.tooltip_text(label);
     }
 
     ui.same_line_with_pos(PROPERTY_LABEL_WIDTH);
     ui.set_next_item_width(-1.0);
+}
+
+pub fn property_label(ui: &Ui, label: &str) {
+    write_property_label(ui, label, srgb_to_linear_rgba(TEXT_SECONDARY));
+}
+
+pub fn property_label_colored(ui: &Ui, label: &str, color: [f32; 4]) {
+    write_property_label(ui, label, color);
 }
 
 fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {

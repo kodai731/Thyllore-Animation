@@ -52,6 +52,7 @@ pub fn group_list_row() -> UiRow<SpringView> {
                 group: group_view.group.clone(),
             }) as _
         },
+        initially_open: |_| false,
     }))
 }
 
@@ -126,6 +127,7 @@ pub fn group_rows(view: &GroupView) -> Vec<UiRow<GroupView>> {
                 group: member_view.group,
             }) as _
         },
+        initially_open: |_| false,
     })));
 
     rows.push(UiRow::Action {

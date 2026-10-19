@@ -7,7 +7,9 @@ use thyllore_scene_core::{find_scalar_param, ScalarParam, UiKind, UiParam};
 use crate::ecs::events::UiCommand;
 use crate::ecs::World;
 use crate::platform::ui::numeric_format::numeric_format;
-use crate::platform::ui::theme::{property_label, section_header, vector3_field, SectionDefault};
+use crate::platform::ui::theme::{
+    property_label, property_label_colored, section_header, vector3_field, SectionDefault,
+};
 
 /// Scalar keys touched by one widget, `(alias name, value)`; a colour yields its r, g, b aliases.
 pub type EditedScalars<'a> = &'a [(&'static str, f32)];
@@ -42,13 +44,39 @@ pub enum UiRow<C: 'static> {
         enabled: fn(&World, &C) -> bool,
         apply: fn(&mut C),
     },
+    Sliders {
+        items: fn(&World, &C) -> Vec<NamedValue>,
+        min: f32,
+        max: f32,
+        on_change: fn(&C, &NamedValue, f32) -> Box<dyn UiCommand>,
+    },
+    Choices {
+        items: fn(&World, &C) -> Vec<NamedChoice>,
+        on_pick: fn(&C, &NamedChoice, usize) -> Box<dyn UiCommand>,
+    },
     List(Box<dyn DrawList<C>>),
     Canvas(fn(&imgui::Ui, &World, &C)),
 }
 
+#[derive(Clone)]
 pub struct ChoiceOption {
     pub label: String,
     pub selected: bool,
+}
+
+#[derive(Clone)]
+pub struct NamedValue {
+    pub label: String,
+    pub key: usize,
+    pub value: f32,
+}
+
+#[derive(Clone)]
+pub struct NamedChoice {
+    pub label: String,
+    pub key: usize,
+    pub emphasized: bool,
+    pub options: Vec<ChoiceOption>,
 }
 
 pub struct ListRows<C, I: 'static> {
@@ -56,6 +84,7 @@ pub struct ListRows<C, I: 'static> {
     pub items: fn(&World, &C) -> Vec<(String, I)>,
     pub rows: fn(&I) -> Vec<UiRow<I>>,
     pub on_change: fn(&C, usize, I) -> Box<dyn UiCommand>,
+    pub initially_open: fn(&I) -> bool,
 }
 
 pub trait DrawList<C> {
@@ -87,7 +116,12 @@ impl<C: 'static, I: 'static> ListRows<C, I> {
         mut item: I,
     ) {
         let _item_id = ui.push_id(index);
-        if !section_header(ui, world, name, SectionDefault::Closed) {
+        let section_default = if (self.initially_open)(&item) {
+            SectionDefault::Open
+        } else {
+            SectionDefault::Closed
+        };
+        if !section_header(ui, world, name, section_default) {
             return;
         }
         let rows = (self.rows)(&item);
@@ -137,6 +171,26 @@ fn draw_row<C>(
             if ui.button(label) {
                 world.send_boxed_command(on_click(value));
             }
+            false
+        }
+        UiRow::Sliders {
+            items,
+            min,
+            max,
+            on_change,
+        } => {
+            draw_sliders(
+                ui,
+                world,
+                &items(world, value),
+                (*min, *max),
+                *on_change,
+                value,
+            );
+            false
+        }
+        UiRow::Choices { items, on_pick } => {
+            draw_choices(ui, world, &items(world, value), *on_pick, value);
             false
         }
         UiRow::Apply {
@@ -227,6 +281,63 @@ fn draw_text<C>(
     }
     set(value, text);
     true
+}
+
+fn draw_sliders<C>(
+    ui: &imgui::Ui,
+    world: &World,
+    items: &[NamedValue],
+    (min, max): (f32, f32),
+    on_change: fn(&C, &NamedValue, f32) -> Box<dyn UiCommand>,
+    value: &C,
+) {
+    for item in items {
+        let mut slider_value = item.value;
+        property_label(ui, &item.label);
+        ui.set_next_item_width(-1.0);
+        if ui.slider(format!("##{}", item.key), min, max, &mut slider_value) {
+            world.send_boxed_command(on_change(value, item, slider_value));
+        }
+    }
+}
+
+const CHOICES_WARNING_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
+
+fn draw_choices<C>(
+    ui: &imgui::Ui,
+    world: &World,
+    items: &[NamedChoice],
+    on_pick: fn(&C, &NamedChoice, usize) -> Box<dyn UiCommand>,
+    value: &C,
+) {
+    for item in items {
+        let label_color = if item.emphasized {
+            CHOICES_WARNING_COLOR
+        } else {
+            crate::platform::ui::theme::colors::srgb_to_linear_rgba(
+                crate::platform::ui::theme::colors::TEXT_SECONDARY,
+            )
+        };
+        let preview = item
+            .options
+            .iter()
+            .find(|option| option.selected)
+            .map_or("", |option| option.label.as_str());
+        property_label_colored(ui, &item.label, label_color);
+        let Some(combo) = ui.begin_combo(format!("##{}", item.key), preview) else {
+            continue;
+        };
+        for (index, option) in item.options.iter().enumerate() {
+            if ui
+                .selectable_config(&option.label)
+                .selected(option.selected)
+                .build()
+            {
+                world.send_boxed_command(on_pick(value, item, index));
+            }
+        }
+        combo.end();
+    }
 }
 
 fn draw_scalar_row<C>(
@@ -448,7 +559,7 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::Action { label, .. }
         | UiRow::Apply { label, .. } => Some(label),
         UiRow::List(list) => Some(list.title()),
-        UiRow::Canvas(_) => None,
+        UiRow::Canvas(_) | UiRow::Sliders { .. } | UiRow::Choices { .. } => None,
     }
 }
 
@@ -470,6 +581,7 @@ mod tests {
             items: |_, _| Vec::new(),
             rows: |_| Vec::new(),
             on_change: |_, _, _| unreachable!(),
+            initially_open: |_| false,
         }))
     }
 

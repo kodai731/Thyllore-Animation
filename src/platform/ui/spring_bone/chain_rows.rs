@@ -8,7 +8,8 @@ use crate::ecs::component::SpringChain;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
 
-use super::super::ui_rows::{ChoiceOption, ListRows, UiRow};
+use super::super::bone_choice::bone_options;
+use super::super::ui_rows::{ListRows, UiRow};
 use super::section::SpringView;
 
 #[derive(Clone)]
@@ -46,27 +47,6 @@ static JOINT_SCALARS: LazyLock<Vec<ScalarParam<JointView>>> = LazyLock::new(|| {
     out
 });
 
-pub fn bone_options(
-    bones: &[(BoneId, String)],
-    selected_bone: Option<BoneId>,
-    current: BoneId,
-) -> Vec<ChoiceOption> {
-    bones
-        .iter()
-        .map(|(bone_id, name)| {
-            let prefix = if selected_bone == Some(*bone_id) {
-                "* "
-            } else {
-                ""
-            };
-            ChoiceOption {
-                label: format!("{}{}", prefix, name),
-                selected: *bone_id == current,
-            }
-        })
-        .collect()
-}
-
 pub fn chain_list_row() -> UiRow<SpringView> {
     UiRow::List(Box::new(ListRows::<SpringView, ChainView> {
         title: "Chains",
@@ -93,6 +73,7 @@ pub fn chain_list_row() -> UiRow<SpringView> {
                 chain: chain_view.chain.clone(),
             }) as _
         },
+        initially_open: |_| false,
     }))
 }
 
@@ -134,6 +115,7 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
                 joint: joint_view.joint,
             }) as _
         },
+        initially_open: |_| false,
     })));
 
     rows.push(UiRow::Action {

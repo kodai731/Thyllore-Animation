@@ -1,11 +1,13 @@
+use crate::ecs::resource::{FlameUIState, GpuPassTimings, ViewportInput};
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::world::Entity;
-use crate::ecs::{resource::FlameUIState, World};
+use crate::ecs::World;
 
 use super::super::effect_rows::effect_instances;
+use super::body_rows::FlameBodyView;
 use super::fit_browser::validate_texture_fit_path;
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
@@ -194,6 +196,67 @@ pub(super) fn send_flame_requests(
 pub(super) fn write_back_flame_ui(world: &World, flame_ui: FlameUIState) {
     if let Some(mut resource) = world.get_resource_mut::<FlameUIState>() {
         *resource = flame_ui;
+    }
+}
+
+pub(super) fn read_flame_body_view(
+    world: &World,
+    flame: Entity,
+    effect: crate::ecs::component::FlameEffect,
+) -> FlameBodyView {
+    let trail = world
+        .get_component::<crate::ecs::component::FlameTrail>(flame)
+        .map(|t| (t.state.enabled, t.state.fade_seconds))
+        .unwrap_or((false, 0.8));
+    let render = world
+        .get_resource::<crate::ecs::resource::FlameRenderSettings>()
+        .map(|s| *s);
+    let jitter = thyllore_effect_core::flame_wave::read_env_wave_jitter();
+    let jitter_freq = thyllore_effect_core::flame_wave::read_env_wave_jitter_freq();
+    let viewport_size = world.resource::<ViewportInput>().size;
+    let gpu_timings = match world.get_resource::<GpuPassTimings>() {
+        Some(t) => t.passes.clone(),
+        None => Vec::new(),
+    };
+    FlameBodyView {
+        effect,
+        trail_enabled: trail.0,
+        trail_fade: trail.1,
+        render: render.unwrap_or_default(),
+        jitter,
+        jitter_freq,
+        viewport_size,
+        gpu_timings,
+    }
+}
+
+pub(super) fn send_flame_body_changes(
+    world: &World,
+    flame: Entity,
+    shown: &FlameBodyView,
+    view: &FlameBodyView,
+    effect_applied_this_frame: bool,
+) {
+    if !effect_applied_this_frame {
+        world.send_command(FlameUiCommand::UpdateEffect {
+            entity: flame,
+            effect: Box::new(view.effect.clone()),
+        });
+    }
+    if view.trail_enabled != shown.trail_enabled {
+        world.send_command(FlameUiCommand::UpdateTrailEnabled(view.trail_enabled));
+    }
+    if (view.trail_fade - shown.trail_fade).abs() > 0.01 {
+        world.send_command(FlameUiCommand::UpdateTrailFade(view.trail_fade));
+    }
+    if view.render != shown.render {
+        world.send_command(FlameUiCommand::UpdateRenderSettings(view.render.clone()));
+    }
+    if view.jitter != shown.jitter {
+        thyllore_effect_core::flame_wave::set_wave_jitter(view.jitter);
+    }
+    if view.jitter_freq != shown.jitter_freq {
+        thyllore_effect_core::flame_wave::set_wave_jitter_freq(view.jitter_freq);
     }
 }
 

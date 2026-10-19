@@ -1,11 +1,10 @@
-use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
+use crate::ecs::systems::flame::{FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
-use crate::ecs::{resource::FlameUIState, World};
 
 use super::super::effect_rows::{instance_options, preset_options};
 use super::super::ui_rows::{ChoiceOption, UiRow};
-use super::section_view::{FlameRequests, FlameSectionView};
+use super::section_view::FlameSectionView;
 
 pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
     let mut rows: Vec<UiRow<FlameSectionView>> = vec![UiRow::Action {
@@ -52,7 +51,7 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
                 label: "(custom path)".to_string(),
                 selected: view.flame_ui.texture_fit_path.is_empty(),
             }];
-            for (i, name) in view.flame_ui.texture_fit_scan.iter().enumerate() {
+            for name in &view.flame_ui.texture_fit_scan {
                 let expected_path = format!("{}/{}", FLAMES_TEXTURE_DIR, name);
                 items.push(ChoiceOption {
                     label: name.clone(),
@@ -290,7 +289,9 @@ pub(super) fn style_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>
 
 #[cfg(test)]
 mod tests {
+    use super::super::section_view::FlameRequests;
     use super::*;
+    use crate::ecs::resource::FlameUIState;
     use crate::platform::ui::ui_rows::visible_labels;
 
     fn view(instances: &[&str], profile: bool, styles: &[&str]) -> FlameSectionView {

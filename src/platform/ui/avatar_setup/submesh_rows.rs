@@ -100,14 +100,27 @@ fn resolve_chain_request(
     })
 }
 
+const CHAIN_GENERATION_HELP: &str = "Generate Chains places bone chains along a Hair or Skirt \
+submesh, hanging from its root bone, and skins the submesh to them. These settings apply to the \
+next Generate Chains press; hover a label for its meaning.";
+
+fn chain_generation_group() -> UiRow<SubmeshesView> {
+    let mut rows: Vec<UiRow<SubmeshesView>> = vec![UiRow::Canvas(|ui, _, _| {
+        ui.text_wrapped(CHAIN_GENERATION_HELP);
+    })];
+    rows.extend(CHAIN_GEN_UI_PARAMS.iter().map(|param| UiRow::Scalar {
+        param,
+        scalars: &CHAIN_GEN_SCALARS,
+    }));
+    UiRow::Group {
+        title: "Chain Generation".into(),
+        initially_open: true,
+        rows,
+    }
+}
+
 pub fn rows() -> Vec<UiRow<SubmeshesView>> {
-    let mut out: Vec<UiRow<SubmeshesView>> = CHAIN_GEN_UI_PARAMS
-        .iter()
-        .map(|param| UiRow::Scalar {
-            param,
-            scalars: &CHAIN_GEN_SCALARS,
-        })
-        .collect();
+    let mut out = vec![chain_generation_group()];
     out.push(UiRow::List(Box::new(ListRows::<
         SubmeshesView,
         SubmeshItem,
@@ -225,10 +238,17 @@ mod tests {
     #[test]
     fn test_row_labels() {
         let rows = rows();
-        let labels = visible_labels(&rows);
-        let mut expected: Vec<&str> = CHAIN_GEN_UI_PARAMS.iter().map(|p| p.name).collect();
-        expected.push("Submeshes");
-        assert_eq!(labels, expected);
+        assert_eq!(visible_labels(&rows), ["Submeshes"]);
+
+        let Some(UiRow::Group {
+            title, rows: group, ..
+        }) = rows.first()
+        else {
+            panic!("the chain generation settings lead the Submeshes tab");
+        };
+        assert_eq!(title, "Chain Generation");
+        let expected: Vec<&str> = CHAIN_GEN_UI_PARAMS.iter().map(|p| p.name).collect();
+        assert_eq!(visible_labels(group), expected);
     }
 
     #[test]

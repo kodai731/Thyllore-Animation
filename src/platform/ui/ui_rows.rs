@@ -14,7 +14,8 @@ use crate::ecs::World;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::pointer::is_last_item_double_clicked;
 use crate::platform::ui::theme::{
-    property_label, property_label_colored, section_header, vector3_field, SectionDefault,
+    label_column_width, property_label_colored, property_label_in_column, section_header,
+    vector3_field, SectionDefault,
 };
 
 /// Scalar rows whose name resolves in the domain get a key button after the widget.
@@ -212,11 +213,40 @@ pub fn draw_rows<C>(
     value: &mut C,
     keys: KeyDomain,
 ) -> bool {
+    let label_column = label_column_width(ui, displayed_labels(rows));
     let mut changed = false;
     for row in rows {
-        changed |= draw_row(ui, world, row, value, keys);
+        changed |= draw_row(ui, world, row, value, keys, label_column);
     }
     changed
+}
+
+fn displayed_labels<C>(rows: &[UiRow<C>]) -> Vec<Cow<'_, str>> {
+    rows.iter()
+        .flat_map(|row| match row {
+            UiRow::Scalar { param, .. } => vec![param.display_label()],
+            UiRow::Toggle { label, .. }
+            | UiRow::Choice { label, .. }
+            | UiRow::Text { label, .. }
+            | UiRow::Slider { label, .. }
+            | UiRow::IntSlider { label, .. }
+            | UiRow::IntInput { label, .. }
+            | UiRow::FloatInput { label, .. }
+            | UiRow::Vector3 { label, .. }
+            | UiRow::Switch { label, .. }
+            | UiRow::Color3 { label, .. } => vec![Cow::Borrowed(*label)],
+            UiRow::Group { rows, .. } => displayed_labels(rows),
+            UiRow::Action { .. }
+            | UiRow::Apply { .. }
+            | UiRow::Sliders { .. }
+            | UiRow::Choices { .. }
+            | UiRow::Heading(_)
+            | UiRow::Tooltip(_)
+            | UiRow::List(_)
+            | UiRow::Canvas(_)
+            | UiRow::Field(_) => Vec::new(),
+        })
+        .collect()
 }
 
 fn draw_row<C>(
@@ -225,16 +255,28 @@ fn draw_row<C>(
     row: &UiRow<C>,
     value: &mut C,
     keys: KeyDomain,
+    label_column: f32,
 ) -> bool {
     match row {
-        UiRow::Scalar { param, scalars } => draw_scalar_row(ui, world, param, scalars, value, keys),
-        UiRow::Toggle { label, get, set } => draw_toggle(ui, label, *get, *set, value),
+        UiRow::Scalar { param, scalars } => {
+            draw_scalar_row(ui, world, param, scalars, value, keys, label_column)
+        }
+        UiRow::Toggle { label, get, set } => {
+            draw_toggle(ui, label, *get, *set, value, label_column)
+        }
         UiRow::Choice {
             label,
             options,
             pick,
-        } => draw_choice(ui, label, &options(world, value), *pick, value),
-        UiRow::Text { label, get, set } => draw_text(ui, label, *get, *set, value),
+        } => draw_choice(
+            ui,
+            label,
+            &options(world, value),
+            *pick,
+            value,
+            label_column,
+        ),
+        UiRow::Text { label, get, set } => draw_text(ui, label, *get, *set, value, label_column),
         UiRow::Action {
             label,
             enabled,
@@ -259,6 +301,7 @@ fn draw_row<C>(
                 (*min, *max),
                 *on_change,
                 value,
+                label_column,
             );
             false
         }
@@ -287,7 +330,7 @@ fn draw_row<C>(
             set,
         } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             let changed = ui
                 .slider_config(format!("##{}", label), *min, *max)
                 .display_format(numeric_format(format))
@@ -307,7 +350,7 @@ fn draw_row<C>(
             set,
         } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             let changed = ui
                 .slider_config(format!("##{}", label), *min, *max)
                 .build(&mut v);
@@ -320,7 +363,7 @@ fn draw_row<C>(
         }
         UiRow::IntInput { label, get, set } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             if ui.input_int(format!("##{}", label), &mut v) {
                 (*set)(value, v);
                 return true;
@@ -334,7 +377,7 @@ fn draw_row<C>(
             set,
         } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             if ui
                 .input_float_config(format!("##{}", label))
                 .display_format(numeric_format(format))
@@ -353,7 +396,7 @@ fn draw_row<C>(
             set,
         } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             if vector3_field(ui, &format!("##{}", label), &mut v, *speed, format) {
                 (*set)(value, v);
                 return true;
@@ -376,7 +419,7 @@ fn draw_row<C>(
             let _id = ui.push_id(title.as_ref());
             let mut group_changed = false;
             for row in rows {
-                group_changed |= draw_row(ui, world, row, value, keys);
+                group_changed |= draw_row(ui, world, row, value, keys, label_column);
             }
             group_changed
         }
@@ -406,7 +449,7 @@ fn draw_row<C>(
         }
         UiRow::Color3 { label, get, set } => {
             let mut v = (*get)(value);
-            property_label(ui, label);
+            property_label_in_column(ui, label, label_column);
             if ui.color_edit3(format!("##{}", label), &mut v) {
                 (*set)(value, v);
                 return true;
@@ -423,9 +466,10 @@ fn draw_toggle<C>(
     get: fn(&C) -> bool,
     set: fn(&mut C, bool),
     value: &mut C,
+    label_column: f32,
 ) -> bool {
     let mut checked = get(value);
-    property_label(ui, label);
+    property_label_in_column(ui, label, label_column);
     if !ui.checkbox(format!("##{label}"), &mut checked) {
         return false;
     }
@@ -439,12 +483,13 @@ fn draw_choice<C>(
     options: &[ChoiceOption],
     pick: fn(&mut C, usize),
     value: &mut C,
+    label_column: f32,
 ) -> bool {
     let preview = options
         .iter()
         .find(|option| option.selected)
         .map_or("", |option| option.label.as_str());
-    property_label(ui, label);
+    property_label_in_column(ui, label, label_column);
     let Some(combo) = ui.begin_combo(format!("##{label}"), preview) else {
         return false;
     };
@@ -474,9 +519,10 @@ fn draw_text<C>(
     get: fn(&C) -> &str,
     set: fn(&mut C, String),
     value: &mut C,
+    label_column: f32,
 ) -> bool {
     let mut text = get(value).to_owned();
-    property_label(ui, label);
+    property_label_in_column(ui, label, label_column);
     if !ui.input_text(format!("##{label}"), &mut text).build() {
         return false;
     }
@@ -491,10 +537,11 @@ fn draw_sliders<C>(
     (min, max): (f32, f32),
     on_change: fn(&C, &NamedValue, f32) -> Box<dyn UiCommand>,
     value: &C,
+    label_column: f32,
 ) {
     for item in items {
         let mut slider_value = item.value;
-        property_label(ui, &item.label);
+        property_label_in_column(ui, &item.label, label_column);
         ui.set_next_item_width(-1.0);
         if ui.slider(format!("##{}", item.key), min, max, &mut slider_value) {
             world.send_boxed_command(on_change(value, item, slider_value));
@@ -548,9 +595,10 @@ fn draw_scalar_row<C>(
     scalars: &[ScalarParam<C>],
     component: &mut C,
     keys: KeyDomain,
+    label_column: f32,
 ) -> bool {
     match meta.kind {
-        UiKind::Scalar => draw_scalar(ui, world, meta, scalars, component, keys),
+        UiKind::Scalar => draw_scalar(ui, world, meta, scalars, component, keys, label_column),
         UiKind::Color => draw_color(
             ui,
             world,
@@ -559,6 +607,7 @@ fn draw_scalar_row<C>(
             component,
             ColorMapping::Identity,
             keys,
+            label_column,
         ),
         UiKind::Absorption => draw_color(
             ui,
@@ -568,8 +617,9 @@ fn draw_scalar_row<C>(
             component,
             ColorMapping::Transmitted,
             keys,
+            label_column,
         ),
-        UiKind::Offset => draw_offset(ui, world, meta, scalars, component, keys),
+        UiKind::Offset => draw_offset(ui, world, meta, scalars, component, keys, label_column),
     }
 }
 
@@ -624,6 +674,7 @@ fn draw_scalar<C>(
     scalars: &[ScalarParam<C>],
     component: &mut C,
     keys: KeyDomain,
+    label_column: f32,
 ) -> bool {
     let Some(scalar) = find_scalar_param(scalars, meta.name) else {
         return false;
@@ -631,7 +682,7 @@ fn draw_scalar<C>(
     let targets = key_targets(keys, &[scalar]);
 
     let mut value = (scalar.get)(component);
-    property_label(ui, &meta.display_label());
+    property_label_in_column(ui, &meta.display_label(), label_column);
     reserve_key_button_width(ui, &targets);
     let changed = ui
         .slider_config(format!("##{}", meta.name), meta.min, meta.max)
@@ -689,6 +740,7 @@ fn draw_color<C>(
     component: &mut C,
     mapping: ColorMapping,
     keys: KeyDomain,
+    label_column: f32,
 ) -> bool {
     let component_names = meta.color_component_names();
     let Some(channels) = resolve_channels(scalars, &component_names) else {
@@ -698,7 +750,7 @@ fn draw_color<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut picked = mapping.to_picker(stored);
-    property_label(ui, &meta.display_label());
+    property_label_in_column(ui, &meta.display_label(), label_column);
     reserve_key_button_width(ui, &targets);
     let changed = ui
         .color_picker3_config(format!("##{}", meta.name), &mut picked)
@@ -744,6 +796,7 @@ fn draw_offset<C>(
     scalars: &[ScalarParam<C>],
     component: &mut C,
     keys: KeyDomain,
+    label_column: f32,
 ) -> bool {
     let component_names = meta.offset_component_names();
     let Some(channels) = resolve_channels(scalars, &component_names) else {
@@ -753,7 +806,7 @@ fn draw_offset<C>(
 
     let stored = channels.map(|channel| (channel.get)(component));
     let mut dragged = stored;
-    property_label(ui, &meta.display_label());
+    property_label_in_column(ui, &meta.display_label(), label_column);
     reserve_key_button_width(ui, &targets);
     let changed = vector3_field(ui, meta.name, &mut dragged, 1.0, meta.format);
     show_tooltip(ui, meta.tooltip);

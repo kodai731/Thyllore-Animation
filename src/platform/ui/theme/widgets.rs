@@ -18,6 +18,7 @@ use super::icons::Icon;
 const TREE_INDENT: f32 = 16.0;
 pub const ICON_BUTTON_SIZE: f32 = 24.0;
 pub const PROPERTY_LABEL_WIDTH: f32 = 96.0;
+const LABEL_COLUMN_MAX_FRACTION: f32 = 0.5;
 const TOOLBAR_DIVIDER_WIDTH: f32 = 12.0;
 const TOOLBAR_DIVIDER_HEIGHT: f32 = 18.0;
 const SEGMENT_PADDING_X: f32 = 8.0;
@@ -83,27 +84,48 @@ pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
     Cow::Owned(truncated)
 }
 
-fn write_property_label(ui: &Ui, label: &str, color: [f32; 4]) {
-    let display = fit_label_to_column(ui, label);
+fn write_property_label(ui: &Ui, label: &str, column_width: f32, color: [f32; 4]) {
+    let column_start = ui.cursor_pos()[0];
+    let display = fit_label_to_column(ui, label, column_width);
     ui.text_colored(color, &display);
     if matches!(display, Cow::Owned(_)) && ui.is_item_hovered() {
         ui.tooltip_text(label);
     }
 
-    ui.same_line_with_pos(PROPERTY_LABEL_WIDTH);
+    ui.same_line_with_pos(column_start + column_width);
     ui.set_next_item_width(-1.0);
 }
 
 pub fn property_label(ui: &Ui, label: &str) {
-    write_property_label(ui, label, srgb_to_linear_rgba(TEXT_SECONDARY));
+    write_property_label(
+        ui,
+        label,
+        PROPERTY_LABEL_WIDTH,
+        srgb_to_linear_rgba(TEXT_SECONDARY),
+    );
+}
+
+pub fn property_label_in_column(ui: &Ui, label: &str, column_width: f32) {
+    write_property_label(ui, label, column_width, srgb_to_linear_rgba(TEXT_SECONDARY));
 }
 
 pub fn property_label_colored(ui: &Ui, label: &str, color: [f32; 4]) {
-    write_property_label(ui, label, color);
+    write_property_label(ui, label, PROPERTY_LABEL_WIDTH, color);
 }
 
-fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {
-    let text_width = PROPERTY_LABEL_WIDTH - ui.clone_style().item_inner_spacing()[0];
+/// The label column that shows every given label in full, within half of the available width.
+pub fn label_column_width<'a>(ui: &Ui, labels: impl IntoIterator<Item = Cow<'a, str>>) -> f32 {
+    let inner_spacing = ui.clone_style().item_inner_spacing()[0];
+    let widest = labels
+        .into_iter()
+        .map(|label| ui.calc_text_size(label.as_ref())[0])
+        .fold(0.0, f32::max);
+    let max_width = ui.content_region_avail()[0] * LABEL_COLUMN_MAX_FRACTION;
+    (widest + inner_spacing).clamp(PROPERTY_LABEL_WIDTH, max_width.max(PROPERTY_LABEL_WIDTH))
+}
+
+fn fit_label_to_column<'a>(ui: &Ui, label: &'a str, column_width: f32) -> Cow<'a, str> {
+    let text_width = column_width - ui.clone_style().item_inner_spacing()[0];
     let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= text_width;
     if fits(label) {
         return Cow::Borrowed(label);

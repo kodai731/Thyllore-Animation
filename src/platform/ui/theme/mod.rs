@@ -22,4 +22,6 @@ pub use widgets::SectionDefault;
 pub use widgets::TreeRowResponse;
 pub use widgets::TreeRowSpec;
 pub use widgets::ICON_BUTTON_SIZE;
-pub use widgets::{property_label, property_label_colored};
+pub use widgets::{
+    label_column_width, property_label, property_label_colored, property_label_in_column,
+};

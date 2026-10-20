@@ -1,10 +1,12 @@
 use std::sync::LazyLock;
 
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, RampShape, SpringColliderDef, SpringColliderGroup, CHAIN_RAMP_UI_PARAMS,
+    chains_in_scope, ColliderShape, RampShape, SpringColliderDef, SpringColliderGroup,
+    CHAIN_RAMP_UI_PARAMS,
 };
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
+use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ChainRamp, RampScope};
 use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringChainId, WithSpringBone};
@@ -87,6 +89,21 @@ pub struct SpringView {
     pub gizmo_visible: bool,
 }
 
+fn resolve_ramp_targets(
+    setup: &SpringBoneSetup,
+    skeleton: Option<&Skeleton>,
+    scope: RampScope,
+) -> Vec<Vec<SpringChainId>> {
+    match skeleton {
+        Some(skeleton) => setup
+            .chains
+            .iter()
+            .map(|chain| chains_in_scope(setup, skeleton, chain.id, scope))
+            .collect(),
+        None => setup.chains.iter().map(|chain| vec![chain.id]).collect(),
+    }
+}
+
 pub fn spring_bone_section(
     world: &World,
     assets: &AssetStorage,
@@ -112,23 +129,11 @@ pub fn spring_bone_section(
 
     let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
 
-    let ramp_targets: Vec<Vec<SpringChainId>> =
-        if let Some(skeleton_asset) = assets.skeletons.values().next() {
-            setup
-                .chains
-                .iter()
-                .map(|chain| {
-                    thyllore_anim_core::spring_bone::chains_in_scope(
-                        &setup,
-                        &skeleton_asset.skeleton,
-                        chain.id,
-                        inspector_state.ramp_scope,
-                    )
-                })
-                .collect()
-        } else {
-            setup.chains.iter().map(|chain| vec![chain.id]).collect()
-        };
+    let ramp_targets = resolve_ramp_targets(
+        &setup,
+        assets.skeletons.values().next().map(|s| &s.skeleton),
+        inspector_state.ramp_scope,
+    );
 
     let view = SpringView {
         entity: target_entity,
@@ -372,13 +377,37 @@ fn ramp_rows() -> Vec<UiRow<SpringView>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::{BoneId, Skeleton};
     use crate::ecs::events::UiCommandQueue;
+    use thyllore_anim_core::spring_bone::SpringJointParam;
 
     fn make_world() -> World {
         let mut world = World::new();
         world.insert_resource(SpringBoneInspectorState::default());
         world.insert_resource(UiCommandQueue::default());
         world
+    }
+
+    fn make_skeleton() -> Skeleton {
+        let mut skeleton = Skeleton::default();
+        skeleton.add_bone("Head", None);
+        let hair_l_root = skeleton.add_bone("hair_l_root", Some(0));
+        let hair_r_root = skeleton.add_bone("hair_r_root", Some(0));
+        skeleton.add_bone("hair_l_1", Some(hair_l_root));
+        skeleton.add_bone("hair_r_1", Some(hair_r_root));
+        skeleton
+    }
+
+    fn chain(id: SpringChainId, name: &str, root_bone_id: BoneId) -> SpringChain {
+        SpringChain {
+            id,
+            name: name.to_string(),
+            joints: vec![SpringJointParam {
+                bone_id: root_bone_id,
+                ..SpringJointParam::default()
+            }],
+            ..SpringChain::default()
+        }
     }
 
     fn base_view(entity: Entity) -> SpringView {
@@ -479,5 +508,27 @@ mod tests {
 
         let queue = world.resource::<UiCommandQueue>();
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn resolve_ramp_targets_none_skeleton_returns_each_chain_alone() {
+        let setup = SpringBoneSetup {
+            chains: vec![chain(1, "a", 0), chain(2, "b", 0), chain(3, "c", 0)],
+            ..SpringBoneSetup::default()
+        };
+        let targets = resolve_ramp_targets(&setup, None, RampScope::SiblingChains);
+        assert_eq!(targets, vec![vec![1], vec![2], vec![3]]);
+    }
+
+    #[test]
+    fn resolve_ramp_targets_sibling_chains_returns_both_children() {
+        let skeleton = make_skeleton();
+        let setup = SpringBoneSetup {
+            chains: vec![chain(1, "hair_l", 1), chain(2, "hair_r", 2)],
+            ..SpringBoneSetup::default()
+        };
+        let targets = resolve_ramp_targets(&setup, Some(&skeleton), RampScope::SiblingChains);
+        assert_eq!(targets[0], vec![1, 2]);
+        assert_eq!(targets[1], vec![1, 2]);
     }
 }

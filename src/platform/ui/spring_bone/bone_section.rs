@@ -6,9 +6,9 @@ use thyllore_anim_core::spring_bone::{
 
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
+use crate::ecs::component::{RampEnd, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::SpringBoneInspectorState;
-use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::{SetChainRampEnd, SpringBoneEvent};
 use crate::ecs::world::{Entity, World};
 
 use super::super::bone_choice::collect_bone_list;
@@ -145,6 +145,31 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
     rows
 }
 
+fn bone_joint_rows() -> Vec<UiRow<JointView>> {
+    let mut rows = joint_param_rows();
+    rows.push(UiRow::Action {
+        label: "Use As Ramp Root",
+        enabled: |_, _: &JointView| true,
+        on_click: |view: &JointView| {
+            Box::new(SetChainRampEnd {
+                end: RampEnd::Root,
+                joint: view.joint.clone(),
+            }) as _
+        },
+    });
+    rows.push(UiRow::Action {
+        label: "Use As Ramp Tip",
+        enabled: |_, _: &JointView| true,
+        on_click: |view: &JointView| {
+            Box::new(SetChainRampEnd {
+                end: RampEnd::Tip,
+                joint: view.joint.clone(),
+            }) as _
+        },
+    });
+    rows
+}
+
 fn joint_list_row() -> UiRow<BoneSpringView> {
     UiRow::List(Box::new(ListRows::<BoneSpringView, JointView> {
         title: "Joints",
@@ -162,7 +187,7 @@ fn joint_list_row() -> UiRow<BoneSpringView> {
                 })
                 .collect()
         },
-        rows: |_| joint_param_rows(),
+        rows: |_| bone_joint_rows(),
         on_change: |view, index, joint_view| {
             let source = &view.joints[index];
             Box::new(SpringBoneEvent::JointUpdate {
@@ -290,5 +315,24 @@ mod tests {
             visible_labels(&rows),
             ["Joints", "Add Collider On This Bone"]
         );
+    }
+
+    #[test]
+    fn bone_joint_rows_label_order() {
+        let rows = bone_joint_rows();
+        let labels = visible_labels(&rows);
+        assert_eq!(
+            labels,
+            [
+                "stiffness",
+                "drag_force",
+                "gravity_power",
+                "gravity_dir",
+                "hit_radius",
+                "Use As Ramp Root",
+                "Use As Ramp Tip",
+            ]
+        );
+        assert!(find_duplicate_labels(&rows).is_empty());
     }
 }

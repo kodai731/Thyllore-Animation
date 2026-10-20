@@ -260,4 +260,53 @@ mod tests {
         let rows = chain_rows();
         assert!(find_duplicate_labels(&rows).is_empty());
     }
+
+    #[test]
+    fn chain_rows_apply_ramp_enabled_by_ramp_targets() {
+        let view_empty = ChainView {
+            entity: 0,
+            chain: SpringChain::default(),
+            ramp: ChainRamp::default(),
+            ramp_targets: Vec::new(),
+            bones: std::rc::Rc::new([]),
+            selected_bone: None,
+        };
+        let view_some = ChainView {
+            entity: 0,
+            chain: SpringChain::default(),
+            ramp: ChainRamp::default(),
+            ramp_targets: vec![1],
+            bones: std::rc::Rc::new([]),
+            selected_bone: None,
+        };
+
+        let rows = chain_rows();
+        let apply_ramp_row = rows.iter().find(|r| match r {
+            UiRow::Action { label, .. } => *label == "Apply Ramp",
+            _ => false,
+        });
+        let Some(apply_ramp_row) = apply_ramp_row else {
+            panic!("Apply Ramp row not found");
+        };
+
+        let world: crate::ecs::world::World = crate::ecs::world::World::new();
+
+        let enabled_empty = match apply_ramp_row {
+            UiRow::Action { enabled, .. } => enabled(&world, &view_empty),
+            _ => false,
+        };
+        let enabled_some = match apply_ramp_row {
+            UiRow::Action { enabled, .. } => enabled(&world, &view_some),
+            _ => false,
+        };
+
+        assert!(
+            !enabled_empty,
+            "Apply Ramp should be disabled when ramp_targets is empty"
+        );
+        assert!(
+            enabled_some,
+            "Apply Ramp should be enabled when ramp_targets is non-empty"
+        );
+    }
 }

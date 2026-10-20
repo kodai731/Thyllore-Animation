@@ -49,7 +49,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use crate::animation::spring_bone::{fit_bone_capsules, replace_fitted_body_colliders};
 
-pub(crate) fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
+pub fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
         .bones
         .iter()

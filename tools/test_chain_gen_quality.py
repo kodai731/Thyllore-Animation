@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from chain_gen_quality import chain_of_bone, quality_metrics
+from chain_gen_quality import centerline_gaps, chain_of_bone, quality_metrics
 
 
 def build_head_ring(radius: float = 0.1, height: float = 1.6) -> list[list[float]]:
@@ -139,3 +139,54 @@ def test_report_without_band_or_tails_degrades_to_none() -> None:
     assert metrics["shell_rigid_ratio"] is None
     assert metrics["tail_reach_ratio"] is None
     assert metrics["component_split_count"] == 0
+
+
+def test_centerline_gaps_vertical_chain_with_offset_centerline() -> None:
+    """Vertical chain (heads (0,0,0),(0,-1,0) tail (0,-2,0)) with centerline at x=0.3 -> gap_max 0.3."""
+    chains = {
+        "hair_00": {
+            "heads": [[0.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+            "tail": [0.0, -2.0, 0.0],
+        }
+    }
+    records = [
+        {"component": (0, 0), "chain": 0, "points": [[0.3, 0.0, 0.0], [0.3, -1.0, 0.0], [0.3, -2.0, 0.0]]}
+    ]
+    result = centerline_gaps(chains, records, scale=1.0)
+
+    assert abs(result["centerline_gap_max"] - 0.3) < 1e-9
+    assert abs(result["centerline_gap_mean"] - 0.3) < 1e-9
+    assert result["centerline_record_count"] == 1
+
+
+def test_centerline_gaps_empty_records() -> None:
+    """No records returns None values and count 0."""
+    chains = {
+        "hair_00": {
+            "heads": [[0.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+            "tail": [0.0, -2.0, 0.0],
+        }
+    }
+    result = centerline_gaps(chains, [], scale=1.0)
+
+    assert result["centerline_gap_max"] is None
+    assert result["centerline_gap_mean"] is None
+    assert result["centerline_record_count"] == 0
+
+
+def test_centerline_gaps_chain_none_not_counted() -> None:
+    """Record with chain=None is not counted."""
+    chains = {
+        "hair_00": {
+            "heads": [[0.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+            "tail": [0.0, -2.0, 0.0],
+        }
+    }
+    records = [
+        {"component": (0, 0), "chain": None, "points": [[0.3, 0.0, 0.0]]}
+    ]
+    result = centerline_gaps(chains, records, scale=1.0)
+
+    assert result["centerline_gap_max"] is None
+    assert result["centerline_gap_mean"] is None
+    assert result["centerline_record_count"] == 0

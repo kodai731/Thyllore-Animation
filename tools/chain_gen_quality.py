@@ -145,6 +145,71 @@ def root_height(chains: dict[str, dict], equator_height: float) -> dict:
     }
 
 
+def _point_to_polyline_distance(point: np.ndarray, polyline: list[np.ndarray]) -> float:
+    """Distance from a point to the polyline defined by consecutive segments of `polyline`."""
+    if len(polyline) < 2:
+        return float(np.linalg.norm(point - polyline[0]))
+    distances = []
+    for i in range(len(polyline) - 1):
+        seg_start = polyline[i]
+        seg_end = polyline[i + 1]
+        dist = _point_to_segment_distance(point, seg_start, seg_end)
+        distances.append(dist)
+    return float(min(distances))
+
+
+def _point_to_segment_distance(point: np.ndarray, seg_start: np.ndarray, seg_end: np.ndarray) -> float:
+    """Distance from a point to a line segment."""
+    segment = seg_end - seg_start
+    segment_length_sq = np.dot(segment, segment)
+    if segment_length_sq < 1e-30:
+        return float(np.linalg.norm(point - seg_start))
+    t = max(0.0, min(1.0, np.dot(point - seg_start, segment) / segment_length_sq))
+    projection = seg_start + t * segment
+    return float(np.linalg.norm(point - projection))
+
+
+def centerline_gaps(chains: dict[str, dict], records: list[dict], scale: float) -> dict:
+    """Per record: max distance from centerline points to the chain polyline (heads->tail).
+
+    Matches each record's `chain` (column number or None) to a chain key by extracting the column
+    suffix from the chain name (`hair_03` -> 3) and comparing with the record's `chain` field.
+    Returns aggregate of per-record maximum distances."""
+    if not records:
+        return {"centerline_gap_max": None, "centerline_gap_mean": None, "centerline_record_count": 0}
+
+    chain_by_column: dict[int, dict] = {}
+    for key, entry in chains.items():
+        parts = key.rsplit("_", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            col = int(parts[1])
+            chain_by_column[col] = entry
+
+    record_gaps = []
+    for record in records:
+        chain_col = record.get("chain")
+        if chain_col is None:
+            continue
+        entry = chain_by_column.get(chain_col)
+        if entry is None or not entry["heads"]:
+            continue
+        polyline = [np.asarray(h, dtype=float) for h in entry["heads"]]
+        if entry["tail"] is not None:
+            polyline.append(np.asarray(entry["tail"], dtype=float))
+        points = np.array(record["points"], dtype=float) * scale
+        max_dist = max(_point_to_polyline_distance(p, polyline) for p in points)
+        record_gaps.append(max_dist)
+
+    if not record_gaps:
+        return {"centerline_gap_max": None, "centerline_gap_mean": None, "centerline_record_count": 0}
+
+    return {
+        "centerline_gap_max": float(max(record_gaps)),
+        "centerline_gap_mean": float(np.mean(record_gaps)),
+        "centerline_record_count": len(record_gaps),
+    }
+
+
 def empty_columns(chains: dict[str, dict], vertices: dict, min_fraction: float) -> dict:
     """Chains that dominate fewer than `min_fraction` of all chained vertices."""
     counts = {chain: 0 for chain in chains}
@@ -176,6 +241,8 @@ def quality_metrics(chain_gen: dict, scale: float = 1.0, empty_fraction: float =
     out.update(component_splits(vertices))
     out.update(tail_reach(chains, vertices))
     out.update(empty_columns(chains, vertices, empty_fraction))
+    out.update(centerline_gaps(chains, chain_gen.get("strand_centerlines", []), scale))
+    out["strand_mode"] = chain_gen.get("strand_mode")
     if band is not None:
         out.update(shell_rigidity(vertices, band["height"] * scale, root_only_tolerance))
         out.update(root_height(chains, band["equator_height"] * scale))
@@ -193,6 +260,9 @@ SUMMARY_KEYS = (
     "component_split_count",
     "tail_reach_ratio",
     "tail_gap_max",
+    "strand_mode",
+    "centerline_gap_max",
+    "centerline_gap_mean",
     "root_height_diff_mean",
     "empty_column_count",
     "chain_count",

@@ -2,6 +2,7 @@ use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{fit_principal_axis, world_y_axis};
 
 use super::chain_gen::{progress_of, resample_polyline};
+use crate::garment::components::chain_gen::{ChainGenInput, StrandMode};
 
 pub const CENTERLINE_SAMPLE_COUNT: usize = 16;
 pub const MIN_STRAND_UV_CORRELATION: f32 = 0.8;
@@ -228,6 +229,41 @@ pub fn tuft_centerline(
     }
 
     result
+}
+
+pub fn decide_strand_mode(
+    input: &ChainGenInput,
+    components: &[Vec<u32>],
+    band_progress: f32,
+) -> StrandMode {
+    if input.tex_coords.is_empty() {
+        return StrandMode::Azimuth;
+    }
+
+    let up = world_y_axis();
+    let mut total_below = 0;
+    let mut correlated_below = 0;
+    for members in components {
+        let below_count = members
+            .iter()
+            .filter(|&&v| {
+                progress_of(input.positions[v as usize], input.root_position, up) > band_progress
+            })
+            .count();
+        total_below += below_count;
+
+        let is_correlated = uv_strand_correlation(input.positions, input.tex_coords, members)
+            .is_some_and(|r| r.abs() >= MIN_STRAND_UV_CORRELATION);
+        if is_correlated {
+            correlated_below += below_count;
+        }
+    }
+
+    if correlated_below * 2 > total_below {
+        StrandMode::Card
+    } else {
+        StrandMode::Azimuth
+    }
 }
 
 #[cfg(test)]
@@ -509,5 +545,75 @@ mod tests {
 
         assert_eq!(clusters.len(), 1);
         assert_eq!(clusters[0], [0]);
+    }
+
+    struct StripSet {
+        positions: Vec<Vector3<f32>>,
+        tex_coords: Vec<[f32; 2]>,
+        components: Vec<Vec<u32>>,
+    }
+
+    fn build_three_vertical_strips() -> StripSet {
+        let mut strip_set = StripSet {
+            positions: Vec::new(),
+            tex_coords: Vec::new(),
+            components: Vec::new(),
+        };
+        for index in 0..3 {
+            let strip = build_vertical_strip();
+            let first_vertex = strip_set.positions.len() as u32;
+            let offset = Vector3::new(5.0 * index as f32, 0.0, 0.0);
+
+            strip_set
+                .components
+                .push(strip.members.iter().map(|&m| m + first_vertex).collect());
+            strip_set
+                .positions
+                .extend(strip.positions.iter().map(|&p| p + offset));
+            strip_set.tex_coords.extend(strip.tex_coords);
+        }
+        strip_set
+    }
+
+    fn decide_mode_for(strip_set: &StripSet, tex_coords: &[[f32; 2]]) -> StrandMode {
+        let input = ChainGenInput {
+            positions: &strip_set.positions,
+            triangles: &[],
+            root_position: Vector3::new(0.0, 9.0, 0.0),
+            attachment_positions: &[],
+            tex_coords,
+        };
+        decide_strand_mode(&input, &strip_set.components, KEEP_ALL_BAND)
+    }
+
+    #[test]
+    fn vertical_strips_with_v_along_strand_are_card() {
+        let strip_set = build_three_vertical_strips();
+
+        assert_eq!(
+            decide_mode_for(&strip_set, &strip_set.tex_coords),
+            StrandMode::Card
+        );
+    }
+
+    #[test]
+    fn missing_tex_coords_fall_back_to_azimuth() {
+        let strip_set = build_three_vertical_strips();
+
+        assert_eq!(decide_mode_for(&strip_set, &[]), StrandMode::Azimuth);
+    }
+
+    #[test]
+    fn random_v_strips_are_azimuth() {
+        let mut strip_set = build_three_vertical_strips();
+        let mut state = 42;
+        for tex_coord in &mut strip_set.tex_coords {
+            tex_coord[1] = next_lcg(&mut state);
+        }
+
+        assert_eq!(
+            decide_mode_for(&strip_set, &strip_set.tex_coords),
+            StrandMode::Azimuth
+        );
     }
 }

@@ -34,6 +34,9 @@ pub struct ChainGenSettings {
     /// Chains per submesh; 0 takes the count from the azimuth distribution
     #[persist(ui(min = 0.0, max = 32.0, format = "%.0f"))]
     pub column_count: u32,
+    /// Centerline distance in model units under which two strands join one chain; 0 keeps every strand apart
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub strand_merge_distance: f32,
     /// Arc length in model units over which the root bone keeps its weight; 0 uses the first joint length
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
     pub root_blend_width: f32,
@@ -50,6 +53,7 @@ impl Default for ChainGenSettings {
         Self {
             joint_count: 4,
             column_count: 0,
+            strand_merge_distance: 0.0,
             root_blend_width: 0.0,
             column_blend_width: 0.0,
             root_band_offset: 0.0,
@@ -85,6 +89,8 @@ pub struct ChainGenInput<'a> {
     pub root_position: Vector3<f32>,
     /// Skin vertices the root bone drives, in the same space as `positions`; empty falls back to `positions`
     pub attachment_positions: &'a [Vector3<f32>],
+    /// Per-vertex texture coordinates; empty means no strand parameter is available
+    pub tex_coords: &'a [[f32; 2]],
 }
 
 #[derive(Debug, Clone)]
@@ -115,6 +121,12 @@ pub enum InfluenceTarget {
 pub struct VertexInfluences {
     pub vertex: u32,
     pub influences: Vec<(InfluenceTarget, f32)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum StrandMode {
+    Card,
+    Azimuth,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -172,6 +184,7 @@ mod tests {
             [
                 "joint_count",
                 "column_count",
+                "strand_merge_distance",
                 "root_blend_width",
                 "column_blend_width",
                 "root_band_offset"

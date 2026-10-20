@@ -107,7 +107,7 @@ pub fn order_visible_triangles_first(indices: &[u32], hidden_triangles: &[u32]) 
             reordered.extend_from_slice(&indices[3 * t..3 * t + 3]);
         }
     }
-    let visible_count = (reordered.len() as u32);
+    let visible_count = reordered.len() as u32;
     for t in 0..num_triangles {
         if is_hidden[t] {
             reordered.extend_from_slice(&indices[3 * t..3 * t + 3]);

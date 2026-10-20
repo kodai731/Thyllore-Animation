@@ -928,6 +928,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -956,6 +957,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         assert!(place_chains(&input, &build_hair_params(0)).is_err());
@@ -997,6 +999,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
         let params = build_params(ChainRole::Skirt, 2, 8);
 
@@ -1052,6 +1055,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
         let params = build_params(ChainRole::Hair, 2, 0);
 
@@ -1068,6 +1072,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -1094,6 +1099,7 @@ mod tests {
                 triangles: &triangles,
                 root_position: Vector3::new(0.0, 0.0, 0.0),
                 attachment_positions: &head,
+                tex_coords: &[],
             },
             &build_hair_params(4),
         )
@@ -1107,6 +1113,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
         let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
 
@@ -1147,6 +1154,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_hair_params(4)).unwrap();
@@ -1181,6 +1189,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_hair_params(3)).unwrap();
@@ -1211,6 +1220,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_hair_params(2)).unwrap();
@@ -1223,6 +1233,7 @@ mod tests {
             triangles: &reversed_triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
 
         let reversed_chains = place_chains(&reversed_input, &build_hair_params(2)).unwrap();
@@ -1279,6 +1290,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
         let params = build_params(ChainRole::Skirt, 3, 2);
 
@@ -1302,6 +1314,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
         let mut params = build_params(ChainRole::Skirt, 3, 2);
         let mut chains = place_chains(&input_for_chains, &params).unwrap();
@@ -1315,6 +1328,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
 
         let weights = compute_chain_weights(&input, &params, &chains);
@@ -1343,6 +1357,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
         let params = build_params(ChainRole::Hair, 3, 0);
 
@@ -1387,6 +1402,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
         let mut params = build_params(ChainRole::Hair, 3, 2);
         let baseline = place_chains(&input, &params).unwrap();
@@ -1408,6 +1424,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
 
         let chains = place_chains(&input, &build_params(ChainRole::Hair, 3, 2)).unwrap();
@@ -1424,6 +1441,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &[],
+            tex_coords: &[],
         };
 
         let labels = component_labels(&input);
@@ -1444,6 +1462,7 @@ mod tests {
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
             attachment_positions: &head,
+            tex_coords: &[],
         };
         let mut params = build_params(ChainRole::Hair, 3, 2);
         params.settings.root_band_offset = 0.05;

@@ -68,6 +68,7 @@ pub fn generate_chain_bones(
         triangles: &triangles,
         root_position: root_global.w.truncate(),
         attachment_positions: &attachment_positions,
+        tex_coords: &[],
     };
     let params = ChainGenParams {
         role,

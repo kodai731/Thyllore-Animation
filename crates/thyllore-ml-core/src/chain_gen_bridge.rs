@@ -108,6 +108,7 @@ pub fn run_chain_gen(
         triangles,
         root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
         attachment_positions: &attachment_vec,
+        tex_coords: &[],
     };
     let params = ChainGenParams { role, settings };
 

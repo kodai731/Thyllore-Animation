@@ -318,10 +318,8 @@ pub struct SetChainRampEnd {
 
 impl UiCommand for SetChainRampEnd {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
-        use crate::ecs::resource::SpringBoneInspectorState;
-        if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
-            state.ramp.set_end(self.end, self.joint);
-        }
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_ramp_set_end;
+        handle_spring_chain_ramp_set_end(world, self.end, self.joint);
     }
 }
 

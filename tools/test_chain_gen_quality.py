@@ -172,21 +172,3 @@ def test_centerline_gaps_empty_records() -> None:
     assert result["centerline_gap_max"] is None
     assert result["centerline_gap_mean"] is None
     assert result["centerline_record_count"] == 0
-
-
-def test_centerline_gaps_chain_none_not_counted() -> None:
-    """Record with chain=None is not counted."""
-    chains = {
-        "hair_00": {
-            "heads": [[0.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
-            "tail": [0.0, -2.0, 0.0],
-        }
-    }
-    records = [
-        {"component": (0, 0), "chain": None, "points": [[0.3, 0.0, 0.0]]}
-    ]
-    result = centerline_gaps(chains, records, scale=1.0)
-
-    assert result["centerline_gap_max"] is None
-    assert result["centerline_gap_mean"] is None
-    assert result["centerline_record_count"] == 0

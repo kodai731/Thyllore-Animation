@@ -2,17 +2,16 @@ use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_avatar_core::garment::components::chain_gen::{
     ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainGenSettings, ChainRole,
     ChainWeightRecord, GeneratedBoneRecord, GeneratedChain, GeneratedJoint, InfluenceTarget,
-    RootBandRecord, VertexInfluences,
+    RootBandRecord, StrandPlacement, VertexInfluences,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
 };
-use thyllore_avatar_core::garment::systems::card_strands::strand_centerline_records;
 use thyllore_avatar_core::garment::systems::chain_bones::{
     append_chain_bones, write_chain_weights,
 };
 use thyllore_avatar_core::garment::systems::chain_gen::{
-    component_labels, compute_chain_weights, hair_root_band, place_chains, RootBand,
+    component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
 };
 use thyllore_math_core::world_y_axis;
 
@@ -76,7 +75,8 @@ pub fn generate_chain_bones(
         role,
         settings: request.settings.clone(),
     };
-    let chains = place_chains(&input, &params)?;
+    let placement = place_chains_with_strands(&input, &params)?;
+    let chains = placement.chains;
     let influences = compute_chain_weights(&input, &params, &chains);
 
     let geometry_chains: Vec<GeneratedChain> = chains
@@ -106,7 +106,7 @@ pub fn generate_chain_bones(
             root,
             influences: &influences,
             input: &input,
-            params: &params,
+            strands: placement.strands,
             root_band: hair_root_band(&input, &params),
             component_labels: &component_labels(&input),
         },
@@ -378,7 +378,7 @@ struct ReportSource<'a> {
     root: thyllore_model_core::BoneId,
     influences: &'a [VertexInfluences],
     input: &'a ChainGenInput<'a>,
-    params: &'a ChainGenParams,
+    strands: Option<StrandPlacement>,
     root_band: Option<RootBand>,
     component_labels: &'a [usize],
 }
@@ -462,8 +462,10 @@ fn build_report(
     target: &SubmeshSelector,
     source: ReportSource,
 ) -> ChainGenReport {
-    let (strand_mode, strand_centerlines) =
-        strand_centerline_records(source.input, source.params, source.chains);
+    let (strand_mode, strand_centerlines) = match &source.strands {
+        Some(strands) => (Some(strands.mode), strands.centerlines.clone()),
+        None => (None, Vec::new()),
+    };
     ChainGenReport {
         target: target.to_string(),
         bones: bone_records(skeleton, &source),

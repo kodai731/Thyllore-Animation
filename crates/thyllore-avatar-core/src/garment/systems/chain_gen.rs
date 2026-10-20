@@ -9,8 +9,9 @@ use thyllore_scene_core::find_scalar_param;
 
 use super::card_strands::{decide_strand_mode, place_card_chains};
 use crate::garment::components::chain_gen::{
-    joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
-    GeneratedJoint, InfluenceTarget, StrandMode, VertexInfluences, CHAIN_GEN_SCALAR_PARAMS,
+    joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainPlacement, ChainRole,
+    GeneratedChain, GeneratedJoint, InfluenceTarget, StrandMode, StrandPlacement, VertexInfluences,
+    CHAIN_GEN_SCALAR_PARAMS,
 };
 
 const AZIMUTH_BIN_COUNT: usize = 36;
@@ -553,13 +554,24 @@ fn place_hair_card_chains(
     vertices: &[u32],
     band: RootBand,
     params: &ChainGenParams,
-) -> Vec<GeneratedChain> {
+) -> Option<ChainPlacement> {
     let components = group_into_components(input, vertices);
     match decide_strand_mode(input, &components, band.progress) {
         StrandMode::Card => {
-            place_card_chains(input, &components, band.progress, band.center, params)
+            let (chains, centerlines) =
+                place_card_chains(input, &components, band.progress, band.center, params);
+            if chains.is_empty() {
+                return None;
+            }
+            Some(ChainPlacement {
+                chains,
+                strands: Some(StrandPlacement {
+                    mode: StrandMode::Card,
+                    centerlines,
+                }),
+            })
         }
-        StrandMode::Azimuth => Vec::new(),
+        StrandMode::Azimuth => None,
     }
 }
 
@@ -567,6 +579,13 @@ pub fn place_chains(
     input: &ChainGenInput,
     params: &ChainGenParams,
 ) -> anyhow::Result<Vec<GeneratedChain>> {
+    place_chains_with_strands(input, params).map(|placement| placement.chains)
+}
+
+pub fn place_chains_with_strands(
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+) -> anyhow::Result<ChainPlacement> {
     if params.settings.joint_count == 0 {
         anyhow::bail!("chain generation needs at least one joint");
     }
@@ -578,15 +597,21 @@ pub fn place_chains(
     let root_band = hair_root_band(input, params);
     let azimuth_center = root_band.map_or(input.root_position, |band| band.center);
     let frames = compute_vertex_frames(input, &vertices, azimuth_center);
-    let columns = match root_band {
+    let (columns, strands) = match root_band {
         Some(band) => {
-            let card_chains = place_hair_card_chains(input, &vertices, band, params);
-            if !card_chains.is_empty() {
-                return Ok(card_chains);
+            if let Some(card_placement) = place_hair_card_chains(input, &vertices, band, params) {
+                return Ok(card_placement);
             }
-            split_hair_columns(input, &frames, band, params)
+            let strands = StrandPlacement {
+                mode: StrandMode::Azimuth,
+                centerlines: Vec::new(),
+            };
+            (
+                split_hair_columns(input, &frames, band, params),
+                Some(strands),
+            )
         }
-        None => split_skirt_columns(&frames, params),
+        None => (split_skirt_columns(&frames, params), None),
     };
     if columns.is_empty() {
         anyhow::bail!("chain generation found no vertex below the root band");
@@ -603,7 +628,7 @@ pub fn place_chains(
         })
         .collect();
 
-    Ok(chains)
+    Ok(ChainPlacement { chains, strands })
 }
 
 struct ChainArc {

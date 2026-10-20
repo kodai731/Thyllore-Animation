@@ -172,7 +172,7 @@ def _point_to_segment_distance(point: np.ndarray, seg_start: np.ndarray, seg_end
 def centerline_gaps(chains: dict[str, dict], records: list[dict], scale: float) -> dict:
     """Per record: max distance from centerline points to the chain polyline (heads->tail).
 
-    Matches each record's `chain` (column number or None) to a chain key by extracting the column
+    Matches each record's `chain` (column number) to a chain key by extracting the column
     suffix from the chain name (`hair_03` -> 3) and comparing with the record's `chain` field.
     Returns aggregate of per-record maximum distances."""
     if not records:
@@ -187,10 +187,7 @@ def centerline_gaps(chains: dict[str, dict], records: list[dict], scale: float) 
 
     record_gaps = []
     for record in records:
-        chain_col = record.get("chain")
-        if chain_col is None:
-            continue
-        entry = chain_by_column.get(chain_col)
+        entry = chain_by_column.get(record["chain"])
         if entry is None or not entry["heads"]:
             continue
         polyline = [np.asarray(h, dtype=float) for h in entry["heads"]]

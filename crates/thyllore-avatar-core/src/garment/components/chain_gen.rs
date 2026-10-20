@@ -159,8 +159,21 @@ pub struct RootBandRecord {
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct StrandCenterlineRecord {
     pub component: u32,
-    pub chain: Option<usize>,
+    pub chain: usize,
     pub points: Vec<[f32; 3]>,
+}
+
+/// How the hair chains were placed and the card centerlines the card path used
+#[derive(Debug, Clone)]
+pub struct StrandPlacement {
+    pub mode: StrandMode,
+    pub centerlines: Vec<StrandCenterlineRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChainPlacement {
+    pub chains: Vec<GeneratedChain>,
+    pub strands: Option<StrandPlacement>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]

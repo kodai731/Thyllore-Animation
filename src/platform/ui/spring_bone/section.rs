@@ -494,6 +494,36 @@ mod tests {
     }
 
     #[test]
+    fn ramp_root_block_shows_every_joint_param_and_tip_block_all_but_gravity_dir() {
+        use thyllore_anim_core::spring_bone::SPRING_JOINT_UI_PARAMS;
+
+        let rows = ramp_rows();
+        let heading_at = |label: &str| {
+            rows.iter()
+                .position(|row| matches!(row, UiRow::Heading(heading) if *heading == label))
+                .unwrap_or_else(|| panic!("ramp rows have a {label} heading"))
+        };
+        let shape_at = rows
+            .iter()
+            .position(|row| matches!(row, UiRow::Choice { label, .. } if *label == "Shape"))
+            .expect("ramp rows have the Shape choice");
+        fn scalar_count(rows: &[UiRow<SpringView>]) -> usize {
+            rows.iter()
+                .map(|row| match row {
+                    UiRow::Scalar { .. } => 1,
+                    UiRow::Group { rows, .. } => scalar_count(rows),
+                    _ => 0,
+                })
+                .sum()
+        }
+        let root_block = &rows[heading_at("Root") + 1..heading_at("Tip")];
+        let tip_block = &rows[heading_at("Tip") + 1..shape_at];
+
+        assert_eq!(scalar_count(root_block), SPRING_JOINT_UI_PARAMS.len());
+        assert_eq!(scalar_count(tip_block), SPRING_JOINT_UI_PARAMS.len() - 1);
+    }
+
+    #[test]
     fn ramp_stiffness_change_updates_state() {
         let mut world = make_world();
         let entity = world.entity().with_name("test").build();

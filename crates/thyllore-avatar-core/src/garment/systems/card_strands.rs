@@ -107,6 +107,128 @@ pub fn strand_centerline(
 
     Some(points)
 }
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StrandMergeStop {
+    Count(usize),
+    Distance(f32),
+    Never,
+}
+
+impl StrandMergeStop {
+    pub fn from_settings(column_count: u32, strand_merge_distance: f32) -> Self {
+        if column_count > 0 {
+            Self::Count(column_count as usize)
+        } else if strand_merge_distance > 0.0 {
+            Self::Distance(strand_merge_distance)
+        } else {
+            Self::Never
+        }
+    }
+}
+
+fn centerline_distance(a: &[Vector3<f32>], b: &[Vector3<f32>]) -> f32 {
+    let len = a.len().min(b.len());
+    a.iter()
+        .zip(b)
+        .map(|(p, q)| (p - q).magnitude())
+        .sum::<f32>()
+        / len as f32
+}
+
+pub fn merge_strands(centerlines: &[Vec<Vector3<f32>>], stop: StrandMergeStop) -> Vec<Vec<usize>> {
+    let n = centerlines.len();
+    if n == 0 {
+        return vec![];
+    }
+
+    let mut clusters: Vec<Vec<usize>> = (0..n).map(|i| vec![i]).collect();
+
+    loop {
+        let Some((i, j, distance)) = closest_cluster_pair(&clusters, centerlines) else {
+            break;
+        };
+
+        match stop {
+            StrandMergeStop::Never => break,
+            StrandMergeStop::Count(target) if clusters.len() <= target => break,
+            StrandMergeStop::Distance(threshold) if distance > threshold => break,
+            _ => {}
+        }
+
+        let mut merged = clusters[i].clone();
+        merged.append(&mut clusters[j]);
+        clusters.remove(j);
+        clusters[i] = merged;
+    }
+
+    for cluster in &mut clusters {
+        cluster.sort_unstable();
+    }
+    clusters.sort_by_key(|c| c[0]);
+
+    clusters
+}
+
+fn closest_cluster_pair(
+    clusters: &[Vec<usize>],
+    centerlines: &[Vec<Vector3<f32>>],
+) -> Option<(usize, usize, f32)> {
+    if clusters.len() < 2 {
+        return None;
+    }
+
+    let (mut best_i, mut best_j) = (0, 1);
+    let mut best_dist = cluster_distance(&clusters[0], &clusters[1], centerlines);
+
+    for i in 0..clusters.len() {
+        for j in (i + 1)..clusters.len() {
+            let dist = cluster_distance(&clusters[i], &clusters[j], centerlines);
+            if dist < best_dist {
+                best_dist = dist;
+                best_i = i;
+                best_j = j;
+            }
+        }
+    }
+
+    Some((best_i, best_j, best_dist))
+}
+
+fn cluster_distance(a: &[usize], b: &[usize], centerlines: &[Vec<Vector3<f32>>]) -> f32 {
+    let mut total = 0.0;
+    let mut count = 0usize;
+    for &ai in a {
+        for &bi in b {
+            total += centerline_distance(&centerlines[ai], &centerlines[bi]);
+            count += 1;
+        }
+    }
+    total / count as f32
+}
+
+pub fn tuft_centerline(
+    centerlines: &[Vec<Vector3<f32>>],
+    weights: &[usize],
+    members: &[usize],
+) -> Vec<Vector3<f32>> {
+    let total_weight: usize = members.iter().map(|&c| weights[c]).sum();
+    if total_weight == 0 || centerlines.is_empty() {
+        return vec![];
+    }
+
+    let sample_count = centerlines[members[0]].len();
+    let mut result = Vec::with_capacity(sample_count);
+
+    for k in 0..sample_count {
+        let mut sum = Vector3::new(0.0, 0.0, 0.0);
+        for &c in members {
+            sum += centerlines[c][k] * weights[c] as f32;
+        }
+        result.push(sum / total_weight as f32);
+    }
+
+    result
+}
 
 #[cfg(test)]
 mod tests {
@@ -274,5 +396,118 @@ mod tests {
             .expect("correlation exists");
 
         assert!(r.abs() < 0.5, "r {r}");
+    }
+
+    fn make_vertical_centerline(offset_x: f32) -> Vec<Vector3<f32>> {
+        (0..CENTERLINE_SAMPLE_COUNT)
+            .map(|i| {
+                let t = i as f32 / (CENTERLINE_SAMPLE_COUNT - 1) as f32;
+                Vector3::new(offset_x, 9.0 * (1.0 - t), 0.0)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn merge_strands_distance_two_clusters() {
+        let centerlines = vec![
+            make_vertical_centerline(0.0),
+            make_vertical_centerline(2.0),
+            make_vertical_centerline(4.0),
+            make_vertical_centerline(24.0),
+        ];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Distance(5.0));
+
+        assert_eq!(clusters.len(), 2);
+        assert_eq!(clusters[0], [0, 1, 2]);
+        assert_eq!(clusters[1], [3]);
+    }
+
+    #[test]
+    fn merge_strands_count_three_clusters() {
+        let centerlines = vec![
+            make_vertical_centerline(0.0),
+            make_vertical_centerline(2.0),
+            make_vertical_centerline(4.0),
+            make_vertical_centerline(24.0),
+        ];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Count(3));
+
+        assert_eq!(clusters.len(), 3);
+        assert_eq!(clusters[0], [0, 1]);
+        assert_eq!(clusters[1], [2]);
+        assert_eq!(clusters[2], [3]);
+    }
+
+    #[test]
+    fn merge_strands_never() {
+        let centerlines = vec![
+            make_vertical_centerline(0.0),
+            make_vertical_centerline(2.0),
+            make_vertical_centerline(4.0),
+            make_vertical_centerline(24.0),
+        ];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Never);
+
+        assert_eq!(clusters.len(), 4);
+        assert_eq!(clusters[0], [0]);
+        assert_eq!(clusters[1], [1]);
+        assert_eq!(clusters[2], [2]);
+        assert_eq!(clusters[3], [3]);
+    }
+
+    #[test]
+    fn merge_strands_count_ten_no_merge() {
+        let centerlines = vec![
+            make_vertical_centerline(0.0),
+            make_vertical_centerline(2.0),
+            make_vertical_centerline(4.0),
+            make_vertical_centerline(24.0),
+        ];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Count(10));
+
+        assert_eq!(clusters.len(), 4);
+        assert_eq!(clusters[0], [0]);
+        assert_eq!(clusters[1], [1]);
+        assert_eq!(clusters[2], [2]);
+        assert_eq!(clusters[3], [3]);
+    }
+
+    #[test]
+    fn tuft_centerline_weighted_average() {
+        let centerlines = vec![make_vertical_centerline(0.0), make_vertical_centerline(4.0)];
+        let weights = [1, 3];
+        let members = [0, 1];
+        let tuft = tuft_centerline(&centerlines, &weights, &members);
+
+        assert_eq!(tuft.len(), CENTERLINE_SAMPLE_COUNT);
+        for sample in &tuft {
+            assert!(
+                (sample.x - 3.0).abs() < 1e-4,
+                "expected x=3.0 (1:3 weighted average of 0 and 4), got {}",
+                sample.x
+            );
+        }
+    }
+
+    #[test]
+    fn merge_strands_all_close_becomes_one_cluster() {
+        let centerlines = vec![
+            make_vertical_centerline(0.0),
+            make_vertical_centerline(1.0),
+            make_vertical_centerline(2.0),
+        ];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Distance(5.0));
+
+        assert_eq!(clusters.len(), 1);
+        assert_eq!(clusters[0], [0, 1, 2]);
+    }
+
+    #[test]
+    fn merge_strands_single_centerline() {
+        let centerlines = vec![make_vertical_centerline(0.0)];
+        let clusters = merge_strands(&centerlines, StrandMergeStop::Distance(5.0));
+
+        assert_eq!(clusters.len(), 1);
+        assert_eq!(clusters[0], [0]);
     }
 }

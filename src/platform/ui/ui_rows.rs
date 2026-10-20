@@ -12,6 +12,7 @@ use crate::ecs::events::UiCommand;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::World;
 use crate::platform::ui::numeric_format::numeric_format;
+use crate::platform::ui::pointer::is_last_item_double_clicked;
 use crate::platform::ui::theme::{
     property_label, property_label_colored, section_header, vector3_field, SectionDefault,
 };
@@ -287,11 +288,12 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            if ui
+            let changed = ui
                 .slider_config(format!("##{}", label), *min, *max)
                 .display_format(numeric_format(format))
-                .build(&mut v)
-            {
+                .build(&mut v);
+            open_text_entry_on_double_click(ui);
+            if changed {
                 (*set)(value, v);
                 return true;
             }
@@ -306,10 +308,11 @@ fn draw_row<C>(
         } => {
             let mut v = (*get)(value);
             property_label(ui, label);
-            if ui
+            let changed = ui
                 .slider_config(format!("##{}", label), *min, *max)
-                .build(&mut v)
-            {
+                .build(&mut v);
+            open_text_entry_on_double_click(ui);
+            if changed {
                 (*set)(value, v);
                 return true;
             }
@@ -634,6 +637,7 @@ fn draw_scalar<C>(
         .slider_config(format!("##{}", meta.name), meta.min, meta.max)
         .display_format(numeric_format(meta.format))
         .build(&mut value);
+    open_text_entry_on_double_click(ui);
     if changed {
         (scalar.set)(component, value);
     }
@@ -766,6 +770,13 @@ fn draw_offset<C>(
 
     draw_key_button(ui, world, meta.name, &targets, &written);
     changed
+}
+
+// imgui activates a slider as a text input when a keyboard focus request lands on it.
+fn open_text_entry_on_double_click(ui: &imgui::Ui) {
+    if is_last_item_double_clicked(ui) {
+        ui.set_keyboard_focus_here_with_offset(-1);
+    }
 }
 
 fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {

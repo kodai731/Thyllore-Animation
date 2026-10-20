@@ -7,6 +7,7 @@ use thyllore_avatar_core::garment::components::chain_gen::{
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
 };
+use thyllore_avatar_core::garment::systems::card_strands::strand_centerline_records;
 use thyllore_avatar_core::garment::systems::chain_bones::{
     append_chain_bones, write_chain_weights,
 };
@@ -105,6 +106,7 @@ pub fn generate_chain_bones(
             root,
             influences: &influences,
             input: &input,
+            params: &params,
             root_band: hair_root_band(&input, &params),
             component_labels: &component_labels(&input),
         },
@@ -376,6 +378,7 @@ struct ReportSource<'a> {
     root: thyllore_model_core::BoneId,
     influences: &'a [VertexInfluences],
     input: &'a ChainGenInput<'a>,
+    params: &'a ChainGenParams,
     root_band: Option<RootBand>,
     component_labels: &'a [usize],
 }
@@ -459,6 +462,8 @@ fn build_report(
     target: &SubmeshSelector,
     source: ReportSource,
 ) -> ChainGenReport {
+    let (strand_mode, strand_centerlines) =
+        strand_centerline_records(source.input, source.params, source.chains);
     ChainGenReport {
         target: target.to_string(),
         bones: bone_records(skeleton, &source),
@@ -473,6 +478,8 @@ fn build_report(
             .copied()
             .map(to_array)
             .collect(),
+        strand_mode,
+        strand_centerlines,
     }
 }
 

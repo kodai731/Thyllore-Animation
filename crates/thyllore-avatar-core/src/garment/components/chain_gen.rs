@@ -157,12 +157,21 @@ pub struct RootBandRecord {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct StrandCenterlineRecord {
+    pub component: u32,
+    pub chain: Option<usize>,
+    pub points: Vec<[f32; 3]>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct ChainGenReport {
     pub target: String,
     pub bones: Vec<GeneratedBoneRecord>,
     pub vertex_weights: Vec<ChainWeightRecord>,
     pub root_band: Option<RootBandRecord>,
     pub attachment_positions: Vec<[f32; 3]>,
+    pub strand_mode: Option<StrandMode>,
+    pub strand_centerlines: Vec<StrandCenterlineRecord>,
 }
 
 #[derive(Debug, Clone)]

@@ -40,7 +40,7 @@ pub struct RootBand {
     pub center: Vector3<f32>,
 }
 
-fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
+pub(crate) fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
     let vertex_count = input.positions.len() as u32;
     input
         .triangles
@@ -536,7 +536,7 @@ fn attachment_or_target<'a>(
     }
 }
 
-fn group_into_components(input: &ChainGenInput, vertices: &[u32]) -> Vec<Vec<u32>> {
+pub(crate) fn group_into_components(input: &ChainGenInput, vertices: &[u32]) -> Vec<Vec<u32>> {
     let labels = component_labels(input);
     let mut components: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
     for &vertex in vertices {

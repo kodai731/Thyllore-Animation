@@ -3,13 +3,62 @@ use std::f32::consts::TAU;
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{fit_principal_axis, world_y_axis};
 
-use super::chain_gen::{build_azimuth_basis, progress_of, resample_polyline};
+use super::chain_gen::{
+    build_azimuth_basis, collect_target_vertices, group_into_components, hair_root_band,
+    progress_of, resample_polyline,
+};
 use crate::garment::components::chain_gen::{
-    joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint, StrandMode,
+    joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint,
+    StrandCenterlineRecord, StrandMode,
 };
 
 pub const CENTERLINE_SAMPLE_COUNT: usize = 16;
 pub const MIN_STRAND_UV_CORRELATION: f32 = 0.8;
+
+pub fn strand_centerline_records(
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+    chains: &[GeneratedChain],
+) -> (Option<StrandMode>, Vec<StrandCenterlineRecord>) {
+    let vertices = collect_target_vertices(input);
+    if vertices.is_empty() {
+        return (None, vec![]);
+    }
+
+    let Some(band) = hair_root_band(input, params) else {
+        return (None, vec![]);
+    };
+
+    let components = group_into_components(input, &vertices);
+    let mode = decide_strand_mode(input, &components, band.progress);
+
+    if mode != StrandMode::Card {
+        return (Some(mode), vec![]);
+    }
+
+    let mut records: Vec<StrandCenterlineRecord> = Vec::new();
+    for component in &components {
+        let Some(strand) = build_card_strand(input, component, band.progress) else {
+            continue;
+        };
+
+        let first_below = strand.below_band.first().copied();
+        let chain = match first_below {
+            Some(v) => chains
+                .iter()
+                .position(|c| c.vertices.binary_search(&v).is_ok()),
+            None => None,
+        };
+
+        records.push(StrandCenterlineRecord {
+            component: *component.first().unwrap_or(&0),
+            chain,
+            points: strand.centerline.iter().map(|p| [p.x, p.y, p.z]).collect(),
+        });
+    }
+
+    (Some(mode), records)
+}
 
 pub fn uv_strand_correlation(
     positions: &[Vector3<f32>],
@@ -868,12 +917,33 @@ mod tests {
     fn three_cards_become_three_chains_along_their_centerlines() {
         let mesh = build_three_tilted_cards();
         let chains = place_card_mesh_chains(&mesh, &hair_params(0, 0.0));
+        let input = card_input(&mesh, &mesh.tex_coords);
+        let params = hair_params(0, 0.0);
+        let (mode, records) = strand_centerline_records(&input, &params, &chains);
 
         assert_eq!(
             decide_card_mesh_mode(&mesh, &mesh.tex_coords),
             StrandMode::Card
         );
         assert_eq!(chains.len(), 3);
+        assert_eq!(mode, Some(StrandMode::Card));
+        assert_eq!(records.len(), 3);
+
+        for record in &records {
+            let chain = record.chain.expect("record has a chain");
+            let chain = &chains[chain];
+            for (i, strip_vertices) in mesh.strip_vertices.iter().enumerate() {
+                if strip_vertices[0] == record.component {
+                    assert!(
+                        strip_vertices.iter().all(|v| chain.vertices.contains(v)),
+                        "chain {} should contain all vertices of strip {}",
+                        chain.column,
+                        i
+                    );
+                }
+            }
+        }
+
         for (strip_vertices, &axis) in mesh.strip_vertices.iter().zip(&mesh.strip_axes) {
             let chain = chains
                 .iter()
@@ -924,5 +994,20 @@ mod tests {
 
         assert_eq!(decide_card_mesh_mode(&mesh, &[]), StrandMode::Azimuth);
         assert_eq!(chains.len(), 3);
+    }
+
+    #[test]
+    fn skirt_role_returns_none() {
+        let mesh = build_three_tilted_cards();
+        let input = card_input(&mesh, &mesh.tex_coords);
+        let chains = place_card_mesh_chains(&mesh, &hair_params(0, 0.0));
+        let params = ChainGenParams {
+            role: ChainRole::Skirt,
+            settings: ChainGenSettings::default(),
+        };
+        let (mode, records) = strand_centerline_records(&input, &params, &chains);
+
+        assert_eq!(mode, None);
+        assert!(records.is_empty());
     }
 }

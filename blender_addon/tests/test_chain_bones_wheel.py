@@ -167,6 +167,18 @@ def test_vertex_tex_coords_uncovered_vertex():
     assert result[2] == (0.0, 0.0)
 
 
+def test_vertex_tex_coords_first_loop_uv_zero_later_loops_half():
+    """First loop has UV (0.0, 0.0), later loops have (0.5, 0.5).
+    Vertex 2 is uncovered — it stays at (0.0, 0.0) from initialization."""
+    loop_vertices = [0, 1, 0]
+    loop_uvs = [(0.0, 0.0), (0.5, 0.5), (0.0, 0.0)]
+    result = vertex_tex_coords(loop_vertices, loop_uvs, 3)
+
+    assert result[0] == (0.0, 0.0)
+    assert result[1] == (0.5, 0.5)
+    assert result[2] == (0.0, 0.0)
+
+
 def test_generate_chains_with_tex_coords(tml):
     top, bottom = -0.1, -0.5
     positions, triangles = _strand_mesh((0.0, 2.1, 4.2), 5, top, bottom, 0.0)

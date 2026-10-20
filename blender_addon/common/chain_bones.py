@@ -30,6 +30,19 @@ def submesh_triangles(
     return result
 
 
+def vertex_tex_coords(
+    loop_vertices: list[int],
+    loop_uvs: list[tuple[float, float]],
+    vertex_count: int,
+) -> list[tuple[float, float]]:
+    """Per-vertex UV from mesh loops; each vertex gets its first loop occurrence's UV."""
+    first_uvs: list[tuple[float, float] | None] = [None] * vertex_count
+    for v_idx, uv in zip(loop_vertices, loop_uvs):
+        if first_uvs[v_idx] is None:
+            first_uvs[v_idx] = uv
+    return [uv if uv is not None else (0.0, 0.0) for uv in first_uvs]
+
+
 def output_to_blender(output: dict) -> dict:
     """The same output with every joint head and chain tail converted to Blender space."""
     chains = [

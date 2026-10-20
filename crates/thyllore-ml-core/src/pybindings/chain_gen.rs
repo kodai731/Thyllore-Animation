@@ -21,9 +21,9 @@ pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 }
 
 /// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
-/// `settings` maps setting names to values.
+/// `settings` maps setting names to values; `tex_coords` is per-vertex UV, empty uses the azimuth method.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, settings, attachment_positions = Vec::new()))]
+#[pyo3(signature = (positions, triangles, root_position, role, settings, attachment_positions = Vec::new(), tex_coords = Vec::new()))]
 pub fn generate_chains<'py>(
     py: Python<'py>,
     positions: Vec<[f32; 3]>,
@@ -32,6 +32,7 @@ pub fn generate_chains<'py>(
     role: &str,
     settings: &Bound<'py, PyDict>,
     attachment_positions: Vec<[f32; 3]>,
+    tex_coords: Vec<[f32; 2]>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs: Vec<(String, f32)> = settings
         .iter()
@@ -48,6 +49,7 @@ pub fn generate_chains<'py>(
                 role,
                 settings,
                 &attachment_positions,
+                &tex_coords,
             )
         })
         .map_err(anyhow_to_pyerr)?;

@@ -20,6 +20,7 @@ from ..common.chain_bones import (
     output_to_blender,
     settings_from_properties,
     submesh_triangles,
+    vertex_tex_coords,
 )
 from ..common.effect_properties import build_param_properties
 
@@ -140,6 +141,12 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             triangle_materials.append(lt.material_index)
         triangles = submesh_triangles(triangle_vertices, triangle_materials, self.material_index)
 
+        tex_coords: list[tuple[float, float]] = []
+        if uv_layer := mesh.uv_layers.active:
+            loop_vertices = [l.vertex_index for l in mesh.loops]
+            loop_uvs = [tuple(d.uv) for d in uv_layer.data]
+            tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
+
         output = tml.generate_chains(
             positions,
             triangles,
@@ -147,6 +154,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             self.role,
             settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
             _skin_engine_positions(bpy.data.objects.get(self.skin_object), self.root_bone),
+            tex_coords,
         )
 
         blender_output = output_to_blender(output)

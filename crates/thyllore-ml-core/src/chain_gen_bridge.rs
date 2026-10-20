@@ -98,6 +98,7 @@ pub fn run_chain_gen(
     role: &str,
     settings: ChainGenSettings,
     attachment_positions: &[[f32; 3]],
+    tex_coords: &[[f32; 2]],
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
 
@@ -108,7 +109,7 @@ pub fn run_chain_gen(
         triangles,
         root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
         attachment_positions: &attachment_vec,
-        tex_coords: &[],
+        tex_coords,
     };
     let params = ChainGenParams { role, settings };
 
@@ -189,6 +190,7 @@ mod tests {
             "hair",
             settings,
             &head,
+            &[],
         )
         .expect("chain generation should succeed");
 

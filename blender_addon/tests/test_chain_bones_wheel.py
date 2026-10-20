@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from blender_addon.common.chain_bones import bone_specs, group_weights, output_to_blender
+from blender_addon.common.chain_bones import (
+    bone_specs,
+    group_weights,
+    output_to_blender,
+    vertex_tex_coords,
+)
 from blender_addon.common.coordinates import blender_to_engine_point, engine_to_blender_point
 
 WHEELS_DIR = Path(__file__).resolve().parents[1] / "wheels"
@@ -60,6 +65,7 @@ def test_settings_table_lists_defaults(tml):
     assert [p["name"] for p in params] == [
         "joint_count",
         "column_count",
+        "strand_merge_distance",
         "root_blend_width",
         "column_blend_width",
         "root_band_offset",
@@ -138,3 +144,44 @@ def test_output_to_blender_converts_heads_and_tails(tml):
             assert joint_blender["head"] == engine_to_blender_point(joint_engine["head"])
             assert blender_to_engine_point(joint_blender["head"]) == tuple(joint_engine["head"])
     assert blender["weights"] == output["weights"]
+
+
+def test_vertex_tex_coords():
+    loop_vertices = [0, 1, 2, 1, 3, 2]
+    loop_uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.5, 0.5), (0.0, 1.0), (0.5, 0.5)]
+    result = vertex_tex_coords(loop_vertices, loop_uvs, 4)
+
+    assert result[0] == (0.0, 0.0)
+    assert result[1] == (1.0, 0.0)
+    assert result[2] == (1.0, 1.0)
+    assert result[3] == (0.0, 1.0)
+
+
+def test_vertex_tex_coords_uncovered_vertex():
+    loop_vertices = [0, 1, 0]
+    loop_uvs = [(0.25, 0.75), (0.5, 0.5), (0.0, 0.0)]
+    result = vertex_tex_coords(loop_vertices, loop_uvs, 3)
+
+    assert result[0] == (0.25, 0.75)
+    assert result[1] == (0.5, 0.5)
+    assert result[2] == (0.0, 0.0)
+
+
+def test_generate_chains_with_tex_coords(tml):
+    top, bottom = -0.1, -0.5
+    positions, triangles = _strand_mesh((0.0, 2.1, 4.2), 5, top, bottom, 0.0)
+    tex_coords = [(0.0, (p[1] - bottom) / (top - bottom)) for p in positions]
+
+    output = tml.generate_chains(
+        positions,
+        triangles,
+        (0.0, 0.0, 0.0),
+        "hair",
+        {"joint_count": 4},
+        HEAD,
+        tex_coords,
+    )
+
+    assert len(output["chains"]) == 3
+    for chain in output["chains"]:
+        assert len(chain["joints"]) == 4

@@ -23,7 +23,6 @@ use crate::animation::BoneId;
 
 use super::super::bone_choice::{bone_options, collect_bone_list};
 use super::super::form_window::{message_section, rows_section, FormSection};
-use super::super::param_widgets::rows_from_params;
 use super::super::ui_rows::{ChoiceOption, UiRow};
 
 struct AddChainPath;
@@ -310,33 +309,36 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     rows
 }
 
+fn ramp_param_rows(hidden: &[&str]) -> Vec<UiRow<SpringView>> {
+    CHAIN_RAMP_UI_PARAMS
+        .iter()
+        .filter(|param| !hidden.contains(&param.name))
+        .map(|param| UiRow::Scalar {
+            param,
+            scalars: &RAMP_SCALARS,
+        })
+        .collect()
+}
+
 fn ramp_rows() -> Vec<UiRow<SpringView>> {
     let mut rows = Vec::new();
     rows.push(UiRow::Heading("Root"));
-    rows.extend(rows_from_params(
-        &CHAIN_RAMP_UI_PARAMS,
-        &RAMP_SCALARS,
-        &[
-            "tip_stiffness",
-            "tip_drag_force",
-            "tip_gravity_power",
-            "tip_gravity_dir",
-            "tip_hit_radius",
-        ],
-    ));
+    rows.extend(ramp_param_rows(&[
+        "tip_stiffness",
+        "tip_drag_force",
+        "tip_gravity_power",
+        "tip_gravity_dir",
+        "tip_hit_radius",
+    ]));
     rows.push(UiRow::Heading("Tip"));
-    rows.extend(rows_from_params(
-        &CHAIN_RAMP_UI_PARAMS,
-        &RAMP_SCALARS,
-        &[
-            "root_stiffness",
-            "root_drag_force",
-            "root_gravity_power",
-            "root_gravity_dir",
-            "root_hit_radius",
-            "tip_gravity_dir",
-        ],
-    ));
+    rows.extend(ramp_param_rows(&[
+        "root_stiffness",
+        "root_drag_force",
+        "root_gravity_power",
+        "root_gravity_dir",
+        "root_hit_radius",
+        "tip_gravity_dir",
+    ]));
     rows.push(UiRow::Choice {
         label: "Shape",
         options: |_, view: &SpringView| {
@@ -507,15 +509,11 @@ mod tests {
             .iter()
             .position(|row| matches!(row, UiRow::Choice { label, .. } if *label == "Shape"))
             .expect("ramp rows have the Shape choice");
-        fn scalar_count(rows: &[UiRow<SpringView>]) -> usize {
+        let scalar_count = |rows: &[UiRow<SpringView>]| {
             rows.iter()
-                .map(|row| match row {
-                    UiRow::Scalar { .. } => 1,
-                    UiRow::Group { rows, .. } => scalar_count(rows),
-                    _ => 0,
-                })
-                .sum()
-        }
+                .filter(|row| matches!(row, UiRow::Scalar { .. }))
+                .count()
+        };
         let root_block = &rows[heading_at("Root") + 1..heading_at("Tip")];
         let tip_block = &rows[heading_at("Tip") + 1..shape_at];
 

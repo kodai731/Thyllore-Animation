@@ -16,7 +16,9 @@ use super::super::form_window::{message_section, rows_section, FormSection};
 use super::super::ui_rows::{ListRows, UiRow};
 use super::chain_rows::{joint_param_rows, JointView};
 use super::collider_rows::{collider_rows, ColliderFields, ColliderView};
-use super::ramp_rows::{ramp_list_row, resolve_ramp_targets};
+use super::ramp_rows::{
+    ramp_list_row, resolve_child_chain_targets, resolve_ramp_targets, RampTargets,
+};
 
 #[derive(Clone, Debug)]
 pub struct BoneJoint {
@@ -32,7 +34,9 @@ pub struct BoneSpringView {
     pub bone_id: BoneId,
     pub joints: Vec<BoneJoint>,
     /// Per joint: the chains a ramp applied from that joint's chain reaches under the scope
-    pub ramp_targets: Vec<Vec<SpringChainId>>,
+    pub ramp_targets: Vec<RampTargets>,
+    /// The chains rooted directly under this bone, when it is the bone above chain roots
+    pub child_chains: Option<RampTargets>,
     pub ramp: ChainRamp,
     pub ramp_scope: RampScope,
     pub colliders: Vec<SpringColliderDef>,
@@ -70,6 +74,7 @@ pub fn bone_spring_section(
         bone_id,
         joints,
         ramp_targets,
+        child_chains: resolve_child_chain_targets(&setup, skeleton, bone_id),
         ramp: inspector_state.ramp,
         ramp_scope: inspector_state.ramp_scope,
         colliders: colliders_on_bone(&setup, bone_id),
@@ -137,6 +142,8 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
         ));
     } else {
         rows.push(joint_list_row());
+    }
+    if !view.joints.is_empty() || view.child_chains.is_some() {
         rows.push(ramp_list_row());
     }
 
@@ -285,12 +292,19 @@ mod tests {
     }
 
     fn view(joints: Vec<BoneJoint>, colliders: Vec<SpringColliderDef>) -> BoneSpringView {
-        let ramp_targets = joints.iter().map(|joint| vec![joint.chain_id]).collect();
+        let ramp_targets = joints
+            .iter()
+            .map(|joint| RampTargets {
+                chains: vec![joint.chain_id],
+                joint_count: 3,
+            })
+            .collect();
         BoneSpringView {
             entity: 0,
             bone_id: 11,
             joints,
             ramp_targets,
+            child_chains: None,
             ramp: ChainRamp::default(),
             ramp_scope: RampScope::default(),
             colliders,
@@ -323,6 +337,24 @@ mod tests {
             ["Add Chain From This Bone", "Add Collider On This Bone"]
         );
         assert!(find_duplicate_labels(&rows).is_empty());
+    }
+
+    #[test]
+    fn bone_above_chain_roots_offers_the_ramp_next_to_the_add_action() {
+        let mut parent = view(Vec::new(), Vec::new());
+        parent.child_chains = Some(RampTargets {
+            chains: vec![1, 2],
+            joint_count: 5,
+        });
+        let rows = bone_spring_rows(&parent);
+        assert_eq!(
+            visible_labels(&rows),
+            [
+                "Add Chain From This Bone",
+                "Ramp",
+                "Add Collider On This Bone"
+            ]
+        );
     }
 
     #[test]

@@ -124,6 +124,20 @@ fn root_parent(chain: &SpringChain, skeleton: &Skeleton) -> Option<BoneId> {
         .and_then(|b| b.parent_id)
 }
 
+/// The chains whose root joint hangs directly under `bone_id`.
+pub fn chains_under_bone(
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+) -> Vec<SpringChainId> {
+    setup
+        .chains
+        .iter()
+        .filter(|c| root_parent(c, skeleton) == Some(bone_id))
+        .map(|c| c.id)
+        .collect()
+}
+
 pub fn chains_in_scope(
     setup: &SpringBoneSetup,
     skeleton: &Skeleton,
@@ -141,14 +155,18 @@ pub fn chains_in_scope(
             let Some(parent) = root_parent(target_chain, skeleton) else {
                 return Vec::new();
             };
-            setup
-                .chains
-                .iter()
-                .filter(|c| root_parent(c, skeleton) == Some(parent))
-                .map(|c| c.id)
-                .collect()
+            chains_under_bone(setup, skeleton, parent)
         }
     }
+}
+
+pub fn joint_count_of(setup: &SpringBoneSetup, chain_ids: &[SpringChainId]) -> usize {
+    setup
+        .chains
+        .iter()
+        .filter(|c| chain_ids.contains(&c.id))
+        .map(|c| c.joints.len())
+        .sum()
 }
 
 pub static CHAIN_RAMP_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
@@ -316,6 +334,23 @@ mod tests {
         for i in 0..6u32 {
             assert!(result.contains(&i), "chain {} should be in scope", i);
         }
+    }
+
+    #[test]
+    fn chains_under_head_are_all_six_and_a_joint_bone_has_none() {
+        let (skeleton, setup) = build_full_test_data(6, 4);
+
+        let under_head = chains_under_bone(&setup, &skeleton, 0);
+        assert_eq!(under_head, (0..6u32).collect::<Vec<_>>());
+        assert!(chains_under_bone(&setup, &skeleton, 1).is_empty());
+    }
+
+    #[test]
+    fn joint_count_sums_only_the_listed_chains() {
+        let (_, setup) = build_full_test_data(6, 4);
+
+        assert_eq!(joint_count_of(&setup, &[0, 2]), 8);
+        assert_eq!(joint_count_of(&setup, &[]), 0);
     }
 
     #[test]

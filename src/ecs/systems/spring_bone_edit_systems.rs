@@ -1,7 +1,7 @@
 use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{
-    apply_ramp, ChainRamp, ColliderShape, RampEnd, SpringBoneSetup, SpringChain, SpringChainId,
-    SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
+    apply_ramp, ChainRamp, ColliderShape, RampEnd, RampScope, SpringBoneSetup, SpringChain,
+    SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
     SpringJointParam,
 };
 use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
@@ -254,6 +254,13 @@ pub fn handle_spring_chain_ramp_load(world: &mut World, entity: Entity, chain_id
     }
 }
 
+pub fn handle_spring_chain_ramp_form(world: &mut World, ramp: ChainRamp, scope: RampScope) {
+    if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+        state.ramp = ramp;
+        state.ramp_scope = scope;
+    }
+}
+
 pub fn handle_spring_chain_ramp_set_end(world: &mut World, end: RampEnd, joint: SpringJointParam) {
     if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
         state.ramp.set_end(end, joint);
@@ -355,6 +362,18 @@ mod tests {
         let state = world.resource::<SpringBoneInspectorState>();
         assert_eq!(state.ramp.root, joints[0]);
         assert_eq!(state.ramp.tip, joints[2]);
+    }
+
+    #[test]
+    fn ramp_form_writes_ramp_and_scope() {
+        let (mut world, _) = make_world_with_three_chains();
+        let ramp = make_ramp();
+
+        handle_spring_chain_ramp_form(&mut world, ramp.clone(), RampScope::AllChains);
+
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert_eq!(state.ramp, ramp);
+        assert_eq!(state.ramp_scope, RampScope::AllChains);
     }
 
     #[test]

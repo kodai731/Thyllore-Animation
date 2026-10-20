@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::animation::spring_bone::{ChainRamp, RampEnd, SpringSpace};
+use crate::animation::spring_bone::{ChainRamp, RampEnd, RampScope, SpringSpace};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -307,6 +307,19 @@ impl UiCommand for LoadChainRamp {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
         use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_ramp_load;
         handle_spring_chain_ramp_load(world, self.entity, self.chain_id);
+    }
+}
+
+#[derive(Debug)]
+pub struct SetChainRampForm {
+    pub ramp: ChainRamp,
+    pub scope: RampScope,
+}
+
+impl UiCommand for SetChainRampForm {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_ramp_form;
+        handle_spring_chain_ramp_form(world, self.ramp, self.scope);
     }
 }
 

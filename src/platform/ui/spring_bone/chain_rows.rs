@@ -4,10 +4,8 @@ use thyllore_anim_core::spring_bone::{SpringJointParam, SPRING_JOINT_UI_PARAMS};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::animation::BoneId;
-use crate::ecs::component::{ChainRamp, SpringChain, SpringChainId};
-use crate::ecs::systems::phases::event_dispatch::spring_bone::{
-    ApplyChainRamp, LoadChainRamp, SpringBoneEvent,
-};
+use crate::ecs::component::SpringChain;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
 
 use super::super::bone_choice::bone_options;
@@ -18,8 +16,6 @@ use super::section::SpringView;
 pub struct ChainView {
     pub entity: Entity,
     pub chain: SpringChain,
-    pub ramp: ChainRamp,
-    pub ramp_targets: Vec<SpringChainId>,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
 }
@@ -57,14 +53,11 @@ pub fn chain_list_row() -> UiRow<SpringView> {
         items: |_, view: &SpringView| {
             view.chains
                 .iter()
-                .zip(&view.ramp_targets)
-                .map(|(chain, targets)| {
+                .map(|chain| {
                     let header = format!("Chain: {} (id:{})", chain.name, chain.id);
                     let item = ChainView {
                         entity: view.entity,
                         chain: chain.clone(),
-                        ramp: view.ramp.clone(),
-                        ramp_targets: targets.clone(),
                         bones: view.bones.clone(),
                         selected_bone: view.selected_bone,
                     };
@@ -124,29 +117,6 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
         },
         initially_open: |_| false,
     })));
-
-    rows.push(UiRow::Action {
-        label: "Load Ramp From Chain",
-        enabled: |_, _: &ChainView| true,
-        on_click: |view: &ChainView| {
-            Box::new(LoadChainRamp {
-                entity: view.entity,
-                chain_id: view.chain.id,
-            }) as _
-        },
-    });
-
-    rows.push(UiRow::Action {
-        label: "Apply Ramp",
-        enabled: |_, view: &ChainView| !view.ramp_targets.is_empty(),
-        on_click: |view: &ChainView| {
-            Box::new(ApplyChainRamp {
-                entity: view.entity,
-                chain_ids: view.ramp_targets.clone(),
-                ramp: view.ramp.clone(),
-            }) as _
-        },
-    });
 
     rows.push(UiRow::Action {
         label: "Remove Chain",
@@ -243,70 +213,12 @@ mod tests {
     fn chain_rows_label_order() {
         let rows = chain_rows();
         let labels = visible_labels(&rows);
-        assert_eq!(
-            labels,
-            [
-                "Enabled",
-                "Joints",
-                "Load Ramp From Chain",
-                "Apply Ramp",
-                "Remove Chain"
-            ]
-        );
+        assert_eq!(labels, ["Enabled", "Joints", "Remove Chain"]);
     }
 
     #[test]
     fn chain_rows_no_duplicate_labels() {
         let rows = chain_rows();
         assert!(find_duplicate_labels(&rows).is_empty());
-    }
-
-    #[test]
-    fn chain_rows_apply_ramp_enabled_by_ramp_targets() {
-        let view_empty = ChainView {
-            entity: 0,
-            chain: SpringChain::default(),
-            ramp: ChainRamp::default(),
-            ramp_targets: Vec::new(),
-            bones: std::rc::Rc::new([]),
-            selected_bone: None,
-        };
-        let view_some = ChainView {
-            entity: 0,
-            chain: SpringChain::default(),
-            ramp: ChainRamp::default(),
-            ramp_targets: vec![1],
-            bones: std::rc::Rc::new([]),
-            selected_bone: None,
-        };
-
-        let rows = chain_rows();
-        let apply_ramp_row = rows.iter().find(|r| match r {
-            UiRow::Action { label, .. } => *label == "Apply Ramp",
-            _ => false,
-        });
-        let Some(apply_ramp_row) = apply_ramp_row else {
-            panic!("Apply Ramp row not found");
-        };
-
-        let world: crate::ecs::world::World = crate::ecs::world::World::new();
-
-        let enabled_empty = match apply_ramp_row {
-            UiRow::Action { enabled, .. } => enabled(&world, &view_empty),
-            _ => false,
-        };
-        let enabled_some = match apply_ramp_row {
-            UiRow::Action { enabled, .. } => enabled(&world, &view_some),
-            _ => false,
-        };
-
-        assert!(
-            !enabled_empty,
-            "Apply Ramp should be disabled when ramp_targets is empty"
-        );
-        assert!(
-            enabled_some,
-            "Apply Ramp should be enabled when ramp_targets is non-empty"
-        );
     }
 }

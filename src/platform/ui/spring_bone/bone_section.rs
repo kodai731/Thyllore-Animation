@@ -6,7 +6,7 @@ use thyllore_anim_core::spring_bone::{
 
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{RampEnd, SpringBoneSetup, WithSpringBone};
+use crate::ecs::component::{ChainRamp, RampEnd, RampScope, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::SpringBoneInspectorState;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{SetChainRampEnd, SpringBoneEvent};
 use crate::ecs::world::{Entity, World};
@@ -16,6 +16,7 @@ use super::super::form_window::{message_section, rows_section, FormSection};
 use super::super::ui_rows::{ListRows, UiRow};
 use super::chain_rows::{joint_param_rows, JointView};
 use super::collider_rows::{collider_rows, ColliderFields, ColliderView};
+use super::ramp_rows::{ramp_list_row, resolve_ramp_targets};
 
 #[derive(Clone, Debug)]
 pub struct BoneJoint {
@@ -30,6 +31,10 @@ pub struct BoneSpringView {
     pub entity: Entity,
     pub bone_id: BoneId,
     pub joints: Vec<BoneJoint>,
+    /// Per joint: the chains a ramp applied from that joint's chain reaches under the scope
+    pub ramp_targets: Vec<Vec<SpringChainId>>,
+    pub ramp: ChainRamp,
+    pub ramp_scope: RampScope,
     pub colliders: Vec<SpringColliderDef>,
     pub bones: Rc<[(BoneId, String)]>,
     pub chain_length: u32,
@@ -50,18 +55,26 @@ pub fn bone_spring_section(
     let Some(setup) = world.get_component::<SpringBoneSetup>(entity) else {
         return message_section("Spring", true, "No SpringBoneSetup".to_string());
     };
-    let chain_length = world
-        .get_resource::<SpringBoneInspectorState>()
-        .map(|state| state.add_chain.chain_length)
-        .unwrap_or_default();
+    let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
+    let skeleton = assets.skeletons.values().next().map(|s| &s.skeleton);
+    let joints = joints_on_bone(&setup, bone_id);
+    let ramp_targets = joints
+        .iter()
+        .map(|joint| {
+            resolve_ramp_targets(&setup, skeleton, joint.chain_id, inspector_state.ramp_scope)
+        })
+        .collect();
 
     let view = BoneSpringView {
         entity,
         bone_id,
-        joints: joints_on_bone(&setup, bone_id),
+        joints,
+        ramp_targets,
+        ramp: inspector_state.ramp,
+        ramp_scope: inspector_state.ramp_scope,
         colliders: colliders_on_bone(&setup, bone_id),
         bones: collect_bone_list(assets).into(),
-        chain_length,
+        chain_length: inspector_state.add_chain.chain_length,
     };
 
     rows_section(
@@ -124,6 +137,7 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
         ));
     } else {
         rows.push(joint_list_row());
+        rows.push(ramp_list_row());
     }
 
     if view.colliders.is_empty() {
@@ -271,10 +285,14 @@ mod tests {
     }
 
     fn view(joints: Vec<BoneJoint>, colliders: Vec<SpringColliderDef>) -> BoneSpringView {
+        let ramp_targets = joints.iter().map(|joint| vec![joint.chain_id]).collect();
         BoneSpringView {
             entity: 0,
             bone_id: 11,
             joints,
+            ramp_targets,
+            ramp: ChainRamp::default(),
+            ramp_scope: RampScope::default(),
             colliders,
             bones: Rc::new([]),
             chain_length: 3,
@@ -313,7 +331,7 @@ mod tests {
         let rows = bone_spring_rows(&view(joints, Vec::new()));
         assert_eq!(
             visible_labels(&rows),
-            ["Joints", "Add Collider On This Bone"]
+            ["Joints", "Ramp", "Add Collider On This Bone"]
         );
     }
 

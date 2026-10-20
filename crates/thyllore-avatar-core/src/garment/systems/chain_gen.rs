@@ -62,7 +62,11 @@ fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     (reference, up.cross(reference))
 }
 
-fn progress_of(position: Vector3<f32>, root_position: Vector3<f32>, up: Vector3<f32>) -> f32 {
+pub(crate) fn progress_of(
+    position: Vector3<f32>,
+    root_position: Vector3<f32>,
+    up: Vector3<f32>,
+) -> f32 {
     -(position - root_position).dot(up)
 }
 
@@ -462,7 +466,7 @@ fn build_centerline(
     (centroids, positions[tail_frame.vertex as usize])
 }
 
-fn resample_polyline(points: &[Vector3<f32>], count: usize) -> Vec<Vector3<f32>> {
+pub(crate) fn resample_polyline(points: &[Vector3<f32>], count: usize) -> Vec<Vector3<f32>> {
     let segment_lengths: Vec<f32> = points
         .windows(2)
         .map(|segment| (segment[1] - segment[0]).magnitude())

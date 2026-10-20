@@ -1,3 +1,4 @@
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::InspectorData;
 use crate::ecs::world::{Entity, Visibility, World};
@@ -49,9 +50,22 @@ pub(super) fn no_selection_section() -> Box<dyn FormSection> {
     )
 }
 
+fn avatar_setup_section() -> Box<dyn FormSection> {
+    rows_section(
+        vec![UiRow::Action {
+            label: "Avatar Setup...",
+            enabled: |_, _: &()| true,
+            on_click: |_: &()| Box::new(AvatarSetupEvent::OpenAvatarSetup),
+        }],
+        (),
+        |_, _, _| {},
+    )
+}
+
 pub(super) fn entity_sections(_world: &World, data: &InspectorData) -> Vec<Box<dyn FormSection>> {
     let mut sections = Vec::new();
     sections.push(header_section(data));
+    sections.push(avatar_setup_section());
     if let Some(section) = transform_section(data) {
         sections.push(section);
     }

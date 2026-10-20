@@ -47,12 +47,12 @@ pub fn generate_chain_bones(
     request: &ChainGenRequest,
 ) -> anyhow::Result<GeneratedChainBones> {
     let (submeshes, role) = resolve_target(world, assets, graphics, &request.target)?;
-    let (parts, positions, triangles, skeleton_id) = merge_submesh_geometry(graphics, submeshes)?;
+    let geometry = merge_submesh_geometry(graphics, submeshes)?;
 
-    let root = find_root_bone(assets, skeleton_id, &request.root_bone)?;
+    let root = find_root_bone(assets, geometry.skeleton_id, &request.root_bone)?;
     let attachment_geometry =
-        collect_skin_vertices_of_bone(world, assets, graphics, skeleton_id, root);
-    let skeleton = find_skeleton_mut(assets, skeleton_id)?;
+        collect_skin_vertices_of_bone(world, assets, graphics, geometry.skeleton_id, root);
+    let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
     let root_global = compute_bone_global_transform(skeleton, root as usize);
     let geometry_to_model = root_global * skeleton.bones[root as usize].inverse_bind_pose;
     let model_to_geometry = geometry_to_model
@@ -60,15 +60,16 @@ pub fn generate_chain_bones(
         .ok_or_else(|| anyhow::anyhow!("geometry transform of the skin is singular"))?;
 
     let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
-    let model_positions: Vec<cgmath::Vector3<f32>> = positions.iter().map(to_model).collect();
+    let model_positions: Vec<cgmath::Vector3<f32>> =
+        geometry.positions.iter().map(to_model).collect();
     let attachment_positions: Vec<cgmath::Vector3<f32>> =
         attachment_geometry.iter().map(to_model).collect();
     let input = ChainGenInput {
         positions: &model_positions,
-        triangles: &triangles,
+        triangles: &geometry.triangles,
         root_position: root_global.w.truncate(),
         attachment_positions: &attachment_positions,
-        tex_coords: &[],
+        tex_coords: &geometry.tex_coords,
     };
     let params = ChainGenParams {
         role,
@@ -98,7 +99,7 @@ pub fn generate_chain_bones(
         skeleton,
         &request.target,
         ReportSource {
-            parts: &parts,
+            parts: &geometry.parts,
             chains: &chains,
             bone_ids: &bone_ids,
             root,
@@ -109,7 +110,7 @@ pub fn generate_chain_bones(
         },
     );
 
-    for part in &parts {
+    for part in &geometry.parts {
         let part_influences = influences_of_part(part, &influences);
         if let Some(skin) = graphics.meshes[part.mesh_index].skin_data.as_mut() {
             write_chain_weights(skin, root, &bone_ids, &part_influences);
@@ -232,12 +233,28 @@ fn collect_skin_vertices_of_bone(
     positions
 }
 
-type MergedGeometry = (
-    Vec<ChainGenPart>,
-    Vec<cgmath::Vector3<f32>>,
-    Vec<[u32; 3]>,
-    crate::animation::SkeletonId,
-);
+struct MergedGeometry {
+    parts: Vec<ChainGenPart>,
+    positions: Vec<cgmath::Vector3<f32>>,
+    triangles: Vec<[u32; 3]>,
+    tex_coords: Vec<[f32; 2]>,
+    skeleton_id: crate::animation::SkeletonId,
+}
+
+fn submesh_tex_coords(
+    vertices: &[thyllore_model_core::mesh::Vertex],
+    vertex_count: usize,
+) -> Option<Vec<[f32; 2]>> {
+    if vertices.len() != vertex_count {
+        return None;
+    }
+    Some(
+        vertices
+            .iter()
+            .map(|v| [v.tex_coord.x, v.tex_coord.y])
+            .collect(),
+    )
+}
 
 fn merge_submesh_geometry(
     graphics: &GraphicsResources,
@@ -246,6 +263,7 @@ fn merge_submesh_geometry(
     let mut parts = Vec::new();
     let mut positions: Vec<cgmath::Vector3<f32>> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
+    let mut submesh_uvs: Vec<Option<Vec<[f32; 2]>>> = Vec::new();
     let mut skeleton_id = None;
 
     for (key, mesh_index) in submeshes {
@@ -275,6 +293,12 @@ fn merge_submesh_geometry(
                 c[2] + vertex_offset,
             ]
         }));
+
+        submesh_uvs.push(submesh_tex_coords(
+            &mesh.vertex_data.vertices,
+            skin.base_positions.len(),
+        ));
+
         parts.push(ChainGenPart {
             key,
             mesh_index,
@@ -283,10 +307,22 @@ fn merge_submesh_geometry(
         });
     }
 
+    let tex_coords = submesh_uvs
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .map(|uvs| uvs.concat())
+        .unwrap_or_default();
+
     let Some(skeleton_id) = skeleton_id else {
         anyhow::bail!("no submesh to generate chains on");
     };
-    Ok((parts, positions, triangles, skeleton_id))
+    Ok(MergedGeometry {
+        parts,
+        positions,
+        triangles,
+        tex_coords,
+        skeleton_id,
+    })
 }
 
 fn influences_of_part(
@@ -457,4 +493,40 @@ pub fn apply_chain_generation(
 
 pub fn set_chain_gen_settings(world: &mut World, settings: ChainGenSettings) {
     world.resource_mut::<AvatarSetupState>().chain_gen = settings;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thyllore_math_core::{Vec2, Vec3};
+    use thyllore_model_core::mesh::Vertex;
+
+    fn vertex_with_uv(u: f32, v: f32) -> Vertex {
+        Vertex {
+            pos: Vec3::new(0.0, 0.0, 0.0),
+            color: Default::default(),
+            tex_coord: Vec2::new(u, v),
+            normal: Default::default(),
+        }
+    }
+
+    #[test]
+    fn test_submesh_tex_coords_matching_count() {
+        let vertices: Vec<Vertex> = vec![vertex_with_uv(0.1, 0.2), vertex_with_uv(0.3, 0.4)];
+        let result = submesh_tex_coords(&vertices, 2);
+        assert!(result.is_some());
+        let tc = result.unwrap();
+        assert_eq!(tc.len(), 2);
+        assert!((tc[0][0] - 0.1).abs() < 1e-6);
+        assert!((tc[0][1] - 0.2).abs() < 1e-6);
+        assert!((tc[1][0] - 0.3).abs() < 1e-6);
+        assert!((tc[1][1] - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_submesh_tex_coords_mismatching_count() {
+        let vertices: Vec<Vertex> = vec![vertex_with_uv(0.1, 0.2)];
+        let result = submesh_tex_coords(&vertices, 3);
+        assert!(result.is_none());
+    }
 }

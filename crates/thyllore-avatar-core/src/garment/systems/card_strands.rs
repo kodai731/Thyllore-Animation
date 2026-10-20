@@ -363,24 +363,35 @@ fn build_tuft_chain(
     centerline: Vec<Vector3<f32>>,
     params: &ChainGenParams,
 ) -> GeneratedChain {
-    let joints = resample_polyline(&centerline, params.settings.joint_count as usize)
-        .into_iter()
-        .enumerate()
-        .map(|(joint, head)| GeneratedJoint {
-            name: joint_name(params.role, column, joint),
-            head,
-        })
-        .collect();
+    let joints: Vec<GeneratedJoint> =
+        resample_polyline(&centerline, params.settings.joint_count as usize)
+            .into_iter()
+            .enumerate()
+            .map(|(joint, head)| GeneratedJoint {
+                name: joint_name(params.role, column, joint),
+                head,
+            })
+            .collect();
     let mut vertices: Vec<u32> = tuft
         .iter()
         .flat_map(|&strand| strands[strand].below_band.iter().copied())
         .collect();
     vertices.sort_unstable();
 
+    let up = world_y_axis();
+    let tail = match tuft
+        .iter()
+        .filter_map(|&strand| strands[strand].centerline.last().copied())
+        .min_by(|a, b| a.dot(up).total_cmp(&b.dot(up)))
+    {
+        Some(t) => t,
+        None => centerline[centerline.len() - 1],
+    };
+
     GeneratedChain {
         column,
         joints,
-        tail: centerline[centerline.len() - 1],
+        tail,
         vertices,
     }
 }
@@ -820,7 +831,7 @@ mod tests {
             .collect()
     }
 
-    fn add_card_strip(mesh: &mut CardMesh, placement: &CardPlacement) {
+    fn add_card_strip(mesh: &mut CardMesh, placement: &CardPlacement, length: f32) {
         let azimuth = placement.azimuth_degrees.to_radians();
         let outward = Vector3::new(azimuth.cos(), 0.0, azimuth.sin());
         let across = world_y_axis().cross(outward);
@@ -831,7 +842,7 @@ mod tests {
 
         for row in 0..CARD_ROWS {
             let v = 1.0 - row as f32 / (CARD_ROWS - 1) as f32;
-            let row_center = top + down * (CARD_LENGTH * (1.0 - v));
+            let row_center = top + down * (length * (1.0 - v));
             for column in 0..CARD_COLUMNS {
                 let width_offset = (column as f32 - 1.0) * CARD_COLUMN_SPACING;
                 mesh.positions.push(row_center + across * width_offset);
@@ -849,7 +860,7 @@ mod tests {
             }
         }
 
-        mesh.strip_axes.push((top, top + down * CARD_LENGTH));
+        mesh.strip_axes.push((top, top + down * length));
         mesh.strip_vertices
             .push((first_vertex..mesh.positions.len() as u32).collect());
     }
@@ -864,7 +875,7 @@ mod tests {
             strip_vertices: Vec::new(),
         };
         for placement in placements {
-            add_card_strip(&mut mesh, placement);
+            add_card_strip(&mut mesh, placement, CARD_LENGTH);
         }
         mesh
     }
@@ -1009,5 +1020,56 @@ mod tests {
 
         assert_eq!(mode, None);
         assert!(records.is_empty());
+    }
+
+    #[test]
+    fn merged_tuft_tail_reaches_longest_strand_tip() {
+        let mut mesh = CardMesh {
+            positions: Vec::new(),
+            triangles: Vec::new(),
+            tex_coords: Vec::new(),
+            attachment_positions: build_head_ring(),
+            strip_axes: Vec::new(),
+            strip_vertices: Vec::new(),
+        };
+        add_card_strip(
+            &mut mesh,
+            &CardPlacement {
+                azimuth_degrees: 0.0,
+                side_shift: 0.0,
+            },
+            3.0,
+        );
+        add_card_strip(
+            &mut mesh,
+            &CardPlacement {
+                azimuth_degrees: 0.0,
+                side_shift: 0.5,
+            },
+            6.0,
+        );
+
+        let chains = place_card_mesh_chains(&mesh, &hair_params(0, 2.0));
+        assert_eq!(
+            chains.len(),
+            1,
+            "two adjacent strips should merge into one chain"
+        );
+
+        let chain = &chains[0];
+        let shorter_tip_y = 8.5 - 3.0 * CARD_TILT_DEGREES.to_radians().cos();
+        let longer_tip_y = 8.5 - 6.0 * CARD_TILT_DEGREES.to_radians().cos();
+
+        let distance_to_longer = (chain.tail.y - longer_tip_y).abs();
+        let distance_to_shorter = (chain.tail.y - shorter_tip_y).abs();
+        assert!(
+            distance_to_longer < distance_to_shorter,
+            "tail y={} should be closer to longer tip y={:.1} (dist {:.2}) than shorter tip y={:.1} (dist {:.2})",
+            chain.tail.y,
+            longer_tip_y,
+            distance_to_longer,
+            shorter_tip_y,
+            distance_to_shorter,
+        );
     }
 }

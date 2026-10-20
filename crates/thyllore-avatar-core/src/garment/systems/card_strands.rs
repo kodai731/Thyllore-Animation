@@ -1,8 +1,12 @@
+use std::f32::consts::TAU;
+
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{fit_principal_axis, world_y_axis};
 
-use super::chain_gen::{progress_of, resample_polyline};
-use crate::garment::components::chain_gen::{ChainGenInput, StrandMode};
+use super::chain_gen::{build_azimuth_basis, progress_of, resample_polyline};
+use crate::garment::components::chain_gen::{
+    joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint, StrandMode,
+};
 
 pub const CENTERLINE_SAMPLE_COUNT: usize = 16;
 pub const MIN_STRAND_UV_CORRELATION: f32 = 0.8;
@@ -266,9 +270,126 @@ pub fn decide_strand_mode(
     }
 }
 
+struct CardStrand {
+    centerline: Vec<Vector3<f32>>,
+    below_band: Vec<u32>,
+}
+
+fn build_card_strand(
+    input: &ChainGenInput,
+    members: &[u32],
+    band_progress: f32,
+) -> Option<CardStrand> {
+    let correlation = uv_strand_correlation(input.positions, input.tex_coords, members)?;
+    if correlation.abs() < MIN_STRAND_UV_CORRELATION {
+        return None;
+    }
+    let centerline = strand_centerline(
+        input.positions,
+        input.tex_coords,
+        members,
+        input.root_position,
+        band_progress,
+    )?;
+
+    let up = world_y_axis();
+    let below_band = members
+        .iter()
+        .copied()
+        .filter(|&v| {
+            progress_of(input.positions[v as usize], input.root_position, up) > band_progress
+        })
+        .collect();
+
+    Some(CardStrand {
+        centerline,
+        below_band,
+    })
+}
+
+fn build_tuft_chain(
+    column: usize,
+    strands: &[CardStrand],
+    tuft: &[usize],
+    centerline: Vec<Vector3<f32>>,
+    params: &ChainGenParams,
+) -> GeneratedChain {
+    let joints = resample_polyline(&centerline, params.settings.joint_count as usize)
+        .into_iter()
+        .enumerate()
+        .map(|(joint, head)| GeneratedJoint {
+            name: joint_name(params.role, column, joint),
+            head,
+        })
+        .collect();
+    let mut vertices: Vec<u32> = tuft
+        .iter()
+        .flat_map(|&strand| strands[strand].below_band.iter().copied())
+        .collect();
+    vertices.sort_unstable();
+
+    GeneratedChain {
+        column,
+        joints,
+        tail: centerline[centerline.len() - 1],
+        vertices,
+    }
+}
+
+pub(crate) fn place_card_chains(
+    input: &ChainGenInput,
+    components: &[Vec<u32>],
+    band_progress: f32,
+    azimuth_center: Vector3<f32>,
+    params: &ChainGenParams,
+) -> Vec<GeneratedChain> {
+    let strands: Vec<CardStrand> = components
+        .iter()
+        .filter_map(|members| build_card_strand(input, members, band_progress))
+        .collect();
+    let centerlines: Vec<Vec<Vector3<f32>>> = strands
+        .iter()
+        .map(|strand| strand.centerline.clone())
+        .collect();
+    let weights: Vec<usize> = strands
+        .iter()
+        .map(|strand| strand.below_band.len())
+        .collect();
+    let stop = StrandMergeStop::from_settings(
+        params.settings.column_count,
+        params.settings.strand_merge_distance,
+    );
+    let tufts = merge_strands(&centerlines, stop);
+
+    let (reference, side) = build_azimuth_basis(world_y_axis());
+    let mut tuft_centerlines: Vec<(f32, Vec<usize>, Vec<Vector3<f32>>)> = tufts
+        .into_iter()
+        .map(|tuft| {
+            let centerline = tuft_centerline(&centerlines, &weights, &tuft);
+            let offset = centerline[0] - azimuth_center;
+            let azimuth = offset
+                .dot(side)
+                .atan2(offset.dot(reference))
+                .rem_euclid(TAU);
+            (azimuth, tuft, centerline)
+        })
+        .collect();
+    tuft_centerlines.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+    tuft_centerlines
+        .into_iter()
+        .enumerate()
+        .map(|(column, (_, tuft, centerline))| {
+            build_tuft_chain(column, &strands, &tuft, centerline, params)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::garment::components::chain_gen::{ChainGenSettings, ChainRole};
+    use crate::garment::systems::chain_gen::{hair_root_band, place_chains};
 
     const KEEP_ALL_BAND: f32 = -1.0;
 
@@ -615,5 +736,193 @@ mod tests {
             decide_mode_for(&strip_set, &strip_set.tex_coords),
             StrandMode::Azimuth
         );
+    }
+
+    const CARD_ROWS: usize = 10;
+    const CARD_COLUMNS: usize = 3;
+    const CARD_LENGTH: f32 = 6.0;
+    const CARD_COLUMN_SPACING: f32 = 0.1;
+    const CARD_TILT_DEGREES: f32 = 40.0;
+
+    struct CardPlacement {
+        azimuth_degrees: f32,
+        side_shift: f32,
+    }
+
+    struct CardMesh {
+        positions: Vec<Vector3<f32>>,
+        triangles: Vec<[u32; 3]>,
+        tex_coords: Vec<[f32; 2]>,
+        attachment_positions: Vec<Vector3<f32>>,
+        strip_axes: Vec<(Vector3<f32>, Vector3<f32>)>,
+        strip_vertices: Vec<Vec<u32>>,
+    }
+
+    fn card_root() -> Vector3<f32> {
+        Vector3::new(0.0, 10.0, 0.0)
+    }
+
+    fn build_head_ring() -> Vec<Vector3<f32>> {
+        (0..16)
+            .map(|index| {
+                let angle = index as f32 / 16.0 * TAU;
+                Vector3::new(angle.cos(), 9.0, angle.sin())
+            })
+            .collect()
+    }
+
+    fn add_card_strip(mesh: &mut CardMesh, placement: &CardPlacement) {
+        let azimuth = placement.azimuth_degrees.to_radians();
+        let outward = Vector3::new(azimuth.cos(), 0.0, azimuth.sin());
+        let across = world_y_axis().cross(outward);
+        let tilt = CARD_TILT_DEGREES.to_radians();
+        let down = outward * tilt.sin() - world_y_axis() * tilt.cos();
+        let top = Vector3::new(0.0, 8.5, 0.0) + outward + across * placement.side_shift;
+        let first_vertex = mesh.positions.len() as u32;
+
+        for row in 0..CARD_ROWS {
+            let v = 1.0 - row as f32 / (CARD_ROWS - 1) as f32;
+            let row_center = top + down * (CARD_LENGTH * (1.0 - v));
+            for column in 0..CARD_COLUMNS {
+                let width_offset = (column as f32 - 1.0) * CARD_COLUMN_SPACING;
+                mesh.positions.push(row_center + across * width_offset);
+                mesh.tex_coords
+                    .push([column as f32 / (CARD_COLUMNS - 1) as f32, v]);
+            }
+        }
+
+        for row in 0..CARD_ROWS - 1 {
+            for column in 0..CARD_COLUMNS - 1 {
+                let upper = first_vertex + (row * CARD_COLUMNS + column) as u32;
+                let lower = upper + CARD_COLUMNS as u32;
+                mesh.triangles.push([upper, upper + 1, lower]);
+                mesh.triangles.push([upper + 1, lower + 1, lower]);
+            }
+        }
+
+        mesh.strip_axes.push((top, top + down * CARD_LENGTH));
+        mesh.strip_vertices
+            .push((first_vertex..mesh.positions.len() as u32).collect());
+    }
+
+    fn build_card_mesh(placements: &[CardPlacement]) -> CardMesh {
+        let mut mesh = CardMesh {
+            positions: Vec::new(),
+            triangles: Vec::new(),
+            tex_coords: Vec::new(),
+            attachment_positions: build_head_ring(),
+            strip_axes: Vec::new(),
+            strip_vertices: Vec::new(),
+        };
+        for placement in placements {
+            add_card_strip(&mut mesh, placement);
+        }
+        mesh
+    }
+
+    fn build_three_tilted_cards() -> CardMesh {
+        build_card_mesh(&[0.0, 120.0, 240.0].map(|azimuth_degrees| CardPlacement {
+            azimuth_degrees,
+            side_shift: 0.0,
+        }))
+    }
+
+    fn card_input<'a>(mesh: &'a CardMesh, tex_coords: &'a [[f32; 2]]) -> ChainGenInput<'a> {
+        ChainGenInput {
+            positions: &mesh.positions,
+            triangles: &mesh.triangles,
+            root_position: card_root(),
+            attachment_positions: &mesh.attachment_positions,
+            tex_coords,
+        }
+    }
+
+    fn hair_params(column_count: u32, strand_merge_distance: f32) -> ChainGenParams {
+        ChainGenParams {
+            role: ChainRole::Hair,
+            settings: ChainGenSettings {
+                column_count,
+                strand_merge_distance,
+                ..ChainGenSettings::default()
+            },
+        }
+    }
+
+    fn place_card_mesh_chains(mesh: &CardMesh, params: &ChainGenParams) -> Vec<GeneratedChain> {
+        place_chains(&card_input(mesh, &mesh.tex_coords), params).expect("chains are placed")
+    }
+
+    fn decide_card_mesh_mode(mesh: &CardMesh, tex_coords: &[[f32; 2]]) -> StrandMode {
+        let input = card_input(mesh, tex_coords);
+        let band = hair_root_band(&input, &hair_params(0, 0.0)).expect("hair has a root band");
+        decide_strand_mode(&input, &mesh.strip_vertices, band.progress)
+    }
+
+    fn distance_to_segment(point: Vector3<f32>, (start, end): (Vector3<f32>, Vector3<f32>)) -> f32 {
+        let along = end - start;
+        let t = ((point - start).dot(along) / along.magnitude2()).clamp(0.0, 1.0);
+        (point - (start + along * t)).magnitude()
+    }
+
+    #[test]
+    fn three_cards_become_three_chains_along_their_centerlines() {
+        let mesh = build_three_tilted_cards();
+        let chains = place_card_mesh_chains(&mesh, &hair_params(0, 0.0));
+
+        assert_eq!(
+            decide_card_mesh_mode(&mesh, &mesh.tex_coords),
+            StrandMode::Card
+        );
+        assert_eq!(chains.len(), 3);
+        for (strip_vertices, &axis) in mesh.strip_vertices.iter().zip(&mesh.strip_axes) {
+            let chain = chains
+                .iter()
+                .find(|chain| chain.vertices.contains(&strip_vertices[0]))
+                .expect("strip belongs to a chain");
+            assert!(strip_vertices.iter().all(|v| chain.vertices.contains(v)));
+            for joint in &chain.joints {
+                let distance = distance_to_segment(joint.head, axis);
+                assert!(distance <= 0.5, "{} is {distance} off", joint.name);
+            }
+        }
+    }
+
+    #[test]
+    fn adjacent_cards_merge_within_strand_merge_distance() {
+        let mesh = build_card_mesh(&[
+            CardPlacement {
+                azimuth_degrees: 0.0,
+                side_shift: 0.0,
+            },
+            CardPlacement {
+                azimuth_degrees: 0.0,
+                side_shift: 0.5,
+            },
+            CardPlacement {
+                azimuth_degrees: 120.0,
+                side_shift: 0.0,
+            },
+        ]);
+        let chains = place_card_mesh_chains(&mesh, &hair_params(0, 2.0));
+
+        assert_eq!(chains.len(), 2);
+    }
+
+    #[test]
+    fn column_count_one_merges_every_card() {
+        let mesh = build_three_tilted_cards();
+        let chains = place_card_mesh_chains(&mesh, &hair_params(1, 0.0));
+
+        assert_eq!(chains.len(), 1);
+    }
+
+    #[test]
+    fn cards_without_tex_coords_use_the_azimuth_path() {
+        let mesh = build_three_tilted_cards();
+        let chains =
+            place_chains(&card_input(&mesh, &[]), &hair_params(0, 0.0)).expect("chains are placed");
+
+        assert_eq!(decide_card_mesh_mode(&mesh, &[]), StrandMode::Azimuth);
+        assert_eq!(chains.len(), 3);
     }
 }

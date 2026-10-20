@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::f32::consts::{PI, TAU};
 
 use cgmath::{InnerSpace, Vector3};
@@ -7,9 +7,10 @@ use thyllore_math_core::world_y_axis;
 
 use thyllore_scene_core::find_scalar_param;
 
+use super::card_strands::{decide_strand_mode, place_card_chains};
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
-    GeneratedJoint, InfluenceTarget, VertexInfluences, CHAIN_GEN_SCALAR_PARAMS,
+    GeneratedJoint, InfluenceTarget, StrandMode, VertexInfluences, CHAIN_GEN_SCALAR_PARAMS,
 };
 
 const AZIMUTH_BIN_COUNT: usize = 36;
@@ -52,7 +53,7 @@ fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
         .collect()
 }
 
-fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
+pub(crate) fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     let seed = if up.x.abs() < 0.9 {
         Vector3::unit_x()
     } else {
@@ -535,6 +536,33 @@ fn attachment_or_target<'a>(
     }
 }
 
+fn group_into_components(input: &ChainGenInput, vertices: &[u32]) -> Vec<Vec<u32>> {
+    let labels = component_labels(input);
+    let mut components: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
+    for &vertex in vertices {
+        components
+            .entry(labels[vertex as usize])
+            .or_default()
+            .push(vertex);
+    }
+    components.into_values().collect()
+}
+
+fn place_hair_card_chains(
+    input: &ChainGenInput,
+    vertices: &[u32],
+    band: RootBand,
+    params: &ChainGenParams,
+) -> Vec<GeneratedChain> {
+    let components = group_into_components(input, vertices);
+    match decide_strand_mode(input, &components, band.progress) {
+        StrandMode::Card => {
+            place_card_chains(input, &components, band.progress, band.center, params)
+        }
+        StrandMode::Azimuth => Vec::new(),
+    }
+}
+
 pub fn place_chains(
     input: &ChainGenInput,
     params: &ChainGenParams,
@@ -551,7 +579,13 @@ pub fn place_chains(
     let azimuth_center = root_band.map_or(input.root_position, |band| band.center);
     let frames = compute_vertex_frames(input, &vertices, azimuth_center);
     let columns = match root_band {
-        Some(band) => split_hair_columns(input, &frames, band, params),
+        Some(band) => {
+            let card_chains = place_hair_card_chains(input, &vertices, band, params);
+            if !card_chains.is_empty() {
+                return Ok(card_chains);
+            }
+            split_hair_columns(input, &frames, band, params)
+        }
         None => split_skirt_columns(&frames, params),
     };
     if columns.is_empty() {

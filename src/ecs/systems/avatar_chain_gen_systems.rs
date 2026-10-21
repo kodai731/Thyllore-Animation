@@ -19,7 +19,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::avatar_submesh_role_systems::collect_submesh_meshes;
-use crate::ecs::systems::skeleton_edit_systems::refresh_after_skeleton_edit;
+use crate::ecs::systems::skeleton_edit_systems::{
+    capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
+};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -40,7 +42,7 @@ impl ChainGenPart {
     }
 }
 
-pub fn generate_chain_bones(
+fn generate_chain_bones(
     world: &World,
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
@@ -485,7 +487,20 @@ fn build_report(
     }
 }
 
-pub fn apply_chain_generation(
+pub fn generate_and_apply_chain_bones(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &mut GraphicsResources,
+    request: &ChainGenRequest,
+) -> anyhow::Result<()> {
+    let before = capture_skeleton_snapshot(world, assets, graphics);
+    let generated = generate_chain_bones(world, assets, graphics, request)?;
+    apply_chain_generation(world, assets, graphics, generated);
+    record_skeleton_edit(world, assets, graphics, before, "Generate chains");
+    Ok(())
+}
+
+fn apply_chain_generation(
     world: &mut World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,

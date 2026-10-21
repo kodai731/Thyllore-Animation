@@ -3,9 +3,9 @@ use crate::ecs::resource::{
     AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand, ScaleHistory,
     SceneLoadCommand,
 };
+use crate::ecs::systems::generate_and_apply_chain_bones;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
-use crate::ecs::systems::{apply_chain_generation, generate_chain_bones};
 use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
@@ -263,21 +263,13 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::GenerateChainBones { request } => {
-            match generate_chain_bones(
-                &app.data.ecs_world,
+            if let Err(e) = generate_and_apply_chain_bones(
+                &mut app.data.ecs_world,
                 &mut app.data.ecs_assets,
                 &mut app.data.graphics_resources,
                 &request,
             ) {
-                Ok(report) => {
-                    apply_chain_generation(
-                        &mut app.data.ecs_world,
-                        &app.data.ecs_assets,
-                        &app.data.graphics_resources,
-                        report,
-                    );
-                }
-                Err(e) => msg_error!("Failed to generate chain bones: {:?}", e),
+                msg_error!("Failed to generate chain bones: {:?}", e);
             }
         }
 

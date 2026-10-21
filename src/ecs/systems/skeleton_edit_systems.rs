@@ -148,7 +148,7 @@ pub fn capture_skeleton_snapshot(
     })
 }
 
-fn record_skeleton_edit(
+pub(crate) fn record_skeleton_edit(
     world: &mut World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,

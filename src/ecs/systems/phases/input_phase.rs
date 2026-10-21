@@ -14,6 +14,7 @@ use crate::ecs::resource::{
     KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose, TimelineState,
     TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
 };
+use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::systems::{
     apply_mesh_selection, camera_anchor_pivot_to_focus, camera_move_to_pose,
     camera_pose_looking_at, compute_local_override_from_global_rotation,
@@ -318,13 +319,14 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
 
     let (ray_origin, ray_direction) = compute_bone_pick_ray(ctx);
 
-    let (skeleton_id, transforms, offsets, mesh_scale) = {
+    let (skeleton_id, transforms, offsets, mesh_scale, draw_set) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
             bone_gizmo.mesh_scale,
+            BoneDrawSet::from_flags(bone_gizmo.drawn_bones.clone()),
         )
     };
 
@@ -345,6 +347,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
         &offsets,
         mesh_scale,
         None,
+        &draw_set,
     );
 
     let hit = widget_hit.or_else(|| {

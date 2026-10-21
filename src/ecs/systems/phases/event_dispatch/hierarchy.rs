@@ -3,7 +3,7 @@ use cgmath::Vector3;
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::BoneDisplayStyle;
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
 use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
@@ -48,6 +48,7 @@ pub enum HierarchyEvent {
     },
     ScrollToSelectionDone,
     SetBoneDisplayStyle(BoneDisplayStyle),
+    SetBoneDrawMode(BoneDrawMode),
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
     SetBoneDistanceScaleFactor(f32),
@@ -308,6 +309,12 @@ fn dispatch_hierarchy_bone_events(
             HierarchyEvent::SetBoneDisplayStyle(style) => {
                 if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
                     bone_gizmo.display_style = *style;
+                }
+            }
+
+            HierarchyEvent::SetBoneDrawMode(mode) => {
+                if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
+                    bone_gizmo.draw_mode = *mode;
                 }
             }
 

@@ -13,6 +13,7 @@ use crate::ecs::component::SpringColliderGroupId;
 use crate::ecs::component::SpringColliderId;
 use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
+use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Entity, World};
@@ -70,7 +71,8 @@ pub enum SpringBoneEvent {
         group_id: SpringColliderGroupId,
         group: SpringColliderGroup,
     },
-    ToggleGizmo(bool),
+    ToggleColliderGizmo(bool),
+    SetChainGizmoMode(SpringChainGizmoMode),
 }
 
 impl UiCommand for SpringBoneEvent {
@@ -780,11 +782,15 @@ fn dispatch_spring_bone_edit_events(
                 handle_spring_collider_group_update(world, *entity, *group_id, group.clone());
             }
 
-            SpringBoneEvent::ToggleGizmo(visible) => {
-                if let Some(mut gizmo) =
-                    world.get_resource_mut::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
-                {
-                    gizmo.visible = *visible;
+            SpringBoneEvent::ToggleColliderGizmo(visible) => {
+                if let Some(mut gizmo) = world.get_resource_mut::<SpringBoneGizmoData>() {
+                    gizmo.colliders_visible = *visible;
+                }
+            }
+
+            SpringBoneEvent::SetChainGizmoMode(mode) => {
+                if let Some(mut gizmo) = world.get_resource_mut::<SpringBoneGizmoData>() {
+                    gizmo.chain_mode = *mode;
                 }
             }
 

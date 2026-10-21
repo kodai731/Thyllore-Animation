@@ -4,10 +4,11 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
+use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
-    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData, SpringChainGizmoMode,
 };
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{
@@ -18,6 +19,11 @@ use crate::ecs::systems::render_data_systems::{
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
     transform_gizmo_render_data,
 };
+use crate::ecs::systems::{
+    chains_to_draw, chains_with_radius, compute_bone_draw_set, spring_chain_bone_indices,
+    BoneDrawSet, ColliderGizmo, ScreenSpaceScale, SpringGizmoSelection,
+};
+use crate::ecs::world::World;
 use crate::ecs::FrameContext;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
@@ -376,7 +382,7 @@ fn collect_gizmo_render_data(
 
     if ctx.world.contains_resource::<SpringBoneGizmoData>() {
         let sg = ctx.world.resource::<SpringBoneGizmoData>();
-        if sg.visible {
+        if sg.draws_anything() {
             render_data_vec.extend(spring_bone_gizmo_render_data(&sg, frame_slot));
         }
     }
@@ -500,6 +506,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     let (
         visible,
         display_style,
+        draw_mode,
         skeleton_id,
         transforms,
         offsets,
@@ -511,6 +518,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         (
             bone_gizmo.visible,
             bone_gizmo.display_style,
+            bone_gizmo.draw_mode,
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
@@ -540,9 +548,25 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         distance_scaling_factor,
     );
 
+    let selection = bone_selection_snapshot(ctx.world);
+    let chain_bones = find_spring_bone_setup(ctx.world)
+        .map(|setup| spring_chain_bone_indices(&setup))
+        .unwrap_or_default();
+    let draw_set = compute_bone_draw_set(&skeleton, draw_mode, &selection, &chain_bones);
+    ctx.world.resource_mut::<BoneGizmoData>().drawn_bones = draw_set.flags().to_vec();
+
     match display_style {
         BoneDisplayStyle::Stick => {
-            update_stick_bone_mesh(ctx, &skeleton, &transforms, &offsets, mesh_scale)?;
+            let marker_scale = joint_marker_scale(ctx);
+            update_stick_bone_mesh(
+                ctx,
+                &skeleton,
+                &transforms,
+                &offsets,
+                mesh_scale,
+                &draw_set,
+                &marker_scale,
+            )?;
         }
         BoneDisplayStyle::Octahedral => {
             update_octahedral_bone_mesh(
@@ -552,6 +576,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
                 &offsets,
                 visual_scale,
                 mesh_scale,
+                &draw_set,
             )?;
         }
         BoneDisplayStyle::Box => {
@@ -562,6 +587,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
                 &offsets,
                 visual_scale,
                 mesh_scale,
+                &draw_set,
             )?;
         }
         BoneDisplayStyle::Sphere => {
@@ -572,11 +598,35 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
                 &offsets,
                 visual_scale,
                 mesh_scale,
+                &draw_set,
             )?;
         }
     }
 
     Ok(())
+}
+
+fn bone_selection_snapshot(world: &World) -> BoneSelectionState {
+    world
+        .get_resource::<BoneSelectionState>()
+        .map(|selection| (*selection).clone())
+        .unwrap_or_default()
+}
+
+fn find_spring_bone_setup(world: &World) -> Option<SpringBoneSetup> {
+    let (entity, _) = world.iter_components::<WithSpringBone>().next()?;
+    world.get_component::<SpringBoneSetup>(entity).cloned()
+}
+
+fn joint_marker_scale(ctx: &FrameContext) -> ScreenSpaceScale {
+    use crate::ecs::systems::camera_systems::compute_camera_position;
+    let camera = ctx.world.resource::<Camera>();
+    let viewport_height = ctx.world.resource::<ProjectionData>().screen_size.y;
+    ScreenSpaceScale::new(
+        compute_camera_position(&camera),
+        cgmath::Rad::from(camera.fov_y).0,
+        viewport_height,
+    )
 }
 
 fn compute_visual_scale(
@@ -613,6 +663,8 @@ unsafe fn update_stick_bone_mesh(
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
     mesh_scale: f32,
+    draw_set: &BoneDrawSet,
+    marker_scale: &ScreenSpaceScale,
 ) -> Result<()> {
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
@@ -622,6 +674,8 @@ unsafe fn update_stick_bone_mesh(
             offsets,
             mesh_scale,
             None,
+            draw_set,
+            marker_scale,
             &mut bone_gizmo.stick_mesh,
         );
     }
@@ -653,12 +707,9 @@ unsafe fn update_octahedral_bone_mesh(
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,
+    draw_set: &BoneDrawSet,
 ) -> Result<()> {
-    let selection = ctx
-        .world
-        .get_resource::<BoneSelectionState>()
-        .map(|s| (*s).clone())
-        .unwrap_or_default();
+    let selection = bone_selection_snapshot(ctx.world);
 
     let (mut solid_mesh, mut wire_mesh) = {
         let bg = ctx.world.resource::<BoneGizmoData>();
@@ -675,6 +726,7 @@ unsafe fn update_octahedral_bone_mesh(
         visual_scale,
         mesh_scale,
         None,
+        draw_set,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -702,12 +754,9 @@ unsafe fn update_box_bone_mesh(
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,
+    draw_set: &BoneDrawSet,
 ) -> Result<()> {
-    let selection = ctx
-        .world
-        .get_resource::<BoneSelectionState>()
-        .map(|s| (*s).clone())
-        .unwrap_or_default();
+    let selection = bone_selection_snapshot(ctx.world);
 
     let (mut solid_mesh, mut wire_mesh) = {
         let bg = ctx.world.resource::<BoneGizmoData>();
@@ -724,6 +773,7 @@ unsafe fn update_box_bone_mesh(
         visual_scale,
         mesh_scale,
         None,
+        draw_set,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -751,12 +801,9 @@ unsafe fn update_sphere_bone_mesh(
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,
+    draw_set: &BoneDrawSet,
 ) -> Result<()> {
-    let selection = ctx
-        .world
-        .get_resource::<BoneSelectionState>()
-        .map(|s| (*s).clone())
-        .unwrap_or_default();
+    let selection = bone_selection_snapshot(ctx.world);
 
     let (mut solid_mesh, mut wire_mesh) = {
         let bg = ctx.world.resource::<BoneGizmoData>();
@@ -774,6 +821,7 @@ unsafe fn update_sphere_bone_mesh(
         visual_scale,
         mesh_scale,
         None,
+        draw_set,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -875,32 +923,41 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     }
 
-    let visible = {
+    let (colliders_visible, chain_mode) = {
         let sg = ctx.world.resource::<SpringBoneGizmoData>();
-        sg.visible
+        (sg.colliders_visible, sg.chain_mode)
     };
-    if !visible {
+    if !colliders_visible && chain_mode == SpringChainGizmoMode::None {
         return Ok(());
     }
 
-    let (transforms, offsets, mesh_scale) = {
+    let (skeleton_id, transforms, offsets, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
+            bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
             bone_gizmo.mesh_scale,
         )
     };
 
-    use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
-    let setup = ctx
-        .world
-        .iter_components::<WithSpringBone>()
-        .next()
-        .and_then(|(e, _)| ctx.world.get_component::<SpringBoneSetup>(e).cloned());
-
-    let Some(setup) = setup else {
+    let Some(setup) = find_spring_bone_setup(ctx.world) else {
         return Ok(());
+    };
+    let skeleton = skeleton_id.and_then(|id| ctx.assets.get_skeleton_by_skeleton_id(id));
+    let Some(skeleton) = skeleton else {
+        return Ok(());
+    };
+
+    let selection = bone_selection_snapshot(ctx.world);
+    let shown = SpringGizmoSelection {
+        chain_ids: chains_to_draw(&setup, skeleton, &selection, chain_mode),
+        radius_chain_ids: chains_with_radius(&setup, &selection, chain_mode),
+        colliders: if colliders_visible {
+            ColliderGizmo::Shown
+        } else {
+            ColliderGizmo::Hidden
+        },
     };
 
     let mut wire_mesh = ctx
@@ -909,7 +966,14 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         .wire_mesh
         .clone();
 
-    build_spring_bone_gizmo_mesh(&setup, &transforms, &offsets, mesh_scale, &mut wire_mesh);
+    build_spring_bone_gizmo_mesh(
+        &setup,
+        &shown,
+        &transforms,
+        &offsets,
+        mesh_scale,
+        &mut wire_mesh,
+    );
 
     {
         let frame_slot = ctx.frame_slot;

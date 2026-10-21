@@ -5,6 +5,7 @@ use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
+use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::resource::{
     AddChainForm, AddColliderForm, HierarchyState, SpringBoneInspectorState,
 };
@@ -57,7 +58,8 @@ pub struct SpringView {
     pub add_chain: AddChainForm,
     pub add_collider: AddColliderForm,
     pub add_group_name: String,
-    pub gizmo_visible: bool,
+    pub collider_gizmo_visible: bool,
+    pub chain_gizmo_mode: SpringChainGizmoMode,
 }
 
 pub fn spring_bone_section(
@@ -78,10 +80,10 @@ pub fn spring_bone_section(
     };
     let bone_list = collect_bone_list(assets);
 
-    let gizmo_visible = world
-        .get_resource::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
-        .map(|g| g.visible)
-        .unwrap_or(false);
+    let (collider_gizmo_visible, chain_gizmo_mode) = world
+        .get_resource::<SpringBoneGizmoData>()
+        .map(|g| (g.colliders_visible, g.chain_mode))
+        .unwrap_or((false, SpringChainGizmoMode::None));
 
     let inspector_state = world.resource::<SpringBoneInspectorState>().clone();
 
@@ -95,7 +97,8 @@ pub fn spring_bone_section(
         add_chain: inspector_state.add_chain,
         add_collider: inspector_state.add_collider,
         add_group_name: inspector_state.add_collider_group_name,
-        gizmo_visible,
+        collider_gizmo_visible,
+        chain_gizmo_mode,
     };
 
     rows_section(
@@ -121,8 +124,13 @@ fn commit_spring_view(world: &World, shown: &SpringView, view: &SpringView) {
         }
     }
 
-    if view.gizmo_visible != shown.gizmo_visible {
-        world.send_command(SpringBoneEvent::ToggleGizmo(view.gizmo_visible));
+    if view.collider_gizmo_visible != shown.collider_gizmo_visible {
+        world.send_command(SpringBoneEvent::ToggleColliderGizmo(
+            view.collider_gizmo_visible,
+        ));
+    }
+    if view.chain_gizmo_mode != shown.chain_gizmo_mode {
+        world.send_command(SpringBoneEvent::SetChainGizmoMode(view.chain_gizmo_mode));
     }
 }
 
@@ -239,9 +247,24 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     });
     rows.push(UiRow::Toggle {
         label: "Show Collider Gizmos",
-        get: |view: &SpringView| view.gizmo_visible,
+        get: |view: &SpringView| view.collider_gizmo_visible,
         set: |view: &mut SpringView, value: bool| {
-            view.gizmo_visible = value;
+            view.collider_gizmo_visible = value;
+        },
+    });
+    rows.push(UiRow::Choice {
+        label: "Chain Gizmos",
+        options: |_, view: &SpringView| {
+            SpringChainGizmoMode::ALL
+                .iter()
+                .map(|mode| ChoiceOption {
+                    label: mode.label().to_string(),
+                    selected: view.chain_gizmo_mode == *mode,
+                })
+                .collect()
+        },
+        pick: |view: &mut SpringView, index| {
+            view.chain_gizmo_mode = SpringChainGizmoMode::ALL[index];
         },
     });
     rows
@@ -270,7 +293,8 @@ mod tests {
             add_chain: AddChainForm::default(),
             add_collider: AddColliderForm::default(),
             add_group_name: "NewGroup".to_string(),
-            gizmo_visible: false,
+            collider_gizmo_visible: false,
+            chain_gizmo_mode: SpringChainGizmoMode::Selected,
         }
     }
 
@@ -307,17 +331,18 @@ mod tests {
     }
 
     #[test]
-    fn gizmo_visible_toggle_sends_command() {
+    fn gizmo_changes_send_one_command_each() {
         let mut world = make_world();
         let entity = world.entity().with_name("test").build();
         let shown = base_view(entity);
         let mut view = shown.clone();
-        view.gizmo_visible = true;
+        view.collider_gizmo_visible = true;
+        view.chain_gizmo_mode = SpringChainGizmoMode::All;
 
         commit_spring_view(&world, &shown, &view);
 
         let mut queue = world.get_resource_mut::<UiCommandQueue>().unwrap();
         let drained: Vec<_> = queue.drain().collect();
-        assert_eq!(drained.len(), 1);
+        assert_eq!(drained.len(), 2);
     }
 }

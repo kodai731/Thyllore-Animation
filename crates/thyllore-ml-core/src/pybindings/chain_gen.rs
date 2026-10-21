@@ -5,7 +5,7 @@ use pythonize::pythonize;
 use super::error::anyhow_to_pyerr;
 use crate::chain_gen_bridge::{chain_gen_params, run_chain_gen, settings_from_pairs};
 
-fn pythonize_value<'py, T: serde::Serialize>(
+pub(super) fn pythonize_value<'py, T: serde::Serialize>(
     py: Python<'py>,
     value: &T,
 ) -> PyResult<Bound<'py, PyAny>> {

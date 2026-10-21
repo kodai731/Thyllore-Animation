@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+mod avatar_setup;
 mod chain_gen;
 #[cfg(feature = "debug-log")]
 mod debuglog;
@@ -37,6 +38,10 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_gen_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::spring_joint_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::sidecar_read, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::sidecar_build, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::infer_humanoid_mapping, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::build_feedback_record, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_feedback_batch, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;

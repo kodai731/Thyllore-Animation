@@ -95,7 +95,7 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
     }
 }
 
-fn build_hybrid_bone_map(
+pub fn build_hybrid_bone_map(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
 ) -> BTreeMap<String, String> {

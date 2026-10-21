@@ -43,7 +43,15 @@ pub struct ChainGenParamOut {
     pub max: f32,
     pub format: &'static str,
     pub tooltip: &'static str,
-    pub default: f32,
+    pub kind: &'static str,
+    pub default: ParamDefault,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum ParamDefault {
+    Scalar(f32),
+    Vector([f32; 3]),
 }
 
 pub fn chain_gen_params() -> Vec<ChainGenParamOut> {
@@ -60,7 +68,8 @@ pub fn chain_gen_params() -> Vec<ChainGenParamOut> {
                 max: param.max,
                 format: param.format,
                 tooltip: param.tooltip,
-                default: (scalar.get)(&defaults),
+                kind: "scalar",
+                default: ParamDefault::Scalar((scalar.get)(&defaults)),
             }
         })
         .collect()
@@ -219,7 +228,7 @@ mod tests {
     fn params_table_carries_defaults() {
         let params = chain_gen_params();
         let joint_count = params.iter().find(|p| p.name == "joint_count").unwrap();
-        assert_eq!(joint_count.default, 4.0);
+        assert_eq!(joint_count.default, ParamDefault::Scalar(4.0));
         assert_eq!(joint_count.label, "Joint Count");
     }
 }

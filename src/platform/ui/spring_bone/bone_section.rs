@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, SpringChainId, SpringColliderDef, SpringJointParam,
+    ColliderShape, SpringChainId, SpringColliderDef, SpringColliderGroupId, SpringJointParam,
 };
 
 use crate::animation::BoneId;
@@ -15,6 +15,7 @@ use super::super::bone_choice::collect_bone_list;
 use super::super::form_window::{message_section, rows_section, FormSection};
 use super::super::ui_rows::{ListRows, UiRow};
 use super::chain_rows::{joint_param_rows, JointView};
+use super::collider_group_rows::{collider_group_list_row, GroupChoice};
 use super::collider_rows::{collider_rows, ColliderFields, ColliderView};
 use super::ramp_rows::{
     ramp_list_row, resolve_child_chain_targets, resolve_ramp_targets, RampTargets,
@@ -39,6 +40,11 @@ pub struct BoneSpringView {
     pub child_chains: Option<RampTargets>,
     pub ramp: ChainRamp,
     pub ramp_scope: RampScope,
+    /// Per joint: the chains a collider group assignment from that joint's chain reaches under its scope
+    pub collider_group_targets: Vec<RampTargets>,
+    pub collider_groups: Vec<GroupChoice>,
+    pub chain_collider_groups: Vec<SpringColliderGroupId>,
+    pub chain_collider_scope: RampScope,
     pub colliders: Vec<SpringColliderDef>,
     pub bones: Rc<[(BoneId, String)]>,
     pub chain_length: u32,
@@ -68,6 +74,17 @@ pub fn bone_spring_section(
             resolve_ramp_targets(&setup, skeleton, joint.chain_id, inspector_state.ramp_scope)
         })
         .collect();
+    let collider_group_targets = joints
+        .iter()
+        .map(|joint| {
+            resolve_ramp_targets(
+                &setup,
+                skeleton,
+                joint.chain_id,
+                inspector_state.chain_collider_scope,
+            )
+        })
+        .collect();
 
     let view = BoneSpringView {
         entity,
@@ -77,6 +94,10 @@ pub fn bone_spring_section(
         child_chains: resolve_child_chain_targets(&setup, skeleton, bone_id),
         ramp: inspector_state.ramp,
         ramp_scope: inspector_state.ramp_scope,
+        collider_group_targets,
+        collider_groups: GroupChoice::from_groups(&setup.collider_groups),
+        chain_collider_groups: inspector_state.chain_collider_groups,
+        chain_collider_scope: inspector_state.chain_collider_scope,
         colliders: colliders_on_bone(&setup, bone_id),
         bones: collect_bone_list(assets).into(),
         chain_length: inspector_state.add_chain.chain_length,
@@ -145,6 +166,13 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
     }
     if !view.joints.is_empty() || view.child_chains.is_some() {
         rows.push(ramp_list_row());
+        if view.collider_groups.is_empty() {
+            rows.push(UiRow::Tooltip(
+                "Collider groups are assigned here once one exists in the entity's Spring Bones section",
+            ));
+        } else {
+            rows.push(collider_group_list_row());
+        }
     }
 
     if view.colliders.is_empty() {
@@ -307,6 +335,10 @@ mod tests {
             child_chains: None,
             ramp: ChainRamp::default(),
             ramp_scope: RampScope::default(),
+            collider_group_targets: Vec::new(),
+            collider_groups: Vec::new(),
+            chain_collider_groups: Vec::new(),
+            chain_collider_scope: RampScope::default(),
             colliders,
             bones: Rc::new([]),
             chain_length: 3,
@@ -365,6 +397,27 @@ mod tests {
             visible_labels(&rows),
             ["Joints", "Ramp", "Add Collider On This Bone"]
         );
+    }
+
+    #[test]
+    fn bone_with_joints_and_groups_offers_the_collider_group_assignment() {
+        let joints = joints_on_bone(&setup_with_two_chains(), 11);
+        let mut with_groups = view(joints, Vec::new());
+        with_groups.collider_groups = vec![GroupChoice {
+            id: 1,
+            name: "Fitted Body".to_string(),
+        }];
+        let rows = bone_spring_rows(&with_groups);
+        assert_eq!(
+            visible_labels(&rows),
+            [
+                "Joints",
+                "Ramp",
+                "Collider Groups",
+                "Add Collider On This Bone"
+            ]
+        );
+        assert!(find_duplicate_labels(&rows).is_empty());
     }
 
     #[test]

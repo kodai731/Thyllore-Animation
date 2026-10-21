@@ -1,17 +1,46 @@
+use std::sync::LazyLock;
+
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Transform, Vector3};
 
 use thyllore_math_core::{fit_principal_axis, PrincipalAxis};
 use thyllore_model_core::{Bone, BoneId, Skeleton, SkinData};
+use thyllore_scene_core::{SceneFields, UiParam};
 
 use super::setup::{ColliderShape, SpringBoneSetup, SpringColliderDef, SpringColliderGroup};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, SceneFields)]
+#[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct CapsuleFitParams {
+    /// Skin weight under which a vertex does not count toward its bone's capsule
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
     pub min_weight: f32,
+    /// Percentile of the vertex distances from the bone axis taken as the capsule radius
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
     pub radius_percentile: f32,
+    /// Factor applied to the percentile radius
+    #[persist(ui(min = 0.0, max = 2.0, format = "%.2f"))]
     pub radius_scale: f32,
-    pub min_vertex_count: usize,
+    /// Bones with fewer weighted vertices get no capsule
+    #[persist(ui(min = 1.0, max = 64.0, format = "%.0f"))]
+    pub min_vertex_count: u32,
 }
+
+impl Default for CapsuleFitParams {
+    fn default() -> Self {
+        Self {
+            min_weight: 0.5,
+            radius_percentile: 0.9,
+            radius_scale: 0.85,
+            min_vertex_count: 8,
+        }
+    }
+}
+
+pub static CAPSULE_FIT_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
+    let mut out = Vec::new();
+    CapsuleFitParams::collect_ui("", "", &mut out);
+    out
+});
 
 #[derive(Clone, Debug)]
 pub struct FittedCapsule {
@@ -90,7 +119,7 @@ pub fn fit_bone_capsules(
 
     for bone in &skeleton.bones {
         let local_points = collect_local_points(skins, bone, params.min_weight);
-        if local_points.len() < params.min_vertex_count {
+        if local_points.len() < params.min_vertex_count as usize {
             continue;
         }
 

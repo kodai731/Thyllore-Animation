@@ -434,7 +434,7 @@ fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> 
         parts[0].trim().parse::<f32>().ok(),
         parts[1].trim().parse::<f32>().ok(),
         parts[2].trim().parse::<f32>().ok(),
-        parts[3].trim().parse::<usize>().ok(),
+        parts[3].trim().parse::<u32>().ok(),
     );
 
     Some(match parsed {

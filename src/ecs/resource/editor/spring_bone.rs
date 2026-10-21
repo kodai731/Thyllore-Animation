@@ -1,5 +1,5 @@
 use crate::animation::BoneId;
-use crate::ecs::component::{ChainRamp, RampScope};
+use crate::ecs::component::{ChainRamp, RampScope, SpringColliderGroupId};
 
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
@@ -31,6 +31,8 @@ pub struct SpringBoneInspectorState {
     pub add_collider_group_name: String,
     pub ramp: ChainRamp,
     pub ramp_scope: RampScope,
+    pub chain_collider_groups: Vec<SpringColliderGroupId>,
+    pub chain_collider_scope: RampScope,
 }
 
 impl Default for SpringBoneInspectorState {
@@ -41,6 +43,8 @@ impl Default for SpringBoneInspectorState {
             add_collider_group_name: "NewGroup".to_string(),
             ramp: ChainRamp::default(),
             ramp_scope: RampScope::default(),
+            chain_collider_groups: Vec::new(),
+            chain_collider_scope: RampScope::default(),
         }
     }
 }

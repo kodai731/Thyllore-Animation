@@ -267,6 +267,57 @@ pub fn handle_spring_chain_ramp_set_end(world: &mut World, end: RampEnd, joint: 
     }
 }
 
+pub fn handle_spring_chain_collider_groups_apply(
+    world: &mut World,
+    entity: Entity,
+    chain_ids: &[SpringChainId],
+    group_ids: &[SpringColliderGroupId],
+) {
+    let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
+        return;
+    };
+    let known: Vec<SpringColliderGroupId> = group_ids
+        .iter()
+        .copied()
+        .filter(|id| setup.collider_groups.iter().any(|group| group.id == *id))
+        .collect();
+    for chain in &mut setup.chains {
+        if chain_ids.contains(&chain.id) {
+            chain.collider_group_ids = known.clone();
+        }
+    }
+
+    reset_spring_bone_state(world);
+}
+
+pub fn handle_spring_chain_collider_groups_load(
+    world: &mut World,
+    entity: Entity,
+    chain_id: SpringChainId,
+) {
+    let Some(setup) = world.get_component::<SpringBoneSetup>(entity) else {
+        return;
+    };
+    let Some(chain) = setup.chains.iter().find(|c| c.id == chain_id) else {
+        return;
+    };
+    let group_ids = chain.collider_group_ids.clone();
+    if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+        state.chain_collider_groups = group_ids;
+    }
+}
+
+pub fn handle_spring_chain_collider_groups_form(
+    world: &mut World,
+    group_ids: Vec<SpringColliderGroupId>,
+    scope: RampScope,
+) {
+    if let Some(mut state) = world.get_resource_mut::<SpringBoneInspectorState>() {
+        state.chain_collider_groups = group_ids;
+        state.chain_collider_scope = scope;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +425,71 @@ mod tests {
         let state = world.resource::<SpringBoneInspectorState>();
         assert_eq!(state.ramp, ramp);
         assert_eq!(state.ramp_scope, RampScope::AllChains);
+    }
+
+    fn chain_group_ids(world: &World, entity: Entity, index: usize) -> Vec<SpringColliderGroupId> {
+        world
+            .get_component::<SpringBoneSetup>(entity)
+            .unwrap()
+            .chains[index]
+            .collider_group_ids
+            .clone()
+    }
+
+    fn add_group(world: &mut World, entity: Entity, id: SpringColliderGroupId) {
+        let mut setup = world.get_component_mut::<SpringBoneSetup>(entity).unwrap();
+        setup.collider_groups.push(SpringColliderGroup {
+            id,
+            name: format!("group_{id}"),
+            collider_ids: Vec::new(),
+        });
+    }
+
+    #[test]
+    fn collider_groups_apply_replaces_groups_of_listed_chains_only() {
+        let (mut world, entity) = make_world_with_three_chains();
+        add_group(&mut world, entity, 7);
+        add_group(&mut world, entity, 8);
+
+        handle_spring_chain_collider_groups_apply(&mut world, entity, &[0, 2], &[7, 8]);
+        handle_spring_chain_collider_groups_apply(&mut world, entity, &[2], &[8]);
+
+        assert_eq!(chain_group_ids(&world, entity, 0), vec![7, 8]);
+        assert_eq!(
+            chain_group_ids(&world, entity, 1),
+            Vec::<SpringColliderGroupId>::new()
+        );
+        assert_eq!(chain_group_ids(&world, entity, 2), vec![8]);
+    }
+
+    #[test]
+    fn collider_groups_apply_drops_unknown_group_ids() {
+        let (mut world, entity) = make_world_with_three_chains();
+        add_group(&mut world, entity, 7);
+
+        handle_spring_chain_collider_groups_apply(&mut world, entity, &[1], &[7, 99]);
+
+        assert_eq!(chain_group_ids(&world, entity, 1), vec![7]);
+    }
+
+    #[test]
+    fn collider_groups_load_and_form_write_the_inspector_state() {
+        let (mut world, entity) = make_world_with_three_chains();
+        add_group(&mut world, entity, 7);
+        handle_spring_chain_collider_groups_apply(&mut world, entity, &[1], &[7]);
+
+        handle_spring_chain_collider_groups_load(&mut world, entity, 1);
+        assert_eq!(
+            world
+                .resource::<SpringBoneInspectorState>()
+                .chain_collider_groups,
+            vec![7]
+        );
+
+        handle_spring_chain_collider_groups_form(&mut world, Vec::new(), RampScope::AllChains);
+        let state = world.resource::<SpringBoneInspectorState>();
+        assert!(state.chain_collider_groups.is_empty());
+        assert_eq!(state.chain_collider_scope, RampScope::AllChains);
     }
 
     #[test]

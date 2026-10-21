@@ -324,6 +324,51 @@ impl UiCommand for SetChainRampForm {
 }
 
 #[derive(Debug)]
+pub struct ApplyChainColliderGroups {
+    pub entity: Entity,
+    pub chain_ids: Vec<SpringChainId>,
+    pub group_ids: Vec<SpringColliderGroupId>,
+}
+
+impl UiCommand for ApplyChainColliderGroups {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_collider_groups_apply;
+        handle_spring_chain_collider_groups_apply(
+            world,
+            self.entity,
+            &self.chain_ids,
+            &self.group_ids,
+        );
+    }
+}
+
+#[derive(Debug)]
+pub struct LoadChainColliderGroups {
+    pub entity: Entity,
+    pub chain_id: SpringChainId,
+}
+
+impl UiCommand for LoadChainColliderGroups {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_collider_groups_load;
+        handle_spring_chain_collider_groups_load(world, self.entity, self.chain_id);
+    }
+}
+
+#[derive(Debug)]
+pub struct SetChainColliderGroupForm {
+    pub group_ids: Vec<SpringColliderGroupId>,
+    pub scope: RampScope,
+}
+
+impl UiCommand for SetChainColliderGroupForm {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_collider_groups_form;
+        handle_spring_chain_collider_groups_form(world, self.group_ids, self.scope);
+    }
+}
+
+#[derive(Debug)]
 pub struct SetChainRampEnd {
     pub end: RampEnd,
     pub joint: SpringJointParam,

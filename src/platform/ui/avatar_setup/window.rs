@@ -107,6 +107,7 @@ fn commit_stats(world: &World, shown: &StatsView, view: &StatsView) {
 fn commit_export(world: &World, _shown: &ExportView, view: &ExportView) {
     if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
         state.spring_prefix = view.spring_prefix.clone();
+        state.body_collider_fit = view.body_collider_fit.clone();
     }
 }
 
@@ -215,6 +216,7 @@ mod tests {
 
         let view = ExportView {
             spring_prefix: prefix.clone(),
+            body_collider_fit: Default::default(),
         };
         commit_export(&world, &view, &view);
 
@@ -228,9 +230,11 @@ mod tests {
 
         let shown = ExportView {
             spring_prefix: "old".to_string(),
+            body_collider_fit: Default::default(),
         };
         let view = ExportView {
             spring_prefix: "new".to_string(),
+            body_collider_fit: Default::default(),
         };
         commit_export(&world, &shown, &view);
 

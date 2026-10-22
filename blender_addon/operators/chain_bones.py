@@ -20,9 +20,9 @@ from ..common.chain_bones import (
     group_weights,
     output_to_blender,
     settings_from_properties,
-    submesh_triangles,
     vertex_tex_coords,
 )
+from ..common.submesh_mask import material_triangles
 from ..common.effect_properties import build_param_properties
 
 CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
@@ -140,7 +140,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         for lt in mesh.loop_triangles:
             triangle_vertices.extend(lt.vertices)
             triangle_materials.append(lt.material_index)
-        triangles = submesh_triangles(triangle_vertices, triangle_materials, self.material_index)
+        triangles = material_triangles(triangle_vertices, triangle_materials, self.material_index)[0]
 
         tex_coords: list[tuple[float, float]] = []
         if uv_layer := mesh.uv_layers.active:

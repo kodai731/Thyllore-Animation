@@ -14,6 +14,12 @@ from .properties import SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
 
+def _active_mesh(context):
+    """Return context.active_object if it is a MESH, else None."""
+    obj = context.active_object
+    return obj if obj is not None and obj.type == "MESH" else None
+
+
 class THYLLORE_UL_SpringChains(UIList):
     """UIList for spring bone chains: name, enabled checkbox, joint count."""
 
@@ -218,10 +224,49 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
         self._draw_groups(layout, context, arm)
 
 
-UI_LISTS = (THYLLORE_UL_SpringChains, THYLLORE_UL_SpringColliders, THYLLORE_UL_ColliderGroups)
+class THYLLORE_UL_SubmeshRoles(UIList):
+    """UIList for submesh roles: material, role, source."""
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, prop_name):
+        row = layout.row(align=True)
+        row.prop(item, "material", text="", emboss=False)
+        row.prop(item, "role", text="")
+        row.prop(item, "source", text="")
+
+
+class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
+    """Submeshes sub-panel: role list, guess/hide buttons, hidden triangle counts."""
+
+    bl_label = "Submeshes"
+    bl_idname = "THYLLORE_PT_avatar_setup_submeshes"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_parent_id = "THYLLORE_PT_avatar_setup"
+
+    def draw(self, context):
+        layout = self.layout
+        mesh_obj = _active_mesh(context)
+        if mesh_obj is None:
+            layout.label(text="Select a skinned mesh", icon="ERROR")
+            return
+
+        submesh = mesh_obj.thyllore_submesh
+        layout.template_list(
+            "THYLLORE_UL_SubmeshRoles", "", submesh, "roles", submesh, "active_role_index"
+        )
+        layout.operator("thyllore.guess_submesh_roles")
+        layout.operator("thyllore.hide_covered_skin")
+
+        for item in submesh.hidden_triangles:
+            triangles = list(item.get("triangles", []))
+            layout.label(text=f"{item.material}: {len(triangles)} hidden triangles")
+
+
+UI_LISTS = (THYLLORE_UL_SpringChains, THYLLORE_UL_SpringColliders, THYLLORE_UL_ColliderGroups, THYLLORE_UL_SubmeshRoles)
 
 PANELS = (
     THYLLORE_PT_AvatarSetup,
+    THYLLORE_PT_AvatarSetupSubmeshes,
     THYLLORE_PT_AvatarSetupChains,
     THYLLORE_PT_AvatarSetupColliders,
     THYLLORE_PT_AvatarSetupExport,

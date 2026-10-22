@@ -9,27 +9,6 @@ from __future__ import annotations
 from .coordinates import engine_to_blender_point
 
 
-def submesh_triangles(
-    triangle_vertices: list[int],
-    triangle_materials: list[int],
-    material_index: int,
-) -> list[list[int]]:
-    """Extract triangles belonging to one material from Blender loop data.
-
-    ``triangle_vertices`` is the flat list of vertex indices from
-    ``mesh.loop_triangles`` (3 per triangle).  ``triangle_materials`` is the
-    parallel list of ``material_index`` values.  Returns only the triangles
-    whose material matches ``material_index``, each as a 3-element list.
-    """
-    result: list[list[int]] = []
-    for i in range(0, len(triangle_vertices), 3):
-        if triangle_materials[i // 3] == material_index:
-            result.append(
-                [triangle_vertices[i], triangle_vertices[i + 1], triangle_vertices[i + 2]]
-            )
-    return result
-
-
 def vertex_tex_coords(
     loop_vertices: list[int],
     loop_uvs: list[tuple[float, float]],

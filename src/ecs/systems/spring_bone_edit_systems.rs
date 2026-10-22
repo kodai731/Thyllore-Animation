@@ -1,4 +1,4 @@
-use crate::animation::{BoneId, Skeleton};
+use crate::animation::{spring_bone::set_chain_collider_groups, BoneId, Skeleton};
 use crate::ecs::component::{
     apply_ramp, ChainRamp, ColliderShape, RampEnd, RampScope, SpringBoneSetup, SpringChain,
     SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
@@ -233,16 +233,7 @@ pub fn handle_spring_chain_collider_groups_apply(
     let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
         return;
     };
-    let known: Vec<SpringColliderGroupId> = group_ids
-        .iter()
-        .copied()
-        .filter(|id| setup.collider_groups.iter().any(|group| group.id == *id))
-        .collect();
-    for chain in &mut setup.chains {
-        if chain_ids.contains(&chain.id) {
-            chain.collider_group_ids = known.clone();
-        }
-    }
+    set_chain_collider_groups(setup, chain_ids, group_ids);
 
     reset_spring_bone_state(world);
 }

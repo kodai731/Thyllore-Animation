@@ -20,6 +20,13 @@ pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &chain_gen_params())
 }
 
+pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, f32)>> {
+    settings
+        .iter()
+        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
+        .collect::<PyResult<_>>()
+}
+
 /// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
 /// `settings` maps setting names to values; `tex_coords` is per-vertex UV, empty uses the azimuth method.
 #[pyfunction]
@@ -34,10 +41,7 @@ pub fn generate_chains<'py>(
     attachment_positions: Vec<[f32; 3]>,
     tex_coords: Vec<[f32; 2]>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let pairs: Vec<(String, f32)> = settings
-        .iter()
-        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
-        .collect::<PyResult<_>>()?;
+    let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
 
     let output = py

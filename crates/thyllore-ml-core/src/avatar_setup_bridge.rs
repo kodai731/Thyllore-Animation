@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 
+use crate::param_rows::{param_rows, ParamRow};
 use thyllore_anim_core::spring_bone::{
     SpringJointParam, SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS,
 };
@@ -17,46 +18,13 @@ use thyllore_avatar_core::vrchat::sidecar::{
 use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring, SidecarSpringChain,
 };
-use thyllore_scene_core::{find_scalar_param, UiKind, UiParam};
 
-use crate::chain_gen_bridge::{ChainGenParamOut, ParamDefault};
-
-pub fn spring_joint_params() -> Vec<ChainGenParamOut> {
-    let defaults = SpringJointParam::default();
-    SPRING_JOINT_UI_PARAMS
-        .iter()
-        .map(|param| ChainGenParamOut {
-            name: param.name,
-            label: param.display_label().into_owned(),
-            min: param.min,
-            max: param.max,
-            format: param.format,
-            tooltip: param.tooltip,
-            kind: param.kind.name(),
-            default: read_component_defaults(param, &defaults),
-        })
-        .collect()
-}
-
-fn read_component_defaults(param: &UiParam, defaults: &SpringJointParam) -> ParamDefault {
-    let values: Vec<f32> = param
-        .scalar_accessor_names()
-        .iter()
-        .map(|accessor_name| {
-            let scalar = find_scalar_param(&SPRING_JOINT_SCALAR_PARAMS, accessor_name)
-                .expect("every ui param component has a scalar entry");
-            (scalar.get)(defaults)
-        })
-        .collect();
-
-    match param.kind {
-        UiKind::Offset => ParamDefault::Vector(
-            values
-                .try_into()
-                .expect("offset params have exactly 3 components"),
-        ),
-        _ => ParamDefault::Scalar(values[0]),
-    }
+pub fn spring_joint_params() -> Vec<ParamRow> {
+    param_rows(
+        &SPRING_JOINT_UI_PARAMS,
+        &SPRING_JOINT_SCALAR_PARAMS,
+        &SpringJointParam::default(),
+    )
 }
 
 #[derive(Clone, serde::Deserialize)]
@@ -279,6 +247,7 @@ pub fn infer_humanoid_mapping(bones: &[BoneInput]) -> HumanoidMappingOut {
 mod tests {
     use super::*;
 
+    use crate::param_rows::ParamDefault;
     use thyllore_avatar_core::vrchat::sidecar::SidecarBlink;
     use thyllore_avatar_core::vrchat::sidecar_spring::{
         SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin, SidecarColliderShape,

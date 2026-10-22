@@ -3,10 +3,9 @@ use thyllore_avatar_core::garment::components::chain_gen::{
     ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
     CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::garment::systems::chain_gen::{
-    apply_setting_assignments, compute_chain_weights, place_chains,
-};
-use thyllore_scene_core::{find_scalar_param, UiParam};
+use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
+
+use crate::param_rows::{apply_scalar_pairs, param_rows, ParamRow};
 
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
@@ -34,50 +33,17 @@ pub struct WeightOut {
     pub influences: Vec<(String, f32)>,
 }
 
-/// One row of the settings table as the addon sees it: the declaration plus the default value.
-#[derive(serde::Serialize)]
-pub struct ChainGenParamOut {
-    pub name: &'static str,
-    pub label: String,
-    pub min: f32,
-    pub max: f32,
-    pub format: &'static str,
-    pub tooltip: &'static str,
-    pub kind: &'static str,
-    pub default: ParamDefault,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub enum ParamDefault {
-    Scalar(f32),
-    Vector([f32; 3]),
-}
-
-pub fn chain_gen_params() -> Vec<ChainGenParamOut> {
-    let defaults = ChainGenSettings::default();
-    CHAIN_GEN_UI_PARAMS
-        .iter()
-        .map(|param: &UiParam| {
-            let scalar = find_scalar_param(&CHAIN_GEN_SCALAR_PARAMS, param.name)
-                .expect("every ui param has a scalar entry");
-            ChainGenParamOut {
-                name: param.name,
-                label: param.display_label().into_owned(),
-                min: param.min,
-                max: param.max,
-                format: param.format,
-                tooltip: param.tooltip,
-                kind: "scalar",
-                default: ParamDefault::Scalar((scalar.get)(&defaults)),
-            }
-        })
-        .collect()
+pub fn chain_gen_params() -> Vec<ParamRow> {
+    param_rows(
+        &CHAIN_GEN_UI_PARAMS,
+        &CHAIN_GEN_SCALAR_PARAMS,
+        &ChainGenSettings::default(),
+    )
 }
 
 pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSettings> {
     let mut settings = ChainGenSettings::default();
-    apply_setting_assignments(&mut settings, pairs)?;
+    apply_scalar_pairs(&mut settings, &CHAIN_GEN_SCALAR_PARAMS, pairs)?;
     Ok(settings)
 }
 
@@ -171,6 +137,7 @@ pub fn run_chain_gen(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::param_rows::ParamDefault;
 
     #[test]
     fn straight_strand_single_chain() {

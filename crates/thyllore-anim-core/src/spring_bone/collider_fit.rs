@@ -4,7 +4,7 @@ use cgmath::{EuclideanSpace, InnerSpace, Point3, Transform, Vector3};
 
 use thyllore_math_core::{fit_principal_axis, PrincipalAxis};
 use thyllore_model_core::{Bone, BoneId, Skeleton, SkinData};
-use thyllore_scene_core::{SceneFields, UiParam};
+use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use super::setup::{ColliderShape, SpringBoneSetup, SpringColliderDef, SpringColliderGroup};
 
@@ -41,6 +41,15 @@ pub static CAPSULE_FIT_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     CapsuleFitParams::collect_ui("", "", &mut out);
     out
 });
+
+pub static CAPSULE_FIT_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<CapsuleFitParams>>> =
+    LazyLock::new(|| {
+        let mut out: Vec<ScalarParam<CapsuleFitParams>> = Vec::new();
+        CapsuleFitParams::collect_scalars::<CapsuleFitParams, RootPath<CapsuleFitParams>>(
+            "", &mut out,
+        );
+        out
+    });
 
 #[derive(Clone, Debug)]
 pub struct FittedCapsule {

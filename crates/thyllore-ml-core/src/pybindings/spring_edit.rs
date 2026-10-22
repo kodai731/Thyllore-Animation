@@ -43,7 +43,6 @@ pub fn apply_ramp<'py>(
 
 #[pyfunction]
 pub fn chains_in_scope(
-    _py: Python<'_>,
     spring: &Bound<PyAny>,
     bones: &Bound<PyAny>,
     chain_name: &str,
@@ -58,7 +57,6 @@ pub fn chains_in_scope(
 
 #[pyfunction]
 pub fn chains_under_bone(
-    _py: Python<'_>,
     spring: &Bound<PyAny>,
     bones: &Bound<PyAny>,
     bone_name: &str,

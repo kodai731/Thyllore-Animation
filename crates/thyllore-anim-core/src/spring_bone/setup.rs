@@ -129,6 +129,23 @@ pub struct SpringBoneSetup {
     pub collision_mode: SpringCollisionMode,
 }
 
+pub fn set_chain_collider_groups(
+    setup: &mut SpringBoneSetup,
+    chain_ids: &[SpringChainId],
+    group_ids: &[SpringColliderGroupId],
+) {
+    let known: Vec<SpringColliderGroupId> = group_ids
+        .iter()
+        .copied()
+        .filter(|id| setup.collider_groups.iter().any(|group| group.id == *id))
+        .collect();
+    for chain in &mut setup.chains {
+        if chain_ids.contains(&chain.id) {
+            chain.collider_group_ids = known.clone();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

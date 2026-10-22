@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 
 mod avatar_setup;
 mod chain_gen;
+mod collider;
 #[cfg(feature = "debug-log")]
 mod debuglog;
 mod error;
@@ -47,6 +48,9 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(spring_edit::apply_ramp, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_in_scope, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_under_bone, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::capsule_fit_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::assign_collider_groups, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::build_feedback_record, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_feedback_batch, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;

@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use cgmath::Vector3;
 use thyllore_avatar_core::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::garment::systems::hidden_mask::find_hidden_triangle_indices;
+use thyllore_avatar_core::garment::systems::hidden_mask::{
+    find_hidden_triangle_indices, merge_mask_meshes,
+};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
@@ -104,24 +106,9 @@ fn build_garment_mask_mesh(
     garment_pairs: &[(SubmeshKey, usize)],
     graphics: &GraphicsResources,
 ) -> MaskMesh {
-    let mut merged = MaskMesh {
-        positions: Vec::new(),
-        normals: Vec::new(),
-        triangles: Vec::new(),
-    };
-
-    for (_key, mesh_index) in garment_pairs {
-        let garment = mesh_to_mask_mesh(&graphics.meshes[*mesh_index].vertex_data);
-        let offset = merged.positions.len() as u32;
-        merged.positions.extend(garment.positions);
-        merged.normals.extend(garment.normals);
-        merged.triangles.extend(
-            garment
-                .triangles
-                .iter()
-                .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-        );
-    }
-
-    merged
+    let meshes: Vec<MaskMesh> = garment_pairs
+        .iter()
+        .map(|(_key, mesh_index)| mesh_to_mask_mesh(&graphics.meshes[*mesh_index].vertex_data))
+        .collect();
+    merge_mask_meshes(&meshes)
 }

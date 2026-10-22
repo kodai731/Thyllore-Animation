@@ -93,6 +93,21 @@ pub fn find_hidden_triangle_indices(
         .collect()
 }
 
+pub fn merge_mask_meshes(meshes: &[MaskMesh]) -> MaskMesh {
+    let mut merged = MaskMesh::default();
+    for mesh in meshes {
+        let offset = merged.positions.len() as u32;
+        merged.positions.extend_from_slice(&mesh.positions);
+        merged.normals.extend_from_slice(&mesh.normals);
+        merged.triangles.extend(
+            mesh.triangles
+                .iter()
+                .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
+        );
+    }
+    merged
+}
+
 pub fn order_visible_triangles_first(indices: &[u32], hidden_triangles: &[u32]) -> (Vec<u32>, u32) {
     let num_triangles = indices.len() / 3;
     let mut is_hidden = vec![false; num_triangles];

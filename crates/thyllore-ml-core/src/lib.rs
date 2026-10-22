@@ -10,6 +10,7 @@ pub mod mode;
 pub mod model_path;
 pub mod param_rows;
 pub mod spring_edit_bridge;
+pub mod submesh_bridge;
 
 #[cfg(feature = "python")]
 mod pybindings;

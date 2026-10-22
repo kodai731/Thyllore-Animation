@@ -1,15 +1,9 @@
-use std::collections::HashSet;
-
 use cgmath::{Matrix4, Vector3};
-use thyllore_anim_core::spring_bone::chains_under_bone;
 
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{
     ColliderShape, ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId,
 };
-use crate::ecs::resource::gizmo::{BoneSelectionState, SpringChainGizmoMode};
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
-
 const COLOR_COLLIDER: [f32; 3] = [0.2, 0.8, 0.2];
 const COLOR_CHAIN: [f32; 3] = [0.95, 0.75, 0.2];
 const CIRCLE_SEGMENTS: u32 = 16;
@@ -25,62 +19,6 @@ pub struct SpringGizmoSelection {
     pub chain_ids: Vec<SpringChainId>,
     pub radius_chain_ids: Vec<SpringChainId>,
     pub colliders: ColliderGizmo,
-}
-
-/// The chains holding the active bone: the only ones that show their joint hit radii.
-pub fn chains_with_radius(
-    setup: &SpringBoneSetup,
-    selection: &BoneSelectionState,
-    mode: SpringChainGizmoMode,
-) -> Vec<SpringChainId> {
-    let Some(active) = selection.active_bone_index else {
-        return Vec::new();
-    };
-    if mode == SpringChainGizmoMode::None {
-        return Vec::new();
-    }
-    let active_only = HashSet::from([active]);
-    setup
-        .chains
-        .iter()
-        .filter(|chain| chain_has_selected_joint(chain, &active_only))
-        .map(|chain| chain.id)
-        .collect()
-}
-
-/// Chains whose joint is selected, plus every chain hanging directly under a selected bone.
-pub fn chains_to_draw(
-    setup: &SpringBoneSetup,
-    skeleton: &Skeleton,
-    selection: &BoneSelectionState,
-    mode: SpringChainGizmoMode,
-) -> Vec<SpringChainId> {
-    match mode {
-        SpringChainGizmoMode::None => Vec::new(),
-        SpringChainGizmoMode::All => setup.chains.iter().map(|chain| chain.id).collect(),
-        SpringChainGizmoMode::Selected => {
-            let selected = &selection.selected_bone_indices;
-            let mut ids: HashSet<SpringChainId> = setup
-                .chains
-                .iter()
-                .filter(|chain| chain_has_selected_joint(chain, selected))
-                .map(|chain| chain.id)
-                .collect();
-            for &bone_index in selected {
-                ids.extend(chains_under_bone(setup, skeleton, bone_index as BoneId));
-            }
-            let mut ordered: Vec<SpringChainId> = ids.into_iter().collect();
-            ordered.sort_unstable();
-            ordered
-        }
-    }
-}
-
-fn chain_has_selected_joint(chain: &SpringChain, selected: &HashSet<usize>) -> bool {
-    chain
-        .joints
-        .iter()
-        .any(|joint| selected.contains(&(joint.bone_id as usize)))
 }
 
 pub fn build_spring_bone_gizmo_mesh(
@@ -324,105 +262,4 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
     }
     let inv = 1.0 / len;
     [v[0] * inv, v[1] * inv, v[2] * inv]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::animation::Bone;
-    use crate::ecs::component::SpringJointParam;
-
-    fn skeleton_with_two_chains() -> (Skeleton, SpringBoneSetup) {
-        let mut skeleton = Skeleton::default();
-        let parents = [None, Some(0), Some(1), Some(1), Some(3)];
-        for (id, parent_id) in parents.iter().enumerate() {
-            skeleton.bones.push(Bone {
-                id: id as BoneId,
-                parent_id: *parent_id,
-                ..Bone::default()
-            });
-        }
-        for id in 1..5u32 {
-            let parent = skeleton.bones[id as usize].parent_id.expect("child bone");
-            skeleton.bones[parent as usize].children.push(id);
-        }
-
-        let chain = |id: SpringChainId, bone_ids: &[BoneId]| SpringChain {
-            id,
-            joints: bone_ids
-                .iter()
-                .map(|&bone_id| SpringJointParam {
-                    bone_id,
-                    ..SpringJointParam::default()
-                })
-                .collect(),
-            ..Default::default()
-        };
-        let setup = SpringBoneSetup {
-            chains: vec![chain(10, &[2]), chain(11, &[3, 4])],
-            ..Default::default()
-        };
-        (skeleton, setup)
-    }
-
-    fn selecting(indices: &[usize]) -> BoneSelectionState {
-        BoneSelectionState {
-            selected_bone_indices: indices.iter().copied().collect(),
-            active_bone_index: indices.first().copied(),
-        }
-    }
-
-    #[test]
-    fn selected_mode_draws_chains_under_the_selected_bone() {
-        let (skeleton, setup) = skeleton_with_two_chains();
-        let ids = chains_to_draw(
-            &setup,
-            &skeleton,
-            &selecting(&[1]),
-            SpringChainGizmoMode::Selected,
-        );
-        assert_eq!(ids, vec![10, 11]);
-    }
-
-    #[test]
-    fn selected_mode_draws_the_chain_of_a_selected_joint() {
-        let (skeleton, setup) = skeleton_with_two_chains();
-        let ids = chains_to_draw(
-            &setup,
-            &skeleton,
-            &selecting(&[4]),
-            SpringChainGizmoMode::Selected,
-        );
-        assert_eq!(ids, vec![11]);
-    }
-
-    #[test]
-    fn radii_follow_the_active_bone_only() {
-        let (_, setup) = skeleton_with_two_chains();
-        let head_active = BoneSelectionState {
-            selected_bone_indices: [1, 2, 3, 4].into_iter().collect(),
-            active_bone_index: Some(1),
-        };
-        assert!(
-            chains_with_radius(&setup, &head_active, SpringChainGizmoMode::Selected).is_empty()
-        );
-        assert_eq!(
-            chains_with_radius(&setup, &selecting(&[4]), SpringChainGizmoMode::All),
-            vec![11]
-        );
-    }
-
-    #[test]
-    fn all_and_none_ignore_the_selection() {
-        let (skeleton, setup) = skeleton_with_two_chains();
-        let none = selecting(&[]);
-        assert_eq!(
-            chains_to_draw(&setup, &skeleton, &none, SpringChainGizmoMode::All),
-            vec![10, 11]
-        );
-        assert!(chains_to_draw(&setup, &skeleton, &none, SpringChainGizmoMode::None).is_empty());
-        assert!(
-            chains_to_draw(&setup, &skeleton, &none, SpringChainGizmoMode::Selected).is_empty()
-        );
-    }
 }

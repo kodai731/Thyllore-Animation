@@ -1,28 +1,6 @@
+pub use thyllore_anim_core::spring_bone::SpringChainGizmoMode;
+
 use crate::ecs::component::{LineMesh, RenderInfo};
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SpringChainGizmoMode {
-    #[default]
-    Selected,
-    All,
-    None,
-}
-
-impl SpringChainGizmoMode {
-    pub const ALL: [SpringChainGizmoMode; 3] = [
-        SpringChainGizmoMode::Selected,
-        SpringChainGizmoMode::All,
-        SpringChainGizmoMode::None,
-    ];
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            SpringChainGizmoMode::Selected => "Selected",
-            SpringChainGizmoMode::All => "All",
-            SpringChainGizmoMode::None => "None",
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct SpringBoneGizmoData {

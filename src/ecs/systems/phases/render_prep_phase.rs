@@ -20,8 +20,8 @@ use crate::ecs::systems::render_data_systems::{
     transform_gizmo_render_data,
 };
 use crate::ecs::systems::{
-    chains_to_draw, chains_with_radius, compute_bone_draw_set, spring_chain_bone_indices,
-    BoneDrawSet, ColliderGizmo, ScreenSpaceScale, SpringGizmoSelection,
+    compute_bone_draw_set, spring_chain_bone_indices, BoneDrawSet, ColliderGizmo, ScreenSpaceScale,
+    SpringGizmoSelection,
 };
 use crate::ecs::world::World;
 use crate::ecs::FrameContext;
@@ -33,6 +33,7 @@ use crate::ecs::{
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
+use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -951,8 +952,13 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
 
     let selection = bone_selection_snapshot(ctx.world);
     let shown = SpringGizmoSelection {
-        chain_ids: chains_to_draw(&setup, skeleton, &selection, chain_mode),
-        radius_chain_ids: chains_with_radius(&setup, &selection, chain_mode),
+        chain_ids: chains_to_draw(
+            &setup,
+            skeleton,
+            &selection.selected_bone_indices,
+            chain_mode,
+        ),
+        radius_chain_ids: chains_with_radius(&setup, selection.active_bone_index, chain_mode),
         colliders: if colliders_visible {
             ColliderGizmo::Shown
         } else {

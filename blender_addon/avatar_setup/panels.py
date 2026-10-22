@@ -108,6 +108,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         arm = target_armature(context)
         if arm is None:
             return
+        layout.prop(arm.data.thyllore_spring, "gizmo_mode")
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
         self._draw_ramp(layout, context)

@@ -13,6 +13,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.bone_collections import assign_bones_to_chain_collection
 from ..common import coordinates
 from ..common.chain_bones import (
     bone_specs,
@@ -169,6 +170,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
+
+        assign_bones_to_chain_collection(arm, [name for name, _, _, _ in specs])
 
         self.report({"INFO"}, f"Generated {len(specs)} chain bones")
         return {"FINISHED"}

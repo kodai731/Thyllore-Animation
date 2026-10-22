@@ -11,6 +11,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.bone_collections import assign_bones_to_chain_collection
 from ..common.spring_properties import (
     disabled_chain_names,
     restore_disabled_chains,
@@ -18,6 +19,15 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from .operators import armature_bone_specs, target_armature
+
+def assign_chain_bone_collection(arm) -> None:
+    """Assign all chain joints' bones to the 'Thyllore Chains' collection."""
+    settings = arm.data.thyllore_spring
+    bone_names = []
+    for chain in settings.chains:
+        for joint in chain.joints:
+            bone_names.append(joint.bone)
+    assign_bones_to_chain_collection(arm, bone_names)
 
 
 class THYLLORE_OT_AddSpringChains(bpy.types.Operator):
@@ -54,15 +64,7 @@ class THYLLORE_OT_AddSpringChains(bpy.types.Operator):
         write_sidecar_spring(settings, output)
         restore_disabled_chains(settings, disabled)
 
-        collection = arm.data.collections.get("Thyllore Chains")
-        if collection is None:
-            collection = arm.data.collections.new("Thyllore Chains")
-
-        for chain in settings.chains:
-            for joint in chain.joints:
-                bone = arm.data.bones.get(joint.bone)
-                if bone is not None:
-                    collection.assign(bone)
+        assign_chain_bone_collection(arm)
 
         chain_count = len(output["chains"])
         self.report({"INFO"}, f"Added {chain_count} chains with prefix '{self.prefix}'")

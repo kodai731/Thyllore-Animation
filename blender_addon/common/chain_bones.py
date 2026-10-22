@@ -82,3 +82,15 @@ def group_weights(
             bone_name = root_bone if target == "root" else target
             groups.setdefault(bone_name, []).append((vertex, weight))
     return groups
+
+
+def chain_entries(output: dict, origin: dict) -> list[dict]:
+    """One spring chain entry per generated chain: its name, the origin submesh and the joint bone names."""
+    return [
+        {
+            "name": chain["name"],
+            "origin": origin,
+            "joints": [joint["name"] for joint in chain["joints"]],
+        }
+        for chain in output["chains"]
+    ]

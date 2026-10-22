@@ -506,7 +506,7 @@ fn build_chain(
         .into_iter()
         .enumerate()
         .map(|(joint, head)| GeneratedJoint {
-            name: joint_name(params.role, column, joint),
+            name: joint_name(params, column, joint),
             head,
         })
         .collect();
@@ -899,6 +899,7 @@ pub fn compute_chain_weights(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::garment::components::submesh_role::SubmeshSelector;
 
     fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
         let positions = (1..=5)
@@ -910,6 +911,7 @@ mod tests {
     fn build_params(role: ChainRole, joint_count: u32, column_count: u32) -> ChainGenParams {
         ChainGenParams {
             role,
+            target: SubmeshSelector::Mesh("test".to_string()),
             settings: ChainGenSettings {
                 joint_count,
                 column_count,
@@ -990,12 +992,13 @@ mod tests {
             tex_coords: &[],
         };
 
-        let chains = place_chains(&input, &build_hair_params(4)).unwrap();
+        let params = build_hair_params(4);
+        let chains = place_chains(&input, &params).unwrap();
 
         assert_eq!(chains.len(), 1);
         assert_eq!(chains[0].vertices, vec![0, 1, 2, 3, 4]);
         assert_eq!(chains[0].joints.len(), 4);
-        assert_eq!(chains[0].joints[0].name, joint_name(ChainRole::Hair, 0, 0));
+        assert_eq!(chains[0].joints[0].name, joint_name(&params, 0, 0));
         for (joint_index, joint) in chains[0].joints.iter().enumerate() {
             let expected = Vector3::new(0.0, -0.1 - 0.1 * joint_index as f32, 0.0);
             assert!(

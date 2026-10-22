@@ -4,11 +4,12 @@ use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, Submes
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::vrchat::rank::Platform;
 
+use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
 use crate::ecs::resource::OutputQueue;
 use crate::ecs::systems::{
-    add_spring_chains_by_prefix, compute_hidden_triangles, export_unity_avatar, fit_body_colliders,
+    add_spring_chains_under, compute_hidden_triangles, export_unity_avatar, fit_body_colliders,
     invalidate_humanoid_rig, open_avatar_setup, save_humanoid_mapping, save_material_textures,
     select_submesh_entity, set_avatar_rank_platform, set_chain_gen_settings, set_humanoid_role,
     set_material_texture, set_submesh_role,
@@ -27,8 +28,9 @@ pub enum AvatarSetupEvent {
     SaveHumanoidMapping,
     SetAvatarRankPlatform(Platform),
     ExportUnityAvatar,
-    AddSpringChainsByPrefix {
-        prefix: String,
+    AddSpringChainsUnder {
+        root: BoneId,
+        min_joints: u32,
     },
     FitBodyColliders {
         params: CapsuleFitParams,
@@ -78,8 +80,8 @@ impl UiCommand for AvatarSetupEvent {
                 set_avatar_rank_platform(world, platform)
             }
             AvatarSetupEvent::ExportUnityAvatar => export_unity_avatar(world, assets, graphics),
-            AvatarSetupEvent::AddSpringChainsByPrefix { prefix } => {
-                add_spring_chains_by_prefix(world, assets, &prefix)
+            AvatarSetupEvent::AddSpringChainsUnder { root, min_joints } => {
+                add_spring_chains_under(world, assets, root, min_joints)
             }
             AvatarSetupEvent::FitBodyColliders { params } => {
                 fit_body_colliders(world, assets, graphics, &params)

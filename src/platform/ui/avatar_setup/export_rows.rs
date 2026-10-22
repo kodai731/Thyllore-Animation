@@ -10,14 +10,12 @@ use crate::platform::ui::ui_rows::UiRow;
 
 #[derive(Clone)]
 pub struct ExportView {
-    pub spring_prefix: String,
     pub body_collider_fit: CapsuleFitParams,
 }
 
 impl ExportView {
     pub fn from_state(state: &AvatarSetupState) -> Self {
         Self {
-            spring_prefix: state.spring_prefix.clone(),
             body_collider_fit: state.body_collider_fit.clone(),
         }
     }
@@ -94,20 +92,6 @@ pub fn rows() -> Vec<UiRow<ExportView>> {
                 ui.text_disabled("Export FBX (needs an FBX model)");
             }
         }),
-        UiRow::Text {
-            label: "Bone Name Prefix",
-            get: |view| view.spring_prefix.as_str(),
-            set: |view, text| view.spring_prefix = text,
-        },
-        UiRow::Action {
-            label: "Add Spring Chains",
-            enabled: |_world, view| !view.spring_prefix.trim().is_empty(),
-            on_click: |view| {
-                Box::new(AvatarSetupEvent::AddSpringChainsByPrefix {
-                    prefix: view.spring_prefix.trim().to_string(),
-                })
-            },
-        },
         body_collider_fit_group(),
     ]
 }
@@ -121,10 +105,7 @@ mod tests {
     fn test_row_labels() {
         let rows = rows();
         let labels = visible_labels(&rows);
-        assert_eq!(
-            labels,
-            ["Export for Unity", "Bone Name Prefix", "Add Spring Chains"]
-        );
+        assert_eq!(labels, ["Export for Unity"]);
         let Some(UiRow::Group { title, .. }) = rows.last() else {
             panic!("the export tab ends with the body collider group");
         };

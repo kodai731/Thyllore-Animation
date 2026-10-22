@@ -398,6 +398,7 @@ mod tests {
                 collider_group_ids: vec![],
                 center_bone_id: None,
                 enabled: true,
+                origin: Default::default(),
             }],
             colliders: vec![],
             collider_groups: vec![],
@@ -598,6 +599,7 @@ mod tests {
                     collider_group_ids: vec![],
                     center_bone_id: None,
                     enabled: false,
+                    origin: Default::default(),
                 },
                 SpringChain {
                     id: 1,
@@ -613,6 +615,7 @@ mod tests {
                     collider_group_ids: vec![],
                     center_bone_id: None,
                     enabled: true,
+                    origin: Default::default(),
                 },
             ],
             colliders: vec![],

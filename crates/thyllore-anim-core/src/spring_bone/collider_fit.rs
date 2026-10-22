@@ -444,6 +444,7 @@ mod tests {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         });
         setup.next_chain_id = 1;
 
@@ -486,6 +487,7 @@ mod tests {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         });
         setup.next_chain_id = 1;
 
@@ -529,6 +531,7 @@ mod tests {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         });
         setup.next_chain_id = 1;
 

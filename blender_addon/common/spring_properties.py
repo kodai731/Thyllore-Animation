@@ -60,6 +60,19 @@ def _chain_to_sidecar(chain) -> dict:
         "collider_groups": [entry.name for entry in chain.collider_groups],
         "joints": [_joint_to_sidecar(joint) for joint in chain.joints],
         "tail": chain.tail or None,
+        "origin": _chain_origin_to_sidecar(chain),
+    }
+
+
+def _chain_origin_to_sidecar(chain) -> dict | None:
+    """The submesh a generated chain came from, or None for an authored chain."""
+    mesh = getattr(chain, "origin_mesh", "")
+    if not mesh:
+        return None
+    return {
+        "mesh": mesh,
+        "material": chain.origin_material,
+        "role": chain.origin_role,
     }
 
 
@@ -109,6 +122,10 @@ def _write_chains(chains, spring_chains: list[dict]) -> None:
         item.center = chain.get("center") or ""
         item.enabled = True
         item.tail = chain.get("tail") or ""
+        origin = chain.get("origin") or {}
+        item.origin_mesh = origin.get("mesh", "")
+        item.origin_material = origin.get("material", "")
+        item.origin_role = origin.get("role", "")
         for joint in chain["joints"]:
             _write_joint(item.joints, joint)
         for group_name in chain.get("collider_groups", []):
@@ -206,3 +223,39 @@ def chain_with_joint(settings, bone_name: str):
         if joint.bone == bone_name:
             return chain
     return None
+
+
+def same_origin(chain, origin: dict) -> bool:
+    """Whether a chain item was generated on the submesh ``origin`` names (mesh, material)."""
+    return (
+        bool(getattr(chain, "origin_mesh", ""))
+        and chain.origin_mesh == origin["mesh"]
+        and chain.origin_material == (origin.get("material") or "")
+    )
+
+
+def remove_chains_generated_on(settings, origin: dict) -> list[str]:
+    """Drop the chains generated on ``origin`` from the settings; returns their joint bone names."""
+    bone_names: list[str] = []
+    for index in reversed(range(len(settings.chains))):
+        chain = settings.chains[index]
+        if not same_origin(chain, origin):
+            continue
+        bone_names.extend(joint.bone for joint in chain.joints)
+        settings.chains.remove(index)
+    return bone_names
+
+
+def add_generated_chains(settings, entries: list[dict]) -> None:
+    """Append chain items (name, origin, joint bone names); joint parameters keep their defaults."""
+    for entry in entries:
+        item = settings.chains.add()
+        item.name = entry["name"]
+        item.enabled = True
+        origin = entry["origin"]
+        item.origin_mesh = origin["mesh"]
+        item.origin_material = origin.get("material") or ""
+        item.origin_role = origin["role"]
+        for bone_name in entry["joints"]:
+            joint = item.joints.add()
+            joint.bone = bone_name

@@ -1,6 +1,4 @@
 use std::collections::BTreeMap;
-use std::fmt;
-use std::str::FromStr;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
@@ -13,11 +11,7 @@ pub enum SubmeshRole {
     Accessory,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SubmeshKey {
-    pub mesh: String,
-    pub material: String,
-}
+pub use thyllore_anim_core::spring_bone::SubmeshKey;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubmeshRoleSource {
@@ -163,44 +157,4 @@ mod tests {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SubmeshSelector {
-    Submesh(SubmeshKey),
-    Mesh(String),
-}
-
-impl SubmeshSelector {
-    pub fn matches(&self, key: &SubmeshKey) -> bool {
-        match self {
-            SubmeshSelector::Submesh(selected) => selected == key,
-            SubmeshSelector::Mesh(mesh) => key.mesh == *mesh,
-        }
-    }
-}
-
-impl FromStr for SubmeshSelector {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Err("submesh selector expects <mesh> or <mesh>/<material>".to_string());
-        }
-        match text.rsplit_once('/') {
-            Some((mesh, material)) => Ok(SubmeshSelector::Submesh(SubmeshKey {
-                mesh: mesh.to_string(),
-                material: material.to_string(),
-            })),
-            None => Ok(SubmeshSelector::Mesh(text.to_string())),
-        }
-    }
-}
-
-impl fmt::Display for SubmeshSelector {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SubmeshSelector::Submesh(key) => write!(f, "{}/{}", key.mesh, key.material),
-            SubmeshSelector::Mesh(mesh) => f.write_str(mesh),
-        }
-    }
-}
+pub use thyllore_anim_core::spring_bone::SubmeshSelector;

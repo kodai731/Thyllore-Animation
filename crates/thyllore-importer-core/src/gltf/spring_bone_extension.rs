@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
-    SpringCollisionMode, SpringJointParam,
+    ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringCollisionMode, SpringJointParam,
 };
 
 #[derive(Deserialize)]
@@ -216,6 +216,7 @@ fn convert_springs(
             collider_group_ids: vs.collider_groups.clone().unwrap_or_default(),
             center_bone_id,
             enabled: true,
+            origin: ChainOrigin::Authored,
         });
     }
 

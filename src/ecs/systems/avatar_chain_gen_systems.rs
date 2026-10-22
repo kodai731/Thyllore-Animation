@@ -1,8 +1,12 @@
 use cgmath::{InnerSpace, SquareMatrix};
+use thyllore_anim_core::spring_bone::{
+    ChainOrigin, SpringBoneSetup, SpringChain, SpringJointParam, FITTED_BODY_GROUP_NAME,
+};
 use thyllore_avatar_core::garment::components::chain_gen::{
-    ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainGenSettings, ChainRole,
-    ChainWeightRecord, GeneratedBoneRecord, GeneratedChain, GeneratedJoint, InfluenceTarget,
-    RootBandRecord, StrandPlacement, VertexInfluences,
+    chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
+    ChainGenRequest, ChainGenSettings, ChainRole, ChainWeightRecord, GeneratedBoneRecord,
+    GeneratedChain, GeneratedJoint, InfluenceTarget, RootBandRecord, StrandPlacement,
+    VertexInfluences,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -13,20 +17,25 @@ use thyllore_avatar_core::garment::systems::chain_bones::{
 use thyllore_avatar_core::garment::systems::chain_gen::{
     component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
 };
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::world_y_axis;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
+use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
 use crate::ecs::systems::avatar_submesh_role_systems::collect_submesh_meshes;
 use crate::ecs::systems::skeleton_edit_systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
+    remove_bone_subtree,
 };
+use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub struct GeneratedChainBones {
     pub report: ChainGenReport,
+    pub chains: Vec<SpringChain>,
 }
 
 struct ChainGenPart {
@@ -51,7 +60,7 @@ fn generate_chain_bones(
     let (submeshes, role) = resolve_target(world, assets, graphics, &request.target)?;
     let geometry = merge_submesh_geometry(graphics, submeshes)?;
 
-    let root = find_root_bone(assets, geometry.skeleton_id, &request.root_bone)?;
+    let root = find_root_bone(world, request.root)?;
     let attachment_geometry =
         collect_skin_vertices_of_bone(world, assets, graphics, geometry.skeleton_id, root);
     let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
@@ -75,6 +84,7 @@ fn generate_chain_bones(
     };
     let params = ChainGenParams {
         role,
+        target: request.target.clone(),
         settings: request.settings.clone(),
     };
     let placement = place_chains_with_strands(&input, &params)?;
@@ -121,7 +131,30 @@ fn generate_chain_bones(
         }
     }
 
-    Ok(GeneratedChainBones { report })
+    let spring_chains = chains
+        .iter()
+        .zip(&bone_ids)
+        .map(|(chain, joint_bones)| SpringChain {
+            name: chain_name(&params, chain.column),
+            joints: joint_bones
+                .iter()
+                .map(|&bone_id| SpringJointParam {
+                    bone_id,
+                    ..SpringJointParam::default()
+                })
+                .collect(),
+            origin: ChainOrigin::Generated {
+                target: request.target.clone(),
+                role,
+            },
+            ..SpringChain::default()
+        })
+        .collect();
+
+    Ok(GeneratedChainBones {
+        report,
+        chains: spring_chains,
+    })
 }
 
 fn resolve_target(
@@ -156,13 +189,12 @@ fn resolve_target(
         let entry = state.submesh_roles.get(&key).ok_or_else(|| {
             anyhow::anyhow!("submesh role not set: {}/{}", key.mesh, key.material)
         })?;
-        let part_role = match (entry.role, target) {
-            (SubmeshRole::Hair, _) => ChainRole::Hair,
-            (SubmeshRole::Garment, _) => ChainRole::Skirt,
-            (_, SubmeshSelector::Mesh(_)) => continue,
-            (other, SubmeshSelector::Submesh(_)) => anyhow::bail!(
+        let part_role = match (chain_role_of_submesh(entry.role), target) {
+            (Some(chain_role), _) => chain_role,
+            (None, SubmeshSelector::Mesh(_)) => continue,
+            (None, SubmeshSelector::Submesh(_)) => anyhow::bail!(
                 "submesh role {:?} is not Hair or Garment: {}/{}",
-                other,
+                entry.role,
                 key.mesh,
                 key.material
             ),
@@ -344,21 +376,17 @@ fn influences_of_part(
 }
 
 fn find_root_bone(
-    assets: &AssetStorage,
-    skeleton_id: crate::animation::SkeletonId,
-    root_bone: &str,
+    world: &World,
+    root: HumanoidRole,
 ) -> anyhow::Result<thyllore_model_core::BoneId> {
-    let skeleton = assets
-        .skeletons
-        .values()
-        .find(|sa| sa.skeleton_id == skeleton_id)
-        .map(|sa| &sa.skeleton)
-        .ok_or_else(|| anyhow::anyhow!("skeleton not found: {:?}", skeleton_id))?;
-    skeleton
-        .bone_name_to_id
-        .get(root_bone)
-        .copied()
-        .ok_or_else(|| anyhow::anyhow!("root bone '{}' not found", root_bone))
+    let state = world.resource::<AvatarSetupState>();
+    let bone_index = state.mapping.by_role.get(&root).copied().ok_or_else(|| {
+        anyhow::anyhow!(
+            "humanoid role {} is not mapped; confirm the mapping in Avatar Setup",
+            root.unity_name()
+        )
+    })?;
+    Ok(bone_index as thyllore_model_core::BoneId)
 }
 
 fn find_skeleton_mut(
@@ -487,6 +515,8 @@ fn build_report(
     }
 }
 
+/// Replaces the chains generated earlier on the same target: their bones go, their weights fold back
+/// into the root, and the new chains are registered as spring chains.
 pub fn generate_and_apply_chain_bones(
     world: &mut World,
     assets: &mut AssetStorage,
@@ -494,10 +524,37 @@ pub fn generate_and_apply_chain_bones(
     request: &ChainGenRequest,
 ) -> anyhow::Result<()> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
+    let replaced = remove_generated_chains(world, assets, graphics, &request.target)?;
     let generated = generate_chain_bones(world, assets, graphics, request)?;
-    apply_chain_generation(world, assets, graphics, generated);
+    apply_chain_generation(world, assets, graphics, generated, replaced);
     record_skeleton_edit(world, assets, graphics, before, "Generate chains");
     Ok(())
+}
+
+fn remove_generated_chains(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &mut GraphicsResources,
+    target: &SubmeshSelector,
+) -> anyhow::Result<usize> {
+    let mut removed_chains = 0;
+    while let Some(root_joint) = first_generated_root_joint(world, target) {
+        remove_bone_subtree(world, assets, graphics, root_joint)?;
+        removed_chains += 1;
+    }
+    Ok(removed_chains)
+}
+
+fn first_generated_root_joint(
+    world: &World,
+    target: &SubmeshSelector,
+) -> Option<thyllore_model_core::BoneId> {
+    world
+        .iter_components::<SpringBoneSetup>()
+        .flat_map(|(_, setup)| setup.chains.iter())
+        .find(|chain| chain.origin.is_generated_on(target))
+        .and_then(|chain| chain.joints.first())
+        .map(|joint| joint.bone_id)
 }
 
 fn apply_chain_generation(
@@ -505,14 +562,53 @@ fn apply_chain_generation(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     generated: GeneratedChainBones,
+    replaced_chains: usize,
 ) {
     let report = generated.report;
     let bone_count = report.bones.len();
+    let chain_count = generated.chains.len();
 
+    register_spring_chains(world, generated.chains);
     refresh_after_skeleton_edit(world, assets, graphics);
     world.resource_mut::<AvatarSetupState>().chain_gen_report = Some(report);
 
-    msg_info!("Generated {} chain bones", bone_count);
+    match replaced_chains {
+        0 => msg_info!(
+            "Generated {} chain bones in {} spring chains",
+            bone_count,
+            chain_count
+        ),
+        replaced => msg_info!(
+            "Generated {} chain bones in {} spring chains, replacing {} chains",
+            bone_count,
+            chain_count,
+            replaced
+        ),
+    }
+}
+
+fn register_spring_chains(world: &mut World, chains: Vec<SpringChain>) {
+    let Some(entity) = find_or_create_spring_bone_setup_entity(world) else {
+        msg_warn!("Generated chains are not spring chains: no animated model entity");
+        return;
+    };
+    let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
+        return;
+    };
+
+    let fitted_body_group = setup
+        .collider_groups
+        .iter()
+        .find(|group| group.name == FITTED_BODY_GROUP_NAME)
+        .map(|group| group.id);
+    for mut chain in chains {
+        chain.id = setup.next_chain_id;
+        setup.next_chain_id += 1;
+        chain.collider_group_ids.extend(fitted_body_group);
+        setup.chains.push(chain);
+    }
+
+    reset_spring_bone_state(world);
 }
 
 pub fn set_chain_gen_settings(world: &mut World, settings: ChainGenSettings) {

@@ -335,7 +335,7 @@ fn build_tuft_chain(
             .into_iter()
             .enumerate()
             .map(|(joint, head)| GeneratedJoint {
-                name: joint_name(params.role, column, joint),
+                name: joint_name(params, column, joint),
                 head,
             })
             .collect();
@@ -420,6 +420,7 @@ pub(crate) fn place_card_chains(
 mod tests {
     use super::*;
     use crate::garment::components::chain_gen::{ChainGenSettings, ChainRole};
+    use crate::garment::components::submesh_role::SubmeshSelector;
     use crate::garment::systems::chain_gen::{
         hair_root_band, place_chains, place_chains_with_strands,
     };
@@ -873,6 +874,7 @@ mod tests {
     fn hair_params(column_count: u32, strand_merge_distance: f32) -> ChainGenParams {
         ChainGenParams {
             role: ChainRole::Hair,
+            target: SubmeshSelector::Mesh("test".to_string()),
             settings: ChainGenSettings {
                 column_count,
                 strand_merge_distance,
@@ -989,6 +991,7 @@ mod tests {
         let mesh = build_three_tilted_cards();
         let params = ChainGenParams {
             role: ChainRole::Skirt,
+            target: SubmeshSelector::Mesh("test".to_string()),
             settings: ChainGenSettings::default(),
         };
         let placement = place_chains_with_strands(&card_input(&mesh, &mesh.tex_coords), &params)

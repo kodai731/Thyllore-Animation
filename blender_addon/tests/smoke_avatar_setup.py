@@ -142,23 +142,29 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
     return added
 
 
-def step_d_add_spring_chains(arm, added):
-    """(d) Armature active -> thyllore.add_spring_chains(prefix="hair_") -> chain count == added // 4."""
+def step_d_generated_chains_are_registered(arm, added):
+    """(d) Generate Chain Bones registered one spring chain per 4 bones; Add Chains Under Bone adds none more."""
     import bpy
 
-    bpy.context.view_layer.objects.active = arm
-    bpy.ops.thyllore.add_spring_chains(prefix="hair_")
-
     settings = arm.data.thyllore_spring
-    chain_count = len(settings.chains)
-
     expected = added // 4
+    chain_count = len(settings.chains)
     if chain_count != expected:
         raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_d — expected {expected} spring chains (added={added} / 4), got {chain_count}"
+            f"AVATAR_SETUP_SMOKE failed: step_d — expected {expected} spring chains from generation (added={added} / 4), got {chain_count}"
+        )
+    if any(not chain.origin_mesh for chain in settings.chains):
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d — a generated chain has no origin")
+
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.thyllore.add_chains_under_bone(root_bone="mixamorig:Head", min_joints=2)
+    chain_count_after = len(settings.chains)
+    if chain_count_after != expected:
+        raise SystemExit(
+            f"AVATAR_SETUP_SMOKE failed: step_d — add_chains_under_bone changed the chain count {expected} -> {chain_count_after}"
         )
 
-    print(f"[smoke] step_d: {chain_count} spring chains added")
+    print(f"[smoke] step_d: {chain_count} spring chains registered by generation, idempotent under Head")
 
 
 def step_e_fit_body_colliders(arm):
@@ -247,7 +253,7 @@ def main() -> None:
     arm, mesh = step_a_import_fbx()
     hair_material = step_b_guess_submesh_roles(arm, mesh)
     added = step_c_generate_chain_bones(arm, mesh, hair_material)
-    step_d_add_spring_chains(arm, added)
+    step_d_generated_chains_are_registered(arm, added)
     step_e_fit_body_colliders(arm)
     step_f_apply_ramp(arm)
     step_g_export_for_unity(arm, mesh)

@@ -1,8 +1,9 @@
 use cgmath::Vector3;
 use thyllore_avatar_core::garment::components::chain_gen::{
-    ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
+    chain_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
     CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
+use thyllore_avatar_core::garment::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::garment::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains,
 };
@@ -18,6 +19,7 @@ pub struct ChainGenOutput {
 #[derive(serde::Serialize)]
 pub struct ChainOut {
     pub column: usize,
+    pub name: String,
     pub joints: Vec<JointOut>,
     pub tail: [f32; 3],
     pub vertices: Vec<u32>,
@@ -73,11 +75,13 @@ pub fn run_chain_gen(
     triangles: &[[u32; 3]],
     root_position: [f32; 3],
     role: &str,
+    target: &str,
     settings: ChainGenSettings,
     attachment_positions: &[[f32; 3]],
     tex_coords: &[[f32; 2]],
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
+    let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
 
     let positions_vec = to_vectors(positions);
     let attachment_vec = to_vectors(attachment_positions);
@@ -88,7 +92,11 @@ pub fn run_chain_gen(
         attachment_positions: &attachment_vec,
         tex_coords,
     };
-    let params = ChainGenParams { role, settings };
+    let params = ChainGenParams {
+        role,
+        target,
+        settings,
+    };
 
     let chains = place_chains(&input, &params)?;
     let weights = compute_chain_weights(&input, &params, &chains);
@@ -97,6 +105,7 @@ pub fn run_chain_gen(
         .iter()
         .map(|chain| ChainOut {
             column: chain.column,
+            name: chain_name(&params, chain.column),
             joints: chain
                 .joints
                 .iter()
@@ -166,6 +175,7 @@ mod tests {
             &triangles,
             [0.0, 0.0, 0.0],
             "hair",
+            "strip/hair",
             settings,
             &head,
             &[],

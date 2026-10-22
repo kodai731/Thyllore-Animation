@@ -106,7 +106,6 @@ fn commit_stats(world: &World, shown: &StatsView, view: &StatsView) {
 
 fn commit_export(world: &World, _shown: &ExportView, view: &ExportView) {
     if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
-        state.spring_prefix = view.spring_prefix.clone();
         state.body_collider_fit = view.body_collider_fit.clone();
     }
 }
@@ -206,21 +205,24 @@ fn format_geometry_warning(warning: &GeometryWarning) -> String {
 mod tests {
     use super::*;
     use crate::ecs::resource::AvatarSetupState;
+    use thyllore_anim_core::spring_bone::CapsuleFitParams;
     use thyllore_avatar_core::vrchat::rank::Platform;
 
     #[test]
     fn test_commit_export_no_change() {
         let mut world = World::new();
         world.insert_resource(AvatarSetupState::default());
-        let prefix = world.resource::<AvatarSetupState>().spring_prefix.clone();
+        let fit = world
+            .resource::<AvatarSetupState>()
+            .body_collider_fit
+            .clone();
 
         let view = ExportView {
-            spring_prefix: prefix.clone(),
-            body_collider_fit: Default::default(),
+            body_collider_fit: fit.clone(),
         };
         commit_export(&world, &view, &view);
 
-        assert_eq!(world.resource::<AvatarSetupState>().spring_prefix, prefix);
+        assert_eq!(world.resource::<AvatarSetupState>().body_collider_fit, fit);
     }
 
     #[test]
@@ -229,16 +231,19 @@ mod tests {
         world.insert_resource(AvatarSetupState::default());
 
         let shown = ExportView {
-            spring_prefix: "old".to_string(),
             body_collider_fit: Default::default(),
         };
+        let mut changed = CapsuleFitParams::default();
+        changed.min_vertex_count += 1;
         let view = ExportView {
-            spring_prefix: "new".to_string(),
-            body_collider_fit: Default::default(),
+            body_collider_fit: changed.clone(),
         };
         commit_export(&world, &shown, &view);
 
-        assert_eq!(world.resource::<AvatarSetupState>().spring_prefix, "new");
+        assert_eq!(
+            world.resource::<AvatarSetupState>().body_collider_fit,
+            changed
+        );
     }
 
     #[test]

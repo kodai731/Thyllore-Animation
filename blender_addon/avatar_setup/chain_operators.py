@@ -1,4 +1,4 @@
-"""Spring chain add/remove operators (thyllore.add_spring_chains, thyllore.remove_spring_chain)."""
+"""Spring chain add/remove operators (thyllore.add_chains_under_bone, thyllore.remove_spring_chain)."""
 from __future__ import annotations
 
 import bpy
@@ -30,18 +30,30 @@ def assign_chain_bone_collection(arm) -> None:
     assign_bones_to_chain_collection(arm, bone_names)
 
 
-class THYLLORE_OT_AddSpringChains(bpy.types.Operator):
-    """Add spring chains from bones matching a prefix."""
+class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
+    """Add a spring chain for every run of non-humanoid bones under a root bone."""
 
-    bl_idname = "thyllore.add_spring_chains"
-    bl_label = "Add Spring Chains"
+    bl_idname = "thyllore.add_chains_under_bone"
+    bl_label = "Add Chains Under Bone"
     bl_options = {"REGISTER", "UNDO"}
 
-    prefix: bpy.props.StringProperty(default="hair_")
+    root_bone: bpy.props.StringProperty(name="Root Bone", default="Head")
+    min_joints: bpy.props.IntProperty(
+        name="Min Joints",
+        default=2,
+        min=1,
+        description="Shortest run of bones under the root that becomes a chain",
+    )
 
     @classmethod
     def poll(cls, context):
         return _TML_AVAILABLE and target_armature(context) is not None
+
+    def invoke(self, context, event):
+        active = getattr(context, "active_bone", None)
+        if active is not None:
+            self.root_bone = active.name
+        return self.execute(context)
 
     def execute(self, context):
         if not _TML_AVAILABLE:
@@ -54,9 +66,9 @@ class THYLLORE_OT_AddSpringChains(bpy.types.Operator):
         try:
             sidecar = spring_settings_to_edit(settings)
             bones = armature_bone_specs(context, arm)
-            output = tml.chains_from_prefix(sidecar, bones, self.prefix)
+            output = tml.add_chains_under_bone(sidecar, bones, self.root_bone, self.min_joints)
         except ValueError as e:
-            self.report({"ERROR"}, f"chains_from_prefix failed: {e}")
+            self.report({"ERROR"}, f"add_chains_under_bone failed: {e}")
             return {"CANCELLED"}
 
         disabled = disabled_chain_names(settings)
@@ -67,7 +79,7 @@ class THYLLORE_OT_AddSpringChains(bpy.types.Operator):
         assign_chain_bone_collection(arm)
 
         chain_count = len(output["chains"])
-        self.report({"INFO"}, f"Added {chain_count} chains with prefix '{self.prefix}'")
+        self.report({"INFO"}, f"{chain_count} chains under '{self.root_bone}'")
         return {"FINISHED"}
 
 
@@ -102,7 +114,7 @@ class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):
 
 
 OPERATORS = (
-    THYLLORE_OT_AddSpringChains,
+    THYLLORE_OT_AddChainsUnderBone,
     THYLLORE_OT_RemoveSpringChain,
 )
 

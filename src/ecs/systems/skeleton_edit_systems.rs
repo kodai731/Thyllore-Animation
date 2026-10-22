@@ -76,8 +76,29 @@ pub fn remove_skeleton_bone(
 ) -> anyhow::Result<()> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
 
-    let (skeleton_id, skeleton) = edited_skeleton_mut(assets)?;
+    let (_, skeleton) = edited_skeleton_mut(assets)?;
     let bone_id = resolve_bone(skeleton, bone_name)?;
+    let removed_count = remove_bone_subtree(world, assets, graphics, bone_id)?;
+
+    refresh_after_skeleton_edit(world, assets, graphics);
+    record_skeleton_edit(world, assets, graphics, before, "Remove bone");
+    msg_info!(
+        "Removed bone \"{}\" and {} descendants",
+        bone_name,
+        removed_count - 1
+    );
+    Ok(())
+}
+
+/// Removes a bone with its descendants, folds their skin weights into the parent and renumbers every
+/// bone reference in the world; returns the number of bones removed. The caller refreshes and records.
+pub fn remove_bone_subtree(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &mut GraphicsResources,
+    bone_id: BoneId,
+) -> anyhow::Result<usize> {
+    let (skeleton_id, skeleton) = edited_skeleton_mut(assets)?;
     let removed = skeleton.remove_bone(bone_id)?;
 
     for mesh in graphics.meshes.iter_mut() {
@@ -90,15 +111,7 @@ pub fn remove_skeleton_bone(
         }
     }
     remap_bone_references(world, &removed.remap);
-
-    refresh_after_skeleton_edit(world, assets, graphics);
-    record_skeleton_edit(world, assets, graphics, before, "Remove bone");
-    msg_info!(
-        "Removed bone \"{}\" and {} descendants",
-        bone_name,
-        removed.removed.len() - 1
-    );
-    Ok(())
+    Ok(removed.removed.len())
 }
 
 /// The state a skeleton edit can touch, or `None` when no skeleton is loaded.

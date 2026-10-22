@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::humanoid::components::skeleton_input::BoneInput;
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
-    SpringColliderGroupId, SpringColliderId, SpringCollisionMode, SpringJointParam,
-    FITTED_BODY_GROUP_NAME,
+    ChainOrigin, ChainRole, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringColliderGroupId, SpringColliderId, SpringCollisionMode,
+    SpringJointParam, SubmeshSelector, FITTED_BODY_GROUP_NAME,
 };
 use thyllore_anim_core::BoneId;
 
@@ -65,6 +65,38 @@ pub struct SidecarSpringChain {
     /// The bone of the appended VRM tail joint, which is not a simulated joint of the engine chain
     #[serde(default)]
     pub tail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SidecarChainOrigin>,
+}
+
+/// The submesh a generated chain was placed on; absent for hand-authored chains.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SidecarChainOrigin {
+    pub mesh: String,
+    #[serde(default)]
+    pub material: Option<String>,
+    pub role: ChainRole,
+}
+
+fn sidecar_chain_origin(origin: &ChainOrigin) -> Option<SidecarChainOrigin> {
+    match origin {
+        ChainOrigin::Authored => None,
+        ChainOrigin::Generated { target, role } => Some(SidecarChainOrigin {
+            mesh: target.mesh().to_string(),
+            material: target.material().map(str::to_string),
+            role: *role,
+        }),
+    }
+}
+
+fn chain_origin_from_sidecar(origin: &Option<SidecarChainOrigin>) -> ChainOrigin {
+    match origin {
+        None => ChainOrigin::Authored,
+        Some(origin) => ChainOrigin::Generated {
+            target: SubmeshSelector::from_parts(&origin.mesh, origin.material.as_deref()),
+            role: origin.role,
+        },
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -225,6 +257,7 @@ fn build_sidecar_chains(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Vec<Sid
                 collider_groups,
                 joints,
                 tail: tail_bone,
+                origin: sidecar_chain_origin(&chain.origin),
             }
         })
         .collect()
@@ -332,6 +365,7 @@ pub fn spring_setup_from_sidecar(spring: &SidecarSpring, bones: &[BoneInput]) ->
                 .collect(),
             center_bone_id: chain.center.as_deref().and_then(bone_id_of),
             enabled: true,
+            origin: chain_origin_from_sidecar(&chain.origin),
         });
     }
 
@@ -444,6 +478,7 @@ mod tests {
             collider_group_ids: vec![0],
             center_bone_id: Some(0),
             enabled: true,
+            origin: Default::default(),
         });
 
         setup.next_chain_id = 1;
@@ -568,6 +603,7 @@ mod tests {
             collider_group_ids: vec![7],
             center_bone_id: Some(1),
             enabled: true,
+            origin: Default::default(),
         });
         setup.next_chain_id = 3;
         setup.next_collider_id = 5;
@@ -610,6 +646,62 @@ mod tests {
         assert_eq!(restored.next_chain_id, 1);
         assert_eq!(restored.next_collider_id, 1);
         assert_eq!(restored.next_group_id, 1);
+    }
+
+    #[test]
+    fn generated_origin_round_trips_and_is_absent_for_authored_chains() {
+        let bones = make_bones(&["Head", "Hair0", "Hair1", "Side0"]);
+        let origin = ChainOrigin::Generated {
+            target: SubmeshSelector::from_parts("Hair_back", Some("Hair")),
+            role: ChainRole::Hair,
+        };
+        let joints = |ids: &[BoneId]| -> Vec<SpringJointParam> {
+            ids.iter()
+                .map(|&bone_id| SpringJointParam {
+                    bone_id,
+                    ..Default::default()
+                })
+                .collect()
+        };
+        let setup = SpringBoneSetup {
+            chains: vec![
+                SpringChain {
+                    id: 0,
+                    joints: joints(&[1, 2]),
+                    origin: origin.clone(),
+                    ..Default::default()
+                },
+                SpringChain {
+                    id: 1,
+                    joints: joints(&[3]),
+                    ..Default::default()
+                },
+            ],
+            next_chain_id: 2,
+            ..Default::default()
+        };
+
+        let sidecar = build_sidecar_spring(&setup, &bones);
+        let json = serde_json::to_string(&sidecar).unwrap();
+        assert!(json.contains(
+            "\"origin\":{\"mesh\":\"Hair_back\",\"material\":\"Hair\",\"role\":\"hair\"}"
+        ));
+        assert_eq!(sidecar.chains[1].origin, None);
+
+        let restored = spring_setup_from_sidecar(&serde_json::from_str(&json).unwrap(), &bones);
+        assert_eq!(restored.chains[0].origin, origin);
+        assert_eq!(restored.chains[1].origin, ChainOrigin::Authored);
+    }
+
+    #[test]
+    fn chain_without_origin_field_loads_as_authored() {
+        let bones = make_bones(&["Head", "Hair0"]);
+        let json = r#"{"collision_mode":"vrm_compatible","colliders":[],"collider_groups":[],
+            "chains":[{"name":"c","center":null,"collider_groups":[],
+            "joints":[{"bone":"Hair0","stiffness":1.0,"drag_force":0.4,"gravity_power":0.0,"gravity_dir":[0.0,-1.0,0.0],"hit_radius":0.02}]}]}"#;
+        let sidecar: SidecarSpring = serde_json::from_str(json).unwrap();
+        let restored = spring_setup_from_sidecar(&sidecar, &bones);
+        assert_eq!(restored.chains[0].origin, ChainOrigin::Authored);
     }
 
     #[test]
@@ -731,6 +823,7 @@ mod tests {
             collider_group_ids: vec![],
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         });
 
         let sidecar = build_sidecar_spring(&setup, &bones);
@@ -773,6 +866,7 @@ mod tests {
             collider_group_ids: vec![],
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         });
 
         let sidecar = build_sidecar_spring(&setup, &bones);

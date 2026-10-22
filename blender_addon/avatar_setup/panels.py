@@ -60,7 +60,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
 
     @staticmethod
     def _draw_chain_list(layout, arm):
-        layout.operator("thyllore.add_spring_chains")
+        layout.operator("thyllore.add_chains_under_bone")
         layout.operator("thyllore.remove_spring_chain")
         settings = arm.data.thyllore_spring
         layout.template_list(

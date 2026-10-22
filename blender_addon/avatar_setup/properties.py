@@ -55,6 +55,9 @@ class THYLLORE_PG_SpringChain(bpy.types.PropertyGroup):
     tail: bpy.props.StringProperty(name="Tail Bone")
     joints: bpy.props.CollectionProperty(type=THYLLORE_PG_SpringJoint)
     collider_groups: bpy.props.CollectionProperty(type=THYLLORE_PG_NameItem)
+    origin_mesh: bpy.props.StringProperty(name="Origin Mesh")
+    origin_material: bpy.props.StringProperty(name="Origin Material")
+    origin_role: bpy.props.StringProperty(name="Origin Role")
 
 
 class THYLLORE_PG_Collider(bpy.types.PropertyGroup):

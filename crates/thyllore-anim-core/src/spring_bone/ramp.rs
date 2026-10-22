@@ -511,6 +511,7 @@ mod tests {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         };
         ramp.load_ends(&chain);
         assert_eq!(ramp.root.bone_id, 1);
@@ -534,6 +535,7 @@ mod tests {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: Default::default(),
         };
         ramp.load_ends(&chain);
         assert_eq!(ramp.root.bone_id, 99);

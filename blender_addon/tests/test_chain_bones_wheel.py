@@ -78,19 +78,29 @@ def test_unknown_setting_is_rejected(tml):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
 
     with pytest.raises(Exception, match="unknown chain generation setting"):
-        tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", {"joints": 4})
+        tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joints": 4})
 
 
 def test_bone_specs_chain_joints_root_to_tip(tml):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
     output = tml.generate_chains(
-        positions, triangles, (0.0, 0.0, 0.0), "hair", {"joint_count": 4, "column_count": 1}, HEAD
+        positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joint_count": 4, "column_count": 1}, HEAD
     )
 
     specs = bone_specs(output, "Head")
 
-    assert [name for name, _, _, _ in specs] == ["hair_00_00", "hair_00_01", "hair_00_02", "hair_00_03"]
-    assert [parent for _, parent, _, _ in specs] == ["Head", "hair_00_00", "hair_00_01", "hair_00_02"]
+    assert [name for name, _, _, _ in specs] == [
+        "hair_strip_hair_00_00",
+        "hair_strip_hair_00_01",
+        "hair_strip_hair_00_02",
+        "hair_strip_hair_00_03",
+    ]
+    assert [parent for _, parent, _, _ in specs] == [
+        "Head",
+        "hair_strip_hair_00_00",
+        "hair_strip_hair_00_01",
+        "hair_strip_hair_00_02",
+    ]
     for (_, _, _, tail), (_, _, next_head, _) in zip(specs, specs[1:]):
         assert tail == next_head
     assert specs[0][2][1] > specs[-1][2][1]
@@ -98,7 +108,7 @@ def test_bone_specs_chain_joints_root_to_tip(tml):
 
 def test_group_weights_sum_to_one_per_vertex(tml):
     positions, triangles = _strand_mesh((0.5, 3.5), 9, -0.05, -0.45, 0.01)
-    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", {"joint_count": 4}, HEAD)
+    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joint_count": 4}, HEAD)
 
     totals: dict[int, float] = {}
     for influences in group_weights(output, "Head").values():
@@ -114,12 +124,13 @@ def test_blender_space_input_converted_at_the_boundary_matches_engine_input(tml)
     positions_blender = [engine_to_blender_point(p) for p in positions_engine]
     settings = {"joint_count": 4}
 
-    engine = tml.generate_chains(positions_engine, triangles, (0.0, 0.0, 0.0), "hair", settings, HEAD)
+    engine = tml.generate_chains(positions_engine, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", settings, HEAD)
     converted = tml.generate_chains(
         [blender_to_engine_point(p) for p in positions_blender],
         triangles,
         blender_to_engine_point((0.0, 0.0, 0.0)),
         "hair",
+        "strip/hair",
         settings,
         [blender_to_engine_point(engine_to_blender_point(p)) for p in HEAD],
     )
@@ -134,7 +145,7 @@ def test_blender_space_input_converted_at_the_boundary_matches_engine_input(tml)
 
 def test_output_to_blender_converts_heads_and_tails(tml):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
-    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", {"column_count": 1}, HEAD)
+    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"column_count": 1}, HEAD)
 
     blender = output_to_blender(output)
 
@@ -189,6 +200,7 @@ def test_generate_chains_with_tex_coords(tml):
         triangles,
         (0.0, 0.0, 0.0),
         "hair",
+        "strip/hair",
         {"joint_count": 4},
         HEAD,
         tex_coords,

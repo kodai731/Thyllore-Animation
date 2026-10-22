@@ -19,7 +19,7 @@ use thyllore_avatar_core::humanoid::systems::name_match::{
     collect_unresolved_roles, infer_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
-use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;
+use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
@@ -324,7 +324,14 @@ pub fn save_humanoid_mapping(world: &World) {
     }
 }
 
-pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, prefix: &str) {
+/// Registers every run of non-humanoid bones under `root` as a spring chain; runs that already head
+/// a chain are kept as they are.
+pub fn add_spring_chains_under(
+    world: &mut World,
+    assets: &AssetStorage,
+    root: BoneId,
+    min_joints: u32,
+) {
     let Some(skeleton) = find_first_skeleton(assets) else {
         msg_error!("Cannot add spring chains: no skeleton loaded");
         return;
@@ -334,28 +341,47 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
         return;
     };
 
-    let bones = skeleton_to_bone_inputs(skeleton);
-    let roots = find_prefix_chain_roots(&bones, prefix);
-    if roots.is_empty() {
-        msg_error!("No spring chain roots found for prefix \"{}\"", prefix);
+    let mapping = world.resource::<AvatarSetupState>().mapping.clone();
+    let chains = find_chains_under(skeleton, &mapping, root, min_joints as usize);
+    let root_name = skeleton
+        .get_bone(root)
+        .map(|bone| bone.name.as_str())
+        .unwrap_or_default();
+    if chains.is_empty() {
+        msg_error!(
+            "No bone runs of at least {} joints under \"{}\"",
+            min_joints,
+            root_name
+        );
         return;
     }
 
-    let chain_count = roots.len();
-    for chain in roots {
+    let existing_roots: Vec<BoneId> = world
+        .get_component::<SpringBoneSetup>(spring_entity)
+        .map(|setup| {
+            setup
+                .chains
+                .iter()
+                .filter_map(|chain| chain.joints.first().map(|joint| joint.bone_id))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut added = 0;
+    for chain in chains {
+        let chain_root = chain.joints[0];
+        if existing_roots.contains(&chain_root) {
+            continue;
+        }
         handle_spring_chain_add(
             world,
             spring_entity,
-            chain.root as BoneId,
-            chain.length,
+            chain_root,
+            chain.joints.len() as u32,
             skeleton,
         );
+        added += 1;
     }
-    msg_info!(
-        "Added {} spring chains for prefix \"{}\"",
-        chain_count,
-        prefix
-    );
+    msg_info!("Added {} spring chains under \"{}\"", added, root_name);
 }
 
 pub fn fit_body_colliders(
@@ -410,7 +436,7 @@ pub fn fit_body_colliders(
     msg_info!("Fitted {} body colliders", fitted.len());
 }
 
-fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {
+pub fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {
     if let Some(entity) = find_spring_bone_setup_entity(world) {
         return Some(entity);
     }

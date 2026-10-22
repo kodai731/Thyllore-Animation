@@ -25,7 +25,6 @@ pub struct AvatarSetupState {
     pub stats: AvatarStats,
     pub platform: Platform,
     pub rank: Option<RankReport>,
-    pub spring_prefix: String,
     pub submesh_roles: BTreeMap<SubmeshKey, SubmeshRoleEntry>,
     pub hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>>,
     pub chain_gen: ChainGenSettings,

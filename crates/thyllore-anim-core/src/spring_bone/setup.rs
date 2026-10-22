@@ -4,6 +4,7 @@ use cgmath::Vector3;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
+use super::origin::ChainOrigin;
 use crate::BoneId;
 
 pub type SpringChainId = u32;
@@ -62,6 +63,7 @@ pub struct SpringChain {
     pub collider_group_ids: Vec<SpringColliderGroupId>,
     pub center_bone_id: Option<BoneId>,
     pub enabled: bool,
+    pub origin: ChainOrigin,
 }
 
 impl Default for SpringChain {
@@ -73,6 +75,7 @@ impl Default for SpringChain {
             collider_group_ids: Vec::new(),
             center_bone_id: None,
             enabled: true,
+            origin: ChainOrigin::Authored,
         }
     }
 }

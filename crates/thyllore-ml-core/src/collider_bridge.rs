@@ -284,6 +284,7 @@ mod tests {
                     },
                 ],
                 tail: None,
+                origin: Default::default(),
             },
         );
 
@@ -329,6 +330,7 @@ mod tests {
                     },
                 ],
                 tail: None,
+                origin: Default::default(),
             },
         );
         spring.collider_groups.push(
@@ -378,6 +380,7 @@ mod tests {
                     },
                 ],
                 tail: None,
+                origin: Default::default(),
             },
         );
         let bones = make_bones();

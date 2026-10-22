@@ -4,22 +4,25 @@ use pythonize::depythonize;
 use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
 use super::chain_gen::pythonize_value;
 use crate::spring_edit_bridge::{
-    apply_ramp_to_chains, chains_from_prefix as bridge_chains_from_prefix,
+    add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
     chains_in_scope as bridge_chains_in_scope, chains_to_draw as bridge_chains_to_draw,
     chains_under_bone as bridge_chains_under_bone, RampInput,
 };
 
+/// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
 #[pyfunction]
-pub fn chains_from_prefix<'py>(
+#[pyo3(signature = (spring, bones, root_bone, min_joints = 2))]
+pub fn add_chains_under_bone<'py>(
     py: Python<'py>,
     spring: &Bound<PyAny>,
     bones: &Bound<PyAny>,
-    prefix: &str,
+    root_bone: &str,
+    min_joints: u32,
 ) -> PyResult<Bound<'py, PyAny>> {
     let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
         depythonize(spring).map_err(depythonize_error_to_pyerr)?;
     let bone_inputs = bones_from_py(bones)?;
-    let output = bridge_chains_from_prefix(&spring, &bone_inputs, prefix)
+    let output = bridge_add_chains_under_bone(&spring, &bone_inputs, root_bone, min_joints)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 
+use crate::animation::BoneId;
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::resource::{
@@ -20,6 +21,7 @@ use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
 };
 use thyllore_avatar_core::garment::systems::chain_gen;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_cli_core::scalar_assignment_parse;
 
 use super::avatar_export_systems::dump_morph_track_samples;
@@ -124,18 +126,32 @@ fn capture_expression_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> 
 }
 
 #[derive(Debug)]
-pub struct AddSpringChains {
-    prefix: String,
+pub struct AddSpringChainsUnder {
+    root: HumanoidRole,
+    min_joints: u32,
 }
 
-impl BatchAction for AddSpringChains {
+impl BatchAction for AddSpringChainsUnder {
     fn name(&self) -> &'static str {
-        "add_spring_chains"
+        "add_spring_chains_under"
     }
     fn apply(&self, world: &mut World) {
-        world.send_command(AvatarSetupEvent::AddSpringChainsByPrefix {
-            prefix: self.prefix.clone(),
-        });
+        let root = world
+            .resource::<AvatarSetupState>()
+            .mapping
+            .by_role
+            .get(&self.root)
+            .copied();
+        match root {
+            Some(root) => world.send_command(AvatarSetupEvent::AddSpringChainsUnder {
+                root: root as BoneId,
+                min_joints: self.min_joints,
+            }),
+            None => msg_error!(
+                "add_spring_chains_under: humanoid role {} is not mapped",
+                self.root.unity_name()
+            ),
+        }
     }
 }
 
@@ -170,17 +186,29 @@ fn apply_model_scale_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     )
 }
 
-fn add_spring_chains_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
-    let prefix = text.strip_prefix("add_spring_chains=")?.trim();
-    Some(if prefix.is_empty() {
-        Err(anyhow!(
-            "add_spring_chains expects add_spring_chains=<bone name prefix>"
-        ))
-    } else {
-        Ok(Box::new(AddSpringChains {
-            prefix: prefix.to_string(),
-        }))
-    })
+const ADD_SPRING_CHAINS_UNDER_USAGE: &str =
+    "add_spring_chains_under expects add_spring_chains_under=<humanoid role>[,min_joints=<n>]";
+
+fn add_spring_chains_under_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("add_spring_chains_under=")?;
+    let mut parts = spec.split(',');
+    let Some(root) = parts
+        .next()
+        .and_then(|role| HumanoidRole::from_unity_name(role.trim()))
+    else {
+        return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+    };
+    let mut min_joints = 2;
+    for part in parts {
+        let Some(value) = part.trim().strip_prefix("min_joints=") else {
+            return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+        };
+        match value.parse::<u32>() {
+            Ok(parsed) if parsed >= 1 => min_joints = parsed,
+            _ => return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}"))),
+        }
+    }
+    Some(Ok(Box::new(AddSpringChainsUnder { root, min_joints })))
 }
 
 #[derive(Debug, Default)]
@@ -498,7 +526,7 @@ fn export_model_fbx_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     })))
 }
 
-const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root_bone>[,<setting>=<value>...]";
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root humanoid role>[,<setting>=<value>...]";
 
 fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     let spec = text.strip_prefix("generate_chain_bones=")?;
@@ -511,10 +539,12 @@ fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>
         Ok(target) => target,
         Err(_) => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
     };
-    let root_bone = root_bone.trim().to_string();
-    if root_bone.is_empty() {
-        return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
-    }
+    let Some(root) = HumanoidRole::from_unity_name(root_bone.trim()) else {
+        return Some(Err(anyhow!(
+            "generate_chain_bones: root must be a humanoid role such as Head or Hips, got \"{}\"",
+            root_bone.trim()
+        )));
+    };
 
     let setting_names = chain_gen::setting_names();
     let assignments: Vec<(String, f32)> = match parts
@@ -536,7 +566,7 @@ fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>
 
     let request = ChainGenRequest {
         target,
-        root_bone,
+        root,
         settings,
     };
     Some(Ok(Box::new(GenerateChainBones { request })))
@@ -653,7 +683,7 @@ fn hide_covered_skin_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
 crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
-crate::batch_action!("add_spring_chains", add_spring_chains_parse);
+crate::batch_action!("add_spring_chains_under", add_spring_chains_under_parse);
 crate::batch_action!("apply_model_scale", apply_model_scale_parse);
 crate::batch_action!("fit_body_colliders", fit_body_colliders_parse);
 crate::batch_action!(
@@ -745,9 +775,19 @@ mod tests {
         assert!(capture_expression_parse("capture_expression=")
             .expect("prefix matches")
             .is_err());
-        assert!(add_spring_chains_parse("add_spring_chains= ")
+        assert!(add_spring_chains_under_parse("add_spring_chains_under= ")
             .expect("prefix matches")
             .is_err());
+        assert!(
+            add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=0")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=3")
+                .expect("prefix matches")
+                .is_ok()
+        );
     }
 
     #[test]
@@ -876,17 +916,17 @@ mod tests {
     #[test]
     fn test_generate_chain_bones_parses_submesh_root_and_settings() {
         let action = generate_chain_bones_parse(
-            "generate_chain_bones=garment/cloth,spine,joint_count=3,column_count=2",
+            "generate_chain_bones=garment/cloth,Spine,joint_count=3,column_count=2",
         )
         .expect("prefix matches")
         .expect("spec is valid");
         assert_eq!(action.name(), "generate_chain_bones");
 
-        let defaults_only = generate_chain_bones_parse("generate_chain_bones=garment/cloth,spine")
+        let defaults_only = generate_chain_bones_parse("generate_chain_bones=garment/cloth,Spine")
             .expect("prefix matches");
         assert!(defaults_only.is_ok());
 
-        let whole_mesh = generate_chain_bones_parse("generate_chain_bones=garment,spine")
+        let whole_mesh = generate_chain_bones_parse("generate_chain_bones=garment,Spine")
             .expect("prefix matches");
         assert!(whole_mesh.is_ok());
     }

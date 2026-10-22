@@ -8,6 +8,7 @@ use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ChainRamp, RampEnd, RampScope, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::SpringBoneInspectorState;
+use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{SetChainRampEnd, SpringBoneEvent};
 use crate::ecs::world::{Entity, World};
 
@@ -48,6 +49,7 @@ pub struct BoneSpringView {
     pub colliders: Vec<SpringColliderDef>,
     pub bones: Rc<[(BoneId, String)]>,
     pub chain_length: u32,
+    pub min_joints: u32,
 }
 
 pub fn bone_spring_section(
@@ -101,6 +103,7 @@ pub fn bone_spring_section(
         colliders: colliders_on_bone(&setup, bone_id),
         bones: collect_bone_list(assets).into(),
         chain_length: inspector_state.add_chain.chain_length,
+        min_joints: inspector_state.add_chain.min_joints,
     };
 
     rows_section(
@@ -160,6 +163,19 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
         });
         rows.push(UiRow::Tooltip(
             "Chain length comes from the Add Chain form in the entity's Spring Bones section",
+        ));
+        rows.push(UiRow::Action {
+            label: "Add Chains Under This Bone",
+            enabled: |_, _| true,
+            on_click: |view: &BoneSpringView| {
+                Box::new(AvatarSetupEvent::AddSpringChainsUnder {
+                    root: view.bone_id,
+                    min_joints: view.min_joints,
+                })
+            },
+        });
+        rows.push(UiRow::Tooltip(
+            "Every run of non-humanoid bones under this bone becomes a chain; Min Joints comes from the Add Chain form",
         ));
     } else {
         rows.push(joint_list_row());
@@ -342,6 +358,7 @@ mod tests {
             colliders,
             bones: Rc::new([]),
             chain_length: 3,
+            min_joints: 2,
         }
     }
 
@@ -366,7 +383,11 @@ mod tests {
         let rows = bone_spring_rows(&view(Vec::new(), Vec::new()));
         assert_eq!(
             visible_labels(&rows),
-            ["Add Chain From This Bone", "Add Collider On This Bone"]
+            [
+                "Add Chain From This Bone",
+                "Add Chains Under This Bone",
+                "Add Collider On This Bone"
+            ]
         );
         assert!(find_duplicate_labels(&rows).is_empty());
     }
@@ -383,6 +404,7 @@ mod tests {
             visible_labels(&rows),
             [
                 "Add Chain From This Bone",
+                "Add Chains Under This Bone",
                 "Ramp",
                 "Add Collider On This Bone"
             ]

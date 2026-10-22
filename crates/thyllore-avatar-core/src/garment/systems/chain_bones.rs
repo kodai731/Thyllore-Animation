@@ -128,16 +128,22 @@ mod tests {
     }
 
     fn make_chain() -> Vec<GeneratedChain> {
-        use crate::garment::components::chain_gen::joint_name;
         use crate::garment::components::chain_gen::ChainRole;
+        use crate::garment::components::chain_gen::{joint_name, ChainGenParams, ChainGenSettings};
+        use crate::garment::components::submesh_role::SubmeshSelector;
 
+        let params = ChainGenParams {
+            role: ChainRole::Hair,
+            target: SubmeshSelector::Mesh("test".to_string()),
+            settings: ChainGenSettings::default(),
+        };
         let joints = vec![
             GeneratedJoint {
-                name: joint_name(ChainRole::Hair, 0, 0),
+                name: joint_name(&params, 0, 0),
                 head: Vector3::new(0.0, 1.4, 0.0),
             },
             GeneratedJoint {
-                name: joint_name(ChainRole::Hair, 0, 1),
+                name: joint_name(&params, 0, 1),
                 head: Vector3::new(0.0, 1.3, 0.0),
             },
         ];

@@ -1,5 +1,6 @@
 use crate::{BoneId, Skeleton};
 
+use super::origin::ChainOrigin;
 use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 
 fn build_chain_joints(
@@ -50,6 +51,7 @@ pub fn add_chain(
         collider_group_ids: Vec::new(),
         center_bone_id: None,
         enabled: true,
+        origin: ChainOrigin::Authored,
     };
     setup.chains.push(chain);
 

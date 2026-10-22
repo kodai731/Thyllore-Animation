@@ -5,7 +5,7 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 use thyllore_avatar_core::garment::components::chain_gen::{
-    ChainGenRequest, ChainGenSettings, CHAIN_GEN_UI_PARAMS,
+    chain_role_of_submesh, chain_root_role, ChainGenRequest, ChainGenSettings, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshRoleSource, SubmeshSelector,
@@ -90,12 +90,12 @@ fn resolve_chain_request(
     key: &SubmeshKey,
     settings: &ChainGenSettings,
 ) -> Option<ChainGenRequest> {
-    let root_role = chain_root_role(role)?;
-    let bone_index = *mapping.get(&root_role)?;
-    let root_bone = bones.get(bone_index)?;
+    let root = chain_root_role(chain_role_of_submesh(role)?);
+    let bone_index = *mapping.get(&root)?;
+    bones.get(bone_index)?;
     Some(ChainGenRequest {
         target: SubmeshSelector::Submesh(key.clone()),
-        root_bone: root_bone.name.clone(),
+        root,
         settings: settings.clone(),
     })
 }
@@ -148,7 +148,7 @@ fn list_items(_world: &World, view: &SubmeshesView) -> Vec<(String, SubmeshItem)
 }
 
 fn item_rows(item: &SubmeshItem) -> Vec<UiRow<SubmeshItem>> {
-    let chain_root = chain_root_role(item.role);
+    let chain_role = chain_role_of_submesh(item.role);
     let mut rows: Vec<UiRow<SubmeshItem>> = vec![
         UiRow::Action {
             label: "Select in Hierarchy",
@@ -162,7 +162,7 @@ fn item_rows(item: &SubmeshItem) -> Vec<UiRow<SubmeshItem>> {
         },
     ];
 
-    if chain_root.is_some() {
+    if chain_role.is_some() {
         rows.push(UiRow::Action {
             label: "Generate Chains",
             enabled: |_world, item| item.chain_request.is_some(),
@@ -218,14 +218,6 @@ fn submesh_role_label(role: SubmeshRole) -> &'static str {
         SubmeshRole::Garment => "Garment",
         SubmeshRole::Hair => "Hair",
         SubmeshRole::Accessory => "Accessory",
-    }
-}
-
-fn chain_root_role(role: SubmeshRole) -> Option<HumanoidRole> {
-    match role {
-        SubmeshRole::Hair => Some(HumanoidRole::Head),
-        SubmeshRole::Garment => Some(HumanoidRole::Hips),
-        SubmeshRole::Skin | SubmeshRole::Accessory => None,
     }
 }
 
@@ -295,7 +287,7 @@ mod tests {
             .as_ref()
             .expect("Head is mapped");
         assert_eq!(request.target, SubmeshSelector::Submesh(hair_key()));
-        assert_eq!(request.root_bone, "Head");
+        assert_eq!(request.root, HumanoidRole::Head);
         assert!(request.settings == state.chain_gen);
     }
 

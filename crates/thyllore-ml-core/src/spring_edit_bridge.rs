@@ -7,7 +7,8 @@ use thyllore_anim_core::spring_bone::{
     RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode, SpringChainId, SpringJointParam,
 };
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;
+use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
+use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring,
 };
@@ -24,31 +25,44 @@ pub fn skeleton_from_bones(bones: &[BoneInput]) -> Skeleton {
     skeleton
 }
 
-pub fn chains_from_prefix(
+/// Every run of non-humanoid bones under `root_name` becomes a chain; a run that already heads a
+/// chain is kept. The humanoid bones are inferred from the bone names, as the collider fit does.
+pub fn add_chains_under_bone(
     spring: &SidecarSpring,
     bones: &[BoneInput],
-    prefix: &str,
+    root_name: &str,
+    min_joints: u32,
 ) -> anyhow::Result<SidecarSpring> {
     let mut setup = spring_setup_from_sidecar(spring, bones);
     let skeleton = skeleton_from_bones(bones);
+    let root = skeleton
+        .bone_name_to_id
+        .get(root_name)
+        .copied()
+        .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", root_name))?;
 
-    let roots = find_prefix_chain_roots(bones, prefix);
-    if roots.is_empty() {
-        anyhow::bail!("no bones found matching prefix \"{}\"", prefix);
+    let (mapping, _) = infer_mapping(bones);
+    let chains = find_chains_under(&skeleton, &mapping, root, min_joints as usize);
+    if chains.is_empty() {
+        anyhow::bail!(
+            "no bone runs of at least {} joints under \"{}\"",
+            min_joints,
+            root_name
+        );
     }
 
-    for root in roots {
-        let root_bone_id = root.root as BoneId;
-        let already_exists = setup.chains.iter().any(|chain| {
-            chain
+    for chain in chains {
+        let chain_root = chain.joints[0];
+        let already_exists = setup.chains.iter().any(|existing| {
+            existing
                 .joints
                 .first()
-                .is_some_and(|joint| joint.bone_id == root_bone_id)
+                .is_some_and(|joint| joint.bone_id == chain_root)
         });
         if already_exists {
             continue;
         }
-        add_chain(&mut setup, root_bone_id, root.length, &skeleton);
+        add_chain(&mut setup, chain_root, chain.joints.len() as u32, &skeleton);
     }
 
     Ok(build_sidecar_spring(&setup, bones))
@@ -269,11 +283,11 @@ mod tests {
     }
 
     #[test]
-    fn spring_edit_bridge_builds_two_chains_from_prefix() {
+    fn spring_edit_bridge_builds_two_chains_under_head() {
         let bones = test_bones();
         let spring = SidecarSpring::default();
 
-        let result = chains_from_prefix(&spring, &bones, "hair_").unwrap();
+        let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
 
         assert_eq!(result.chains.len(), 2);
 
@@ -302,10 +316,10 @@ mod tests {
         let bones = test_bones();
         let spring = SidecarSpring::default();
 
-        let first = chains_from_prefix(&spring, &bones, "hair_").unwrap();
+        let first = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
         assert_eq!(first.chains.len(), 2);
 
-        let second = chains_from_prefix(&first, &bones, "hair_").unwrap();
+        let second = add_chains_under_bone(&first, &bones, "Head", 1).unwrap();
 
         assert_eq!(second.chains.len(), 2);
 
@@ -315,18 +329,18 @@ mod tests {
     }
 
     #[test]
-    fn spring_edit_bridge_unknown_prefix_returns_error() {
+    fn spring_edit_bridge_unknown_root_or_short_runs_return_error() {
         let bones = test_bones();
         let spring = SidecarSpring::default();
 
-        let result = chains_from_prefix(&spring, &bones, "nonexistent_");
-        assert!(result.is_err());
+        assert!(add_chains_under_bone(&spring, &bones, "nonexistent", 1).is_err());
+        assert!(add_chains_under_bone(&spring, &bones, "Head", 4).is_err());
     }
 
     #[test]
     fn spring_edit_bridge_ramp_linear_interpolation() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_a").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
         let ramp = ramp_input("linear");
 
         let result =
@@ -343,7 +357,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_under_bone_head() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
         let result = chains_under_bone(&spring, &bones, "Head").unwrap();
 
@@ -355,7 +369,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_in_scope_sibling_chains() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
         let result = chains_in_scope(&spring, &bones, "Chain_0", "sibling_chains").unwrap();
 
@@ -365,7 +379,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_unknown_shape_returns_error() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_a").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
         let mut ramp = ramp_input("linear");
         ramp.shape = "unknown".to_string();
 
@@ -376,7 +390,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_to_draw_selected_head() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
         let result = chains_to_draw(&spring, &bones, &[1], None, "selected").unwrap();
 
@@ -387,7 +401,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_to_draw_selected_joint_with_active() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_a").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
 
         let result = chains_to_draw(&spring, &bones, &[2], Some(2), "selected").unwrap();
 
@@ -398,7 +412,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_to_draw_mode_all() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
         let result = chains_to_draw(&spring, &bones, &[], None, "all").unwrap();
 
@@ -408,7 +422,7 @@ mod tests {
     #[test]
     fn spring_edit_bridge_chains_to_draw_unknown_mode_returns_error() {
         let bones = test_bones();
-        let spring = chains_from_prefix(&SidecarSpring::default(), &bones, "hair_").unwrap();
+        let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
         let result = chains_to_draw(&spring, &bones, &[], None, "unknown");
         assert!(result.is_err());

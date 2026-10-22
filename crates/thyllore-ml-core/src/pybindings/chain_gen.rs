@@ -28,15 +28,17 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 }
 
 /// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
-/// `settings` maps setting names to values; `tex_coords` is per-vertex UV, empty uses the azimuth method.
+/// `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
+/// `tex_coords` is per-vertex UV, empty uses the azimuth method.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, settings, attachment_positions = Vec::new(), tex_coords = Vec::new()))]
+#[pyo3(signature = (positions, triangles, root_position, role, target, settings, attachment_positions = Vec::new(), tex_coords = Vec::new()))]
 pub fn generate_chains<'py>(
     py: Python<'py>,
     positions: Vec<[f32; 3]>,
     triangles: Vec<[u32; 3]>,
     root_position: [f32; 3],
     role: &str,
+    target: &str,
     settings: &Bound<'py, PyDict>,
     attachment_positions: Vec<[f32; 3]>,
     tex_coords: Vec<[f32; 2]>,
@@ -51,6 +53,7 @@ pub fn generate_chains<'py>(
                 &triangles,
                 root_position,
                 role,
+                target,
                 settings,
                 &attachment_positions,
                 &tex_coords,

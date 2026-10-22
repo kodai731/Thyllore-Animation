@@ -3,22 +3,10 @@ use std::sync::LazyLock;
 use cgmath::Vector3;
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
-use super::submesh_role::SubmeshSelector;
+use super::submesh_role::{SubmeshRole, SubmeshSelector};
+use crate::humanoid::components::role::HumanoidRole;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChainRole {
-    Hair,
-    Skirt,
-}
-
-impl ChainRole {
-    pub fn bone_prefix(self) -> &'static str {
-        match self {
-            ChainRole::Hair => "hair",
-            ChainRole::Skirt => "skirt",
-        }
-    }
-}
+pub use thyllore_anim_core::spring_bone::ChainRole;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChainGenOwner {
@@ -79,7 +67,41 @@ pub static CHAIN_GEN_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
 #[derive(Debug, Clone)]
 pub struct ChainGenParams {
     pub role: ChainRole,
+    pub target: SubmeshSelector,
     pub settings: ChainGenSettings,
+}
+
+pub fn chain_role_of_submesh(role: SubmeshRole) -> Option<ChainRole> {
+    match role {
+        SubmeshRole::Hair => Some(ChainRole::Hair),
+        SubmeshRole::Garment => Some(ChainRole::Skirt),
+        SubmeshRole::Skin | SubmeshRole::Accessory => None,
+    }
+}
+
+pub fn chain_root_role(role: ChainRole) -> HumanoidRole {
+    match role {
+        ChainRole::Hair => HumanoidRole::Head,
+        ChainRole::Skirt => HumanoidRole::Hips,
+    }
+}
+
+/// The submesh part of a generated bone name: lower case, one `_` between runs of other characters.
+pub fn submesh_label(target: &SubmeshSelector) -> String {
+    let text = match target.material() {
+        Some(material) => format!("{} {}", target.mesh(), material),
+        None => target.mesh().to_string(),
+    };
+    let mut label = String::with_capacity(text.len());
+    for ch in text.chars() {
+        let lowered = ch.to_ascii_lowercase();
+        if lowered.is_ascii_alphanumeric() {
+            label.push(lowered);
+        } else if !label.ends_with('_') && !label.is_empty() {
+            label.push('_');
+        }
+    }
+    label.trim_end_matches('_').to_string()
 }
 
 #[derive(Debug, Clone)]
@@ -107,8 +129,17 @@ pub struct GeneratedChain {
     pub vertices: Vec<u32>,
 }
 
-pub fn joint_name(role: ChainRole, column: usize, joint: usize) -> String {
-    format!("{}_{:02}_{:02}", role.bone_prefix(), column, joint)
+pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
+    format!(
+        "{}_{}_{:02}",
+        params.role.bone_prefix(),
+        submesh_label(&params.target),
+        column
+    )
+}
+
+pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
+    format!("{}_{:02}", chain_name(params, column), joint)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,13 +221,39 @@ pub struct ChainGenReport {
 #[derive(Debug, Clone)]
 pub struct ChainGenRequest {
     pub target: SubmeshSelector,
-    pub root_bone: String,
+    pub root: HumanoidRole,
     pub settings: ChainGenSettings,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submesh_label_lowers_and_joins_runs_with_one_underscore() {
+        let selector: SubmeshSelector = "woman 1_mat2/Hair".parse().unwrap();
+        assert_eq!(submesh_label(&selector), "woman_1_mat2_hair");
+        let mesh_only: SubmeshSelector = "Hair_back".parse().unwrap();
+        assert_eq!(submesh_label(&mesh_only), "hair_back");
+    }
+
+    #[test]
+    fn joint_names_differ_between_submeshes_and_follow_the_chain_name() {
+        let params = |target: &str| ChainGenParams {
+            role: ChainRole::Hair,
+            target: target.parse().unwrap(),
+            settings: ChainGenSettings::default(),
+        };
+        assert_eq!(
+            joint_name(&params("Hair_back"), 3, 1),
+            "hair_hair_back_03_01"
+        );
+        assert_eq!(
+            joint_name(&params("Hair_side"), 3, 1),
+            "hair_hair_side_03_01"
+        );
+        assert_eq!(chain_name(&params("Hair_side"), 3), "hair_hair_side_03");
+    }
 
     #[test]
     fn tables_list_every_setting_in_declaration_order() {

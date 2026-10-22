@@ -66,7 +66,7 @@ def run_engine(work_dir: Path, fbx_path: Path, dood: bool) -> None:
         "--batch-scene", str(scene),
         "--batch-screenshot", str(work_dir / "engine.png"),
         "--batch-frames", "20",
-        "--batch-debug-action-at", "10:add_spring_chains=Left_braid",
+        "--batch-debug-action-at", "10:add_spring_chains_under=Head,min_joints=2",
         "--batch-debug-action-at", "12:export_unity_avatar",
         "--batch-debug-action-at", f"14:dump_spring_tails={work_dir / 'engine_tails.csv'},30",
     ]

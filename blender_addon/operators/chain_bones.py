@@ -17,11 +17,13 @@ from ..common.bone_collections import assign_bones_to_chain_collection
 from ..common import coordinates
 from ..common.chain_bones import (
     bone_specs,
+    chain_entries,
     group_weights,
     output_to_blender,
     settings_from_properties,
     vertex_tex_coords,
 )
+from ..common.spring_properties import add_generated_chains, remove_chains_generated_on
 from ..common.submesh_mask import material_triangles
 from ..common.effect_properties import build_param_properties
 
@@ -40,6 +42,13 @@ def _armature_of(obj):
         if mod.type == "ARMATURE":
             return mod.object
     return None
+
+
+def _material_name(obj, material_index: int) -> str:
+    slots = obj.material_slots
+    if material_index < len(slots) and slots[material_index].material is not None:
+        return slots[material_index].material.name
+    return str(material_index)
 
 
 def _root_engine_position(arm, root_bone: str) -> tuple[float, float, float]:
@@ -64,6 +73,29 @@ def _add_bones(context, arm, specs):
             bone.parent = edit_bones[parent_name]
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def _remove_bones(context, arm, bone_names):
+    """Remove bones by name in edit mode; descendants of a removed bone are removed by Blender."""
+    if not bone_names:
+        return
+    context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        edit_bones = arm.data.edit_bones
+        for name in bone_names:
+            bone = edit_bones.get(name)
+            if bone is not None:
+                edit_bones.remove(bone)
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def _remove_vertex_groups(obj, bone_names):
+    for name in bone_names:
+        group = obj.vertex_groups.get(name)
+        if group is not None:
+            obj.vertex_groups.remove(group)
 
 
 def _write_weights(obj, groups):
@@ -148,11 +180,19 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             loop_uvs = [tuple(d.uv) for d in uv_layer.data]
             tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
+        material_name = _material_name(obj, self.material_index)
+        origin = {"mesh": obj.name, "material": material_name, "role": self.role}
+        settings = arm.data.thyllore_spring
+        replaced_bones = remove_chains_generated_on(settings, origin)
+        _remove_bones(context, arm, replaced_bones)
+        _remove_vertex_groups(obj, replaced_bones)
+
         output = tml.generate_chains(
             positions,
             triangles,
             _root_engine_position(arm, self.root_bone),
             self.role,
+            f"{obj.name}/{material_name}",
             settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
             _skin_engine_positions(bpy.data.objects.get(self.skin_object), self.root_bone),
             tex_coords,
@@ -170,6 +210,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
+        add_generated_chains(settings, chain_entries(output, origin))
 
         assign_bones_to_chain_collection(arm, [name for name, _, _, _ in specs])
 

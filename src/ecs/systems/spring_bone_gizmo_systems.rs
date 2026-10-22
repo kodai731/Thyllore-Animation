@@ -4,10 +4,9 @@ use crate::ecs::component::{
     ColliderShape, ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId,
 };
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
-const COLOR_COLLIDER: [f32; 3] = [0.2, 0.8, 0.2];
-const COLOR_CHAIN: [f32; 3] = [0.95, 0.75, 0.2];
-const CIRCLE_SEGMENTS: u32 = 16;
-const CHAIN_RADIUS_SEGMENTS: u32 = 8;
+use thyllore_anim_core::spring_bone::{
+    CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColliderGizmo {

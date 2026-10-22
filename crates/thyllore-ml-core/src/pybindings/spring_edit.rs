@@ -84,3 +84,25 @@ pub fn chains_to_draw<'py>(
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }
+
+#[pyfunction]
+pub fn spring_gizmo_style<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    use thyllore_anim_core::spring_bone::{
+        CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
+    };
+    let style = SpringGizmoStyle {
+        chain_color: COLOR_CHAIN,
+        collider_color: COLOR_COLLIDER,
+        circle_segments: CIRCLE_SEGMENTS,
+        chain_radius_segments: CHAIN_RADIUS_SEGMENTS,
+    };
+    pythonize_value(py, &style)
+}
+
+#[derive(serde::Serialize)]
+struct SpringGizmoStyle {
+    chain_color: [f32; 3],
+    collider_color: [f32; 3],
+    circle_segments: u32,
+    chain_radius_segments: u32,
+}

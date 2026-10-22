@@ -3,9 +3,11 @@ use thyllore_avatar_core::garment::components::chain_gen::{
     ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
     CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::garment::systems::chain_gen::{compute_chain_weights, place_chains};
+use thyllore_avatar_core::garment::systems::chain_gen::{
+    apply_setting_assignments, compute_chain_weights, place_chains,
+};
 
-use crate::param_rows::{apply_scalar_pairs, param_rows, ParamRow};
+use crate::param_rows::{param_rows, ParamRow};
 
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
@@ -43,7 +45,7 @@ pub fn chain_gen_params() -> Vec<ParamRow> {
 
 pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSettings> {
     let mut settings = ChainGenSettings::default();
-    apply_scalar_pairs(&mut settings, &CHAIN_GEN_SCALAR_PARAMS, pairs)?;
+    apply_setting_assignments(&mut settings, pairs)?;
     Ok(settings)
 }
 

@@ -1,4 +1,5 @@
 mod chain;
+mod chain_add;
 mod collider_fit;
 mod collision;
 mod ramp;
@@ -8,6 +9,7 @@ mod trajectory;
 mod verlet;
 
 pub use chain::*;
+pub use chain_add::add_chain;
 pub use collider_fit::*;
 pub use collision::*;
 pub use ramp::*;

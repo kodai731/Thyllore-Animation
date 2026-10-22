@@ -18,19 +18,7 @@ pub fn handle_spring_chain_add(
         return;
     };
 
-    let chain_id = setup.next_chain_id;
-    setup.next_chain_id += 1;
-
-    let joints = build_chain_joints(root_bone_id, chain_length, skeleton);
-    let chain = SpringChain {
-        id: chain_id,
-        name: format!("Chain_{}", chain_id),
-        joints,
-        collider_group_ids: Vec::new(),
-        center_bone_id: None,
-        enabled: true,
-    };
-    setup.chains.push(chain);
+    thyllore_anim_core::spring_bone::add_chain(setup, root_bone_id, chain_length, skeleton);
 
     reset_spring_bone_state(world);
 }
@@ -185,37 +173,6 @@ pub fn handle_spring_collider_group_update(
     }
 
     reset_spring_bone_state(world);
-}
-
-fn build_chain_joints(
-    root_bone_id: BoneId,
-    chain_length: u32,
-    skeleton: &Skeleton,
-) -> Vec<SpringJointParam> {
-    let mut joints = Vec::new();
-    let mut current_bone = root_bone_id;
-
-    for _ in 0..chain_length {
-        joints.push(SpringJointParam {
-            bone_id: current_bone,
-            ..Default::default()
-        });
-
-        let children: Vec<BoneId> = skeleton
-            .bones
-            .iter()
-            .filter(|b| b.parent_id == Some(current_bone))
-            .map(|b| b.id)
-            .collect();
-
-        if let Some(&first_child) = children.first() {
-            current_bone = first_child;
-        } else {
-            break;
-        }
-    }
-
-    joints
 }
 
 pub(crate) fn reset_spring_bone_state(world: &mut World) {

@@ -33,12 +33,16 @@ pub fn infer_humanoid_mapping<'py>(
     py: Python<'py>,
     bones: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let specs: Vec<BoneSpec> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs: Vec<BoneInput> = specs.into_iter().map(Into::into).collect();
+    let bone_inputs = bones_from_py(bones)?;
     let output: HumanoidMappingOut = bridge_infer_humanoid_mapping(&bone_inputs);
     pythonize_value(py, &output)
 }
 
-fn depythonize_error_to_pyerr(error: PythonizeError) -> PyErr {
+pub(super) fn bones_from_py(bones: &Bound<PyAny>) -> PyResult<Vec<BoneInput>> {
+    let specs: Vec<BoneSpec> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
+    Ok(specs.into_iter().map(Into::into).collect())
+}
+
+pub(super) fn depythonize_error_to_pyerr(error: PythonizeError) -> PyErr {
     PyValueError::new_err(error.to_string())
 }

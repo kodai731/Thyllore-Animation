@@ -135,7 +135,7 @@ def tail_reach(chains: dict[str, dict], vertices: dict) -> dict:
 
 
 def root_height(chains: dict[str, dict], equator_height: float) -> dict:
-    """First joint height relative to the equator; the design expects it to equal `root_band_offset`."""
+    """First joint height relative to the equator; for Azimuth mode the design expects it to equal `root_band_offset`."""
     diffs = [float(entry["heads"][0][UP_AXIS] - equator_height) for entry in chains.values() if entry["heads"]]
     if not diffs:
         return {"root_height_diff_mean": None, "root_height_diff_max_abs": None}
@@ -241,10 +241,11 @@ def quality_metrics(chain_gen: dict, scale: float = 1.0, empty_fraction: float =
     out.update(centerline_gaps(chains, chain_gen.get("strand_centerlines", []), scale))
     out["strand_mode"] = chain_gen.get("strand_mode")
     if band is not None:
-        out.update(shell_rigidity(vertices, band["height"] * scale, root_only_tolerance))
-        out.update(root_height(chains, band["equator_height"] * scale))
         out["root_band_height"] = band["height"] * scale
         out["equator_height"] = band["equator_height"] * scale
+    if band is not None and chain_gen.get("strand_mode") != "Card":
+        out.update(shell_rigidity(vertices, band["height"] * scale, root_only_tolerance))
+        out.update(root_height(chains, band["equator_height"] * scale))
     else:
         out.update({"shell_vertex_count": None, "shell_rigid_ratio": None,
                     "root_height_diff_mean": None, "root_height_diff_max_abs": None})

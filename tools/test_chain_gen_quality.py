@@ -172,3 +172,18 @@ def test_centerline_gaps_empty_records() -> None:
     assert result["centerline_gap_max"] is None
     assert result["centerline_gap_mean"] is None
     assert result["centerline_record_count"] == 0
+
+
+def test_card_mode_skips_equator_metrics() -> None:
+    """Card mode with a root band should have shell_rigid_ratio/root_height_diff_mean as None
+    but still emit root_band_height as a number."""
+    report = build_report()
+    report["strand_mode"] = "Card"
+
+    metrics = quality_metrics(report)
+
+    assert metrics["shell_vertex_count"] is None
+    assert metrics["shell_rigid_ratio"] is None
+    assert metrics["root_height_diff_mean"] is None
+    assert metrics["root_height_diff_max_abs"] is None
+    assert isinstance(metrics["root_band_height"], float)

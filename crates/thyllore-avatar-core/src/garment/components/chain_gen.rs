@@ -31,7 +31,7 @@ pub struct ChainGenSettings {
     /// Distance band in model units over which a vertex blends with the neighbouring column; 0 keeps columns hard
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
     pub column_blend_width: f32,
-    /// Shift of the hair root band in model units from the widest cross-section of the skin under the root bone; positive moves it down the hair, negative toward the root bone
+    /// Azimuth: shift of the hair root band from the skin's widest cross-section in model units (positive = toward tips, negative = toward root bone); Card: length kept as root rigid body from each card's base in model units (0 = full card length is chain, negative clamped to 0)
     #[persist(ui(min = -100.0, max = 100.0, format = "%.3f"))]
     pub root_band_offset: f32,
 }

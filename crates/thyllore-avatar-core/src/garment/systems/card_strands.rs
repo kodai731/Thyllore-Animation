@@ -87,12 +87,26 @@ fn build_v_bin_centroids(
         .collect()
 }
 
+fn card_cutoff_progress(
+    positions: &[Vector3<f32>],
+    members: &[u32],
+    root_position: Vector3<f32>,
+    root_offset: f32,
+) -> Option<f32> {
+    let up = world_y_axis();
+    members
+        .iter()
+        .map(|&v| progress_of(positions[v as usize], root_position, up))
+        .reduce(f32::min)
+        .map(|p| p + root_offset)
+}
+
 pub fn strand_centerline(
     positions: &[Vector3<f32>],
     tex_coords: &[[f32; 2]],
     members: &[u32],
     root_position: Vector3<f32>,
-    band_progress: f32,
+    root_offset: f32,
 ) -> Option<Vec<Vector3<f32>>> {
     let up = world_y_axis();
     let mut centroids = build_v_bin_centroids(positions, tex_coords, members);
@@ -102,7 +116,8 @@ pub fn strand_centerline(
         centroids.reverse();
     }
 
-    centroids.retain(|&centroid| progress_of(centroid, root_position, up) > band_progress);
+    let cutoff = card_cutoff_progress(positions, members, root_position, root_offset)?;
+    centroids.retain(|&centroid| progress_of(centroid, root_position, up) >= cutoff);
     let &tip = centroids.last()?;
     if centroids.len() < 2 {
         return None;
@@ -248,25 +263,27 @@ pub fn decide_strand_mode(
     }
 
     let up = world_y_axis();
-    let mut total_below = 0;
-    let mut correlated_below = 0;
+    let mut total = 0;
+    let mut correlated = 0;
     for members in components {
-        let below_count = members
-            .iter()
-            .filter(|&&v| {
-                progress_of(input.positions[v as usize], input.root_position, up) > band_progress
-            })
-            .count();
-        total_below += below_count;
-
         let is_correlated = uv_strand_correlation(input.positions, input.tex_coords, members)
             .is_some_and(|r| r.abs() >= MIN_STRAND_UV_CORRELATION);
         if is_correlated {
-            correlated_below += below_count;
+            total += members.len();
+            correlated += members.len();
+        } else {
+            let below_count = members
+                .iter()
+                .filter(|&&v| {
+                    progress_of(input.positions[v as usize], input.root_position, up)
+                        > band_progress
+                })
+                .count();
+            total += below_count;
         }
     }
 
-    if correlated_below * 2 > total_below {
+    if correlated * 2 > total {
         StrandMode::Card
     } else {
         StrandMode::Azimuth
@@ -292,7 +309,7 @@ impl CardStrand {
 fn build_card_strand(
     input: &ChainGenInput,
     members: &[u32],
-    band_progress: f32,
+    root_offset: f32,
 ) -> Option<CardStrand> {
     let component = members.iter().copied().min()?;
     let correlation = uv_strand_correlation(input.positions, input.tex_coords, members)?;
@@ -304,16 +321,15 @@ fn build_card_strand(
         input.tex_coords,
         members,
         input.root_position,
-        band_progress,
+        root_offset,
     )?;
 
     let up = world_y_axis();
+    let cutoff = card_cutoff_progress(input.positions, members, input.root_position, root_offset)?;
     let below_band = members
         .iter()
         .copied()
-        .filter(|&v| {
-            progress_of(input.positions[v as usize], input.root_position, up) > band_progress
-        })
+        .filter(|&v| progress_of(input.positions[v as usize], input.root_position, up) >= cutoff)
         .collect();
 
     Some(CardStrand {
@@ -366,13 +382,12 @@ fn build_tuft_chain(
 pub(crate) fn place_card_chains(
     input: &ChainGenInput,
     components: &[Vec<u32>],
-    band_progress: f32,
     azimuth_center: Vector3<f32>,
     params: &ChainGenParams,
 ) -> (Vec<GeneratedChain>, Vec<StrandCenterlineRecord>) {
     let strands: Vec<CardStrand> = components
         .iter()
-        .filter_map(|members| build_card_strand(input, members, band_progress))
+        .filter_map(|members| build_card_strand(input, members, params.settings.root_band_offset))
         .collect();
     let centerlines: Vec<Vec<Vector3<f32>>> = strands
         .iter()
@@ -442,13 +457,13 @@ mod tests {
                 .expect("strip has vertices")
         }
 
-        fn centerline(&self, root_position: Vector3<f32>, band_progress: f32) -> Vec<Vector3<f32>> {
+        fn centerline(&self, root_position: Vector3<f32>, root_offset: f32) -> Vec<Vector3<f32>> {
             strand_centerline(
                 &self.positions,
                 &self.tex_coords,
                 &self.members,
                 root_position,
-                band_progress,
+                root_offset,
             )
             .expect("centerline exists")
         }
@@ -504,7 +519,7 @@ mod tests {
     #[test]
     fn vertical_strip_centerline_runs_top_to_bottom_on_axis() {
         let strip = build_vertical_strip();
-        let centerline = strip.centerline(strip.top(), KEEP_ALL_BAND);
+        let centerline = strip.centerline(strip.top(), 0.0);
 
         assert_eq!(centerline.len(), CENTERLINE_SAMPLE_COUNT);
         assert!(centerline.windows(2).all(|pair| pair[1].y < pair[0].y));
@@ -517,7 +532,7 @@ mod tests {
     fn tilted_strip_centerline_follows_tilt() {
         let mut strip = build_vertical_strip();
         tilt_about_z(&mut strip, 60.0_f32.to_radians());
-        let centerline = strip.centerline(strip.top(), KEEP_ALL_BAND);
+        let centerline = strip.centerline(strip.top(), 0.0);
 
         let direction = centerline[CENTERLINE_SAMPLE_COUNT - 1] - centerline[0];
         let tilt = angle_between_degrees(direction, -world_y_axis());
@@ -532,7 +547,7 @@ mod tests {
             let angle = v * std::f32::consts::FRAC_PI_2;
             Vector3::new(radius * angle.cos(), radius * angle.sin(), 0.0)
         });
-        let centerline = strip.centerline(strip.top(), KEEP_ALL_BAND);
+        let centerline = strip.centerline(strip.top(), 0.0);
 
         let total_turn: f32 = centerline
             .windows(3)
@@ -548,23 +563,32 @@ mod tests {
         for tex_coord in &mut strip.tex_coords {
             tex_coord[1] = 1.0 - tex_coord[1];
         }
-        let centerline = strip.centerline(strip.top(), KEEP_ALL_BAND);
+        let centerline = strip.centerline(strip.top(), 0.0);
 
         assert!((centerline[0].y - 9.0).abs() < 1e-4);
         assert!(centerline[CENTERLINE_SAMPLE_COUNT - 1].y.abs() < 1e-4);
     }
 
     #[test]
-    fn rows_above_band_are_dropped() {
+    fn root_offset_drops_rows_near_the_card_root() {
         let strip = build_vertical_strip();
         let root_position = strip.top();
-        let band_progress = 2.5;
-        let centerline = strip.centerline(root_position, band_progress);
+        let root_offset = 2.5;
+        let centerline = strip.centerline(root_position, root_offset);
 
         assert!((centerline[0].y - 6.0).abs() < 1e-4);
         assert!(centerline
             .iter()
-            .all(|&p| progress_of(p, root_position, world_y_axis()) > band_progress));
+            .all(|&p| progress_of(p, root_position, world_y_axis()) >= root_offset));
+    }
+
+    #[test]
+    fn zero_root_offset_keeps_the_whole_card() {
+        let strip = build_vertical_strip();
+        let root_position = Vector3::new(0.0, 14.0, 0.0);
+        let centerline = strip.centerline(root_position, 0.0);
+
+        assert!((centerline[0].y - 9.0).abs() < 1e-4);
     }
 
     #[test]
@@ -796,11 +820,11 @@ mod tests {
         Vector3::new(0.0, 10.0, 0.0)
     }
 
-    fn build_head_ring() -> Vec<Vector3<f32>> {
+    fn build_head_ring(height: f32) -> Vec<Vector3<f32>> {
         (0..16)
             .map(|index| {
                 let angle = index as f32 / 16.0 * TAU;
-                Vector3::new(angle.cos(), 9.0, angle.sin())
+                Vector3::new(angle.cos(), height, angle.sin())
             })
             .collect()
     }
@@ -844,7 +868,7 @@ mod tests {
             positions: Vec::new(),
             triangles: Vec::new(),
             tex_coords: Vec::new(),
-            attachment_positions: build_head_ring(),
+            attachment_positions: build_head_ring(9.0),
             strip_axes: Vec::new(),
             strip_vertices: Vec::new(),
         };
@@ -1006,7 +1030,7 @@ mod tests {
             positions: Vec::new(),
             triangles: Vec::new(),
             tex_coords: Vec::new(),
-            attachment_positions: build_head_ring(),
+            attachment_positions: build_head_ring(9.0),
             strip_axes: Vec::new(),
             strip_vertices: Vec::new(),
         };
@@ -1049,5 +1073,38 @@ mod tests {
             shorter_tip_y,
             distance_to_shorter,
         );
+    }
+
+    #[test]
+    fn cards_above_the_equator_start_at_their_root() {
+        let mut mesh = build_three_tilted_cards();
+        mesh.attachment_positions = build_head_ring(4.5);
+
+        let placement =
+            place_chains_with_strands(&card_input(&mesh, &mesh.tex_coords), &hair_params(0, 0.0))
+                .expect("chains are placed");
+        let strands = placement.strands.expect("hair has a strand placement");
+
+        assert_eq!(strands.mode, StrandMode::Card);
+        assert_eq!(placement.chains.len(), 3);
+
+        for strip_vertices in &mesh.strip_vertices {
+            let chain = placement
+                .chains
+                .iter()
+                .find(|chain| chain.vertices.contains(&strip_vertices[0]))
+                .expect("strip belongs to a chain");
+            assert!(
+                strip_vertices.iter().all(|v| chain.vertices.contains(v)),
+                "chain {} should contain all vertices of its strip",
+                chain.column
+            );
+            assert!(
+                chain.joints[0].head.y > 8.0,
+                "chain {} first joint head.y={} should be > 8.0 (card root is at y=8.5)",
+                chain.column,
+                chain.joints[0].head.y
+            );
+        }
     }
 }

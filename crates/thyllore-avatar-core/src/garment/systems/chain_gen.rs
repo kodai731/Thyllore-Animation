@@ -558,8 +558,7 @@ fn place_hair_card_chains(
     let components = group_into_components(input, vertices);
     match decide_strand_mode(input, &components, band.progress) {
         StrandMode::Card => {
-            let (chains, centerlines) =
-                place_card_chains(input, &components, band.progress, band.center, params);
+            let (chains, centerlines) = place_card_chains(input, &components, band.center, params);
             if chains.is_empty() {
                 return None;
             }

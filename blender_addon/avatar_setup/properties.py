@@ -86,6 +86,7 @@ class THYLLORE_PG_ColliderGroup(bpy.types.PropertyGroup):
     """One collider group: name + list of collider names."""
 
     name: bpy.props.StringProperty(name="Name")
+    assigned: bpy.props.BoolProperty(name="Assigned", default=False)
     colliders: bpy.props.CollectionProperty(type=THYLLORE_PG_NameItem)
 
 

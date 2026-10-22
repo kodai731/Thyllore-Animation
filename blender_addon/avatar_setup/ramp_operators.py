@@ -35,7 +35,7 @@ def active_bone_name(context):
     return None
 
 
-def _target_chain_names(settings, spring, bones, bone_name, scope):
+def target_chain_names(settings, spring, bones, bone_name, scope):
     """Determine which chain names to apply ramp to based on active bone and scope."""
     chain = chain_with_joint(settings, bone_name)
     if chain is not None:
@@ -68,7 +68,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         bones = armature_bone_specs(context, arm)
 
         try:
-            names = _target_chain_names(settings, spring, bones, bone_name, form.scope)
+            names = target_chain_names(settings, spring, bones, bone_name, form.scope)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}

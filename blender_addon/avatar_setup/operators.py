@@ -14,12 +14,14 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common import coordinates
 from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sidecar, write_submesh_sidecar
+from ..common.collider_fit import scaled_bind_matrix
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..operators.chain_bones import _armature_of
 
 
-def _bound_meshes(arm) -> list:
+def bound_meshes(arm) -> list:
     """Collect mesh objects that reference arm via an ARMATURE modifier."""
     meshes = []
     for obj in bpy.data.objects:
@@ -68,6 +70,18 @@ def armature_bone_specs(context, arm):
     names, parent_indices, world_heads = _collect_bone_data(arm)
     scale_length = context.scene.unit_settings.scale_length
     return bone_specs(names, parent_indices, world_heads, scale_length)
+
+
+def armature_fit_bones(context, arm):
+    """Collect bone data from arm and build bone specs with bind_matrix for collider fit."""
+    specs = armature_bone_specs(context, arm)
+    scale_length = context.scene.unit_settings.scale_length
+    for spec, bone in zip(specs, arm.data.bones):
+        world_matrix = arm.matrix_world @ bone.matrix_local
+        engine_matrix = coordinates.blender_to_engine_matrix(world_matrix)
+        rows = [[engine_matrix[i][j] for j in range(4)] for i in range(4)]
+        spec["bind_matrix"] = scaled_bind_matrix(rows, scale_length)
+    return specs
 
 
 def _select_only(context, objects):
@@ -178,7 +192,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
         write_sidecar_spring(arm.data.thyllore_spring, sidecar["spring"])
 
-        meshes = _bound_meshes(arm)
+        meshes = bound_meshes(arm)
         for mesh_obj in meshes:
             write_submesh_sidecar(
                 mesh_obj.thyllore_submesh,
@@ -213,7 +227,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             return {"CANCELLED"}
 
         arm = target_armature(context)
-        meshes = _bound_meshes(arm)
+        meshes = bound_meshes(arm)
 
         selected_before = frozenset(o for o in context.selected_objects)
         active_before = context.view_layer.objects.active

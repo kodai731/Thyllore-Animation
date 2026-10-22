@@ -4,12 +4,14 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
+use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData, SpringChainGizmoMode,
 };
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{
     Camera, Exposure, GpuPassTimings, GpuTimingsSink, SceneBrightness, TransformGizmoState,
@@ -25,6 +27,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::ecs::FrameContext;
+use crate::ecs::MeshRef;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
@@ -33,7 +36,10 @@ use crate::ecs::{
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
-use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{
+    chains_skinned_to, chains_to_draw, chains_with_radius, SpringChainId,
+};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -614,6 +620,39 @@ fn bone_selection_snapshot(world: &World) -> BoneSelectionState {
         .unwrap_or_default()
 }
 
+/// A selected skinned mesh (hair, skirt) shows the chains that move it, so the chains are found
+/// without selecting their root bone, and a viewport click that clears the bone selection keeps them.
+fn chains_of_selected_mesh(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    setup: &SpringBoneSetup,
+) -> Vec<SpringChainId> {
+    let Some(entity) = world
+        .get_resource::<HierarchyState>()
+        .and_then(|state| state.selected_entity)
+    else {
+        return Vec::new();
+    };
+    let Some(mesh_ref) = world.get_component::<MeshRef>(entity) else {
+        return Vec::new();
+    };
+    let Some(mesh_index) = assets
+        .get_mesh(mesh_ref.mesh_asset_id)
+        .map(|mesh| mesh.graphics_mesh_index)
+    else {
+        return Vec::new();
+    };
+    match graphics
+        .meshes
+        .get(mesh_index)
+        .and_then(|mesh| mesh.skin_data.as_ref())
+    {
+        Some(skin) => chains_skinned_to(setup, skin),
+        None => Vec::new(),
+    }
+}
+
 fn find_spring_bone_setup(world: &World) -> Option<SpringBoneSetup> {
     let (entity, _) = world.iter_components::<WithSpringBone>().next()?;
     world.get_component::<SpringBoneSetup>(entity).cloned()
@@ -951,13 +990,24 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     };
 
     let selection = bone_selection_snapshot(ctx.world);
-    let shown = SpringGizmoSelection {
-        chain_ids: chains_to_draw(
+    let mut chain_ids = chains_to_draw(
+        &setup,
+        skeleton,
+        &selection.selected_bone_indices,
+        chain_mode,
+    );
+    if chain_mode == SpringChainGizmoMode::Selected {
+        chain_ids.extend(chains_of_selected_mesh(
+            ctx.world,
+            ctx.assets,
+            ctx.graphics,
             &setup,
-            skeleton,
-            &selection.selected_bone_indices,
-            chain_mode,
-        ),
+        ));
+        chain_ids.sort_unstable();
+        chain_ids.dedup();
+    }
+    let shown = SpringGizmoSelection {
+        chain_ids,
         radius_chain_ids: chains_with_radius(&setup, selection.active_bone_index, chain_mode),
         colliders: if colliders_visible {
             ColliderGizmo::Shown

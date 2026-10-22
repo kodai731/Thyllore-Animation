@@ -1,9 +1,7 @@
 use cgmath::Vector3;
-use thyllore_anim_core::spring_bone::chain_joints_skinned_to;
 
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
-use crate::ecs::component::SpringBoneSetup;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
 use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
@@ -22,7 +20,6 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
-use crate::ecs::MeshRef;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use cgmath::Quaternion;
 
@@ -65,65 +62,17 @@ pub enum HierarchyEvent {
 }
 
 impl UiCommand for HierarchyEvent {
-    fn apply(
-        self: Box<Self>,
-        world: &mut World,
-        assets: &mut AssetStorage,
-        graphics: &GraphicsResources,
-    ) {
-        dispatch_hierarchy_events(&[*self], world, assets, graphics);
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
+        dispatch_hierarchy_events(&[*self], world, assets);
     }
 }
 
-fn dispatch_hierarchy_events(
-    events: &[HierarchyEvent],
-    world: &mut World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-) {
+fn dispatch_hierarchy_events(events: &[HierarchyEvent], world: &mut World, assets: &AssetStorage) {
     dispatch_hierarchy_entity_events(events, world);
-    select_spring_chains_of_selected_mesh(events, world, assets, graphics);
     dispatch_hierarchy_bone_events(events, world, assets);
     queue_skeleton_edits(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
     dispatch_hierarchy_navigation_events(events, world, assets);
-}
-
-/// Selecting a skinned mesh selects the joints of the spring chains that move it, so the chain
-/// gizmos of a hair or skirt mesh show without hunting for the chains' root bone.
-fn select_spring_chains_of_selected_mesh(
-    events: &[HierarchyEvent],
-    world: &mut World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-) {
-    for event in events {
-        let HierarchyEvent::SelectEntity(entity) = event else {
-            continue;
-        };
-        let Some(joints) = spring_chain_joints_of_mesh(world, assets, graphics, *entity) else {
-            continue;
-        };
-
-        let Some(mut selection) = world.get_resource_mut::<BoneSelectionState>() else {
-            continue;
-        };
-        selection.active_bone_index = joints.first().copied();
-        selection.selected_bone_indices = joints.into_iter().collect();
-    }
-}
-
-fn spring_chain_joints_of_mesh(
-    world: &World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-    entity: Entity,
-) -> Option<Vec<usize>> {
-    let mesh_ref = world.get_component::<MeshRef>(entity)?;
-    let mesh_index = assets.get_mesh(mesh_ref.mesh_asset_id)?.graphics_mesh_index;
-    let skin = graphics.meshes.get(mesh_index)?.skin_data.as_ref()?;
-    let (_, setup) = world.iter_components::<SpringBoneSetup>().next()?;
-    Some(chain_joints_skinned_to(setup, skin))
 }
 
 fn bone_name(assets: &AssetStorage, bone_id: BoneId) -> Option<String> {

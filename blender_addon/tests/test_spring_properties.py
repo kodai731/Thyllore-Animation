@@ -1,0 +1,275 @@
+"""Tests for spring_properties module: round-trip, disabled chain exclusion, idempotent write."""
+from __future__ import annotations
+
+import pytest
+from types import SimpleNamespace
+
+from blender_addon.common.spring_properties import (
+    humanoid_overrides_to_dict,
+    spring_settings_to_sidecar,
+    write_sidecar_spring,
+)
+
+
+class FakeCollection:
+    """Minimal fake collection with .add(), .clear(), and iteration.
+
+    ``item_factory`` (callable, no args) controls what each .add() returns.
+    Defaults to a plain SimpleNamespace."""
+
+    def __init__(self, item_factory=None):
+        self._items = []
+        self._factory = item_factory or (lambda: SimpleNamespace())
+
+    def add(self):
+        item = self._factory()
+        self._items.append(item)
+        return item
+
+    def clear(self):
+        self._items.clear()
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __len__(self):
+        return len(self._items)
+
+    def __getitem__(self, index):
+        return self._items[index]
+
+
+def _chain_item_factory():
+    """Factory for chain items: each has joints and collider_groups as FakeCollections."""
+    item = SimpleNamespace()
+    item.joints = FakeCollection()
+    item.collider_groups = FakeCollection()
+    return item
+
+
+def _collider_group_item_factory():
+    """Factory for collider group items: each has colliders as FakeCollection."""
+    item = SimpleNamespace()
+    item.colliders = FakeCollection()
+    return item
+
+
+def _make_settings(chains_data, colliders_data, groups_data, collision_mode="vrm_compatible"):
+    """Build a fake settings object from chain/collider/group data."""
+    settings = SimpleNamespace()
+    settings.collision_mode = collision_mode
+    settings.chains = FakeCollection(_chain_item_factory)
+    settings.colliders = FakeCollection()
+    settings.collider_groups = FakeCollection(_collider_group_item_factory)
+
+    for cd in chains_data:
+        item = settings.chains.add()
+        item.name = cd["name"]
+        item.center = cd.get("center", "")
+        item.enabled = cd.get("enabled", True)
+        item.tail = cd.get("tail", "")
+        for jd in cd["joints"]:
+            j = item.joints.add()
+            j.bone = jd["bone"]
+            j.stiffness = jd["stiffness"]
+            j.drag_force = jd["drag_force"]
+            j.gravity_power = jd["gravity_power"]
+            j.gravity_dir = jd["gravity_dir"]
+            j.hit_radius = jd["hit_radius"]
+        for cg in cd.get("collider_groups", []):
+            entry = item.collider_groups.add()
+            entry.name = cg
+
+    for cld in colliders_data:
+        c = settings.colliders.add()
+        c.name = cld["name"]
+        c.bone = cld["bone"]
+        c.offset = cld["offset"]
+        c.shape = cld["shape"]
+        c.radius = cld["radius"]
+        c.has_tail = cld.get("has_tail", False)
+        c.tail = cld.get("tail", (0.0, 0.0, 0.0))
+        c.origin = cld.get("origin", "authored")
+
+    for gd in groups_data:
+        g = settings.collider_groups.add()
+        g.name = gd["name"]
+        for cn in gd["colliders"]:
+            entry = g.colliders.add()
+            entry.name = cn
+
+    return settings
+
+
+TEST_CHAINS = [
+    {
+        "name": "chain_0",
+        "center": "Hips",
+        "enabled": True,
+        "tail": "Spine3",
+        "joints": [
+            {
+                "bone": "Hips",
+                "stiffness": 1.0,
+                "drag_force": 0.5,
+                "gravity_power": 1.0,
+                "gravity_dir": (0.0, -1.0, 0.0),
+                "hit_radius": 0.05,
+            },
+            {
+                "bone": "Spine",
+                "stiffness": 0.8,
+                "drag_force": 0.3,
+                "gravity_power": 0.5,
+                "gravity_dir": (0.0, -1.0, 0.0),
+                "hit_radius": 0.03,
+            },
+        ],
+        "collider_groups": ["body"],
+    }
+]
+
+TEST_COLLIDERS = [
+    {
+        "name": "torso",
+        "bone": "Hips",
+        "offset": (0.0, 1.0, 0.0),
+        "shape": "capsule",
+        "radius": 0.2,
+        "has_tail": True,
+        "tail": (0.0, 3.0, 0.0),
+        "origin": "authored",
+    }
+]
+
+TEST_GROUPS = [{"name": "body", "colliders": ["torso"]}]
+
+
+def _expected_sidecar():
+    return {
+        "collision_mode": "vrm_compatible",
+        "chains": [
+            {
+                "name": "chain_0",
+                "center": "Hips",
+                "collider_groups": ["body"],
+                "joints": [
+                    {"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.05},
+                    {"bone": "Spine", "stiffness": 0.8, "drag_force": 0.3, "gravity_power": 0.5, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.03},
+                ],
+                "tail": "Spine3",
+            }
+        ],
+        "colliders": [
+            {"name": "torso", "bone": "Hips", "offset": (0.0, 0.0, -1.0), "shape": "capsule", "radius": 0.2, "tail": (0.0, 0.0, -3.0), "origin": "authored"}
+        ],
+        "collider_groups": [{"name": "body", "colliders": ["torso"]}],
+    }
+
+
+def test_round_trip():
+    """write_sidecar_spring -> spring_settings_to_sidecar round-trips to the original sidecar."""
+    settings = _make_settings(TEST_CHAINS, TEST_COLLIDERS, TEST_GROUPS)
+    expected = _expected_sidecar()
+
+    sidecar = spring_settings_to_sidecar(settings)
+    assert sidecar == expected
+
+    write_sidecar_spring(settings, expected)
+    round_tripped = spring_settings_to_sidecar(settings)
+
+    assert round_tripped["collision_mode"] == expected["collision_mode"]
+    assert len(round_tripped["chains"]) == len(expected["chains"])
+    assert len(round_tripped["colliders"]) == len(expected["colliders"])
+    assert len(round_tripped["collider_groups"]) == len(expected["collider_groups"])
+
+    for rt_chain, exp_chain in zip(round_tripped["chains"], expected["chains"]):
+        assert rt_chain["name"] == exp_chain["name"]
+        assert rt_chain["center"] == exp_chain["center"]
+        assert rt_chain["tail"] == exp_chain["tail"]
+        assert rt_chain["collider_groups"] == exp_chain["collider_groups"]
+        for rt_joint, exp_joint in zip(rt_chain["joints"], exp_chain["joints"]):
+            assert rt_joint["bone"] == exp_joint["bone"]
+            assert rt_joint["stiffness"] == pytest.approx(exp_joint["stiffness"])
+            assert rt_joint["drag_force"] == pytest.approx(exp_joint["drag_force"])
+            assert rt_joint["gravity_power"] == pytest.approx(exp_joint["gravity_power"])
+            assert rt_joint["gravity_dir"] == pytest.approx(exp_joint["gravity_dir"])
+            assert rt_joint["hit_radius"] == pytest.approx(exp_joint["hit_radius"])
+
+    for rt_c, exp_c in zip(round_tripped["colliders"], expected["colliders"]):
+        assert rt_c["name"] == exp_c["name"]
+        assert rt_c["bone"] == exp_c["bone"]
+        assert rt_c["offset"] == pytest.approx(exp_c["offset"])
+        assert rt_c["shape"] == exp_c["shape"]
+        assert rt_c["radius"] == pytest.approx(exp_c["radius"])
+        assert rt_c["tail"] == pytest.approx(exp_c["tail"])
+        assert rt_c["origin"] == exp_c["origin"]
+
+    for rt_g, exp_g in zip(round_tripped["collider_groups"], expected["collider_groups"]):
+        assert rt_g["name"] == exp_g["name"]
+        assert rt_g["colliders"] == exp_g["colliders"]
+
+
+def test_disabled_chain_excluded():
+    """A chain with enabled=False is not included in the output."""
+    chains = [
+        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+    ]
+    settings = _make_settings(chains, [], [])
+    sidecar = spring_settings_to_sidecar(settings)
+
+    assert len(sidecar["chains"]) == 1
+    assert sidecar["chains"][0]["name"] == "visible"
+
+
+def test_idempotent_double_write():
+    """Writing the same sidecar twice does not increase item counts."""
+    settings = _make_settings(TEST_CHAINS, TEST_COLLIDERS, TEST_GROUPS)
+    expected = _expected_sidecar()
+
+    write_sidecar_spring(settings, expected)
+    count_chains_1 = len(settings.chains)
+    count_colliders_1 = len(settings.colliders)
+    count_groups_1 = len(settings.collider_groups)
+
+    write_sidecar_spring(settings, expected)
+    assert len(settings.chains) == count_chains_1 == 1
+    assert len(settings.colliders) == count_colliders_1 == 1
+    assert len(settings.collider_groups) == count_groups_1 == 1
+
+
+def test_empty_center_and_tail_become_none():
+    """Empty string center/tail in settings becomes None in sidecar."""
+    chains = [{"name": "chain_0", "center": "", "enabled": True, "tail": "", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]}]
+    settings = _make_settings(chains, [], [])
+    sidecar = spring_settings_to_sidecar(settings)
+
+    assert sidecar["chains"][0]["center"] is None
+    assert sidecar["chains"][0]["tail"] is None
+
+
+def test_sphere_collider_no_tail():
+    """A sphere collider (has_tail=False) has tail=None in the sidecar."""
+    colliders = [{"name": "sphere_c", "bone": "Hips", "offset": (0.0, 1.0, 0.0), "shape": "sphere", "radius": 0.1, "has_tail": False, "tail": (0.0, 0.0, 0.0), "origin": "authored"}]
+    settings = _make_settings([], colliders, [])
+    sidecar = spring_settings_to_sidecar(settings)
+
+    assert sidecar["colliders"][0]["tail"] is None
+
+
+def test_humanoid_overrides_to_dict():
+    """humanoid_overrides_to_dict reads role/bone pairs correctly."""
+    settings = SimpleNamespace()
+    settings.humanoid_overrides = FakeCollection()
+
+    item1 = settings.humanoid_overrides.add()
+    item1.role = "hips"
+    item1.bone = "Hips_Bone"
+
+    item2 = settings.humanoid_overrides.add()
+    item2.role = "spine"
+    item2.bone = "Spine_Bone"
+
+    result = humanoid_overrides_to_dict(settings)
+    assert result == {"hips": "Hips_Bone", "spine": "Spine_Bone"}

@@ -1,0 +1,132 @@
+"""Pure Python helpers for reading/writing spring bone settings from Blender property groups."""
+from __future__ import annotations
+
+from .coordinates import blender_to_engine_point, engine_to_blender_point
+
+
+def spring_settings_to_sidecar(settings) -> dict:
+    """Read spring settings from a Blender property group and build the sidecar dict."""
+    return {
+        "collision_mode": settings.collision_mode,
+        "chains": [_chain_to_sidecar(chain) for chain in settings.chains if chain.enabled],
+        "colliders": [_collider_to_sidecar(collider) for collider in settings.colliders],
+        "collider_groups": [_collider_group_to_sidecar(group) for group in settings.collider_groups],
+    }
+
+
+def _chain_to_sidecar(chain) -> dict:
+    """Build sidecar dict for one chain item."""
+    return {
+        "name": chain.name,
+        "center": chain.center or None,
+        "collider_groups": [entry.name for entry in chain.collider_groups],
+        "joints": [_joint_to_sidecar(joint) for joint in chain.joints],
+        "tail": chain.tail or None,
+    }
+
+
+def _joint_to_sidecar(joint) -> dict:
+    """Build sidecar dict for one joint item."""
+    return {
+        "bone": joint.bone,
+        "stiffness": float(joint.stiffness),
+        "drag_force": float(joint.drag_force),
+        "gravity_power": float(joint.gravity_power),
+        "gravity_dir": blender_to_engine_point(tuple(joint.gravity_dir)),
+        "hit_radius": float(joint.hit_radius),
+    }
+
+
+def _collider_to_sidecar(collider) -> dict:
+    """Build sidecar dict for one collider item."""
+    tail_value = None
+    if collider.has_tail and collider.tail is not None:
+        tail_value = blender_to_engine_point(tuple(collider.tail))
+    return {
+        "name": collider.name,
+        "bone": collider.bone,
+        "offset": blender_to_engine_point(tuple(collider.offset)),
+        "shape": collider.shape,
+        "radius": float(collider.radius),
+        "tail": tail_value,
+        "origin": collider.origin,
+    }
+
+
+def _collider_group_to_sidecar(group) -> dict:
+    """Build sidecar dict for one collider group item."""
+    return {
+        "name": group.name,
+        "colliders": [entry.name for entry in group.colliders],
+    }
+
+
+def write_sidecar_spring(settings, spring: dict) -> None:
+    """Write sidecar spring data into a Blender property group (idempotent)."""
+    settings.collision_mode = spring["collision_mode"]
+
+    _write_chains(settings.chains, spring["chains"])
+    _write_colliders(settings.colliders, spring["colliders"])
+    _write_collider_groups(settings.collider_groups, spring["collider_groups"])
+
+
+def _write_chains(chains, spring_chains: list[dict]) -> None:
+    chains.clear()
+    for chain in spring_chains:
+        item = chains.add()
+        item.name = chain["name"]
+        item.center = chain.get("center") or ""
+        item.enabled = True
+        item.tail = chain.get("tail") or ""
+        for joint in chain["joints"]:
+            _write_joint(item.joints, joint)
+        for group_name in chain.get("collider_groups", []):
+            entry = item.collider_groups.add()
+            entry.name = group_name
+
+
+def _write_joint(joints_collection, joint: dict) -> None:
+    """Write one joint dict into a Blender joints collection."""
+    joint_item = joints_collection.add()
+    joint_item.bone = joint["bone"]
+    joint_item.stiffness = joint["stiffness"]
+    joint_item.drag_force = joint["drag_force"]
+    joint_item.gravity_power = joint["gravity_power"]
+    joint_item.gravity_dir = engine_to_blender_point(tuple(joint["gravity_dir"]))
+    joint_item.hit_radius = joint["hit_radius"]
+
+
+def _write_colliders(colliders, spring_colliders: list[dict]) -> None:
+    colliders.clear()
+    for collider in spring_colliders:
+        collider_item = colliders.add()
+        collider_item.name = collider["name"]
+        collider_item.bone = collider["bone"]
+        collider_item.offset = engine_to_blender_point(tuple(collider["offset"]))
+        collider_item.shape = collider["shape"]
+        collider_item.radius = collider["radius"]
+        if collider.get("tail") is not None:
+            collider_item.has_tail = True
+            collider_item.tail = engine_to_blender_point(tuple(collider["tail"]))
+        else:
+            collider_item.has_tail = False
+            collider_item.tail = (0.0, 0.0, 0.0)
+        collider_item.origin = collider.get("origin", "authored")
+
+
+def _write_collider_groups(collider_groups, spring_groups: list[dict]) -> None:
+    collider_groups.clear()
+    for group in spring_groups:
+        group_item = collider_groups.add()
+        group_item.name = group["name"]
+        for collider_name in group["colliders"]:
+            entry = group_item.colliders.add()
+            entry.name = collider_name
+
+
+def humanoid_overrides_to_dict(settings) -> dict[str, str]:
+    """Read humanoid bone overrides from a Blender property group."""
+    result = {}
+    for item in settings.humanoid_overrides:
+        result[item.role] = item.bone
+    return result

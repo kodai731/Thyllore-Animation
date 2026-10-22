@@ -5,10 +5,38 @@ import pytest
 from types import SimpleNamespace
 
 from blender_addon.common.spring_properties import (
+    chain_with_joint,
+    copy_joint_values,
+    disabled_chain_names,
     humanoid_overrides_to_dict,
+    joint_values,
+    restore_disabled_chains,
+    spring_settings_to_edit,
     spring_settings_to_sidecar,
     write_sidecar_spring,
 )
+
+
+class _ItemProxy:
+    """Thin proxy that delegates attribute access to an underlying item.
+
+    Each instance is a distinct object, so ``is`` identity checks between two
+    proxies wrapping the same item are always False — matching Blender RNA's
+    behavior where each collection access returns a new wrapper."""
+
+    __slots__ = ("_item",)
+
+    def __init__(self, item):
+        self._item = item
+
+    def __getattr__(self, name):
+        return getattr(self._item, name)
+
+    def __setattr__(self, name, value):
+        if name == "_item":
+            super().__setattr__(name, value)
+        else:
+            setattr(self._item, name, value)
 
 
 class FakeCollection:
@@ -30,13 +58,13 @@ class FakeCollection:
         self._items.clear()
 
     def __iter__(self):
-        return iter(self._items)
+        return (_ItemProxy(item) for item in self._items)
 
     def __len__(self):
         return len(self._items)
 
     def __getitem__(self, index):
-        return self._items[index]
+        return _ItemProxy(self._items[index])
 
 
 def _chain_item_factory():
@@ -273,3 +301,107 @@ def test_humanoid_overrides_to_dict():
 
     result = humanoid_overrides_to_dict(settings)
     assert result == {"hips": "Hips_Bone", "spine": "Spine_Bone"}
+
+
+def test_edit_write_restore_keeps_disabled():
+    """disabled chain settings -> edit dict -> write -> restore -> disabled stays.
+
+    spring_settings_to_sidecar (export) drops disabled chains, so an operator that
+    reads via spring_settings_to_edit and writes back must restore them."""
+    chains = [
+        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+    ]
+    settings = _make_settings(chains, [], [])
+
+    disabled = disabled_chain_names(settings)
+    assert disabled == {"hidden"}
+
+    sidecar = spring_settings_to_edit(settings)
+    assert len(sidecar["chains"]) == 2
+
+    write_sidecar_spring(settings, sidecar)
+    restore_disabled_chains(settings, disabled)
+
+    assert len(settings.chains) == 2
+    names = [c.name for c in settings.chains]
+    assert "visible" in names
+    assert "hidden" in names
+    for c in settings.chains:
+        if c.name == "visible":
+            assert c.enabled is True
+        elif c.name == "hidden":
+            assert c.enabled is False
+
+
+def test_joint_values():
+    """joint_values reads 5 param values from a Blender joint item with gravity_dir conversion."""
+    j = SimpleNamespace()
+    j.stiffness = 1.0
+    j.drag_force = 0.5
+    j.gravity_power = 1.0
+    j.gravity_dir = (0.0, -1.0, 0.0)
+    j.hit_radius = 0.05
+
+    values = joint_values(j)
+
+    assert values["stiffness"] == pytest.approx(1.0)
+    assert values["drag_force"] == pytest.approx(0.5)
+    assert values["gravity_power"] == pytest.approx(1.0)
+    assert values["gravity_dir"] == (0.0, 0.0, 1.0)
+    assert values["hit_radius"] == pytest.approx(0.05)
+
+
+def test_copy_joint_values():
+    """copy_joint_values copies all 5 param values from source to target."""
+    source = SimpleNamespace()
+    source.stiffness = 2.0
+    source.drag_force = 0.8
+    source.gravity_power = 1.5
+    source.gravity_dir = (0.0, -1.0, 0.0)
+    source.hit_radius = 0.1
+
+    target = SimpleNamespace()
+    target.stiffness = 0.0
+    target.drag_force = 0.0
+    target.gravity_power = 0.0
+    target.gravity_dir = (0.0, 0.0, 0.0)
+    target.hit_radius = 0.0
+
+    copy_joint_values(source, target)
+
+    assert target.stiffness == pytest.approx(2.0)
+    assert target.drag_force == pytest.approx(0.8)
+    assert target.gravity_power == pytest.approx(1.5)
+    assert target.gravity_dir == (0.0, -1.0, 0.0)
+    assert target.hit_radius == pytest.approx(0.1)
+
+
+def test_chain_with_joint_found():
+    """chain_with_joint finds the chain containing a joint with the given bone name."""
+    settings = _make_settings(
+        [
+            {"name": "chain_a", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+            {"name": "chain_b", "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        ],
+        [],
+        [],
+    )
+
+    chain = chain_with_joint(settings, "Spine")
+    assert chain is not None
+    assert chain.name == "chain_b"
+
+
+def test_chain_with_joint_not_found():
+    """chain_with_joint returns None when no joint matches the bone name."""
+    settings = _make_settings(
+        [
+            {"name": "chain_a", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        ],
+        [],
+        [],
+    )
+
+    chain = chain_with_joint(settings, "Missing")
+    assert chain is None

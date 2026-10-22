@@ -48,7 +48,7 @@ def _collect_bone_data(arm):
     return names, parent_indices, world_heads
 
 
-def _target_armature(context):
+def target_armature(context):
     """Resolve the target armature from context.active_object.
 
     Returns the active object if it is an ARMATURE, or its armature modifier's
@@ -61,6 +61,13 @@ def _target_armature(context):
     if obj.type == "MESH":
         return _armature_of(obj)
     return None
+
+
+def armature_bone_specs(context, arm):
+    """Collect bone data from arm and build bone specs with context scale_length."""
+    names, parent_indices, world_heads = _collect_bone_data(arm)
+    scale_length = context.scene.unit_settings.scale_length
+    return bone_specs(names, parent_indices, world_heads, scale_length)
 
 
 def _select_only(context, objects):
@@ -99,9 +106,7 @@ def _mesh_counts(meshes):
 
 def _sidecar_build_input(context, arm, meshes):
     """Build the input dict for tml.sidecar_build from arm and meshes."""
-    names, parent_indices, world_heads = _collect_bone_data(arm)
-    scale_length = context.scene.unit_settings.scale_length
-    bones = bone_specs(names, parent_indices, world_heads, scale_length)
+    bones = armature_bone_specs(context, arm)
 
     spring = spring_settings_to_sidecar(arm.data.thyllore_spring)
 
@@ -149,14 +154,14 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and _target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         if not _TML_AVAILABLE:
             self.report({"ERROR"}, "thyllore_ml_core not available")
             return {"CANCELLED"}
 
-        arm = _target_armature(context)
+        arm = target_armature(context)
 
         try:
             with open(self.filepath, encoding="utf-8") as f:
@@ -200,14 +205,14 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and _target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         if not _TML_AVAILABLE:
             self.report({"ERROR"}, "thyllore_ml_core not available")
             return {"CANCELLED"}
 
-        arm = _target_armature(context)
+        arm = target_armature(context)
         meshes = _bound_meshes(arm)
 
         selected_before = frozenset(o for o in context.selected_objects)

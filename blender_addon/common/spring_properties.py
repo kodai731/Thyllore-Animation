@@ -5,12 +5,50 @@ from .coordinates import blender_to_engine_point, engine_to_blender_point
 
 
 def spring_settings_to_sidecar(settings) -> dict:
-    """Read spring settings from a Blender property group and build the sidecar dict."""
+    """Read spring settings from a Blender property group and build the sidecar dict.
+
+    Only enabled chains are included — disabled chains are excluded from export."""
+    return _build_sidecar_from_chains(
+        [c for c in settings.chains if c.enabled],
+        list(settings.colliders),
+        list(settings.collider_groups),
+        settings.collision_mode,
+    )
+
+
+def spring_settings_to_edit(settings) -> dict:
+    """Build the sidecar spring dict from Blender spring settings (edit view).
+
+    Includes ALL chains regardless of enabled state — used for edit operators that
+    round-trip through write_sidecar_spring."""
+    return _build_sidecar_from_chains(
+        list(settings.chains),
+        list(settings.colliders),
+        list(settings.collider_groups),
+        settings.collision_mode,
+    )
+
+
+def disabled_chain_names(settings) -> set[str]:
+    """Return the names of chains that are currently disabled."""
+    return {c.name for c in settings.chains if not c.enabled}
+
+
+def restore_disabled_chains(settings, names: set[str]) -> None:
+    """Restore disabled state: set enabled=False for chains whose names are in *names*."""
+    for chain in settings.chains:
+        if chain.name in names:
+            chain.enabled = False
+
+def _build_sidecar_from_chains(chains, colliders, groups, collision_mode) -> dict:
+    """Build the sidecar spring dict from explicit lists of chains/colliders/groups.
+
+    This is the shared private implementation — callers pass whichever chains they need."""
     return {
-        "collision_mode": settings.collision_mode,
-        "chains": [_chain_to_sidecar(chain) for chain in settings.chains if chain.enabled],
-        "colliders": [_collider_to_sidecar(collider) for collider in settings.colliders],
-        "collider_groups": [_collider_group_to_sidecar(group) for group in settings.collider_groups],
+        "collision_mode": collision_mode,
+        "chains": [_chain_to_sidecar(chain) for chain in chains],
+        "colliders": [_collider_to_sidecar(collider) for collider in colliders],
+        "collider_groups": [_collider_group_to_sidecar(group) for group in groups],
     }
 
 
@@ -27,14 +65,7 @@ def _chain_to_sidecar(chain) -> dict:
 
 def _joint_to_sidecar(joint) -> dict:
     """Build sidecar dict for one joint item."""
-    return {
-        "bone": joint.bone,
-        "stiffness": float(joint.stiffness),
-        "drag_force": float(joint.drag_force),
-        "gravity_power": float(joint.gravity_power),
-        "gravity_dir": blender_to_engine_point(tuple(joint.gravity_dir)),
-        "hit_radius": float(joint.hit_radius),
-    }
+    return {"bone": joint.bone, **joint_values(joint)}
 
 
 def _collider_to_sidecar(collider) -> dict:
@@ -130,3 +161,48 @@ def humanoid_overrides_to_dict(settings) -> dict[str, str]:
     for item in settings.humanoid_overrides:
         result[item.role] = item.bone
     return result
+
+
+def joint_values(joint) -> dict:
+    """Read 5 joint param values from a Blender spring joint item (without bone)."""
+    return {
+        "stiffness": float(joint.stiffness),
+        "drag_force": float(joint.drag_force),
+        "gravity_power": float(joint.gravity_power),
+        "gravity_dir": blender_to_engine_point(tuple(joint.gravity_dir)),
+        "hit_radius": float(joint.hit_radius),
+    }
+
+
+def copy_joint_values(source, target) -> None:
+    """Copy joint param values from source to target Blender spring joint item.
+
+    Copies stiffness, drag_force, gravity_power, gravity_dir, hit_radius."""
+    target.stiffness = source.stiffness
+    target.drag_force = source.drag_force
+    target.gravity_power = source.gravity_power
+    target.gravity_dir = source.gravity_dir
+    target.hit_radius = source.hit_radius
+
+
+def _chain_joint_pairs(settings):
+    """Yield (chain, joint) for every joint in every chain."""
+    for chain in settings.chains:
+        for joint in chain.joints:
+            yield chain, joint
+
+
+def joint_for_bone(settings, bone_name: str):
+    """Find the first joint item across all chains matching bone_name."""
+    for _, joint in _chain_joint_pairs(settings):
+        if joint.bone == bone_name:
+            return joint
+    return None
+
+
+def chain_with_joint(settings, bone_name: str):
+    """Find the first chain item that has a joint matching bone_name."""
+    for chain, joint in _chain_joint_pairs(settings):
+        if joint.bone == bone_name:
+            return chain
+    return None

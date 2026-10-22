@@ -27,6 +27,11 @@ def _spring_joint_annotations() -> dict[str, object]:
     return annotations
 
 
+SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
+    tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
+)
+
+
 class THYLLORE_PG_NameItem(bpy.types.PropertyGroup):
     """A single name entry for a UIList (collider group members, chain collider groups)."""
 
@@ -149,6 +154,27 @@ class THYLLORE_PG_SubmeshSettings(bpy.types.PropertyGroup):
     active_role_index: bpy.props.IntProperty(name="Active Role Index", default=-1)
 
 
+class THYLLORE_PG_RampForm(bpy.types.PropertyGroup):
+    """Ramp form: root/tip joint params + shape + scope."""
+
+    root: bpy.props.PointerProperty(type=THYLLORE_PG_SpringJoint)
+    tip: bpy.props.PointerProperty(type=THYLLORE_PG_SpringJoint)
+    shape: bpy.props.EnumProperty(
+        name="Shape",
+        items=[("linear", "Linear", ""), ("ease_in", "Ease In", ""), ("ease_out", "Ease Out", "")],
+        default="linear",
+    )
+    scope: bpy.props.EnumProperty(
+        name="Scope",
+        items=[
+            ("this_chain", "This Chain", ""),
+            ("sibling_chains", "Sibling Chains", ""),
+            ("all_chains", "All Chains", ""),
+        ],
+        default="this_chain",
+    )
+
+
 CLASSES = (
     THYLLORE_PG_NameItem,
     THYLLORE_PG_SpringJoint,
@@ -160,6 +186,7 @@ CLASSES = (
     THYLLORE_PG_SubmeshRole,
     THYLLORE_PG_HiddenTriangles,
     THYLLORE_PG_SubmeshSettings,
+    THYLLORE_PG_RampForm,
 )
 
 
@@ -173,9 +200,13 @@ def register() -> None:
     bpy.types.Object.thyllore_submesh = bpy.props.PointerProperty(
         type=THYLLORE_PG_SubmeshSettings
     )
+    bpy.types.WindowManager.thyllore_ramp = bpy.props.PointerProperty(
+        type=THYLLORE_PG_RampForm
+    )
 
 
 def unregister() -> None:
+    del bpy.types.WindowManager.thyllore_ramp
     del bpy.types.Object.thyllore_submesh
     del bpy.types.Armature.thyllore_spring
 

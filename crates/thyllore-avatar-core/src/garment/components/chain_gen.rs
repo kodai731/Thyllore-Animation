@@ -31,7 +31,7 @@ pub struct ChainGenSettings {
     /// Distance band in model units over which a vertex blends with the neighbouring column; 0 keeps columns hard
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
     pub column_blend_width: f32,
-    /// Shift of the hair root band in model units from the widest cross-section of the skin under the root bone
+    /// Shift of the hair root band in model units from the widest cross-section of the skin under the root bone; positive moves it down the hair, negative toward the root bone
     #[persist(ui(min = -100.0, max = 100.0, format = "%.3f"))]
     pub root_band_offset: f32,
 }

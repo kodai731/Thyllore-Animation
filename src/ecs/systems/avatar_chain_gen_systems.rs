@@ -1,12 +1,13 @@
 use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, SpringBoneSetup, SpringChain, SpringJointParam, FITTED_BODY_GROUP_NAME,
+    ensure_fitted_collider, fit_bone_capsule, ChainOrigin, FittedCapsule, SpringBoneSetup,
+    SpringChain, SpringJointParam, FITTED_BODY_GROUP_NAME,
 };
 use thyllore_avatar_core::garment::components::chain_gen::{
     chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
     ChainGenRequest, ChainGenSettings, ChainRole, ChainWeightRecord, GeneratedBoneRecord,
-    GeneratedChain, GeneratedJoint, InfluenceTarget, RootBandRecord, StrandPlacement,
-    VertexInfluences,
+    GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget, RootBandRecord,
+    StrandPlacement, VertexInfluences,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -17,6 +18,7 @@ use thyllore_avatar_core::garment::systems::chain_bones::{
 use thyllore_avatar_core::garment::systems::chain_gen::{
     component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
 };
+use thyllore_avatar_core::garment::systems::head_capsule::{hair_head_capsule, HeadCapsule};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::world_y_axis;
 
@@ -36,6 +38,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 pub struct GeneratedChainBones {
     pub report: ChainGenReport,
     pub chains: Vec<SpringChain>,
+    pub root_collider: Option<FittedCapsule>,
 }
 
 struct ChainGenPart {
@@ -63,6 +66,7 @@ fn generate_chain_bones(
     let root = find_root_bone(world, request.root)?;
     let attachment_geometry =
         collect_skin_vertices_of_bone(world, assets, graphics, geometry.skeleton_id, root);
+    let body_collider = fit_body_collider(world, assets, graphics, geometry.skeleton_id, root);
     let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
     let root_global = compute_bone_global_transform(skeleton, root as usize);
     let geometry_to_model = root_global * skeleton.bones[root as usize].inverse_bind_pose;
@@ -86,6 +90,14 @@ fn generate_chain_bones(
         role,
         target: request.target.clone(),
         settings: request.settings.clone(),
+    };
+    let model_to_root_local = root_global
+        .invert()
+        .ok_or_else(|| anyhow::anyhow!("global transform of the root bone is singular"))?;
+    let head_capsule = hair_head_capsule(&input, &params);
+    let root_collider = match head_capsule {
+        Some(capsule) => Some(head_capsule_collider(&capsule, root, model_to_root_local)),
+        None => body_collider,
     };
     let placement = place_chains_with_strands(&input, &params)?;
     let chains = placement.chains;
@@ -120,6 +132,7 @@ fn generate_chain_bones(
             input: &input,
             strands: placement.strands,
             root_band: hair_root_band(&input, &params),
+            head_capsule,
             component_labels: &component_labels(&input),
         },
     );
@@ -154,6 +167,7 @@ fn generate_chain_bones(
     Ok(GeneratedChainBones {
         report,
         chains: spring_chains,
+        root_collider,
     })
 }
 
@@ -230,16 +244,15 @@ fn dominant_bone(indices: cgmath::Vector4<u32>, weights: cgmath::Vector4<f32>) -
 }
 
 /// Geometry-space positions of the skin-role vertices the bone drives most, the surface the chains hang from.
-fn collect_skin_vertices_of_bone(
+fn skin_role_skins<'a>(
     world: &World,
     assets: &AssetStorage,
-    graphics: &GraphicsResources,
+    graphics: &'a GraphicsResources,
     skeleton_id: crate::animation::SkeletonId,
-    bone: thyllore_model_core::BoneId,
-) -> Vec<cgmath::Vector3<f32>> {
+) -> Vec<&'a thyllore_model_core::SkinData> {
     let node_assets = world.resource::<NodeAssets>();
     let state = world.resource::<AvatarSetupState>();
-    let skin_meshes = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
+    let mut skin_meshes: Vec<usize> = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
         .into_iter()
         .filter(|(key, _)| {
             state
@@ -247,16 +260,58 @@ fn collect_skin_vertices_of_bone(
                 .get(key)
                 .is_some_and(|entry| entry.role == SubmeshRole::Skin)
         })
-        .map(|(_, mesh_index)| mesh_index);
+        .map(|(_, mesh_index)| mesh_index)
+        .collect();
+    skin_meshes.sort_unstable();
+    skin_meshes.dedup();
 
+    skin_meshes
+        .into_iter()
+        .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data.as_ref())
+        .filter(|skin| skin.skeleton_id == skeleton_id)
+        .collect()
+}
+
+/// Collider offsets are in the bone's frame: the spring solver places them at `global[bone] * offset`.
+fn head_capsule_collider(
+    capsule: &HeadCapsule,
+    root: thyllore_model_core::BoneId,
+    model_to_root_local: cgmath::Matrix4<f32>,
+) -> FittedCapsule {
+    let to_local = |p: cgmath::Vector3<f32>| (model_to_root_local * p.extend(1.0)).truncate();
+    FittedCapsule {
+        bone_id: root,
+        head: to_local(capsule.bottom),
+        tail: to_local(capsule.top),
+        radius: capsule.radius,
+    }
+}
+
+fn fit_body_collider(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    skeleton_id: crate::animation::SkeletonId,
+    root: thyllore_model_core::BoneId,
+) -> Option<FittedCapsule> {
+    let skins = skin_role_skins(world, assets, graphics, skeleton_id);
+    let skeleton = assets
+        .skeletons
+        .values()
+        .find(|sa| sa.skeleton_id == skeleton_id)?;
+    let params = &world.resource::<AvatarSetupState>().body_collider_fit;
+    fit_bone_capsule(&skins, skeleton.skeleton.get_bone(root)?, params)
+}
+
+fn collect_skin_vertices_of_bone(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    skeleton_id: crate::animation::SkeletonId,
+    bone: thyllore_model_core::BoneId,
+) -> Vec<cgmath::Vector3<f32>> {
     let mut positions = Vec::new();
-    for mesh_index in skin_meshes {
-        let Some(skin) = graphics.meshes[mesh_index].skin_data.as_ref() else {
-            continue;
-        };
-        if skin.skeleton_id != skeleton_id {
-            continue;
-        }
+    for skin in skin_role_skins(world, assets, graphics, skeleton_id) {
         positions.extend(
             skin.base_positions
                 .iter()
@@ -410,6 +465,7 @@ struct ReportSource<'a> {
     input: &'a ChainGenInput<'a>,
     strands: Option<StrandPlacement>,
     root_band: Option<RootBand>,
+    head_capsule: Option<HeadCapsule>,
     component_labels: &'a [usize],
 }
 
@@ -503,6 +559,11 @@ fn build_report(
         root_band: source
             .root_band
             .map(|band| root_band_record(band, source.input.root_position)),
+        head_capsule: source.head_capsule.map(|capsule| HeadCapsuleRecord {
+            bottom: to_array(capsule.bottom),
+            top: to_array(capsule.top),
+            radius: capsule.radius,
+        }),
         attachment_positions: source
             .input
             .attachment_positions
@@ -568,39 +629,54 @@ fn apply_chain_generation(
     let bone_count = report.bones.len();
     let chain_count = generated.chains.len();
 
-    register_spring_chains(world, generated.chains);
+    let has_root_collider = generated.root_collider.is_some();
+    register_spring_chains(world, generated.chains, generated.root_collider);
     refresh_after_skeleton_edit(world, assets, graphics);
     world.resource_mut::<AvatarSetupState>().chain_gen_report = Some(report);
 
+    let collider_note = if has_root_collider {
+        " with a fitted root collider"
+    } else {
+        " without a root collider (no skin vertices on the root bone)"
+    };
     match replaced_chains {
         0 => msg_info!(
-            "Generated {} chain bones in {} spring chains",
-            bone_count,
-            chain_count
-        ),
-        replaced => msg_info!(
-            "Generated {} chain bones in {} spring chains, replacing {} chains",
+            "Generated {} chain bones in {} spring chains{}",
             bone_count,
             chain_count,
+            collider_note
+        ),
+        replaced => msg_info!(
+            "Generated {} chain bones in {} spring chains{}, replacing {} chains",
+            bone_count,
+            chain_count,
+            collider_note,
             replaced
         ),
     }
 }
 
-fn register_spring_chains(world: &mut World, chains: Vec<SpringChain>) {
+fn register_spring_chains(
+    world: &mut World,
+    chains: Vec<SpringChain>,
+    root_collider: Option<FittedCapsule>,
+) {
     let Some(entity) = find_or_create_spring_bone_setup_entity(world) else {
         msg_warn!("Generated chains are not spring chains: no animated model entity");
         return;
     };
-    let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
+    let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
         return;
     };
 
-    let fitted_body_group = setup
-        .collider_groups
-        .iter()
-        .find(|group| group.name == FITTED_BODY_GROUP_NAME)
-        .map(|group| group.id);
+    let fitted_body_group = match root_collider {
+        Some(capsule) => Some(ensure_fitted_collider(&mut setup, &capsule)),
+        None => setup
+            .collider_groups
+            .iter()
+            .find(|group| group.name == FITTED_BODY_GROUP_NAME)
+            .map(|group| group.id),
+    };
     for mut chain in chains {
         chain.id = setup.next_chain_id;
         setup.next_chain_id += 1;

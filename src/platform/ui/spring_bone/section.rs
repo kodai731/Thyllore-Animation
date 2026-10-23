@@ -7,10 +7,11 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
 use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::resource::{
-    AddChainForm, AddColliderForm, HierarchyState, SpringBoneInspectorState,
+    AddChainForm, AddColliderForm, AvatarSetupState, HierarchyState, SpringBoneInspectorState,
 };
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;
@@ -55,11 +56,48 @@ pub struct SpringView {
     pub groups: Vec<SpringColliderGroup>,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
+    pub default_bone: Option<BoneId>,
     pub add_chain: AddChainForm,
     pub add_collider: AddColliderForm,
     pub add_group_name: String,
     pub collider_gizmo_visible: bool,
     pub chain_gizmo_mode: SpringChainGizmoMode,
+}
+
+impl SpringView {
+    pub fn chain_root_bone(&self) -> Option<BoneId> {
+        self.add_chain.root_bone.or(self.default_bone)
+    }
+
+    pub fn collider_bone(&self) -> Option<BoneId> {
+        self.add_collider.bone.or(self.default_bone)
+    }
+}
+
+/// The bone a new chain or collider targets before the user picks one: the selected bone, else Head.
+fn default_form_bone(world: &World, hierarchy_state: &HierarchyState) -> Option<BoneId> {
+    hierarchy_state.selected_bone_id.or_else(|| {
+        world
+            .get_resource::<AvatarSetupState>()?
+            .mapping
+            .by_role
+            .get(&HumanoidRole::Head)
+            .map(|&index| index as BoneId)
+    })
+}
+
+fn bone_choice_options(view: &SpringView, current: Option<BoneId>) -> Vec<ChoiceOption> {
+    match current {
+        Some(current) => bone_options(&view.bones, view.selected_bone, current),
+        None => view
+            .bones
+            .iter()
+            .map(|(_, name)| ChoiceOption {
+                label: name.clone(),
+                selected: false,
+            })
+            .collect(),
+    }
 }
 
 pub fn spring_bone_section(
@@ -94,6 +132,7 @@ pub fn spring_bone_section(
         groups: setup.collider_groups,
         bones: bone_list.into(),
         selected_bone: hierarchy_state.selected_bone_id,
+        default_bone: default_form_bone(world, hierarchy_state),
         add_chain: inspector_state.add_chain,
         add_collider: inspector_state.add_collider,
         add_group_name: inspector_state.add_collider_group_name,
@@ -147,12 +186,10 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
 
     rows.push(UiRow::Choice {
         label: "Root Bone",
-        options: |_, view: &SpringView| {
-            bone_options(&view.bones, view.selected_bone, view.add_chain.root_bone)
-        },
+        options: |_, view: &SpringView| bone_choice_options(view, view.chain_root_bone()),
         pick: |view: &mut SpringView, index: usize| {
             if let Some((bone_id, _)) = view.bones.get(index) {
-                view.add_chain.root_bone = *bone_id;
+                view.add_chain.root_bone = Some(*bone_id);
             }
         },
     });
@@ -161,7 +198,7 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
         enabled: |_, view: &SpringView| view.selected_bone.is_some(),
         apply: |view: &mut SpringView| {
             if let Some(bone_id) = view.selected_bone {
-                view.add_chain.root_bone = bone_id;
+                view.add_chain.root_bone = Some(bone_id);
             }
         },
     });
@@ -171,11 +208,13 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     }));
     rows.push(UiRow::Action {
         label: "Add Chain",
-        enabled: |_, view: &SpringView| !view.bones.is_empty(),
+        enabled: |_, view: &SpringView| view.chain_root_bone().is_some(),
         on_click: |view: &SpringView| {
             Box::new(SpringBoneEvent::ChainAdd {
                 entity: view.entity,
-                root_bone_id: view.add_chain.root_bone,
+                root_bone_id: view
+                    .chain_root_bone()
+                    .expect("enabled only with a root bone"),
                 chain_length: view.add_chain.chain_length,
             }) as _
         },
@@ -183,12 +222,10 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     rows.push(collider_list_row());
     rows.push(UiRow::Choice {
         label: "Collider Bone",
-        options: |_, view: &SpringView| {
-            bone_options(&view.bones, view.selected_bone, view.add_collider.bone)
-        },
+        options: |_, view: &SpringView| bone_choice_options(view, view.collider_bone()),
         pick: |view: &mut SpringView, index: usize| {
             if let Some((bone_id, _)) = view.bones.get(index) {
-                view.add_collider.bone = *bone_id;
+                view.add_collider.bone = Some(*bone_id);
             }
         },
     });
@@ -213,7 +250,7 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
     });
     rows.push(UiRow::Action {
         label: "Add Collider",
-        enabled: |_, view: &SpringView| !view.bones.is_empty(),
+        enabled: |_, view: &SpringView| view.collider_bone().is_some(),
         on_click: |view: &SpringView| {
             let shape = if view.add_collider.capsule {
                 ColliderShape::default_capsule()
@@ -222,7 +259,9 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
             };
             Box::new(SpringBoneEvent::ColliderAdd {
                 entity: view.entity,
-                bone_id: view.add_collider.bone,
+                bone_id: view
+                    .collider_bone()
+                    .expect("enabled only with a collider bone"),
                 shape,
             }) as _
         },
@@ -290,6 +329,7 @@ mod tests {
             groups: Vec::new(),
             bones: std::rc::Rc::new([]),
             selected_bone: None,
+            default_bone: None,
             add_chain: AddChainForm::default(),
             add_collider: AddColliderForm::default(),
             add_group_name: "NewGroup".to_string(),
@@ -344,5 +384,58 @@ mod tests {
         let mut queue = world.get_resource_mut::<UiCommandQueue>().unwrap();
         let drained: Vec<_> = queue.drain().collect();
         assert_eq!(drained.len(), 2);
+    }
+
+    fn world_with_head_mapped(head: BoneId) -> World {
+        let mut world = make_world();
+        let mut state = AvatarSetupState::default();
+        state
+            .mapping
+            .by_role
+            .insert(HumanoidRole::Head, head as usize);
+        world.insert_resource(state);
+        world
+    }
+
+    #[test]
+    fn form_bones_default_to_the_selected_bone() {
+        let world = world_with_head_mapped(4);
+        let hierarchy = HierarchyState {
+            selected_bone_id: Some(9),
+            ..Default::default()
+        };
+
+        assert_eq!(default_form_bone(&world, &hierarchy), Some(9));
+    }
+
+    #[test]
+    fn form_bones_fall_back_to_the_mapped_head() {
+        let world = world_with_head_mapped(4);
+
+        assert_eq!(
+            default_form_bone(&world, &HierarchyState::default()),
+            Some(4)
+        );
+    }
+
+    #[test]
+    fn form_bones_have_no_default_without_selection_or_mapping() {
+        let world = make_world();
+
+        assert_eq!(default_form_bone(&world, &HierarchyState::default()), None);
+    }
+
+    #[test]
+    fn a_picked_bone_wins_over_the_default() {
+        let entity = make_world().entity().with_name("test").build();
+        let mut view = base_view(entity);
+        view.default_bone = Some(4);
+        assert_eq!(view.chain_root_bone(), Some(4));
+        assert_eq!(view.collider_bone(), Some(4));
+
+        view.add_chain.root_bone = Some(2);
+        view.add_collider.bone = Some(3);
+        assert_eq!(view.chain_root_bone(), Some(2));
+        assert_eq!(view.collider_bone(), Some(3));
     }
 }

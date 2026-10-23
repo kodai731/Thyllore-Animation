@@ -187,6 +187,14 @@ pub struct RootBandRecord {
     pub center: [f32; 3],
 }
 
+/// The head capsule the hair chains collide with, as model-space points
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HeadCapsuleRecord {
+    pub bottom: [f32; 3],
+    pub top: [f32; 3],
+    pub radius: f32,
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct StrandCenterlineRecord {
     pub component: u32,
@@ -213,6 +221,7 @@ pub struct ChainGenReport {
     pub bones: Vec<GeneratedBoneRecord>,
     pub vertex_weights: Vec<ChainWeightRecord>,
     pub root_band: Option<RootBandRecord>,
+    pub head_capsule: Option<HeadCapsuleRecord>,
     pub attachment_positions: Vec<[f32; 3]>,
     pub strand_mode: Option<StrandMode>,
     pub strand_centerlines: Vec<StrandCenterlineRecord>,

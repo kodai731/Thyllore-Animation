@@ -76,19 +76,26 @@ fn horizontal_radius(offset: Vector3<f32>, up: Vector3<f32>) -> f32 {
     (offset - up * offset.dot(up)).magnitude()
 }
 
-fn mean_position(positions: &[Vector3<f32>]) -> Vector3<f32> {
+pub(crate) fn mean_position(positions: &[Vector3<f32>]) -> Vector3<f32> {
     positions
         .iter()
         .fold(Vector3::new(0.0, 0.0, 0.0), |sum, p| sum + p)
         / positions.len().max(1) as f32
 }
 
-/// The widest horizontal cross-section of the attachment surface, shifted by the setting.
-fn estimate_root_band(
+pub(crate) struct WidestSlice {
+    pub members: Vec<Vector3<f32>>,
+    pub progress: f32,
+}
+
+/// The slice of the attachment surface with the largest horizontal radius about its mean.
+pub(crate) fn widest_slice(
     attachment: &[Vector3<f32>],
     root_position: Vector3<f32>,
-    offset: f32,
-) -> RootBand {
+) -> Option<WidestSlice> {
+    if attachment.is_empty() {
+        return None;
+    }
     let up = world_y_axis();
     let center = mean_position(attachment);
     let progresses: Vec<f32> = attachment
@@ -111,22 +118,36 @@ fn estimate_root_band(
         let slice = slice_of(progress);
         widest_radius[slice] = widest_radius[slice].max(horizontal_radius(p - center, up));
     }
-    let widest_slice = (0..ROOT_BAND_SLICE_COUNT)
+    let widest = (0..ROOT_BAND_SLICE_COUNT)
         .max_by(|a, b| widest_radius[*a].total_cmp(&widest_radius[*b]))
         .unwrap_or(0);
 
-    let slice_members: Vec<Vector3<f32>> = attachment
+    let members: Vec<Vector3<f32>> = attachment
         .iter()
         .zip(&progresses)
-        .filter(|(_, &progress)| slice_of(progress) == widest_slice)
+        .filter(|(_, &progress)| slice_of(progress) == widest)
         .map(|(&p, _)| p)
         .collect();
+    Some(WidestSlice {
+        members,
+        progress: min_progress + (widest as f32 + 0.5) * slice_width,
+    })
+}
 
-    let equator_progress = min_progress + (widest_slice as f32 + 0.5) * slice_width;
+/// The widest horizontal cross-section of the attachment surface, shifted by the setting.
+fn estimate_root_band(
+    attachment: &[Vector3<f32>],
+    root_position: Vector3<f32>,
+    offset: f32,
+) -> RootBand {
+    let slice = widest_slice(attachment, root_position).unwrap_or(WidestSlice {
+        members: Vec::new(),
+        progress: 0.0,
+    });
     RootBand {
-        equator_progress,
-        progress: equator_progress + offset,
-        center: mean_position(&slice_members),
+        equator_progress: slice.progress,
+        progress: slice.progress + offset,
+        center: mean_position(&slice.members),
     }
 }
 
@@ -521,7 +542,7 @@ fn build_chain(
     }
 }
 
-fn attachment_or_target<'a>(
+pub(crate) fn attachment_or_target<'a>(
     input: &ChainGenInput<'a>,
     vertices: &[u32],
 ) -> Cow<'a, [Vector3<f32>]> {

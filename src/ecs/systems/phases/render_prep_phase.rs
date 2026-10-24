@@ -536,6 +536,10 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     };
 
     if !visible {
+        ctx.world
+            .resource_mut::<BoneGizmoData>()
+            .drawn_bones
+            .clear();
         return Ok(());
     }
 
@@ -651,6 +655,15 @@ fn chains_of_selected_mesh(
         Some(skin) => chains_skinned_to(setup, skin),
         None => Vec::new(),
     }
+}
+
+/// Colliders accompany the bones and chains the gizmo draws; with nothing selected they stay hidden.
+fn any_bone_drawn(world: &World) -> bool {
+    world
+        .resource::<BoneGizmoData>()
+        .drawn_bones
+        .iter()
+        .any(|&drawn| drawn)
 }
 
 fn find_spring_bone_setup(world: &World) -> Option<SpringBoneSetup> {
@@ -1006,14 +1019,15 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         chain_ids.sort_unstable();
         chain_ids.dedup();
     }
+    let colliders = if colliders_visible && (any_bone_drawn(ctx.world) || !chain_ids.is_empty()) {
+        ColliderGizmo::Shown
+    } else {
+        ColliderGizmo::Hidden
+    };
     let shown = SpringGizmoSelection {
         chain_ids,
         radius_chain_ids: chains_with_radius(&setup, selection.active_bone_index, chain_mode),
-        colliders: if colliders_visible {
-            ColliderGizmo::Shown
-        } else {
-            ColliderGizmo::Hidden
-        },
+        colliders,
     };
 
     let mut wire_mesh = ctx

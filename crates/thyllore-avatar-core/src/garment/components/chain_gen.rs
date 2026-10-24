@@ -74,7 +74,7 @@ pub struct ChainGenParams {
 pub fn chain_role_of_submesh(role: SubmeshRole) -> Option<ChainRole> {
     match role {
         SubmeshRole::Hair => Some(ChainRole::Hair),
-        SubmeshRole::Garment => Some(ChainRole::Skirt),
+        SubmeshRole::Garment => Some(ChainRole::Garment),
         SubmeshRole::Skin | SubmeshRole::Accessory => None,
     }
 }
@@ -82,7 +82,7 @@ pub fn chain_role_of_submesh(role: SubmeshRole) -> Option<ChainRole> {
 pub fn chain_root_role(role: ChainRole) -> HumanoidRole {
     match role {
         ChainRole::Hair => HumanoidRole::Head,
-        ChainRole::Skirt => HumanoidRole::Hips,
+        ChainRole::Garment => HumanoidRole::Hips,
     }
 }
 

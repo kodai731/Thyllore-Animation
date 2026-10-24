@@ -151,7 +151,7 @@ fn estimate_root_band(
     }
 }
 
-/// The root band a hair generation uses; a skirt has none.
+/// The root band a hair generation uses; a garment has none.
 pub fn hair_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<RootBand> {
     match params.role {
         ChainRole::Hair => {
@@ -162,7 +162,7 @@ pub fn hair_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<
                 params.settings.root_band_offset,
             ))
         }
-        ChainRole::Skirt => None,
+        ChainRole::Garment => None,
     }
 }
 
@@ -328,7 +328,7 @@ fn group_into_columns(assigned: &[(usize, Vec<usize>)], column_count: usize) -> 
     columns
 }
 
-fn split_skirt_columns(frames: &[VertexFrame], params: &ChainGenParams) -> Vec<Vec<usize>> {
+fn split_garment_columns(frames: &[VertexFrame], params: &ChainGenParams) -> Vec<Vec<usize>> {
     let samples: Vec<AzimuthSample> = frames
         .iter()
         .map(|frame| AzimuthSample {
@@ -631,7 +631,7 @@ pub fn place_chains_with_strands(
                 Some(strands),
             )
         }
-        None => (split_skirt_columns(&frames, params), None),
+        None => (split_garment_columns(&frames, params), None),
     };
     if columns.is_empty() {
         anyhow::bail!("chain generation found no vertex below the root band");
@@ -1046,7 +1046,7 @@ mod tests {
     }
 
     #[test]
-    fn skirt_column_split_by_azimuth() {
+    fn garment_column_split_by_azimuth() {
         let mut positions: Vec<Vector3<f32>> = Vec::new();
         let mut triangles: Vec<[u32; 3]> = Vec::new();
         let ring_count = 2;
@@ -1083,7 +1083,7 @@ mod tests {
             attachment_positions: &[],
             tex_coords: &[],
         };
-        let params = build_params(ChainRole::Skirt, 2, 8);
+        let params = build_params(ChainRole::Garment, 2, 8);
 
         let chains = place_chains(&input, &params).unwrap();
         assert_eq!(chains.len(), 8);
@@ -1374,7 +1374,7 @@ mod tests {
             attachment_positions: &[],
             tex_coords: &[],
         };
-        let params = build_params(ChainRole::Skirt, 3, 2);
+        let params = build_params(ChainRole::Garment, 3, 2);
 
         let chains = place_chains(&input, &params).unwrap();
         let weights = compute_chain_weights(&input, &params, &chains);
@@ -1398,7 +1398,7 @@ mod tests {
             attachment_positions: &[],
             tex_coords: &[],
         };
-        let mut params = build_params(ChainRole::Skirt, 3, 2);
+        let mut params = build_params(ChainRole::Garment, 3, 2);
         let mut chains = place_chains(&input_for_chains, &params).unwrap();
 
         let boundary_vertex = positions.len() as u32;
@@ -1557,6 +1557,6 @@ mod tests {
             "ring height {:?}",
             band.center
         );
-        assert!(hair_root_band(&input, &build_params(ChainRole::Skirt, 3, 2)).is_none());
+        assert!(hair_root_band(&input, &build_params(ChainRole::Garment, 3, 2)).is_none());
     }
 }

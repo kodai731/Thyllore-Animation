@@ -54,7 +54,7 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
 fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
     match role {
         "hair" => Ok(ChainRole::Hair),
-        "skirt" => Ok(ChainRole::Skirt),
+        "garment" | "skirt" => Ok(ChainRole::Garment),
         _ => anyhow::bail!("chain generation role must be \"hair\" or \"skirt\", got \"{role}\""),
     }
 }

@@ -100,7 +100,7 @@ fn resolve_chain_request(
     })
 }
 
-const CHAIN_GENERATION_HELP: &str = "Generate Chains places bone chains along a Hair or Skirt \
+const CHAIN_GENERATION_HELP: &str = "Generate Chains places bone chains along a Hair or Garment \
 submesh, hanging from its root bone, and skins the submesh to them. These settings apply to the \
 next Generate Chains press; hover a label for its meaning.";
 

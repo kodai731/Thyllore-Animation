@@ -212,6 +212,53 @@ mod tests {
         }
     }
 
+    fn build_head_ring_skeleton(
+        chain_count: usize,
+        chain_length: usize,
+    ) -> (Skeleton, Vec<Vec<BoneId>>) {
+        let mut skeleton = Skeleton::default();
+        skeleton.add_bone("Head", None);
+        let mut chain_bones: Vec<Vec<BoneId>> = Vec::new();
+        for c in 0..chain_count {
+            let mut prev: Option<u32> = Some(0);
+            let mut bones: Vec<BoneId> = Vec::new();
+            for j in 0..chain_length {
+                let name = format!("chain{}_bone{}", c, j);
+                let bone_id = skeleton.add_bone(&name, prev);
+                bones.push(bone_id);
+                prev = Some(bone_id);
+            }
+            chain_bones.push(bones);
+        }
+        (skeleton, chain_bones)
+    }
+
+    fn build_full_test_data(
+        chain_count: usize,
+        chain_length: usize,
+    ) -> (Skeleton, SpringBoneSetup) {
+        let (skeleton, chain_bones) = build_head_ring_skeleton(chain_count, chain_length);
+        let mut setup = SpringBoneSetup::default();
+
+        for (i, bones) in chain_bones.into_iter().enumerate() {
+            let joints: Vec<SpringJointParam> = bones
+                .iter()
+                .map(|&bone_id| SpringJointParam {
+                    bone_id,
+                    ..Default::default()
+                })
+                .collect();
+            setup.chains.push(SpringChain {
+                id: i as u32,
+                name: format!("chain{}", i),
+                joints,
+                ..Default::default()
+            });
+            setup.next_chain_id = i as u32 + 1;
+        }
+        (skeleton, setup)
+    }
+
     #[test]
     fn single_joint_is_root_value() {
         let chain = make_chain(&[0]);
@@ -276,53 +323,6 @@ mod tests {
         assert_eq!(result.joints[0].bone_id, 5);
         assert_eq!(result.joints[1].bone_id, 12);
         assert_eq!(result.joints[2].bone_id, 7);
-    }
-
-    fn build_head_ring_skeleton(
-        chain_count: usize,
-        chain_length: usize,
-    ) -> (Skeleton, Vec<Vec<BoneId>>) {
-        let mut skeleton = Skeleton::default();
-        skeleton.add_bone("Head", None);
-        let mut chain_bones: Vec<Vec<BoneId>> = Vec::new();
-        for c in 0..chain_count {
-            let mut prev: Option<u32> = Some(0);
-            let mut bones: Vec<BoneId> = Vec::new();
-            for j in 0..chain_length {
-                let name = format!("chain{}_bone{}", c, j);
-                let bone_id = skeleton.add_bone(&name, prev);
-                bones.push(bone_id);
-                prev = Some(bone_id);
-            }
-            chain_bones.push(bones);
-        }
-        (skeleton, chain_bones)
-    }
-
-    fn build_full_test_data(
-        chain_count: usize,
-        chain_length: usize,
-    ) -> (Skeleton, SpringBoneSetup) {
-        let (skeleton, chain_bones) = build_head_ring_skeleton(chain_count, chain_length);
-        let mut setup = SpringBoneSetup::default();
-
-        for (i, bones) in chain_bones.into_iter().enumerate() {
-            let joints: Vec<SpringJointParam> = bones
-                .iter()
-                .map(|&bone_id| SpringJointParam {
-                    bone_id,
-                    ..Default::default()
-                })
-                .collect();
-            setup.chains.push(SpringChain {
-                id: i as u32,
-                name: format!("chain{}", i),
-                joints,
-                ..Default::default()
-            });
-            setup.next_chain_id = i as u32 + 1;
-        }
-        (skeleton, setup)
     }
 
     #[test]

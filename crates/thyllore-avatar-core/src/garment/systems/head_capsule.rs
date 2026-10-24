@@ -56,7 +56,7 @@ pub fn hair_head_capsule(input: &ChainGenInput, params: &ChainGenParams) -> Opti
             let vertices = collect_target_vertices(input);
             estimate_head_capsule(&attachment_or_target(input, &vertices), input.root_position)
         }
-        ChainRole::Skirt => None,
+        ChainRole::Garment => None,
     }
 }
 

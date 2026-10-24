@@ -83,7 +83,7 @@ def cotangent_laplacian(
     return np.concatenate(rows), np.concatenate(cols), np.concatenate(values)
 
 
-def _multiply_coo(
+def _multiply_sparse_matrix(
     rows: NDArray[np.integer],
     cols: NDArray[np.integer],
     values: NDArray[np.floating],
@@ -111,7 +111,7 @@ def _solve_conjugate_gradient(
     for _ in range(max_iterations):
         if np.sqrt(residual_norm_sq) <= tolerance:
             break
-        projected = _multiply_coo(rows, cols, values, direction, len(rhs))
+        projected = _multiply_sparse_matrix(rows, cols, values, direction, len(rhs))
         alpha = residual_norm_sq / float(direction @ projected)
         x += alpha * direction
         residual -= alpha * projected

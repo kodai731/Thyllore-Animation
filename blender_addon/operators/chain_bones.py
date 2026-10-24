@@ -139,7 +139,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     role: bpy.props.EnumProperty(
-        items=[("hair", "Hair", ""), ("skirt", "Skirt", "")],
+        items=[("hair", "Hair", ""), ("garment", "Garment", "")],
         default="hair",
     )
     material_index: bpy.props.IntProperty(default=0, min=0)

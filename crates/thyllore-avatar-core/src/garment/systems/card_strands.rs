@@ -1011,10 +1011,10 @@ mod tests {
     }
 
     #[test]
-    fn skirt_role_has_no_strand_placement() {
+    fn garment_role_has_no_strand_placement() {
         let mesh = build_three_tilted_cards();
         let params = ChainGenParams {
-            role: ChainRole::Skirt,
+            role: ChainRole::Garment,
             target: SubmeshSelector::Mesh("test".to_string()),
             settings: ChainGenSettings::default(),
         };

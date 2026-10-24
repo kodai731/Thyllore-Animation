@@ -5,14 +5,15 @@ use std::str::FromStr;
 #[serde(rename_all = "snake_case")]
 pub enum ChainRole {
     Hair,
-    Skirt,
+    #[serde(alias = "skirt")]
+    Garment,
 }
 
 impl ChainRole {
     pub fn bone_prefix(self) -> &'static str {
         match self {
             ChainRole::Hair => "hair",
-            ChainRole::Skirt => "skirt",
+            ChainRole::Garment => "garment",
         }
     }
 }

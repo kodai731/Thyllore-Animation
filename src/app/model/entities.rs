@@ -2,6 +2,7 @@ use super::clips::{build_initial_clip_schedule, register_loaded_clips};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
+use crate::ecs::systems::attach_morph_channel_catalogs;
 use crate::ecs::world::{Animator, Entity, Transform, World};
 use crate::loader::{LoadedMesh, ModelLoadResult};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -112,6 +113,7 @@ pub(super) fn spawn_mesh_entities(
     mesh_range: std::ops::Range<usize>,
 ) {
     let first_mesh_index = mesh_range.start;
+    let mut morph_entities = Vec::new();
     for mesh_idx in mesh_range {
         let mesh = &graphics.meshes[mesh_idx];
         let entity_name = entity_names[mesh_idx - first_mesh_index].clone();
@@ -140,6 +142,7 @@ pub(super) fn spawn_mesh_entities(
         let morph = &graphics.meshes[mesh_idx].morph;
         if !morph.channels.is_empty() {
             world.insert_component(entity, MorphWeights::from_defaults(morph));
+            morph_entities.push(entity);
         }
 
         log!(
@@ -151,6 +154,8 @@ pub(super) fn spawn_mesh_entities(
             parent_entity
         );
     }
+
+    attach_morph_channel_catalogs(world, assets, graphics, &morph_entities);
 }
 
 pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {

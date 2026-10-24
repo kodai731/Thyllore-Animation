@@ -150,7 +150,12 @@ impl ModelLoadResult {
                 material_name: m
                     .material_name
                     .unwrap_or_else(|| name_unnamed_material(mesh_index)),
-                base_color_factor: [1.0, 1.0, 1.0, 1.0],
+                base_color_factor: [
+                    m.diffuse_color[0],
+                    m.diffuse_color[1],
+                    m.diffuse_color[2],
+                    1.0,
+                ],
                 morph: m.morph,
             })
             .collect();

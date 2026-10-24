@@ -1,30 +1,28 @@
-use std::collections::HashSet;
-
 use thyllore_avatar_core::expression::components::grouping::{ChannelGroup, ExpressionGrouping};
 use thyllore_avatar_core::expression::systems::grouping::group_channels;
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::MorphWeights;
+use crate::ecs::component::{MorphChannelCatalog, MorphWeights};
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
-use crate::ecs::systems::{
-    find_deforming_morph_channels, find_expression_morph_entity, find_mesh_morph,
-    find_morph_channel_names, find_morph_siblings,
-};
-use crate::ecs::world::{Children, Entity, World};
-use crate::platform::ui::form_window::{message_section, rows_section, FormSection};
+use crate::ecs::systems::{find_expression_morph_entity, find_mesh_morph};
+use crate::ecs::world::{Entity, World};
+use crate::platform::ui::form_window::{rows_section, FormSection};
 use crate::platform::ui::ui_rows::{ListRows, NamedValue, UiRow};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone)]
 struct BlendShapeView {
     entity: Entity,
+    search: String,
+    mirror_edit: bool,
+}
+
+struct ChannelSource {
     names: Vec<String>,
     weights: Vec<f32>,
     deforming_channels: Vec<usize>,
-    search: String,
-    mirror_edit: bool,
 }
 
 #[derive(Clone)]
@@ -164,55 +162,33 @@ pub fn blend_shape_sections(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
 ) -> Vec<Box<dyn FormSection>> {
-    let morph_entities = collect_morph_entities(world, entity);
-    if morph_entities.is_empty() {
-        return vec![message_section(
-            "Blend Shapes",
-            true,
-            "No blend shapes".to_string(),
-        )];
+    let mut sections: Vec<Box<dyn FormSection>> = Vec::new();
+
+    if world.has_component::<MorphChannelCatalog>(entity) {
+        let (search, mirror_edit) = world
+            .get_resource::<BlendShapeInspectorState>()
+            .map(|state| (state.search.clone(), state.mirror_edit))
+            .unwrap_or_default();
+        let view = BlendShapeView {
+            entity,
+            search,
+            mirror_edit,
+        };
+        sections.push(rows_section(
+            vec![UiRow::Group {
+                title: format!(
+                    "Blend Shapes ({})###blend_shapes_{}",
+                    format_section_title(world, entity, assets, graphics),
+                    entity
+                )
+                .into(),
+                initially_open: true,
+                rows: blend_shape_rows(),
+            }],
+            view,
+            commit_blend_shape_view,
+        ));
     }
-
-    let representatives = collect_sibling_representatives(world, &morph_entities, assets, graphics);
-
-    let (search, mirror_edit) = world
-        .get_resource::<BlendShapeInspectorState>()
-        .map(|state| (state.search.clone(), state.mirror_edit))
-        .unwrap_or_default();
-
-    let mut sections: Vec<Box<dyn FormSection>> = representatives
-        .into_iter()
-        .filter_map(|representative| {
-            let morph_weights = world.get_component::<MorphWeights>(representative)?;
-            let channel_names = find_morph_channel_names(world, representative, assets, graphics)?;
-            let deforming_channels =
-                find_deforming_morph_channels(world, representative, assets, graphics);
-
-            let view = BlendShapeView {
-                entity: representative,
-                names: channel_names,
-                weights: morph_weights.weights.clone(),
-                deforming_channels,
-                search: search.clone(),
-                mirror_edit,
-            };
-
-            Some(rows_section(
-                vec![UiRow::Group {
-                    title: format!(
-                        "Blend Shapes ({})###blend_shapes_{}",
-                        format_section_title(world, representative, assets, graphics),
-                        representative
-                    )
-                    .into(),
-                    initially_open: true,
-                    rows: blend_shape_rows(),
-                }],
-                view,
-                commit_blend_shape_view,
-            ))
-        })
-        .collect();
 
     if let Some(expression_entity) = find_expression_morph_entity(world, assets, graphics) {
         let (capture_name, presets): (String, Vec<(String, usize)>) = world
@@ -268,36 +244,6 @@ fn commit_expression_presets_view(
     }
 }
 
-fn collect_morph_entities(world: &World, entity: Entity) -> Vec<Entity> {
-    let children = world
-        .get_component::<Children>(entity)
-        .map(|children| children.0.clone())
-        .unwrap_or_default();
-
-    std::iter::once(entity)
-        .chain(children)
-        .filter(|&candidate| world.has_component::<MorphWeights>(candidate))
-        .collect()
-}
-
-fn collect_sibling_representatives(
-    world: &World,
-    morph_entities: &[Entity],
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-) -> Vec<Entity> {
-    let mut covered_entities = HashSet::new();
-    let mut representatives = Vec::new();
-    for &morph_entity in morph_entities {
-        if covered_entities.contains(&morph_entity) {
-            continue;
-        }
-        covered_entities.extend(find_morph_siblings(world, morph_entity, assets, graphics));
-        representatives.push(morph_entity);
-    }
-    representatives
-}
-
 fn format_section_title(
     world: &World,
     entity: Entity,
@@ -308,6 +254,16 @@ fn format_section_title(
         .map(|morph| morph.source_mesh.clone())
         .filter(|source_mesh| !source_mesh.is_empty())
         .unwrap_or_else(|| format!("entity {}", entity))
+}
+
+fn channel_source(world: &World, entity: Entity) -> Option<ChannelSource> {
+    let catalog = world.get_component::<MorphChannelCatalog>(entity)?;
+    let weights = world.get_component::<MorphWeights>(entity)?;
+    Some(ChannelSource {
+        names: catalog.names.clone(),
+        weights: weights.weights.clone(),
+        deforming_channels: catalog.deforming_channels.clone(),
+    })
 }
 
 fn blend_shape_rows() -> Vec<UiRow<BlendShapeView>> {
@@ -346,7 +302,7 @@ fn blend_shape_rows() -> Vec<UiRow<BlendShapeView>> {
         },
         UiRow::List(Box::new(ListRows::<BlendShapeView, ChannelGroupView> {
             title: "Channels",
-            items: |_, view| collect_channel_groups(view),
+            items: collect_channel_groups,
             rows: |_| vec![channel_sliders_row()],
             on_change: |_, _, _| unreachable!("channel sliders send their own commands"),
             initially_open: |group| !group.collapsed,
@@ -369,11 +325,14 @@ fn channel_sliders_row() -> UiRow<ChannelGroupView> {
     }
 }
 
-fn collect_channel_groups(view: &BlendShapeView) -> Vec<(String, ChannelGroupView)> {
-    group_channels(&view.names, &ExpressionGrouping::default())
+fn collect_channel_groups(world: &World, view: &BlendShapeView) -> Vec<(String, ChannelGroupView)> {
+    let Some(source) = channel_source(world, view.entity) else {
+        return Vec::new();
+    };
+    group_channels(&source.names, ExpressionGrouping::shared())
         .into_iter()
         .filter_map(|group| {
-            let channels = filter_channels(&group, view);
+            let channels = filter_channels(&group, &source, &view.search);
             if channels.is_empty() {
                 return None;
             }
@@ -387,19 +346,19 @@ fn collect_channel_groups(view: &BlendShapeView) -> Vec<(String, ChannelGroupVie
         .collect()
 }
 
-fn filter_channels(group: &ChannelGroup, view: &BlendShapeView) -> Vec<NamedValue> {
-    let search = view.search.to_lowercase();
+fn filter_channels(group: &ChannelGroup, source: &ChannelSource, search: &str) -> Vec<NamedValue> {
+    let search = search.to_lowercase();
     group
         .channel_indices
         .iter()
         .copied()
-        .filter(|channel| view.deforming_channels.contains(channel))
-        .filter(|&channel| view.names[channel].to_lowercase().contains(&search))
+        .filter(|channel| source.deforming_channels.contains(channel))
+        .filter(|&channel| source.names[channel].to_lowercase().contains(&search))
         .filter_map(|channel| {
             Some(NamedValue {
-                label: view.names[channel].clone(),
+                label: source.names[channel].clone(),
                 key: channel,
-                value: *view.weights.get(channel)?,
+                value: *source.weights.get(channel)?,
             })
         })
         .collect()
@@ -495,14 +454,11 @@ mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
-    fn make_view(names: &[&str], deforming_channels: Vec<usize>, search: &str) -> BlendShapeView {
-        BlendShapeView {
-            entity: 0,
+    fn make_source(names: &[&str], deforming_channels: Vec<usize>) -> ChannelSource {
+        ChannelSource {
             names: names.iter().map(|name| name.to_string()).collect(),
             weights: (0..names.len()).map(|index| index as f32 * 0.25).collect(),
             deforming_channels,
-            search: search.to_string(),
-            mirror_edit: false,
         }
     }
 
@@ -515,8 +471,8 @@ mod tests {
         }
     }
 
-    fn filtered_labels(group: &ChannelGroup, view: &BlendShapeView) -> Vec<String> {
-        filter_channels(group, view)
+    fn filtered_labels(group: &ChannelGroup, source: &ChannelSource) -> Vec<String> {
+        filter_channels(group, source, "")
             .into_iter()
             .map(|channel| channel.label)
             .collect()
@@ -543,8 +499,8 @@ mod tests {
 
     #[test]
     fn filter_channels_matches_search_case_insensitively() {
-        let view = make_view(&["mouth_open", "Eye_Blink", "smile"], vec![0, 1, 2], "eye");
-        let filtered = filter_channels(&make_group(vec![0, 1, 2]), &view);
+        let source = make_source(&["mouth_open", "Eye_Blink", "smile"], vec![0, 1, 2]);
+        let filtered = filter_channels(&make_group(vec![0, 1, 2]), &source, "eye");
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].label, "Eye_Blink");
@@ -554,17 +510,20 @@ mod tests {
 
     #[test]
     fn filter_channels_skips_non_deforming_channels() {
-        let view = make_view(&["mouth_open", "eye_blink"], vec![1], "");
+        let source = make_source(&["mouth_open", "eye_blink"], vec![1]);
         assert_eq!(
-            filtered_labels(&make_group(vec![0, 1]), &view),
+            filtered_labels(&make_group(vec![0, 1]), &source),
             ["eye_blink"]
         );
     }
 
     #[test]
     fn filter_channels_keeps_group_order() {
-        let view = make_view(&["a", "b", "c"], vec![0, 1, 2], "");
-        assert_eq!(filtered_labels(&make_group(vec![2, 0]), &view), ["c", "a"]);
+        let source = make_source(&["a", "b", "c"], vec![0, 1, 2]);
+        assert_eq!(
+            filtered_labels(&make_group(vec![2, 0]), &source),
+            ["c", "a"]
+        );
     }
 
     #[test]
@@ -628,9 +587,6 @@ mod tests {
 
         let view = BlendShapeView {
             entity: 0,
-            names: vec!["a".to_string()],
-            weights: vec![1.0],
-            deforming_channels: vec![0],
             search: "test".to_string(),
             mirror_edit: true,
         };
@@ -653,9 +609,6 @@ mod tests {
 
         let shown = BlendShapeView {
             entity: 0,
-            names: vec!["a".to_string()],
-            weights: vec![1.0],
-            deforming_channels: vec![0],
             search: "old".to_string(),
             mirror_edit: false,
         };
@@ -680,9 +633,6 @@ mod tests {
 
         let shown = BlendShapeView {
             entity: 0,
-            names: vec!["a".to_string()],
-            weights: vec![1.0],
-            deforming_channels: vec![0],
             search: "test".to_string(),
             mirror_edit: false,
         };

@@ -3,16 +3,17 @@ use thyllore_model_core::{BoneRemap, SkinData};
 
 use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
+use crate::ecs::component::{Constrained, ConstraintSet, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
     AvatarSetupState, BoneGizmoData, BonePoseOverride, BoneSelectionState, ClipLibrary,
     CurveEditorState, CurveEditorTarget, EditHistory, FbxModelCache, HierarchyState,
     SkeletonSnapshot, SkinSnapshot, SpringBoneState, TimelineState, TransformGizmoData,
 };
+use crate::ecs::storage::Component;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::humanoid_rig_systems::invalidate_humanoid_rig;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 use crate::exporter::fbx_exporter::clusters_from_skin_data;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -207,16 +208,8 @@ pub fn restore_skeleton_snapshot(
         };
         restore_skin_weights(skin, &skin_snapshot);
     }
-    for (entity, setup) in snapshot.spring_setups {
-        if let Some(current) = world.get_component_mut::<SpringBoneSetup>(entity) {
-            *current = setup;
-        }
-    }
-    for (entity, set) in snapshot.constraint_sets {
-        if let Some(current) = world.get_component_mut::<ConstraintSet>(entity) {
-            *current = set;
-        }
-    }
+    restore_owned_components::<SpringBoneSetup, WithSpringBone>(world, snapshot.spring_setups);
+    restore_owned_components::<ConstraintSet, Constrained>(world, snapshot.constraint_sets);
     {
         let mut clips = world.resource_mut::<ClipLibrary>();
         for (id, tracks) in snapshot.clip_tracks {
@@ -229,6 +222,28 @@ pub fn restore_skeleton_snapshot(
     invalidate_humanoid_rig(world);
 
     refresh_after_skeleton_edit(world, assets, graphics);
+}
+
+/// Makes the set of entities carrying `T` (and its marker `M`) equal to the snapshot's: entities the
+/// snapshot does not name lose the component, since an edit may have created it.
+fn restore_owned_components<T: Component, M: Component + Default>(
+    world: &mut World,
+    entries: Vec<(Entity, T)>,
+) {
+    let stale: Vec<Entity> = world
+        .iter_components::<T>()
+        .map(|(entity, _)| entity)
+        .filter(|entity| !entries.iter().any(|(kept, _)| kept == entity))
+        .collect();
+    for entity in stale {
+        world.remove_component::<T>(entity);
+        world.remove_component::<M>(entity);
+    }
+
+    for (entity, component) in entries {
+        world.insert_component(entity, component);
+        world.insert_component(entity, M::default());
+    }
 }
 
 pub fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
@@ -620,6 +635,40 @@ mod tests {
 
         assert_eq!(skin.bone_indices[0], Vector4::new(0, 0, 0, 0));
         assert!((skin.bone_weights[0].x - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn restore_owned_components_removes_setups_the_snapshot_does_not_have() {
+        let mut world = World::new();
+        let created_by_edit = world.spawn();
+        world.insert_component(created_by_edit, SpringBoneSetup::default());
+        world.insert_component(created_by_edit, WithSpringBone);
+
+        restore_owned_components::<SpringBoneSetup, WithSpringBone>(&mut world, Vec::new());
+
+        assert!(!world.has_component::<SpringBoneSetup>(created_by_edit));
+        assert!(!world.has_component::<WithSpringBone>(created_by_edit));
+    }
+
+    #[test]
+    fn restore_owned_components_reinserts_setups_the_snapshot_has() {
+        let mut world = World::new();
+        let owner = world.spawn();
+        let mut setup = SpringBoneSetup::default();
+        setup.next_chain_id = 7;
+
+        restore_owned_components::<SpringBoneSetup, WithSpringBone>(
+            &mut world,
+            vec![(owner, setup)],
+        );
+
+        assert_eq!(
+            world
+                .get_component::<SpringBoneSetup>(owner)
+                .map(|s| s.next_chain_id),
+            Some(7)
+        );
+        assert!(world.has_component::<WithSpringBone>(owner));
     }
 
     #[test]

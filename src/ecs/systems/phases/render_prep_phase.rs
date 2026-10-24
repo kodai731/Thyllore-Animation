@@ -22,12 +22,11 @@ use crate::ecs::systems::render_data_systems::{
     transform_gizmo_render_data,
 };
 use crate::ecs::systems::{
-    compute_bone_draw_set, spring_chain_bone_indices, BoneDrawSet, ColliderGizmo, ScreenSpaceScale,
-    SpringGizmoSelection,
+    chains_skinned_to_entity, compute_bone_draw_set, spring_chain_bone_indices, BoneDrawSet,
+    ColliderGizmo, ScreenSpaceScale, SpringGizmoSelection,
 };
 use crate::ecs::world::World;
 use crate::ecs::FrameContext;
-use crate::ecs::MeshRef;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
@@ -37,9 +36,7 @@ use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_anim_core::spring_bone::{
-    chains_skinned_to, chains_to_draw, chains_with_radius, SpringChainId,
-};
+use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius, SpringChainId};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -638,26 +635,11 @@ fn chains_of_selected_mesh(
     else {
         return Vec::new();
     };
-    let Some(mesh_ref) = world.get_component::<MeshRef>(entity) else {
-        return Vec::new();
-    };
-    let Some(mesh_index) = assets
-        .get_mesh(mesh_ref.mesh_asset_id)
-        .map(|mesh| mesh.graphics_mesh_index)
-    else {
-        return Vec::new();
-    };
-    match graphics
-        .meshes
-        .get(mesh_index)
-        .and_then(|mesh| mesh.skin_data.as_ref())
-    {
-        Some(skin) => chains_skinned_to(setup, skin),
-        None => Vec::new(),
-    }
+    chains_skinned_to_entity(world, assets, graphics, setup, entity)
 }
 
-/// Colliders accompany the bones and chains the gizmo draws; with nothing selected they stay hidden.
+/// The spring gizmo accompanies the bone gizmo: chains and colliders show only while a bone is drawn
+/// or a skinned mesh is selected.
 fn any_bone_drawn(world: &World) -> bool {
     world
         .resource::<BoneGizmoData>()
@@ -1003,13 +985,18 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     };
 
     let selection = bone_selection_snapshot(ctx.world);
-    let mut chain_ids = chains_to_draw(
-        &setup,
-        skeleton,
-        &selection.selected_bone_indices,
-        chain_mode,
-    );
-    if chain_mode == SpringChainGizmoMode::Selected {
+    let bones_drawn = any_bone_drawn(ctx.world);
+    let mut chain_ids = if bones_drawn {
+        chains_to_draw(
+            &setup,
+            skeleton,
+            &selection.selected_bone_indices,
+            chain_mode,
+        )
+    } else {
+        Vec::new()
+    };
+    if chain_mode != SpringChainGizmoMode::None {
         chain_ids.extend(chains_of_selected_mesh(
             ctx.world,
             ctx.assets,
@@ -1019,7 +1006,7 @@ unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         chain_ids.sort_unstable();
         chain_ids.dedup();
     }
-    let colliders = if colliders_visible && (any_bone_drawn(ctx.world) || !chain_ids.is_empty()) {
+    let colliders = if colliders_visible && (bones_drawn || !chain_ids.is_empty()) {
         ColliderGizmo::Shown
     } else {
         ColliderGizmo::Hidden

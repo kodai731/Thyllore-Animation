@@ -12,7 +12,10 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{ColliderShape, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneState, SpringChainState, SpringJointState};
 use crate::ecs::world::{Animator, Entity, Parent, Transform, World};
+use crate::ecs::MeshRef;
 use crate::hooks::model_load::LoadedModel;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{chains_skinned_to, SpringChainId};
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
 
@@ -659,6 +662,33 @@ fn collect_world_colliders(
 fn approx_eq_vec3(a: Vector3<f32>, b: Vector3<f32>) -> bool {
     let d = a - b;
     (d.x * d.x + d.y * d.y + d.z * d.z) < 1e-12
+}
+
+/// The chains whose joints skin the mesh of `entity`; empty for an entity without a skinned mesh.
+pub fn chains_skinned_to_entity(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    setup: &SpringBoneSetup,
+    entity: Entity,
+) -> Vec<SpringChainId> {
+    let Some(mesh_ref) = world.get_component::<MeshRef>(entity) else {
+        return Vec::new();
+    };
+    let Some(mesh_index) = assets
+        .get_mesh(mesh_ref.mesh_asset_id)
+        .map(|mesh| mesh.graphics_mesh_index)
+    else {
+        return Vec::new();
+    };
+    match graphics
+        .meshes
+        .get(mesh_index)
+        .and_then(|mesh| mesh.skin_data.as_ref())
+    {
+        Some(skin) => chains_skinned_to(setup, skin),
+        None => Vec::new(),
+    }
 }
 
 pub fn collect_affected_bone_ids(setup: &SpringBoneSetup) -> Vec<BoneId> {

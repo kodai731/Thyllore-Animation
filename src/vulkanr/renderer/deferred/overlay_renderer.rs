@@ -265,15 +265,14 @@ impl<'a> OverlayRenderer<'a> {
             return Ok(());
         }
 
-        let options = LineMeshDrawOptions::default();
-        record_line_mesh_draw(
+        self.record_alpha_mesh(
             ctx,
             &constraint_gizmo.wire_mesh,
             &constraint_gizmo.wire_render_info,
-            &options,
+            1.0,
+            LineMeshDrawOptions::default(),
             command_buffer,
-        )?;
-        Ok(())
+        )
     }
 
     unsafe fn draw_spring_bone_gizmo(
@@ -289,15 +288,14 @@ impl<'a> OverlayRenderer<'a> {
             return Ok(());
         }
 
-        let options = LineMeshDrawOptions::default();
-        record_line_mesh_draw(
+        self.record_alpha_mesh(
             ctx,
             &spring_gizmo.wire_mesh,
             &spring_gizmo.wire_render_info,
-            &options,
+            1.0,
+            LineMeshDrawOptions::default(),
             command_buffer,
-        )?;
-        Ok(())
+        )
     }
 
     unsafe fn draw_billboard(

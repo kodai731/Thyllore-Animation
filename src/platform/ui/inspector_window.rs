@@ -10,7 +10,7 @@ use super::constraint::constraint_section;
 use super::form_window::{FormPlacement, FormSection, FormWindow};
 use super::inspector_sections::{entity_sections, no_selection_section};
 use super::inspector_target::{inspector_target, InspectorTarget};
-use super::spring_bone::{bone_spring_section, spring_bone_section};
+use super::spring_bone::{bone_spring_section, mesh_spring_section, spring_bone_section};
 
 fn inspector_form(
     world: &World,
@@ -29,6 +29,7 @@ fn inspector_form(
             let data = collect_inspector_data(world, entity, assets, graphics);
             let mut sections: Vec<Box<dyn FormSection>> = entity_sections(world, &data);
             sections.push(constraint_section(world, assets, &hierarchy_state, None));
+            sections.extend(mesh_spring_section(world, assets, graphics, entity));
             sections.push(spring_bone_section(world, assets, &hierarchy_state));
             sections.extend(blend_shape_sections(world, entity, assets, graphics));
             sections

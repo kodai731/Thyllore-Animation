@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
     ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
-    SpringColliderGroup, SpringCollisionMode, SpringJointParam,
+    SpringColliderGroup, SpringCollisionMode, SpringForceModel, SpringJointParam,
 };
 
 #[derive(Deserialize)]
@@ -95,6 +95,7 @@ pub fn parse_vrmc_spring_bone(
         next_collider_id,
         next_group_id,
         collision_mode: SpringCollisionMode::VrmCompatible,
+        force_model: SpringForceModel::Vrm,
     })
 }
 

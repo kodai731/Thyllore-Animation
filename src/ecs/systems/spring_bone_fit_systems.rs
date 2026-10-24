@@ -144,7 +144,7 @@ pub fn fit_spring_params(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::SpringCollisionMode;
+    use crate::animation::spring_bone::{SpringCollisionMode, SpringForceModel};
     use crate::animation::{Bone, Keyframe, TransformChannel};
     use crate::ecs::component::SpringJointParam;
     use cgmath::{Matrix4, Vector3};
@@ -216,6 +216,7 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
+            force_model: SpringForceModel::Vrm,
         }
     }
 
@@ -264,6 +265,7 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
+            force_model: SpringForceModel::Vrm,
         };
 
         let config = BakeConfig {

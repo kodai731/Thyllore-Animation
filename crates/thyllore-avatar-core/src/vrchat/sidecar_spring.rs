@@ -5,7 +5,7 @@ use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
     ChainOrigin, ChainRole, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
     SpringColliderGroup, SpringColliderGroupId, SpringColliderId, SpringCollisionMode,
-    SpringJointParam, SubmeshSelector, FITTED_BODY_GROUP_NAME,
+    SpringForceModel, SpringJointParam, SubmeshSelector, FITTED_BODY_GROUP_NAME,
 };
 use thyllore_anim_core::BoneId;
 
@@ -15,6 +15,14 @@ pub enum SidecarCollisionMode {
     #[default]
     VrmCompatible,
     SegmentExtended,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SidecarForceModel {
+    Vrm,
+    #[default]
+    RestRelative,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +42,8 @@ pub enum SidecarColliderOrigin {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SidecarSpring {
     pub collision_mode: SidecarCollisionMode,
+    #[serde(default)]
+    pub force_model: SidecarForceModel,
     pub colliders: Vec<SidecarCollider>,
     pub collider_groups: Vec<SidecarColliderGroup>,
     pub chains: Vec<SidecarSpringChain>,
@@ -111,12 +121,14 @@ pub struct SidecarSpringJoint {
 
 pub fn build_sidecar_spring(setup: &SpringBoneSetup, bones: &[BoneInput]) -> SidecarSpring {
     let collision_mode = to_sidecar_collision_mode(setup.collision_mode);
+    let force_model = to_sidecar_force_model(setup.force_model);
     let colliders_with_id = build_sidecar_colliders(setup, bones);
     let collider_groups = build_sidecar_collider_groups(setup, &colliders_with_id);
     let chains = build_sidecar_chains(setup, bones);
 
     SidecarSpring {
         collision_mode,
+        force_model,
         colliders: colliders_with_id.into_iter().map(|(_, c)| c).collect(),
         collider_groups,
         chains,
@@ -127,6 +139,13 @@ fn to_sidecar_collision_mode(mode: SpringCollisionMode) -> SidecarCollisionMode 
     match mode {
         SpringCollisionMode::VrmCompatible => SidecarCollisionMode::VrmCompatible,
         SpringCollisionMode::SegmentExtended => SidecarCollisionMode::SegmentExtended,
+    }
+}
+
+fn to_sidecar_force_model(model: SpringForceModel) -> SidecarForceModel {
+    match model {
+        SpringForceModel::Vrm => SidecarForceModel::Vrm,
+        SpringForceModel::RestRelative => SidecarForceModel::RestRelative,
     }
 }
 
@@ -274,6 +293,7 @@ pub fn spring_setup_from_sidecar(spring: &SidecarSpring, bones: &[BoneInput]) ->
 
     let mut setup = SpringBoneSetup {
         collision_mode: from_sidecar_collision_mode(&spring.collision_mode),
+        force_model: from_sidecar_force_model(&spring.force_model),
         ..Default::default()
     };
 
@@ -376,6 +396,13 @@ fn from_sidecar_collision_mode(mode: &SidecarCollisionMode) -> SpringCollisionMo
     match mode {
         SidecarCollisionMode::VrmCompatible => SpringCollisionMode::VrmCompatible,
         SidecarCollisionMode::SegmentExtended => SpringCollisionMode::SegmentExtended,
+    }
+}
+
+fn from_sidecar_force_model(model: &SidecarForceModel) -> SpringForceModel {
+    match model {
+        SidecarForceModel::Vrm => SpringForceModel::Vrm,
+        SidecarForceModel::RestRelative => SpringForceModel::RestRelative,
     }
 }
 

@@ -1,10 +1,11 @@
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
-    apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
-    integrate_joint, recompute_global_transform, resolve_all_segment_collisions,
-    resolve_all_tail_collisions, segment_axis_distance, tail_axis_distance, SpringCollisionMode,
-    SpringSpace, WorldCollider,
+    apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
+    extract_world_position, integrate_joint, recompute_global_transform,
+    resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
+    segment_axis_distance, tail_axis_distance, JointForces, JointRestFrame, SpringCollisionMode,
+    SpringForceModel, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -116,6 +117,10 @@ pub fn spring_bone_initialize(
 
             let rest_axis_distances =
                 rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode);
+            let parent_world_rotation =
+                extract_parent_world_rotation(skeleton, idx, global_transforms);
+            let gravity_in_parent_rest =
+                rotate_vector(conjugate(parent_world_rotation), joint_param.gravity_dir);
 
             joint_states.push(SpringJointState {
                 prev_tail: tail,
@@ -124,6 +129,7 @@ pub fn spring_bone_initialize(
                 bone_axis,
                 initial_local_rotation,
                 rest_axis_distances,
+                gravity_in_parent_rest,
             });
         }
 
@@ -196,6 +202,7 @@ pub fn spring_bone_update(
                 dt,
                 space,
                 setup.collision_mode,
+                setup.force_model,
             );
         }
     }
@@ -214,6 +221,7 @@ fn update_single_joint(
     dt: f32,
     space: SpringSpace,
     collision_mode: SpringCollisionMode,
+    force_model: SpringForceModel,
 ) {
     let bone_id = joint_param.bone_id;
     let idx = bone_id as usize;
@@ -226,20 +234,22 @@ fn update_single_joint(
 
     let current_tail_before = joint_state.current_tail;
 
-    let stiffness = space.skeleton_length(joint_param.stiffness);
-    let gravity_power = space.skeleton_length(joint_param.gravity_power);
     let hit_radius = space.skeleton_length(joint_param.hit_radius);
+    let rest_frame = JointRestFrame {
+        parent_world_rotation: parent_world_rot,
+        initial_local_rotation: joint_state.initial_local_rotation,
+        bone_axis: joint_state.bone_axis,
+        bone_length: joint_state.bone_length,
+        gravity_in_parent_rest: joint_state.gravity_in_parent_rest,
+    };
+    let forces = joint_forces(joint_param, space, force_model);
 
     let next_tail = integrate_joint(
         joint_state.current_tail,
         joint_state.prev_tail,
-        joint_param.drag_force,
-        stiffness,
-        joint_param.gravity_dir,
-        gravity_power,
-        parent_world_rot,
-        joint_state.initial_local_rotation,
-        joint_state.bone_axis,
+        &rest_frame,
+        &forces,
+        force_model,
         dt,
     );
 
@@ -345,6 +355,31 @@ pub fn spring_bone_write_back_to_pose(
         pose.bone_poses[idx].translation = t;
         pose.bone_poses[idx].rotation = r;
         pose.bone_poses[idx].scale = s;
+    }
+}
+
+/// VRM reads `stiffness` and `gravity_power` as metres per second; the rest-relative model reads
+/// `stiffness` as a rate and `gravity_power` as a multiple of Earth gravity.
+fn joint_forces(
+    joint_param: &crate::ecs::component::SpringJointParam,
+    space: SpringSpace,
+    force_model: SpringForceModel,
+) -> JointForces {
+    let (stiffness, gravity) = match force_model {
+        SpringForceModel::Vrm => (
+            space.skeleton_length(joint_param.stiffness),
+            space.skeleton_length(joint_param.gravity_power),
+        ),
+        SpringForceModel::RestRelative => (
+            joint_param.stiffness,
+            space.skeleton_length(joint_param.gravity_power * EARTH_GRAVITY_M_PER_S2),
+        ),
+    };
+    JointForces {
+        drag_force: joint_param.drag_force,
+        stiffness,
+        gravity_dir: joint_param.gravity_dir,
+        gravity,
     }
 }
 

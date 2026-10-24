@@ -334,7 +334,7 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::SpringCollisionMode;
+    use crate::animation::spring_bone::{SpringCollisionMode, SpringForceModel};
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
     use cgmath::{InnerSpace, Matrix4, Vector3};
@@ -406,6 +406,7 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
+            force_model: SpringForceModel::Vrm,
         }
     }
 
@@ -507,6 +508,7 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
+            force_model: SpringForceModel::Vrm,
         };
         let clip = AnimationClip::new("test");
 
@@ -624,6 +626,7 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
+            force_model: SpringForceModel::Vrm,
         };
 
         let setup_enabled_only = create_test_setup();

@@ -19,6 +19,7 @@ use thyllore_avatar_core::garment::systems::chain_gen::{
     component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
 };
 use thyllore_avatar_core::garment::systems::head_capsule::{hair_head_capsule, HeadCapsule};
+use thyllore_avatar_core::garment::systems::joint_radius::joint_half_thicknesses;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::world_y_axis;
 
@@ -32,6 +33,7 @@ use crate::ecs::systems::skeleton_edit_systems::{
     remove_bone_subtree,
 };
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -144,15 +146,19 @@ fn generate_chain_bones(
         }
     }
 
+    let half_thicknesses = joint_half_thicknesses(&model_positions, &chains, &influences);
     let spring_chains = chains
         .iter()
         .zip(&bone_ids)
-        .map(|(chain, joint_bones)| SpringChain {
+        .zip(&half_thicknesses)
+        .map(|((chain, joint_bones), radii)| SpringChain {
             name: chain_name(&params, chain.column),
             joints: joint_bones
                 .iter()
-                .map(|&bone_id| SpringJointParam {
+                .zip(radii)
+                .map(|(&bone_id, &hit_radius)| SpringJointParam {
                     bone_id,
+                    hit_radius,
                     ..SpringJointParam::default()
                 })
                 .collect(),
@@ -665,6 +671,7 @@ fn register_spring_chains(
         msg_warn!("Generated chains are not spring chains: no animated model entity");
         return;
     };
+    let world_units_per_skeleton_unit = spring_space_for_entity(world, entity).world_scale();
     let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
         return;
     };
@@ -681,6 +688,9 @@ fn register_spring_chains(
         chain.id = setup.next_chain_id;
         setup.next_chain_id += 1;
         chain.collider_group_ids.extend(fitted_body_group);
+        for joint in &mut chain.joints {
+            joint.hit_radius *= world_units_per_skeleton_unit;
+        }
         setup.chains.push(chain);
     }
 

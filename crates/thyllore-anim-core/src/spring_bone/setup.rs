@@ -27,15 +27,25 @@ pub struct SpringJointParam {
     pub hit_radius: f32,
 }
 
+pub const DEFAULT_SIMULATION_STEP: f32 = 1.0 / 30.0;
+pub const EARTH_GRAVITY_M_PER_S2: f32 = 9.80665;
+const DEFAULT_DRAG_FORCE: f32 = 0.4;
+
+/// The stiffness at which the linearised verlet step `θ' = (2 - d - k·dt)θ - (1 - d)θ_prev` has a double root.
+pub fn critically_damped_stiffness(drag_force: f32, step: f32) -> f32 {
+    let retained = (1.0 - drag_force).clamp(0.0, 1.0);
+    (2.0 - drag_force - 2.0 * retained.sqrt()) / step
+}
+
 impl Default for SpringJointParam {
     fn default() -> Self {
         Self {
             bone_id: 0,
-            stiffness: 0.5,
-            drag_force: 0.4,
+            stiffness: critically_damped_stiffness(DEFAULT_DRAG_FORCE, DEFAULT_SIMULATION_STEP),
+            drag_force: DEFAULT_DRAG_FORCE,
             gravity_power: 1.0,
             gravity_dir: Vector3::new(0.0, -1.0, 0.0),
-            hit_radius: 0.02,
+            hit_radius: 0.0,
         }
     }
 }
@@ -121,6 +131,14 @@ pub enum SpringCollisionMode {
     SegmentExtended,
 }
 
+/// How the joint forces are evaluated: the VRM formula, or forces that vanish in the rest pose.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpringForceModel {
+    Vrm,
+    #[default]
+    RestRelative,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SpringBoneSetup {
     pub chains: Vec<SpringChain>,
@@ -130,6 +148,7 @@ pub struct SpringBoneSetup {
     pub next_collider_id: SpringColliderId,
     pub next_group_id: SpringColliderGroupId,
     pub collision_mode: SpringCollisionMode,
+    pub force_model: SpringForceModel,
 }
 
 pub fn set_chain_collider_groups(
@@ -169,5 +188,44 @@ mod tests {
                 "hit_radius"
             ]
         );
+    }
+
+    fn settle_angle(stiffness: f32, drag: f32, step: f32, frames: usize) -> Vec<f32> {
+        let mut prev = 1.0f32;
+        let mut cur = 1.0f32;
+        let mut trace = Vec::with_capacity(frames);
+        for _ in 0..frames {
+            let next = cur + (cur - prev) * (1.0 - drag) - stiffness * step * cur;
+            prev = cur;
+            cur = next;
+            trace.push(cur);
+        }
+        trace
+    }
+
+    #[test]
+    fn default_stiffness_settles_without_overshoot() {
+        let joint = SpringJointParam::default();
+        let trace = settle_angle(
+            joint.stiffness,
+            joint.drag_force,
+            DEFAULT_SIMULATION_STEP,
+            60,
+        );
+        assert!(trace.iter().all(|angle| *angle >= -1e-6));
+        assert!(trace[59].abs() < 1e-3);
+        assert!(trace.windows(2).all(|pair| pair[1] <= pair[0] + 1e-6));
+    }
+
+    #[test]
+    fn stiffer_than_critical_overshoots() {
+        let joint = SpringJointParam::default();
+        let trace = settle_angle(
+            joint.stiffness * 4.0,
+            joint.drag_force,
+            DEFAULT_SIMULATION_STEP,
+            60,
+        );
+        assert!(trace.iter().any(|angle| *angle < 0.0));
     }
 }

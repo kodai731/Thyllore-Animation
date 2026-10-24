@@ -6,6 +6,7 @@ use crate::{compose_transform, decompose_transform, normalize_quat};
 /// The rest frame of a joint: where its bone points when the chain is undisturbed.
 #[derive(Clone, Copy, Debug)]
 pub struct JointRestFrame {
+    pub head: Vector3<f32>,
     pub parent_world_rotation: Quaternion<f32>,
     pub initial_local_rotation: Quaternion<f32>,
     pub bone_axis: Vector3<f32>,
@@ -14,7 +15,7 @@ pub struct JointRestFrame {
     pub gravity_in_parent_rest: Vector3<f32>,
 }
 
-/// Joint forces in solver units: `stiffness` per second, `gravity` as the per-step magnitude the model expects.
+/// Joint forces in solver units: `stiffness` is a return rate per second, `gravity` the per-step magnitude the model expects.
 #[derive(Clone, Copy, Debug)]
 pub struct JointForces {
     pub drag_force: f32,
@@ -31,26 +32,28 @@ pub fn integrate_joint(
     model: SpringForceModel,
     dt: f32,
 ) -> Vector3<f32> {
-    let inertia = (current_tail - prev_tail) * (1.0 - forces.drag_force);
+    let velocity = (current_tail - prev_tail) * (1.0 - forces.drag_force);
     let rest_rotation = frame.parent_world_rotation * frame.initial_local_rotation;
     let rest_dir = unit_or_up(rotate_vector(rest_rotation, frame.bone_axis));
 
-    let (stiffness_force, external_force) = match model {
-        SpringForceModel::Vrm => (
-            rest_dir * forces.stiffness * dt,
-            forces.gravity_dir * forces.gravity * dt,
-        ),
+    match model {
+        SpringForceModel::Vrm => {
+            current_tail
+                + velocity
+                + rest_dir * forces.stiffness * dt
+                + forces.gravity_dir * forces.gravity * dt
+        }
         SpringForceModel::RestRelative => {
             let rest_gravity =
                 rotate_vector(frame.parent_world_rotation, frame.gravity_in_parent_rest);
-            (
-                rest_dir * frame.bone_length * forces.stiffness * dt,
-                (forces.gravity_dir - rest_gravity) * forces.gravity * dt * dt,
-            )
+            let rest_tail = frame.head + rest_dir * frame.bone_length;
+            let return_share = (forces.stiffness * dt).min(1.0);
+            current_tail
+                + velocity * (1.0 - return_share)
+                + (rest_tail - current_tail) * return_share
+                + (forces.gravity_dir - rest_gravity) * forces.gravity * dt * dt
         }
-    };
-
-    current_tail + inertia + stiffness_force + external_force
+    }
 }
 
 fn unit_or_up(v: Vector3<f32>) -> Vector3<f32> {
@@ -180,6 +183,7 @@ mod tests {
 
     fn frame(bone_axis: Vector3<f32>, bone_length: f32) -> JointRestFrame {
         JointRestFrame {
+            head: Vector3::new(0.0, 0.0, 0.0),
             parent_world_rotation: IDENTITY,
             initial_local_rotation: IDENTITY,
             bone_axis,
@@ -284,6 +288,21 @@ mod tests {
         );
         let expected_gravity = DOWN - rotate_vector(tilted.parent_world_rotation, DOWN);
         assert!((result - current - expected_gravity).magnitude() < 1e-5);
+    }
+
+    #[test]
+    fn rest_relative_spring_snaps_to_rest_once_the_rate_saturates() {
+        let rest = Vector3::new(0.0, -1.0, 0.0);
+        let current = Vector3::new(0.03, 0.0, 0.0);
+        let result = integrate_joint(
+            current,
+            Vector3::new(0.0, 0.0, 0.0),
+            &frame(rest, 0.03),
+            &forces(0.0, 1000.0, 0.0),
+            SpringForceModel::RestRelative,
+            1.0 / 30.0,
+        );
+        assert!((result - rest * 0.03).magnitude() < 1e-6);
     }
 
     #[test]

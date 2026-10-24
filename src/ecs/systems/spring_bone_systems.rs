@@ -133,9 +133,11 @@ pub fn spring_bone_initialize(
             });
         }
 
+        let strand_length = joint_states.iter().map(|joint| joint.bone_length).sum();
         chain_states.push(SpringChainState {
             chain_id: chain.id,
             joint_states,
+            strand_length,
         });
     }
 
@@ -185,6 +187,7 @@ pub fn spring_bone_update(
             collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
 
         let chain_state = &mut state.chain_states[state_idx];
+        let strand_length = chain_state.strand_length;
 
         for (joint_idx, joint_param) in chain.joints.iter().enumerate() {
             if joint_idx >= chain_state.joint_states.len() {
@@ -193,6 +196,7 @@ pub fn spring_bone_update(
 
             update_single_joint(
                 joint_param,
+                strand_length,
                 &mut chain_state.joint_states[joint_idx],
                 skeleton,
                 global_transforms,
@@ -212,6 +216,7 @@ pub fn spring_bone_update(
 
 fn update_single_joint(
     joint_param: &crate::ecs::component::SpringJointParam,
+    strand_length: f32,
     joint_state: &mut SpringJointState,
     skeleton: &Skeleton,
     global_transforms: &mut [Matrix4<f32>],
@@ -236,13 +241,20 @@ fn update_single_joint(
 
     let hit_radius = space.skeleton_length(joint_param.hit_radius);
     let rest_frame = JointRestFrame {
+        head: head_pos,
         parent_world_rotation: parent_world_rot,
         initial_local_rotation: joint_state.initial_local_rotation,
         bone_axis: joint_state.bone_axis,
         bone_length: joint_state.bone_length,
         gravity_in_parent_rest: joint_state.gravity_in_parent_rest,
     };
-    let forces = joint_forces(joint_param, space, force_model);
+    let forces = joint_forces(
+        joint_param,
+        strand_length,
+        joint_state.bone_length,
+        space,
+        force_model,
+    );
 
     let next_tail = integrate_joint(
         joint_state.current_tail,
@@ -359,9 +371,11 @@ pub fn spring_bone_write_back_to_pose(
 }
 
 /// VRM reads `stiffness` and `gravity_power` as metres per second; the rest-relative model reads
-/// `stiffness` as a rate and `gravity_power` as a multiple of Earth gravity.
+/// `stiffness` as the bending relaxation `D` [m²/s] and `gravity_power` as a multiple of Earth gravity.
 fn joint_forces(
     joint_param: &crate::ecs::component::SpringJointParam,
+    strand_length: f32,
+    bone_length: f32,
     space: SpringSpace,
     force_model: SpringForceModel,
 ) -> JointForces {
@@ -371,7 +385,11 @@ fn joint_forces(
             space.skeleton_length(joint_param.gravity_power),
         ),
         SpringForceModel::RestRelative => (
-            joint_param.stiffness,
+            strand_return_rate(
+                space.skeleton_length(space.skeleton_length(joint_param.stiffness)),
+                strand_length,
+                bone_length,
+            ),
             space.skeleton_length(joint_param.gravity_power * EARTH_GRAVITY_M_PER_S2),
         ),
     };
@@ -380,6 +398,17 @@ fn joint_forces(
         stiffness,
         gravity_dir: joint_param.gravity_dir,
         gravity,
+    }
+}
+
+/// A strand returns at `D / L²`; splitting it into bones of length `l` scales each joint's rate by `L / l`
+/// so the strand's bending stiffness does not depend on the subdivision.
+fn strand_return_rate(relaxation: f32, strand_length: f32, bone_length: f32) -> f32 {
+    let lever = strand_length * bone_length;
+    if lever > 0.0 {
+        relaxation / lever
+    } else {
+        0.0
     }
 }
 

@@ -35,6 +35,8 @@ impl Default for SpringJointState {
 pub struct SpringChainState {
     pub chain_id: SpringChainId,
     pub joint_states: Vec<SpringJointState>,
+    /// Sum of the chain's bone lengths in skeleton units.
+    pub strand_length: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]

@@ -31,17 +31,22 @@ pub const DEFAULT_SIMULATION_STEP: f32 = 1.0 / 30.0;
 pub const EARTH_GRAVITY_M_PER_S2: f32 = 9.80665;
 const DEFAULT_DRAG_FORCE: f32 = 0.4;
 
-/// The stiffness at which the linearised verlet step `θ' = (2 - d - k·dt)θ - (1 - d)θ_prev` has a double root.
-pub fn critically_damped_stiffness(drag_force: f32, step: f32) -> f32 {
-    let retained = (1.0 - drag_force).clamp(0.0, 1.0);
-    (2.0 - drag_force - 2.0 * retained.sqrt()) / step
+/// The strand lag that defines the hair material: a strand of this length trails its root moving at this speed by this angle.
+pub const STRAND_LAG_REFERENCE_SPEED_M_PER_S: f32 = 0.5;
+pub const STRAND_LAG_REFERENCE_LENGTH_M: f32 = 0.1;
+pub const STRAND_LAG_REFERENCE_ANGLE_DEG: f32 = 20.0;
+
+/// Bending relaxation `D` [m²/s]: a strand of length `L` returns at the rate `D / L²`, so its lag is `v·L / D`.
+pub fn strand_bending_relaxation() -> f32 {
+    STRAND_LAG_REFERENCE_SPEED_M_PER_S * STRAND_LAG_REFERENCE_LENGTH_M
+        / STRAND_LAG_REFERENCE_ANGLE_DEG.to_radians().tan()
 }
 
 impl Default for SpringJointParam {
     fn default() -> Self {
         Self {
             bone_id: 0,
-            stiffness: critically_damped_stiffness(DEFAULT_DRAG_FORCE, DEFAULT_SIMULATION_STEP),
+            stiffness: strand_bending_relaxation(),
             drag_force: DEFAULT_DRAG_FORCE,
             gravity_power: 1.0,
             gravity_dir: Vector3::new(0.0, -1.0, 0.0),
@@ -188,44 +193,5 @@ mod tests {
                 "hit_radius"
             ]
         );
-    }
-
-    fn settle_angle(stiffness: f32, drag: f32, step: f32, frames: usize) -> Vec<f32> {
-        let mut prev = 1.0f32;
-        let mut cur = 1.0f32;
-        let mut trace = Vec::with_capacity(frames);
-        for _ in 0..frames {
-            let next = cur + (cur - prev) * (1.0 - drag) - stiffness * step * cur;
-            prev = cur;
-            cur = next;
-            trace.push(cur);
-        }
-        trace
-    }
-
-    #[test]
-    fn default_stiffness_settles_without_overshoot() {
-        let joint = SpringJointParam::default();
-        let trace = settle_angle(
-            joint.stiffness,
-            joint.drag_force,
-            DEFAULT_SIMULATION_STEP,
-            60,
-        );
-        assert!(trace.iter().all(|angle| *angle >= -1e-6));
-        assert!(trace[59].abs() < 1e-3);
-        assert!(trace.windows(2).all(|pair| pair[1] <= pair[0] + 1e-6));
-    }
-
-    #[test]
-    fn stiffer_than_critical_overshoots() {
-        let joint = SpringJointParam::default();
-        let trace = settle_angle(
-            joint.stiffness * 4.0,
-            joint.drag_force,
-            DEFAULT_SIMULATION_STEP,
-            60,
-        );
-        assert!(trace.iter().any(|angle| *angle < 0.0));
     }
 }

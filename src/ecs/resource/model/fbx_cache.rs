@@ -5,17 +5,38 @@ pub enum FbxModelCache {
         fbx_model: FbxModel,
         source_path: String,
         has_skinned_meshes: bool,
+        graphics_mesh_offset: usize,
     },
     Empty,
 }
 
 impl FbxModelCache {
-    pub fn new(fbx_model: FbxModel, source_path: String, has_skinned_meshes: bool) -> Self {
+    pub fn new(
+        fbx_model: FbxModel,
+        source_path: String,
+        has_skinned_meshes: bool,
+        graphics_mesh_offset: usize,
+    ) -> Self {
         Self::Loaded {
             fbx_model,
             source_path,
             has_skinned_meshes,
+            graphics_mesh_offset,
         }
+    }
+
+    /// Index into `fbx_data` of the graphics mesh uploaded from it, if that mesh came from this model.
+    pub fn fbx_data_index(&self, graphics_mesh_index: usize) -> Option<usize> {
+        let Self::Loaded {
+            fbx_model,
+            graphics_mesh_offset,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let index = graphics_mesh_index.checked_sub(*graphics_mesh_offset)?;
+        (index < fbx_model.fbx_data.len()).then_some(index)
     }
 
     pub fn empty() -> Self {
@@ -23,6 +44,13 @@ impl FbxModelCache {
     }
 
     pub fn fbx_model(&self) -> Option<&FbxModel> {
+        match self {
+            Self::Loaded { fbx_model, .. } => Some(fbx_model),
+            Self::Empty => None,
+        }
+    }
+
+    pub fn fbx_model_mut(&mut self) -> Option<&mut FbxModel> {
         match self {
             Self::Loaded { fbx_model, .. } => Some(fbx_model),
             Self::Empty => None,

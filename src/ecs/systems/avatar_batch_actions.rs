@@ -1,9 +1,28 @@
+use std::path::PathBuf;
+
 use anyhow::{anyhow, Result};
 
+use crate::animation::BoneId;
+use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
+use crate::ecs::resource::{
+    AssetEditCommand, AssetEditQueue, AvatarSetupState, OutputCommand, OutputQueue, ScaleHistory,
+};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
+use crate::ecs::systems::phases::event_dispatch::spring_bone::{
+    DumpSkinnedVertices, DumpSpringTails, FitSpringParams,
+};
+use crate::ecs::systems::validate_scale_factor;
 use crate::ecs::world::{Entity, World};
+use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
+use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRole, SubmeshSelector,
+};
+use thyllore_avatar_core::garment::systems::chain_gen;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_cli_core::scalar_assignment_parse;
 
 use super::avatar_export_systems::dump_morph_track_samples;
 use super::batch_run_systems::{unit_action_parse, BatchAction};
@@ -107,32 +126,89 @@ fn capture_expression_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> 
 }
 
 #[derive(Debug)]
-pub struct AddSpringChains {
-    prefix: String,
+pub struct AddSpringChainsUnder {
+    root: HumanoidRole,
+    min_joints: u32,
 }
 
-impl BatchAction for AddSpringChains {
+impl BatchAction for AddSpringChainsUnder {
     fn name(&self) -> &'static str {
-        "add_spring_chains"
+        "add_spring_chains_under"
     }
     fn apply(&self, world: &mut World) {
-        world.send_command(AvatarSetupEvent::AddSpringChainsByPrefix {
-            prefix: self.prefix.clone(),
-        });
+        let root = world
+            .resource::<AvatarSetupState>()
+            .mapping
+            .by_role
+            .get(&self.root)
+            .copied();
+        match root {
+            Some(root) => world.send_command(AvatarSetupEvent::AddSpringChainsUnder {
+                root: root as BoneId,
+                min_joints: self.min_joints,
+            }),
+            None => msg_error!(
+                "add_spring_chains_under: humanoid role {} is not mapped",
+                self.root.unity_name()
+            ),
+        }
     }
 }
 
-fn add_spring_chains_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
-    let prefix = text.strip_prefix("add_spring_chains=")?.trim();
-    Some(if prefix.is_empty() {
-        Err(anyhow!(
-            "add_spring_chains expects add_spring_chains=<bone name prefix>"
-        ))
-    } else {
-        Ok(Box::new(AddSpringChains {
-            prefix: prefix.to_string(),
-        }))
-    })
+#[derive(Debug)]
+pub struct ApplyModelScale {
+    factor: f32,
+}
+
+impl BatchAction for ApplyModelScale {
+    fn name(&self) -> &'static str {
+        "apply_model_scale"
+    }
+    fn apply(&self, world: &mut World) {
+        world
+            .resource_mut::<AssetEditQueue>()
+            .push(AssetEditCommand::ApplyModelScale {
+                factor: self.factor,
+                history: ScaleHistory::Record,
+            });
+    }
+}
+
+fn apply_model_scale_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("apply_model_scale=")?.trim();
+    Some(
+        spec.parse::<f32>()
+            .map_err(|_| anyhow!("apply_model_scale expects apply_model_scale=<factor>"))
+            .and_then(|factor| {
+                validate_scale_factor(factor)?;
+                Ok(Box::new(ApplyModelScale { factor }) as Box<dyn BatchAction>)
+            }),
+    )
+}
+
+const ADD_SPRING_CHAINS_UNDER_USAGE: &str =
+    "add_spring_chains_under expects add_spring_chains_under=<humanoid role>[,min_joints=<n>]";
+
+fn add_spring_chains_under_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("add_spring_chains_under=")?;
+    let mut parts = spec.split(',');
+    let Some(root) = parts
+        .next()
+        .and_then(|role| HumanoidRole::from_unity_name(role.trim()))
+    else {
+        return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+    };
+    let mut min_joints = 2;
+    for part in parts {
+        let Some(value) = part.trim().strip_prefix("min_joints=") else {
+            return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+        };
+        match value.parse::<u32>() {
+            Ok(parsed) if parsed >= 1 => min_joints = parsed,
+            _ => return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}"))),
+        }
+    }
+    Some(Ok(Box::new(AddSpringChainsUnder { root, min_joints })))
 }
 
 #[derive(Debug, Default)]
@@ -159,10 +235,457 @@ impl BatchAction for DumpMorphTrackSamples {
     }
 }
 
+#[derive(Debug)]
+pub struct DumpSpringTailsAction {
+    path: PathBuf,
+    sample_rate: f32,
+}
+
+impl BatchAction for DumpSpringTailsAction {
+    fn name(&self) -> &'static str {
+        "dump_spring_tails"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(DumpSpringTails {
+            path: self.path.clone(),
+            sample_rate: self.sample_rate,
+        });
+    }
+}
+
+fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("dump_spring_tails=")?;
+    let parts: Vec<&str> = suffix.split(',').collect();
+    if parts.len() != 2 {
+        return Some(Err(anyhow!(
+            "dump_spring_tails requires exactly 2 comma-separated values: path,sample_rate"
+        )));
+    }
+    let path = PathBuf::from(parts[0].trim());
+    if path.as_os_str().is_empty() {
+        return Some(Err(anyhow!("dump_spring_tails: path must not be empty")));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "dump_spring_tails: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "dump_spring_tails: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
+    Some(Ok(Box::new(DumpSpringTailsAction { path, sample_rate })))
+}
+
+#[derive(Debug)]
+pub struct DumpSkinnedVerticesAction {
+    path: PathBuf,
+    sample_rate: f32,
+    submesh: SubmeshKey,
+}
+
+impl BatchAction for DumpSkinnedVerticesAction {
+    fn name(&self) -> &'static str {
+        "dump_skinned_vertices"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(DumpSkinnedVertices {
+            path: self.path.clone(),
+            sample_rate: self.sample_rate,
+            submesh: self.submesh.clone(),
+        });
+    }
+}
+
+fn dump_skinned_vertices_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("dump_skinned_vertices=")?;
+    let parts: Vec<&str> = suffix.splitn(3, ',').collect();
+    if parts.len() != 3 {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices requires exactly 3 comma-separated values: path,sample_rate,mesh/material"
+        )));
+    }
+    let path = PathBuf::from(parts[0].trim());
+    if path.as_os_str().is_empty() {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: path must not be empty"
+        )));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "dump_skinned_vertices: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
+    let mesh_material = parts[2].trim();
+    let (mesh, material) = match mesh_material.rsplit_once('/') {
+        Some((m, mat)) => (m.to_string(), mat.to_string()),
+        None => {
+            return Some(Err(anyhow!(
+                "dump_skinned_vertices: submesh must be in mesh/material format"
+            )))
+        }
+    };
+    let submesh = SubmeshKey { mesh, material };
+    Some(Ok(Box::new(DumpSkinnedVerticesAction {
+        path,
+        sample_rate,
+        submesh,
+    })))
+}
+
+#[derive(Debug)]
+pub struct FitSpringParamsAction {
+    reference: PathBuf,
+    sample_rate: f32,
+    initial_step: f32,
+    max_iterations: usize,
+    tolerance: f32,
+}
+
+impl BatchAction for FitSpringParamsAction {
+    fn name(&self) -> &'static str {
+        "fit_spring_params"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(FitSpringParams {
+            reference: self.reference.clone(),
+            sample_rate: self.sample_rate,
+            params: thyllore_math_core::NelderMeadParams {
+                initial_step: self.initial_step,
+                max_iterations: self.max_iterations,
+                tolerance: self.tolerance,
+            },
+        });
+    }
+}
+
+fn fit_spring_params_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let suffix = text.strip_prefix("fit_spring_params=")?;
+    let parts: Vec<&str> = suffix.split(',').collect();
+    if parts.len() != 5 {
+        return Some(Err(anyhow!(
+            "fit_spring_params requires exactly 5 comma-separated values: reference,sample_rate,initial_step,max_iterations,tolerance"
+        )));
+    }
+    let reference = PathBuf::from(parts[0].trim());
+    if reference.as_os_str().is_empty() {
+        return Some(Err(anyhow!(
+            "fit_spring_params: reference path must not be empty"
+        )));
+    }
+    let Ok(sample_rate) = parts[1].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid sample_rate '{}'",
+            parts[1]
+        )));
+    };
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: sample_rate must be positive and finite, got {}",
+            sample_rate
+        )));
+    }
+    let Ok(initial_step) = parts[2].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid initial_step '{}'",
+            parts[2]
+        )));
+    };
+    if initial_step <= 0.0 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: initial_step must be positive, got {}",
+            initial_step
+        )));
+    }
+    let Ok(max_iterations) = parts[3].trim().parse::<usize>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid max_iterations '{}'",
+            parts[3]
+        )));
+    };
+    if max_iterations < 1 {
+        return Some(Err(anyhow!(
+            "fit_spring_params: max_iterations must be at least 1, got {}",
+            max_iterations
+        )));
+    }
+    let Ok(tolerance) = parts[4].trim().parse::<f32>() else {
+        return Some(Err(anyhow!(
+            "fit_spring_params: invalid tolerance '{}'",
+            parts[4]
+        )));
+    };
+    Some(Ok(Box::new(FitSpringParamsAction {
+        reference,
+        sample_rate,
+        initial_step,
+        max_iterations,
+        tolerance,
+    })))
+}
+
+#[derive(Debug)]
+pub struct FitBodyColliders {
+    params: CapsuleFitParams,
+}
+
+impl BatchAction for FitBodyColliders {
+    fn name(&self) -> &'static str {
+        "fit_body_colliders"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::FitBodyColliders {
+            params: self.params.clone(),
+        });
+    }
+}
+
+const FIT_BODY_COLLIDERS_USAGE: &str = "fit_body_colliders expects fit_body_colliders=<min_weight>,<radius_percentile>,<radius_scale>,<min_vertex_count>";
+
+fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("fit_body_colliders=")?;
+    let parts: Vec<&str> = spec.split(',').collect();
+    if parts.len() != 4 {
+        return Some(Err(anyhow!("{FIT_BODY_COLLIDERS_USAGE}")));
+    }
+    let parsed = (
+        parts[0].trim().parse::<f32>().ok(),
+        parts[1].trim().parse::<f32>().ok(),
+        parts[2].trim().parse::<f32>().ok(),
+        parts[3].trim().parse::<u32>().ok(),
+    );
+
+    Some(match parsed {
+        (Some(min_weight), Some(radius_percentile), Some(radius_scale), Some(min_vertex_count)) => {
+            Ok(Box::new(FitBodyColliders {
+                params: CapsuleFitParams {
+                    min_weight,
+                    radius_percentile,
+                    radius_scale,
+                    min_vertex_count,
+                },
+            }))
+        }
+        _ => Err(anyhow!("{FIT_BODY_COLLIDERS_USAGE}")),
+    })
+}
+
+#[derive(Debug)]
+pub struct GenerateChainBones {
+    request: ChainGenRequest,
+}
+
+impl BatchAction for GenerateChainBones {
+    fn name(&self) -> &'static str {
+        "generate_chain_bones"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::GenerateChainBones {
+            request: self.request.clone(),
+        });
+    }
+}
+
+#[derive(Debug)]
+pub struct ExportModelFbx {
+    path: PathBuf,
+}
+
+impl BatchAction for ExportModelFbx {
+    fn name(&self) -> &'static str {
+        "export_model_fbx"
+    }
+    fn apply(&self, world: &mut World) {
+        world
+            .resource_mut::<OutputQueue>()
+            .push(OutputCommand::ExportModelFbx {
+                path: self.path.clone(),
+            });
+    }
+}
+
+fn export_model_fbx_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("export_model_fbx=")?.trim();
+    if spec.is_empty() {
+        return Some(Err(anyhow!(
+            "export_model_fbx expects export_model_fbx=<path.fbx>"
+        )));
+    }
+    Some(Ok(Box::new(ExportModelFbx {
+        path: PathBuf::from(spec),
+    })))
+}
+
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root humanoid role>[,<setting>=<value>...]";
+
+fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("generate_chain_bones=")?;
+    let mut parts = spec.split(',');
+    let (Some(target_text), Some(root_bone)) = (parts.next(), parts.next()) else {
+        return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}")));
+    };
+
+    let target = match target_text.parse::<SubmeshSelector>() {
+        Ok(target) => target,
+        Err(_) => return Some(Err(anyhow!("{GENERATE_CHAIN_BONES_USAGE}"))),
+    };
+    let Some(root) = HumanoidRole::from_unity_name(root_bone.trim()) else {
+        return Some(Err(anyhow!(
+            "generate_chain_bones: root must be a humanoid role such as Head or Hips, got \"{}\"",
+            root_bone.trim()
+        )));
+    };
+
+    let setting_names = chain_gen::setting_names();
+    let assignments: Vec<(String, f32)> = match parts
+        .map(|part| scalar_assignment_parse(part.trim(), &setting_names))
+        .collect::<std::result::Result<_, String>>()
+    {
+        Ok(assignments) => assignments,
+        Err(message) => return Some(Err(anyhow!("generate_chain_bones: {message}"))),
+    };
+    let mut settings = ChainGenSettings::default();
+    if let Err(e) = chain_gen::apply_setting_assignments(&mut settings, &assignments) {
+        return Some(Err(e));
+    }
+    if settings.joint_count == 0 {
+        return Some(Err(anyhow!(
+            "generate_chain_bones: joint_count must be at least 1"
+        )));
+    }
+
+    let request = ChainGenRequest {
+        target,
+        root,
+        settings,
+    };
+    Some(Ok(Box::new(GenerateChainBones { request })))
+}
+
+#[derive(Debug)]
+pub struct SubmeshRoleAction {
+    role: SubmeshRole,
+    target: SubmeshSelector,
+}
+
+impl BatchAction for SubmeshRoleAction {
+    fn name(&self) -> &'static str {
+        "submesh_role"
+    }
+    fn apply(&self, world: &mut World) {
+        let keys: Vec<SubmeshKey> = world
+            .resource::<AvatarSetupState>()
+            .submesh_roles
+            .keys()
+            .filter(|key| self.target.matches(key))
+            .cloned()
+            .collect();
+        if keys.is_empty() {
+            log_warn!("submesh_role: no submesh matches {}", self.target);
+        }
+        for key in keys {
+            world.send_command(AvatarSetupEvent::SetSubmeshRole {
+                key,
+                role: self.role,
+            });
+        }
+    }
+}
+
+const SUBMESH_ROLE_USAGE: &str = "submesh_role expects submesh_role=<role>:<mesh>[/<material>]";
+
+fn submesh_role_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("submesh_role=")?;
+    Some(submesh_role_spec_parse(spec).map(|action| Box::new(action) as Box<dyn BatchAction>))
+}
+
+fn submesh_role_spec_parse(spec: &str) -> Result<SubmeshRoleAction> {
+    let Some((role_str, target_text)) = spec.split_once(':') else {
+        return Err(anyhow!("{SUBMESH_ROLE_USAGE}"));
+    };
+    let target = target_text
+        .parse::<SubmeshSelector>()
+        .map_err(|_| anyhow!("{SUBMESH_ROLE_USAGE}"))?;
+    let role =
+        serde_json::from_value::<SubmeshRole>(serde_json::Value::String(role_str.to_string()))
+            .map_err(|e| anyhow!("unknown submesh role {:?}: {}", role_str, e))?;
+    Ok(SubmeshRoleAction { role, target })
+}
+
+#[derive(Debug)]
+pub struct HideCoveredSkin {
+    params: HiddenMaskParams,
+}
+
+impl BatchAction for HideCoveredSkin {
+    fn name(&self) -> &'static str {
+        "hide_covered_skin"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(AvatarSetupEvent::ComputeHiddenTriangles {
+            params: self.params.clone(),
+        });
+    }
+}
+
+const HIDE_COVERED_SKIN_USAGE: &str = "hide_covered_skin expects hide_covered_skin=<cover_distance>,<cone_angle_deg>,<ray_count>,<hidden_ratio>";
+
+fn hide_covered_skin_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("hide_covered_skin=")?;
+    let parts: Vec<&str> = spec.split(',').collect();
+    if parts.len() != 4 {
+        return Some(Err(anyhow!("{HIDE_COVERED_SKIN_USAGE}")));
+    }
+    let parsed = (
+        parts[0].trim().parse::<f32>().ok(),
+        parts[1].trim().parse::<f32>().ok(),
+        parts[2].trim().parse::<usize>().ok(),
+        parts[3].trim().parse::<f32>().ok(),
+    );
+
+    Some(match parsed {
+        (Some(cover_distance), Some(cone_angle_deg), Some(ray_count), Some(hidden_ratio)) => {
+            if cover_distance <= 0.0 {
+                return Some(Err(anyhow!("cover_distance must be > 0")));
+            }
+            if cone_angle_deg < 0.0 || cone_angle_deg > 90.0 {
+                return Some(Err(anyhow!("cone_angle_deg must be in range [0, 90]")));
+            }
+            if ray_count < 1 {
+                return Some(Err(anyhow!("ray_count must be >= 1")));
+            }
+            if hidden_ratio < 0.0 || hidden_ratio > 1.0 {
+                return Some(Err(anyhow!("hidden_ratio must be in range [0, 1]")));
+            }
+            Ok(Box::new(HideCoveredSkin {
+                params: HiddenMaskParams {
+                    cover_distance,
+                    cone_angle_deg,
+                    ray_count,
+                    hidden_ratio,
+                },
+            }))
+        }
+        _ => Err(anyhow!("{HIDE_COVERED_SKIN_USAGE}")),
+    })
+}
+
 crate::batch_action!("morph_weight", morph_weight_parse);
 crate::batch_action!("key_morph_weights", unit_action_parse::<KeyMorphWeights>);
 crate::batch_action!("capture_expression", capture_expression_parse);
-crate::batch_action!("add_spring_chains", add_spring_chains_parse);
+crate::batch_action!("add_spring_chains_under", add_spring_chains_under_parse);
+crate::batch_action!("apply_model_scale", apply_model_scale_parse);
+crate::batch_action!("fit_body_colliders", fit_body_colliders_parse);
 crate::batch_action!(
     "export_unity_avatar",
     unit_action_parse::<ExportUnityAvatar>
@@ -171,6 +694,13 @@ crate::batch_action!(
     "dump_morph_track_samples",
     unit_action_parse::<DumpMorphTrackSamples>
 );
+crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
+crate::batch_action!("dump_skinned_vertices", dump_skinned_vertices_parse);
+crate::batch_action!("fit_spring_params", fit_spring_params_parse);
+crate::batch_action!("generate_chain_bones", generate_chain_bones_parse);
+crate::batch_action!("export_model_fbx", export_model_fbx_parse);
+crate::batch_action!("submesh_role", submesh_role_parse);
+crate::batch_action!("hide_covered_skin", hide_covered_skin_parse);
 
 #[cfg(test)]
 mod tests {
@@ -245,8 +775,209 @@ mod tests {
         assert!(capture_expression_parse("capture_expression=")
             .expect("prefix matches")
             .is_err());
-        assert!(add_spring_chains_parse("add_spring_chains= ")
+        assert!(add_spring_chains_under_parse("add_spring_chains_under= ")
             .expect("prefix matches")
             .is_err());
+        assert!(
+            add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=0")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=3")
+                .expect("prefix matches")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_fit_body_colliders_parses_correct_format() {
+        let action = fit_body_colliders_parse("fit_body_colliders=0.5,0.9,0.85,8")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(
+            format!("{:?}", action),
+            "FitBodyColliders { params: CapsuleFitParams { min_weight: 0.5, radius_percentile: 0.9, radius_scale: 0.85, min_vertex_count: 8 } }"
+        );
+    }
+
+    #[test]
+    fn test_fit_body_colliders_rejects_malformed_specs() {
+        assert!(fit_body_colliders_parse("fit_body_colliders=0.5,0.9,0.85")
+            .expect("prefix matches")
+            .is_err());
+        assert!(fit_body_colliders_parse("fit_body_colliders=0.5,0.9")
+            .expect("prefix matches")
+            .is_err());
+        assert!(fit_body_colliders_parse("fit_body_colliders=a,0.9,0.85,8")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_dump_spring_tails_parses_correct_format() {
+        let action = dump_spring_tails_parse("dump_spring_tails=output.csv,60.0")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(action.name(), "dump_spring_tails");
+    }
+
+    #[test]
+    fn test_dump_spring_tails_rejects_malformed_specs() {
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,abc")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,0")
+            .expect("prefix matches")
+            .is_err());
+        assert!(dump_spring_tails_parse("dump_spring_tails=output.csv,-1")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_submesh_role_parses_submesh_and_whole_mesh() {
+        let submesh = submesh_role_spec_parse("hair:Body/Hair_mat").expect("spec is valid");
+        assert_eq!(submesh.role, SubmeshRole::Hair);
+        assert_eq!(
+            submesh.target,
+            SubmeshSelector::Submesh(SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Hair_mat".to_string(),
+            })
+        );
+
+        let whole_mesh = submesh_role_spec_parse("garment:Cloth_skirt").expect("spec is valid");
+        assert_eq!(whole_mesh.role, SubmeshRole::Garment);
+        assert_eq!(
+            whole_mesh.target,
+            SubmeshSelector::Mesh("Cloth_skirt".to_string())
+        );
+    }
+
+    #[test]
+    fn test_submesh_role_rejects_malformed_specs() {
+        assert!(submesh_role_parse("submesh_role=fur:Body/x")
+            .expect("prefix matches")
+            .is_err());
+        assert!(submesh_role_parse("submesh_role=skin")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_fit_spring_params_parses_correct_format() {
+        let action: Box<dyn BatchAction> =
+            fit_spring_params_parse("fit_spring_params=reference.csv,30.0,1.0,100,0.001")
+                .expect("prefix matches")
+                .expect("spec is valid");
+
+        assert_eq!(action.name(), "fit_spring_params");
+    }
+
+    #[test]
+    fn test_fit_spring_params_rejects_insufficient_elements() {
+        assert!(
+            fit_spring_params_parse("fit_spring_params=reference.csv,30.0")
+                .expect("prefix matches")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_hide_covered_skin_parses_correct_format() {
+        let result = hide_covered_skin_parse("hide_covered_skin=0.5,45.0,8,0.5");
+        assert!(result.is_some());
+        let action: Box<dyn BatchAction> = result.unwrap().unwrap();
+        assert_eq!(action.name(), "hide_covered_skin");
+    }
+
+    #[test]
+    fn test_hide_covered_skin_rejects_out_of_range() {
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.0,45.0,8,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,91.0,8,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,45.0,0,0.5")
+            .expect("prefix matches")
+            .is_err());
+        assert!(hide_covered_skin_parse("hide_covered_skin=0.5,45.0,8,1.5")
+            .expect("prefix matches")
+            .is_err());
+    }
+
+    #[test]
+    fn test_generate_chain_bones_parses_submesh_root_and_settings() {
+        let action = generate_chain_bones_parse(
+            "generate_chain_bones=garment/cloth,Spine,joint_count=3,column_count=2",
+        )
+        .expect("prefix matches")
+        .expect("spec is valid");
+        assert_eq!(action.name(), "generate_chain_bones");
+
+        let defaults_only = generate_chain_bones_parse("generate_chain_bones=garment/cloth,Spine")
+            .expect("prefix matches");
+        assert!(defaults_only.is_ok());
+
+        let whole_mesh = generate_chain_bones_parse("generate_chain_bones=garment,Spine")
+            .expect("prefix matches");
+        assert!(whole_mesh.is_ok());
+    }
+
+    #[test]
+    fn test_generate_chain_bones_rejects_malformed_specs() {
+        for spec in [
+            "generate_chain_bones=garment/cloth,,joint_count=3",
+            "generate_chain_bones=garment/cloth,spine,joint_count=0",
+            "generate_chain_bones=garment/cloth,spine,joints=3",
+            "generate_chain_bones=,spine",
+        ] {
+            assert!(
+                generate_chain_bones_parse(spec)
+                    .expect("prefix matches")
+                    .is_err(),
+                "{spec}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dump_skinned_vertices_parses_correct_format() {
+        let action = dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0,Body/Skin")
+            .expect("prefix matches")
+            .expect("spec is valid");
+
+        assert_eq!(action.name(), "dump_skinned_vertices");
+    }
+
+    #[test]
+    fn test_dump_skinned_vertices_rejects_malformed_specs() {
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,abc,Body/Skin")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,0,Body/Skin")
+                .expect("prefix matches")
+                .is_err()
+        );
+        assert!(
+            dump_skinned_vertices_parse("dump_skinned_vertices=output.csv,60.0,Bare")
+                .expect("prefix matches")
+                .is_err()
+        );
     }
 }

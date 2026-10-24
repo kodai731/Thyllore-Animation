@@ -1,5 +1,6 @@
 use cgmath::{Quaternion, Vector3};
 
+use crate::animation::spring_bone::DEFAULT_SIMULATION_STEP;
 use crate::animation::BoneId;
 use crate::ecs::component::SpringChainId;
 
@@ -10,6 +11,10 @@ pub struct SpringJointState {
     pub bone_length: f32,
     pub bone_axis: Vector3<f32>,
     pub initial_local_rotation: Quaternion<f32>,
+    /// Distance from the rest tail to each collider axis of the chain, in collider order.
+    pub rest_axis_distances: Vec<f32>,
+    /// The joint's gravity direction in the parent's frame at initialization.
+    pub gravity_in_parent_rest: Vector3<f32>,
 }
 
 impl Default for SpringJointState {
@@ -20,6 +25,8 @@ impl Default for SpringJointState {
             bone_length: 0.0,
             bone_axis: Vector3::new(0.0, 1.0, 0.0),
             initial_local_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            rest_axis_distances: Vec::new(),
+            gravity_in_parent_rest: Vector3::new(0.0, -1.0, 0.0),
         }
     }
 }
@@ -28,6 +35,8 @@ impl Default for SpringJointState {
 pub struct SpringChainState {
     pub chain_id: SpringChainId,
     pub joint_states: Vec<SpringJointState>,
+    /// Sum of the chain's bone lengths in skeleton units.
+    pub strand_length: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -56,7 +65,7 @@ impl Default for SpringBoneState {
         Self {
             chain_states: Vec::new(),
             initialized: false,
-            max_delta_time: 1.0 / 30.0,
+            max_delta_time: DEFAULT_SIMULATION_STEP,
             frame_count: 0,
             log_frames: 10,
             mode: SpringBoneMode::Realtime,

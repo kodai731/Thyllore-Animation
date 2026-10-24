@@ -28,8 +28,8 @@ namespace Thyllore.Avatar
         [JsonProperty("expressions")]
         public List<SidecarExpression> expressions = new List<SidecarExpression>();
 
-        [JsonProperty("spring_chains")]
-        public List<SidecarSpringChain> spring_chains = new List<SidecarSpringChain>();
+        [JsonProperty("spring")]
+        public SidecarSpring spring = new SidecarSpring();
 
         [JsonProperty("materials")]
         public Dictionary<string, string> materials = new Dictionary<string, string>();
@@ -62,22 +62,92 @@ namespace Thyllore.Avatar
     }
 
     [Serializable]
+    public class SidecarSpring
+    {
+        [JsonProperty("collision_mode")]
+        public string collision_mode;
+
+        [JsonProperty("colliders")]
+        public List<SidecarCollider> colliders = new List<SidecarCollider>();
+
+        [JsonProperty("collider_groups")]
+        public List<SidecarColliderGroup> collider_groups = new List<SidecarColliderGroup>();
+
+        [JsonProperty("chains")]
+        public List<SidecarSpringChain> chains = new List<SidecarSpringChain>();
+    }
+
+    [Serializable]
+    public class SidecarCollider
+    {
+        [JsonProperty("name")]
+        public string name;
+
+        [JsonProperty("bone")]
+        public string bone;
+
+        [JsonProperty("offset")]
+        public float[] offset;
+
+        [JsonProperty("shape")]
+        public string shape;
+
+        [JsonProperty("radius")]
+        public float radius;
+
+        [JsonProperty("tail")]
+        public float[] tail;
+
+        [JsonProperty("origin")]
+        public string origin;
+    }
+
+    [Serializable]
+    public class SidecarColliderGroup
+    {
+        [JsonProperty("name")]
+        public string name;
+
+        [JsonProperty("colliders")]
+        public List<string> colliders = new List<string>();
+    }
+
+    [Serializable]
     public class SidecarSpringChain
     {
-        [JsonProperty("root")]
-        public string root;
+        [JsonProperty("name")]
+        public string name;
+
+        [JsonProperty("center")]
+        public string center;
+
+        [JsonProperty("collider_groups")]
+        public List<string> collider_groups = new List<string>();
+
+        [JsonProperty("joints")]
+        public List<SidecarSpringJoint> joints = new List<SidecarSpringJoint>();
+    }
+
+    [Serializable]
+    public class SidecarSpringJoint
+    {
+        [JsonProperty("bone")]
+        public string bone;
 
         [JsonProperty("stiffness")]
         public float stiffness;
 
-        [JsonProperty("gravity")]
-        public float gravity;
+        [JsonProperty("drag_force")]
+        public float drag_force;
 
-        [JsonProperty("drag")]
-        public float drag;
+        [JsonProperty("gravity_power")]
+        public float gravity_power;
 
-        [JsonProperty("colliders")]
-        public List<string> colliders = new List<string>();
+        [JsonProperty("gravity_dir")]
+        public float[] gravity_dir;
+
+        [JsonProperty("hit_radius")]
+        public float hit_radius;
     }
 
     [Serializable]
@@ -116,7 +186,7 @@ namespace Thyllore.Avatar
 
     public static class AvatarSidecarLoader
     {
-        public const int SupportedSchema = 2;
+        public const int SupportedSchema = 3;
 
         public static AvatarSidecar Load(string path)
         {

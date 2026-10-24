@@ -17,3 +17,4 @@ Before opening a PR or finishing an edit, run the branch diff through these 10 i
 8. Split oversized files and structs with many fields into sub-modules / sub-structs → `coding.md` §5
 9. UI interactions are self-applying `UiCommand`s sent with `World::send_command`, not new central event enums; one-off work runs where it is triggered → `hierarchy.md` "Hook or command?"
 10. No hard-coded tuning numbers and no golden-text comparisons; pin facts at their declaration → `hierarchy.md`, `ui.md`
+11. Labelled widgets live in `UiRow` declarations drawn by `draw_rows`; `&imgui::Ui` builds exist only for self-drawn surfaces, and no `FormSection` wraps an imgui closure → `ui.md` "Form windows"

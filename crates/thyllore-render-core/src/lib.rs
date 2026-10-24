@@ -16,8 +16,8 @@ pub use backend::RenderBackend;
 pub use billboard::{BillboardMesh, BillboardTransform, BillboardVertex};
 pub use buffer_handle::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 pub use gizmo::{
-    BoneDisplayStyle, ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable,
-    TransformGizmoHandle,
+    BoneDisplayStyle, BoneDrawMode, ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition,
+    GizmoSelectable, TransformGizmoHandle,
 };
 pub use gizmo_data::{BoneGizmoData, ConstraintGizmoData, GridMeshData, LightGizmoData};
 pub use lighting::{lit_white_radiance, AMBIENT_INTENSITY, DIRECT_LIGHT_COLOR};

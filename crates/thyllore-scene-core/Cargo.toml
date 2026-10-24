@@ -8,6 +8,7 @@ description = "Scene persistence core for ThylloreAnimation — the SceneFields 
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+cgmath = "0.18"
 serde = { version = "1", features = ["derive"] }
 thyllore-color-core = { path = "../thyllore-color-core" }
 thyllore-scene-derive = { path = "derive" }

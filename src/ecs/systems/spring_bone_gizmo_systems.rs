@@ -1,13 +1,28 @@
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::component::{ColliderShape, ColorVertex, LineMesh, SpringBoneSetup};
+use crate::ecs::component::{
+    ColliderShape, ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId,
+};
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
+use thyllore_anim_core::spring_bone::{
+    CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
+};
 
-const COLOR_COLLIDER: [f32; 3] = [0.2, 0.8, 0.2];
-const CIRCLE_SEGMENTS: u32 = 16;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColliderGizmo {
+    Shown,
+    Hidden,
+}
+
+pub struct SpringGizmoSelection {
+    pub chain_ids: Vec<SpringChainId>,
+    pub radius_chain_ids: Vec<SpringChainId>,
+    pub colliders: ColliderGizmo,
+}
 
 pub fn build_spring_bone_gizmo_mesh(
     setup: &SpringBoneSetup,
+    shown: &SpringGizmoSelection,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
@@ -22,6 +37,23 @@ pub fn build_spring_bone_gizmo_mesh(
 
     let display_positions =
         compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+
+    for chain in setup
+        .chains
+        .iter()
+        .filter(|chain| shown.chain_ids.contains(&chain.id))
+    {
+        let radii = if shown.radius_chain_ids.contains(&chain.id) {
+            JointRadii::Shown
+        } else {
+            JointRadii::Hidden
+        };
+        append_chain(mesh, chain, &display_positions, mesh_scale, radii);
+    }
+
+    if shown.colliders == ColliderGizmo::Hidden {
+        return;
+    }
 
     for collider in &setup.colliders {
         let bone_idx = collider.bone_id as usize;
@@ -58,6 +90,39 @@ pub fn build_spring_bone_gizmo_mesh(
                 );
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum JointRadii {
+    Shown,
+    Hidden,
+}
+
+fn append_chain(
+    mesh: &mut LineMesh,
+    chain: &SpringChain,
+    display_positions: &[[f32; 3]],
+    mesh_scale: f32,
+    radii: JointRadii,
+) {
+    let joint_positions: Vec<([f32; 3], f32)> = chain
+        .joints
+        .iter()
+        .filter_map(|joint| {
+            let position = display_positions.get(joint.bone_id as usize)?;
+            Some((*position, joint.hit_radius * mesh_scale))
+        })
+        .collect();
+
+    for pair in joint_positions.windows(2) {
+        append_solid_line(mesh, pair[0].0, pair[1].0, COLOR_CHAIN);
+    }
+    if radii == JointRadii::Hidden {
+        return;
+    }
+    for (position, radius) in &joint_positions {
+        append_wire_sphere(mesh, *position, *radius, COLOR_CHAIN, CHAIN_RADIUS_SEGMENTS);
     }
 }
 

@@ -1,9 +1,25 @@
 mod chain;
+mod chain_add;
+mod collider_fit;
 mod collision;
+mod gizmo_scope;
+mod origin;
+mod ramp;
 mod setup;
+mod skinned_chains;
+mod space;
+mod trajectory;
 mod verlet;
 
 pub use chain::*;
+pub use chain_add::add_chain;
+pub use collider_fit::*;
 pub use collision::*;
+pub use gizmo_scope::*;
+pub use origin::*;
+pub use ramp::*;
 pub use setup::*;
+pub use skinned_chains::*;
+pub use space::*;
+pub use trajectory::*;
 pub use verlet::*;

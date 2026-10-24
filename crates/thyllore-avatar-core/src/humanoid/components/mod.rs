@@ -1,4 +1,5 @@
 pub mod avatar_rig;
+pub mod body_collider_roles;
 pub mod geometry_warning;
 pub mod humanoid_frame;
 pub mod mapping;

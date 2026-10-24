@@ -2,7 +2,11 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
+use thyllore_avatar_core::garment::components::submesh_role::{
+    SubmeshKey, SubmeshRoleEntry, SubmeshRoleSource,
+};
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
+use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
@@ -15,29 +19,37 @@ use thyllore_avatar_core::humanoid::systems::name_match::{
     collect_unresolved_roles, infer_mapping,
 };
 use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
-use thyllore_avatar_core::humanoid::systems::spring_prefix::find_prefix_chain_roots;
+use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
 use thyllore_avatar_core::vrchat::sidecar::{
-    build_sidecar, count_viseme_channels, sidecar_path, write_sidecar_json, AvatarSidecar,
-    SidecarInput, SidecarSpringChain,
+    build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,
+    AvatarSidecar, SidecarInput,
+};
+use thyllore_avatar_core::vrchat::sidecar_spring::{
+    build_sidecar_spring, spring_setup_from_sidecar,
 };
 use thyllore_model_core::MeshMorph;
 
-use crate::animation::{BoneId, Skeleton};
+use crate::animation::{BoneId, Skeleton, SkinData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
+use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
-    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState,
+    AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState, NodeAssets,
 };
-use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
+use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
+use crate::ecs::systems::spring_bone_edit_systems::{
+    handle_spring_chain_add, reset_spring_bone_state,
+};
 use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-pub(crate) fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
+use crate::animation::spring_bone::{fit_bone_capsules, replace_fitted_body_colliders};
+
+pub fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
         .bones
         .iter()
@@ -161,13 +173,69 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
         load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
     let stats = count_avatar_stats(graphics, Some(skeleton), find_spring_bone_setup(world));
 
+    let node_assets = world.resource::<NodeAssets>();
     let mut state = world.resource_mut::<AvatarSetupState>();
     state.bones = bones;
     state.mapping = mapping;
     state.missing_bone_names = missing_bone_names;
     state.stats = stats;
+    refresh_submesh_roles(&mut state, assets, graphics, &node_assets.nodes);
     refresh_avatar_validation(&mut state);
-    state.source_model_path = model_path;
+    state.source_model_path = model_path.clone();
+    drop(state);
+    drop(node_assets);
+
+    apply_avatar_sidecar(world, Path::new(&model_path));
+}
+
+/// Restore the setup an earlier export wrote beside the model: submesh roles and spring bones.
+fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
+    let path = sidecar_path(model_path);
+    if !path.exists() {
+        return;
+    }
+    let sidecar = match read_sidecar_json(&path) {
+        Ok(sidecar) => sidecar,
+        Err(error) => {
+            msg_warn!("Ignoring avatar sidecar {}: {}", path.display(), error);
+            return;
+        }
+    };
+
+    let spring_setup = {
+        let mut state = world.resource_mut::<AvatarSetupState>();
+        for role in &sidecar.submesh_roles {
+            let key = SubmeshKey {
+                mesh: role.mesh.clone(),
+                material: role.material.clone(),
+            };
+            if let Some(entry) = state.submesh_roles.get_mut(&key) {
+                *entry = SubmeshRoleEntry {
+                    role: role.role,
+                    source: SubmeshRoleSource::User,
+                };
+            }
+        }
+        spring_setup_from_sidecar(&sidecar.spring, &state.bones)
+    };
+
+    let chain_count = spring_setup.chains.len();
+    let collider_count = spring_setup.colliders.len();
+    if chain_count > 0 || collider_count > 0 {
+        let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+            msg_warn!("Avatar sidecar has spring bones but no animated model entity");
+            return;
+        };
+        world.insert_component(spring_entity, spring_setup);
+        reset_spring_bone_state(world);
+    }
+    msg_info!(
+        "Applied avatar sidecar {}: {} submesh roles, {} spring chains, {} colliders",
+        path.display(),
+        sidecar.submesh_roles.len(),
+        chain_count,
+        collider_count
+    );
 }
 
 pub(crate) fn load_or_infer_mapping(
@@ -240,10 +308,8 @@ pub fn save_humanoid_mapping(world: &World) {
     let state = world.resource::<AvatarSetupState>();
 
     if !state.issues.is_empty() {
-        msg_error!(
-            "Cannot save humanoid mapping: {} structural issue(s)",
-            state.issues.len()
-        );
+        let issue_list: Vec<String> = state.issues.iter().map(|issue| issue.to_string()).collect();
+        msg_error!("Cannot save humanoid mapping: {}", issue_list.join("; "));
         return;
     }
 
@@ -258,7 +324,14 @@ pub fn save_humanoid_mapping(world: &World) {
     }
 }
 
-pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, prefix: &str) {
+/// Registers every run of non-humanoid bones under `root` as a spring chain; runs that already head
+/// a chain are kept as they are.
+pub fn add_spring_chains_under(
+    world: &mut World,
+    assets: &AssetStorage,
+    root: BoneId,
+    min_joints: u32,
+) {
     let Some(skeleton) = find_first_skeleton(assets) else {
         msg_error!("Cannot add spring chains: no skeleton loaded");
         return;
@@ -268,25 +341,102 @@ pub fn add_spring_chains_by_prefix(world: &mut World, assets: &AssetStorage, pre
         return;
     };
 
-    let bones = skeleton_to_bone_inputs(skeleton);
-    let roots = find_prefix_chain_roots(&bones, prefix);
-    if roots.is_empty() {
-        msg_error!("No spring chain roots found for prefix \"{}\"", prefix);
+    let mapping = world.resource::<AvatarSetupState>().mapping.clone();
+    let chains = find_chains_under(skeleton, &mapping, root, min_joints as usize);
+    let root_name = skeleton
+        .get_bone(root)
+        .map(|bone| bone.name.as_str())
+        .unwrap_or_default();
+    if chains.is_empty() {
+        msg_error!(
+            "No bone runs of at least {} joints under \"{}\"",
+            min_joints,
+            root_name
+        );
         return;
     }
 
-    for chain in roots {
+    let existing_roots: Vec<BoneId> = world
+        .get_component::<SpringBoneSetup>(spring_entity)
+        .map(|setup| {
+            setup
+                .chains
+                .iter()
+                .filter_map(|chain| chain.joints.first().map(|joint| joint.bone_id))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut added = 0;
+    for chain in chains {
+        let chain_root = chain.joints[0];
+        if existing_roots.contains(&chain_root) {
+            continue;
+        }
         handle_spring_chain_add(
             world,
             spring_entity,
-            chain.root as BoneId,
-            chain.length,
+            chain_root,
+            chain.joints.len() as u32,
             skeleton,
         );
+        added += 1;
     }
+    msg_info!("Added {} spring chains under \"{}\"", added, root_name);
 }
 
-fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {
+pub fn fit_body_colliders(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    params: &CapsuleFitParams,
+) {
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        msg_error!("Cannot fit body colliders: no skeleton loaded");
+        return;
+    };
+
+    let skin_data: Vec<&SkinData> = graphics
+        .meshes
+        .iter()
+        .filter_map(|m| m.skin_data.as_ref())
+        .filter(|skin| skin.skeleton_id == skeleton.id)
+        .collect();
+
+    if skin_data.is_empty() {
+        msg_error!("Cannot fit body colliders: no skinned meshes found for this skeleton");
+        return;
+    }
+
+    let fitted = fit_bone_capsules(&skin_data, skeleton, params);
+
+    let allowed = body_collider_bone_indices(&world.resource::<AvatarSetupState>().mapping);
+    let fitted: Vec<_> = fitted
+        .into_iter()
+        .filter(|c| allowed.contains(&(c.bone_id as usize)))
+        .collect();
+
+    if fitted.is_empty() {
+        msg_error!("Cannot fit body colliders: no humanoid body bones are mapped");
+        return;
+    }
+
+    let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+        msg_error!("Cannot fit body colliders: no animated model loaded");
+        return;
+    };
+
+    let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(spring_entity) else {
+        msg_error!("Cannot fit body colliders: spring bone setup missing");
+        return;
+    };
+    replace_fitted_body_colliders(&mut setup, &fitted);
+
+    reset_spring_bone_state(world);
+
+    msg_info!("Fitted {} body colliders", fitted.len());
+}
+
+pub fn find_or_create_spring_bone_setup_entity(world: &mut World) -> Option<Entity> {
     if let Some(entity) = find_spring_bone_setup_entity(world) {
         return Some(entity);
     }
@@ -312,9 +462,18 @@ pub fn export_avatar_sidecar(world: &World, assets: &AssetStorage, graphics: &Gr
         msg_error!("Cannot export avatar sidecar: no model loaded");
         return;
     };
+    export_avatar_sidecar_beside(world, assets, graphics, Path::new(&model_path));
+}
 
+/// Write the sidecar next to `model_path`, the FBX the setup belongs to.
+pub fn export_avatar_sidecar_beside(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    model_path: &Path,
+) {
     let sidecar = build_avatar_sidecar(world, assets, graphics);
-    let path = sidecar_path(Path::new(&model_path));
+    let path = sidecar_path(model_path);
     match write_sidecar_json(&path, &sidecar) {
         Ok(()) => msg_info!("Exported avatar sidecar to {}", path.display()),
         Err(error) => msg_error!(
@@ -343,8 +502,8 @@ fn build_avatar_sidecar(
                 .collect()
         })
         .unwrap_or_default();
-    let spring_chains = find_spring_bone_setup(world)
-        .map(|setup| collect_sidecar_spring_chains(setup, &state.bones))
+    let spring = find_spring_bone_setup(world)
+        .map(|setup| build_sidecar_spring(setup, &state.bones))
         .unwrap_or_default();
     let materials: BTreeMap<String, String> = world
         .resource::<MaterialTextureState>()
@@ -363,9 +522,11 @@ fn build_avatar_sidecar(
         channel_names: &channel_names,
         expression_mesh_name: expression_morph.map(|morph| morph.source_mesh.as_str()),
         library: &library_state.library,
-        spring_chains: &spring_chains,
+        spring: &spring,
         materials: &materials,
         stats: &state.stats,
+        submesh_roles: &state.submesh_roles,
+        hidden_triangles: &state.hidden_triangles,
     })
 }
 
@@ -394,27 +555,6 @@ pub(crate) fn find_expression_morph<'a>(
 ) -> Option<&'a MeshMorph> {
     let entity = find_expression_morph_entity(world, assets, graphics)?;
     find_mesh_morph(world, entity, assets, graphics)
-}
-
-fn collect_sidecar_spring_chains(
-    setup: &SpringBoneSetup,
-    bones: &[BoneInput],
-) -> Vec<SidecarSpringChain> {
-    setup
-        .chains
-        .iter()
-        .filter_map(|chain| {
-            let first_joint = chain.joints.first()?;
-            let root = bones.get(first_joint.bone_id as usize)?;
-            Some(SidecarSpringChain {
-                root: root.name.clone(),
-                stiffness: first_joint.stiffness,
-                gravity: first_joint.gravity_power,
-                drag: first_joint.drag_force,
-                colliders: Vec::new(),
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]

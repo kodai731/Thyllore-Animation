@@ -1,9 +1,14 @@
 use pyo3::prelude::*;
 
+mod avatar_setup;
+mod chain_gen;
+mod collider;
 #[cfg(feature = "debug-log")]
 mod debuglog;
 mod error;
 mod feedback;
+mod spring_edit;
+mod submesh;
 mod v2_curve_copilot;
 
 pub use v2_curve_copilot::PyV2CurveCopilotSession;
@@ -34,9 +39,27 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         v2_curve_copilot::degraded_context_length,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::chain_gen_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::spring_joint_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::sidecar_read, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::sidecar_build, m)?)?;
+    m.add_function(wrap_pyfunction!(avatar_setup::infer_humanoid_mapping, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::add_chains_under_bone, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::apply_ramp, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::chains_in_scope, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::chains_under_bone, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::chains_to_draw, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::spring_gizmo_style, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::capsule_fit_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;
+    m.add_function(wrap_pyfunction!(collider::assign_collider_groups, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::build_feedback_record, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_feedback_batch, m)?)?;
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;
+    m.add_function(wrap_pyfunction!(submesh::guess_submesh_role, m)?)?;
+    m.add_function(wrap_pyfunction!(submesh::find_hidden_triangles, m)?)?;
+    m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;
 
     #[cfg(feature = "debug-log")]
     {

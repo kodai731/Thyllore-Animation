@@ -1,13 +1,12 @@
 use std::sync::OnceLock;
 
 use crate::ecs::World;
-
-pub type EffectSectionDrawFn = fn(&imgui::Ui, &World);
+use crate::platform::ui::form_window::FormSection;
 
 pub struct EffectSectionHook {
     pub key: &'static str,
     pub order: u32,
-    pub draw: EffectSectionDrawFn,
+    pub section: fn(&World) -> Option<Box<dyn FormSection>>,
 }
 
 inventory::collect!(EffectSectionHook);

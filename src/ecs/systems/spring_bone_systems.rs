@@ -1,15 +1,33 @@
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
-    apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
-    integrate_joint, recompute_global_transform, resolve_all_collisions, WorldCollider,
+    apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
+    extract_world_position, integrate_joint, recompute_global_transform,
+    resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
+    segment_axis_distance, tail_axis_distance, JointForces, JointRestFrame, SpringCollisionMode,
+    SpringForceModel, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColliderShape, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneState, SpringChainState, SpringJointState};
-use crate::ecs::world::{Animator, World};
+use crate::ecs::world::{Animator, Entity, Parent, Transform, World};
 use crate::hooks::model_load::LoadedModel;
+
+const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
+
+/// The uniform scale the entity's ancestry applies to its skeleton, as the space the spring integrates in.
+pub fn spring_space_for_entity(world: &World, entity: Entity) -> SpringSpace {
+    let mut world_scale = 1.0;
+    let mut current = Some(entity);
+    while let Some(e) = current {
+        if let Some(transform) = world.get_component::<Transform>(e) {
+            world_scale *= (transform.scale.x + transform.scale.y + transform.scale.z) / 3.0;
+        }
+        current = world.get_component::<Parent>(e).map(|p| p.0);
+    }
+    SpringSpace::from_world_scale(world_scale).unwrap_or(SpringSpace::IDENTITY)
+}
 
 pub fn collider_shape_radius(shape: &ColliderShape) -> f32 {
     match shape {
@@ -42,6 +60,8 @@ pub fn spring_bone_initialize(
             chain.joints.len()
         );
 
+        let world_colliders =
+            collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
         let mut joint_states = Vec::new();
 
         for joint_param in &chain.joints {
@@ -95,18 +115,29 @@ pub fn spring_bone_initialize(
                 bone_axis.z,
             );
 
+            let rest_axis_distances =
+                rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode);
+            let parent_world_rotation =
+                extract_parent_world_rotation(skeleton, idx, global_transforms);
+            let gravity_in_parent_rest =
+                rotate_vector(conjugate(parent_world_rotation), joint_param.gravity_dir);
+
             joint_states.push(SpringJointState {
                 prev_tail: tail,
                 current_tail: tail,
                 bone_length,
                 bone_axis,
                 initial_local_rotation,
+                rest_axis_distances,
+                gravity_in_parent_rest,
             });
         }
 
+        let strand_length = joint_states.iter().map(|joint| joint.bone_length).sum();
         chain_states.push(SpringChainState {
             chain_id: chain.id,
             joint_states,
+            strand_length,
         });
     }
 
@@ -129,6 +160,7 @@ pub fn spring_bone_update(
     global_transforms: &mut [Matrix4<f32>],
     pose: &SkeletonPose,
     dt: f32,
+    space: SpringSpace,
 ) {
     let dt = dt.min(state.max_delta_time);
     if dt <= 0.0 {
@@ -155,6 +187,7 @@ pub fn spring_bone_update(
             collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
 
         let chain_state = &mut state.chain_states[state_idx];
+        let strand_length = chain_state.strand_length;
 
         for (joint_idx, joint_param) in chain.joints.iter().enumerate() {
             if joint_idx >= chain_state.joint_states.len() {
@@ -163,6 +196,7 @@ pub fn spring_bone_update(
 
             update_single_joint(
                 joint_param,
+                strand_length,
                 &mut chain_state.joint_states[joint_idx],
                 skeleton,
                 global_transforms,
@@ -170,6 +204,9 @@ pub fn spring_bone_update(
                 &world_colliders,
                 should_log,
                 dt,
+                space,
+                setup.collision_mode,
+                setup.force_model,
             );
         }
     }
@@ -179,6 +216,7 @@ pub fn spring_bone_update(
 
 fn update_single_joint(
     joint_param: &crate::ecs::component::SpringJointParam,
+    strand_length: f32,
     joint_state: &mut SpringJointState,
     skeleton: &Skeleton,
     global_transforms: &mut [Matrix4<f32>],
@@ -186,6 +224,9 @@ fn update_single_joint(
     world_colliders: &[WorldCollider],
     should_log: bool,
     dt: f32,
+    space: SpringSpace,
+    collision_mode: SpringCollisionMode,
+    force_model: SpringForceModel,
 ) {
     let bone_id = joint_param.bone_id;
     let idx = bone_id as usize;
@@ -198,25 +239,49 @@ fn update_single_joint(
 
     let current_tail_before = joint_state.current_tail;
 
+    let hit_radius = space.skeleton_length(joint_param.hit_radius);
+    let rest_frame = JointRestFrame {
+        head: head_pos,
+        parent_world_rotation: parent_world_rot,
+        initial_local_rotation: joint_state.initial_local_rotation,
+        bone_axis: joint_state.bone_axis,
+        bone_length: joint_state.bone_length,
+        gravity_in_parent_rest: joint_state.gravity_in_parent_rest,
+    };
+    let forces = joint_forces(
+        joint_param,
+        strand_length,
+        joint_state.bone_length,
+        space,
+        force_model,
+    );
+
     let next_tail = integrate_joint(
         joint_state.current_tail,
         joint_state.prev_tail,
-        joint_param.drag_force,
-        joint_param.stiffness,
-        joint_param.gravity_dir,
-        joint_param.gravity_power,
-        parent_world_rot,
-        joint_state.initial_local_rotation,
-        joint_state.bone_axis,
-        joint_state.bone_length,
-        head_pos,
+        &rest_frame,
+        &forces,
+        force_model,
         dt,
     );
 
     let constrained_tail = apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
 
-    let collision_resolved =
-        resolve_all_collisions(constrained_tail, joint_param.hit_radius, world_colliders);
+    let collision_resolved = match collision_mode {
+        SpringCollisionMode::VrmCompatible => resolve_all_tail_collisions(
+            constrained_tail,
+            hit_radius,
+            world_colliders,
+            &joint_state.rest_axis_distances,
+        ),
+        SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
+            head_pos,
+            constrained_tail,
+            hit_radius,
+            world_colliders,
+            &joint_state.rest_axis_distances,
+        ),
+    };
     let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
     let resolved_tail =
         apply_length_constraint(head_pos, collision_resolved, joint_state.bone_length);
@@ -238,8 +303,8 @@ fn update_single_joint(
     let velocity_mag_sq =
         velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
 
-    const VELOCITY_THRESHOLD_SQ: f32 = 1e-8;
-    if velocity_mag_sq < VELOCITY_THRESHOLD_SQ {
+    let rest_velocity = space.skeleton_length(REST_VELOCITY_WORLD_UNITS);
+    if velocity_mag_sq < rest_velocity * rest_velocity {
         joint_state.prev_tail = resolved_tail;
         joint_state.current_tail = resolved_tail;
     } else {
@@ -303,6 +368,63 @@ pub fn spring_bone_write_back_to_pose(
         pose.bone_poses[idx].rotation = r;
         pose.bone_poses[idx].scale = s;
     }
+}
+
+/// VRM reads `stiffness` and `gravity_power` as metres per second; the rest-relative model reads
+/// `stiffness` as the bending relaxation `D` [m²/s] and `gravity_power` as a multiple of Earth gravity.
+fn joint_forces(
+    joint_param: &crate::ecs::component::SpringJointParam,
+    strand_length: f32,
+    bone_length: f32,
+    space: SpringSpace,
+    force_model: SpringForceModel,
+) -> JointForces {
+    let (stiffness, gravity) = match force_model {
+        SpringForceModel::Vrm => (
+            space.skeleton_length(joint_param.stiffness),
+            space.skeleton_length(joint_param.gravity_power),
+        ),
+        SpringForceModel::RestRelative => (
+            strand_return_rate(
+                space.skeleton_length(space.skeleton_length(joint_param.stiffness)),
+                strand_length,
+                bone_length,
+            ),
+            space.skeleton_length(joint_param.gravity_power * EARTH_GRAVITY_M_PER_S2),
+        ),
+    };
+    JointForces {
+        drag_force: joint_param.drag_force,
+        stiffness,
+        gravity_dir: joint_param.gravity_dir,
+        gravity,
+    }
+}
+
+/// A strand returns at `D / L²`; splitting it into bones of length `l` scales each joint's rate by `L / l`
+/// so the strand's bending stiffness does not depend on the subdivision.
+fn strand_return_rate(relaxation: f32, strand_length: f32, bone_length: f32) -> f32 {
+    let lever = strand_length * bone_length;
+    if lever > 0.0 {
+        relaxation / lever
+    } else {
+        0.0
+    }
+}
+
+fn rest_axis_distances(
+    head: Vector3<f32>,
+    tail: Vector3<f32>,
+    world_colliders: &[WorldCollider],
+    collision_mode: SpringCollisionMode,
+) -> Vec<f32> {
+    world_colliders
+        .iter()
+        .map(|collider| match collision_mode {
+            SpringCollisionMode::VrmCompatible => tail_axis_distance(tail, collider),
+            SpringCollisionMode::SegmentExtended => segment_axis_distance(head, tail, collider),
+        })
+        .collect()
 }
 
 fn compute_initial_tail_position(

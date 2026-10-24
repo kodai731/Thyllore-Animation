@@ -1,4 +1,4 @@
-use crate::animation::{ConstraintId, ConstraintType};
+use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::{Entity, World};
@@ -13,6 +13,7 @@ pub enum ConstraintEvent {
     Add {
         entity: Entity,
         constraint_type_index: u8,
+        constrained_bone: Option<BoneId>,
     },
     Remove {
         entity: Entity,
@@ -85,8 +86,9 @@ fn dispatch_constraint_edit_events(events: &[ConstraintEvent], world: &mut World
             ConstraintEvent::Add {
                 entity,
                 constraint_type_index,
+                constrained_bone,
             } => {
-                handle_constraint_add(world, *entity, *constraint_type_index);
+                handle_constraint_add(world, *entity, *constraint_type_index, *constrained_bone);
             }
             ConstraintEvent::Remove {
                 entity,

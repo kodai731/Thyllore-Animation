@@ -10,6 +10,8 @@ pub struct SpringJointState {
     pub bone_length: f32,
     pub bone_axis: Vector3<f32>,
     pub initial_local_rotation: Quaternion<f32>,
+    /// Distance from the rest tail to each collider axis of the chain, in collider order.
+    pub rest_axis_distances: Vec<f32>,
 }
 
 impl Default for SpringJointState {
@@ -20,6 +22,7 @@ impl Default for SpringJointState {
             bone_length: 0.0,
             bone_axis: Vector3::new(0.0, 1.0, 0.0),
             initial_local_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            rest_axis_distances: Vec::new(),
         }
     }
 }

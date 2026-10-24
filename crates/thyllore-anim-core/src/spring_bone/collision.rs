@@ -9,15 +9,20 @@ pub struct WorldCollider {
     pub tail: Option<Vector3<f32>>,
 }
 
+/// Resolves the tail against every collider; `rest_axis_distances[i]` caps the clearance the joint
+/// had from collider `i` at rest so the rest pose is never pushed.
 pub fn resolve_all_segment_collisions(
     head: Vector3<f32>,
     tail: Vector3<f32>,
     joint_radius: f32,
     colliders: &[WorldCollider],
+    rest_axis_distances: &[f32],
 ) -> Vector3<f32> {
     let mut resolved_tail = tail;
-    for collider in colliders {
-        resolved_tail = resolve_segment_collision(head, resolved_tail, joint_radius, collider);
+    for (index, collider) in colliders.iter().enumerate() {
+        let min_distance =
+            effective_min_distance(joint_radius, collider, rest_axis_distances.get(index));
+        resolved_tail = resolve_segment_collision(head, resolved_tail, min_distance, collider);
     }
     resolved_tail
 }
@@ -26,17 +31,54 @@ pub fn resolve_all_tail_collisions(
     tail: Vector3<f32>,
     joint_radius: f32,
     colliders: &[WorldCollider],
+    rest_axis_distances: &[f32],
 ) -> Vector3<f32> {
     let mut resolved_tail = tail;
-    for collider in colliders {
-        resolved_tail = resolve_tail_collision(resolved_tail, joint_radius, collider);
+    for (index, collider) in colliders.iter().enumerate() {
+        let min_distance =
+            effective_min_distance(joint_radius, collider, rest_axis_distances.get(index));
+        resolved_tail = resolve_tail_collision(resolved_tail, min_distance, collider);
     }
     resolved_tail
 }
 
+fn effective_min_distance(
+    joint_radius: f32,
+    collider: &WorldCollider,
+    rest_axis_distance: Option<&f32>,
+) -> f32 {
+    let full = joint_radius + collider.radius;
+    match rest_axis_distance {
+        Some(&rest) => full.min(rest),
+        None => full,
+    }
+}
+
+/// Distance from the tail to the collider axis (center or capsule segment).
+pub fn tail_axis_distance(tail: Vector3<f32>, collider: &WorldCollider) -> f32 {
+    let closest = match collider.tail {
+        Some(capsule_tail) => closest_point_on_segment(tail, collider.center, capsule_tail),
+        None => collider.center,
+    };
+    (tail - closest).magnitude()
+}
+
+/// Distance between the joint segment and the collider axis.
+pub fn segment_axis_distance(
+    head: Vector3<f32>,
+    tail: Vector3<f32>,
+    collider: &WorldCollider,
+) -> f32 {
+    let collider_tail = collider.tail.unwrap_or(collider.center);
+    let (s, t) = find_closest_segment_parameters(head, tail, collider.center, collider_tail);
+    let joint_point = head + (tail - head) * s;
+    let collider_point = collider.center + (collider_tail - collider.center) * t;
+    (joint_point - collider_point).magnitude()
+}
+
 fn resolve_tail_collision(
     tail: Vector3<f32>,
-    joint_radius: f32,
+    min_distance: f32,
     collider: &WorldCollider,
 ) -> Vector3<f32> {
     let closest = match collider.tail {
@@ -45,7 +87,6 @@ fn resolve_tail_collision(
     };
     let diff = tail - closest;
     let distance = diff.magnitude();
-    let min_distance = joint_radius + collider.radius;
 
     if distance >= min_distance {
         return tail;
@@ -75,7 +116,7 @@ fn closest_point_on_segment(p: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -
 fn resolve_segment_collision(
     head: Vector3<f32>,
     tail: Vector3<f32>,
-    joint_radius: f32,
+    min_distance: f32,
     collider: &WorldCollider,
 ) -> Vector3<f32> {
     let collider_tail = collider.tail.unwrap_or(collider.center);
@@ -85,7 +126,6 @@ fn resolve_segment_collision(
 
     let diff = joint_point - collider_point;
     let distance = diff.magnitude();
-    let min_distance = joint_radius + collider.radius;
 
     if distance >= min_distance || s <= MIN_TAIL_LEVER {
         return tail;
@@ -166,7 +206,7 @@ mod tests {
             radius: 0.5,
             tail: None,
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, tail, 1e-5));
     }
 
@@ -180,7 +220,7 @@ mod tests {
             radius: 0.5,
             tail: None,
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
 
         let dist = magnitude(result - center);
         assert!((dist - 0.6).abs() < 1e-4);
@@ -197,7 +237,7 @@ mod tests {
             radius: 0.5,
             tail: None,
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, tail, 1e-5));
     }
 
@@ -212,7 +252,7 @@ mod tests {
             radius: 0.5,
             tail: Some(capsule_tail),
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         let dist = magnitude(result - Vector3::new(0.0, 1.0, 0.0));
         assert!((dist - 0.6).abs() < 1e-4);
     }
@@ -228,7 +268,7 @@ mod tests {
             radius: 0.5,
             tail: Some(capsule_tail),
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         let dist = magnitude(result - capsule_head);
         assert!((dist - 0.6).abs() < 1e-4);
     }
@@ -243,7 +283,7 @@ mod tests {
             radius: 0.5,
             tail: Some(center),
         }];
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         let dist = magnitude(result - center);
         assert!((dist - 0.6).abs() < 1e-4);
     }
@@ -260,7 +300,7 @@ mod tests {
             tail: Some(capsule_tail),
         }];
 
-        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(segment_result, Vector3::new(0.0, 4.8, 0.0), 1e-4));
     }
 
@@ -274,7 +314,7 @@ mod tests {
             tail: None,
         }];
 
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, tail, 1e-5));
     }
 
@@ -289,7 +329,7 @@ mod tests {
             tail: None,
         }];
 
-        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let segment_result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(segment_result, Vector3::new(0.6, 0.0, 0.0), 1e-4));
     }
 
@@ -303,7 +343,7 @@ mod tests {
             tail: None,
         }];
 
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, tail, 1e-5));
     }
 
@@ -318,7 +358,7 @@ mod tests {
             tail: None,
         }];
 
-        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders);
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &[]);
         let expected = Vector3::new(1.0, 3.8, 3.0);
         assert!(approx_eq(result, expected, 1e-4));
     }
@@ -331,7 +371,7 @@ mod tests {
             radius: 0.5,
             tail: None,
         }];
-        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, tail, 1e-5));
     }
 
@@ -344,7 +384,7 @@ mod tests {
             radius: 0.5,
             tail: None,
         }];
-        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders, &[]);
         let dist = magnitude(result - center);
         assert!((dist - 0.6).abs() < 1e-4);
         assert!(result.x > 0.0);
@@ -360,7 +400,59 @@ mod tests {
             radius: 0.5,
             tail: Some(capsule_tail),
         }];
-        let result = resolve_all_tail_collisions(tail, 0.1, &colliders);
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders, &[]);
         assert!(approx_eq(result, Vector3::new(0.6, 1.0, 0.0), 1e-4));
+    }
+
+    fn unit_sphere_at_origin() -> [WorldCollider; 1] {
+        [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 1.0,
+            tail: None,
+        }]
+    }
+
+    #[test]
+    fn rest_clearance_keeps_a_tail_that_rests_inside_the_collider() {
+        let tail = Vector3::new(0.8, 0.0, 0.0);
+        let colliders = unit_sphere_at_origin();
+        let rest = [tail_axis_distance(tail, &colliders[0])];
+        let result = resolve_all_tail_collisions(tail, 0.1, &colliders, &rest);
+        assert!(approx_eq(result, tail, 1e-6));
+    }
+
+    #[test]
+    fn rest_clearance_still_pushes_a_tail_deeper_than_its_rest() {
+        let colliders = unit_sphere_at_origin();
+        let rest = [0.8];
+        let result =
+            resolve_all_tail_collisions(Vector3::new(0.5, 0.0, 0.0), 0.1, &colliders, &rest);
+        assert!(approx_eq(result, Vector3::new(0.8, 0.0, 0.0), 1e-5));
+    }
+
+    #[test]
+    fn rest_clearance_never_enlarges_the_collider() {
+        let colliders = unit_sphere_at_origin();
+        let rest = [5.0];
+        let result =
+            resolve_all_tail_collisions(Vector3::new(1.05, 0.0, 0.0), 0.1, &colliders, &rest);
+        assert!(approx_eq(result, Vector3::new(1.1, 0.0, 0.0), 1e-5));
+    }
+
+    #[test]
+    fn rest_clearance_applies_to_segment_mode_too() {
+        let head = Vector3::new(0.9, 1.0, 0.0);
+        let tail = Vector3::new(0.9, -1.0, 0.0);
+        let colliders = unit_sphere_at_origin();
+        let rest = [segment_axis_distance(head, tail, &colliders[0])];
+        let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &rest);
+        assert!(approx_eq(result, tail, 1e-6));
+    }
+
+    #[test]
+    fn missing_rest_distances_use_the_full_radius() {
+        let colliders = unit_sphere_at_origin();
+        let result = resolve_all_tail_collisions(Vector3::new(0.8, 0.0, 0.0), 0.1, &colliders, &[]);
+        assert!(approx_eq(result, Vector3::new(1.1, 0.0, 0.0), 1e-5));
     }
 }

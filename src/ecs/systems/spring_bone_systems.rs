@@ -3,7 +3,8 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
     integrate_joint, recompute_global_transform, resolve_all_segment_collisions,
-    resolve_all_tail_collisions, SpringCollisionMode, SpringSpace, WorldCollider,
+    resolve_all_tail_collisions, segment_axis_distance, tail_axis_distance, SpringCollisionMode,
+    SpringSpace, WorldCollider,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -58,6 +59,8 @@ pub fn spring_bone_initialize(
             chain.joints.len()
         );
 
+        let world_colliders =
+            collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
         let mut joint_states = Vec::new();
 
         for joint_param in &chain.joints {
@@ -111,12 +114,16 @@ pub fn spring_bone_initialize(
                 bone_axis.z,
             );
 
+            let rest_axis_distances =
+                rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode);
+
             joint_states.push(SpringJointState {
                 prev_tail: tail,
                 current_tail: tail,
                 bone_length,
                 bone_axis,
                 initial_local_rotation,
+                rest_axis_distances,
             });
         }
 
@@ -239,12 +246,19 @@ fn update_single_joint(
     let constrained_tail = apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
 
     let collision_resolved = match collision_mode {
-        SpringCollisionMode::VrmCompatible => {
-            resolve_all_tail_collisions(constrained_tail, hit_radius, world_colliders)
-        }
-        SpringCollisionMode::SegmentExtended => {
-            resolve_all_segment_collisions(head_pos, constrained_tail, hit_radius, world_colliders)
-        }
+        SpringCollisionMode::VrmCompatible => resolve_all_tail_collisions(
+            constrained_tail,
+            hit_radius,
+            world_colliders,
+            &joint_state.rest_axis_distances,
+        ),
+        SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
+            head_pos,
+            constrained_tail,
+            hit_radius,
+            world_colliders,
+            &joint_state.rest_axis_distances,
+        ),
     };
     let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
     let resolved_tail =
@@ -332,6 +346,21 @@ pub fn spring_bone_write_back_to_pose(
         pose.bone_poses[idx].rotation = r;
         pose.bone_poses[idx].scale = s;
     }
+}
+
+fn rest_axis_distances(
+    head: Vector3<f32>,
+    tail: Vector3<f32>,
+    world_colliders: &[WorldCollider],
+    collision_mode: SpringCollisionMode,
+) -> Vec<f32> {
+    world_colliders
+        .iter()
+        .map(|collider| match collision_mode {
+            SpringCollisionMode::VrmCompatible => tail_axis_distance(tail, collider),
+            SpringCollisionMode::SegmentExtended => segment_axis_distance(head, tail, collider),
+        })
+        .collect()
 }
 
 fn compute_initial_tail_position(

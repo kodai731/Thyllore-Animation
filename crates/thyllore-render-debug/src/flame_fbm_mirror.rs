@@ -8,6 +8,7 @@ fn glsl_fract(x: f32) -> f32 {
     x - x.floor()
 }
 
+#[allow(clippy::approx_constant)]
 pub fn hash_cell(cell: [f32; 3]) -> f32 {
     let mut p = [
         glsl_fract(cell[0] * 0.318_309_9 + 0.1),

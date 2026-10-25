@@ -101,7 +101,7 @@ mod tests {
     }
 
     fn collect_resource_sources(dir: &Path, sources: &mut Vec<(String, String)>) {
-        let entries = std::fs::read_dir(dir).expect("src/ecs/resource exists");
+        let entries = std::fs::read_dir(dir).expect("source dir exists");
         for path in entries
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
@@ -109,7 +109,7 @@ mod tests {
             if path.is_dir() {
                 collect_resource_sources(&path, sources);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
-                let source = std::fs::read_to_string(&path).expect("resource file is readable");
+                let source = std::fs::read_to_string(&path).expect("source file is readable");
                 sources.push((path.display().to_string(), source));
             }
         }
@@ -177,6 +177,56 @@ mod tests {
         assert!(
             names.iter().any(|name| name.ends_with("BillboardData")),
             "{names:?}"
+        );
+    }
+
+    fn render_target_struct_names(source: &str) -> Vec<&str> {
+        source
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                let stripped = trimmed.strip_prefix("pub struct ")?;
+                let space_pos = stripped.find(' ')?;
+                let name = &stripped[..space_pos];
+                if name.ends_with("RenderTargets") {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn effect_render_targets_moved_to_vulkan_core_are_registered() {
+        let effect_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/thyllore-vulkan-core/src/effect");
+        let mut sources: Vec<(String, String)> = Vec::new();
+        collect_resource_sources(&effect_dir, &mut sources);
+
+        let mut render_target_names: Vec<String> = sources
+            .iter()
+            .flat_map(|(_, source)| render_target_struct_names(source))
+            .map(String::from)
+            .collect();
+        render_target_names.sort();
+        render_target_names.dedup();
+
+        let hooks = GpuResourceHooks::collect().expect("no duplicate registrations");
+        let type_names = hooks.type_names();
+
+        for name in &render_target_names {
+            assert!(
+                type_names.iter().any(|tn| tn.ends_with(name.as_str())),
+                "effect render target struct `{name}` found in vulkan-core/src/effect/ \
+                 but no gpu_resource hook ends with that name. Registered: {type_names:?}",
+            );
+        }
+
+        assert!(
+            !render_target_names.is_empty(),
+            "no *RenderTargets structs found under crates/thyllore-vulkan-core/src/effect/ — \
+             the test may need updating if they are all moved out"
         );
     }
 }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{BoundGenerations, WindGpuState, WindRenderTargets};
+use crate::ecs::resource::{BoundGenerations, WindGpuState};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{OverlayUpsampleDescriptorSet, WIND_RESOLVE, WIND_SHADOW_BAKE};
 use crate::vulkanr::pipeline::RRPipeline;
@@ -11,6 +11,7 @@ use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
 use thyllore_vulkan_core::effect::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
 };
+use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };

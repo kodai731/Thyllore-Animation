@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
+use cgmath::{InnerSpace, Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
@@ -510,14 +510,19 @@ fn compute_bone_length_and_axis(
         }
     }
 
-    let (t, _, _) = decompose_transform(&bone.local_transform);
-    let length = (t.x * t.x + t.y * t.y + t.z * t.z).sqrt();
+    leaf_bone_length_and_axis(&bone.local_transform)
+}
 
-    if length > 1e-6 {
-        (length, t / length)
-    } else {
-        (0.1, Vector3::new(0.0, 1.0, 0.0))
+/// A leaf joint extends its own bone: the direction from the parent head, expressed in the bone's frame.
+fn leaf_bone_length_and_axis(local_transform: &Matrix4<f32>) -> (f32, Vector3<f32>) {
+    let (offset_from_parent, local_rotation, _) = decompose_transform(local_transform);
+    let length = offset_from_parent.magnitude();
+    if length <= 1e-6 {
+        return (0.1, Vector3::new(0.0, 1.0, 0.0));
     }
+    let axis_in_bone_frame =
+        rotate_vec3_by_quat(conjugate(local_rotation), offset_from_parent / length);
+    (length, axis_in_bone_frame)
 }
 
 fn rotate_vec3_by_quat(q: cgmath::Quaternion<f32>, v: Vector3<f32>) -> Vector3<f32> {
@@ -770,3 +775,58 @@ pub fn spring_bone_attach_loaded(world: &mut World, _assets: &AssetStorage, load
 }
 
 crate::model_load_hook!("spring_bone", Rig, spring_bone_attach_loaded);
+
+#[cfg(test)]
+mod tests {
+    use cgmath::{Deg, Rotation3};
+
+    use super::*;
+
+    fn leaf_tail_for_local_rotation(leaf_rotation: Quaternion<f32>) -> Vector3<f32> {
+        let parent_rotation = Quaternion::from_angle_z(Deg(30.0));
+        let parent_local = compose_transform(
+            Vector3::new(0.0, 1.0, 0.0),
+            parent_rotation,
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        let leaf_local = compose_transform(
+            Vector3::new(0.1, -0.2, 0.05),
+            leaf_rotation,
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        let globals = [parent_local, parent_local * leaf_local];
+
+        let (length, axis) = leaf_bone_length_and_axis(&leaf_local);
+        let (_, leaf_local_rotation, _) = decompose_transform(&leaf_local);
+        compute_tail_position(
+            extract_world_position(&globals[1]),
+            parent_rotation,
+            leaf_local_rotation,
+            axis,
+            length,
+        )
+    }
+
+    #[test]
+    fn leaf_tail_does_not_depend_on_the_bone_local_frame() {
+        let identity_frame = leaf_tail_for_local_rotation(Quaternion::new(1.0, 0.0, 0.0, 0.0));
+        let rotated_frame = leaf_tail_for_local_rotation(
+            Quaternion::from_angle_x(Deg(-98.0)) * Quaternion::from_angle_y(Deg(11.0)),
+        );
+
+        assert!(
+            (identity_frame - rotated_frame).magnitude() < 1e-5,
+            "{identity_frame:?} vs {rotated_frame:?}"
+        );
+    }
+
+    #[test]
+    fn leaf_extends_its_own_bone_direction() {
+        let tail = leaf_tail_for_local_rotation(Quaternion::new(1.0, 0.0, 0.0, 0.0));
+        let parent_rotation = Quaternion::from_angle_z(Deg(30.0));
+        let offset = rotate_vec3_by_quat(parent_rotation, Vector3::new(0.1, -0.2, 0.05));
+        let head = Vector3::new(0.0, 1.0, 0.0) + offset;
+
+        assert!((tail - (head + offset)).magnitude() < 1e-5, "{tail:?}");
+    }
+}

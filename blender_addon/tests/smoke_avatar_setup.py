@@ -114,7 +114,6 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
         role="hair",
         material_index=hair_slot_index,
         root_bone="mixamorig:Head",
-        skin_object=mesh.name,
         joint_count=4,
     )
 
@@ -155,6 +154,21 @@ def step_d_generated_chains_are_registered(arm, added):
         )
     if any(not chain.origin_mesh for chain in settings.chains):
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d — a generated chain has no origin")
+    radii = [joint.hit_radius for chain in settings.chains for joint in chain.joints]
+    if max(radii) <= 0.0:
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d — no generated joint has a measured hit_radius")
+
+    head_colliders = [c for c in settings.colliders if c.bone == "mixamorig:Head" and c.shape == "capsule"]
+    if len(head_colliders) != 1:
+        raise SystemExit(
+            f"AVATAR_SETUP_SMOKE failed: step_d — expected one head capsule collider, got {len(head_colliders)}"
+        )
+    fitted = [g for g in settings.collider_groups if g.name == "Fitted Body"]
+    if len(fitted) != 1 or any(
+        "Fitted Body" not in [entry.name for entry in chain.collider_groups] for chain in settings.chains
+    ):
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d — generated chains are not bound to 'Fitted Body'")
+    print(f"[smoke] step_d: head capsule r={head_colliders[0].radius:.3f} on every generated chain")
 
     bpy.context.view_layer.objects.active = arm
     bpy.ops.thyllore.add_chains_under_bone(root_bone="mixamorig:Head", min_joints=2)

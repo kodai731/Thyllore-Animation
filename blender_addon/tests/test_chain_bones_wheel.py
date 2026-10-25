@@ -209,3 +209,53 @@ def test_generate_chains_with_tex_coords(tml):
     assert len(output["chains"]) == 3
     for chain in output["chains"]:
         assert len(chain["joints"]) == 4
+
+
+def _fit_bones(names_parents_heads):
+    bones = []
+    for name, parent, head in names_parents_heads:
+        bind = [[1.0, 0.0, 0.0, head[0]], [0.0, 1.0, 0.0, head[1]], [0.0, 0.0, 1.0, head[2]], [0.0, 0.0, 0.0, 1.0]]
+        bones.append({"name": name, "parent": parent, "rest_position": list(head), "bind_matrix": bind})
+    return bones
+
+
+def test_generate_chains_measures_joint_radii_and_fits_a_head_capsule(tml):
+    positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
+    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"column_count": 1}, HEAD)
+
+    for chain in output["chains"]:
+        assert all(math.isfinite(joint["hit_radius"]) for joint in chain["joints"])
+    capsule = output["head_capsule"]
+    assert capsule is not None
+    assert capsule["radius"] > 0.0
+    assert capsule["top"][1] >= capsule["bottom"][1]
+
+
+def test_register_generated_chains_binds_the_head_capsule_to_every_chain(tml):
+    positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
+    output = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"column_count": 1}, HEAD)
+    joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
+    bones = _fit_bones(
+        [("Hips", None, (0.0, -1.0, 0.0)), ("Head", 0, (0.0, 0.0, 0.0))]
+        + [(name, 1 + i, (0.0, -0.1 * (i + 1), 0.0)) for i, name in enumerate(joint_names)]
+    )
+    empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
+
+    spring = tml.register_generated_chains(
+        empty, bones, [], "Head", "strip/hair", "hair", output["chains"], output["head_capsule"]
+    )
+
+    assert [c["name"] for c in spring["chains"]] == [c["name"] for c in output["chains"]]
+    assert [c["bone"] for c in spring["colliders"]] == ["Head"]
+    assert spring["colliders"][0]["shape"] == "capsule"
+    assert [g["name"] for g in spring["collider_groups"]] == ["Fitted Body"]
+    for chain, generated in zip(spring["chains"], output["chains"]):
+        assert chain["collider_groups"] == ["Fitted Body"]
+        assert chain["origin"] == {"mesh": "strip", "material": "hair", "role": "hair"}
+        assert [j["hit_radius"] for j in chain["joints"]] == [j["hit_radius"] for j in generated["joints"]]
+
+    again = tml.register_generated_chains(
+        spring, bones, [], "Head", "strip/hair", "hair", output["chains"], output["head_capsule"]
+    )
+    assert len(again["chains"]) == len(spring["chains"])
+    assert len(again["colliders"]) == 1

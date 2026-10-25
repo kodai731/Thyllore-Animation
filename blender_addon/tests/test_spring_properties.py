@@ -4,9 +4,7 @@ from __future__ import annotations
 import pytest
 from types import SimpleNamespace
 
-from blender_addon.common.chain_bones import chain_entries
 from blender_addon.common.spring_properties import (
-    add_generated_chains,
     chain_with_joint,
     remove_chains_generated_on,
     copy_joint_values,
@@ -451,24 +449,27 @@ def test_generated_origin_round_trips_and_authored_is_none():
     assert out["chains"][1]["origin"] is None
 
 
-def test_generated_chains_are_added_with_origin_and_replaced_per_submesh():
-    """add_generated_chains registers the generator output; remove_chains_generated_on drops only that submesh."""
+def test_generated_chains_are_replaced_per_submesh():
+    """remove_chains_generated_on drops only the chains generated on that submesh and names their bones."""
     settings = _make_settings(TEST_CHAINS, [], [])
-    output = {
-        "chains": [
-            {"column": 0, "name": "hair_hair_back_00", "joints": [{"name": "hair_hair_back_00_00"}, {"name": "hair_hair_back_00_01"}], "tail": (0, 0, 0), "vertices": []},
-            {"column": 1, "name": "hair_hair_back_01", "joints": [{"name": "hair_hair_back_01_00"}], "tail": (0, 0, 0), "vertices": []},
-        ],
-        "weights": [],
-    }
     back = {"mesh": "Hair_back", "material": "Hair", "role": "hair"}
     side = {"mesh": "Hair_side", "material": "Hair", "role": "hair"}
 
-    add_generated_chains(settings, chain_entries(output, back))
-    add_generated_chains(settings, [{"name": "hair_hair_side_00", "origin": side, "joints": ["hair_hair_side_00_00"]}])
+    def joint(bone):
+        return {"bone": bone, "stiffness": 1.0, "drag_force": 0.4, "gravity_power": 0.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
+
+    spring = spring_settings_to_sidecar(settings)
+    spring["chains"] += [
+        {"name": "hair_hair_back_00", "center": None, "tail": None, "collider_groups": [], "origin": back,
+         "joints": [joint("hair_hair_back_00_00"), joint("hair_hair_back_00_01")]},
+        {"name": "hair_hair_back_01", "center": None, "tail": None, "collider_groups": [], "origin": back,
+         "joints": [joint("hair_hair_back_01_00")]},
+        {"name": "hair_hair_side_00", "center": None, "tail": None, "collider_groups": [], "origin": side,
+         "joints": [joint("hair_hair_side_00_00")]},
+    ]
+    write_sidecar_spring(settings, spring)
     assert [c.name for c in settings.chains] == ["chain_0", "hair_hair_back_00", "hair_hair_back_01", "hair_hair_side_00"]
     assert settings.chains[1].origin_mesh == "Hair_back"
-    assert [j.bone for j in settings.chains[1].joints] == ["hair_hair_back_00_00", "hair_hair_back_00_01"]
 
     removed = remove_chains_generated_on(settings, back)
     assert sorted(removed) == ["hair_hair_back_00_00", "hair_hair_back_00_01", "hair_hair_back_01_00"]

@@ -7,6 +7,8 @@ use thyllore_avatar_core::garment::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::garment::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains,
 };
+use thyllore_avatar_core::garment::systems::head_capsule::hair_head_capsule;
+use thyllore_avatar_core::garment::systems::joint_radius::joint_half_thicknesses;
 
 use crate::param_rows::{param_rows, ParamRow};
 
@@ -14,6 +16,15 @@ use crate::param_rows::{param_rows, ParamRow};
 pub struct ChainGenOutput {
     pub chains: Vec<ChainOut>,
     pub weights: Vec<WeightOut>,
+    /// The capsule a hair role fits around the head, in the same space as the positions
+    pub head_capsule: Option<CapsuleOut>,
+}
+
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct CapsuleOut {
+    pub bottom: [f32; 3],
+    pub top: [f32; 3],
+    pub radius: f32,
 }
 
 #[derive(serde::Serialize)]
@@ -29,6 +40,7 @@ pub struct ChainOut {
 pub struct JointOut {
     pub name: String,
     pub head: [f32; 3],
+    pub hit_radius: f32,
 }
 
 #[derive(serde::Serialize)]
@@ -51,7 +63,7 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
     Ok(settings)
 }
 
-fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
+pub(crate) fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
     match role {
         "hair" => Ok(ChainRole::Hair),
         "garment" | "skirt" => Ok(ChainRole::Garment),
@@ -98,20 +110,29 @@ pub fn run_chain_gen(
         settings,
     };
 
+    let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
+        bottom: vector3_to_array(capsule.bottom),
+        top: vector3_to_array(capsule.top),
+        radius: capsule.radius,
+    });
     let chains = place_chains(&input, &params)?;
     let weights = compute_chain_weights(&input, &params, &chains);
+    let half_thicknesses = joint_half_thicknesses(&positions_vec, &chains, &weights);
 
     let chains_out: Vec<ChainOut> = chains
         .iter()
-        .map(|chain| ChainOut {
+        .zip(&half_thicknesses)
+        .map(|(chain, radii)| ChainOut {
             column: chain.column,
             name: chain_name(&params, chain.column),
             joints: chain
                 .joints
                 .iter()
-                .map(|joint| JointOut {
+                .zip(radii)
+                .map(|(joint, &hit_radius)| JointOut {
                     name: joint.name.clone(),
                     head: vector3_to_array(joint.head),
+                    hit_radius,
                 })
                 .collect(),
             tail: vector3_to_array(chain.tail),
@@ -142,6 +163,7 @@ pub fn run_chain_gen(
     Ok(ChainGenOutput {
         chains: chains_out,
         weights: weights_out,
+        head_capsule,
     })
 }
 
@@ -186,6 +208,14 @@ mod tests {
         let chain = &output.chains[0];
         assert_eq!(chain.joints.len(), 2, "should have 2 joints");
         assert!(chain.vertices.len() >= 3, "should cover the mesh vertices");
+        assert!(chain
+            .joints
+            .iter()
+            .all(|joint| joint.hit_radius.is_finite()));
+        let capsule = output
+            .head_capsule
+            .expect("a hair role fits a head capsule");
+        assert!(capsule.radius > 0.0);
 
         for weight in &output.weights {
             let sum: f32 = weight.influences.iter().map(|(_, w)| *w).sum();

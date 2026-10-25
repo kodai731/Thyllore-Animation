@@ -11,9 +11,8 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..common import coordinates
 from ..common.chain_bones import settings_from_properties
-from ..common.collider_fit import top_influences
+from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import (
     disabled_chain_names,
@@ -34,39 +33,6 @@ def _setting_annotations() -> dict[str, object]:
     return annotations
 
 
-def _skin_meshes(meshes) -> list:
-    """Select bound meshes that have 'skin' role."""
-    skin_meshes = []
-    for mesh_obj in meshes:
-        roles = [item.role for item in mesh_obj.thyllore_submesh.roles]
-        if "skin" in roles:
-            skin_meshes.append(mesh_obj)
-    return skin_meshes
-
-
-def _skin_input(mesh_obj, arm, scale_length) -> dict:
-    """Build skin input (positions / influences) from one mesh object."""
-    group_to_bone_local = {
-        i: arm.data.bones.find(vg.name)
-        for i, vg in enumerate(mesh_obj.vertex_groups)
-        if arm.data.bones.find(vg.name) >= 0
-    }
-
-    positions = []
-    influences = []
-    for v in mesh_obj.data.vertices:
-        world_pos = tuple(mesh_obj.matrix_world @ v.co)
-        engine_pos = coordinates.blender_to_engine_point(world_pos)
-        scaled_pos = [c * scale_length for c in engine_pos]
-        positions.append(scaled_pos)
-
-        vertex_groups = [(g.group, g.weight) for g in v.groups]
-        top = top_influences(vertex_groups, group_to_bone_local)
-        influences.append(top)
-
-    return {"positions": positions, "influences": influences}
-
-
 class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
     """Fit body colliders from skin mesh vertices."""
 
@@ -84,7 +50,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
         arm = target_armature(context)
         settings = arm.data.thyllore_spring
 
-        skin_meshes = _skin_meshes(bound_meshes(arm))
+        skin_meshes = skin_role_meshes(bound_meshes(arm))
         if not skin_meshes:
             self.report({"ERROR"}, "No skin mesh found (no bound mesh has role 'skin')")
             return {"CANCELLED"}
@@ -94,7 +60,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
         disabled = disabled_chain_names(settings)
 
         scale_length = context.scene.unit_settings.scale_length
-        skins = [_skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
+        skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
 
         try:
             output = tml.fit_body_colliders(

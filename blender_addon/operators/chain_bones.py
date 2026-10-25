@@ -13,19 +13,27 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..common.bone_collections import assign_bones_to_chain_collection
+from ..avatar_setup.operators import armature_fit_bones, bound_meshes
 from ..common import coordinates
+from ..common.armature import armature_of
+from ..common.bone_collections import assign_bones_to_chain_collection
 from ..common.chain_bones import (
     bone_specs,
-    chain_entries,
     group_weights,
     output_to_blender,
     settings_from_properties,
     vertex_tex_coords,
 )
-from ..common.spring_properties import add_generated_chains, remove_chains_generated_on
-from ..common.submesh_mask import material_triangles
 from ..common.effect_properties import build_param_properties
+from ..common.skin_input import dominant_bone_positions, skin_input, skin_role_meshes
+from ..common.spring_properties import (
+    disabled_chain_names,
+    remove_chains_generated_on,
+    restore_disabled_chains,
+    spring_settings_to_edit,
+    write_sidecar_spring,
+)
+from ..common.submesh_mask import material_triangles
 
 CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
 
@@ -37,13 +45,6 @@ def _setting_annotations() -> dict[str, object]:
     return annotations
 
 
-def _armature_of(obj):
-    for mod in obj.modifiers:
-        if mod.type == "ARMATURE":
-            return mod.object
-    return None
-
-
 def _material_name(obj, material_index: int) -> str:
     slots = obj.material_slots
     if material_index < len(slots) and slots[material_index].material is not None:
@@ -51,9 +52,9 @@ def _material_name(obj, material_index: int) -> str:
     return str(material_index)
 
 
-def _root_engine_position(arm, root_bone: str) -> tuple[float, float, float]:
+def _root_engine_position(arm, root_bone: str, scale_length: float) -> list[float]:
     head = arm.data.bones[root_bone].head_local
-    return coordinates.blender_to_engine_point(tuple(arm.matrix_world @ head))
+    return [c * scale_length for c in coordinates.blender_to_engine_point(tuple(arm.matrix_world @ head))]
 
 
 def _add_bones(context, arm, specs):
@@ -114,23 +115,6 @@ def _write_weights(obj, groups):
             vg.add([v_idx], weight, "REPLACE")
 
 
-def _skin_engine_positions(skin_obj, root_bone):
-    """Engine-space positions of the skin vertices whose heaviest vertex group is the root bone."""
-    if skin_obj is None or skin_obj.type != "MESH":
-        return []
-    group_index = skin_obj.vertex_groups.find(root_bone)
-    if group_index < 0:
-        return []
-    positions = []
-    for v in skin_obj.data.vertices:
-        if not v.groups:
-            continue
-        heaviest = max(v.groups, key=lambda g: g.weight)
-        if heaviest.group == group_index and heaviest.weight > 0.0:
-            positions.append(coordinates.blender_to_engine_point(tuple(skin_obj.matrix_world @ v.co)))
-    return positions
-
-
 class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     """Generate chain bones from mesh surface."""
 
@@ -144,10 +128,6 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     )
     material_index: bpy.props.IntProperty(default=0, min=0)
     root_bone: bpy.props.StringProperty(default="Head")
-    skin_object: bpy.props.StringProperty(
-        default="",
-        description="Mesh object of the skin; its vertices driven by the root bone give the root band",
-    )
 
     __annotations__.update(_setting_annotations())
 
@@ -156,15 +136,17 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         obj = context.active_object
         if obj is None or obj.type != "MESH":
             return False
-        return _TML_AVAILABLE and _armature_of(obj) is not None
+        return _TML_AVAILABLE and armature_of(obj) is not None
 
     def execute(self, context):
         obj = context.active_object
         mesh = obj.data
-        arm = _armature_of(obj)
+        arm = armature_of(obj)
+        scale_length = context.scene.unit_settings.scale_length
 
         positions = [
-            coordinates.blender_to_engine_point(tuple(obj.matrix_world @ v.co)) for v in mesh.vertices
+            [c * scale_length for c in coordinates.blender_to_engine_point(tuple(obj.matrix_world @ v.co))]
+            for v in mesh.vertices
         ]
         mesh.calc_loop_triangles()
         triangle_vertices = []
@@ -180,7 +162,14 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             loop_uvs = [tuple(d.uv) for d in uv_layer.data]
             tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
+        skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
+        root_index = arm.data.bones.find(self.root_bone)
+        if root_index < 0:
+            self.report({"ERROR"}, f"Root bone {self.root_bone!r} not found")
+            return {"CANCELLED"}
+
         material_name = _material_name(obj, self.material_index)
+        target = f"{obj.name}/{material_name}"
         origin = {"mesh": obj.name, "material": material_name, "role": self.role}
         settings = arm.data.thyllore_spring
         replaced_bones = remove_chains_generated_on(settings, origin)
@@ -190,15 +179,15 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         output = tml.generate_chains(
             positions,
             triangles,
-            _root_engine_position(arm, self.root_bone),
+            _root_engine_position(arm, self.root_bone, scale_length),
             self.role,
-            f"{obj.name}/{material_name}",
+            target,
             settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
-            _skin_engine_positions(bpy.data.objects.get(self.skin_object), self.root_bone),
+            dominant_bone_positions(skins, root_index),
             tex_coords,
         )
 
-        blender_output = output_to_blender(output)
+        blender_output = output_to_blender(output, scale_length)
         specs = bone_specs(blender_output, self.root_bone)
         groups = group_weights(blender_output, self.root_bone)
 
@@ -210,9 +199,26 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
-        add_generated_chains(settings, chain_entries(output, origin))
-
         assign_bones_to_chain_collection(arm, [name for name, _, _, _ in specs])
 
-        self.report({"INFO"}, f"Generated {len(specs)} chain bones")
+        try:
+            spring = tml.register_generated_chains(
+                spring_settings_to_edit(settings),
+                armature_fit_bones(context, arm),
+                skins,
+                self.root_bone,
+                target,
+                self.role,
+                output["chains"],
+                output.get("head_capsule"),
+            )
+        except ValueError as e:
+            self.report({"ERROR"}, f"register_generated_chains failed: {e}")
+            return {"CANCELLED"}
+        disabled = disabled_chain_names(settings)
+        write_sidecar_spring(settings, spring)
+        restore_disabled_chains(settings, disabled)
+
+        collider_note = " with a head collider" if output.get("head_capsule") else ""
+        self.report({"INFO"}, f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}")
         return {"FINISHED"}

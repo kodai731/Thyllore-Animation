@@ -28,7 +28,7 @@ pub struct FitSkin {
     pub influences: Vec<Vec<(usize, f32)>>,
 }
 
-fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
+pub(crate) fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
     let mut skeleton = skeleton_from_bones(&to_bone_inputs(bones));
 
     for (skeleton_bone, fit_bone) in skeleton.bones.iter_mut().zip(bones) {
@@ -44,7 +44,7 @@ fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
     Ok(skeleton)
 }
 
-fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
+pub(crate) fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
     let count = fit_skin.positions.len();
     let mut bone_indices = Vec::with_capacity(count);
     let mut bone_weights = Vec::with_capacity(count);
@@ -77,7 +77,7 @@ fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
     }
 }
 
-fn to_bone_inputs(bones: &[FitBone]) -> Vec<BoneInput> {
+pub(crate) fn to_bone_inputs(bones: &[FitBone]) -> Vec<BoneInput> {
     bones
         .iter()
         .map(|fit_bone| fit_bone.bone.clone().into())

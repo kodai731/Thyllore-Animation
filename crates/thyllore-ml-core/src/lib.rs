@@ -1,5 +1,6 @@
 pub mod avatar_setup_bridge;
 pub mod chain_gen_bridge;
+pub mod chain_register_bridge;
 pub mod collider_bridge;
 pub mod copilot;
 #[cfg(feature = "debug-log")]

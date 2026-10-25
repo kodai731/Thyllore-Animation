@@ -22,15 +22,17 @@ def vertex_tex_coords(
     return [uv if uv is not None else (0.0, 0.0) for uv in first_uvs]
 
 
-def output_to_blender(output: dict) -> dict:
-    """The same output with every joint head and chain tail converted to Blender space."""
+def output_to_blender(output: dict, scale_length: float = 1.0) -> dict:
+    """The same output with every joint head and chain tail in Blender space and Blender units."""
+
+    def to_blender(point):
+        return tuple(c / scale_length for c in engine_to_blender_point(point))
+
     chains = [
         {
             **chain,
-            "joints": [
-                {**joint, "head": engine_to_blender_point(joint["head"])} for joint in chain["joints"]
-            ],
-            "tail": engine_to_blender_point(chain["tail"]),
+            "joints": [{**joint, "head": to_blender(joint["head"])} for joint in chain["joints"]],
+            "tail": to_blender(chain["tail"]),
         }
         for chain in output["chains"]
     ]
@@ -82,15 +84,3 @@ def group_weights(
             bone_name = root_bone if target == "root" else target
             groups.setdefault(bone_name, []).append((vertex, weight))
     return groups
-
-
-def chain_entries(output: dict, origin: dict) -> list[dict]:
-    """One spring chain entry per generated chain: its name, the origin submesh and the joint bone names."""
-    return [
-        {
-            "name": chain["name"],
-            "origin": origin,
-            "joints": [joint["name"] for joint in chain["joints"]],
-        }
-        for chain in output["chains"]
-    ]

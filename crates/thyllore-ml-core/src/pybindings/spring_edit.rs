@@ -3,6 +3,12 @@ use pythonize::depythonize;
 
 use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
 use super::chain_gen::pythonize_value;
+use crate::chain_gen_bridge::CapsuleOut;
+use crate::chain_register_bridge::{
+    register_generated_chains as bridge_register_generated_chains, GeneratedChainIn,
+    RegisterRequest,
+};
+use crate::collider_bridge::{FitBone, FitSkin};
 use crate::spring_edit_bridge::{
     add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
     chains_in_scope as bridge_chains_in_scope, chains_to_draw as bridge_chains_to_draw,
@@ -23,6 +29,43 @@ pub fn add_chains_under_bone<'py>(
         depythonize(spring).map_err(depythonize_error_to_pyerr)?;
     let bone_inputs = bones_from_py(bones)?;
     let output = bridge_add_chains_under_bone(&spring, &bone_inputs, root_bone, min_joints)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
+    pythonize_value(py, &output)
+}
+
+/// Registers the chains of a `generate_chains` output as the engine does: joint radii, the head
+/// capsule (or a capsule fitted to the skin on the root bone) in the fitted body group, and the
+/// chains bound to that group. `bones` carry `bind_matrix` like the collider fit.
+#[pyfunction]
+#[pyo3(signature = (spring, bones, skins, root_bone, target, role, chains, head_capsule = None))]
+#[allow(clippy::too_many_arguments)]
+pub fn register_generated_chains<'py>(
+    py: Python<'py>,
+    spring: &Bound<PyAny>,
+    bones: &Bound<PyAny>,
+    skins: &Bound<PyAny>,
+    root_bone: &str,
+    target: &str,
+    role: &str,
+    chains: &Bound<PyAny>,
+    head_capsule: Option<&Bound<PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
+        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
+    let bones: Vec<FitBone> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
+    let skins: Vec<FitSkin> = depythonize(skins).map_err(depythonize_error_to_pyerr)?;
+    let chains: Vec<GeneratedChainIn> = depythonize(chains).map_err(depythonize_error_to_pyerr)?;
+    let head_capsule: Option<CapsuleOut> = head_capsule
+        .map(|capsule| depythonize(capsule).map_err(depythonize_error_to_pyerr))
+        .transpose()?;
+    let request = RegisterRequest {
+        root_name: root_bone,
+        target,
+        role,
+        chains: &chains,
+        head_capsule,
+    };
+    let output = bridge_register_generated_chains(&spring, &bones, &skins, &request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }

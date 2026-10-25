@@ -268,7 +268,10 @@ mod tests {
         let gravity_dir = params.iter().find(|p| p.name == "gravity_dir").unwrap();
         assert_eq!(gravity_dir.default, ParamDefault::Vector([0.0, -1.0, 0.0]));
         let stiffness = params.iter().find(|p| p.name == "stiffness").unwrap();
-        assert_eq!(stiffness.default, ParamDefault::Scalar(0.5));
+        assert_eq!(
+            stiffness.default,
+            ParamDefault::Scalar(SpringJointParam::default().stiffness)
+        );
     }
 
     #[test]
@@ -320,6 +323,7 @@ mod tests {
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
+                force_model: Default::default(),
                 colliders: vec![SidecarCollider {
                     name: "collider0".into(),
                     bone: "Bone0".into(),
@@ -385,6 +389,7 @@ mod tests {
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
+                force_model: Default::default(),
                 colliders: Vec::new(),
                 collider_groups: Vec::new(),
                 chains: vec![SidecarSpringChain {
@@ -429,6 +434,7 @@ mod tests {
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
+                force_model: Default::default(),
                 colliders: Vec::new(),
                 collider_groups: Vec::new(),
                 chains: vec![SidecarSpringChain {

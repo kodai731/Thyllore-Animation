@@ -244,18 +244,3 @@ def remove_chains_generated_on(settings, origin: dict) -> list[str]:
         bone_names.extend(joint.bone for joint in chain.joints)
         settings.chains.remove(index)
     return bone_names
-
-
-def add_generated_chains(settings, entries: list[dict]) -> None:
-    """Append chain items (name, origin, joint bone names); joint parameters keep their defaults."""
-    for entry in entries:
-        item = settings.chains.add()
-        item.name = entry["name"]
-        item.enabled = True
-        origin = entry["origin"]
-        item.origin_mesh = origin["mesh"]
-        item.origin_material = origin.get("material") or ""
-        item.origin_role = origin["role"]
-        for bone_name in entry["joints"]:
-            joint = item.joints.add()
-            joint.bone = bone_name

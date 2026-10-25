@@ -18,7 +18,7 @@ from ..common import coordinates
 from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sidecar, write_submesh_sidecar
 from ..common.collider_fit import scaled_bind_matrix
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
-from ..operators.chain_bones import _armature_of
+from ..common.armature import armature_of
 
 
 def bound_meshes(arm) -> list:
@@ -61,7 +61,7 @@ def target_armature(context):
     if obj.type == "ARMATURE":
         return obj
     if obj.type == "MESH":
-        return _armature_of(obj)
+        return armature_of(obj)
     return None
 
 

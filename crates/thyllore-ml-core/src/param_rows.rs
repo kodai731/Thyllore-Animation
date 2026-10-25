@@ -114,7 +114,10 @@ mod tests {
         );
         let stiffness = rows.iter().find(|r| r.name == "stiffness").unwrap();
         assert_eq!(stiffness.kind, "scalar");
-        assert_eq!(stiffness.default, ParamDefault::Scalar(0.5));
+        assert_eq!(
+            stiffness.default,
+            ParamDefault::Scalar(SpringJointParam::default().stiffness)
+        );
     }
 
     #[test]

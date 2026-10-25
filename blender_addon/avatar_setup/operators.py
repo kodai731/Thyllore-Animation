@@ -249,6 +249,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             bake_anim=False,
             add_leaf_bones=False,
             use_mesh_modifiers=True,
+            path_mode="RELATIVE",
         )
 
         _restore_selection(context, selected_before, active_before)

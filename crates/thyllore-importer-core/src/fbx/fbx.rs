@@ -339,21 +339,26 @@ fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, ControlPoin
 }
 
 fn extract_texture_path(mat: &ufbx::Material) -> Option<String> {
-    if let Some(ref tex) = mat.pbr.base_color.texture {
-        let filename = tex.filename.to_string();
-        if !filename.is_empty() {
-            return Some(filename);
-        }
-    }
+    [&mat.pbr.base_color.texture, &mat.fbx.diffuse_color.texture]
+        .into_iter()
+        .flatten()
+        .find_map(|tex| {
+            texture_reference(
+                &tex.relative_filename,
+                &tex.absolute_filename,
+                &tex.filename,
+            )
+        })
+}
 
-    if let Some(ref tex) = mat.fbx.diffuse_color.texture {
-        let filename = tex.filename.to_string();
-        if !filename.is_empty() {
-            return Some(filename);
-        }
-    }
-
-    None
+/// The reference as the file wrote it: `RelativeFilename` (relative to the model, or absolute when
+/// the writer could not make it relative), then `FileName`; ufbx's resolved name only as a last
+/// resort because it joins an absolute `RelativeFilename` onto the model directory.
+fn texture_reference(relative: &str, absolute: &str, resolved: &str) -> Option<String> {
+    [relative, absolute, resolved]
+        .into_iter()
+        .find(|name| !name.is_empty())
+        .map(str::to_string)
 }
 
 fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos: &[MeshSplitInfo]) {
@@ -1003,6 +1008,31 @@ mod tests {
         data.material_name = Some("Material01".to_string());
 
         assert_eq!(data.material_name, Some("Material01".to_string()));
+    }
+
+    #[test]
+    fn texture_reference_prefers_the_written_relative_name() {
+        assert_eq!(
+            texture_reference(
+                "../source/skin.png",
+                "/abs/skin.png",
+                "/model/../source/skin.png"
+            ),
+            Some("../source/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("/abs/skin.png", "/abs/skin.png", "/model/abs/skin.png"),
+            Some("/abs/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("", "/abs/skin.png", "/model/skin.png"),
+            Some("/abs/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("", "", "skin.png"),
+            Some("skin.png".to_string())
+        );
+        assert_eq!(texture_reference("", "", ""), None);
     }
 
     #[test]

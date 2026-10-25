@@ -1,12 +1,12 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::shader_bindings::lightning_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE};
-use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::GpuResource;
-use crate::vulkanr::resource::UniformBuffer;
+use crate::core::RRDevice;
+use crate::descriptor::shader_bindings::lightning_resolve;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE};
+use crate::resource::image::create_scene_depth_sampler;
+use crate::resource::GpuResource;
+use crate::resource::UniformBuffer;
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
 
 #[derive(Clone, Debug, Default)]

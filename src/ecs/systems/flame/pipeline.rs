@@ -7,12 +7,11 @@ use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
+use thyllore_vulkan_core::effect::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::HistoryTargets;
-
-use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 
 /// Blends the shading onto the HDR color and writes the unblended result into the history image.
 pub const FLAME_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {

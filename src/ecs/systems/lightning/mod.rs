@@ -1,6 +1,5 @@
 mod cli;
 mod debug_dump;
-mod descriptors;
 mod object_pick;
 mod passes;
 mod path;
@@ -19,7 +18,6 @@ mod ui_command;
 
 pub use cli::*;
 pub use debug_dump::*;
-pub use descriptors::*;
 pub use object_pick::*;
 pub use path::*;
 pub use pipeline::*;
@@ -27,5 +25,6 @@ pub use preset::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use target::*;
+pub use thyllore_vulkan_core::effect::lightning::descriptors::*;
 pub use time::*;
 pub use ui_command::*;

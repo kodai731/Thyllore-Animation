@@ -1,7 +1,6 @@
 mod attach;
 mod batch_actions;
 mod cli;
-mod descriptors;
 mod dump;
 mod field;
 mod frame_prep;
@@ -25,7 +24,6 @@ mod ui_command;
 
 pub use attach::*;
 pub use cli::*;
-pub use descriptors::*;
 pub use dump::*;
 pub use field::*;
 pub use heat_distortion::*;
@@ -39,6 +37,7 @@ pub use render_targets::*;
 pub use spawn::*;
 pub use style::*;
 pub use texture_fit::*;
+pub use thyllore_vulkan_core::effect::flame::descriptors::*;
 pub use time::*;
 pub use trace::*;
 pub use trail::*;

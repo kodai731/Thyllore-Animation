@@ -1,10 +1,10 @@
-use crate::vulkanr::core::device::*;
-use crate::vulkanr::data::SceneUniformData;
-use crate::vulkanr::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
-use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::vulkanr::resource::gpu_resource::GpuResource;
-use crate::vulkanr::vulkan::*;
+use crate::core::device::*;
+use crate::data::SceneUniformData;
+use crate::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
+use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
+use crate::resource::gpu_resource::GpuResource;
+use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {

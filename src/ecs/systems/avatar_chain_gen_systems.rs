@@ -9,9 +9,7 @@ use thyllore_avatar_core::garment::components::chain_gen::{
     GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget, RootBandRecord,
     StrandPlacement, VertexInfluences,
 };
-use thyllore_avatar_core::garment::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshSelector};
 use thyllore_avatar_core::garment::systems::chain_bones::{
     append_chain_bones, write_chain_weights,
 };
@@ -27,7 +25,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
-use crate::ecs::systems::avatar_submesh_role_systems::collect_submesh_meshes;
+use crate::ecs::systems::avatar_submesh_role_systems::{collect_submesh_meshes, skin_role_skins};
 use crate::ecs::systems::skeleton_edit_systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
     remove_bone_subtree,
@@ -247,35 +245,6 @@ fn dominant_bone(indices: cgmath::Vector4<u32>, weights: cgmath::Vector4<f32>) -
         .filter(|(_, weight)| *weight > 0.0)
         .max_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(bone, _)| bone)
-}
-
-/// Geometry-space positions of the skin-role vertices the bone drives most, the surface the chains hang from.
-fn skin_role_skins<'a>(
-    world: &World,
-    assets: &AssetStorage,
-    graphics: &'a GraphicsResources,
-    skeleton_id: crate::animation::SkeletonId,
-) -> Vec<&'a thyllore_model_core::SkinData> {
-    let node_assets = world.resource::<NodeAssets>();
-    let state = world.resource::<AvatarSetupState>();
-    let mut skin_meshes: Vec<usize> = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
-        .into_iter()
-        .filter(|(key, _)| {
-            state
-                .submesh_roles
-                .get(key)
-                .is_some_and(|entry| entry.role == SubmeshRole::Skin)
-        })
-        .map(|(_, mesh_index)| mesh_index)
-        .collect();
-    skin_meshes.sort_unstable();
-    skin_meshes.dedup();
-
-    skin_meshes
-        .into_iter()
-        .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data.as_ref())
-        .filter(|skin| skin.skeleton_id == skeleton_id)
-        .collect()
 }
 
 /// Collider offsets are in the bone's frame: the spring solver places them at `global[bone] * offset`.

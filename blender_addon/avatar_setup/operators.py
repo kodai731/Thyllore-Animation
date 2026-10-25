@@ -14,9 +14,8 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..common import coordinates
 from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sidecar, write_submesh_sidecar
-from ..common.collider_fit import scaled_bind_matrix
+from ..common.collider_fit import bone_bind_matrix
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.armature import armature_of
 
@@ -76,11 +75,10 @@ def armature_fit_bones(context, arm):
     """Collect bone data from arm and build bone specs with bind_matrix for collider fit."""
     specs = armature_bone_specs(context, arm)
     scale_length = context.scene.unit_settings.scale_length
+    armature_rows = [[arm.matrix_world[i][j] for j in range(4)] for i in range(4)]
     for spec, bone in zip(specs, arm.data.bones):
-        world_matrix = arm.matrix_world @ bone.matrix_local
-        engine_matrix = coordinates.blender_to_engine_matrix(world_matrix)
-        rows = [[engine_matrix[i][j] for j in range(4)] for i in range(4)]
-        spec["bind_matrix"] = scaled_bind_matrix(rows, scale_length)
+        bone_rows = [[bone.matrix_local[i][j] for j in range(4)] for i in range(4)]
+        spec["bind_matrix"] = bone_bind_matrix(armature_rows, bone_rows, scale_length)
     return specs
 
 

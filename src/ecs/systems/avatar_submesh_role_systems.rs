@@ -2,6 +2,7 @@ use thyllore_avatar_core::garment::components::submesh_role::{
     merge_guessed_roles, SubmeshKey, SubmeshRole, SubmeshRoleEntry, SubmeshRoleSource,
 };
 
+use crate::animation::{SkeletonId, SkinData};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::resource::{AvatarSetupState, HierarchyState, NodeAssets};
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
@@ -229,4 +230,33 @@ mod tests {
         assert_eq!(state.submesh_roles.len(), 2);
         assert_eq!(state.submesh_roles[&key("Body", "")], user_entry);
     }
+}
+
+/// The skin data of every mesh whose submesh role is skin: the body surface colliders and chains fit to.
+pub(crate) fn skin_role_skins<'a>(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &'a GraphicsResources,
+    skeleton_id: SkeletonId,
+) -> Vec<&'a SkinData> {
+    let node_assets = world.resource::<NodeAssets>();
+    let state = world.resource::<AvatarSetupState>();
+    let mut skin_meshes: Vec<usize> = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
+        .into_iter()
+        .filter(|(key, _)| {
+            state
+                .submesh_roles
+                .get(key)
+                .is_some_and(|entry| entry.role == SubmeshRole::Skin)
+        })
+        .map(|(_, mesh_index)| mesh_index)
+        .collect();
+    skin_meshes.sort_unstable();
+    skin_meshes.dedup();
+
+    skin_meshes
+        .into_iter()
+        .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data.as_ref())
+        .filter(|skin| skin.skeleton_id == skeleton_id)
+        .collect()
 }

@@ -33,13 +33,13 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 use thyllore_model_core::MeshMorph;
 
-use crate::animation::{BoneId, Skeleton, SkinData};
+use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
     AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState, NodeAssets,
 };
-use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
+use crate::ecs::systems::avatar_submesh_role_systems::{refresh_submesh_roles, skin_role_skins};
 use crate::ecs::systems::spring_bone_edit_systems::{
     handle_spring_chain_add, reset_spring_bone_state,
 };
@@ -395,15 +395,11 @@ pub fn fit_body_colliders(
         return;
     };
 
-    let skin_data: Vec<&SkinData> = graphics
-        .meshes
-        .iter()
-        .filter_map(|m| m.skin_data.as_ref())
-        .filter(|skin| skin.skeleton_id == skeleton.id)
-        .collect();
-
+    let skin_data = skin_role_skins(world, assets, graphics, skeleton.id);
     if skin_data.is_empty() {
-        msg_error!("Cannot fit body colliders: no skinned meshes found for this skeleton");
+        msg_error!(
+            "Cannot fit body colliders: no mesh with the skin role is bound to this skeleton"
+        );
         return;
     }
 

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameHistorySnapshotState, FlameRenderTargets};
@@ -7,8 +6,7 @@ use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
-use thyllore_vulkan_core::resource::render_target_storage::RenderTargetKey;
-use thyllore_vulkan_core::resource::{HistoryTargets, HistoryTargetsDesc};
+use thyllore_vulkan_core::effect::flame::targets::{create_flame_history, recreate_flame_history};
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
@@ -23,7 +21,7 @@ unsafe fn create_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         return Ok(());
     };
 
-    let history = HistoryTargets::new(
+    let history = create_flame_history(
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
@@ -31,7 +29,6 @@ unsafe fn create_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_view,
-        flame_history_desc(),
     )?;
 
     for image in history.images {
@@ -104,16 +101,15 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
     let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() else {
         return Ok(());
     };
-    targets.history.destroy(&ctx.rrdevice.device);
-    targets.history = HistoryTargets::new(
+    recreate_flame_history(
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
         command_pool,
+        &mut targets.history,
         width,
         height,
         hdr_view,
-        flame_history_desc(),
     )?;
     for image in targets.history.images {
         ctx.pass_image_states.mark_shader_read_only(image);
@@ -139,40 +135,4 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         state.previous = None;
     }
     Ok(())
-}
-
-const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
-    RenderTargetKey::EffectHistory(0),
-    RenderTargetKey::EffectHistory(1),
-];
-
-pub const FLAME_HISTORY_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
-
-fn flame_history_desc() -> HistoryTargetsDesc {
-    HistoryTargetsDesc {
-        keys: FLAME_HISTORY_KEYS,
-        format: FLAME_HISTORY_FORMAT,
-        usage: vk::ImageUsageFlags::TRANSFER_SRC,
-        sampler: nearest_clamp_sampler_info(),
-        history_load_op: vk::AttachmentLoadOp::CLEAR,
-        depth_view: None,
-    }
-}
-
-fn nearest_clamp_sampler_info() -> vk::SamplerCreateInfo {
-    vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::NEAREST)
-        .min_filter(vk::Filter::NEAREST)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .anisotropy_enable(false)
-        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-        .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
-        .mip_lod_bias(0.0)
-        .min_lod(0.0)
-        .max_lod(0.0)
-        .build()
 }

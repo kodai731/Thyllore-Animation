@@ -25,7 +25,6 @@ use crate::ecs::{
     build_spring_bone_gizmo_mesh,
 };
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
-use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {

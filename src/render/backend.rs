@@ -3,7 +3,6 @@ use cgmath::Matrix4;
 
 use crate::ecs::resource::billboard::BillboardData;
 
-pub use thyllore_render_core::backend::RenderBackend;
 pub use thyllore_render_core::{BufferMemoryType, MeshId};
 
 pub trait BillboardBackend {

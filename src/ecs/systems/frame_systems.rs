@@ -9,7 +9,6 @@ use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{Camera, LightState, ProjectionData};
 use crate::math::coordinate_system::perspective_infinite_reverse;
-use crate::render::RenderBackend;
 
 pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> ProjectionData {
     let position = compute_camera_position(camera);
@@ -30,7 +29,7 @@ pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> Pr
 }
 
 pub unsafe fn update_frame_ubo(
-    backend: &mut dyn RenderBackend,
+    backend: &mut crate::vulkanr::VulkanBackend<'_>,
     proj_data: &ProjectionData,
     camera_position: Vector3<f32>,
     light_position: Vector3<f32>,
@@ -47,7 +46,7 @@ pub unsafe fn update_frame_ubo(
 }
 
 pub unsafe fn update_object_ubos(
-    backend: &mut dyn RenderBackend,
+    backend: &mut crate::vulkanr::VulkanBackend<'_>,
     model_matrix: Matrix4<f32>,
     object_index: usize,
     image_index: usize,

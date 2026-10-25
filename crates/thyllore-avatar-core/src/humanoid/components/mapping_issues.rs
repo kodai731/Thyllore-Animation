@@ -2,17 +2,22 @@ use std::fmt;
 
 use super::role::HumanoidRole;
 
+/// A reason `validate_mapping` rejects a humanoid mapping; a mapping with no issue is exportable as is.
 #[derive(Clone, Debug)]
 pub enum MappingIssue {
+    /// A role marked `required` in `humanoid_rig.toml` has no bone.
     MissingRequired(HumanoidRole),
+    /// `child` is mapped but its bone is not a descendant of the bone mapped to `expected_ancestor`.
     HierarchyOrder {
         child: HumanoidRole,
         expected_ancestor: HumanoidRole,
     },
+    /// A left role and its mirror are mapped to the same bone.
     MirroredRolesShareBone {
         left: HumanoidRole,
         right: HumanoidRole,
     },
+    /// One bone is mapped to two roles that are not mirrors of each other.
     BoneInTwoRoles {
         bone_index: usize,
         roles: [HumanoidRole; 2],

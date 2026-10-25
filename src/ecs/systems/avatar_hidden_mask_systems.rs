@@ -29,7 +29,7 @@ pub fn compute_hidden_triangles(
         let filter_by_role = |role: SubmeshRole| -> Vec<(SubmeshKey, usize)> {
             pairs
                 .iter()
-                .filter(|(key, _)| state.submesh_roles.get(key).map(|e| e.role) == Some(role))
+                .filter(|(key, _)| state.submesh_roles.get(key) == Some(&role))
                 .cloned()
                 .collect()
         };

@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+pub use thyllore_anim_core::spring_bone::{SubmeshKey, SubmeshSelector};
+
+/// What the avatar setup does with a submesh: skin is hidden under garments and fit by colliders,
+/// garment and hair grow spring chains, an accessory takes part in neither.
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -9,20 +13,6 @@ pub enum SubmeshRole {
     Garment,
     Hair,
     Accessory,
-}
-
-pub use thyllore_anim_core::spring_bone::SubmeshKey;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SubmeshRoleSource {
-    Guessed,
-    User,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SubmeshRoleEntry {
-    pub role: SubmeshRole,
-    pub source: SubmeshRoleSource,
 }
 
 const HAIR_KEYWORDS: &[&str] = &["hair", "bang", "ponytail", "twintail"];
@@ -39,53 +29,33 @@ const ACCESSORY_KEYWORDS: &[&str] = &[
 
 pub fn guess_submesh_role(key: &SubmeshKey) -> SubmeshRole {
     let combined = format!("{}{}", key.mesh, key.material).to_lowercase();
-    for kw in HAIR_KEYWORDS {
-        if combined.contains(kw) {
-            return SubmeshRole::Hair;
-        }
+    let matches_any = |keywords: &[&str]| keywords.iter().any(|kw| combined.contains(kw));
+
+    if matches_any(HAIR_KEYWORDS) {
+        SubmeshRole::Hair
+    } else if matches_any(SKIN_KEYWORDS) {
+        SubmeshRole::Skin
+    } else if matches_any(ACCESSORY_KEYWORDS) {
+        SubmeshRole::Accessory
+    } else {
+        SubmeshRole::Garment
     }
-    for kw in SKIN_KEYWORDS {
-        if combined.contains(kw) {
-            return SubmeshRole::Skin;
-        }
-    }
-    for kw in ACCESSORY_KEYWORDS {
-        if combined.contains(kw) {
-            return SubmeshRole::Accessory;
-        }
-    }
-    SubmeshRole::Garment
 }
 
-pub fn merge_guessed_roles(
-    current: &BTreeMap<SubmeshKey, SubmeshRoleEntry>,
+/// The roles of `keys`: an already assigned role is kept, a new submesh gets the guessed role.
+pub fn refresh_submesh_roles(
+    current: &BTreeMap<SubmeshKey, SubmeshRole>,
     keys: &[SubmeshKey],
-) -> BTreeMap<SubmeshKey, SubmeshRoleEntry> {
-    let mut out = BTreeMap::new();
-    for key in keys {
-        if let Some(entry) = current.get(key) {
-            if entry.source == SubmeshRoleSource::User {
-                out.insert(key.clone(), *entry);
-            } else {
-                out.insert(
-                    key.clone(),
-                    SubmeshRoleEntry {
-                        role: guess_submesh_role(key),
-                        source: SubmeshRoleSource::Guessed,
-                    },
-                );
-            }
-        } else {
-            out.insert(
-                key.clone(),
-                SubmeshRoleEntry {
-                    role: guess_submesh_role(key),
-                    source: SubmeshRoleSource::Guessed,
-                },
-            );
-        }
-    }
-    out
+) -> BTreeMap<SubmeshKey, SubmeshRole> {
+    keys.iter()
+        .map(|key| {
+            let role = current
+                .get(key)
+                .copied()
+                .unwrap_or_else(|| guess_submesh_role(key));
+            (key.clone(), role)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -121,40 +91,21 @@ mod tests {
     }
 
     #[test]
-    fn test_guess_garment_and_idempotent() {
+    fn test_refresh_keeps_assigned_roles_and_is_idempotent() {
         let k_coat = key("Coat", "Cloth");
         assert_eq!(guess_submesh_role(&k_coat), SubmeshRole::Garment);
-
-        let mut current: BTreeMap<SubmeshKey, SubmeshRoleEntry> = BTreeMap::new();
         let keys = [k_coat.clone()];
 
-        let first = merge_guessed_roles(&current, &keys);
-        assert_eq!(first.len(), 1);
-        assert_eq!(
-            first.get(&k_coat).unwrap().source,
-            SubmeshRoleSource::Guessed
-        );
+        let first = refresh_submesh_roles(&BTreeMap::new(), &keys);
+        assert_eq!(first[&k_coat], SubmeshRole::Garment);
+        assert_eq!(refresh_submesh_roles(&first, &keys), first);
 
-        let second = merge_guessed_roles(&first, &keys);
-        assert_eq!(first, second);
-
-        current.insert(
-            k_coat.clone(),
-            SubmeshRoleEntry {
-                role: SubmeshRole::Garment,
-                source: SubmeshRoleSource::User,
-            },
-        );
-        let with_user = merge_guessed_roles(&current, &keys);
-        assert_eq!(
-            with_user.get(&k_coat).unwrap().source,
-            SubmeshRoleSource::User
-        );
+        let mut assigned = BTreeMap::new();
+        assigned.insert(k_coat.clone(), SubmeshRole::Accessory);
+        let kept = refresh_submesh_roles(&assigned, &keys);
+        assert_eq!(kept[&k_coat], SubmeshRole::Accessory);
 
         let empty_keys: [SubmeshKey; 0] = [];
-        let dropped = merge_guessed_roles(&current, &empty_keys);
-        assert!(dropped.is_empty());
+        assert!(refresh_submesh_roles(&assigned, &empty_keys).is_empty());
     }
 }
-
-pub use thyllore_anim_core::spring_bone::SubmeshSelector;

@@ -1,31 +1,10 @@
 use std::collections::BTreeSet;
 
 use super::mapping::HumanoidMapping;
-use super::role::HumanoidRole;
-
-pub const BODY_COLLIDER_ROLES: &[HumanoidRole] = &[
-    HumanoidRole::Hips,
-    HumanoidRole::Spine,
-    HumanoidRole::Chest,
-    HumanoidRole::UpperChest,
-    HumanoidRole::Neck,
-    HumanoidRole::Head,
-    HumanoidRole::LeftUpperArm,
-    HumanoidRole::RightUpperArm,
-    HumanoidRole::LeftLowerArm,
-    HumanoidRole::RightLowerArm,
-    HumanoidRole::LeftHand,
-    HumanoidRole::RightHand,
-    HumanoidRole::LeftUpperLeg,
-    HumanoidRole::RightUpperLeg,
-    HumanoidRole::LeftLowerLeg,
-    HumanoidRole::RightLowerLeg,
-    HumanoidRole::LeftFoot,
-    HumanoidRole::RightFoot,
-];
+use super::role::BODY_COLLIDER;
 
 pub fn body_collider_bone_indices(mapping: &HumanoidMapping) -> BTreeSet<usize> {
-    BODY_COLLIDER_ROLES
+    BODY_COLLIDER
         .iter()
         .filter_map(|&role| mapping.by_role.get(&role).copied())
         .collect()
@@ -34,6 +13,7 @@ pub fn body_collider_bone_indices(mapping: &HumanoidMapping) -> BTreeSet<usize> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::humanoid::components::role::HumanoidRole;
 
     #[test]
     fn test_body_collider_bone_indices_filters_thin_and_unassigned() {
@@ -45,5 +25,20 @@ mod tests {
         let indices = body_collider_bone_indices(&mapping);
 
         assert_eq!(indices, BTreeSet::from([0usize, 2]));
+    }
+
+    #[test]
+    fn test_body_collider_roles_exclude_fingers_shoulders_and_toes() {
+        for role in BODY_COLLIDER {
+            assert!(HumanoidRole::ALL.contains(&role));
+        }
+        for excluded in [
+            HumanoidRole::LeftShoulder,
+            HumanoidRole::LeftToes,
+            HumanoidRole::LeftIndexProximal,
+            HumanoidRole::Jaw,
+        ] {
+            assert!(!BODY_COLLIDER.contains(&excluded), "{excluded:?}");
+        }
     }
 }

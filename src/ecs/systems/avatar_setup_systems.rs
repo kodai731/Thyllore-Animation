@@ -2,9 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cgmath::Matrix4;
-use thyllore_avatar_core::garment::components::submesh_role::{
-    SubmeshKey, SubmeshRoleEntry, SubmeshRoleSource,
-};
+use thyllore_avatar_core::garment::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
@@ -209,11 +207,8 @@ fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
                 mesh: role.mesh.clone(),
                 material: role.material.clone(),
             };
-            if let Some(entry) = state.submesh_roles.get_mut(&key) {
-                *entry = SubmeshRoleEntry {
-                    role: role.role,
-                    source: SubmeshRoleSource::User,
-                };
+            if let Some(assigned) = state.submesh_roles.get_mut(&key) {
+                *assigned = role.role;
             }
         }
         spring_setup_from_sidecar(&sidecar.spring, &state.bones)

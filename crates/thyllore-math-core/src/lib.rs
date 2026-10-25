@@ -2,7 +2,9 @@ mod billboard;
 mod bounds;
 mod bridge_fit;
 mod chebyshev;
+mod circular;
 mod compact_support;
+mod connected_components;
 pub mod coordinate_system;
 mod faddeeva;
 mod gpu_matrix;
@@ -23,7 +25,9 @@ mod polynomial;
 mod principal_axis;
 mod quaternion;
 mod random;
+mod segment;
 mod smooth_step;
+mod statistics;
 mod torus_intersect;
 mod torus_projection;
 #[cfg(test)]
@@ -36,7 +40,9 @@ pub use billboard::*;
 pub use bounds::*;
 pub use bridge_fit::*;
 pub use chebyshev::*;
+pub use circular::*;
 pub use compact_support::*;
+pub use connected_components::*;
 pub use coordinate_system::{
     blender_to_engine_point, blender_to_engine_quaternion, blender_to_engine_rows,
     engine_to_blender_point, engine_to_blender_quaternion, get_camera_axes_from_view, perspective,
@@ -57,7 +63,9 @@ pub use polynomial::*;
 pub use principal_axis::*;
 pub use quaternion::*;
 pub use random::*;
+pub use segment::*;
 pub use smooth_step::*;
+pub use statistics::*;
 pub use torus_intersect::*;
 pub use torus_projection::*;
 pub use triangle_bvh::*;

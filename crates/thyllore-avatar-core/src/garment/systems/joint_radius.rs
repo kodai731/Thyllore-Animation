@@ -1,4 +1,5 @@
-use cgmath::{InnerSpace, Vector3};
+use cgmath::Vector3;
+use thyllore_math_core::{distance_to_segment, median};
 
 use crate::garment::components::chain_gen::{GeneratedChain, InfluenceTarget, VertexInfluences};
 
@@ -25,7 +26,12 @@ pub fn joint_half_thicknesses(
 
     distances
         .into_iter()
-        .map(|chain| chain.into_iter().map(median_or_zero).collect())
+        .map(|chain| {
+            chain
+                .into_iter()
+                .map(|mut distances| median(&mut distances).unwrap_or(0.0))
+                .collect()
+        })
         .collect()
 }
 
@@ -47,24 +53,6 @@ fn joint_segment(chain: &GeneratedChain, joint: usize) -> (Vector3<f32>, Vector3
         .get(joint + 1)
         .map_or(chain.tail, |next| next.head);
     (head, tail)
-}
-
-fn distance_to_segment(point: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -> f32 {
-    let ab = b - a;
-    let len_sq = ab.dot(ab);
-    if len_sq < 1e-12 {
-        return (point - a).magnitude();
-    }
-    let t = ((point - a).dot(ab) / len_sq).clamp(0.0, 1.0);
-    (point - (a + ab * t)).magnitude()
-}
-
-fn median_or_zero(mut values: Vec<f32>) -> f32 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    values.sort_by(f32::total_cmp);
-    values[values.len() / 2]
 }
 
 #[cfg(test)]

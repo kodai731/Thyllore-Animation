@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::expression::components::preset::ExpressionLibrary;
-use crate::garment::components::submesh_role::{SubmeshKey, SubmeshRole, SubmeshRoleEntry};
+use crate::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::stats::components::stats::AvatarStats;
@@ -68,7 +68,7 @@ pub struct SidecarInput<'a> {
     pub library: &'a ExpressionLibrary,
     pub spring: &'a SidecarSpring,
     pub materials: &'a BTreeMap<String, String>,
-    pub submesh_roles: &'a BTreeMap<SubmeshKey, SubmeshRoleEntry>,
+    pub submesh_roles: &'a BTreeMap<SubmeshKey, SubmeshRole>,
     pub hidden_triangles: &'a BTreeMap<SubmeshKey, Vec<u32>>,
     pub stats: &'a AvatarStats,
 }
@@ -143,13 +143,13 @@ fn build_expressions(library: &ExpressionLibrary) -> Vec<SidecarExpression> {
         .collect()
 }
 
-fn build_submesh_roles(roles: &BTreeMap<SubmeshKey, SubmeshRoleEntry>) -> Vec<SidecarSubmeshRole> {
+fn build_submesh_roles(roles: &BTreeMap<SubmeshKey, SubmeshRole>) -> Vec<SidecarSubmeshRole> {
     roles
         .iter()
-        .map(|(key, entry)| SidecarSubmeshRole {
+        .map(|(key, role)| SidecarSubmeshRole {
             mesh: key.mesh.clone(),
             material: key.material.clone(),
-            role: entry.role,
+            role: *role,
         })
         .collect()
 }
@@ -348,10 +348,7 @@ mod tests {
                 mesh: "Body".to_string(),
                 material: "Skin".to_string(),
             },
-            SubmeshRoleEntry {
-                role: SubmeshRole::Skin,
-                source: crate::garment::components::submesh_role::SubmeshRoleSource::User,
-            },
+            SubmeshRole::Skin,
         );
 
         let sidecar = AvatarSidecar {

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use thyllore_anim_core::spring_bone::CapsuleFitParams;
 use thyllore_avatar_core::garment::components::chain_gen::{ChainGenReport, ChainGenSettings};
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRoleEntry};
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::mapping::{HumanoidMapping, UnresolvedRole};
 use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
@@ -25,7 +25,7 @@ pub struct AvatarSetupState {
     pub stats: AvatarStats,
     pub platform: Platform,
     pub rank: Option<RankReport>,
-    pub submesh_roles: BTreeMap<SubmeshKey, SubmeshRoleEntry>,
+    pub submesh_roles: BTreeMap<SubmeshKey, SubmeshRole>,
     pub hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>>,
     pub chain_gen: ChainGenSettings,
     pub chain_gen_report: Option<ChainGenReport>,

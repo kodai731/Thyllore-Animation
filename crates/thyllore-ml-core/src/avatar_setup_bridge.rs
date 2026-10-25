@@ -5,9 +5,7 @@ use thyllore_anim_core::spring_bone::{
     SpringJointParam, SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS,
 };
 use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
-use thyllore_avatar_core::garment::components::submesh_role::{
-    SubmeshKey, SubmeshRoleEntry, SubmeshRoleSource,
-};
+use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
@@ -171,7 +169,7 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
     serde_json::to_string_pretty(&sidecar).map_err(|e| anyhow::anyhow!(e))
 }
 
-fn submesh_role_map(roles: &[SidecarSubmeshRole]) -> BTreeMap<SubmeshKey, SubmeshRoleEntry> {
+fn submesh_role_map(roles: &[SidecarSubmeshRole]) -> BTreeMap<SubmeshKey, SubmeshRole> {
     let mut map = BTreeMap::new();
     for entry in roles {
         map.insert(
@@ -179,10 +177,7 @@ fn submesh_role_map(roles: &[SidecarSubmeshRole]) -> BTreeMap<SubmeshKey, Submes
                 mesh: entry.mesh.clone(),
                 material: entry.material.clone(),
             },
-            SubmeshRoleEntry {
-                role: entry.role,
-                source: SubmeshRoleSource::User,
-            },
+            entry.role,
         );
     }
     map

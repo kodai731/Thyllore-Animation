@@ -1,5 +1,5 @@
 use thyllore_avatar_core::garment::components::submesh_role::{
-    merge_guessed_roles, SubmeshKey, SubmeshRole, SubmeshRoleEntry, SubmeshRoleSource,
+    refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 
 use crate::animation::{SkeletonId, SkinData};
@@ -69,12 +69,12 @@ pub fn refresh_submesh_roles(
     nodes: &[NodeData],
 ) {
     let keys = collect_submesh_keys(assets, graphics, nodes);
-    state.submesh_roles = merge_guessed_roles(&state.submesh_roles, &keys);
+    state.submesh_roles = refresh_roles_for_keys(&state.submesh_roles, &keys);
 }
 
 pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
     let mut state = world.resource_mut::<AvatarSetupState>();
-    let Some(entry) = state.submesh_roles.get_mut(&key) else {
+    let Some(assigned) = state.submesh_roles.get_mut(&key) else {
         log_warn!(
             "Cannot set submesh role for missing submesh ({}, {})",
             key.mesh,
@@ -82,10 +82,7 @@ pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
         );
         return;
     };
-    *entry = SubmeshRoleEntry {
-        role,
-        source: SubmeshRoleSource::User,
-    };
+    *assigned = role;
 }
 
 /// The scene entity that renders the submesh, found through its mesh asset.
@@ -220,15 +217,16 @@ mod tests {
         let mut state = AvatarSetupState::default();
         refresh_submesh_roles(&mut state, &assets, &graphics, &[]);
 
-        let user_entry = SubmeshRoleEntry {
-            role: SubmeshRole::Accessory,
-            source: SubmeshRoleSource::User,
-        };
-        state.submesh_roles.insert(key("Body", ""), user_entry);
+        state
+            .submesh_roles
+            .insert(key("Body", ""), SubmeshRole::Accessory);
         refresh_submesh_roles(&mut state, &assets, &graphics, &[]);
 
         assert_eq!(state.submesh_roles.len(), 2);
-        assert_eq!(state.submesh_roles[&key("Body", "")], user_entry);
+        assert_eq!(
+            state.submesh_roles[&key("Body", "")],
+            SubmeshRole::Accessory
+        );
     }
 }
 
@@ -247,7 +245,7 @@ pub(crate) fn skin_role_skins<'a>(
             state
                 .submesh_roles
                 .get(key)
-                .is_some_and(|entry| entry.role == SubmeshRole::Skin)
+                .is_some_and(|role| *role == SubmeshRole::Skin)
         })
         .map(|(_, mesh_index)| mesh_index)
         .collect();

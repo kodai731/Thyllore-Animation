@@ -8,7 +8,7 @@ use thyllore_avatar_core::garment::components::chain_gen::{
     chain_role_of_submesh, chain_root_role, ChainGenRequest, ChainGenSettings, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::garment::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshRoleSource, SubmeshSelector,
+    SubmeshKey, SubmeshRole, SubmeshSelector,
 };
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
@@ -31,7 +31,6 @@ pub struct SubmeshesView {
 pub struct SubmeshItem {
     pub key: SubmeshKey,
     pub role: SubmeshRole,
-    pub source: SubmeshRoleSource,
     pub chain_request: Option<ChainGenRequest>,
 }
 
@@ -60,9 +59,9 @@ impl SubmeshesView {
         let submeshes: Vec<SubmeshItem> = state
             .submesh_roles
             .iter()
-            .map(|(key, entry)| {
+            .map(|(key, role)| {
                 let chain_request = resolve_chain_request(
-                    entry.role,
+                    *role,
                     &state.mapping.by_role,
                     &state.bones,
                     key,
@@ -70,8 +69,7 @@ impl SubmeshesView {
                 );
                 SubmeshItem {
                     key: key.clone(),
-                    role: entry.role,
-                    source: entry.source,
+                    role: *role,
                     chain_request,
                 }
             })
@@ -138,11 +136,10 @@ fn list_items(_world: &World, view: &SubmeshesView) -> Vec<(String, SubmeshItem)
     view.submeshes
         .iter()
         .map(|item| {
-            let mut label = format!("{}/{}", item.key.mesh, item.key.material);
-            if item.source == SubmeshRoleSource::Guessed {
-                label.push_str(" (guessed)");
-            }
-            (label, item.clone())
+            (
+                format!("{}/{}", item.key.mesh, item.key.material),
+                item.clone(),
+            )
         })
         .collect()
 }
@@ -225,7 +222,6 @@ fn submesh_role_label(role: SubmeshRole) -> &'static str {
 mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::visible_labels;
-    use thyllore_avatar_core::garment::components::submesh_role::SubmeshRoleEntry;
 
     #[test]
     fn test_row_labels() {
@@ -266,13 +262,7 @@ mod tests {
             parent: None,
             rest_position: [0.0, 1.6, 0.0],
         });
-        state.submesh_roles.insert(
-            hair_key(),
-            SubmeshRoleEntry {
-                role: SubmeshRole::Hair,
-                source: SubmeshRoleSource::User,
-            },
-        );
+        state.submesh_roles.insert(hair_key(), SubmeshRole::Hair);
         state
     }
 

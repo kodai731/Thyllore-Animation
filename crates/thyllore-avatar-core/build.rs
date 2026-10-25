@@ -27,6 +27,8 @@ struct PartDefinition {
     required: bool,
     #[serde(default)]
     translation: bool,
+    #[serde(default)]
+    collider: bool,
     patterns: Vec<Vec<String>>,
     #[serde(default)]
     vrm1_part: Option<String>,
@@ -158,6 +160,11 @@ fn generate_rig_rust(rig: &RigDefinition) -> String {
         .filter(|role| role.part.required)
         .map(|role| role.name.as_str())
         .collect();
+    let collider_names: Vec<&str> = roles
+        .iter()
+        .filter(|role| role.part.collider)
+        .map(|role| role.name.as_str())
+        .collect();
 
     let mut out = String::new();
     write_role_enum(&mut out, &all_names);
@@ -218,6 +225,12 @@ fn generate_rig_rust(rig: &RigDefinition) -> String {
         "pub const REQUIRED: [HumanoidRole; {}] = {};\n",
         required_names.len(),
         role_array(&required_names)
+    );
+    let _ = writeln!(
+        out,
+        "pub const BODY_COLLIDER: [HumanoidRole; {}] = {};\n",
+        collider_names.len(),
+        role_array(&collider_names)
     );
     write_chains(&mut out, rig);
     out

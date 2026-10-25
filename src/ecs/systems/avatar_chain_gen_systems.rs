@@ -204,15 +204,15 @@ fn resolve_target(
     let mut selected = Vec::new();
     let mut role: Option<ChainRole> = None;
     for (key, mesh_index) in matching {
-        let entry = state.submesh_roles.get(&key).ok_or_else(|| {
+        let submesh_role = *state.submesh_roles.get(&key).ok_or_else(|| {
             anyhow::anyhow!("submesh role not set: {}/{}", key.mesh, key.material)
         })?;
-        let part_role = match (chain_role_of_submesh(entry.role), target) {
+        let part_role = match (chain_role_of_submesh(submesh_role), target) {
             (Some(chain_role), _) => chain_role,
             (None, SubmeshSelector::Mesh(_)) => continue,
             (None, SubmeshSelector::Submesh(_)) => anyhow::bail!(
                 "submesh role {:?} is not Hair or Garment: {}/{}",
-                entry.role,
+                submesh_role,
                 key.mesh,
                 key.material
             ),

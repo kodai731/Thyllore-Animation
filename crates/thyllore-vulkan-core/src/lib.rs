@@ -8,6 +8,7 @@ pub mod command;
 pub mod core;
 pub mod data;
 pub mod descriptor;
+pub mod effect;
 pub mod frame_context;
 pub mod pipeline;
 pub mod profiling;

@@ -2,10 +2,10 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::WindRenderTargets;
-use crate::ecs::systems::wind::descriptors::WindShadowBakeDescriptorSet;
 use crate::ecs::systems::wind::render_targets::wind_shadow_volume_extent;
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
+use thyllore_vulkan_core::effect::wind::descriptors::WindShadowBakeDescriptorSet;
 use thyllore_vulkan_core::{
     insert_storage_image_read_barrier, insert_storage_image_write_barrier, FrameRenderContext,
     OverlayInstanceDraw,

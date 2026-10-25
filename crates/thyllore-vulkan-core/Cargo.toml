@@ -8,6 +8,7 @@ description = "Layer 2 Vulkan primitive wrapper for ThylloreAnimation (device, c
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-render-core = { path = "../thyllore-render-core" }

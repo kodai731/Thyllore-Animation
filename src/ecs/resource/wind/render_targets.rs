@@ -6,8 +6,10 @@ use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
 use thyllore_vulkan_core::vulkan::vk;
 
 use crate::ecs::resource::BoundGenerations;
-use crate::ecs::systems::wind::{WindResolveDescriptorSet, WindShadowBakeDescriptorSet};
 use crate::gpu_resource;
+use thyllore_vulkan_core::effect::wind::descriptors::{
+    WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
+};
 
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
 /// the reduced resolution render pass used by the upsampled resolve path, and the

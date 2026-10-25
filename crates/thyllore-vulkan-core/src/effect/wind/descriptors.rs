@@ -1,14 +1,12 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
-use crate::vulkanr::descriptor::{
-    ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE,
-};
-use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::GpuResource;
-use crate::vulkanr::resource::{UniformBuffer, VolumeImage};
+use crate::core::RRDevice;
+use crate::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE};
+use crate::resource::image::create_scene_depth_sampler;
+use crate::resource::GpuResource;
+use crate::resource::{UniformBuffer, VolumeImage};
 use thyllore_effect_core::WindUBO;
 
 #[derive(Clone, Debug, Default)]

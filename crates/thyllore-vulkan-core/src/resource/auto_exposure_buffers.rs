@@ -158,9 +158,10 @@ impl AutoExposureBuffers {
 
     pub unsafe fn read_luminance(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         slot: usize,
     ) -> Option<AutoExposureReadback> {
+        let device = &rrdevice.device;
         let data = device
             .map_memory(
                 self.readback_memories[slot],

@@ -39,7 +39,7 @@ impl App {
         self.data
             .viewport
             .transient
-            .begin_frame(&self.rrdevice.device, frame_slot)?;
+            .begin_frame(&self.rrdevice, frame_slot)?;
 
         self.update_auto_exposure();
         self.read_object_id_readback();
@@ -166,7 +166,7 @@ impl App {
         let mut render_targets = self.resource_mut::<RenderTargets>();
         render_targets
             .render
-            .destroy_gbuffer_attachments(&self.rrdevice.device);
+            .destroy_gbuffer_attachments(&self.rrdevice);
 
         if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
             create_gbuffer_framebuffer(
@@ -326,7 +326,7 @@ impl App {
         let readback = match self.data.viewport.auto_exposure_buffers {
             Some(ref ae_buffers) => {
                 let current_slot = self.resource::<FrameSync>().current_frame;
-                ae_buffers.read_luminance(&self.rrdevice.device, current_slot)
+                ae_buffers.read_luminance(&self.rrdevice, current_slot)
             }
             None => return,
         };

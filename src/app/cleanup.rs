@@ -67,14 +67,12 @@ impl App {
 
         {
             let mut render_targets = self.resource_mut::<RenderTargets>();
-            render_targets
-                .render
-                .destroy_size_dependent(&self.rrdevice.device);
+            render_targets.render.destroy_size_dependent(&self.rrdevice);
         }
 
         {
             let mut swapchain_state = self.resource_mut::<SwapchainState>();
-            swapchain_state.swapchain.destroy(&self.rrdevice.device);
+            swapchain_state.swapchain.destroy(&self.rrdevice);
         }
 
         let command_pool_handle = {

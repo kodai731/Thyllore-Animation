@@ -790,7 +790,8 @@ impl RRAccelerationStructure {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         if let Some(tlas_as) = self.tlas.acceleration_structure {
             device.destroy_acceleration_structure_khr(tlas_as, None);
         }
@@ -952,7 +953,7 @@ impl RRAccelerationStructure {
 
 impl GpuResource for RRAccelerationStructure {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

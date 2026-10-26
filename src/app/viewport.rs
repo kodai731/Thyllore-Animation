@@ -55,7 +55,7 @@ impl ViewportState {
         let bloom_chain = BloomChain::new(rrdevice, width, height, 5)?;
 
         let mut storage = RenderTargetStorage::default();
-        storage.set_extent_and_reset(&rrdevice.device, width, height);
+        storage.set_extent_and_reset(rrdevice, width, height);
 
         let dof_buffer = DofBuffer::new(rrdevice, width, height)?;
 
@@ -149,7 +149,7 @@ impl ViewportState {
         }
 
         self.storage
-            .set_extent_and_reset(&rrdevice.device, new_width, new_height);
+            .set_extent_and_reset(rrdevice, new_width, new_height);
 
         if let Some(ref mut dof_buffer) = self.dof_buffer {
             dof_buffer.resize(new_width, new_height);

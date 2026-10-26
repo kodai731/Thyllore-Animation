@@ -127,25 +127,21 @@ impl RenderTargetStorage {
         (self.width, self.height)
     }
 
-    pub unsafe fn ensure_extent(&mut self, device: &vulkanalia::Device, width: u32, height: u32) {
+    pub unsafe fn ensure_extent(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
         if (self.width, self.height) == (width, height) {
             return;
         }
-        self.set_extent_and_reset(device, width, height);
+        self.set_extent_and_reset(rrdevice, width, height);
     }
 
-    pub unsafe fn set_extent_and_reset(
-        &mut self,
-        device: &vulkanalia::Device,
-        width: u32,
-        height: u32,
-    ) {
-        self.destroy_all(device);
+    pub unsafe fn set_extent_and_reset(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
+        self.destroy_all(rrdevice);
         self.width = width;
         self.height = height;
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         for (_, entry) in self.entries.drain() {
             destroy_entry(device, &entry);
         }
@@ -196,7 +192,7 @@ unsafe fn destroy_entry(device: &vulkanalia::Device, entry: &RenderTargetEntry) 
 
 impl GpuResource for RenderTargetStorage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        self.destroy_all(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

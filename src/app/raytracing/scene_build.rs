@@ -31,7 +31,7 @@ pub unsafe fn rebuild_acceleration_structures(
     log!("Rebuilding acceleration structures...");
     if let Some(mut previous) = raytracing.acceleration_structure.take() {
         device.wait_idle()?;
-        previous.destroy(&device.device);
+        previous.destroy(device);
     }
 
     let mut acceleration_structure = RRAccelerationStructure::new();

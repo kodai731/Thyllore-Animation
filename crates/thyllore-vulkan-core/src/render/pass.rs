@@ -26,7 +26,8 @@ pub struct RRRender {
 }
 
 impl RRRender {
-    pub unsafe fn destroy_size_dependent(&mut self, device: &crate::core::device::Device) {
+    pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         for fb in self.framebuffers.drain(..) {
             device.destroy_framebuffer(fb, None);
         }
@@ -45,7 +46,8 @@ impl RRRender {
         );
     }
 
-    pub unsafe fn destroy_gbuffer_attachments(&mut self, device: &crate::core::device::Device) {
+    pub unsafe fn destroy_gbuffer_attachments(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         if self.gbuffer_framebuffer != vk::Framebuffer::null() {
             device.destroy_framebuffer(self.gbuffer_framebuffer, None);
             self.gbuffer_framebuffer = vk::Framebuffer::null();
@@ -58,9 +60,10 @@ impl RRRender {
         );
     }
 
-    pub unsafe fn destroy(&mut self, device: &crate::core::device::Device) {
-        self.destroy_size_dependent(device);
-        self.destroy_gbuffer_attachments(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
+        self.destroy_size_dependent(rrdevice);
+        self.destroy_gbuffer_attachments(rrdevice);
 
         if self.render_pass != vk::RenderPass::null() {
             device.destroy_render_pass(self.render_pass, None);
@@ -128,7 +131,7 @@ unsafe fn destroy_image_objects(
 
 impl GpuResource for RRRender {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

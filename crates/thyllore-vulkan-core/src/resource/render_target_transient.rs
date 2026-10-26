@@ -83,7 +83,8 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn begin_frame(&mut self, device: &Device, frame_index: usize) -> Result<()> {
+    pub unsafe fn begin_frame(&mut self, rrdevice: &RRDevice, frame_index: usize) -> Result<()> {
+        let device = &rrdevice.device;
         let evicted = self.advance_frame(frame_index)?;
 
         for pooled in evicted {
@@ -429,7 +430,8 @@ unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
 
 impl GpuResource for RenderTargetTransient {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        let device = &rrdevice.device;
+        self.destroy_all(device);
     }
 
     fn is_destroyed(&self) -> bool {

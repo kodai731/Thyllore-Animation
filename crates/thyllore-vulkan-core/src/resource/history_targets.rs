@@ -54,7 +54,7 @@ impl HistoryTargets {
         hdr_view: vk::ImageView,
         desc: HistoryTargetsDesc,
     ) -> Result<Self> {
-        storage.ensure_extent(&rrdevice.device, width, height);
+        storage.ensure_extent(rrdevice, width, height);
 
         let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT
             | vk::ImageUsageFlags::SAMPLED

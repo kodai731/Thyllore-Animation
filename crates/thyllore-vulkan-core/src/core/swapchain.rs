@@ -33,7 +33,8 @@ impl RRSwapchain {
         Ok(rrswapchain)
     }
 
-    pub unsafe fn destroy(&mut self, device: &super::device::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
         for view in self.swapchain_image_views.drain(..) {
             device.destroy_image_view(view, None);
         }
@@ -47,7 +48,7 @@ impl RRSwapchain {
 
 impl GpuResource for RRSwapchain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

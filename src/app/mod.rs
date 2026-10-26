@@ -19,7 +19,6 @@ pub mod render;
 pub mod render_context;
 pub mod scene_model;
 pub mod update;
-pub mod util;
 pub mod viewport;
 
 pub use render_context::{build_frame_render_context, build_pass_context, RenderContext};

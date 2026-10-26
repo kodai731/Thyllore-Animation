@@ -1,13 +1,11 @@
 use imgui::SynchronousRendererConsumer;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::ReflectedSetLayout;
+use crate::vulkanr::descriptor::{destroy_imgui_pipeline_objects, ReflectedSetLayout};
 use crate::vulkanr::resource::GpuResource;
-use thyllore_vulkan_core::types::{
-    Buffer, DeviceMemory, DeviceSize, Pipeline, PipelineLayout, Sampler,
-};
+use thyllore_vulkan_core::resource::HostBuffer;
+use thyllore_vulkan_core::types::{Pipeline, PipelineLayout, Sampler};
 
 #[derive(Debug, Default)]
 pub struct ImguiData {
@@ -16,58 +14,32 @@ pub struct ImguiData {
     pub descriptor_set_layout: Option<ReflectedSetLayout>,
     pub sampler: Option<Sampler>,
     pub renderer_consumer: Option<SynchronousRendererConsumer>,
-    pub vertex_buffers: [Option<Buffer>; MAX_FRAMES_IN_FLIGHT],
-    pub vertex_buffer_memories: [Option<DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
-    pub vertex_buffer_sizes: [DeviceSize; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffers: [Option<Buffer>; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffer_memories: [Option<DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffer_sizes: [DeviceSize; MAX_FRAMES_IN_FLIGHT],
+    pub vertex_buffers: [Option<HostBuffer>; MAX_FRAMES_IN_FLIGHT],
+    pub index_buffers: [Option<HostBuffer>; MAX_FRAMES_IN_FLIGHT],
 }
 
 impl ImguiData {
     unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-
         for slot in 0..MAX_FRAMES_IN_FLIGHT {
-            destroy_buffer_with_memory(
-                device,
-                self.vertex_buffers[slot].take(),
-                self.vertex_buffer_memories[slot].take(),
-            );
-            destroy_buffer_with_memory(
-                device,
-                self.index_buffers[slot].take(),
-                self.index_buffer_memories[slot].take(),
-            );
-            self.vertex_buffer_sizes[slot] = 0;
-            self.index_buffer_sizes[slot] = 0;
+            if let Some(ref mut vb) = self.vertex_buffers[slot] {
+                vb.destroy(rrdevice);
+            }
+            self.vertex_buffers[slot] = None;
+            if let Some(ref mut ib) = self.index_buffers[slot] {
+                ib.destroy(rrdevice);
+            }
+            self.index_buffers[slot] = None;
         }
 
-        if let Some(pipeline) = self.pipeline.take() {
-            device.destroy_pipeline(pipeline, None);
-        }
-        if let Some(pipeline_layout) = self.pipeline_layout.take() {
-            device.destroy_pipeline_layout(pipeline_layout, None);
-        }
+        destroy_imgui_pipeline_objects(
+            rrdevice,
+            self.pipeline.take(),
+            self.pipeline_layout.take(),
+            self.sampler.take(),
+        );
+
         self.renderer_consumer = None;
         self.descriptor_set_layout.destroy_gpu(rrdevice);
-
-        if let Some(sampler) = self.sampler.take() {
-            device.destroy_sampler(sampler, None);
-        }
-    }
-}
-
-unsafe fn destroy_buffer_with_memory(
-    device: &vulkanalia::Device,
-    buffer: Option<Buffer>,
-    memory: Option<DeviceMemory>,
-) {
-    if let Some(buffer) = buffer {
-        device.destroy_buffer(buffer, None);
-    }
-    if let Some(memory) = memory {
-        device.free_memory(memory, None);
     }
 }
 

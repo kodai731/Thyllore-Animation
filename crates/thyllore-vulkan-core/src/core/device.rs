@@ -57,7 +57,7 @@ impl Deref for Device {
 
 #[derive(Debug, Default)]
 pub struct RRDevice {
-    pub device: Device,
+    pub(crate) device: Device,
     pub physical_device: vk::PhysicalDevice,
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,

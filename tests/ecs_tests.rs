@@ -102,75 +102,57 @@ mod release_build_tests {
 
     use thyllore_animation::vulkanr;
 
-    unsafe fn create_headless_test_device(
-    ) -> Option<(vulkanr::Entry, vulkanr::Instance, vulkanr::RRDevice)> {
-        let loader = vulkanr::LibloadingLoader::new(vulkanr::LIBRARY).ok()?;
-        let entry = vulkanr::Entry::new(loader).ok()?;
-        let instance = vulkanr::create_headless_instance(&entry).ok()?;
-
-        match vulkanr::RRDevice::new_headless(
-            &entry,
-            &instance,
-            vulkanr::HEADLESS_DEVICE_EXTENSIONS,
-            if cfg!(debug_assertions) {
-                vulkanr::ValidationMode::Enabled
-            } else {
-                vulkanr::ValidationMode::Disabled
-            },
-            vulkanr::VALIDATION_LAYER,
-            vulkanr::Version::new(1, 3, 216),
-        ) {
-            Ok(device) => Some((entry, instance, device)),
-            Err(_) => {
-                vulkanr::destroy_headless_instance(&instance);
-                None
-            }
-        }
+    unsafe fn create_headless_test_device() -> Option<vulkanr::HeadlessContext> {
+        vulkanr::create_headless_context().ok()
     }
 
     #[test]
     fn test_vulkan_headless_device_creation() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        assert!(device.has_graphics_queue());
-        assert!(device.min_uniform_buffer_offset_alignment > 0);
+        assert!(headless.rrdevice.has_graphics_queue());
+        assert!(headless.rrdevice.min_uniform_buffer_offset_alignment > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+        unsafe { vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance) };
     }
 
     #[test]
     fn test_vulkan_headless_physical_device_properties() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        let api_version = unsafe { device.query_physical_device_api_version(&instance) };
+        let api_version = unsafe {
+            headless
+                .rrdevice
+                .query_physical_device_api_version(&headless.instance)
+        };
         assert!(api_version > 0);
-        assert!(device.msaa_samples.bits() > 0);
+        assert!(headless.rrdevice.msaa_samples.bits() > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+        unsafe { vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance) };
     }
 
     #[test]
     fn test_vulkan_headless_queue_operations() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        assert!(device.has_graphics_queue());
-        assert!(!device.has_present_queue());
+        assert!(headless.rrdevice.has_graphics_queue());
+        assert!(!headless.rrdevice.has_present_queue());
 
         unsafe {
-            device.wait_graphics_queue_idle().unwrap();
-            vulkanr::destroy_headless_device(&device, &instance);
+            headless.rrdevice.wait_graphics_queue_idle().unwrap();
+            vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance);
         }
     }
 }

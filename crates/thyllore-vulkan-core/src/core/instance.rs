@@ -1,4 +1,6 @@
-use crate::core::device::{RRDevice, VALIDATION_LAYER};
+use crate::core::device::{
+    create_headless_instance, destroy_headless_instance, RRDevice, VALIDATION_LAYER,
+};
 use crate::types::{Fence, Semaphore};
 use crate::vulkan::*;
 use std::ffi::CStr;
@@ -168,9 +170,42 @@ pub unsafe fn create_sync_objects(
     Ok((image_available, render_finished, in_flight))
 }
 
-pub unsafe fn create_vulkan_context(window: &Window) -> Result<VulkanContext> {
+pub unsafe fn load_entry() -> Result<Entry> {
     let loader = LibloadingLoader::new(LIBRARY)?;
-    let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
+    Entry::new(loader).map_err(|b| anyhow!("{}", b))
+}
+
+pub struct HeadlessContext {
+    pub entry: Entry,
+    pub instance: Instance,
+    pub rrdevice: RRDevice,
+}
+
+pub unsafe fn create_headless_context() -> Result<HeadlessContext> {
+    let entry = load_entry()?;
+    let instance = create_headless_instance(&entry)?;
+    match RRDevice::new_headless(
+        &entry,
+        &instance,
+        crate::core::device::HEADLESS_DEVICE_EXTENSIONS,
+        VALIDATION_MODE,
+        VALIDATION_LAYER,
+        PORTABILITY_MACOS_VERSION,
+    ) {
+        Ok(device) => Ok(HeadlessContext {
+            entry,
+            instance,
+            rrdevice: device,
+        }),
+        Err(e) => {
+            destroy_headless_instance(&instance);
+            Err(e)
+        }
+    }
+}
+
+pub unsafe fn create_vulkan_context(window: &Window) -> Result<VulkanContext> {
+    let entry = load_entry()?;
     let (instance, messenger) = create_instance_with_messenger(window, &entry)?;
     let surface = vk_window::create_surface(&instance, &window, &window)?;
     let rrdevice = RRDevice::new(

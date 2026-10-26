@@ -3973,7 +3973,6 @@ dependencies = [
  "thyllore-texture-fit-core",
  "thyllore-vulkan-core",
  "ufbx",
- "vulkanalia",
  "winit",
 ]
 

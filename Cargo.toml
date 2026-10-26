@@ -54,7 +54,6 @@ cgmath = "0.18"
 png = "0.17"
 env_logger = "0.11"
 thiserror = "1"
-vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"
 imgui = { package = "dear-imgui-rs", path = "./vendor/dear-imgui-rs", features = ["build-from-source", "serde"] }
 imgui-winit-support = { path = "./vendor/imgui-winit-support" }

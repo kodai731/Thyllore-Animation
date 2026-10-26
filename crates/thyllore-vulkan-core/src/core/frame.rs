@@ -1,4 +1,9 @@
+use std::rc::Rc;
+
+use crate::command::{RRCommandBuffer, RRCommandPool};
 use crate::core::device::RRDevice;
+use crate::resource::GpuResource;
+use crate::types::{CommandPool, Fence, Semaphore};
 use crate::vulkan::*;
 
 #[derive(Debug)]
@@ -77,4 +82,116 @@ pub unsafe fn submit_and_present(
         Ok(_) => Ok(PresentOutcome::Presented),
         Err(e) => Err(anyhow::anyhow!(e)),
     }
+}
+
+pub struct FrameSync {
+    pub image_available: Vec<Semaphore>,
+    pub render_finished: Vec<Semaphore>,
+    pub in_flight: Vec<Fence>,
+    pub current_frame: usize,
+}
+
+impl FrameSync {
+    pub fn new(
+        image_available: Vec<Semaphore>,
+        render_finished: Vec<Semaphore>,
+        in_flight: Vec<Fence>,
+    ) -> Self {
+        Self {
+            image_available,
+            render_finished,
+            in_flight,
+            current_frame: 0,
+        }
+    }
+
+    pub fn advance(&mut self, max_frames: usize) {
+        self.current_frame = (self.current_frame + 1) % max_frames;
+    }
+
+    pub fn current_image_available(&self) -> Semaphore {
+        self.image_available[self.current_frame]
+    }
+
+    pub fn current_render_finished(&self) -> Semaphore {
+        self.render_finished[self.current_frame]
+    }
+
+    pub fn current_fence(&self) -> Fence {
+        self.in_flight[self.current_frame]
+    }
+}
+
+impl GpuResource for FrameSync {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
+        for semaphore in self
+            .image_available
+            .drain(..)
+            .chain(self.render_finished.drain(..))
+        {
+            device.destroy_semaphore(semaphore, None);
+        }
+        for fence in self.in_flight.drain(..) {
+            device.destroy_fence(fence, None);
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.image_available.is_empty()
+            && self.render_finished.is_empty()
+            && self.in_flight.is_empty()
+    }
+}
+
+pub struct CommandState {
+    pub pool: Rc<RRCommandPool>,
+    pub buffers: RRCommandBuffer,
+}
+
+impl CommandState {
+    pub fn new(pool: Rc<RRCommandPool>, buffers: RRCommandBuffer) -> Self {
+        Self { pool, buffers }
+    }
+}
+
+impl GpuResource for CommandState {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
+        if !self.buffers.command_buffers.is_empty() {
+            device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
+            self.buffers.command_buffers.clear();
+        }
+        if self.pool.command_pool != CommandPool::null() {
+            device.destroy_command_pool(self.pool.command_pool, None);
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.buffers.command_buffers.is_empty()
+    }
+}
+
+pub struct SurfaceState {
+    pub surface: vk::SurfaceKHR,
+    pub messenger: vk::DebugUtilsMessengerEXT,
+}
+
+impl SurfaceState {
+    pub fn new(surface: vk::SurfaceKHR, messenger: vk::DebugUtilsMessengerEXT) -> Self {
+        Self { surface, messenger }
+    }
+}
+
+pub unsafe fn destroy_surface_and_instance(
+    instance: &Instance,
+    surface_state: Option<SurfaceState>,
+) {
+    if let Some(surface_state) = surface_state {
+        instance.destroy_surface_khr(surface_state.surface, None);
+        if surface_state.messenger != vk::DebugUtilsMessengerEXT::null() {
+            instance.destroy_debug_utils_messenger_ext(surface_state.messenger, None);
+        }
+    }
+    instance.destroy_instance(None);
 }

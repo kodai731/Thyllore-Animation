@@ -11,9 +11,8 @@ use crate::vulkanr::resource::{destroy_all_in_reverse, GpuResource};
 use crate::vulkanr::swapchain::RRSwapchain;
 
 use anyhow::Result;
+use thyllore_vulkan_core::core::destroy_surface_and_instance;
 use thyllore_vulkan_core::types::Fence;
-use vulkanalia::prelude::v1_0::*;
-use vulkanalia::vk::{ExtDebugUtilsExtension, KhrSurfaceExtension};
 use winit::window::Window;
 
 impl App {
@@ -39,7 +38,10 @@ impl App {
         self.rrdevice.destroy();
         log!("Destroyed device");
 
-        self.destroy_surface_and_instance();
+        destroy_surface_and_instance(
+            &self.instance,
+            self.data.ecs_world.remove_resource::<SurfaceState>(),
+        );
         log!("All application resources destroyed");
     }
 
@@ -48,18 +50,6 @@ impl App {
             log!("Destroying {}", resource.resource_name());
             resource.destroy_gpu(&self.rrdevice);
         }
-    }
-
-    unsafe fn destroy_surface_and_instance(&mut self) {
-        if let Some(surface_state) = self.data.ecs_world.remove_resource::<SurfaceState>() {
-            self.instance
-                .destroy_surface_khr(surface_state.surface, None);
-            if surface_state.messenger != vk::DebugUtilsMessengerEXT::null() {
-                self.instance
-                    .destroy_debug_utils_messenger_ext(surface_state.messenger, None);
-            }
-        }
-        self.instance.destroy_instance(None);
     }
 
     pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
@@ -79,7 +69,6 @@ impl App {
             let command_state = self.resource::<CommandState>();
             let pool_handle = command_state.pool.command_pool;
             self.rrdevice
-                .device
                 .free_command_buffers(pool_handle, &command_state.buffers.command_buffers);
             pool_handle
         };
@@ -123,7 +112,7 @@ impl App {
         {
             let mut swapchain_state = self.resource_mut::<SwapchainState>();
             swapchain_state.swapchain = new_swapchain;
-            swapchain_state.images_in_flight = vec![Fence::null(); image_count];
+            swapchain_state.images_in_flight = vec![Fence::default(); image_count];
         }
 
         log!("Swapchain recreated successfully");

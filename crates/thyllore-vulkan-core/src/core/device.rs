@@ -724,6 +724,15 @@ impl RRDevice {
         Ok(())
     }
 
+    pub unsafe fn free_command_buffers(
+        &self,
+        command_pool: vk::CommandPool,
+        command_buffers: &[vk::CommandBuffer],
+    ) {
+        self.device
+            .free_command_buffers(command_pool, command_buffers);
+    }
+
     pub unsafe fn submit_one_time(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         let command_buffers = [command_buffer];
         let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);

@@ -3,7 +3,7 @@ use thyllore_animation::ecs::storage::{Components, SparseSet};
 use thyllore_animation::ecs::world::{
     Entity, Name, Resources, Transform, Visibility, Visible, World,
 };
-use thyllore_animation::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+use thyllore_render_core::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {
     use thyllore_animation::ecs::resource::GridMeshData;

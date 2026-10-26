@@ -13,8 +13,8 @@ use crate::math::{
     coordinate_system::perspective_infinite_reverse, is_point_in_rect,
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };
-use crate::render::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 use thyllore_render_core::FRAMES_IN_FLIGHT;
+use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 
 pub fn create_axis_gizmo_mesh_data(axis_length: f32, origin_color: [f32; 3]) -> MeshData {
     let positions = vec![

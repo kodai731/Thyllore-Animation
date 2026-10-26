@@ -5,17 +5,18 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 
 use thyllore_render_core::{
-    BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
-    ObjectUBO, ProjectionData, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
+    BillboardMesh, BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh,
+    MeshId, ObjectUBO, ProjectionData, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
-use crate::data::{SceneUniformData, Vertex};
+use crate::data::{SceneUniformData, UniformBufferObject, Vertex};
 use crate::raytracing::RRAccelerationStructure;
 use crate::resource::graphics_resource::GraphicsResources;
+use crate::resource::image::RRImage;
 use crate::resource::raytracing_data::RayTracingData;
-use crate::resource::GpuBufferRegistry;
+use crate::resource::{BillboardRenderState, GpuBufferRegistry};
 use crate::vulkan::Instance;
 
 pub struct VulkanBackend<'a> {
@@ -44,6 +45,58 @@ impl<'a> VulkanBackend<'a> {
             raytracing,
             buffer_registry,
         }
+    }
+
+    pub unsafe fn create_billboard_buffers(
+        &mut self,
+        mesh: &mut BillboardMesh,
+        render_state: &mut BillboardRenderState,
+    ) -> Result<()> {
+        mesh.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
+            self.instance,
+            self.device,
+            &mesh.vertices,
+            256,
+        )?;
+
+        mesh.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
+            self.instance,
+            self.device,
+            &mesh.indices,
+        )?;
+
+        let white_pixel: [u8; 4] = [255, 255, 255, 255];
+        render_state.texture = Some(
+            RRImage::new_from_pixels(
+                self.instance,
+                self.device,
+                &self.command_pool,
+                &white_pixel,
+                1,
+                1,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to create billboard texture: {}", e))?,
+        );
+
+        Ok(())
+    }
+
+    pub unsafe fn update_billboard_ubo(
+        &mut self,
+        render_state: &mut BillboardRenderState,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        image_index: usize,
+    ) -> Result<()> {
+        for i in 0..render_state.descriptor_set.rrdata.len() {
+            let rrdata = &mut render_state.descriptor_set.rrdata[i];
+
+            let ubo = UniformBufferObject { model, view, proj };
+            rrdata.rruniform_buffers[image_index].update(self.device, &ubo)?;
+        }
+
+        Ok(())
     }
 
     fn acceleration_structure(&mut self) -> &mut Option<RRAccelerationStructure> {

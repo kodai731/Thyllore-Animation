@@ -1,5 +1,6 @@
 pub mod accumulation_target;
 pub mod auto_exposure_buffers;
+mod billboard;
 pub mod bloom_chain;
 pub mod buffer;
 pub mod buffer_registry;
@@ -27,6 +28,7 @@ pub mod volume_image;
 
 pub use accumulation_target::AccumulationTarget;
 pub use auto_exposure_buffers::{AutoExposureBuffers, AutoExposureReadback, LUMINANCE_BUFFER_SIZE};
+pub use billboard::BillboardRenderState;
 pub use bloom_chain::{BloomChain, BloomMipTarget};
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;

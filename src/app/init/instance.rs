@@ -632,7 +632,7 @@ impl App {
             gizmo_create_static_buffers(
                 &mut gizmo_data.mesh,
                 &mut backend,
-                crate::render::BufferMemoryType::DeviceLocal,
+                thyllore_render_core::BufferMemoryType::DeviceLocal,
             )
             .expect("Failed to create gizmo buffers");
         }
@@ -937,7 +937,7 @@ impl App {
             rrdevice,
             rrcommand_pool,
             &grid_mesh.vertices,
-            crate::render::BufferMemoryType::DeviceLocal,
+            thyllore_render_core::BufferMemoryType::DeviceLocal,
         )?;
 
         grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(

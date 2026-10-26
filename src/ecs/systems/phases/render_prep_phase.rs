@@ -257,7 +257,7 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
 
 unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
     use crate::ecs::world::{GlobalTransform, MeshRef};
-    use crate::render::ObjectUBO;
+    use thyllore_render_core::ObjectUBO;
 
     let transforms: Vec<(usize, Matrix4<f32>)> = ctx
         .world

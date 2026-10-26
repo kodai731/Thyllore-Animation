@@ -1,17 +1,9 @@
 use crate::ecs::component::RenderInfo;
 use crate::gpu_resource;
-use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
-use crate::vulkanr::image::RRImage;
 use crate::vulkanr::resource::GpuResource;
 
 pub use thyllore_render_core::{BillboardMesh, BillboardTransform, BillboardVertex};
-
-#[must_use]
-#[derive(Clone, Debug, Default, GpuResource)]
-pub struct BillboardRenderState {
-    pub descriptor_set: RRBillboardDescriptorSet,
-    pub texture: Option<RRImage>,
-}
+pub use thyllore_vulkan_core::resource::BillboardRenderState;
 
 #[must_use]
 #[derive(Clone, Debug, Default, GpuResource)]

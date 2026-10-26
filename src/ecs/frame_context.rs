@@ -11,7 +11,6 @@ use crate::ecs::resource::gizmo::{
 use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
-use crate::render::BillboardBackend;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
@@ -159,6 +158,6 @@ impl<'a> FrameContext<'a> {
             self.raytracing,
             self.buffer_registry,
         );
-        backend.update_billboard_ubo(&mut billboard, model, view, proj, image_index)
+        backend.update_billboard_ubo(&mut billboard.render_state, model, view, proj, image_index)
     }
 }

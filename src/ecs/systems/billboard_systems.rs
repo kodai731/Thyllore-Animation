@@ -8,7 +8,7 @@ use crate::ecs::resource::billboard::{
     BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
 };
 use crate::ecs::world::{BillboardBehavior, Transform, World};
-use crate::render::BillboardBackend;
+use crate::vulkanr::VulkanBackend;
 
 pub fn create_billboard_mesh_data(size: f32) -> MeshData {
     let positions = vec![
@@ -105,9 +105,9 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
 
 pub unsafe fn billboard_create_buffers(
     billboard: &mut BillboardData,
-    backend: &mut dyn BillboardBackend,
+    backend: &mut VulkanBackend<'_>,
 ) -> Result<()> {
-    backend.create_billboard_buffers(billboard)
+    backend.create_billboard_buffers(&mut billboard.mesh, &mut billboard.render_state)
 }
 
 pub fn billboard_transform_update_look_at(

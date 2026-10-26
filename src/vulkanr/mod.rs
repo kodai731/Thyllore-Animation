@@ -1,9 +1,8 @@
-pub mod backend;
 pub mod context;
 pub mod renderer;
 pub mod resource;
 
-pub use backend::VulkanBackend;
+pub use thyllore_vulkan_core::backend::VulkanBackend;
 
 pub use thyllore_vulkan_core::core::{device, swapchain};
 pub use thyllore_vulkan_core::{command, core, data, descriptor, pipeline, render, vulkan};

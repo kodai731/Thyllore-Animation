@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 
-use crate::ecs::resource::{WaterDebugCapture, WaterRenderTargets};
+use crate::ecs::resource::WaterDebugCapture;
 use crate::ecs::systems::{
     build_water_debug_record, current_unix_time, water_debug_caustic_accum_path,
     water_debug_screenshot_path, write_water_debug_dump, WaterDebugRenderInfo,
@@ -10,6 +10,7 @@ use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::data::Vertex;
 use crate::vulkanr::vulkan::*;
 use thyllore_math_core::write_npy_u32;
+use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;

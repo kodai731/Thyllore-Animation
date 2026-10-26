@@ -4,9 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 use crate::ecs::component::WaterTorusEffect;
-use crate::ecs::resource::{
-    EffectTraceGpuState, WaterBindingKey, WaterGpuState, WaterRenderTargets,
-};
+use crate::ecs::resource::{EffectTraceGpuState, WaterGpuState};
 use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
@@ -17,6 +15,7 @@ use crate::hooks::pass::{
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
+use thyllore_vulkan_core::effect::water::targets::{WaterBindingKey, WaterRenderTargets};
 use thyllore_vulkan_core::renderer::TracePush;
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;

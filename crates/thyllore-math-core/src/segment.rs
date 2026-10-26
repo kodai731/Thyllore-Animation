@@ -52,6 +52,50 @@ fn point_at_arc(points: &[Vector3<f32>], segment_lengths: &[f32], arc: f32) -> V
         .unwrap_or(Vector3::new(0.0, 0.0, 0.0))
 }
 
+// Ericson, Real-Time Collision Detection 5.1.9.
+pub fn closest_segment_parameters(
+    p1: Vector3<f32>,
+    q1: Vector3<f32>,
+    p2: Vector3<f32>,
+    q2: Vector3<f32>,
+) -> (f32, f32) {
+    let d1 = q1 - p1;
+    let d2 = q2 - p2;
+    let r = p1 - p2;
+    let a = d1.dot(d1);
+    let e = d2.dot(d2);
+    let f = d2.dot(r);
+
+    if a < DEGENERATE_SEGMENT_LENGTH_SQUARED && e < DEGENERATE_SEGMENT_LENGTH_SQUARED {
+        return (0.0, 0.0);
+    }
+    if a < DEGENERATE_SEGMENT_LENGTH_SQUARED {
+        return (0.0, (f / e).clamp(0.0, 1.0));
+    }
+
+    let c = d1.dot(r);
+    if e < DEGENERATE_SEGMENT_LENGTH_SQUARED {
+        return ((-c / a).clamp(0.0, 1.0), 0.0);
+    }
+
+    let b = d1.dot(d2);
+    let denom = a * e - b * b;
+    let s = if denom > 0.0 {
+        ((b * f - c * e) / denom).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let t = (b * s + f) / e;
+
+    if t < 0.0 {
+        ((-c / a).clamp(0.0, 1.0), 0.0)
+    } else if t > 1.0 {
+        (((b - c) / a).clamp(0.0, 1.0), 1.0)
+    } else {
+        (s, t)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,5 +136,41 @@ mod tests {
         assert!((resampled[1] - Vector3::new(0.5, 0.0, 0.0)).magnitude() < 1e-6);
         assert!((resampled[2] - Vector3::new(1.0, 0.0, 0.0)).magnitude() < 1e-6);
         assert!((resampled[3] - Vector3::new(1.0, 0.5, 0.0)).magnitude() < 1e-6);
+    }
+
+    #[test]
+    fn closest_segment_parameters_non_intersecting_interior() {
+        let p1 = Vector3::new(0.0, 0.0, 0.0);
+        let q1 = Vector3::new(2.0, 0.0, 0.0);
+        let p2 = Vector3::new(1.0, -1.0, 1.0);
+        let q2 = Vector3::new(1.0, 1.0, 1.0);
+        let (s, t) = closest_segment_parameters(p1, q1, p2, q2);
+
+        assert!(s >= 0.0 && s <= 1.0);
+        assert!(t >= 0.0 && t <= 1.0);
+
+        assert!((s - 0.5).abs() < 1e-6);
+        assert!((t - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn closest_segment_parameters_clamped_to_endpoint() {
+        let p1 = Vector3::new(0.0, 0.0, 0.0);
+        let q1 = Vector3::new(1.0, 0.0, 0.0);
+        let p2 = Vector3::new(5.0, 0.0, 0.0);
+        let q2 = Vector3::new(6.0, 0.0, 0.0);
+        let (s, t) = closest_segment_parameters(p1, q1, p2, q2);
+
+        assert!((s - 1.0).abs() < 1e-6);
+        assert!(t.abs() < 1e-6);
+    }
+
+    #[test]
+    fn closest_segment_parameters_both_degenerate() {
+        let p = Vector3::new(1.0, 2.0, 3.0);
+        let (s, t) = closest_segment_parameters(p, p, p, p);
+
+        assert!(s.abs() < 1e-6);
+        assert!(t.abs() < 1e-6);
     }
 }

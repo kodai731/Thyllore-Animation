@@ -1,6 +1,6 @@
 use cgmath::{InnerSpace, Vector3};
+use thyllore_math_core::{closest_segment_parameters, project_point_to_segment};
 
-const DEGENERATE_SEGMENT_LENGTH_SQ: f32 = 1e-8;
 const MIN_TAIL_LEVER: f32 = 1e-3;
 /// A rest clearance below this is a joint authored on the collider axis, which the full radius pushes out.
 const MIN_REST_CLEARANCE: f32 = 1e-4;
@@ -59,7 +59,7 @@ fn effective_min_distance(
 /// Distance from the tail to the collider axis (center or capsule segment).
 pub fn tail_axis_distance(tail: Vector3<f32>, collider: &WorldCollider) -> f32 {
     let closest = match collider.tail {
-        Some(capsule_tail) => closest_point_on_segment(tail, collider.center, capsule_tail),
+        Some(capsule_tail) => project_point_to_segment(tail, collider.center, capsule_tail).1,
         None => collider.center,
     };
     (tail - closest).magnitude()
@@ -72,7 +72,7 @@ pub fn segment_axis_distance(
     collider: &WorldCollider,
 ) -> f32 {
     let collider_tail = collider.tail.unwrap_or(collider.center);
-    let (s, t) = find_closest_segment_parameters(head, tail, collider.center, collider_tail);
+    let (s, t) = closest_segment_parameters(head, tail, collider.center, collider_tail);
     let joint_point = head + (tail - head) * s;
     let collider_point = collider.center + (collider_tail - collider.center) * t;
     (joint_point - collider_point).magnitude()
@@ -84,7 +84,7 @@ fn resolve_tail_collision(
     collider: &WorldCollider,
 ) -> Vector3<f32> {
     let closest = match collider.tail {
-        Some(capsule_tail) => closest_point_on_segment(tail, collider.center, capsule_tail),
+        Some(capsule_tail) => project_point_to_segment(tail, collider.center, capsule_tail).1,
         None => collider.center,
     };
     let diff = tail - closest;
@@ -104,17 +104,6 @@ fn resolve_tail_collision(
     tail + push_direction * penetration
 }
 
-fn closest_point_on_segment(p: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>) -> Vector3<f32> {
-    let ab = b - a;
-    let len_sq = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z;
-    if len_sq < 1e-8 {
-        return a;
-    }
-    let t = ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y + (p.z - a.z) * ab.z) / len_sq;
-    let clamped_t = t.max(0.0).min(1.0);
-    a + ab * clamped_t
-}
-
 fn resolve_segment_collision(
     head: Vector3<f32>,
     tail: Vector3<f32>,
@@ -122,7 +111,7 @@ fn resolve_segment_collision(
     collider: &WorldCollider,
 ) -> Vector3<f32> {
     let collider_tail = collider.tail.unwrap_or(collider.center);
-    let (s, t) = find_closest_segment_parameters(head, tail, collider.center, collider_tail);
+    let (s, t) = closest_segment_parameters(head, tail, collider.center, collider_tail);
     let joint_point = head + (tail - head) * s;
     let collider_point = collider.center + (collider_tail - collider.center) * t;
 
@@ -141,50 +130,6 @@ fn resolve_segment_collision(
     };
 
     tail + push_direction * (penetration / s)
-}
-
-// Ericson, Real-Time Collision Detection 5.1.9.
-fn find_closest_segment_parameters(
-    p1: Vector3<f32>,
-    q1: Vector3<f32>,
-    p2: Vector3<f32>,
-    q2: Vector3<f32>,
-) -> (f32, f32) {
-    let d1 = q1 - p1;
-    let d2 = q2 - p2;
-    let r = p1 - p2;
-    let a = d1.dot(d1);
-    let e = d2.dot(d2);
-    let f = d2.dot(r);
-
-    if a <= DEGENERATE_SEGMENT_LENGTH_SQ && e <= DEGENERATE_SEGMENT_LENGTH_SQ {
-        return (0.0, 0.0);
-    }
-    if a <= DEGENERATE_SEGMENT_LENGTH_SQ {
-        return (0.0, (f / e).clamp(0.0, 1.0));
-    }
-
-    let c = d1.dot(r);
-    if e <= DEGENERATE_SEGMENT_LENGTH_SQ {
-        return ((-c / a).clamp(0.0, 1.0), 0.0);
-    }
-
-    let b = d1.dot(d2);
-    let denom = a * e - b * b;
-    let s = if denom > 0.0 {
-        ((b * f - c * e) / denom).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    let t = (b * s + f) / e;
-
-    if t < 0.0 {
-        ((-c / a).clamp(0.0, 1.0), 0.0)
-    } else if t > 1.0 {
-        (((b - c) / a).clamp(0.0, 1.0), 1.0)
-    } else {
-        (s, t)
-    }
 }
 
 #[cfg(test)]

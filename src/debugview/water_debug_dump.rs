@@ -15,9 +15,7 @@ use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
-use thyllore_vulkan_core::types::{
-    Buffer, CommandBuffer, CommandPool, DeviceMemory, DeviceSize, Fence,
-};
+use thyllore_vulkan_core::types::{Buffer, CommandBuffer, CommandPool, DeviceMemory, DeviceSize};
 
 const VERTEX_PROBE_COUNT: usize = 64;
 
@@ -318,14 +316,7 @@ unsafe fn record_and_submit_vertex_copy(
     device.cmd_copy_buffer(command_buffer, source, destination, &[region]);
     device.end_command_buffer(command_buffer)?;
 
-    let command_buffers = [command_buffer];
-    let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
-    device.queue_submit(
-        ctx.device.graphics_queue,
-        &[submit_info.build()],
-        Fence::null(),
-    )?;
-    device.queue_wait_idle(ctx.device.graphics_queue)?;
+    ctx.device.submit_one_time(command_buffer)?;
 
     Ok(command_buffer)
 }

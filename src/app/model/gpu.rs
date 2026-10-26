@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::texture::{resolve_texture_pixels, DecodedTextureFiles};
 use crate::asset::AssetStorage;
@@ -105,7 +104,7 @@ pub(super) unsafe fn release_model_gpu_resources(
     graphics: &mut GraphicsResources,
     raytracing: &mut RayTracingData,
 ) -> Result<()> {
-    device.device.device_wait_idle()?;
+    device.wait_idle()?;
 
     if let Some(ref mut accel) = raytracing.acceleration_structure {
         accel.destroy(&device.device);

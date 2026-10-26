@@ -75,7 +75,7 @@ pub unsafe fn imgui_texture_destroy(
     imgui_textures: &mut ImguiTextures,
     id: SnapshotTextureId,
 ) -> Result<()> {
-    rrdevice.device.device_wait_idle()?;
+    rrdevice.wait_idle()?;
     let mut texture = imgui_textures
         .textures
         .remove(&id)

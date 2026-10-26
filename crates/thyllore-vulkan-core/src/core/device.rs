@@ -714,6 +714,28 @@ impl RRDevice {
         Ok(())
     }
 
+    pub unsafe fn wait_idle(&self) -> Result<()> {
+        self.device.device_wait_idle()?;
+        Ok(())
+    }
+
+    pub unsafe fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
+        self.device.wait_for_fences(&[fence], true, u64::MAX)?;
+        Ok(())
+    }
+
+    pub unsafe fn submit_one_time(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        let command_buffers = [command_buffer];
+        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
+        self.device.queue_submit(
+            self.graphics_queue,
+            &[submit_info.build()],
+            vk::Fence::null(),
+        )?;
+        self.device.queue_wait_idle(self.graphics_queue)?;
+        Ok(())
+    }
+
     pub unsafe fn query_physical_device_api_version(&self, instance: &Instance) -> u32 {
         let properties = instance.get_physical_device_properties(self.physical_device);
         properties.api_version

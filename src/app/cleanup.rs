@@ -20,7 +20,7 @@ impl App {
     pub unsafe fn destroy(&mut self) {
         log!("Destroying application resources...");
 
-        let _ = self.rrdevice.device.device_wait_idle();
+        let _ = self.rrdevice.wait_idle();
 
         match GpuResourceHooks::collect() {
             Ok(hooks) => hooks.destroy_all(&self.data.ecs_world, &self.rrdevice),
@@ -63,7 +63,7 @@ impl App {
     }
 
     pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         {
             let mut render_targets = self.resource_mut::<RenderTargets>();

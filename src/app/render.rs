@@ -16,8 +16,11 @@ use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
+use thyllore_vulkan_core::core::{
+    acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
+};
 use thyllore_vulkan_core::types::{
-    Buffer, CommandBuffer, Extent2D, Fence, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
+    Buffer, CommandBuffer, Extent2D, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
     Sampler, Viewport,
 };
 
@@ -26,9 +29,7 @@ impl App {
         self.handle_viewport_resize()?;
 
         let current_fence = self.resource::<FrameSync>().current_fence();
-        self.rrdevice
-            .device
-            .wait_for_fences(&[current_fence], true, u64::MAX)?;
+        self.rrdevice.wait_for_fence(current_fence)?;
 
         let frame_slot = self.resource::<FrameSync>().current_frame;
         self.data
@@ -41,24 +42,15 @@ impl App {
 
         let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
         let image_available = self.resource::<FrameSync>().current_image_available();
-        let result = self.rrdevice.device.acquire_next_image_khr(
-            swapchain,
-            u64::MAX,
-            image_available,
-            Fence::null(),
-        );
-
-        let image_index = match result {
-            Ok((image_index, _)) => image_index as usize,
-            Err(vk::ErrorCode::OUT_OF_DATE_KHR) => return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE")),
-            Err(e) => return Err(anyhow!(e)),
+        let image_index = match acquire_swapchain_image(&self.rrdevice, swapchain, image_available)?
+        {
+            AcquireOutcome::Image(image_index) => image_index,
+            AcquireOutcome::OutOfDate => return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE")),
         };
 
         let image_in_flight = self.resource::<SwapchainState>().images_in_flight[image_index];
         if !image_in_flight.is_null() {
-            self.rrdevice
-                .device
-                .wait_for_fences(&[image_in_flight], true, u64::MAX)?;
+            self.rrdevice.wait_for_fence(image_in_flight)?;
         }
 
         let current_fence = self.resource::<FrameSync>().current_fence();
@@ -78,7 +70,7 @@ impl App {
             return Ok(());
         };
 
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
         self.data.pass_image_states.clear();
         let command_pool = self.resource::<CommandState>().pool.command_pool;
         self.data
@@ -345,7 +337,7 @@ impl App {
             return;
         }
         if is_fixed_step {
-            let _ = self.rrdevice.device.device_wait_idle();
+            let _ = self.rrdevice.wait_idle();
         }
 
         let readback = match self.data.viewport.auto_exposure_buffers {
@@ -459,43 +451,24 @@ impl App {
         let render_finished = self.resource::<FrameSync>().current_render_finished();
         let current_fence = self.resource::<FrameSync>().current_fence();
 
-        let wait_semaphores = &[image_available];
-        let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers =
-            &[self.resource::<CommandState>().buffers.command_buffers[image_index]];
-        let signal_semaphores = &[render_finished];
-        let submit_info = vk::SubmitInfo::builder()
-            .wait_semaphores(wait_semaphores)
-            .wait_dst_stage_mask(wait_stages)
-            .command_buffers(command_buffers)
-            .signal_semaphores(signal_semaphores);
+        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
 
-        self.rrdevice.device.reset_fences(&[current_fence])?;
-        self.rrdevice.device.queue_submit(
-            self.rrdevice.graphics_queue,
-            &[submit_info],
-            current_fence,
+        let outcome = submit_and_present(
+            &self.rrdevice,
+            FrameSubmit {
+                command_buffer: self.resource::<CommandState>().buffers.command_buffers
+                    [image_index],
+                image_available,
+                render_finished,
+                fence: current_fence,
+                swapchain,
+                image_index,
+            },
         )?;
 
-        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
-        let swapchains = &[swapchain];
-        let image_indices = &[image_index as u32];
-        let present_info = vk::PresentInfoKHR::builder()
-            .wait_semaphores(signal_semaphores)
-            .swapchains(swapchains)
-            .image_indices(image_indices);
-        let present_result = self
-            .rrdevice
-            .device
-            .queue_present_khr(self.rrdevice.present_queue, &present_info);
-        let changed = present_result == Ok(vk::SuccessCode::SUBOPTIMAL_KHR)
-            || present_result == Err(vk::ErrorCode::OUT_OF_DATE_KHR);
-
-        if changed || self.resized {
+        if matches!(outcome, PresentOutcome::OutOfDate) || self.resized {
             self.resized = false;
             return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE"));
-        } else if let Err(e) = present_result {
-            return Err(anyhow!(e));
         }
 
         self.resource_mut::<FrameSync>()

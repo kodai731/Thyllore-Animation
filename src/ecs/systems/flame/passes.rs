@@ -1,6 +1,5 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, SquareMatrix, Vector3};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::FlameEffect;
 use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
@@ -270,13 +269,7 @@ unsafe fn record_flame_passes(
         let Some(scissor) = *scissor else {
             continue;
         };
-        flame_ubo.record_update(
-            device,
-            command_buffer,
-            slot,
-            ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
-        )?;
+        flame_ubo.record_update(device, command_buffer, slot, ubo, ShaderStage::Fragment)?;
         draws.push(OverlayInstanceDraw {
             dynamic_offsets: vec![flame_ubo.slot_offset(slot)? as u32],
             scissor,

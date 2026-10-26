@@ -118,6 +118,44 @@ impl AutoExposureBuffers {
         Ok(())
     }
 
+    pub unsafe fn record_luminance_readback(
+        &self,
+        device: &vulkanalia::Device,
+        command_buffer: vk::CommandBuffer,
+        slot: usize,
+    ) {
+        let barrier = vk::BufferMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .buffer(self.luminance_buffer)
+            .offset(0)
+            .size(LUMINANCE_BUFFER_SIZE)
+            .build();
+
+        device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[barrier],
+            &[] as &[vk::ImageMemoryBarrier],
+        );
+
+        device.cmd_copy_buffer(
+            command_buffer,
+            self.luminance_buffer,
+            self.readback_buffers[slot],
+            &[vk::BufferCopy::builder()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(LUMINANCE_BUFFER_SIZE)
+                .build()],
+        );
+    }
+
     pub unsafe fn read_luminance(
         &self,
         device: &vulkanalia::Device,

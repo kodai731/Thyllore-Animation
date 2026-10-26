@@ -902,7 +902,7 @@ unsafe fn record_water_ubo_updates(
             command_buffer,
             i,
             &ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER | vk::PipelineStageFlags::COMPUTE_SHADER,
+            ShaderStage::Fragment | ShaderStage::Compute,
         )?;
         instance_ubos.push((ubo, water_ubo.slot_offset(i)? as u32));
     }

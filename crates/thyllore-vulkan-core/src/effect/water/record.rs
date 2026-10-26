@@ -1,7 +1,7 @@
 use vulkanalia::prelude::v1_0::*;
 
-use thyllore_vulkan_core::frame_context::FrameRenderContext;
-use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Extent3D, Image, Offset3D};
+use crate::frame_context::FrameRenderContext;
+use crate::types::{CommandBuffer, Extent2D, Extent3D, Image, Offset3D};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

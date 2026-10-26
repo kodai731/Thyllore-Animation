@@ -1,14 +1,12 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings};
 use crate::ecs::systems::wind::pipeline::WIND_RESOLVE_OVERLAY;
-use crate::ecs::systems::wind::record::record_wind_shadow_bake_pass;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
-    TransientRequest, TransientSlot,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -17,6 +15,7 @@ use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::effect::wind::record::record_wind_shadow_bake_pass;
 use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
@@ -259,7 +258,7 @@ unsafe fn record_wind_passes(
             command_buffer,
             slot,
             ubo,
-            vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER,
+            ShaderStage::Compute | ShaderStage::Fragment,
         )?;
         draws.push(OverlayInstanceDraw {
             dynamic_offsets: vec![wind_ubo.slot_offset(slot)? as u32],

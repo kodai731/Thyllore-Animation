@@ -1,12 +1,12 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{LightningGpuState, LightningRenderSettings, ProjectionData};
 use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse,
 };
 use crate::vulkanr::renderer::deferred::{compute_projected_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
@@ -171,14 +171,14 @@ unsafe fn record_lightning_passes(
             command_buffer,
             slot,
             instance_ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            ShaderStage::Fragment,
         )?;
         segments_ubo.record_update(
             device,
             command_buffer,
             slot,
             instance_segments,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            ShaderStage::Fragment,
         )?;
         draws.push(OverlayInstanceDraw {
             dynamic_offsets: vec![

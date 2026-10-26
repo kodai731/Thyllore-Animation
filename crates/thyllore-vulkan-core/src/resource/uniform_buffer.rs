@@ -122,8 +122,9 @@ impl<T: GpuBlock> UniformBuffer<T> {
         cmd: vk::CommandBuffer,
         slot: usize,
         value: &T,
-        reader_stage: vk::PipelineStageFlags,
+        reader_stage: impl Into<vk::PipelineStageFlags>,
     ) -> Result<()> {
+        let reader_stage: vk::PipelineStageFlags = reader_stage.into();
         if self.placement != Placement::DeviceUpdated {
             return Err(anyhow!(
                 "{} uniform buffer is {:?}; record_update needs Placement::DeviceUpdated",

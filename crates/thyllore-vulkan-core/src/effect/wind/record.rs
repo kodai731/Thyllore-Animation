@@ -1,15 +1,15 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::vulkanr::pipeline::RRPipeline;
-use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
-use thyllore_vulkan_core::effect::wind::descriptors::WindShadowBakeDescriptorSet;
-use thyllore_vulkan_core::effect::wind::targets::{wind_shadow_volume_extent, WindRenderTargets};
-use thyllore_vulkan_core::types::CommandBuffer;
-use thyllore_vulkan_core::{
+use crate::effect::wind::descriptors::WindShadowBakeDescriptorSet;
+use crate::effect::wind::targets::{wind_shadow_volume_extent, WindRenderTargets};
+use crate::pipeline::RRPipeline;
+use crate::types::CommandBuffer;
+use crate::{
     insert_storage_image_read_barrier, insert_storage_image_write_barrier, FrameRenderContext,
     OverlayInstanceDraw,
 };
+use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
 
 /// Must match local_size in shadowBake.comp.
 const SHADOW_BAKE_WORKGROUP_SIZE: u32 = 8;

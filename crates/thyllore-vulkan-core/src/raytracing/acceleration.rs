@@ -19,6 +19,12 @@ pub struct RRBLAS {
     pub transform: vk::TransformMatrixKHR,
 }
 
+impl RRBLAS {
+    pub fn set_transform_rows(&mut self, rows: [[f32; 4]; 3]) {
+        self.transform = vk::TransformMatrixKHR { matrix: rows };
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RRTLAS {
     pub acceleration_structure: Option<vk::AccelerationStructureKHR>,

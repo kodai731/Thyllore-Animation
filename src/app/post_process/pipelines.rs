@@ -6,8 +6,9 @@ use crate::vulkanr::descriptor::{
     AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, DOF, TONEMAP,
 };
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
-    RRPipeline, SampleCount, ShaderStages, Topology, VertexInputConfig,
+    compute_push_constant_range, BlendConfig, DepthCompare, DepthTestConfig, FillMode,
+    PipelineBuilder, PushConstantConfig, RRPipeline, SampleCount, ShaderStages, Topology,
+    VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::BloomChain;
@@ -285,12 +286,4 @@ unsafe fn build_bloom_pipelines(
         bloom_chain.mip_count()
     );
     Ok((downsample_pipeline, upsample_pipeline, bloom_descriptors))
-}
-
-fn compute_push_constant_range(size: u32) -> vk::PushConstantRange {
-    vk::PushConstantRange::builder()
-        .stage_flags(ShaderStages::Compute.into())
-        .offset(0)
-        .size(size)
-        .build()
 }

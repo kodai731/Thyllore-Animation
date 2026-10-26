@@ -33,7 +33,7 @@ pub use frame_commands::{
     end_frame_command_buffer, end_render_pass, record_picked_texel_copy,
     set_full_viewport_and_scissor,
 };
-pub use gbuffer::record_gbuffer_pass;
+pub use gbuffer::{create_gbuffer_framebuffer, record_gbuffer_pass};
 pub use indexed_draw::{
     bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, push_vertex_constants,
     set_scissor, set_viewport_size, IndexWidth,

@@ -14,6 +14,21 @@ pub enum BlasGeometry<'a> {
     },
 }
 
+impl BlasGeometry<'_> {
+    pub fn procedural_aabb(min: [f32; 3], max: [f32; 3]) -> Self {
+        Self::ProceduralAabb {
+            aabb: vk::AabbPositionsKHR {
+                min_x: min[0],
+                min_y: min[1],
+                min_z: min[2],
+                max_x: max[0],
+                max_y: max[1],
+                max_z: max[2],
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GpuPrimitive<'a> {
     pub geometry: BlasGeometry<'a>,

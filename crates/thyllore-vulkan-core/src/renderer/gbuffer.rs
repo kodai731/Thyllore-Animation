@@ -1,11 +1,13 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::core::RRDevice;
 use crate::frame_context::FrameRenderContext;
-use crate::pipeline::RRPipeline;
+use crate::pipeline::{RRPipeline, SampleCount};
+use crate::render::pass::{get_depth_format, RRRender};
 use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::graphics_resource::MeshBuffer;
-use crate::resource::RRGBuffer;
+use crate::resource::{create_image, create_image_view, RRGBuffer};
 
 pub unsafe fn record_gbuffer_pass(
     ctx: &FrameRenderContext,
@@ -196,5 +198,61 @@ unsafe fn draw_single_mesh(
 
     device.cmd_draw_indexed(cmd, mesh.index_buffer.indices, 1, 0, 0, 0);
 
+    Ok(())
+}
+
+pub unsafe fn create_gbuffer_framebuffer(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    rrrender: &mut RRRender,
+    gbuffer: &RRGBuffer,
+) -> Result<()> {
+    let (depth_image, depth_image_memory) = create_image(
+        instance,
+        rrdevice,
+        gbuffer.width,
+        gbuffer.height,
+        1,
+        SampleCount::One.into(),
+        get_depth_format(instance, rrdevice)?,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+
+    let depth_image_view = create_image_view(
+        rrdevice,
+        depth_image,
+        get_depth_format(instance, rrdevice)?,
+        vk::ImageAspectFlags::DEPTH,
+        1,
+    )?;
+
+    rrrender.gbuffer_depth_image = depth_image;
+    rrrender.gbuffer_depth_image_memory = depth_image_memory;
+    rrrender.gbuffer_depth_image_view = depth_image_view;
+
+    let attachments = [
+        gbuffer.position_image_view,
+        gbuffer.normal_image_view,
+        gbuffer.albedo_image_view,
+        gbuffer.object_id_image_view,
+        depth_image_view,
+    ];
+
+    let info = vk::FramebufferCreateInfo::builder()
+        .render_pass(rrrender.gbuffer_render_pass)
+        .attachments(&attachments)
+        .width(gbuffer.width)
+        .height(gbuffer.height)
+        .layers(1);
+
+    rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+
+    log!(
+        "Created G-Buffer framebuffer: {}x{}",
+        gbuffer.width,
+        gbuffer.height
+    );
     Ok(())
 }

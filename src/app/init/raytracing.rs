@@ -3,8 +3,8 @@ use crate::ecs::resource::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
+use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
 use anyhow::Result;
 use std::rc::Rc;

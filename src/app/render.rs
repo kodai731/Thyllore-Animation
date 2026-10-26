@@ -10,9 +10,9 @@ use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };
 use crate::vulkanr::descriptor::CompositeGBufferViews;
-use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
 use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{

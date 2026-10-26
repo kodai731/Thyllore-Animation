@@ -1,5 +1,3 @@
-use vulkanalia::vk;
-
 use thyllore_vulkan_core::types::DeviceAddress;
 
 use crate::ecs::component::WaterTorusEffect;
@@ -15,16 +13,10 @@ impl GpuPrimitiveSource for WaterTorusEffect {
         let extent = self.major_radius + self.minor_radius;
 
         GpuPrimitive {
-            geometry: BlasGeometry::ProceduralAabb {
-                aabb: vk::AabbPositionsKHR {
-                    min_x: -extent,
-                    min_y: -self.minor_radius,
-                    min_z: -extent,
-                    max_x: extent,
-                    max_y: self.minor_radius,
-                    max_z: extent,
-                },
-            },
+            geometry: BlasGeometry::procedural_aabb(
+                [-extent, -self.minor_radius, -extent],
+                [extent, self.minor_radius, extent],
+            ),
             model,
             base_color: [1.0, 1.0, 1.0, 1.0],
             params: [1.0, self.major_radius, self.minor_radius, 0.0],

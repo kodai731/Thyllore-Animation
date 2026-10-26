@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
@@ -32,33 +31,24 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
 
     let (instance, rrdevice) = (ctx.instance, ctx.rrdevice);
     let command_pool = ctx.world.resource::<CommandState>().pool.clone();
-    let (image, image_memory, mips) =
-        thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
-            instance,
-            rrdevice,
-            &command_pool,
-            &pixels,
-            width,
-            height,
-            vk::Format::R8G8B8A8_UNORM,
-        )?;
-    let image_view = thyllore_vulkan_core::resource::create_image_view(
+    let rgba8 = thyllore_vulkan_core::resource::create_rgba8_texture(
+        instance,
         rrdevice,
-        image,
-        vk::Format::R8G8B8A8_UNORM,
-        vk::ImageAspectFlags::COLOR,
-        mips,
+        &command_pool,
+        &pixels,
+        width,
+        height,
+        thyllore_vulkan_core::resource::TextureColorSpace::Linear,
     )?;
-    let sampler = thyllore_vulkan_core::resource::create_texture_sampler(rrdevice, mips)?;
     if ctx.world.get_resource::<FlameGpuState>().is_none() {
         ctx.world.insert_resource(FlameGpuState::default());
     }
     let mut gpu_state = ctx.world.resource_mut::<FlameGpuState>();
     gpu_state.sdf = thyllore_vulkan_core::resource::RRImage {
-        image,
-        image_memory,
-        image_view,
-        sampler,
+        image: rgba8.image,
+        image_memory: rgba8.memory,
+        image_view: rgba8.view,
+        sampler: rgba8.sampler,
     };
 
     let Some(flame_targets) = ctx.world.get_resource::<FlameRenderTargets>() else {
@@ -70,8 +60,8 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
             FlameImageBindings {
                 history_image_views: flame_targets.history.views,
                 flame_sampler: flame_targets.history.sampler,
-                sdf_image_view: image_view,
-                sdf_sampler: sampler,
+                sdf_image_view: rgba8.view,
+                sdf_sampler: rgba8.sampler,
                 scene_depth_view: rrrender.gbuffer_depth_image_view,
             },
         )?;

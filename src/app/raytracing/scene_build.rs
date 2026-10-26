@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use cgmath::SquareMatrix;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::ecs::systems::collect_mesh_transforms;
@@ -73,9 +72,7 @@ pub unsafe fn rebuild_acceleration_structures(
             .get(mesh_index)
             .copied()
             .unwrap_or_else(cgmath::Matrix4::identity);
-        blas.transform = vk::TransformMatrixKHR {
-            matrix: AffineRows3x4::from_mat4(model).rows,
-        };
+        blas.set_transform_rows(AffineRows3x4::from_mat4(model).rows);
 
         acceleration_structure.blas_list.push(blas);
         log!("Created BLAS for mesh");

@@ -915,6 +915,64 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
     Ok(rrdevice.device.create_sampler(&info, None)?)
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum TextureColorSpace {
+    Srgb,
+    Linear,
+}
+
+fn format_for_color_space(color_space: TextureColorSpace) -> vk::Format {
+    match color_space {
+        TextureColorSpace::Srgb => vk::Format::R8G8B8A8_SRGB,
+        TextureColorSpace::Linear => vk::Format::R8G8B8A8_UNORM,
+    }
+}
+
+#[derive(Debug)]
+pub struct Rgba8Texture {
+    pub image: vk::Image,
+    pub memory: vk::DeviceMemory,
+    pub view: vk::ImageView,
+    pub sampler: vk::Sampler,
+    pub mip_levels: u32,
+}
+
+pub unsafe fn create_rgba8_texture(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    color_space: TextureColorSpace,
+) -> Result<Rgba8Texture> {
+    let format = format_for_color_space(color_space);
+    let (image, memory, mip_levels) = create_texture_image_pixel_with_format(
+        instance,
+        rrdevice,
+        command_pool,
+        &pixels.to_vec(),
+        width,
+        height,
+        format,
+    )?;
+    let view = create_image_view(
+        rrdevice,
+        image,
+        format,
+        vk::ImageAspectFlags::COLOR,
+        mip_levels,
+    )?;
+    let sampler = create_texture_sampler(rrdevice, mip_levels)?;
+    Ok(Rgba8Texture {
+        image,
+        memory,
+        view,
+        sampler,
+        mip_levels,
+    })
+}
+
 impl GpuResource for RRImage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);

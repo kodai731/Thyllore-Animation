@@ -1,12 +1,3 @@
-use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
-
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::pipeline::SampleCount;
-use crate::vulkanr::render::pass::get_depth_format;
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
-
 pub use thyllore_vulkan_core::renderer::push_constants::{
     GBufferPushConstants, OnionSkinPushConstants,
 };
@@ -53,60 +44,4 @@ mod tests {
         let tint_r = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         assert!((tint_r - 1.0).abs() < f32::EPSILON);
     }
-}
-
-pub unsafe fn create_gbuffer_framebuffer(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    rrrender: &mut RRRender,
-    gbuffer: &RRGBuffer,
-) -> Result<()> {
-    let (depth_image, depth_image_memory) = create_image(
-        instance,
-        rrdevice,
-        gbuffer.width,
-        gbuffer.height,
-        1,
-        SampleCount::One.into(),
-        get_depth_format(instance, rrdevice)?,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    let depth_image_view = create_image_view(
-        rrdevice,
-        depth_image,
-        get_depth_format(instance, rrdevice)?,
-        vk::ImageAspectFlags::DEPTH,
-        1,
-    )?;
-
-    rrrender.gbuffer_depth_image = depth_image;
-    rrrender.gbuffer_depth_image_memory = depth_image_memory;
-    rrrender.gbuffer_depth_image_view = depth_image_view;
-
-    let attachments = [
-        gbuffer.position_image_view,
-        gbuffer.normal_image_view,
-        gbuffer.albedo_image_view,
-        gbuffer.object_id_image_view,
-        depth_image_view,
-    ];
-
-    let info = vk::FramebufferCreateInfo::builder()
-        .render_pass(rrrender.gbuffer_render_pass)
-        .attachments(&attachments)
-        .width(gbuffer.width)
-        .height(gbuffer.height)
-        .layers(1);
-
-    rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
-
-    log!(
-        "Created G-Buffer framebuffer: {}x{}",
-        gbuffer.width,
-        gbuffer.height
-    );
-    Ok(())
 }

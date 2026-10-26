@@ -3,7 +3,6 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::world::{Transform, World};
@@ -18,9 +17,7 @@ use crate::vulkanr::resource::MeshBuffer;
 use crate::vulkanr::vulkan::Instance;
 use thyllore_model_core::MeshMorph;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
-use thyllore_vulkan_core::resource::image::{
-    create_image_view, create_texture_image_pixel, create_texture_sampler,
-};
+use thyllore_vulkan_core::resource::image::{create_rgba8_texture, TextureColorSpace};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::DeviceSize;
 
@@ -181,17 +178,15 @@ unsafe fn create_quad_mesh_buffer(
     )?;
 
     let white_pixel = vec![255u8, 255, 255, 255];
-    let (image, image_memory, mip_level) =
-        create_texture_image_pixel(instance, device, command_pool, &white_pixel, 1, 1)?;
-
-    let image_view = create_image_view(
+    let rgba8 = create_rgba8_texture(
+        instance,
         device,
-        image,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageAspectFlags::COLOR,
-        mip_level,
+        command_pool,
+        &white_pixel,
+        1,
+        1,
+        TextureColorSpace::Srgb,
     )?;
-    let sampler = create_texture_sampler(device, mip_level)?;
 
     let object_index = graphics.objects.allocate_slot();
 
@@ -199,11 +194,11 @@ unsafe fn create_quad_mesh_buffer(
         vertex_buffer,
         index_buffer,
         vertex_data,
-        image,
-        image_memory,
-        mip_level,
-        image_view,
-        sampler,
+        image: rgba8.image,
+        image_memory: rgba8.memory,
+        mip_level: rgba8.mip_levels,
+        image_view: rgba8.view,
+        sampler: rgba8.sampler,
         render_to_gbuffer: true,
         object_index,
         skin_data: None,

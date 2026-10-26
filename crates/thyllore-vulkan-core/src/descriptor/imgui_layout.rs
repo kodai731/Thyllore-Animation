@@ -25,3 +25,7 @@ pub unsafe fn destroy_imgui_pipeline_objects(
         rrdevice.device.destroy_sampler(sampler, None);
     }
 }
+
+pub fn imgui_texture_id(descriptor_set: vk::DescriptorSet) -> u64 {
+    descriptor_set.as_raw()
+}

@@ -10,8 +10,7 @@ use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::HistoryTargets;
-use thyllore_vulkan_core::types::{ImageView, Sampler};
-use vulkanalia::prelude::v1_0::Instance;
+use thyllore_vulkan_core::types::{ImageView, Instance, Sampler};
 
 /// Blends the shading onto the HDR color and writes the unblended result into the history image.
 pub const FLAME_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {

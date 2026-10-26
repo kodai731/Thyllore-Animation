@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use imgui::SnapshotTextureId;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::gpu_resource;
 use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::descriptor::imgui_texture_id;
 use crate::vulkanr::resource::{GpuResource, SampledTexture};
 use thyllore_vulkan_core::types::DescriptorSet;
 
@@ -20,7 +20,7 @@ impl ImguiTextures {
         self.textures
             .values()
             .map(SampledTexture::descriptor_set)
-            .find(|set| set.as_raw() == texture_id)
+            .find(|set| imgui_texture_id(*set) == texture_id)
     }
 }
 

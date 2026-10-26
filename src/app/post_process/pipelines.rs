@@ -15,7 +15,7 @@ use crate::vulkanr::resource::BloomChain;
 use thyllore_vulkan_core::renderer::tonemap::ToneMapPushConstants;
 
 use anyhow::Result;
-use thyllore_vulkan_core::types::{DeviceSize, Handle, ImageView};
+use thyllore_vulkan_core::types::{DeviceSize, ImageView};
 
 fn fullscreen_pipeline(pass: &'static crate::vulkanr::descriptor::PassShaders) -> PipelineBuilder {
     PipelineBuilder::from_pass(pass)
@@ -151,7 +151,7 @@ impl App {
         };
 
         let depth_image_view = rrrender.gbuffer_depth_image_view;
-        if depth_image_view == ImageView::null() {
+        if depth_image_view == ImageView::default() {
             log!("GBuffer depth image view not available, skipping DOF pipeline");
             return Ok(());
         }

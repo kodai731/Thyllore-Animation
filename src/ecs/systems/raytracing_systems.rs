@@ -5,13 +5,13 @@ use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
 use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::FrameContext;
+use thyllore_vulkan_core::types::Instance;
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
     let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world

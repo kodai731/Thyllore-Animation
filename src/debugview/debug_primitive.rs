@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::vulkanr::context::{CommandState, SwapchainState};
-use crate::vulkanr::vulkan::*;
 use anyhow::Result;
 
 impl App {

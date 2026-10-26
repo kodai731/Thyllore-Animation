@@ -1,7 +1,5 @@
 use crate::vulkan::vk;
 
-pub use vulkanalia::prelude::v1_0::Handle;
-
 pub type Entry = vulkanalia::Entry;
 pub type Instance = vulkanalia::Instance;
 

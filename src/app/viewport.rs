@@ -1,14 +1,14 @@
 use anyhow::Result;
 
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{imgui_layout_spec, shader_bindings, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{
+    imgui_layout_spec, imgui_texture_id, shader_bindings, ReflectedSetLayout,
+};
 use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
-use thyllore_vulkan_core::types::{
-    CommandPool, DescriptorSet, Format, Handle, Instance, SampleCountFlags,
-};
+use thyllore_vulkan_core::types::{CommandPool, DescriptorSet, Format, Instance, SampleCountFlags};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -163,6 +163,6 @@ impl ViewportState {
     }
 
     pub fn texture_id(&self) -> u64 {
-        self.descriptor_set.as_raw()
+        imgui_texture_id(self.descriptor_set)
     }
 }

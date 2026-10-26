@@ -1,12 +1,10 @@
-use vulkanalia::prelude::v1_0::*;
-
 use crate::ecs::World;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::RenderTargetStorage;
 use thyllore_vulkan_core::renderer::ImageStateTracker;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::types::ImageView;
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub struct EffectContext<'a> {
     pub instance: &'a Instance,

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
 use crate::ecs::resource::WaterGpuState;
@@ -11,7 +10,7 @@ use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, Uni
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
-use thyllore_vulkan_core::types::ImageView;
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 /// Writes the shading into the HDR color and the history image where the torus is nearer than
 /// the scene depth.

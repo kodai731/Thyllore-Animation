@@ -24,8 +24,7 @@ use thyllore_vulkan_core::renderer::{
 };
 use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
-    Buffer, CommandBuffer, Extent2D, Handle, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
-    Sampler,
+    Buffer, CommandBuffer, Extent2D, Fence, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
 };
 
 impl App {
@@ -53,7 +52,7 @@ impl App {
         };
 
         let image_in_flight = self.resource::<SwapchainState>().images_in_flight[image_index];
-        if !image_in_flight.is_null() {
+        if image_in_flight != Fence::default() {
             self.rrdevice.wait_for_fence(image_in_flight)?;
         }
 
@@ -153,7 +152,7 @@ impl App {
             let rt = self.resource::<RenderTargets>();
             rt.render.gbuffer_depth_image_view
         };
-        if depth_view == ImageView::null() {
+        if depth_view == ImageView::default() {
             return Ok(());
         }
         if let Some(hdr_buffer) = &mut self.data.viewport.hdr_buffer {
@@ -188,16 +187,8 @@ impl App {
         albedo_view: ImageView,
         object_id_view: ImageView,
     ) -> Result<()> {
-        let gbuffer_sampler = self
-            .data
-            .raytracing
-            .gbuffer_sampler
-            .unwrap_or(Sampler::null());
-        let object_id_sampler = self
-            .data
-            .raytracing
-            .object_id_sampler
-            .unwrap_or(Sampler::null());
+        let gbuffer_sampler = self.data.raytracing.gbuffer_sampler.unwrap_or_default();
+        let object_id_sampler = self.data.raytracing.object_id_sampler.unwrap_or_default();
 
         if let Some(ref composite_desc) = self.data.raytracing.composite_descriptor {
             composite_desc.update_gbuffer_views(

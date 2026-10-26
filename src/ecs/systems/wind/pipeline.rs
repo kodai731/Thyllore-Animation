@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::Instance;
 
 use crate::ecs::resource::{BoundGenerations, WindGpuState};
 use crate::vulkanr::core::RRDevice;
@@ -15,7 +14,7 @@ use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
-use thyllore_vulkan_core::types::ImageView;
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WIND_RESOLVE,

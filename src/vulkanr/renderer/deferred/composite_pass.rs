@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::ray_query_pass::collect_selected_mesh_ids;
 use crate::app::App;
@@ -90,7 +89,7 @@ pub unsafe fn record_composite_pass(
         .draw_all_overlays(command_buffer, true)?;
 
     app.record_imgui_rendering(command_buffer, draw_data)?;
-    app.rrdevice.device.cmd_end_render_pass(command_buffer);
+    thyllore_vulkan_core::renderer::end_render_pass(&app.rrdevice, command_buffer);
 
     Ok(())
 }

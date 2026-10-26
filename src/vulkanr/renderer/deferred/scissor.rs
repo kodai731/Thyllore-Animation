@@ -1,5 +1,4 @@
 use cgmath::{Matrix4, Vector3, Vector4};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::World;
@@ -36,10 +35,10 @@ impl ScreenBounds {
 }
 
 pub(crate) fn full_extent_scissor(extent: Extent2D) -> Rect2D {
-    Rect2D::builder()
-        .offset(Offset2D { x: 0, y: 0 })
-        .extent(extent)
-        .build()
+    Rect2D {
+        offset: Offset2D { x: 0, y: 0 },
+        extent,
+    }
 }
 
 /// Projects local-space bound corners to a screen scissor. Returns the full extent when the
@@ -97,16 +96,14 @@ pub(crate) fn compute_projected_bounds_scissor(
         return None;
     }
 
-    Some(
-        Rect2D::builder()
-            .offset(Offset2D {
-                x: min_x as i32,
-                y: min_y as i32,
-            })
-            .extent(Extent2D {
-                width: (max_x - min_x).ceil() as u32,
-                height: (max_y - min_y).ceil() as u32,
-            })
-            .build(),
-    )
+    Some(Rect2D {
+        offset: Offset2D {
+            x: min_x as i32,
+            y: min_y as i32,
+        },
+        extent: Extent2D {
+            width: (max_x - min_x).ceil() as u32,
+            height: (max_y - min_y).ceil() as u32,
+        },
+    })
 }

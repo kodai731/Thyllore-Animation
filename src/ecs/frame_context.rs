@@ -16,9 +16,9 @@ use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 

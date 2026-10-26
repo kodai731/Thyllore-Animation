@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Result};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::world::{Resource, World};
 use crate::vulkanr::context::SwapchainState;
@@ -10,7 +9,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::hdr_buffer::HdrBuffer;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::resource::{read_image_bytes, write_bgra_png, ReadbackLayout};
-use thyllore_vulkan_core::types::{CommandPool, DeviceSize, Image};
+use thyllore_vulkan_core::types::{CommandPool, DeviceSize, Image, Instance};
 
 /// Which capture of the schedule is being taken; `sequence_dir` is set in sequence mode.
 #[derive(Clone, Debug, PartialEq)]

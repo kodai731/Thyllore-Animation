@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::{composite_pass::*, onion_skin_pass::*, post_process_pass::*, tonemap_pass::*};
 use crate::app::post_process::{

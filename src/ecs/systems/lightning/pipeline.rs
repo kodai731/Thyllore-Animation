@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::Instance;
 
 use crate::ecs::resource::LightningGpuState;
 use crate::vulkanr::core::RRDevice;
@@ -12,7 +11,7 @@ use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
-use thyllore_vulkan_core::types::ImageView;
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub const LIGHTNING_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &LIGHTNING_RESOLVE,

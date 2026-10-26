@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
-use crate::animation::spring_bone::{ChainRamp, RampEnd, RampScope, SpringSpace};
+use crate::animation::spring_bone::{ChainRamp, RampEnd, RampScope, SpringForceModel, SpringSpace};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::component::ColliderShape;
+use crate::ecs::component::SpringBoneSetup;
 use crate::ecs::component::SpringChain;
 use crate::ecs::component::SpringChainId;
 use crate::ecs::component::SpringColliderDef;
@@ -796,5 +797,26 @@ fn dispatch_spring_bone_edit_events(
 
             _ => {}
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct SetSpringForceModel {
+    pub force_model: SpringForceModel,
+}
+
+impl UiCommand for SetSpringForceModel {
+    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+        use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
+        use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+
+        let Some(entity) = find_or_create_spring_bone_setup_entity(world) else {
+            msg_warn!("Spring force model: no animated model entity");
+            return;
+        };
+        if let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) {
+            setup.force_model = self.force_model;
+        }
+        reset_spring_bone_state(world);
     }
 }

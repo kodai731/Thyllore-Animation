@@ -541,7 +541,6 @@ fn compute_bone_length_and_axis(
     global_transforms: &[Matrix4<f32>],
 ) -> (f32, Vector3<f32>) {
     let idx = bone_id as usize;
-    let bone = &skeleton.bones[idx];
 
     if let Some(tail_transform) = tail_bone.and_then(|id| global_transforms.get(id as usize)) {
         let head_pos = extract_world_position(&global_transforms[idx]);
@@ -556,18 +555,28 @@ fn compute_bone_length_and_axis(
         }
     }
 
-    leaf_bone_length_and_axis(&bone.local_transform)
+    leaf_bone_length_and_axis(skeleton, bone_id, global_transforms)
 }
 
-/// A leaf joint extends its own bone: the direction from the parent head, expressed in the bone's frame.
-fn leaf_bone_length_and_axis(local_transform: &Matrix4<f32>) -> (f32, Vector3<f32>) {
-    let (offset_from_parent, local_rotation, _) = decompose_transform(local_transform);
+/// A leaf joint extends its own bone: the world offset from the parent head, expressed in the bone frame.
+fn leaf_bone_length_and_axis(
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+    global_transforms: &[Matrix4<f32>],
+) -> (f32, Vector3<f32>) {
+    let idx = bone_id as usize;
+    let head = extract_world_position(&global_transforms[idx]);
+    let parent_head = skeleton.bones[idx]
+        .parent_id
+        .and_then(|parent| global_transforms.get(parent as usize))
+        .map_or(head, extract_world_position);
+    let offset_from_parent = head - parent_head;
     let length = offset_from_parent.magnitude();
     if length <= 1e-6 {
         return (0.1, Vector3::new(0.0, 1.0, 0.0));
     }
-    let axis_in_bone_frame =
-        rotate_vec3_by_quat(conjugate(local_rotation), offset_from_parent / length);
+    let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
+    let axis_in_bone_frame = rotate_vec3_by_quat(conjugate(bone_rot), offset_from_parent / length);
     (length, axis_in_bone_frame)
 }
 
@@ -841,8 +850,11 @@ mod tests {
             Vector3::new(1.0, 1.0, 1.0),
         );
         let globals = [parent_local, parent_local * leaf_local];
+        let mut skeleton = Skeleton::new("leaf");
+        let parent = skeleton.add_bone("parent", None);
+        let leaf = skeleton.add_bone("leaf", Some(parent));
 
-        let (length, axis) = leaf_bone_length_and_axis(&leaf_local);
+        let (length, axis) = leaf_bone_length_and_axis(&skeleton, leaf, &globals);
         let (_, leaf_local_rotation, _) = decompose_transform(&leaf_local);
         compute_tail_position(
             extract_world_position(&globals[1]),

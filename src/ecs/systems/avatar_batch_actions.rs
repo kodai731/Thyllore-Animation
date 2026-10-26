@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 
+use crate::animation::spring_bone::SpringForceModel;
 use crate::animation::BoneId;
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
@@ -11,7 +12,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
-    DumpSkinnedVertices, DumpSpringTails, FitSpringParams,
+    DumpSkinnedVertices, DumpSpringTails, FitSpringParams, SetSpringForceModel,
 };
 use crate::ecs::systems::validate_scale_factor;
 use crate::ecs::world::{Entity, World};
@@ -623,6 +624,36 @@ fn submesh_role_spec_parse(spec: &str) -> Result<SubmeshRoleAction> {
 }
 
 #[derive(Debug)]
+pub struct SpringForceModelAction {
+    force_model: SpringForceModel,
+}
+
+impl BatchAction for SpringForceModelAction {
+    fn name(&self) -> &'static str {
+        "spring_force_model"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(SetSpringForceModel {
+            force_model: self.force_model,
+        });
+    }
+}
+
+fn spring_force_model_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("spring_force_model=")?;
+    let force_model = match spec {
+        "vrm" => SpringForceModel::Vrm,
+        "rest_relative" => SpringForceModel::RestRelative,
+        other => {
+            return Some(Err(anyhow!(
+                "spring_force_model expects vrm or rest_relative, got {other:?}"
+            )))
+        }
+    };
+    Some(Ok(Box::new(SpringForceModelAction { force_model })))
+}
+
+#[derive(Debug)]
 pub struct HideCoveredSkin {
     params: HiddenMaskParams,
 }
@@ -700,6 +731,7 @@ crate::batch_action!("fit_spring_params", fit_spring_params_parse);
 crate::batch_action!("generate_chain_bones", generate_chain_bones_parse);
 crate::batch_action!("export_model_fbx", export_model_fbx_parse);
 crate::batch_action!("submesh_role", submesh_role_parse);
+crate::batch_action!("spring_force_model", spring_force_model_parse);
 crate::batch_action!("hide_covered_skin", hide_covered_skin_parse);
 
 #[cfg(test)]

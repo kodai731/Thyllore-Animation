@@ -75,8 +75,25 @@ namespace Thyllore.Avatar
 
             var sidecar = AvatarSidecarLoader.Load(sidecarPath);
             SpringSidecarApplier.Apply(root, sidecar.spring);
+            LogJointFrames(root);
 
             return root;
+        }
+
+        static void LogJointFrames(GameObject root)
+        {
+            foreach (var joint in root.GetComponentsInChildren<VRM10SpringBoneJoint>(true))
+            {
+                var t = joint.transform;
+                var child = t.childCount > 0 ? t.GetChild(0) : null;
+                Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                    "SPRINGPARITY joint {0} localPos={1} localRot={2} lossyScale={3} child={4} childLocalPos={5} childPos={6}",
+                    t.name, t.localPosition.ToString("F4"), t.localRotation.eulerAngles.ToString("F2"),
+                    t.lossyScale.ToString("F3"),
+                    child != null ? child.name : "none",
+                    child != null ? child.localPosition.ToString("F4") : "-",
+                    child != null ? child.position.ToString("F4") : "-"));
+            }
         }
 
         static AnimationClip GetClip(string fbxAsset)

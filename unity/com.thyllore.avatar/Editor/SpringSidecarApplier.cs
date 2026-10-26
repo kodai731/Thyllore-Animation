@@ -75,6 +75,7 @@ namespace Thyllore.Avatar
             Undo.SetTransformParent(go.transform, parent.transform, "SpringSidecarApplier: set parent");
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
             return go;
         }
 

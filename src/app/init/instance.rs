@@ -34,38 +34,17 @@ use crate::ecs::resource::Camera;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use anyhow::{anyhow, Context, Result};
-use std::collections::HashSet;
-use std::ffi::CStr;
-use std::os::raw::c_void;
 use std::rc::Rc;
 use std::time::Instant;
-use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
-use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
-use thyllore_vulkan_core::types::{Fence, SampleCountFlags, Semaphore};
-use vulkanalia::Device as VkDevice;
+use thyllore_vulkan_core::types::{DebugMessenger, Fence, SampleCountFlags, Semaphore, Surface};
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
-use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use winit::window::Window;
 
-// Constants
-pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
-pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-pub const VALIDATION_MODE: crate::vulkanr::core::device::ValidationMode = if cfg!(debug_assertions)
-{
-    crate::vulkanr::core::device::ValidationMode::Enabled
-} else {
-    crate::vulkanr::core::device::ValidationMode::Disabled
-};
 pub use crate::vulkanr::core::device::VALIDATION_LAYER;
-pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
-    vk::KHR_SWAPCHAIN_EXTENSION.name,
-    vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
-    vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
-    vk::KHR_RAY_QUERY_EXTENSION.name,
-    vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
-    vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
-];
+pub use thyllore_vulkan_core::core::instance::{
+    create_sync_objects, DEVICE_EXTENSIONS, PORTABILITY_MACOS_VERSION,
+};
 
 /// Clean up old screenshot files from the log directory
 pub fn cleanup_old_screenshots() -> Result<()> {
@@ -106,8 +85,8 @@ pub fn cleanup_old_screenshots() -> Result<()> {
 }
 
 struct VulkanResources {
-    messenger: vk::DebugUtilsMessengerEXT,
-    surface: vk::SurfaceKHR,
+    messenger: DebugMessenger,
+    surface: Surface,
     rrswapchain: RRSwapchain,
     rrrender: RRRender,
     rrcommand_pool: Rc<RRCommandPool>,
@@ -134,8 +113,6 @@ impl App {
         window: &Window,
         #[cfg(feature = "ml")] curve_copilot_mode: crate::ml::CurveCopilotMode,
     ) -> Result<Self> {
-        let loader = LibloadingLoader::new(LIBRARY)?;
-        let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
         crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
@@ -146,17 +123,12 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
 
-        let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
-        let surface = vk_window::create_surface(&instance, &window, &window)?;
-        let rrdevice = RRDevice::new(
-            &entry,
-            &instance,
-            &surface,
-            VALIDATION_MODE,
-            VALIDATION_LAYER,
-            DEVICE_EXTENSIONS,
-            PORTABILITY_MACOS_VERSION,
-        )?;
+        let vulkan_context = thyllore_vulkan_core::create_vulkan_context(window)?;
+        let entry = vulkan_context.entry;
+        let instance = vulkan_context.instance;
+        let messenger = vulkan_context.messenger;
+        let surface = vulkan_context.surface;
+        let rrdevice = vulkan_context.rrdevice;
         let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
@@ -274,7 +246,7 @@ impl App {
         }
 
         let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
-            Self::create_sync_objects(&rrdevice.device)?;
+            create_sync_objects(&rrdevice, MAX_FRAMES_IN_FLIGHT)?;
 
         let vulkan_resources = VulkanResources {
             messenger,
@@ -982,142 +954,6 @@ impl App {
             show_y_axis_grid: false,
             xz_only_index_count,
         })
-    }
-
-    extern "system" fn debug_callback(
-        severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-        type_: vk::DebugUtilsMessageTypeFlagsEXT,
-        data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-        _: *mut c_void,
-    ) -> vk::Bool32 {
-        let data = unsafe { *data };
-        let message = if data.message.is_null() {
-            std::borrow::Cow::Borrowed("(no message)")
-        } else {
-            unsafe { CStr::from_ptr(data.message) }.to_string_lossy()
-        };
-
-        // コンソール（色付き）とログファイルの両方に出力
-        use log::{debug, error, trace, warn};
-        if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
-            error!("({:?}) {}", type_, message);
-            log_error!("({:?}) {}", type_, message);
-            record_validation(ValidationSeverity::Error, &message);
-            push_message(
-                MessageLevel::Error,
-                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
-            );
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
-            warn!("({:?}) {}", type_, message);
-            log_warn!("({:?}) {}", type_, message);
-            record_validation(ValidationSeverity::Warning, &message);
-            push_message(
-                MessageLevel::Warning,
-                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
-            );
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
-            debug!("({:?}) {}", type_, message);
-            log!("({:?}) {}", type_, message);
-        } else {
-            trace!("({:?}) {}", type_, message);
-            log!("DEBUG ({:?}) {}", type_, message);
-        }
-
-        vk::FALSE
-    }
-
-    unsafe fn create_instance_with_messenger(
-        window: &Window,
-        entry: &Entry,
-    ) -> Result<(Instance, vk::DebugUtilsMessengerEXT)> {
-        let application_info = vk::ApplicationInfo::builder()
-            .application_name(b"Vulkan Tutorial\0")
-            .application_version(vk::make_version(1, 0, 0))
-            .engine_name(b"No Engine\0")
-            .engine_version(vk::make_version(1, 0, 0))
-            .api_version(vk::make_version(1, 2, 0));
-
-        let mut extensions = vk_window::get_required_instance_extensions(window)
-            .iter()
-            .map(|e| e.as_ptr())
-            .collect::<Vec<_>>();
-
-        if VALIDATION_ENABLED {
-            extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
-        }
-
-        let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            log!("Enabling extensions for macOS portability.");
-            extensions.push(
-                vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
-                    .name
-                    .as_ptr(),
-            );
-            extensions.push(vk::KHR_PORTABILITY_ENUMERATION_EXTENSION.name.as_ptr());
-            vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
-        } else {
-            vk::InstanceCreateFlags::empty()
-        };
-
-        let available_layers = entry
-            .enumerate_instance_layer_properties()?
-            .iter()
-            .map(|l| l.layer_name)
-            .collect::<HashSet<_>>();
-
-        if VALIDATION_ENABLED && !available_layers.contains(&VALIDATION_LAYER) {
-            return Err(anyhow!("Validation layer requested but not supported"));
-        }
-
-        let layers = if VALIDATION_ENABLED {
-            vec![VALIDATION_LAYER.as_ptr()]
-        } else {
-            Vec::new()
-        };
-
-        let mut info = vk::InstanceCreateInfo::builder()
-            .application_info(&application_info)
-            .enabled_layer_names(&layers)
-            .enabled_extension_names(&extensions)
-            .flags(flags);
-
-        let mut debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-            .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
-            .user_callback(Some(Self::debug_callback));
-
-        if VALIDATION_ENABLED {
-            info = info.push_next(&mut debug_info);
-        }
-
-        let instance = entry.create_instance(&info, None)?;
-
-        let messenger = if VALIDATION_ENABLED {
-            instance.create_debug_utils_messenger_ext(&debug_info, None)?
-        } else {
-            vk::DebugUtilsMessengerEXT::null()
-        };
-
-        Ok((instance, messenger))
-    }
-
-    unsafe fn create_sync_objects(
-        device: &VkDevice,
-    ) -> Result<(Vec<Semaphore>, Vec<Semaphore>, Vec<Fence>)> {
-        let semaphore_info = vk::SemaphoreCreateInfo::builder();
-        let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
-
-        let mut image_available = Vec::new();
-        let mut render_finished = Vec::new();
-        let mut in_flight = Vec::new();
-
-        for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            image_available.push(device.create_semaphore(&semaphore_info, None)?);
-            render_finished.push(device.create_semaphore(&semaphore_info, None)?);
-            in_flight.push(device.create_fence(&fence_info, None)?);
-        }
-
-        Ok((image_available, render_finished, in_flight))
     }
 
     fn register_resources(

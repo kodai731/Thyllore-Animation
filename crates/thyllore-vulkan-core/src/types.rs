@@ -24,3 +24,5 @@ pub type Offset2D = vk::Offset2D;
 pub type Offset3D = vk::Offset3D;
 pub type Viewport = vk::Viewport;
 pub type SampleCountFlags = vk::SampleCountFlags;
+pub type DebugMessenger = vk::DebugUtilsMessengerEXT;
+pub type Surface = vk::SurfaceKHR;

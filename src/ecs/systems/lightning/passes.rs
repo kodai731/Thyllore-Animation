@@ -6,7 +6,7 @@ use crate::ecs::resource::{LightningGpuState, LightningRenderSettings, Projectio
 use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
 };
 use crate::vulkanr::renderer::deferred::{compute_projected_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
@@ -117,10 +117,7 @@ impl RenderPassNode for LightningPassNode {
             .map(|_| {
                 vec![TargetUse::new(
                     TargetRef::Core(CoreTarget::HdrColor),
-                    TargetAccess::Attachment {
-                        initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    },
+                    TargetAccess::Attachment(AttachmentStart::Sampled),
                 )]
             })
             .unwrap_or_default()

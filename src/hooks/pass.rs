@@ -2,7 +2,8 @@ use anyhow::Result;
 
 use crate::ecs::PassContext;
 pub use thyllore_vulkan_core::renderer::{
-    CoreTarget, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest, TransientSlot,
+    AttachmentStart, CoreTarget, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest,
+    TransientSlot,
 };
 use thyllore_vulkan_core::types::CommandBuffer;
 

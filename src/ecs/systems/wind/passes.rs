@@ -7,8 +7,8 @@ use crate::ecs::systems::wind::pipeline::WIND_RESOLVE_OVERLAY;
 use crate::ecs::systems::wind::record::record_wind_shadow_bake_pass;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse, TransientRequest,
-    TransientSlot,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
+    TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -172,18 +172,12 @@ impl RenderPassNode for WindPassNode {
         }
         let mut uses = vec![TargetUse::new(
             TargetRef::Core(CoreTarget::HdrColor),
-            TargetAccess::Attachment {
-                initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            },
+            TargetAccess::Attachment(AttachmentStart::Sampled),
         )];
         if reduced_scale(ctx).is_some() {
             uses.push(TargetUse::new(
                 TargetRef::Transient(REDUCED_COLOR_SLOT),
-                TargetAccess::Attachment {
-                    initial_layout: vk::ImageLayout::UNDEFINED,
-                    final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                },
+                TargetAccess::Attachment(AttachmentStart::Discard),
             ));
         }
         uses

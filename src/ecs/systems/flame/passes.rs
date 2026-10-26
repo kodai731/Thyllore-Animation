@@ -7,7 +7,8 @@ use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::renderer::{
@@ -205,17 +206,11 @@ impl RenderPassNode for FlamePassNode {
                 vec![
                     TargetUse::new(
                         TargetRef::Core(CoreTarget::HdrColor),
-                        TargetAccess::Attachment {
-                            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        },
+                        TargetAccess::Attachment(AttachmentStart::Sampled),
                     ),
                     TargetUse::new(
                         TargetRef::Storage(HISTORY_KEYS[history_index]),
-                        TargetAccess::Attachment {
-                            initial_layout: vk::ImageLayout::UNDEFINED,
-                            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        },
+                        TargetAccess::Attachment(AttachmentStart::Discard),
                     ),
                 ]
             })

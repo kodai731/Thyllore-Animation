@@ -8,28 +8,14 @@ use crate::app::post_process::{
 };
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassGraph, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
-    TargetUse, TransientRequest,
+    AttachmentStart, CoreTarget, PassGraph, PassStage, RenderPassNode, ShaderStage, TargetAccess,
+    TargetRef, TargetUse, TransientRequest,
 };
 use thyllore_vulkan_core::types::CommandBuffer;
 
 const HDR_COLOR: TargetRef = TargetRef::Core(CoreTarget::HdrColor);
 const OFFSCREEN: TargetRef = TargetRef::Core(CoreTarget::Offscreen);
 const ONION_GHOST: TargetRef = TargetRef::Core(CoreTarget::OnionSkinGhost);
-
-const fn cleared_attachment() -> TargetAccess {
-    TargetAccess::Attachment {
-        initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    }
-}
-
-const fn loaded_attachment(layout: vk::ImageLayout) -> TargetAccess {
-    TargetAccess::Attachment {
-        initial_layout: layout,
-        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    }
-}
 
 fn tonemap_input(ctx: &PassContext) -> TargetRef {
     if is_dof_enabled(ctx) {
@@ -73,7 +59,10 @@ impl RenderPassNode for CompositeHdrNode {
     }
 
     fn writes(&self, _ctx: &PassContext) -> Vec<TargetUse> {
-        vec![TargetUse::new(HDR_COLOR, cleared_attachment())]
+        vec![TargetUse::new(
+            HDR_COLOR,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
@@ -102,7 +91,10 @@ impl RenderPassNode for OnionSkinNode {
         if !is_onion_skin_active(ctx) {
             return Vec::new();
         }
-        vec![TargetUse::new(ONION_GHOST, cleared_attachment())]
+        vec![TargetUse::new(
+            ONION_GHOST,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
@@ -166,7 +158,9 @@ impl RenderPassNode for BloomDownsampleNode {
             return Vec::new();
         }
         bloom_mip(ctx, self.mip_index)
-            .map(|target| TargetUse::new(target, cleared_attachment()))
+            .map(|target| {
+                TargetUse::new(target, TargetAccess::Attachment(AttachmentStart::Discard))
+            })
             .into_iter()
             .collect()
     }
@@ -224,7 +218,7 @@ impl RenderPassNode for BloomUpsampleNode {
             .map(|target| {
                 TargetUse::new(
                     target,
-                    loaded_attachment(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL),
+                    TargetAccess::Attachment(AttachmentStart::ColorAttachment),
                 )
             })
             .into_iter()
@@ -283,7 +277,7 @@ impl RenderPassNode for DofNode {
         }
         vec![TargetUse::new(
             TargetRef::Transient(DOF_OUTPUT),
-            cleared_attachment(),
+            TargetAccess::Attachment(AttachmentStart::Discard),
         )]
     }
 
@@ -362,7 +356,10 @@ impl RenderPassNode for TonemapNode {
     }
 
     fn writes(&self, _ctx: &PassContext) -> Vec<TargetUse> {
-        vec![TargetUse::new(OFFSCREEN, cleared_attachment())]
+        vec![TargetUse::new(
+            OFFSCREEN,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
@@ -403,7 +400,7 @@ impl RenderPassNode for OnionCompositeNode {
         }
         vec![TargetUse::new(
             OFFSCREEN,
-            loaded_attachment(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
+            TargetAccess::Attachment(AttachmentStart::Sampled),
         )]
     }
 

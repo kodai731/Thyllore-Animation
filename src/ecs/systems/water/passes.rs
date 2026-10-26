@@ -9,8 +9,8 @@ use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
-    TransientRequest, TransientSlot,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
@@ -797,17 +797,11 @@ impl RenderPassNode for WaterShadingNode {
             vec![
                 TargetUse::new(
                     HDR_COLOR,
-                    TargetAccess::Attachment {
-                        initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    },
+                    TargetAccess::Attachment(AttachmentStart::Sampled),
                 ),
                 TargetUse::new(
                     frame.written_history(),
-                    TargetAccess::Attachment {
-                        initial_layout: vk::ImageLayout::UNDEFINED,
-                        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    },
+                    TargetAccess::Attachment(AttachmentStart::Discard),
                 ),
             ]
         })

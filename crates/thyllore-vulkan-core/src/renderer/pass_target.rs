@@ -56,11 +56,25 @@ impl ShaderStage {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AttachmentStart {
+    Discard,
+    Sampled,
+    ColorAttachment,
+}
+
+impl AttachmentStart {
+    fn initial_layout(self) -> vk::ImageLayout {
+        match self {
+            AttachmentStart::Discard => vk::ImageLayout::UNDEFINED,
+            AttachmentStart::Sampled => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            AttachmentStart::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TargetAccess {
-    Attachment {
-        initial_layout: vk::ImageLayout,
-        final_layout: vk::ImageLayout,
-    },
+    Attachment(AttachmentStart),
     Sampled(ShaderStage),
     StorageRead(ShaderStage),
     StorageReadWrite(ShaderStage),
@@ -174,8 +188,8 @@ const UNKNOWN_STATE: ImageState = ImageState {
 impl TargetAccess {
     fn entry_state(self) -> ImageState {
         match self {
-            TargetAccess::Attachment { initial_layout, .. } => ImageState {
-                layout: initial_layout,
+            TargetAccess::Attachment(start) => ImageState {
+                layout: start.initial_layout(),
                 stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 access: vk::AccessFlags::COLOR_ATTACHMENT_READ
                     | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
@@ -216,8 +230,8 @@ impl TargetAccess {
 
     fn exit_state(self) -> ImageState {
         let mut state = self.entry_state();
-        if let TargetAccess::Attachment { final_layout, .. } = self {
-            state.layout = final_layout;
+        if let TargetAccess::Attachment(_) = self {
+            state.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
         }
         state
     }
@@ -290,13 +304,8 @@ impl ImageStateTracker {
         let entry = access.entry_state();
         self.states.insert(image, access.exit_state());
 
-        let render_pass_discards_contents = matches!(
-            access,
-            TargetAccess::Attachment {
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                ..
-            }
-        );
+        let render_pass_discards_contents =
+            matches!(access, TargetAccess::Attachment(AttachmentStart::Discard));
         if render_pass_discards_contents {
             let image_untouched = current == UNKNOWN_STATE;
             if image_untouched {
@@ -359,6 +368,22 @@ mod tests {
     }
 
     #[test]
+    fn attachment_with_loaded_contents_transitions_to_initial_layout() {
+        let mut tracker = ImageStateTracker::default();
+        tracker.transition(
+            image(1),
+            TargetAccess::StorageReadWrite(ShaderStage::Compute),
+        );
+        let attachment = TargetAccess::Attachment(AttachmentStart::Sampled);
+        let barrier = tracker.transition(image(1), attachment).expect("barrier");
+        assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
+        assert_eq!(
+            barrier.new_layout,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+        );
+    }
+
+    #[test]
     fn write_after_read_in_same_layout_needs_barrier() {
         let mut tracker = ImageStateTracker::default();
         tracker.transition(image(1), TargetAccess::StorageRead(ShaderStage::Fragment));
@@ -377,10 +402,7 @@ mod tests {
     #[test]
     fn attachment_with_undefined_initial_layout_skips_barrier_on_untouched_image() {
         let mut tracker = ImageStateTracker::default();
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
+        let attachment = TargetAccess::Attachment(AttachmentStart::Discard);
         assert!(tracker.transition(image(1), attachment).is_none());
     }
 
@@ -388,10 +410,7 @@ mod tests {
     fn attachment_with_undefined_initial_layout_orders_after_previous_use_and_lands_on_final() {
         let mut tracker = ImageStateTracker::default();
         tracker.transition(image(1), TargetAccess::TransferDst);
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
+        let attachment = TargetAccess::Attachment(AttachmentStart::Discard);
         let ordering = tracker.transition(image(1), attachment).expect("barrier");
         assert_eq!(ordering.old_layout, vk::ImageLayout::TRANSFER_DST_OPTIMAL);
         assert_eq!(ordering.new_layout, vk::ImageLayout::TRANSFER_DST_OPTIMAL);
@@ -410,25 +429,6 @@ mod tests {
         assert_eq!(
             barrier.src_stage,
             vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-        );
-    }
-
-    #[test]
-    fn attachment_with_loaded_contents_transitions_to_initial_layout() {
-        let mut tracker = ImageStateTracker::default();
-        tracker.transition(
-            image(1),
-            TargetAccess::StorageReadWrite(ShaderStage::Compute),
-        );
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
-        let barrier = tracker.transition(image(1), attachment).expect("barrier");
-        assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
-        assert_eq!(
-            barrier.new_layout,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
         );
     }
 

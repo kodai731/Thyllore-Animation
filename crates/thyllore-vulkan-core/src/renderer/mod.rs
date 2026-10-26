@@ -39,8 +39,8 @@ pub use overlay_scale::{
     union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
-    CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
-    TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
+    AttachmentStart, CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage,
+    TargetAccess, TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;

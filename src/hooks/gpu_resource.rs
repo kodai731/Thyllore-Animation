@@ -78,7 +78,7 @@ mod tests {
 
     use super::*;
 
-    const GPU_OWNER_TYPES: [&str; 11] = [
+    const GPU_OWNER_TYPES: [&str; 16] = [
         "vk::Image",
         "vk::Buffer",
         "vk::RenderPass",
@@ -90,6 +90,11 @@ mod tests {
         "RRPipeline",
         "UniformBuffer",
         "VolumeImage",
+        "Image",
+        "Buffer",
+        "RenderPass",
+        "Framebuffer",
+        "DeviceMemory",
     ];
 
     fn resource_sources() -> Vec<(String, String)> {
@@ -166,6 +171,13 @@ mod tests {
         ));
         assert!(!declares_gpu_owner_field(
             "pub struct A {\n    pub id: PipelineId,\n}"
+        ));
+        // alias-name fields (derive-expanded form)
+        assert!(declares_gpu_owner_field(
+            "pub struct A {\n    pub image: Image,\n}"
+        ));
+        assert!(!declares_gpu_owner_field(
+            "pub struct A {\n    pub view: ImageView,\n}"
         ));
     }
 

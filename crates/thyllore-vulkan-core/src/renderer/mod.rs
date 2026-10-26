@@ -11,6 +11,7 @@ pub mod onion_skin_buffers;
 pub mod overlay;
 pub mod overlay_scale;
 pub mod pass_target;
+pub mod pipeline_dispatch;
 pub mod push_constants;
 pub mod rayquery;
 pub mod storage_image;
@@ -53,6 +54,10 @@ pub use pass_target::{
     record_pending_barriers, AttachmentStart, CoreTarget, FrameTransients, ImageStateTracker,
     PendingBarrier, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
     TransientRequest, TransientSlot,
+};
+pub use pipeline_dispatch::{
+    bind_compute, bind_ray_tracing, clear_color_image, dispatch, push_constants_and_trace_rays,
+    ClearColor,
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;

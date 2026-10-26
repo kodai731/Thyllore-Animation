@@ -1,7 +1,5 @@
 use anyhow::Result;
 use cgmath::SquareMatrix;
-use vulkanalia::prelude::v1_0::*;
-use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{EffectTraceGpuState, WaterGpuState};
@@ -16,7 +14,7 @@ use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
 use thyllore_vulkan_core::effect::water::targets::{WaterBindingKey, WaterRenderTargets};
-use thyllore_vulkan_core::renderer::TracePush;
+use thyllore_vulkan_core::renderer::{ClearColor, TracePush};
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;
 use thyllore_vulkan_core::types::{
@@ -49,14 +47,6 @@ const HISTORY_KEYS: [RenderTargetKey; 2] = [
 /// Must match CAUSTIC_GRID_SIZE and numthreads in causticSplatCompute.slang
 const CAUSTIC_GRID_SIZE: u32 = 512;
 const CAUSTIC_WORKGROUP_SIZE: u32 = 16;
-
-const COLOR_SUBRESOURCE_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
-    aspect_mask: vk::ImageAspectFlags::COLOR,
-    base_mip_level: 0,
-    level_count: 1,
-    base_array_layer: 0,
-    layer_count: 1,
-};
 
 /// Everything the water nodes agree on for one frame. `None` means no water pass records this frame.
 struct WaterFrame {
@@ -194,7 +184,9 @@ impl WaterFrame {
             && gpu_state
                 .caustic_descriptor
                 .as_ref()
-                .is_some_and(|descriptor| descriptor.splat_descriptor_set != DescriptorSet::null())
+                .is_some_and(|descriptor| {
+                    descriptor.splat_descriptor_set != DescriptorSet::default()
+                })
     }
 
     fn has_visible_instance(&self) -> bool {
@@ -250,7 +242,7 @@ impl RenderPassNode for WaterTraceNode {
         &self,
         ctx: &PassContext,
         command_buffer: CommandBuffer,
-        image_index: usize,
+        _image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
         let Some(frame) = water_frame(ctx).filter(|frame| frame.is_trace_enabled(ctx)) else {
@@ -269,21 +261,12 @@ impl RenderPassNode for WaterTraceNode {
             return Ok(());
         };
         let water_history = &targets.history;
-        let render = ctx.frame_render_context(image_index);
 
-        let device = &render.device.device;
-        device.cmd_bind_pipeline(
+        thyllore_vulkan_core::renderer::bind_ray_tracing(
+            &ctx.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::RAY_TRACING_KHR,
-            trace_pipeline.pipeline,
-        );
-        device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::RAY_TRACING_KHR,
-            trace_pipeline.pipeline_layout,
-            0,
+            trace_pipeline,
             &[trace_descriptor.descriptor_set(frame_slot)?],
-            &[],
         );
         let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
         let inv_view_proj = crate::ecs::systems::water::probe::inverse_view_proj_f64(
@@ -310,23 +293,15 @@ impl RenderPassNode for WaterTraceNode {
             light_color: [1.0; 4],
         };
         let push_range = push_constant_range(&effect_trace::PUSH_CONSTANT);
-        device.cmd_push_constants(
-            command_buffer,
-            trace_pipeline.pipeline_layout,
-            push_range.stage_flags,
-            push_range.offset,
-            trace_push.as_bytes(),
-        );
         let extent = water_history.extent();
-        device.cmd_trace_rays_khr(
+        thyllore_vulkan_core::renderer::push_constants_and_trace_rays(
+            &ctx.rrdevice,
             command_buffer,
-            &trace_pipeline.raygen_region,
-            &trace_pipeline.miss_region,
-            &trace_pipeline.hit_region,
-            &trace_pipeline.callable_region,
+            trace_pipeline,
+            &push_range,
+            trace_push.as_bytes(),
             extent.width,
             extent.height,
-            1,
         );
         Ok(())
     }
@@ -483,12 +458,11 @@ impl RenderPassNode for WaterCausticClearNode {
             return Ok(());
         };
 
-        ctx.rrdevice.device.cmd_clear_color_image(
+        thyllore_vulkan_core::renderer::clear_color_image(
+            &ctx.rrdevice,
             command_buffer,
             targets.caustic_accum.image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            &vk::ClearColorValue { uint32: [0; 4] },
-            &[COLOR_SUBRESOURCE_RANGE],
+            ClearColor::Uint([0; 4]),
         );
         Ok(())
     }
@@ -558,22 +532,21 @@ impl RenderPassNode for WaterCausticSplatNode {
             return Ok(());
         };
 
-        let device = &ctx.rrdevice.device;
-        device.cmd_bind_pipeline(
+        let splat_group_count = CAUSTIC_GRID_SIZE / CAUSTIC_WORKGROUP_SIZE;
+        thyllore_vulkan_core::renderer::bind_compute(
+            &ctx.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::COMPUTE,
-            splat_pipeline.pipeline,
-        );
-        device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::COMPUTE,
-            splat_pipeline.pipeline_layout,
-            0,
+            splat_pipeline,
             &[descriptor.splat_descriptor_set],
             &[],
         );
-        let splat_group_count = CAUSTIC_GRID_SIZE / CAUSTIC_WORKGROUP_SIZE;
-        device.cmd_dispatch(command_buffer, splat_group_count, splat_group_count, 1);
+        thyllore_vulkan_core::renderer::dispatch(
+            &ctx.rrdevice,
+            command_buffer,
+            splat_group_count,
+            splat_group_count,
+            1,
+        );
         Ok(())
     }
 }
@@ -635,21 +608,15 @@ impl RenderPassNode for WaterCausticApplyNode {
             return Ok(());
         };
 
-        let device = &ctx.rrdevice.device;
-        device.cmd_bind_pipeline(
+        thyllore_vulkan_core::renderer::bind_compute(
+            &ctx.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::COMPUTE,
-            apply_pipeline.pipeline,
-        );
-        device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::COMPUTE,
-            apply_pipeline.pipeline_layout,
-            0,
+            apply_pipeline,
             &[descriptor.apply_descriptor_set],
             &[],
         );
-        device.cmd_dispatch(
+        thyllore_vulkan_core::renderer::dispatch(
+            &ctx.rrdevice,
             command_buffer,
             hdr_buffer.width.div_ceil(CAUSTIC_WORKGROUP_SIZE),
             hdr_buffer.height.div_ceil(CAUSTIC_WORKGROUP_SIZE),
@@ -749,16 +716,12 @@ impl RenderPassNode for WaterHistoryClearNode {
             return Ok(());
         };
 
-        let black = vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 1.0],
-        };
         for &image in &targets.history.images {
-            ctx.rrdevice.device.cmd_clear_color_image(
+            thyllore_vulkan_core::renderer::clear_color_image(
+                &ctx.rrdevice,
                 command_buffer,
                 image,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &black,
-                &[COLOR_SUBRESOURCE_RANGE],
+                ClearColor::Float([0.0, 0.0, 0.0, 1.0]),
             );
         }
         Ok(())

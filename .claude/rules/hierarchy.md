@@ -41,26 +41,29 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `Cargo.toml` `description`. The two build-script helpers (`thyllore-shader-manifest`,
   `thyllore-spirv-reflect`) are named for the artefact they produce instead; no further exception.
 - A crate never depends on `World`, `Entity`, `AssetStorage` or `App`.
-- Only `thyllore-vulkan-core` (and the debug crate) may name `vk::*`. Everything else describes GPU work
-  through the abstract types of `thyllore-render-core`.
+- `vk::*` and `vulkanalia` exist only inside `thyllore-vulkan-core`: the root crate does not depend on
+  vulkanalia and `RRDevice.device` is crate-private, so writing `vk::` elsewhere fails to compile. Code
+  outside the crate names handles through `thyllore_vulkan_core::types` and describes intent with core enums
+  (`AttachmentStart`, `ShaderStage`, `Topology`, `ReadbackLayout`, ...); `thyllore-render-core` holds the
+  data types World and GPU share and no traits.
 - Effects (`thyllore-effect-core`) keep one directory per effect with the same split: `effect/` data,
   `analytic/` pure math mirrored by the shaders, `gpu/` UBO structs, `presets`, `settings`.
   Analytic pieces that more than one effect can use (`volume/`: ray knots, the wall shell, puffs) live
   beside the effect directories and mirror `shaders/include/`; an effect's `analytic/` only builds the
   shared structs from its own parameters and adds what is specific to it (wind: streak / eddy modulation).
-- `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
+- The generic layer of `thyllore-vulkan-core` (everything outside `src/effect/`) never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
   fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
-  offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,
-  `OverlayNodeSpec` / `ReducedResolveTarget` / `OverlayUpsampleDescriptorSet` for fullscreen overlays,
-  `HistoryTargets` (an HDR + history ping-pong render pass with its framebuffers, clear and destroy,
-  parameterised by `HistoryTargetsDesc`: storage keys, format, sampler, history load op, optional scene
-  depth), `AccumulationTarget` (a storage image kept in GENERAL), `ReflectedSetLayout`, `UniformBuffer<T>`,
-  `PipelineBuilder`); an effect's GPU state is an ECS resource (`src/ecs/resource/<effect>/render_targets.rs`)
-  that composes those primitives (`FlameRenderTargets { history }`, `WaterRenderTargets { history,
-  caustic_accum, .. }`) and derives `GpuResource`, so creation and destruction are the primitives' and the
-  effect only writes its `*_desc()`; the assembly lives in `src/ecs/systems/<effect>/` (descriptors,
-  pipeline with its `OverlayNodeSpec`, passes, render targets; `record.rs` only for non-overlay commands
-  such as wind's shadow bake). Wind follows this layout.
+  offers generic primitives only
+  (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`, `OverlayNodeSpec` /
+  `ReducedResolveTarget` / `OverlayUpsampleDescriptorSet` for fullscreen overlays, `HistoryTargets` (an HDR
+  + history ping-pong render pass with its framebuffers, clear and destroy, parameterised by
+  `HistoryTargetsDesc`: storage keys, format, sampler, history load op, optional scene depth),
+  `AccumulationTarget` (a storage image kept in GENERAL), `ReflectedSetLayout`, `UniformBuffer<T>`,
+  `PipelineBuilder`). Each effect's GPU part (descriptor sets, render targets with create / recreate /
+  destroy, `record.rs` non-overlay commands) is in `crates/thyllore-vulkan-core/src/effect/<effect>/` leaf
+  modules that compose those generic primitives. `src/ecs/systems/<effect>/` keeps the World-reading parts
+  (hook setup / resize, passes' frame data construction, pipeline generation); `gpu_resource!` registration
+  stays on the src side (`src/hooks/gpu_resource.rs` test detects core's `*RenderTargets` registration gaps).
   Pipeline creation never lives in vulkan-core: effects build theirs in
   `src/ecs/systems/<effect>/pipeline.rs`, the core post-process passes in
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
@@ -89,7 +92,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   fails when a file in `src/ecs/resource/` declares a GPU-owning field without `gpu_resource!`.
 
 Rule of thumb: if the code needs neither `World` nor `vk::*`, it belongs in a crate. If it needs `vk::*`
-but not `World`, it belongs in `thyllore-vulkan-core`.
+but not `World`, it belongs in `thyllore-vulkan-core` (effect-specific → `effect/<effect>/`).
 
 ### Crates as Blender addon build units
 
@@ -311,7 +314,7 @@ what a file may see:
 | `src/ecs/component/<effect>/`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>/` | its own effect only |
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
-| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), `src/ecs/systems/phases/`, `src/ecs/systems/world/`, `src/ecs/systems/batch_run_systems/`, shared `src/ecs/component/*.rs` and `src/ecs/resource/*.rs`, `src/vulkanr/`, `src/render/`, `src/platform/events/`, shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
+| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), `src/ecs/systems/phases/`, `src/ecs/systems/world/`, `src/ecs/systems/batch_run_systems/`, shared `src/ecs/component/*.rs` and `src/ecs/resource/*.rs`, `src/vulkanr/`, `src/platform/events/`, shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
 | `src/app/`, `src/ecs/world.rs` | none |
 
 Concretely:
@@ -444,14 +447,8 @@ another drag; it never reads `ui.io().mouse_*` / `ui.is_mouse_*` (`tests/ui_raw_
 App-side Vulkan glue: ECS resources that wrap swapchain, sync objects and core attachments, per-frame pass
 recording (`PassContext` for graph nodes, `App` only for the gbuffer / ray query / offscreen fallback that
 run outside the graph), the core pass nodes (`renderer/deferred/nodes.rs`: composite, onion skin, bloom,
-dof, auto exposure, tonemap registered into the `PassGraph`), and implementations of app-side backend
-traits. Anything here that turns out to need only device and handles moves down into
-`thyllore-vulkan-core`.
-
-## src/render/
-
-The app-side extension of the abstract render backend: traits whose signatures must mention an ECS
-resource, plus re-exports of `thyllore-render-core` handle types. It is not a renderer and must stay small.
+dof, auto exposure, tonemap registered into the `PassGraph`). Anything here that turns out to need only
+device and handles moves down into `thyllore-vulkan-core`.
 
 ## src/app/
 
@@ -544,16 +541,20 @@ per-feature `AddPass`).
 
 ## The three "render" places
 
-- `crates/thyllore-render-core` — how systems talk about GPU work without naming Vulkan: the backend trait,
-  handles, UBO layouts, post-process settings.
-- `crates/thyllore-vulkan-core` (`backend.rs`, `renderer/`) — the Vulkan implementation of that trait and the
-  per-pass command helpers that take an immutable frame render context.
-- `src/render/` and `src/vulkanr/` — the app-side extension of the trait (needs ECS resource types) and its
-  Vulkan implementation, plus pass recording over `PassContext`.
+- `crates/thyllore-render-core` — shared data types only: `MeshId`, buffer handles, `FrameUBO` / `ObjectUBO` /
+  `MaterialUBO`, post-process settings. No Vulkan, no ECS, no traits.
+- `crates/thyllore-vulkan-core` — all Vulkan implementation: `core/` (`RRDevice`, `RRSwapchain`, descriptor
+  allocator), `command/`, `descriptor/` (reflected set layouts), `pipeline/` (builder from the pass manifest,
+  cache), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/`
+  (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`,
+  `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend`),
+  `effect/<effect>/` (each effect's GPU part: descriptors, render targets, record).
+- `src/vulkanr/` — wrapping core types as ECS resources (`context/resources.rs`), core pass node registration
+  (`renderer/deferred/nodes.rs`), per-frame pass recording over `PassContext`.
 - `src/app/render.rs` — the frame driver: begin and end of a frame, swapchain-level concerns, the resize
-  fan-out, auto exposure readback and the gbuffer / billboard / imgui recording it does directly. It names no
-  effect and no model format; per-frame TLAS refresh is `src/ecs/systems/raytracing_systems.rs`, model
-  loading is `scene_model.rs`.
+  fan-out, auto exposure readback. Acquire / submit / present and draw recording go through core functions;
+  no direct Vulkan calls. It names no effect and no model format; per-frame TLAS refresh is
+  `src/ecs/systems/raytracing_systems.rs`, model loading is `scene_model.rs`.
 
 Frame contexts, innermost to outermost: the crate-level immutable render context (device, resources,
 pipelines, image index) → the app render context (mutable GPU resources, builds the backend) → the app frame
@@ -573,8 +574,8 @@ context (adds `World`, assets, time, frame slot) used by the ECS phases.
 ## Where does a new file go?
 
 1. Needs neither `World` nor `vk::*` → a crate.
-2. Needs `vk::*` but not `World` or `App` → `thyllore-vulkan-core` (`resource/` for objects, `renderer/` for
-   command helpers, `descriptor/` for sets).
+2. Needs `vk::*` but not `World` → `thyllore-vulkan-core` (effect-specific → `effect/<effect>/`; generic
+   resource objects → `resource/`, command helpers → `renderer/`, descriptor sets → `descriptor/`).
 3. Needs `World` (query, mutate, decide) → `src/ecs/systems/`, one file per domain or one directory per
    effect. Data types go to `src/ecs/component/` or `src/ecs/resource/`.
 4. Needs `App` because it wires several subsystems or owns app-lifetime Vulkan objects → `src/app/`.

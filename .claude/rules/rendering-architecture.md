@@ -2,7 +2,6 @@
 paths:
   - "src/vulkanr/**"
   - "src/app/**"
-  - "src/render/**"
   - "crates/thyllore-vulkan-core/**"
   - "crates/thyllore-render-core/**"
 ---
@@ -17,8 +16,8 @@ naming rules are in `shaders.md`, ECS phases in `ecs-architecture.md`.
 | Layer | Location | Knows |
 |---|---|---|
 | Abstract render types | `crates/thyllore-render-core` | Shared data types only: `MeshId`, buffer handles, `FrameUBO` / `ObjectUBO` / `MaterialUBO`, post-process settings. No Vulkan, no ECS, no traits |
-| Vulkan primitives | `crates/thyllore-vulkan-core` | `core/` (`RRDevice`, `RRSwapchain`, descriptor allocator), `command/`, `descriptor/` (reflected set layouts, one file per pass), `pipeline/` (builder from the pass manifest, cache, ray tracing), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/` (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`, `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend`). No ECS |
-| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `backend.rs` (`BillboardBackend` impl) |
+| Vulkan primitives | `crates/thyllore-vulkan-core` | `core/` (`RRDevice`, `RRSwapchain`, descriptor allocator), `command/`, `descriptor/` (reflected set layouts, one file per pass), `pipeline/` (builder from the pass manifest, cache, ray tracing), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/` (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`, `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend`), `effect/` (per-effect descriptors/targets/record), `types.rs` (src-facing handle/data type aliases), `core/frame.rs` (acquire/submit/present, FrameSync), `core/instance.rs` (instance/device creation). No ECS |
+| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`) |
 | Frame driver | `src/app/` | `App` lifecycle, `AppData`, `ViewportState`, `begin_frame` / `update` / `render` / present |
 
 Effect-specific pass recording, resize and descriptor updates live in `src/ecs/systems/<effect>/` (#151) as
@@ -66,15 +65,15 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 `App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI
 events and applies the queued commands, then calls three `App` methods in order and closes with Last:
 
-1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
+1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (core's `RRDevice::wait_idle`, viewport and
    effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`
    (recycle the frame-in-flight bucket, evict stale images), read back auto exposure and object id, acquire
-   the swapchain image.
+   the swapchain image via core's `acquire_swapchain_image`.
 2. `update` (`src/app/update.rs`): builds `FrameContext` and runs the ECS phase pipeline (`run_frame`),
    then uploads imgui buffers.
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
-   `record_command_buffer`, submit, present, `FrameSync::advance`.
+   `record_command_buffer`, submit and present via core's `submit_and_present`, `FrameSync::advance`.
 4. `run_last_phase` (`src/ecs/systems/phases/last_phase.rs`): only when the
    batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
    the screenshot.

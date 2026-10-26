@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
+use vulkanalia::prelude::v1_0::Instance;
 
 use crate::ecs::resource::{BoundGenerations, WindGpuState};
 use crate::vulkanr::core::RRDevice;
@@ -15,6 +15,7 @@ use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
+use thyllore_vulkan_core::types::ImageView;
 
 pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WIND_RESOLVE,
@@ -29,7 +30,7 @@ pub unsafe fn create_wind_gpu_state(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     targets: &WindRenderTargets,
-    scene_depth_view: vk::ImageView,
+    scene_depth_view: ImageView,
     frames_in_flight: usize,
 ) -> Result<WindGpuState> {
     let ubo = UniformBuffer::new(

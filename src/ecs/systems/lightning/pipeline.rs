@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
+use vulkanalia::prelude::v1_0::Instance;
 
 use crate::ecs::resource::LightningGpuState;
 use crate::vulkanr::core::RRDevice;
@@ -12,6 +12,7 @@ use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
+use thyllore_vulkan_core::types::ImageView;
 
 pub const LIGHTNING_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &LIGHTNING_RESOLVE,
@@ -26,7 +27,7 @@ pub unsafe fn create_lightning_gpu_state(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     targets: &LightningRenderTargets,
-    scene_depth_view: vk::ImageView,
+    scene_depth_view: ImageView,
 ) -> Result<LightningGpuState> {
     let ubo = UniformBuffer::new(
         instance,

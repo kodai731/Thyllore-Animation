@@ -1,17 +1,17 @@
-use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
-
 use crate::ecs::resource::FlameGpuState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
+use anyhow::Result;
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
 use thyllore_vulkan_core::effect::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::HistoryTargets;
+use thyllore_vulkan_core::types::{ImageView, Sampler};
+use vulkanalia::prelude::v1_0::Instance;
 
 /// Blends the shading onto the HDR color and writes the unblended result into the history image.
 pub const FLAME_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
@@ -27,9 +27,9 @@ pub unsafe fn create_flame_pipeline(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     flame_history: &HistoryTargets,
-    position_image_view: vk::ImageView,
-    position_sampler: vk::Sampler,
-    scene_depth_view: vk::ImageView,
+    position_image_view: ImageView,
+    position_sampler: Sampler,
+    scene_depth_view: ImageView,
 ) -> Result<FlameGpuState> {
     let flame_ubo = UniformBuffer::new(
         instance,

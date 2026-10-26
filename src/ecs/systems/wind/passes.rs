@@ -21,8 +21,8 @@ use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
+use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet, Rect2D};
 use thyllore_vulkan_core::FrameRenderContext;
-
 const REDUCED_COLOR_SLOT: TransientSlot = TransientSlot("wind.reduced_color");
 
 pub struct WindPassNode;
@@ -30,7 +30,7 @@ pub struct WindPassNode;
 /// Everything the wind node agrees on for one frame. `None` means nothing records this frame.
 struct WindFrame {
     ubos: Vec<WindUBO>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
 }
 
 impl WindFrame {
@@ -214,7 +214,7 @@ impl RenderPassNode for WindPassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -224,7 +224,7 @@ impl RenderPassNode for WindPassNode {
 
 unsafe fn record_wind_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -336,11 +336,11 @@ unsafe fn record_reduced_scale_wind_passes(
     wind_buffer: &WindRenderTargets,
     scale: OverlayResolveScale,
     shading_pipeline: &RRPipeline,
-    resolve_sets: &[vk::DescriptorSet],
+    resolve_sets: &[DescriptorSet],
     draws: &[OverlayInstanceDraw],
     push_constants: ShadingPushConstants,
     frame_slot: usize,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<()> {
     let (Some(upsample_pipeline), Some(upsample_descriptor)) = (
         gpu_state.upsample_pipeline.as_ref(),

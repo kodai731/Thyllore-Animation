@@ -5,6 +5,7 @@ use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
 use thyllore_vulkan_core::effect::wind::descriptors::WindShadowBakeDescriptorSet;
 use thyllore_vulkan_core::effect::wind::targets::{wind_shadow_volume_extent, WindRenderTargets};
+use thyllore_vulkan_core::types::CommandBuffer;
 use thyllore_vulkan_core::{
     insert_storage_image_read_barrier, insert_storage_image_write_barrier, FrameRenderContext,
     OverlayInstanceDraw,
@@ -21,7 +22,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
     descriptor: &WindShadowBakeDescriptorSet,
     draws: &[OverlayInstanceDraw],
     image_index: usize,
-    cmd: vk::CommandBuffer,
+    cmd: CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
     let volume = &targets.shadow_volume;

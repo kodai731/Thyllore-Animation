@@ -13,7 +13,7 @@ use thyllore_effect_core::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
     LightningShape,
 };
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::Extent2D;
 
 #[test]
 fn spawned_lightning_carries_the_components_the_editor_queries() {
@@ -138,7 +138,7 @@ fn lightning_effect_hook_is_subscribed_after_wind() {
 fn scissor_covers_the_projected_segment_aabb() {
     let effect = lightning_inside_first_burst();
     let (ubo, _) = build_lightning_ubo(&effect, Matrix4::identity());
-    let extent = vk::Extent2D {
+    let extent = Extent2D {
         width: 200,
         height: 200,
     };
@@ -199,7 +199,7 @@ fn coverage_debug_view_scissor_spans_the_full_extent() {
     let mut effect = LightningEffect::default();
     effect.time = burst_start_time(&effect, 0) - 1.0;
     let (ubo, _) = build_lightning_ubo(&effect, Matrix4::identity());
-    let extent = vk::Extent2D {
+    let extent = Extent2D {
         width: 320,
         height: 180,
     };

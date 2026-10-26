@@ -1,5 +1,7 @@
 use vulkanalia::vk;
 
+use thyllore_vulkan_core::types::DeviceAddress;
+
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::WaterTraceBlocks;
 use crate::ecs::world::World;
@@ -30,7 +32,7 @@ impl GpuPrimitiveSource for WaterTorusEffect {
         }
     }
 
-    fn effect_data_address(world: &World, ordinal: usize) -> vk::DeviceAddress {
+    fn effect_data_address(world: &World, ordinal: usize) -> DeviceAddress {
         world
             .get_resource::<WaterTraceBlocks>()
             .map(|blocks| blocks.slot_address(ordinal))

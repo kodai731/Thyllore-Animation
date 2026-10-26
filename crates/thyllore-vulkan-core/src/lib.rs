@@ -16,6 +16,7 @@ pub mod raytracing;
 pub mod render;
 pub mod renderer;
 pub mod resource;
+pub mod types;
 pub mod vulkan;
 
 pub use backend::VulkanBackend;

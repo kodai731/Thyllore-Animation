@@ -11,6 +11,7 @@ use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, Uni
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
+use thyllore_vulkan_core::types::ImageView;
 
 /// Writes the shading into the HDR color and the history image where the torus is nearer than
 /// the scene depth.
@@ -32,7 +33,7 @@ pub unsafe fn create_water_pipeline(
     graphics_resources: &GraphicsResources,
     raytracing: &RayTracingData,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
     frames_in_flight: usize,
 ) -> Result<WaterGpuState> {
     let water_ubo = UniformBuffer::new(
@@ -92,7 +93,7 @@ unsafe fn create_water_caustic_pipelines(
     raytracing: &RayTracingData,
     gpu_state: &mut WaterGpuState,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
         raytracing.gbuffer.as_ref(),

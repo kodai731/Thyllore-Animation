@@ -15,13 +15,14 @@ use thyllore_effect_core::{
 };
 use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
 pub struct LightningPassNode;
 
 /// Every lightning instance the node draws this frame, in UBO slot order.
 struct LightningFrame {
     instances: Vec<(LightningUBO, LightningSegmentsUBO)>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
 }
 
 impl LightningFrame {
@@ -39,11 +40,11 @@ fn lightning_render_settings(ctx: &PassContext) -> LightningRenderSettings {
 
 pub(super) fn compute_lightning_scissor(
     projection: Option<&ProjectionData>,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     debug_view: LightningDebugView,
     effect: &LightningEffect,
     ubo: &LightningUBO,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     if debug_view == LightningDebugView::Coverage {
         return Some(full_extent_scissor(extent));
     }
@@ -128,7 +129,7 @@ impl RenderPassNode for LightningPassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
@@ -138,7 +139,7 @@ impl RenderPassNode for LightningPassNode {
 
 unsafe fn record_lightning_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let Some(frame) = lightning_frame(ctx) else {

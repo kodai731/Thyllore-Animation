@@ -7,6 +7,7 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{shader_bindings, ReflectedSetLayout};
 use crate::vulkanr::resource::{GpuResource, PixelRegion, SampledTexture};
 use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::types::Sampler;
 
 fn pixel_region(rect: &TextureUploadRect) -> PixelRegion<'_> {
     PixelRegion {
@@ -24,7 +25,7 @@ pub unsafe fn imgui_texture_create(
     rrdevice: &RRDevice,
     command_pool: &RRCommandPool,
     layout: &ReflectedSetLayout,
-    sampler: vk::Sampler,
+    sampler: Sampler,
     imgui_textures: &mut ImguiTextures,
     id: SnapshotTextureId,
     region: PixelRegion<'_>,

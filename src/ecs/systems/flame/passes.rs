@@ -14,6 +14,7 @@ use thyllore_vulkan_core::renderer::{
     OverlayAttachmentLoad, OverlayInstanceDraw, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::RenderTargetKey;
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
 const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(0),
@@ -36,7 +37,7 @@ fn flame_history_index(ctx: &PassContext, flames: &[Entity]) -> usize {
 /// Everything the flame node agrees on for one frame. `None` means nothing records this frame.
 struct FlameFrame {
     ubos: Vec<thyllore_effect_core::FlameUBO>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
     history_index: usize,
 }
 
@@ -141,9 +142,9 @@ fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effec
 
 fn instance_scissor(
     ctx: &PassContext,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     ubo: &thyllore_effect_core::FlameUBO,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     let bend_offset = [
         ubo.wind_bend.wind_direction[0] * ubo.wind_bend.bend_amount,
         ubo.wind_bend.wind_direction[1] * ubo.wind_bend.bend_amount,
@@ -224,7 +225,7 @@ impl RenderPassNode for FlamePassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
@@ -234,7 +235,7 @@ impl RenderPassNode for FlamePassNode {
 
 unsafe fn record_flame_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let Some(frame) = flame_frame(ctx) else {

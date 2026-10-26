@@ -1,6 +1,7 @@
 use vulkanalia::prelude::v1_0::*;
 
 use thyllore_vulkan_core::frame_context::FrameRenderContext;
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Extent3D, Image, Offset3D};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -31,10 +32,10 @@ impl WaterPushConstants {
 /// TRANSFER_SRC_OPTIMAL and the destination to TRANSFER_DST_OPTIMAL.
 pub unsafe fn record_water_scene_color_copy(
     ctx: &FrameRenderContext,
-    hdr_image: vk::Image,
-    scene_color_image: vk::Image,
-    extent: vk::Extent2D,
-    cmd: vk::CommandBuffer,
+    hdr_image: Image,
+    scene_color_image: Image,
+    extent: Extent2D,
+    cmd: CommandBuffer,
 ) {
     let device = &ctx.device.device;
 
@@ -46,10 +47,10 @@ pub unsafe fn record_water_scene_color_copy(
         .build();
     let region = vk::ImageCopy::builder()
         .src_subresource(subresource)
-        .src_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+        .src_offset(Offset3D { x: 0, y: 0, z: 0 })
         .dst_subresource(subresource)
-        .dst_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-        .extent(vk::Extent3D {
+        .dst_offset(Offset3D { x: 0, y: 0, z: 0 })
+        .extent(Extent3D {
             width: extent.width,
             height: extent.height,
             depth: 1,

@@ -19,6 +19,9 @@ use thyllore_vulkan_core::effect::water::targets::{WaterBindingKey, WaterRenderT
 use thyllore_vulkan_core::renderer::TracePush;
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;
+use thyllore_vulkan_core::types::{
+    AccelerationStructure, Buffer, CommandBuffer, DescriptorSet, Rect2D,
+};
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
 pub const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[
@@ -58,7 +61,7 @@ const COLOR_SUBRESOURCE_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceR
 /// Everything the water nodes agree on for one frame. `None` means no water pass records this frame.
 struct WaterFrame {
     waters: Vec<Entity>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
     history_index: usize,
     settings: crate::ecs::resource::WaterRenderSettings,
 }
@@ -99,7 +102,7 @@ fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
 
 /// Screen rectangle of every instance, `None` when the instance is off-screen. Declarations and
 /// recording share this so the graph only expects the shading render pass when it really records.
-fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rect2D>> {
+fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<Rect2D>> {
     let Some(extent) = ctx
         .world
         .get_resource::<WaterRenderTargets>()
@@ -132,7 +135,7 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rec
         .collect()
 }
 
-fn water_scene_bindings(ctx: &PassContext) -> Option<(vk::AccelerationStructureKHR, vk::Buffer)> {
+fn water_scene_bindings(ctx: &PassContext) -> Option<(AccelerationStructure, Buffer)> {
     if !ctx.raytracing.has_valid_tlas() {
         return None;
     }
@@ -191,9 +194,7 @@ impl WaterFrame {
             && gpu_state
                 .caustic_descriptor
                 .as_ref()
-                .is_some_and(|descriptor| {
-                    descriptor.splat_descriptor_set != vk::DescriptorSet::null()
-                })
+                .is_some_and(|descriptor| descriptor.splat_descriptor_set != DescriptorSet::null())
     }
 
     fn has_visible_instance(&self) -> bool {
@@ -248,7 +249,7 @@ impl RenderPassNode for WaterTraceNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -424,7 +425,7 @@ impl RenderPassNode for WaterFrameNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
@@ -471,7 +472,7 @@ impl RenderPassNode for WaterCausticClearNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -540,7 +541,7 @@ impl RenderPassNode for WaterCausticSplatNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -616,7 +617,7 @@ impl RenderPassNode for WaterCausticApplyNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -684,7 +685,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
@@ -737,7 +738,7 @@ impl RenderPassNode for WaterHistoryClearNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -815,7 +816,7 @@ impl RenderPassNode for WaterShadingNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -874,7 +875,7 @@ unsafe fn record_water_ubo_updates(
     render: &thyllore_vulkan_core::FrameRenderContext,
     water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<thyllore_effect_core::WaterUBO>,
     waters: &[crate::ecs::world::Entity],
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<Vec<(thyllore_effect_core::WaterUBO, u32)>> {
     let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
     let inv_view_proj =

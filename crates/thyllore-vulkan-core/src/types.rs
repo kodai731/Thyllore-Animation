@@ -1,0 +1,25 @@
+use crate::vulkan::vk;
+
+pub type CommandBuffer = vk::CommandBuffer;
+pub type CommandPool = vk::CommandPool;
+pub type Image = vk::Image;
+pub type ImageView = vk::ImageView;
+pub type Sampler = vk::Sampler;
+pub type Buffer = vk::Buffer;
+pub type DeviceMemory = vk::DeviceMemory;
+pub type DeviceAddress = vk::DeviceAddress;
+pub type DeviceSize = vk::DeviceSize;
+pub type DescriptorSet = vk::DescriptorSet;
+pub type Semaphore = vk::Semaphore;
+pub type Fence = vk::Fence;
+pub type RenderPass = vk::RenderPass;
+pub type Framebuffer = vk::Framebuffer;
+pub type Pipeline = vk::Pipeline;
+pub type PipelineLayout = vk::PipelineLayout;
+pub type AccelerationStructure = vk::AccelerationStructureKHR;
+pub type Extent2D = vk::Extent2D;
+pub type Extent3D = vk::Extent3D;
+pub type Rect2D = vk::Rect2D;
+pub type Offset2D = vk::Offset2D;
+pub type Offset3D = vk::Offset3D;
+pub type Viewport = vk::Viewport;

@@ -15,6 +15,7 @@ use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::ReadbackLayout;
 use thyllore_vulkan_core::types::{Buffer, CommandBuffer, CommandPool, DeviceMemory, DeviceSize};
 
 const VERTEX_PROBE_COUNT: usize = 64;
@@ -29,7 +30,6 @@ unsafe fn save_water_caustic_accum_npy(
     ctx: &CaptureContext,
     path: &std::path::Path,
 ) -> Result<WaterCausticAccumStats> {
-    let device = &ctx.device.device;
     let water_targets = ctx
         .world
         .get_resource::<WaterRenderTargets>()
@@ -39,20 +39,17 @@ unsafe fn save_water_caustic_accum_npy(
     let height = water_targets.history.height;
     let image_size = (width * height * 4) as DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let bytes = ctx.read_image_bytes(
         caustic_image,
         width,
         height,
         image_size,
-        vk::ImageLayout::GENERAL,
+        ReadbackLayout::General,
     )?;
-
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
-    let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
 
     let mut u32_data: Vec<u32> = Vec::with_capacity((width * height) as usize);
     let mut stats = WaterCausticAccumStats::default();
-    for chunk in slice.chunks_exact(4) {
+    for chunk in bytes.chunks_exact(4) {
         let value = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         if value != 0 {
             stats.nonzero_count += 1;
@@ -60,10 +57,6 @@ unsafe fn save_water_caustic_accum_npy(
         stats.max_value = stats.max_value.max(value);
         u32_data.push(value);
     }
-
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
 
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory)?;

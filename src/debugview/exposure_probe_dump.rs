@@ -12,7 +12,7 @@ use crate::ecs::resource::{
 };
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
-use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::resource::ReadbackLayout;
 use thyllore_vulkan_core::types::DeviceSize;
 
 const EXPOSURE_PROBE_DIRECTORY: &str = "log/exposure";
@@ -118,16 +118,13 @@ unsafe fn read_viewport_display_luminance(
     let extent = swapchain.swapchain_extent;
     let image_size = (extent.width * extent.height * 4) as DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let bgra = ctx.read_image_bytes(
         image,
         extent.width,
         extent.height,
         image_size,
-        vk::ImageLayout::PRESENT_SRC_KHR,
+        ReadbackLayout::PresentSrc,
     )?;
-    let device = &ctx.device.device;
-    let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
-    let bgra = std::slice::from_raw_parts(data as *const u8, image_size as usize);
 
     let rect = viewport_pixel_rect(ctx.world, extent.width, extent.height);
     let mut linear = Vec::with_capacity((rect.width * rect.height) as usize);
@@ -146,10 +143,6 @@ unsafe fn read_viewport_display_luminance(
             ]));
         }
     }
-
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
 
     let pixel_count = linear.len().max(1) as f64;
     Ok(ViewportDisplayLuminance {

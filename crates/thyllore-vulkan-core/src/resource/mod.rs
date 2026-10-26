@@ -38,7 +38,7 @@ pub use hdr_buffer::HdrBuffer;
 pub use history_targets::{HistoryTargets, HistoryTargetsDesc};
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
 pub use image::*;
-pub use image_readback::{copy_image_to_host_buffer, write_host_buffer_bgra_png};
+pub use image_readback::{read_image_bytes, write_bgra_png, ReadbackLayout};
 pub use mesh_buffer::*;
 pub use offscreen::OffscreenFramebuffer;
 pub use onion_skin_pass::OnionSkinPassResources;

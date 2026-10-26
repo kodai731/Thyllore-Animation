@@ -5,6 +5,23 @@ use crate::core::device::*;
 use crate::resource::buffer::create_buffer;
 use crate::vulkan::*;
 
+#[derive(Clone, Copy, Debug)]
+pub enum ReadbackLayout {
+    ShaderReadOnly,
+    General,
+    PresentSrc,
+}
+
+impl ReadbackLayout {
+    fn as_vk_layout(self) -> vk::ImageLayout {
+        match self {
+            ReadbackLayout::ShaderReadOnly => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            ReadbackLayout::General => vk::ImageLayout::GENERAL,
+            ReadbackLayout::PresentSrc => vk::ImageLayout::PRESENT_SRC_KHR,
+        }
+    }
+}
+
 pub unsafe fn copy_image_to_host_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
@@ -37,6 +54,42 @@ pub unsafe fn copy_image_to_host_buffer(
     end_single_time_commands(rrdevice, queue, command_pool, command_buffer)?;
 
     Ok((buffer, buffer_memory))
+}
+
+/// Copies an image to a host-visible buffer, reads the bytes back, and cleans up.
+pub unsafe fn read_image_bytes(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    command_pool: vk::CommandPool,
+    image: vk::Image,
+    width: u32,
+    height: u32,
+    byte_size: vk::DeviceSize,
+    layout: ReadbackLayout,
+) -> Result<Vec<u8>> {
+    let (buffer, buffer_memory) = copy_image_to_host_buffer(
+        instance,
+        rrdevice,
+        rrdevice.graphics_queue,
+        command_pool,
+        image,
+        width,
+        height,
+        byte_size,
+        layout.as_vk_layout(),
+    )?;
+
+    let data =
+        rrdevice
+            .device
+            .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
+    let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
+    let bytes = slice.to_vec();
+    rrdevice.device.unmap_memory(buffer_memory);
+    rrdevice.device.free_memory(buffer_memory, None);
+    rrdevice.device.destroy_buffer(buffer, None);
+
+    Ok(bytes)
 }
 
 unsafe fn record_image_to_buffer_copy(
@@ -119,25 +172,15 @@ unsafe fn record_image_to_buffer_copy(
     );
 }
 
-/// Writes a host-visible BGRA8 readback buffer as an RGBA PNG.
-pub unsafe fn write_host_buffer_bgra_png(
-    device: &crate::core::device::Device,
-    buffer_memory: vk::DeviceMemory,
-    image_size: vk::DeviceSize,
-    width: u32,
-    height: u32,
-    path: &Path,
-) -> Result<()> {
-    let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
-    let bgra = std::slice::from_raw_parts(data as *const u8, image_size as usize);
+/// Writes BGRA8 bytes as an RGBA PNG.
+pub fn write_bgra_png(bytes: &[u8], width: u32, height: u32, path: &Path) -> Result<()> {
     let mut rgba = vec![0u8; (width * height * 4) as usize];
-    for (pixel_out, pixel_in) in rgba.chunks_exact_mut(4).zip(bgra.chunks_exact(4)) {
+    for (pixel_out, pixel_in) in rgba.chunks_exact_mut(4).zip(bytes.chunks_exact(4)) {
         pixel_out[0] = pixel_in[2];
         pixel_out[1] = pixel_in[1];
         pixel_out[2] = pixel_in[0];
         pixel_out[3] = pixel_in[3];
     }
-    device.unmap_memory(buffer_memory);
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

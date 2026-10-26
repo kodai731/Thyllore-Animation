@@ -93,10 +93,11 @@ impl<T: GpuBlock> UniformBuffer<T> {
     /// Device address of one slot, for shaders that reach the block through a buffer reference.
     pub unsafe fn slot_address(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         slot: usize,
     ) -> Result<vk::DeviceAddress> {
-        let base = device
+        let base = rrdevice
+            .device
             .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
         Ok(base + self.slot_offset(slot)?)
     }
@@ -118,7 +119,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
     /// Transfers inside the command buffer so frames in flight never race on one slot.
     pub unsafe fn record_update(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         slot: usize,
         value: &T,
@@ -135,7 +136,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         let offset = self.slot_offset(slot)?;
 
         self.record_barrier(
-            device,
+            rrdevice,
             cmd,
             offset,
             (reader_stage, vk::AccessFlags::UNIFORM_READ),
@@ -144,9 +145,11 @@ impl<T: GpuBlock> UniformBuffer<T> {
                 vk::AccessFlags::TRANSFER_WRITE,
             ),
         );
-        device.cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
+        rrdevice
+            .device
+            .cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
         self.record_barrier(
-            device,
+            rrdevice,
             cmd,
             offset,
             (
@@ -160,7 +163,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
 
     unsafe fn record_barrier(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         offset: vk::DeviceSize,
         (src_stage, src_access): (vk::PipelineStageFlags, vk::AccessFlags),
@@ -175,7 +178,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
             .offset(offset)
             .size(self.block_size())
             .build();
-        device.cmd_pipeline_barrier(
+        rrdevice.device.cmd_pipeline_barrier(
             cmd,
             src_stage,
             dst_stage,

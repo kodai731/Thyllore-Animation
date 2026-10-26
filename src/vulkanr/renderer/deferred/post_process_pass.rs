@@ -202,7 +202,7 @@ pub unsafe fn record_auto_exposure(
         command_buffer,
     )?;
 
-    buffers.record_luminance_readback(&render.device.device, command_buffer, frame_slot);
+    buffers.record_luminance_readback(render.device, command_buffer, frame_slot);
 
     Ok(())
 }

@@ -810,7 +810,7 @@ impl RenderPassNode for WaterShadingNode {
                 continue;
             };
             WATER_OVERLAY.record(
-                &render.device.device,
+                render.device,
                 command_buffer,
                 &pass,
                 scissor,
@@ -861,7 +861,7 @@ unsafe fn record_water_ubo_updates(
         ubo.composite[3] = settings.caustic_debug as f32;
 
         water_ubo.record_update(
-            &render.device.device,
+            render.device,
             command_buffer,
             i,
             &ubo,

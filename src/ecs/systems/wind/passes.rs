@@ -127,7 +127,7 @@ unsafe fn prepare_reduced_color_target(
     };
     let reduced_color = ctx.transient_image(REDUCED_COLOR_SLOT)?;
     ctx.transient.framebuffer(
-        &ctx.rrdevice.device,
+        &ctx.rrdevice,
         reduced_render_pass,
         &[reduced_color.view],
         reduced_extent.width,
@@ -254,7 +254,7 @@ unsafe fn record_wind_passes(
             continue;
         };
         wind_ubo.record_update(
-            &render.device.device,
+            render.device,
             command_buffer,
             slot,
             ubo,
@@ -293,7 +293,7 @@ unsafe fn record_wind_passes(
             let pass = wind_buffer.overlay_pass();
             for draw in &draws {
                 WIND_RESOLVE_OVERLAY.record(
-                    &render.device.device,
+                    render.device,
                     command_buffer,
                     &pass,
                     draw.scissor,
@@ -349,7 +349,7 @@ unsafe fn record_reduced_scale_wind_passes(
     else {
         return Ok(());
     };
-    let device = &ctx.device.device;
+    let rrdevice = ctx.device;
 
     let reduced_pass =
         wind_buffer
@@ -363,7 +363,7 @@ unsafe fn record_reduced_scale_wind_passes(
         })
         .collect();
     WIND_RESOLVE_OVERLAY.record(
-        device,
+        rrdevice,
         command_buffer,
         &reduced_pass,
         reduced_pass.full_area(),
@@ -376,7 +376,7 @@ unsafe fn record_reduced_scale_wind_passes(
     let upsample_scissor =
         union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent());
     UPSAMPLE_OVERLAY.record(
-        device,
+        rrdevice,
         command_buffer,
         &wind_buffer.overlay_pass(),
         upsample_scissor,

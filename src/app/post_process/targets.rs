@@ -93,7 +93,7 @@ pub unsafe fn prepare_dof_target(ctx: &mut PassContext) -> Result<()> {
     let desc = dof_buffer.output_desc();
     let output = ctx.transient_image(DOF_OUTPUT)?;
     ctx.transient.framebuffer(
-        &ctx.rrdevice.device,
+        &ctx.rrdevice,
         dof_buffer.render_pass,
         &[output.view],
         desc.width,
@@ -122,7 +122,7 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
             height: image.desc.height,
         };
         let framebuffer = ctx.transient.framebuffer(
-            &ctx.rrdevice.device,
+            &ctx.rrdevice,
             render_pass,
             &[image.view],
             extent.width,

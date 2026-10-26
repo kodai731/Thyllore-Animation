@@ -120,7 +120,7 @@ impl AutoExposureBuffers {
 
     pub unsafe fn record_luminance_readback(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         command_buffer: vk::CommandBuffer,
         slot: usize,
     ) {
@@ -134,7 +134,7 @@ impl AutoExposureBuffers {
             .size(LUMINANCE_BUFFER_SIZE)
             .build();
 
-        device.cmd_pipeline_barrier(
+        rrdevice.device.cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::COMPUTE_SHADER,
             vk::PipelineStageFlags::TRANSFER,
@@ -144,7 +144,7 @@ impl AutoExposureBuffers {
             &[] as &[vk::ImageMemoryBarrier],
         );
 
-        device.cmd_copy_buffer(
+        rrdevice.device.cmd_copy_buffer(
             command_buffer,
             self.luminance_buffer,
             self.readback_buffers[slot],

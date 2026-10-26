@@ -300,7 +300,7 @@ impl RenderTargetTransient {
 
     pub unsafe fn framebuffer(
         &mut self,
-        device: &Device,
+        rrdevice: &RRDevice,
         render_pass: vk::RenderPass,
         views: &[vk::ImageView],
         width: u32,
@@ -318,7 +318,7 @@ impl RenderTargetTransient {
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = device.create_framebuffer(&info, None)?;
+        let framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
         self.framebuffers.insert(key, framebuffer);
 
         Ok(framebuffer)

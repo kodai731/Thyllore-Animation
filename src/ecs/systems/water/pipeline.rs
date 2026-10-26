@@ -77,7 +77,7 @@ pub unsafe fn water_trace_blocks(
         return Ok(crate::ecs::resource::WaterTraceBlocks::default());
     };
     let slot_addresses = (0..WATER_MAX_INSTANCES)
-        .map(|slot| water_ubo.slot_address(&rrdevice.device, slot))
+        .map(|slot| water_ubo.slot_address(rrdevice, slot))
         .collect::<Result<Vec<_>>>()?;
     Ok(crate::ecs::resource::WaterTraceBlocks::new(slot_addresses))
 }

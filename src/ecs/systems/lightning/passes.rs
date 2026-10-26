@@ -157,7 +157,6 @@ unsafe fn record_lightning_passes(
         return Ok(());
     };
     let render = ctx.frame_render_context(image_index);
-    let device = &render.device.device;
 
     let mut draws = Vec::with_capacity(frame.instances.len());
     for (slot, ((instance_ubo, instance_segments), scissor)) in
@@ -167,14 +166,14 @@ unsafe fn record_lightning_passes(
             continue;
         };
         ubo.record_update(
-            device,
+            render.device,
             command_buffer,
             slot,
             instance_ubo,
             ShaderStage::Fragment,
         )?;
         segments_ubo.record_update(
-            device,
+            render.device,
             command_buffer,
             slot,
             instance_segments,
@@ -200,7 +199,7 @@ unsafe fn record_lightning_passes(
     );
     let pass = targets.overlay_pass();
     LIGHTNING_OVERLAY.record(
-        device,
+        render.device,
         command_buffer,
         &pass,
         pass.full_area(),

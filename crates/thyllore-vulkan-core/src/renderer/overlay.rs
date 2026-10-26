@@ -153,7 +153,7 @@ impl OverlayNodeSpec {
     /// dynamic offsets and draws one fullscreen triangle inside its scissor.
     pub unsafe fn record(
         &self,
-        device: &Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         pass: &OverlayPass,
         render_area: vk::Rect2D,
@@ -163,12 +163,14 @@ impl OverlayNodeSpec {
         draws: &[OverlayInstanceDraw],
     ) -> Result<()> {
         self.ensure_push_constants_match(push_constants)?;
-        self.begin_render_pass(device, cmd, pass, render_area);
+        self.begin_render_pass(rrdevice, cmd, pass, render_area);
 
-        device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-        set_full_viewport(device, cmd, pass.extent);
+        rrdevice
+            .device
+            .cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
+        set_full_viewport(&rrdevice.device, cmd, pass.extent);
         if let Some(bytes) = push_constants {
-            device.cmd_push_constants(
+            rrdevice.device.cmd_push_constants(
                 cmd,
                 pipeline.pipeline_layout,
                 vk::ShaderStageFlags::FRAGMENT,
@@ -178,8 +180,8 @@ impl OverlayNodeSpec {
         }
 
         for draw in draws {
-            device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-            device.cmd_bind_descriptor_sets(
+            rrdevice.device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
+            rrdevice.device.cmd_bind_descriptor_sets(
                 cmd,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
@@ -187,16 +189,16 @@ impl OverlayNodeSpec {
                 descriptor_sets,
                 &draw.dynamic_offsets,
             );
-            draw_fullscreen_triangle(device, cmd);
+            draw_fullscreen_triangle(&rrdevice.device, cmd);
         }
 
-        device.cmd_end_render_pass(cmd);
+        rrdevice.device.cmd_end_render_pass(cmd);
         Ok(())
     }
 
     unsafe fn begin_render_pass(
         &self,
-        device: &Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         pass: &OverlayPass,
         render_area: vk::Rect2D,
@@ -215,7 +217,9 @@ impl OverlayNodeSpec {
             .framebuffer(pass.framebuffer)
             .render_area(render_area)
             .clear_values(&clear_values);
-        device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+        rrdevice
+            .device
+            .cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
     }
 
     fn ensure_push_constants_match(&self, push_constants: Option<&[u8]>) -> Result<()> {

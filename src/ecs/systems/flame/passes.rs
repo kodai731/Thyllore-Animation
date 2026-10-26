@@ -251,7 +251,6 @@ unsafe fn record_flame_passes(
         return Ok(());
     };
     let render = ctx.frame_render_context(image_index);
-    let device = &render.device.device;
 
     let settings = ctx
         .world
@@ -269,7 +268,13 @@ unsafe fn record_flame_passes(
         let Some(scissor) = *scissor else {
             continue;
         };
-        flame_ubo.record_update(device, command_buffer, slot, ubo, ShaderStage::Fragment)?;
+        flame_ubo.record_update(
+            render.device,
+            command_buffer,
+            slot,
+            ubo,
+            ShaderStage::Fragment,
+        )?;
         draws.push(OverlayInstanceDraw {
             dynamic_offsets: vec![flame_ubo.slot_offset(slot)? as u32],
             scissor,
@@ -283,7 +288,7 @@ unsafe fn record_flame_passes(
         .history
         .overlay_pass(frame.history_index, OverlayAttachmentLoad::Clear([0.0; 4]));
     FLAME_OVERLAY.record(
-        device,
+        render.device,
         command_buffer,
         &pass,
         pass.full_area(),

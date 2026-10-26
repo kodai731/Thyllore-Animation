@@ -1,11 +1,13 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderData;
 use crate::render::ObjectUBO;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
+use thyllore_vulkan_core::renderer::{
+    bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, IndexWidth,
+};
 use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet};
 
 pub unsafe fn update_object_ubo(
@@ -54,45 +56,33 @@ pub unsafe fn render_scene_objects(
             None => continue,
         };
 
-        rrdevice.device.cmd_bind_pipeline(
+        bind_graphics_mesh(
+            rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline,
-        );
-
-        rrdevice
-            .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-        rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
+            vertex_buffer,
             index_buffer,
-            0,
-            vk::IndexType::UINT32,
+            IndexWidth::U32,
         );
 
-        rrdevice.device.cmd_bind_descriptor_sets(
+        bind_graphics_descriptor_set(
+            rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             0,
-            &[frame_set],
-            &[],
+            frame_set,
         );
 
         let object_set_idx = objects.get_set_index(image_index, data.render_info.object_index);
         let object_set = objects.sets[object_set_idx];
-        rrdevice.device.cmd_bind_descriptor_sets(
+        bind_graphics_descriptor_set(
+            rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             2,
-            &[object_set],
-            &[],
+            object_set,
         );
 
-        rrdevice
-            .device
-            .cmd_draw_indexed(command_buffer, data.mesh_ref.index_count, 1, 0, 0, 0);
+        draw_indexed(rrdevice, command_buffer, data.mesh_ref.index_count, 0, 0);
     }
 }

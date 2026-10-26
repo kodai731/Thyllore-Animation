@@ -10,7 +10,6 @@ use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };
 use crate::vulkanr::descriptor::CompositeGBufferViews;
-use crate::vulkanr::pipeline::ShaderStages;
 use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
@@ -19,11 +18,14 @@ use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
     acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
 };
-use thyllore_vulkan_core::renderer::{begin_render_pass_cleared, set_full_viewport_and_scissor};
+use thyllore_vulkan_core::renderer::{
+    begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed,
+    push_vertex_constants, set_full_viewport_and_scissor, set_scissor, set_viewport_size,
+    IndexWidth,
+};
 use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
-    Buffer, CommandBuffer, Extent2D, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
-    Sampler, Viewport,
+    Buffer, CommandBuffer, Extent2D, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D, Sampler,
 };
 
 impl App {
@@ -545,45 +547,32 @@ impl App {
             }
 
             let pipeline = &self.resource::<PipelineState>().model_pipeline;
-            self.rrdevice.device.cmd_bind_pipeline(
+            bind_graphics_mesh(
+                &self.rrdevice,
                 command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline,
-            );
-
-            self.rrdevice.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[mesh.vertex_buffer.buffer],
-                &[0],
-            );
-
-            self.rrdevice.device.cmd_bind_index_buffer(
-                command_buffer,
+                mesh.vertex_buffer.buffer,
                 mesh.index_buffer.buffer,
-                0,
-                vk::IndexType::UINT32,
+                IndexWidth::U32,
             );
 
             let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
+            bind_graphics_descriptor_set(
+                &self.rrdevice,
                 command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
                 0,
-                &[frame_set],
-                &[],
+                frame_set,
             );
 
             if let Some(material_id) = self.data.graphics_resources.get_material_id(i) {
                 if let Some(material) = self.data.graphics_resources.materials.get(material_id) {
-                    self.rrdevice.device.cmd_bind_descriptor_sets(
+                    bind_graphics_descriptor_set(
+                        &self.rrdevice,
                         command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
                         pipeline.pipeline_layout,
                         1,
-                        &[material.descriptor_set],
-                        &[],
+                        material.descriptor_set,
                     );
                 }
             }
@@ -594,20 +583,18 @@ impl App {
                 .objects
                 .get_set_index(image_index, mesh.object_index);
             let object_set = self.data.graphics_resources.objects.sets[object_set_idx];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
+            bind_graphics_descriptor_set(
+                &self.rrdevice,
                 command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
                 2,
-                &[object_set],
-                &[],
+                object_set,
             );
 
-            self.rrdevice.device.cmd_draw_indexed(
+            draw_indexed(
+                &self.rrdevice,
                 command_buffer,
                 mesh.index_buffer.indices,
-                1,
-                0,
                 0,
                 0,
             );
@@ -688,37 +675,28 @@ impl App {
             None => return,
         };
 
-        self.rrdevice.device.cmd_bind_pipeline(
+        bind_graphics_mesh(
+            &self.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline,
-        );
-
-        self.rrdevice
-            .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-        self.rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
+            vertex_buffer,
             index_buffer,
-            0,
-            vk::IndexType::UINT32,
+            IndexWidth::U32,
         );
 
-        self.rrdevice.device.cmd_bind_descriptor_sets(
+        let descriptor_set = billboard.render_state.descriptor_set.descriptor_sets[image_index];
+        bind_graphics_descriptor_set(
+            &self.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             0,
-            &[billboard.render_state.descriptor_set.descriptor_sets[image_index]],
-            &[],
+            descriptor_set,
         );
 
-        self.rrdevice.device.cmd_draw_indexed(
+        draw_indexed(
+            &self.rrdevice,
             command_buffer,
             billboard.mesh.indices.len() as u32,
-            1,
-            0,
             0,
             0,
         );
@@ -773,34 +751,18 @@ impl App {
         vertex_buffer: Buffer,
         index_buffer: Buffer,
     ) {
-        self.rrdevice.device.cmd_bind_pipeline(
+        bind_graphics_mesh(
+            &self.rrdevice,
             command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
             pipeline,
-        );
-
-        self.rrdevice
-            .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-        self.rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
+            vertex_buffer,
             index_buffer,
-            0,
-            vk::IndexType::UINT16,
+            IndexWidth::U16,
         );
 
         let fb_width = draw_data.display_size()[0] * draw_data.framebuffer_scale()[0];
         let fb_height = draw_data.display_size()[1] * draw_data.framebuffer_scale()[1];
-        let viewport = Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(fb_width)
-            .height(fb_height)
-            .min_depth(0.0)
-            .max_depth(1.0);
-        self.rrdevice
-            .device
-            .cmd_set_viewport(command_buffer, 0, &[viewport]);
+        set_viewport_size(&self.rrdevice, command_buffer, fb_width, fb_height);
 
         let scale = [
             2.0 / draw_data.display_size()[0],
@@ -812,11 +774,10 @@ impl App {
         ];
         let push_constants = [scale[0], scale[1], translate[0], translate[1]];
 
-        self.rrdevice.device.cmd_push_constants(
+        push_vertex_constants(
+            &self.rrdevice,
             command_buffer,
             pipeline_layout,
-            ShaderStages::Vertex.into(),
-            0,
             std::slice::from_raw_parts(
                 push_constants.as_ptr() as *const u8,
                 std::mem::size_of_val(&push_constants),
@@ -853,13 +814,12 @@ impl App {
                             let Some(descriptor_set) = descriptor_set else {
                                 continue;
                             };
-                            self.rrdevice.device.cmd_bind_descriptor_sets(
+                            bind_graphics_descriptor_set(
+                                &self.rrdevice,
                                 command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
                                 pipeline_layout,
                                 0,
-                                &[descriptor_set],
-                                &[],
+                                descriptor_set,
                             );
                             bound_texture_id = Some(texture_id);
                         }
@@ -882,17 +842,14 @@ impl App {
                                     * draw_data.framebuffer_scale()[1])
                                     as u32,
                             });
-                        self.rrdevice
-                            .device
-                            .cmd_set_scissor(command_buffer, 0, &[scissor]);
+                        set_scissor(&self.rrdevice, command_buffer, scissor.build());
 
-                        self.rrdevice.device.cmd_draw_indexed(
+                        draw_indexed(
+                            &self.rrdevice,
                             command_buffer,
                             count as u32,
-                            1,
                             index_offset + cmd_params.idx_offset as u32,
                             (vertex_offset + cmd_params.vtx_offset as u32) as i32,
-                            0,
                         );
                     }
                     _ => {}

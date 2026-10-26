@@ -4,6 +4,7 @@ pub mod composite;
 pub mod dof;
 pub mod frame_commands;
 pub mod gbuffer;
+pub mod indexed_draw;
 pub mod line_mesh_draw;
 pub mod onion_skin;
 pub mod onion_skin_buffers;
@@ -32,6 +33,10 @@ pub use frame_commands::{
     set_full_viewport_and_scissor,
 };
 pub use gbuffer::record_gbuffer_pass;
+pub use indexed_draw::{
+    bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, push_vertex_constants,
+    set_scissor, set_viewport_size, IndexWidth,
+};
 pub use line_mesh_draw::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
 };

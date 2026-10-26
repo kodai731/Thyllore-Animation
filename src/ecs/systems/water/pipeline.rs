@@ -5,7 +5,7 @@ use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstant
 use crate::ecs::resource::WaterGpuState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
-use crate::vulkanr::pipeline::{DepthTestConfig, RRPipeline};
+use crate::vulkanr::pipeline::{DepthCompare, DepthTestConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
@@ -18,11 +18,7 @@ use thyllore_vulkan_core::types::ImageView;
 pub const WATER_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WATER_RESOLVE,
     blends: &[OverlayBlend::Opaque, OverlayBlend::Opaque],
-    depth_test: Some(DepthTestConfig {
-        test_enable: true,
-        write_enable: true,
-        compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-    }),
+    depth_test: Some(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual)),
     push_constants: OverlayPushConstants::of::<WaterPushConstants>(),
 };
 

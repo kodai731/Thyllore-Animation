@@ -6,8 +6,8 @@ use crate::vulkanr::descriptor::{
     AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, DOF, TONEMAP,
 };
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
+    BlendConfig, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
+    RRPipeline, SampleCount, ShaderStages, Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::BloomChain;
@@ -23,20 +23,8 @@ fn fullscreen_pipeline(pass: &'static crate::vulkanr::descriptor::PassShaders) -
             bindings: vec![],
             attributes: vec![],
         })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-}
-
-fn additive_blend() -> BlendConfig {
-    BlendConfig {
-        enable: true,
-        src_color_factor: vk::BlendFactor::ONE,
-        dst_color_factor: vk::BlendFactor::ONE,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ONE,
-        dst_alpha_factor: vk::BlendFactor::ONE,
-        alpha_op: vk::BlendOp::ADD,
-    }
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
 }
 
 impl App {
@@ -100,18 +88,14 @@ impl App {
         )?;
 
         let tonemap_pipeline = fullscreen_pipeline(&TONEMAP)
-            .depth_test(DepthTestConfig {
-                test_enable: true,
-                write_enable: true,
-                compare_op: vk::CompareOp::ALWAYS,
-            })
+            .depth_test(DepthTestConfig::read_write(DepthCompare::Always))
             .custom_render_pass(offscreen_render_pass)
             .descriptor_layouts(&[&tonemap_descriptor.layout])
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<ToneMapPushConstants>() as u32,
-            })
+            .push_constants(PushConstantConfig::new(
+                ShaderStages::Fragment,
+                0,
+                std::mem::size_of::<ToneMapPushConstants>() as u32,
+            ))
             .build(rrdevice, rrrender, Some(offscreen_extent))?;
 
         data.raytracing.tonemap_pipeline = Some(tonemap_pipeline);
@@ -192,13 +176,9 @@ impl App {
         let dof_pipeline = fullscreen_pipeline(&DOF)
             .no_depth_test()
             .custom_render_pass(dof_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
+            .msaa_samples(SampleCount::One)
             .descriptor_layouts(&[&dof_descriptor.layout])
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: 32,
-            })
+            .push_constants(PushConstantConfig::new(ShaderStages::Fragment, 0, 32))
             .build(rrdevice, rrrender, None)?;
 
         data.raytracing.dof_pipeline = Some(dof_pipeline);
@@ -287,20 +267,16 @@ unsafe fn build_bloom_pipelines(
     let downsample_pipeline = fullscreen_pipeline(&BLOOM_DOWNSAMPLE)
         .no_depth_test()
         .custom_render_pass(bloom_chain.downsample_render_pass)
-        .msaa_samples(vk::SampleCountFlags::_1)
+        .msaa_samples(SampleCount::One)
         .descriptor_layouts(&[&bloom_descriptors.layout])
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: 12,
-        })
+        .push_constants(PushConstantConfig::new(ShaderStages::Fragment, 0, 12))
         .build(rrdevice, rrrender, None)?;
 
     let upsample_pipeline = fullscreen_pipeline(&BLOOM_UPSAMPLE)
         .no_depth_test()
         .custom_render_pass(bloom_chain.upsample_render_pass)
-        .msaa_samples(vk::SampleCountFlags::_1)
-        .blend(additive_blend())
+        .msaa_samples(SampleCount::One)
+        .blend(BlendConfig::additive())
         .descriptor_layouts(&[&bloom_descriptors.layout])
         .build(rrdevice, rrrender, None)?;
 
@@ -313,7 +289,7 @@ unsafe fn build_bloom_pipelines(
 
 fn compute_push_constant_range(size: u32) -> vk::PushConstantRange {
     vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::COMPUTE)
+        .stage_flags(ShaderStages::Compute.into())
         .offset(0)
         .size(size)
         .build()

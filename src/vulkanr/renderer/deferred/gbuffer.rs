@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::pipeline::SampleCount;
 use crate::vulkanr::render::pass::get_depth_format;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
@@ -66,7 +67,7 @@ pub unsafe fn create_gbuffer_framebuffer(
         gbuffer.width,
         gbuffer.height,
         1,
-        vk::SampleCountFlags::_1,
+        SampleCount::One.into(),
         get_depth_format(instance, rrdevice)?,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,

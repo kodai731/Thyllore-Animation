@@ -5,24 +5,13 @@ use crate::app::{App, AppData};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST};
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, VertexInputConfig,
+    BlendConfig, CullFace, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder,
+    PushConstantConfig, SampleCount, ShaderStages, Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
 use thyllore_vulkan_core::renderer::{OnionSkinPushConstants, OverlayBlend};
 use thyllore_vulkan_core::types::{Extent2D, ImageView};
-
-fn ghost_blend() -> BlendConfig {
-    BlendConfig {
-        enable: true,
-        src_color_factor: vk::BlendFactor::SRC_ALPHA,
-        dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
-        dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        alpha_op: vk::BlendOp::ADD,
-    }
-}
 
 impl App {
     pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
@@ -81,28 +70,28 @@ unsafe fn create_onion_skin_pass(
 
     let ghost_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_GHOST)
         .vertex_input(VertexInputConfig::Standard)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
+        .cull_mode(CullFace::Back)
         .custom_render_pass(ghost_render_pass)
         .mrt_attachments(1)
-        .msaa_samples(vk::SampleCountFlags::_1)
+        .msaa_samples(SampleCount::One)
         .depth_test(DepthTestConfig {
             test_enable: false,
             write_enable: false,
-            compare_op: vk::CompareOp::ALWAYS,
+            compare_op: DepthCompare::Always.into(),
         })
-        .blend(ghost_blend())
+        .blend(BlendConfig::alpha())
         .descriptor_layouts(&[
             &graphics_resources.frame_set.layout,
             &graphics_resources.materials.layout,
             &graphics_resources.objects.layout,
         ])
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<OnionSkinPushConstants>() as u32,
-        })
+        .push_constants(PushConstantConfig::new(
+            ShaderStages::Fragment,
+            0,
+            std::mem::size_of::<OnionSkinPushConstants>() as u32,
+        ))
         .build(rrdevice, rrrender, Some(extent))?;
     let ghost_framebuffer = OnionSkinPassResources::create_single_framebuffer(
         rrdevice,
@@ -125,11 +114,11 @@ unsafe fn create_onion_skin_pass(
             bindings: vec![],
             attributes: vec![],
         })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
         .no_depth_test()
         .custom_render_pass(composite_render_pass)
-        .msaa_samples(vk::SampleCountFlags::_1)
+        .msaa_samples(SampleCount::One)
         .blend(OverlayBlend::Premultiplied.blend_config())
         .descriptor_layouts(&[&composite_descriptor_layout])
         .build(rrdevice, rrrender, Some(extent))?;

@@ -1,7 +1,7 @@
 use crate::core::RRDevice;
 use crate::descriptor::{PassShaders, ReflectedSetLayout};
 use crate::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
+    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, SampleCount,
     VertexInputConfig,
 };
 use crate::render::RRRender;
@@ -20,7 +20,7 @@ impl OverlayBlend {
         match self {
             OverlayBlend::Premultiplied => premultiplied_blend(),
             OverlayBlend::Opaque => opaque_blend(),
-            OverlayBlend::Additive => additive_blend(),
+            OverlayBlend::Additive => BlendConfig::additive(),
         }
     }
 }
@@ -45,18 +45,6 @@ fn opaque_blend() -> BlendConfig {
         color_op: vk::BlendOp::ADD,
         src_alpha_factor: vk::BlendFactor::ONE,
         dst_alpha_factor: vk::BlendFactor::ZERO,
-        alpha_op: vk::BlendOp::ADD,
-    }
-}
-
-fn additive_blend() -> BlendConfig {
-    BlendConfig {
-        enable: true,
-        src_color_factor: vk::BlendFactor::ONE,
-        dst_color_factor: vk::BlendFactor::ONE,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ZERO,
-        dst_alpha_factor: vk::BlendFactor::ONE,
         alpha_op: vk::BlendOp::ADD,
     }
 }
@@ -137,7 +125,7 @@ impl OverlayNodeSpec {
             })
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .custom_render_pass(render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
+            .msaa_samples(SampleCount::One)
             .mrt_attachments(self.blends.len() as u32)
             .descriptor_layouts(descriptor_layouts)
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);

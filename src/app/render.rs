@@ -10,6 +10,7 @@ use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };
 use crate::vulkanr::descriptor::CompositeGBufferViews;
+use crate::vulkanr::pipeline::ShaderStages;
 use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
@@ -931,7 +932,7 @@ impl App {
         self.rrdevice.device.cmd_push_constants(
             command_buffer,
             pipeline_layout,
-            vk::ShaderStageFlags::VERTEX,
+            ShaderStages::Vertex.into(),
             0,
             std::slice::from_raw_parts(
                 push_constants.as_ptr() as *const u8,

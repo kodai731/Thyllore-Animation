@@ -10,6 +10,97 @@ use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::PrimitiveTopology;
 
+#[derive(Clone, Copy, Debug)]
+pub enum Topology {
+    TriangleList,
+    LineList,
+}
+impl From<Topology> for vk::PrimitiveTopology {
+    fn from(topology: Topology) -> Self {
+        match topology {
+            Topology::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
+            Topology::LineList => vk::PrimitiveTopology::LINE_LIST,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FillMode {
+    Fill,
+    Line,
+}
+impl From<FillMode> for vk::PolygonMode {
+    fn from(mode: FillMode) -> Self {
+        match mode {
+            FillMode::Fill => vk::PolygonMode::FILL,
+            FillMode::Line => vk::PolygonMode::LINE,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CullFace {
+    Back,
+}
+impl From<CullFace> for vk::CullModeFlags {
+    fn from(face: CullFace) -> Self {
+        match face {
+            CullFace::Back => vk::CullModeFlags::BACK,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DepthCompare {
+    Always,
+    GreaterOrEqual,
+    LessOrEqual,
+}
+impl DepthCompare {
+    const fn compare_op(self) -> vk::CompareOp {
+        match self {
+            DepthCompare::Always => vk::CompareOp::ALWAYS,
+            DepthCompare::GreaterOrEqual => vk::CompareOp::GREATER_OR_EQUAL,
+            DepthCompare::LessOrEqual => vk::CompareOp::LESS_OR_EQUAL,
+        }
+    }
+}
+impl From<DepthCompare> for vk::CompareOp {
+    fn from(compare: DepthCompare) -> Self {
+        compare.compare_op()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SampleCount {
+    One,
+    Eight,
+}
+impl From<SampleCount> for vk::SampleCountFlags {
+    fn from(count: SampleCount) -> Self {
+        match count {
+            SampleCount::One => vk::SampleCountFlags::_1,
+            SampleCount::Eight => vk::SampleCountFlags::_8,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ShaderStages {
+    Vertex,
+    Fragment,
+    Compute,
+}
+impl From<ShaderStages> for vk::ShaderStageFlags {
+    fn from(stage: ShaderStages) -> Self {
+        match stage {
+            ShaderStages::Vertex => vk::ShaderStageFlags::VERTEX,
+            ShaderStages::Fragment => vk::ShaderStageFlags::FRAGMENT,
+            ShaderStages::Compute => vk::ShaderStageFlags::COMPUTE,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RRPipeline {
     pub pipeline_layout: vk::PipelineLayout,
@@ -63,6 +154,24 @@ impl Default for DepthTestConfig {
     }
 }
 
+impl DepthTestConfig {
+    pub const fn read_only(compare: DepthCompare) -> Self {
+        Self {
+            test_enable: true,
+            write_enable: false,
+            compare_op: compare.compare_op(),
+        }
+    }
+
+    pub const fn read_write(compare: DepthCompare) -> Self {
+        Self {
+            test_enable: true,
+            write_enable: true,
+            compare_op: compare.compare_op(),
+        }
+    }
+}
+
 /// Blend configuration
 #[derive(Clone, Copy)]
 pub struct BlendConfig {
@@ -89,11 +198,47 @@ impl Default for BlendConfig {
     }
 }
 
+impl BlendConfig {
+    pub fn alpha() -> Self {
+        Self {
+            enable: true,
+            src_color_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            alpha_op: vk::BlendOp::ADD,
+        }
+    }
+
+    pub fn additive() -> Self {
+        Self {
+            enable: true,
+            src_color_factor: vk::BlendFactor::ONE,
+            dst_color_factor: vk::BlendFactor::ONE,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::ONE,
+            dst_alpha_factor: vk::BlendFactor::ONE,
+            alpha_op: vk::BlendOp::ADD,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct PushConstantConfig {
     pub stage_flags: vk::ShaderStageFlags,
     pub offset: u32,
     pub size: u32,
+}
+
+impl PushConstantConfig {
+    pub fn new(stages: ShaderStages, offset: u32, size: u32) -> Self {
+        Self {
+            stage_flags: stages.into(),
+            offset,
+            size,
+        }
+    }
 }
 
 /// Pipeline builder for flexible pipeline creation
@@ -169,14 +314,14 @@ impl PipelineBuilder {
     }
 
     /// Set primitive topology (TRIANGLE_LIST, LINE_LIST, etc.)
-    pub fn topology(mut self, topology: vk::PrimitiveTopology) -> Self {
-        self.topology = topology;
+    pub fn topology(mut self, topology: impl Into<vk::PrimitiveTopology>) -> Self {
+        self.topology = topology.into();
         self
     }
 
     /// Set polygon mode (FILL, LINE, POINT)
-    pub fn polygon_mode(mut self, mode: vk::PolygonMode) -> Self {
-        self.polygon_mode = mode;
+    pub fn polygon_mode(mut self, mode: impl Into<vk::PolygonMode>) -> Self {
+        self.polygon_mode = mode.into();
         self
     }
 
@@ -187,8 +332,8 @@ impl PipelineBuilder {
         self
     }
 
-    pub fn cull_mode(mut self, mode: vk::CullModeFlags) -> Self {
-        self.cull_mode = mode;
+    pub fn cull_mode(mut self, mode: impl Into<vk::CullModeFlags>) -> Self {
+        self.cull_mode = mode.into();
         self
     }
 
@@ -230,8 +375,8 @@ impl PipelineBuilder {
     }
 
     /// Set MSAA samples
-    pub fn msaa_samples(mut self, samples: vk::SampleCountFlags) -> Self {
-        self.msaa_samples = samples;
+    pub fn msaa_samples(mut self, samples: impl Into<vk::SampleCountFlags>) -> Self {
+        self.msaa_samples = samples.into();
         self
     }
 
@@ -431,10 +576,11 @@ impl RRPipeline {
         rrrender: &RRRender,
         layouts: &[&ReflectedSetLayout; 3],
         pass: &'static PassShaders,
-        topology: PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
+        topology: impl Into<PrimitiveTopology>,
+        polygon_mode: impl Into<vk::PolygonMode>,
+        cull_mode: impl Into<vk::CullModeFlags>,
     ) -> Result<Self> {
+        let topology = topology.into();
         let mut builder = PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)

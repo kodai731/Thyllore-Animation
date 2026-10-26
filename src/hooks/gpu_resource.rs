@@ -172,7 +172,6 @@ mod tests {
         assert!(!declares_gpu_owner_field(
             "pub struct A {\n    pub id: PipelineId,\n}"
         ));
-        // alias-name fields (derive-expanded form)
         assert!(declares_gpu_owner_field(
             "pub struct A {\n    pub image: Image,\n}"
         ));

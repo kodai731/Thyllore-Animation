@@ -184,8 +184,9 @@ use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
 };
 use crate::platform::ImguiData;
+use thyllore_vulkan_core::pipeline::SampleCount;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::types::{CommandPool, Extent2D, Fence, Semaphore};
+use thyllore_vulkan_core::types::{CommandPool, Extent2D, Fence, SampleCountFlags, Semaphore};
 
 pub struct CameraState {
     pub camera: Camera,
@@ -270,11 +271,11 @@ impl Default for ImGuiState {
 }
 
 pub struct RenderConfig {
-    pub msaa_samples: vk::SampleCountFlags,
+    pub msaa_samples: SampleCountFlags,
 }
 
 impl RenderConfig {
-    pub fn new(msaa_samples: vk::SampleCountFlags) -> Self {
+    pub fn new(msaa_samples: SampleCountFlags) -> Self {
         Self { msaa_samples }
     }
 }
@@ -282,7 +283,7 @@ impl RenderConfig {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self {
-            msaa_samples: vk::SampleCountFlags::_1,
+            msaa_samples: SampleCount::One.into(),
         }
     }
 }

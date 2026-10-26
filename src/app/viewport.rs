@@ -7,7 +7,7 @@ use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
-use thyllore_vulkan_core::types::{CommandPool, DescriptorSet};
+use thyllore_vulkan_core::types::{CommandPool, DescriptorSet, SampleCountFlags};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -37,7 +37,7 @@ impl ViewportState {
         command_pool: CommandPool,
         width: u32,
         height: u32,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: SampleCountFlags,
         swapchain_format: vk::Format,
     ) -> Result<Self> {
         let offscreen = OffscreenFramebuffer::new(

@@ -8,7 +8,7 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::{CommandState, SwapchainState};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
+use thyllore_vulkan_core::types::Instance;
 
 impl App {
     unsafe fn prepare_model_reload(&mut self) -> Result<(Rc<RRCommandPool>, RRSwapchain)> {

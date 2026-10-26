@@ -7,9 +7,9 @@ use crate::vulkanr::context::FrameSync;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 use thyllore_vulkan_core::FrameRenderContext;
 
 pub fn build_frame_render_context(app: &App, image_index: usize) -> FrameRenderContext<'_> {

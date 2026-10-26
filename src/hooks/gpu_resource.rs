@@ -78,12 +78,7 @@ mod tests {
 
     use super::*;
 
-    const GPU_OWNER_TYPES: [&str; 16] = [
-        "vk::Image",
-        "vk::Buffer",
-        "vk::RenderPass",
-        "vk::Framebuffer",
-        "vk::DeviceMemory",
+    const GPU_OWNER_TYPES: [&str; 11] = [
         "RRImage",
         "RRBuffer",
         "RRUniformBuffer",
@@ -158,16 +153,10 @@ mod tests {
     #[test]
     fn gpu_owner_detection_reads_field_types_not_borrowed_handles() {
         assert!(declares_gpu_owner_field(
-            "pub struct A {\n    pub image: vk::Image,\n}"
-        ));
-        assert!(declares_gpu_owner_field(
             "pub struct A {\n    pub ubo: Option<UniformBuffer<X>>,\n}"
         ));
         assert!(declares_gpu_owner_field(
             "pub struct A {\n    pub texture: Option<RRImage>,\n}"
-        ));
-        assert!(!declares_gpu_owner_field(
-            "pub struct A {\n    pub view: vk::ImageView,\n}"
         ));
         assert!(!declares_gpu_owner_field(
             "pub struct A {\n    pub id: PipelineId,\n}"

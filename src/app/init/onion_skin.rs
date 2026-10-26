@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::{App, AppData};
 use crate::vulkanr::core::RRDevice;
@@ -11,7 +10,7 @@ use crate::vulkanr::pipeline::{
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
 use thyllore_vulkan_core::renderer::{OnionSkinPushConstants, OverlayBlend};
-use thyllore_vulkan_core::types::{Extent2D, ImageView};
+use thyllore_vulkan_core::types::{Extent2D, Format, ImageView, Instance};
 
 impl App {
     pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
@@ -59,7 +58,7 @@ unsafe fn create_onion_skin_pass(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     offscreen_resolve_image_view: ImageView,
-    offscreen_format: vk::Format,
+    offscreen_format: Format,
     width: u32,
     height: u32,
 ) -> Result<OnionSkinPassResources> {

@@ -1,7 +1,13 @@
 use crate::vulkan::vk;
 
+pub use vulkanalia::prelude::v1_0::Handle;
+
+pub type Entry = vulkanalia::Entry;
+pub type Instance = vulkanalia::Instance;
+
 pub type CommandBuffer = vk::CommandBuffer;
 pub type CommandPool = vk::CommandPool;
+pub type Format = vk::Format;
 pub type Image = vk::Image;
 pub type ImageView = vk::ImageView;
 pub type Sampler = vk::Sampler;

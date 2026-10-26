@@ -2,11 +2,10 @@ use crate::app::{App, AppData};
 use crate::ecs::run_frame;
 use crate::ecs::FrameContext;
 use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
 use thyllore_vulkan_core::resource::{HostBuffer, HostBufferUsage};
-use thyllore_vulkan_core::types::DeviceSize;
+use thyllore_vulkan_core::types::{DeviceSize, Instance};
 
 impl App {
     pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {

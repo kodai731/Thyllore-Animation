@@ -417,6 +417,20 @@ impl DescriptorSetWriter<'_> {
         Ok(self)
     }
 
+    pub fn sampled_image(
+        self,
+        binding: ShaderBinding,
+        image_view: vk::ImageView,
+        sampler: vk::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view,
+            sampler,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        )
+    }
+
     pub fn acceleration_structure(
         mut self,
         binding: ShaderBinding,

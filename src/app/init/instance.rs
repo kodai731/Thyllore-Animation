@@ -27,7 +27,6 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
-use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
 use crate::ecs::resource::Camera;
@@ -36,7 +35,9 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::{anyhow, Context, Result};
 use std::rc::Rc;
 use std::time::Instant;
-use thyllore_vulkan_core::types::{DebugMessenger, Fence, SampleCountFlags, Semaphore, Surface};
+use thyllore_vulkan_core::types::{
+    DebugMessenger, Fence, Instance, SampleCountFlags, Semaphore, Surface,
+};
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use winit::window::Window;

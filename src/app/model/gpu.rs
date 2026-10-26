@@ -12,8 +12,8 @@ use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{MeshSource, TexturePixels};
 use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub(super) unsafe fn upload_model_meshes(
     load_result: &ModelLoadResult,

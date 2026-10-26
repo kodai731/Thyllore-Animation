@@ -11,7 +11,6 @@ use crate::vulkanr::context::{
 };
 use crate::vulkanr::descriptor::CompositeGBufferViews;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
-use crate::vulkanr::vulkan::*;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
 use anyhow::{anyhow, Result};
@@ -25,7 +24,8 @@ use thyllore_vulkan_core::renderer::{
 };
 use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
-    Buffer, CommandBuffer, Extent2D, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D, Sampler,
+    Buffer, CommandBuffer, Extent2D, Handle, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
+    Sampler,
 };
 
 impl App {
@@ -829,24 +829,25 @@ impl App {
                         }
 
                         let clip_rect = cmd_params.clip_rect;
-                        let scissor = Rect2D::builder()
-                            .offset(Offset2D {
+                        let scissor = Rect2D {
+                            offset: Offset2D {
                                 x: ((clip_rect[0] - draw_data.display_pos()[0])
                                     * draw_data.framebuffer_scale()[0])
                                     .max(0.0) as i32,
                                 y: ((clip_rect[1] - draw_data.display_pos()[1])
                                     * draw_data.framebuffer_scale()[1])
                                     .max(0.0) as i32,
-                            })
-                            .extent(Extent2D {
+                            },
+                            extent: Extent2D {
                                 width: ((clip_rect[2] - clip_rect[0])
                                     * draw_data.framebuffer_scale()[0])
                                     as u32,
                                 height: ((clip_rect[3] - clip_rect[1])
                                     * draw_data.framebuffer_scale()[1])
                                     as u32,
-                            });
-                        set_scissor(&self.rrdevice, command_buffer, scissor.build());
+                            },
+                        };
+                        set_scissor(&self.rrdevice, command_buffer, scissor);
 
                         draw_indexed(
                             &self.rrdevice,

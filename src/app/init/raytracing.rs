@@ -5,10 +5,10 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::swapchain::RRSwapchain;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
+use thyllore_vulkan_core::types::Instance;
 
 use anyhow::Result;
 use std::rc::Rc;
-use vulkanalia::prelude::v1_0::*;
 
 impl App {
     pub(crate) unsafe fn init_ray_tracing_with_resources(

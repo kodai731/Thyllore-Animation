@@ -10,10 +10,10 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub fn collect_procedural_primitives(world: &World) -> Vec<GpuPrimitive<'static>> {
     crate::hooks::gpu_primitive::collect_all(world)

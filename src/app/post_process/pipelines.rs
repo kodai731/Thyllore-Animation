@@ -15,8 +15,7 @@ use crate::vulkanr::resource::BloomChain;
 use thyllore_vulkan_core::renderer::tonemap::ToneMapPushConstants;
 
 use anyhow::Result;
-use thyllore_vulkan_core::types::{DeviceSize, ImageView};
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::{DeviceSize, Handle, ImageView};
 
 fn fullscreen_pipeline(pass: &'static crate::vulkanr::descriptor::PassShaders) -> PipelineBuilder {
     PipelineBuilder::from_pass(pass)

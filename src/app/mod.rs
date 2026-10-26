@@ -30,7 +30,8 @@ use crate::ecs::{ResMut, ResRef, Resource};
 use crate::vulkanr::device::*;
 
 use std::time::Instant;
-use vulkanalia::prelude::v1_0::*;
+
+use thyllore_vulkan_core::types::{Entry, Instance};
 
 pub struct App {
     pub entry: Entry,

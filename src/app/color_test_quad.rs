@@ -13,13 +13,13 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::MeshBuffer;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_model_core::MeshMorph;
 use thyllore_render_core::MaterialUBO;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
 use thyllore_vulkan_core::resource::image::{create_rgba8_texture, TextureColorSpace};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::DeviceSize;
+use thyllore_vulkan_core::types::Instance;
 
 struct TestColorQuadSpec {
     color: Vec4,

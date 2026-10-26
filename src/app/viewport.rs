@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{imgui_layout_spec, shader_bindings, ReflectedSetLayout};
@@ -7,7 +6,9 @@ use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
-use thyllore_vulkan_core::types::{CommandPool, DescriptorSet, SampleCountFlags};
+use thyllore_vulkan_core::types::{
+    CommandPool, DescriptorSet, Format, Handle, Instance, SampleCountFlags,
+};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -38,7 +39,7 @@ impl ViewportState {
         width: u32,
         height: u32,
         msaa_samples: SampleCountFlags,
-        swapchain_format: vk::Format,
+        swapchain_format: Format,
     ) -> Result<Self> {
         let offscreen = OffscreenFramebuffer::new(
             instance,
@@ -100,11 +101,10 @@ impl ViewportState {
     ) -> Result<()> {
         layout
             .writer(descriptor_set)
-            .image(
+            .sampled_image(
                 shader_bindings::imgui::TEX_SAMPLER,
                 offscreen.resolve_image_view(),
                 offscreen.sampler,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
         Ok(())

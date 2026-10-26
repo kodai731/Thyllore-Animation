@@ -9,7 +9,7 @@ use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
     let camera = world.resource::<Camera>();
@@ -52,7 +52,7 @@ pub struct BillboardDebugInfo {
 }
 
 pub struct GBufferDebugInfo {
-    pub position_image_view: vk::ImageView,
+    pub position_image_view: ImageView,
     pub extent_width: u32,
     pub extent_height: u32,
 }
@@ -62,7 +62,7 @@ pub fn log_billboard_debug_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!("=== Billboard Depth Debug Info ===");
 
@@ -83,7 +83,7 @@ fn log_basic_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!(
         "Light position: ({:.2}, {:.2}, {:.2})",

@@ -10,17 +10,17 @@ use crate::vulkanr::resource::{GpuResource, RRGBuffer};
 use crate::vulkanr::swapchain::RRSwapchain;
 
 pub struct FrameSync {
-    pub image_available: Vec<vk::Semaphore>,
-    pub render_finished: Vec<vk::Semaphore>,
-    pub in_flight: Vec<vk::Fence>,
+    pub image_available: Vec<Semaphore>,
+    pub render_finished: Vec<Semaphore>,
+    pub in_flight: Vec<Fence>,
     pub current_frame: usize,
 }
 
 impl FrameSync {
     pub fn new(
-        image_available: Vec<vk::Semaphore>,
-        render_finished: Vec<vk::Semaphore>,
-        in_flight: Vec<vk::Fence>,
+        image_available: Vec<Semaphore>,
+        render_finished: Vec<Semaphore>,
+        in_flight: Vec<Fence>,
     ) -> Self {
         Self {
             image_available,
@@ -34,15 +34,15 @@ impl FrameSync {
         self.current_frame = (self.current_frame + 1) % max_frames;
     }
 
-    pub fn current_image_available(&self) -> vk::Semaphore {
+    pub fn current_image_available(&self) -> Semaphore {
         self.image_available[self.current_frame]
     }
 
-    pub fn current_render_finished(&self) -> vk::Semaphore {
+    pub fn current_render_finished(&self) -> Semaphore {
         self.render_finished[self.current_frame]
     }
 
-    pub fn current_fence(&self) -> vk::Fence {
+    pub fn current_fence(&self) -> Fence {
         self.in_flight[self.current_frame]
     }
 }
@@ -74,18 +74,18 @@ impl GpuResource for FrameSync {
 pub struct SwapchainState {
     pub swapchain: RRSwapchain,
     #[gpu_resource(skip)]
-    pub images_in_flight: Vec<vk::Fence>,
+    pub images_in_flight: Vec<Fence>,
 }
 
 impl SwapchainState {
     pub fn new(swapchain: RRSwapchain, image_count: usize) -> Self {
         Self {
             swapchain,
-            images_in_flight: vec![vk::Fence::null(); image_count],
+            images_in_flight: vec![Fence::null(); image_count],
         }
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
+    pub fn extent(&self) -> Extent2D {
         self.swapchain.swapchain_extent
     }
 
@@ -136,7 +136,7 @@ impl GpuResource for CommandState {
             device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
             self.buffers.command_buffers.clear();
         }
-        if self.pool.command_pool != vk::CommandPool::null() {
+        if self.pool.command_pool != CommandPool::null() {
             device.destroy_command_pool(self.pool.command_pool, None);
         }
     }
@@ -185,6 +185,7 @@ use crate::ecs::systems::camera_systems::{
 };
 use crate::platform::ImguiData;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::{CommandPool, Extent2D, Fence, Semaphore};
 
 pub struct CameraState {
     pub camera: Camera,

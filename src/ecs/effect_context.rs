@@ -6,6 +6,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::RenderTargetStorage;
 use thyllore_vulkan_core::renderer::ImageStateTracker;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::ImageView;
 
 pub struct EffectContext<'a> {
     pub instance: &'a Instance,
@@ -13,7 +14,7 @@ pub struct EffectContext<'a> {
     pub graphics: &'a GraphicsResources,
     pub viewport_width: u32,
     pub viewport_height: u32,
-    pub hdr_color_view: Option<vk::ImageView>,
+    pub hdr_color_view: Option<ImageView>,
     pub storage: &'a mut RenderTargetStorage,
     pub raytracing: &'a mut RayTracingData,
     pub pass_image_states: &'a mut ImageStateTracker,

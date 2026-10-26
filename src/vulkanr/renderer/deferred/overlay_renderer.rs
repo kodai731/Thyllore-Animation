@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::billboard::BillboardData;
@@ -13,6 +12,7 @@ use thyllore_render_core::MeshBuffers;
 use thyllore_vulkan_core::renderer::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
 };
+use thyllore_vulkan_core::types::CommandBuffer;
 use thyllore_vulkan_core::FrameRenderContext;
 
 pub struct OverlayRenderer<'a> {
@@ -27,7 +27,7 @@ impl<'a> OverlayRenderer<'a> {
 
     pub unsafe fn draw_all_overlays(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         include_grid: bool,
     ) -> Result<()> {
         let ctx = self.ctx;
@@ -57,7 +57,7 @@ impl<'a> OverlayRenderer<'a> {
 
     pub unsafe fn draw_grid_overlay(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         pipeline_override: Option<usize>,
     ) -> Result<()> {
         self.draw_grid(self.ctx, command_buffer, pipeline_override)?;
@@ -67,7 +67,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_grid(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         pipeline_override: Option<usize>,
     ) -> Result<()> {
         let grid = self.world.resource::<GridMeshData>();
@@ -91,7 +91,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_gizmo(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let gizmo = self.world.resource::<GridGizmoData>();
         let options = LineMeshDrawOptions::default();
@@ -108,7 +108,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_transform_gizmo(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let Some(tg) = self.world.get_resource::<TransformGizmoData>() else {
             return Ok(());
@@ -146,7 +146,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_light_lines(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let grid_mesh = self.world.resource::<GridMeshData>();
         let light_gizmo = self.world.resource::<LightGizmoData>();
@@ -170,7 +170,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_bone_gizmo(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let Some(bone_gizmo) = self.world.get_resource::<BoneGizmoData>() else {
             return Ok(());
@@ -254,7 +254,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_constraint_gizmo(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let Some(constraint_gizmo) = self.world.get_resource::<ConstraintGizmoData>() else {
             return Ok(());
@@ -278,7 +278,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_billboard(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let billboard = self.world.resource::<BillboardData>();
         let descriptor_set = billboard
@@ -314,7 +314,7 @@ impl<'a> OverlayRenderer<'a> {
         render_info: &RenderInfo,
         alpha: f32,
         options: LineMeshDrawOptions,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         if mesh.index_count() == 0 {
             return Ok(());

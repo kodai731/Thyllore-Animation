@@ -5,6 +5,7 @@ use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
 use thyllore_vulkan_core::copy_image_to_host_buffer;
+use thyllore_vulkan_core::types::{Buffer, DeviceMemory, DeviceSize, Image};
 
 impl App {
     pub unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
@@ -26,12 +27,12 @@ impl App {
 
     pub unsafe fn copy_image_to_buffer(
         &self,
-        image: vk::Image,
+        image: Image,
         width: u32,
         height: u32,
-        image_size: vk::DeviceSize,
+        image_size: DeviceSize,
         layout: vk::ImageLayout,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    ) -> Result<(Buffer, DeviceMemory)> {
         let command_pool = self.resource::<CommandState>().pool.command_pool;
         copy_image_to_host_buffer(
             &self.instance,

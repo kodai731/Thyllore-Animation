@@ -10,6 +10,7 @@ use crate::vulkanr::pipeline::{
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
 use thyllore_vulkan_core::renderer::{OnionSkinPushConstants, OverlayBlend};
+use thyllore_vulkan_core::types::{Extent2D, ImageView};
 
 fn ghost_blend() -> BlendConfig {
     BlendConfig {
@@ -68,12 +69,12 @@ unsafe fn create_onion_skin_pass(
     rrdevice: &RRDevice,
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
-    offscreen_resolve_image_view: vk::ImageView,
+    offscreen_resolve_image_view: ImageView,
     offscreen_format: vk::Format,
     width: u32,
     height: u32,
 ) -> Result<OnionSkinPassResources> {
-    let extent = vk::Extent2D { width, height };
+    let extent = Extent2D { width, height };
     let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
         OnionSkinPassResources::create_ghost_buffer(instance, rrdevice, width, height)?;
     let ghost_render_pass = OnionSkinPassResources::create_ghost_render_pass(rrdevice)?;

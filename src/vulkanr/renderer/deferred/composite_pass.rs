@@ -5,6 +5,7 @@ use super::ray_query_pass::collect_selected_mesh_ids;
 use crate::app::App;
 use crate::ecs::{PassContext, World};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 fn debug_view_mode_value(mode: crate::ecs::resource::DebugViewMode) -> i32 {
     use crate::ecs::resource::DebugViewMode;
@@ -46,7 +47,7 @@ unsafe fn prepare_composite_resources<'a>(
 
 pub unsafe fn record_composite_pass(
     app: &mut App,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
     draw_data: &imgui::DrawData,
 ) -> Result<()> {
@@ -96,7 +97,7 @@ pub unsafe fn record_composite_pass(
 
 pub unsafe fn record_composite_to_offscreen(
     app: &mut App,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let selected_mesh_ids = collect_selected_mesh_ids(&app.data.ecs_world, &app.data.ecs_assets);
@@ -146,7 +147,7 @@ pub unsafe fn record_composite_to_offscreen(
 
 pub unsafe fn record_composite_to_hdr(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<()> {
     let selected_mesh_ids = collect_selected_mesh_ids(ctx.world, ctx.assets);
 

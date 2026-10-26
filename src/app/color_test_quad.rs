@@ -22,6 +22,7 @@ use thyllore_vulkan_core::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::DeviceSize;
 
 struct TestColorQuadSpec {
     color: Vec4,
@@ -165,7 +166,7 @@ unsafe fn create_quad_mesh_buffer(
         instance,
         device,
         command_pool,
-        (size_of::<Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+        (size_of::<Vertex>() * vertex_data.vertices.len()) as DeviceSize,
         vertex_data.vertices.as_ptr() as *const c_void,
         vertex_data.vertices.len(),
     )?;

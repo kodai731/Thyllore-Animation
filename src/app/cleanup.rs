@@ -11,6 +11,7 @@ use crate::vulkanr::resource::{destroy_all_in_reverse, GpuResource};
 use crate::vulkanr::swapchain::RRSwapchain;
 
 use anyhow::Result;
+use thyllore_vulkan_core::types::Fence;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::{ExtDebugUtilsExtension, KhrSurfaceExtension};
 use winit::window::Window;
@@ -124,7 +125,7 @@ impl App {
         {
             let mut swapchain_state = self.resource_mut::<SwapchainState>();
             swapchain_state.swapchain = new_swapchain;
-            swapchain_state.images_in_flight = vec![vk::Fence::null(); image_count];
+            swapchain_state.images_in_flight = vec![Fence::null(); image_count];
         }
 
         log!("Swapchain recreated successfully");

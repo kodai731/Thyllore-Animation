@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::PassContext;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 struct BloomFrame<'a> {
     bloom_chain: &'a thyllore_vulkan_core::resource::BloomChain,
@@ -53,7 +54,7 @@ fn bloom_frame<'a, 'b>(ctx: &'a PassContext<'b>) -> Result<Option<BloomFrame<'a>
 
 pub unsafe fn record_bloom_downsample(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     mip_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -76,7 +77,7 @@ pub unsafe fn record_bloom_downsample(
 
 pub unsafe fn record_bloom_upsample(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     pass_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -96,7 +97,7 @@ pub unsafe fn record_bloom_upsample(
     )
 }
 
-pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -> Result<()> {
+pub unsafe fn record_dof(ctx: &PassContext, command_buffer: CommandBuffer) -> Result<()> {
     let (Some(pipeline), Some(dof_descriptor), Some(dof_buffer)) = (
         ctx.raytracing.dof_pipeline.as_ref(),
         ctx.raytracing.dof_descriptor.as_ref(),
@@ -147,7 +148,7 @@ pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -
 
 pub unsafe fn record_auto_exposure(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     frame_slot: usize,
 ) -> Result<()> {
     let ae_settings = ctx

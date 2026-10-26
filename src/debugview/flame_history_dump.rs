@@ -7,6 +7,7 @@ use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::{build_flame_ubo, FlameUBO};
 use thyllore_math_core::{f16_to_f32, write_npy_f32};
+use thyllore_vulkan_core::types::DeviceSize;
 
 /// With `--flame-dump`, writes the current flame history image and the first flame's UBO next to
 /// the dump file (`flame_XX.npy` in sequence mode).
@@ -68,7 +69,7 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
     let history_image = flame_history.images[history_index];
     let width = flame_history.width;
     let height = flame_history.height;
-    let image_size = (width * height * 8) as vk::DeviceSize;
+    let image_size = (width * height * 8) as DeviceSize;
 
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
         history_image,

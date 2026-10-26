@@ -2,7 +2,7 @@ use thyllore_effect_core::WaterUBO;
 use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::AccelerationStructure;
 
 use crate::ecs::systems::water::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet};
 use crate::gpu_resource;
@@ -19,7 +19,7 @@ pub struct WaterGpuState {
     pub caustic_apply_pipeline: Option<RRPipeline>,
     pub caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
     #[gpu_resource(skip)]
-    pub caustic_bound_tlas: vk::AccelerationStructureKHR,
+    pub caustic_bound_tlas: AccelerationStructure,
 }
 
 gpu_resource!(WaterGpuState);

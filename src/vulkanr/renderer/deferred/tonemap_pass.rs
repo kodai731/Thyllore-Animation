@@ -1,11 +1,11 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::PassContext;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 pub unsafe fn record_tonemap_to_offscreen(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let offscreen = ctx

@@ -15,6 +15,10 @@ use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
+use thyllore_vulkan_core::types::{
+    Buffer, CommandBuffer, Extent2D, Fence, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
+    Sampler, Viewport,
+};
 
 impl App {
     pub unsafe fn begin_frame(&mut self) -> Result<usize> {
@@ -40,7 +44,7 @@ impl App {
             swapchain,
             u64::MAX,
             image_available,
-            vk::Fence::null(),
+            Fence::null(),
         );
 
         let image_index = match result {
@@ -152,7 +156,7 @@ impl App {
             let rt = self.resource::<RenderTargets>();
             rt.render.gbuffer_depth_image_view
         };
-        if depth_view == vk::ImageView::null() {
+        if depth_view == ImageView::null() {
             return Ok(());
         }
         if let Some(hdr_buffer) = &mut self.data.viewport.hdr_buffer {
@@ -181,22 +185,22 @@ impl App {
 
     unsafe fn update_gbuffer_descriptors(
         &mut self,
-        position_view: vk::ImageView,
-        normal_view: vk::ImageView,
-        shadow_mask_view: vk::ImageView,
-        albedo_view: vk::ImageView,
-        object_id_view: vk::ImageView,
+        position_view: ImageView,
+        normal_view: ImageView,
+        shadow_mask_view: ImageView,
+        albedo_view: ImageView,
+        object_id_view: ImageView,
     ) -> Result<()> {
         let gbuffer_sampler = self
             .data
             .raytracing
             .gbuffer_sampler
-            .unwrap_or(vk::Sampler::null());
+            .unwrap_or(Sampler::null());
         let object_id_sampler = self
             .data
             .raytracing
             .object_id_sampler
-            .unwrap_or(vk::Sampler::null());
+            .unwrap_or(Sampler::null());
 
         if let Some(ref composite_desc) = self.data.raytracing.composite_descriptor {
             composite_desc.update_gbuffer_views(
@@ -503,11 +507,11 @@ impl App {
 
     pub unsafe fn begin_offscreen_render_pass(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
     ) {
-        let render_area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::default())
+        let render_area = Rect2D::builder()
+            .offset(Offset2D::default())
             .extent(offscreen.extent());
 
         let color_clear_value = vk::ClearValue {
@@ -538,13 +542,13 @@ impl App {
 
     pub unsafe fn record_3d_rendering_to_offscreen(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
     ) -> Result<()> {
         let extent = offscreen.extent();
 
-        let viewport = vk::Viewport::builder()
+        let viewport = Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(extent.width as f32)
@@ -555,8 +559,8 @@ impl App {
             .device
             .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
-        let scissor = vk::Rect2D::builder()
-            .offset(vk::Offset2D { x: 0, y: 0 })
+        let scissor = Rect2D::builder()
+            .offset(Offset2D { x: 0, y: 0 })
             .extent(extent);
         self.rrdevice
             .device
@@ -597,13 +601,9 @@ impl App {
         Ok(())
     }
 
-    pub unsafe fn begin_main_render_pass(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) {
-        let render_area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::default())
+    pub unsafe fn begin_main_render_pass(&self, command_buffer: CommandBuffer, image_index: usize) {
+        let render_area = Rect2D::builder()
+            .offset(Offset2D::default())
             .extent(self.resource::<SwapchainState>().swapchain.swapchain_extent);
 
         let color_clear_value = vk::ClearValue {
@@ -633,7 +633,7 @@ impl App {
         );
     }
 
-    unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+    unsafe fn render_models(&self, command_buffer: CommandBuffer, image_index: usize) {
         let mesh_count = self.data.graphics_resources.meshes.len();
 
         for i in 0..mesh_count {
@@ -715,12 +715,12 @@ impl App {
 
     pub unsafe fn record_3d_rendering(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
 
-        let viewport = vk::Viewport::builder()
+        let viewport = Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(extent.width as f32)
@@ -731,8 +731,8 @@ impl App {
             .device
             .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
-        let scissor = vk::Rect2D::builder()
-            .offset(vk::Offset2D { x: 0, y: 0 })
+        let scissor = Rect2D::builder()
+            .offset(Offset2D { x: 0, y: 0 })
             .extent(extent);
         self.rrdevice
             .device
@@ -774,7 +774,7 @@ impl App {
         Ok(())
     }
 
-    unsafe fn render_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+    unsafe fn render_billboard(&self, command_buffer: CommandBuffer, image_index: usize) {
         let billboard = self.resource::<BillboardData>();
         let pipeline_storage = self.pipeline_storage();
 
@@ -842,7 +842,7 @@ impl App {
 
     pub unsafe fn record_imgui_rendering(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
         if draw_data.total_vtx_count() == 0 || draw_data.total_idx_count() == 0 {
@@ -882,12 +882,12 @@ impl App {
 
     unsafe fn setup_imgui_render_state(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         draw_data: &imgui::DrawData,
-        pipeline: vk::Pipeline,
-        pipeline_layout: vk::PipelineLayout,
-        vertex_buffer: vk::Buffer,
-        index_buffer: vk::Buffer,
+        pipeline: Pipeline,
+        pipeline_layout: PipelineLayout,
+        vertex_buffer: Buffer,
+        index_buffer: Buffer,
     ) {
         self.rrdevice.device.cmd_bind_pipeline(
             command_buffer,
@@ -907,7 +907,7 @@ impl App {
 
         let fb_width = draw_data.display_size()[0] * draw_data.framebuffer_scale()[0];
         let fb_height = draw_data.display_size()[1] * draw_data.framebuffer_scale()[1];
-        let viewport = vk::Viewport::builder()
+        let viewport = Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(fb_width)
@@ -942,9 +942,9 @@ impl App {
 
     unsafe fn record_imgui_draw_commands(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         draw_data: &imgui::DrawData,
-        pipeline_layout: vk::PipelineLayout,
+        pipeline_layout: PipelineLayout,
     ) {
         let viewport_texture_id = self.data.viewport.texture_id();
         let viewport_descriptor_set = self.data.viewport.descriptor_set;
@@ -981,8 +981,8 @@ impl App {
                         }
 
                         let clip_rect = cmd_params.clip_rect;
-                        let scissor = vk::Rect2D::builder()
-                            .offset(vk::Offset2D {
+                        let scissor = Rect2D::builder()
+                            .offset(Offset2D {
                                 x: ((clip_rect[0] - draw_data.display_pos()[0])
                                     * draw_data.framebuffer_scale()[0])
                                     .max(0.0) as i32,
@@ -990,7 +990,7 @@ impl App {
                                     * draw_data.framebuffer_scale()[1])
                                     .max(0.0) as i32,
                             })
-                            .extent(vk::Extent2D {
+                            .extent(Extent2D {
                                 width: ((clip_rect[2] - clip_rect[0])
                                     * draw_data.framebuffer_scale()[0])
                                     as u32,

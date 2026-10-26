@@ -6,6 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::gpu_resource;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::resource::{GpuResource, SampledTexture};
+use thyllore_vulkan_core::types::DescriptorSet;
 
 /// The textures Dear ImGui asked the renderer to own; a draw command carries the
 /// descriptor set handle of one of them as its texture id.
@@ -15,7 +16,7 @@ pub struct ImguiTextures {
 }
 
 impl ImguiTextures {
-    pub fn descriptor_set_for(&self, texture_id: u64) -> Option<vk::DescriptorSet> {
+    pub fn descriptor_set_for(&self, texture_id: u64) -> Option<DescriptorSet> {
         self.textures
             .values()
             .map(SampledTexture::descriptor_set)

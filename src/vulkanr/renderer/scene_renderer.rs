@@ -6,6 +6,7 @@ use crate::render::ObjectUBO;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
+use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet};
 
 pub unsafe fn update_object_ubo(
     render_data: &[&RenderData],
@@ -24,9 +25,9 @@ pub unsafe fn update_object_ubo(
 
 pub unsafe fn render_scene_objects(
     render_data: &[&RenderData],
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
-    frame_set: vk::DescriptorSet,
+    frame_set: DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
     pipeline_storage: &PipelineStorage,

@@ -23,6 +23,7 @@ use thyllore_vulkan_core::renderer::{
 };
 use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet, Rect2D};
 use thyllore_vulkan_core::FrameRenderContext;
+
 const REDUCED_COLOR_SLOT: TransientSlot = TransientSlot("wind.reduced_color");
 
 pub struct WindPassNode;

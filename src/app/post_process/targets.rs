@@ -1,10 +1,10 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PostProcessFrameTargets;
 use crate::ecs::PassContext;
 use crate::hooks::pass::TransientSlot;
 use crate::vulkanr::resource::BloomMipTarget;
+use thyllore_vulkan_core::types::{Extent2D, ImageView, Sampler};
 
 pub const DOF_OUTPUT: TransientSlot = TransientSlot("dof.output");
 pub const MAX_BLOOM_MIPS: usize = 8;
@@ -22,8 +22,8 @@ pub const BLOOM_MIPS: [TransientSlot; MAX_BLOOM_MIPS] = [
 const HDR_DIRECT_GENERATION: u64 = 0;
 
 struct InputBinding {
-    view: vk::ImageView,
-    sampler: vk::Sampler,
+    view: ImageView,
+    sampler: Sampler,
     generation: u64,
 }
 
@@ -58,7 +58,7 @@ fn hdr_binding(ctx: &PassContext) -> Result<InputBinding> {
 fn transient_binding(
     ctx: &PassContext,
     slot: TransientSlot,
-    sampler: vk::Sampler,
+    sampler: Sampler,
 ) -> Result<InputBinding> {
     let image = ctx.transient_image(slot)?;
     Ok(InputBinding {
@@ -117,7 +117,7 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
     for slot in &BLOOM_MIPS[..mip_count] {
         let handle = ctx.frame_transients.handle(*slot)?;
         let image = ctx.transient.get(handle)?;
-        let extent = vk::Extent2D {
+        let extent = Extent2D {
             width: image.desc.width,
             height: image.desc.height,
         };
@@ -136,7 +136,7 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
         });
         generations.push(image.generation);
     }
-    let views: Vec<vk::ImageView> = mips.iter().map(|mip| mip.view).collect();
+    let views: Vec<ImageView> = mips.iter().map(|mip| mip.view).collect();
     targets.bloom_mips = mips;
 
     if targets.bloom_bound.is_bound(frame_slot, &generations) {

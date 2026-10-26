@@ -41,6 +41,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
 use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
+use thyllore_vulkan_core::types::{Fence, Semaphore};
 use vulkanalia::Device as VkDevice;
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
@@ -112,9 +113,9 @@ struct VulkanResources {
     rrcommand_pool: Rc<RRCommandPool>,
     rrcommand_buffer: RRCommandBuffer,
     model_pipeline: RRPipeline,
-    image_available_semaphores: Vec<vk::Semaphore>,
-    render_finish_semaphores: Vec<vk::Semaphore>,
-    in_flight_fences: Vec<vk::Fence>,
+    image_available_semaphores: Vec<Semaphore>,
+    render_finish_semaphores: Vec<Semaphore>,
+    in_flight_fences: Vec<Fence>,
 }
 
 struct GizmoPipelineIds {
@@ -1129,7 +1130,7 @@ impl App {
 
     unsafe fn create_sync_objects(
         device: &VkDevice,
-    ) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>)> {
+    ) -> Result<(Vec<Semaphore>, Vec<Semaphore>, Vec<Fence>)> {
         let semaphore_info = vk::SemaphoreCreateInfo::builder();
         let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 

@@ -6,6 +6,7 @@ use crate::app::build_pass_context;
 use crate::ecs::resource::GpuPassTimings;
 use crate::hooks::pass::{TargetUse, TransientRequest};
 use crate::vulkanr::renderer::deferred;
+use thyllore_vulkan_core::types::{CommandBuffer, DeviceSize, Extent3D, Offset3D};
 
 impl App {
     pub unsafe fn record_command_buffer(
@@ -183,7 +184,7 @@ impl App {
 
     unsafe fn record_pass_graph(
         &mut self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -235,7 +236,7 @@ impl App {
         Ok(())
     }
 
-    unsafe fn prepare_empty_shadow_mask(&self, command_buffer: vk::CommandBuffer) {
+    unsafe fn prepare_empty_shadow_mask(&self, command_buffer: CommandBuffer) {
         let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
             return;
         };
@@ -298,7 +299,7 @@ impl App {
         );
     }
 
-    unsafe fn record_object_id_copy(&mut self, command_buffer: vk::CommandBuffer) {
+    unsafe fn record_object_id_copy(&mut self, command_buffer: CommandBuffer) {
         use crate::ecs::resource::ObjectIdReadback;
 
         if !self.data.ecs_world.contains_resource::<ObjectIdReadback>() {
@@ -364,7 +365,7 @@ impl App {
             &[barrier_to_transfer.build(), position_to_transfer.build()],
         );
 
-        let picked_texel = |buffer_offset: vk::DeviceSize| {
+        let picked_texel = |buffer_offset: DeviceSize| {
             vk::BufferImageCopy::builder()
                 .buffer_offset(buffer_offset)
                 .buffer_row_length(0)
@@ -375,12 +376,12 @@ impl App {
                     base_array_layer: 0,
                     layer_count: 1,
                 })
-                .image_offset(vk::Offset3D {
+                .image_offset(Offset3D {
                     x: px as i32,
                     y: py as i32,
                     z: 0,
                 })
-                .image_extent(vk::Extent3D {
+                .image_extent(Extent3D {
                     width: 1,
                     height: 1,
                     depth: 1,

@@ -5,20 +5,23 @@ use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::ReflectedSetLayout;
 use crate::vulkanr::resource::GpuResource;
+use thyllore_vulkan_core::types::{
+    Buffer, DeviceMemory, DeviceSize, Pipeline, PipelineLayout, Sampler,
+};
 
 #[derive(Debug, Default)]
 pub struct ImguiData {
-    pub pipeline: Option<vk::Pipeline>,
-    pub pipeline_layout: Option<vk::PipelineLayout>,
+    pub pipeline: Option<Pipeline>,
+    pub pipeline_layout: Option<PipelineLayout>,
     pub descriptor_set_layout: Option<ReflectedSetLayout>,
-    pub sampler: Option<vk::Sampler>,
+    pub sampler: Option<Sampler>,
     pub renderer_consumer: Option<SynchronousRendererConsumer>,
-    pub vertex_buffers: [Option<vk::Buffer>; MAX_FRAMES_IN_FLIGHT],
-    pub vertex_buffer_memories: [Option<vk::DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
-    pub vertex_buffer_sizes: [vk::DeviceSize; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffers: [Option<vk::Buffer>; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffer_memories: [Option<vk::DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
-    pub index_buffer_sizes: [vk::DeviceSize; MAX_FRAMES_IN_FLIGHT],
+    pub vertex_buffers: [Option<Buffer>; MAX_FRAMES_IN_FLIGHT],
+    pub vertex_buffer_memories: [Option<DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
+    pub vertex_buffer_sizes: [DeviceSize; MAX_FRAMES_IN_FLIGHT],
+    pub index_buffers: [Option<Buffer>; MAX_FRAMES_IN_FLIGHT],
+    pub index_buffer_memories: [Option<DeviceMemory>; MAX_FRAMES_IN_FLIGHT],
+    pub index_buffer_sizes: [DeviceSize; MAX_FRAMES_IN_FLIGHT],
 }
 
 impl ImguiData {
@@ -57,8 +60,8 @@ impl ImguiData {
 
 unsafe fn destroy_buffer_with_memory(
     device: &vulkanalia::Device,
-    buffer: Option<vk::Buffer>,
-    memory: Option<vk::DeviceMemory>,
+    buffer: Option<Buffer>,
+    memory: Option<DeviceMemory>,
 ) {
     if let Some(buffer) = buffer {
         device.destroy_buffer(buffer, None);

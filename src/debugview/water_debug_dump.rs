@@ -15,6 +15,9 @@ use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::types::{
+    Buffer, CommandBuffer, CommandPool, DeviceMemory, DeviceSize, Fence,
+};
 
 const VERTEX_PROBE_COUNT: usize = 64;
 
@@ -36,7 +39,7 @@ unsafe fn save_water_caustic_accum_npy(
     let caustic_image = water_targets.caustic_accum.image;
     let width = water_targets.history.width;
     let height = water_targets.history.height;
-    let image_size = (width * height * 4) as vk::DeviceSize;
+    let image_size = (width * height * 4) as DeviceSize;
 
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
         caustic_image,
@@ -235,7 +238,7 @@ unsafe fn read_gpu_vertex_positions(
 
     let device = &ctx.device.device;
     let stride = std::mem::size_of::<Vertex>();
-    let copy_size = (stride * sample_count) as vk::DeviceSize;
+    let copy_size = (stride * sample_count) as DeviceSize;
     let command_pool = ctx.command_pool;
 
     let (buffer, buffer_memory) = allocate_vertex_probe_buffer(ctx, copy_size)?;
@@ -264,8 +267,8 @@ unsafe fn read_gpu_vertex_positions(
 
 unsafe fn allocate_vertex_probe_buffer(
     ctx: &CaptureContext,
-    size: vk::DeviceSize,
-) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    size: DeviceSize,
+) -> Result<(Buffer, DeviceMemory)> {
     let device = &ctx.device.device;
 
     let buffer_info = vk::BufferCreateInfo::builder()
@@ -292,11 +295,11 @@ unsafe fn allocate_vertex_probe_buffer(
 
 unsafe fn record_and_submit_vertex_copy(
     ctx: &CaptureContext,
-    command_pool: vk::CommandPool,
-    source: vk::Buffer,
-    destination: vk::Buffer,
-    size: vk::DeviceSize,
-) -> Result<vk::CommandBuffer> {
+    command_pool: CommandPool,
+    source: Buffer,
+    destination: Buffer,
+    size: DeviceSize,
+) -> Result<CommandBuffer> {
     let device = &ctx.device.device;
 
     let allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -320,7 +323,7 @@ unsafe fn record_and_submit_vertex_copy(
     device.queue_submit(
         ctx.device.graphics_queue,
         &[submit_info.build()],
-        vk::Fence::null(),
+        Fence::null(),
     )?;
     device.queue_wait_idle(ctx.device.graphics_queue)?;
 

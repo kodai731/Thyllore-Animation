@@ -11,6 +11,7 @@ use crate::hooks::pass::{
     CoreTarget, PassGraph, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
     TargetUse, TransientRequest,
 };
+use thyllore_vulkan_core::types::CommandBuffer;
 
 const HDR_COLOR: TargetRef = TargetRef::Core(CoreTarget::HdrColor);
 const OFFSCREEN: TargetRef = TargetRef::Core(CoreTarget::Offscreen);
@@ -78,7 +79,7 @@ impl RenderPassNode for CompositeHdrNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -107,7 +108,7 @@ impl RenderPassNode for OnionSkinNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
@@ -173,7 +174,7 @@ impl RenderPassNode for BloomDownsampleNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -233,7 +234,7 @@ impl RenderPassNode for BloomUpsampleNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -289,7 +290,7 @@ impl RenderPassNode for DofNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -328,7 +329,7 @@ impl RenderPassNode for AutoExposureNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -367,7 +368,7 @@ impl RenderPassNode for TonemapNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
@@ -409,7 +410,7 @@ impl RenderPassNode for OnionCompositeNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {

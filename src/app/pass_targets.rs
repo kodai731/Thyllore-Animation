@@ -9,9 +9,10 @@ use crate::hooks::pass::{
 };
 use thyllore_vulkan_core::renderer::{PendingBarrier, TransientLifetimes};
 use thyllore_vulkan_core::resource::TransientDesc;
+use thyllore_vulkan_core::types::{CommandBuffer, Image};
 
 impl App {
-    fn resolve_target_image(&self, target: TargetRef) -> Result<vk::Image> {
+    fn resolve_target_image(&self, target: TargetRef) -> Result<Image> {
         match target {
             TargetRef::Core(core) => self.resolve_core_target_image(core),
             TargetRef::Storage(key) => self
@@ -28,7 +29,7 @@ impl App {
         }
     }
 
-    fn resolve_core_target_image(&self, core: CoreTarget) -> Result<vk::Image> {
+    fn resolve_core_target_image(&self, core: CoreTarget) -> Result<Image> {
         let image = match core {
             CoreTarget::HdrColor => self
                 .data
@@ -59,8 +60,8 @@ impl App {
 
     fn gbuffer_image(
         &self,
-        select: fn(&thyllore_vulkan_core::resource::RRGBuffer) -> vk::Image,
-    ) -> Option<vk::Image> {
+        select: fn(&thyllore_vulkan_core::resource::RRGBuffer) -> Image,
+    ) -> Option<Image> {
         self.data.raytracing.gbuffer.as_ref().map(select)
     }
 
@@ -106,7 +107,7 @@ impl App {
     pub(super) fn collect_pass_barriers(
         &mut self,
         uses: &[TargetUse],
-        transients_seen_this_frame: &mut HashSet<vk::Image>,
+        transients_seen_this_frame: &mut HashSet<Image>,
     ) -> Result<Vec<PendingBarrier>> {
         let mut barriers = Vec::new();
         for target_use in uses.iter().copied() {
@@ -129,7 +130,7 @@ impl App {
 
     pub(super) unsafe fn record_pass_barriers(
         &self,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         barriers: &[PendingBarrier],
     ) {
         if barriers.is_empty() {

@@ -6,6 +6,7 @@ use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
+use thyllore_vulkan_core::types::DeviceSize;
 
 impl App {
     pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {
@@ -69,11 +70,9 @@ impl App {
         }
 
         let vtx_buffer_size = (draw_data.total_vtx_count() as usize
-            * std::mem::size_of::<imgui::DrawVert>())
-            as vk::DeviceSize;
+            * std::mem::size_of::<imgui::DrawVert>()) as DeviceSize;
         let idx_buffer_size = (draw_data.total_idx_count() as usize
-            * std::mem::size_of::<imgui::DrawIdx>())
-            as vk::DeviceSize;
+            * std::mem::size_of::<imgui::DrawIdx>()) as DeviceSize;
 
         let needs_vertex_resize = data.imgui.vertex_buffers[frame_slot].is_none()
             || vtx_buffer_size > data.imgui.vertex_buffer_sizes[frame_slot];
@@ -109,7 +108,7 @@ unsafe fn resize_imgui_vertex_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
-    vtx_buffer_size: vk::DeviceSize,
+    vtx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
     if let Some(buffer) = data.imgui.vertex_buffers[frame_slot] {
@@ -138,7 +137,7 @@ unsafe fn resize_imgui_index_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
-    idx_buffer_size: vk::DeviceSize,
+    idx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
     if let Some(buffer) = data.imgui.index_buffers[frame_slot] {
@@ -167,7 +166,7 @@ unsafe fn upload_imgui_vertex_data(
     rrdevice: &RRDevice,
     data: &AppData,
     draw_data: &imgui::DrawData,
-    vtx_buffer_size: vk::DeviceSize,
+    vtx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
     let Some(vertex_buffer_memory) = data.imgui.vertex_buffer_memories[frame_slot] else {
@@ -201,7 +200,7 @@ unsafe fn upload_imgui_index_data(
     rrdevice: &RRDevice,
     data: &AppData,
     draw_data: &imgui::DrawData,
-    idx_buffer_size: vk::DeviceSize,
+    idx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
     let Some(index_buffer_memory) = data.imgui.index_buffer_memories[frame_slot] else {

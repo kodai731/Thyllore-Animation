@@ -1,7 +1,7 @@
 use crate::ecs::storage::Component;
 use crate::ecs::world::World;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
-use vulkanalia::vk;
+use thyllore_vulkan_core::types::DeviceAddress;
 
 /// A component that contributes one ray-tracing instance (BLAS geometry, transform, hit record).
 pub trait GpuPrimitiveSource {
@@ -9,7 +9,7 @@ pub trait GpuPrimitiveSource {
 
     /// Device address of the instance block the effect's closest hit shader reads; `ordinal` is the
     /// index of this entity among the type's instances in entity order. 0 when the effect has none.
-    fn effect_data_address(world: &World, ordinal: usize) -> vk::DeviceAddress {
+    fn effect_data_address(world: &World, ordinal: usize) -> DeviceAddress {
         let _ = (world, ordinal);
         0
     }

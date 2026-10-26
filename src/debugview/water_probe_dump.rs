@@ -11,6 +11,7 @@ use crate::ecs::systems::water::probe::{
 };
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::types::{DeviceSize, Image};
 
 /// With `--batch-water-probe <path>`, compares the HDR image against the analytic torus and
 /// writes `<path>.json` / `<path>.npy`.
@@ -91,11 +92,11 @@ fn probe_root_of(ctx: &CaptureContext) -> ProbeRoot {
 
 pub(crate) unsafe fn read_hdr_rgba16f(
     ctx: &CaptureContext,
-    image: vk::Image,
+    image: Image,
     width: u32,
     height: u32,
 ) -> Result<Vec<f32>> {
-    let image_size = (width * height * 8) as vk::DeviceSize;
+    let image_size = (width * height * 8) as DeviceSize;
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
         image,
         width,

@@ -14,6 +14,7 @@ use crate::vulkanr::resource::BloomChain;
 use thyllore_vulkan_core::renderer::tonemap::ToneMapPushConstants;
 
 use anyhow::Result;
+use thyllore_vulkan_core::types::{DeviceSize, ImageView};
 use vulkanalia::prelude::v1_0::*;
 
 fn fullscreen_pipeline(pass: &'static crate::vulkanr::descriptor::PassShaders) -> PipelineBuilder {
@@ -84,7 +85,7 @@ impl App {
             }
         };
         let scene_buffer_size =
-            std::mem::size_of::<thyllore_vulkan_core::data::SceneUniformData>() as vk::DeviceSize;
+            std::mem::size_of::<thyllore_vulkan_core::data::SceneUniformData>() as DeviceSize;
 
         let tonemap_descriptor =
             RRToneMapDescriptorSet::new(rrdevice, crate::app::init::MAX_FRAMES_IN_FLIGHT)?;
@@ -166,7 +167,7 @@ impl App {
         };
 
         let depth_image_view = rrrender.gbuffer_depth_image_view;
-        if depth_image_view == vk::ImageView::null() {
+        if depth_image_view == ImageView::null() {
             log!("GBuffer depth image view not available, skipping DOF pipeline");
             return Ok(());
         }

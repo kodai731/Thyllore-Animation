@@ -1,12 +1,12 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::ecs::world::MeshRef;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 pub unsafe fn record_gbuffer_pass(
     app: &App,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let gbuffer = app

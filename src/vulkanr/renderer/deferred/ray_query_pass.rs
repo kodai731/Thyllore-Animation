@@ -1,13 +1,13 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
+use thyllore_vulkan_core::types::CommandBuffer;
 
-pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
+pub unsafe fn record_ray_query_pass(app: &App, command_buffer: CommandBuffer) -> Result<()> {
     let gbuffer = app
         .data
         .raytracing

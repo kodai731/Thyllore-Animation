@@ -13,6 +13,7 @@ use crate::ecs::resource::{
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::types::DeviceSize;
 
 const EXPOSURE_PROBE_DIRECTORY: &str = "log/exposure";
 
@@ -115,7 +116,7 @@ unsafe fn read_viewport_display_luminance(
     let swapchain = &ctx.world.resource::<SwapchainState>().swapchain;
     let image = swapchain.swapchain_images[ctx.image_index];
     let extent = swapchain.swapchain_extent;
-    let image_size = (extent.width * extent.height * 4) as vk::DeviceSize;
+    let image_size = (extent.width * extent.height * 4) as DeviceSize;
 
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
         image,

@@ -7,6 +7,7 @@ use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
+use thyllore_vulkan_core::types::{CommandPool, DescriptorSet};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -20,7 +21,7 @@ pub struct ViewportState {
     pub auto_exposure_buffers: Option<AutoExposureBuffers>,
     pub descriptor_set_layout: ReflectedSetLayout,
     #[gpu_resource(skip)]
-    pub descriptor_set: vk::DescriptorSet,
+    pub descriptor_set: DescriptorSet,
     #[gpu_resource(skip)]
     pub width: u32,
     #[gpu_resource(skip)]
@@ -33,7 +34,7 @@ impl ViewportState {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: CommandPool,
         width: u32,
         height: u32,
         msaa_samples: vk::SampleCountFlags,
@@ -82,7 +83,7 @@ impl ViewportState {
     unsafe fn create_imgui_descriptor(
         rrdevice: &RRDevice,
         offscreen: &OffscreenFramebuffer,
-    ) -> Result<(ReflectedSetLayout, vk::DescriptorSet)> {
+    ) -> Result<(ReflectedSetLayout, DescriptorSet)> {
         let layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
         let descriptor_set = layout.allocate_set(rrdevice)?;
 
@@ -94,7 +95,7 @@ impl ViewportState {
     unsafe fn update_descriptor_set(
         rrdevice: &RRDevice,
         layout: &ReflectedSetLayout,
-        descriptor_set: vk::DescriptorSet,
+        descriptor_set: DescriptorSet,
         offscreen: &OffscreenFramebuffer,
     ) -> Result<()> {
         layout
@@ -113,7 +114,7 @@ impl ViewportState {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: CommandPool,
         new_width: u32,
         new_height: u32,
     ) -> Result<()> {

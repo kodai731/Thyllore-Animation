@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::World;
+use thyllore_vulkan_core::types::{Extent2D, Offset2D, Rect2D};
 
 const SCISSOR_MARGIN_PX: f32 = 2.0;
 
@@ -34,9 +35,9 @@ impl ScreenBounds {
     }
 }
 
-pub(crate) fn full_extent_scissor(extent: vk::Extent2D) -> vk::Rect2D {
-    vk::Rect2D::builder()
-        .offset(vk::Offset2D { x: 0, y: 0 })
+pub(crate) fn full_extent_scissor(extent: Extent2D) -> Rect2D {
+    Rect2D::builder()
+        .offset(Offset2D { x: 0, y: 0 })
         .extent(extent)
         .build()
 }
@@ -46,20 +47,20 @@ pub(crate) fn full_extent_scissor(extent: vk::Extent2D) -> vk::Rect2D {
 /// behind the camera or the projected bounds are empty.
 pub(crate) fn compute_bounds_scissor(
     world: &World,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     model: &Matrix4<f32>,
     corners: impl IntoIterator<Item = Vector3<f32>>,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     let projection = world.get_resource::<ProjectionData>();
     compute_projected_bounds_scissor(projection.as_deref(), extent, model, corners)
 }
 
 pub(crate) fn compute_projected_bounds_scissor(
     projection: Option<&ProjectionData>,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     model: &Matrix4<f32>,
     corners: impl IntoIterator<Item = Vector3<f32>>,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     let Some(projection) = projection else {
         return Some(full_extent_scissor(extent));
     };
@@ -97,12 +98,12 @@ pub(crate) fn compute_projected_bounds_scissor(
     }
 
     Some(
-        vk::Rect2D::builder()
-            .offset(vk::Offset2D {
+        Rect2D::builder()
+            .offset(Offset2D {
                 x: min_x as i32,
                 y: min_y as i32,
             })
-            .extent(vk::Extent2D {
+            .extent(Extent2D {
                 width: (max_x - min_x).ceil() as u32,
                 height: (max_y - min_y).ceil() as u32,
             })

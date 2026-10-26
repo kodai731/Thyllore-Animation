@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::App;
 use crate::hooks::pass::{
@@ -9,7 +8,7 @@ use crate::hooks::pass::{
 };
 use thyllore_vulkan_core::renderer::{PendingBarrier, TransientLifetimes};
 use thyllore_vulkan_core::resource::TransientDesc;
-use thyllore_vulkan_core::types::{CommandBuffer, Image};
+use thyllore_vulkan_core::types::Image;
 
 impl App {
     fn resolve_target_image(&self, target: TargetRef) -> Result<Image> {
@@ -126,36 +125,5 @@ impl App {
             }
         }
         Ok(barriers)
-    }
-
-    pub(super) unsafe fn record_pass_barriers(
-        &self,
-        command_buffer: CommandBuffer,
-        barriers: &[PendingBarrier],
-    ) {
-        if barriers.is_empty() {
-            return;
-        }
-
-        let src_stage = barriers
-            .iter()
-            .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.src_stage);
-        let dst_stage = barriers
-            .iter()
-            .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.dst_stage);
-        let image_barriers: Vec<vk::ImageMemoryBarrier> = barriers
-            .iter()
-            .map(PendingBarrier::image_memory_barrier)
-            .collect();
-
-        self.rrdevice.device.cmd_pipeline_barrier(
-            command_buffer,
-            src_stage,
-            dst_stage,
-            vk::DependencyFlags::empty(),
-            &[] as &[vk::MemoryBarrier],
-            &[] as &[vk::BufferMemoryBarrier],
-            &image_barriers,
-        );
     }
 }

@@ -339,6 +339,37 @@ impl ImageStateTracker {
     }
 }
 
+pub unsafe fn record_pending_barriers(
+    rrdevice: &crate::core::device::RRDevice,
+    command_buffer: vk::CommandBuffer,
+    barriers: &[PendingBarrier],
+) {
+    if barriers.is_empty() {
+        return;
+    }
+
+    let src_stage = barriers
+        .iter()
+        .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.src_stage);
+    let dst_stage = barriers
+        .iter()
+        .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.dst_stage);
+    let image_barriers: Vec<vk::ImageMemoryBarrier> = barriers
+        .iter()
+        .map(PendingBarrier::image_memory_barrier)
+        .collect();
+
+    rrdevice.device.cmd_pipeline_barrier(
+        command_buffer,
+        src_stage,
+        dst_stage,
+        vk::DependencyFlags::empty(),
+        &[] as &[vk::MemoryBarrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &image_barriers,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

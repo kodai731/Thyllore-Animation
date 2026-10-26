@@ -301,7 +301,7 @@ impl App {
         data.ecs_world.insert_resource(grid_scale);
 
         let gpu_timestamp_profiler = thyllore_vulkan_core::GpuTimestampProfiler::new(
-            &rrdevice.device,
+            &rrdevice,
             rrdevice.timestamp_period,
             vulkan_resources.rrswapchain.swapchain_images.len(),
         );

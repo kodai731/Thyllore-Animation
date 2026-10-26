@@ -329,6 +329,28 @@ impl RRGBuffer {
     }
 }
 
+pub unsafe fn read_picked_texel(
+    rrdevice: &RRDevice,
+    staging_memory: vk::DeviceMemory,
+) -> Option<(u32, [f32; 3])> {
+    let ptr = rrdevice
+        .device
+        .map_memory(
+            staging_memory,
+            0,
+            READBACK_STAGING_SIZE,
+            vk::MemoryMapFlags::empty(),
+        )
+        .ok()?;
+
+    let object_id = *(ptr as *const u32);
+    let position_ptr = (ptr as *const u8).add(READBACK_POSITION_OFFSET as usize) as *const f32;
+    let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
+
+    rrdevice.device.unmap_memory(staging_memory);
+    Some((object_id, world_position))
+}
+
 unsafe fn destroy_image_set(
     device: &vulkanalia::Device,
     view: &mut vk::ImageView,

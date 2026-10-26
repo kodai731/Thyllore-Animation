@@ -31,7 +31,7 @@ pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
 pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
-pub use gbuffer::{RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
+pub use gbuffer::{read_picked_texel, RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
 pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
 pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;

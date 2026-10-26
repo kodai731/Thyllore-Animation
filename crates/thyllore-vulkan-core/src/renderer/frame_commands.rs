@@ -32,6 +32,67 @@ pub unsafe fn end_render_pass(rrdevice: &RRDevice, command_buffer: CommandBuffer
     rrdevice.device.cmd_end_render_pass(command_buffer);
 }
 
+pub unsafe fn begin_render_pass_cleared(
+    rrdevice: &RRDevice,
+    command_buffer: CommandBuffer,
+    render_pass: RenderPass,
+    framebuffer: Framebuffer,
+    extent: Extent2D,
+    clear_color: [f32; 4],
+    clear_depth: f32,
+) {
+    let render_area = Rect2D::builder().offset(Offset2D::default()).extent(extent);
+
+    let color_clear_value = vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: clear_color,
+        },
+    };
+    let depth_clear_value = vk::ClearValue {
+        depth_stencil: vk::ClearDepthStencilValue {
+            depth: clear_depth,
+            stencil: 0,
+        },
+    };
+    let clear_values = [color_clear_value, depth_clear_value];
+
+    let render_pass_info = vk::RenderPassBeginInfo::builder()
+        .render_pass(render_pass)
+        .framebuffer(framebuffer)
+        .render_area(render_area)
+        .clear_values(&clear_values);
+
+    rrdevice.device.cmd_begin_render_pass(
+        command_buffer,
+        &render_pass_info,
+        vk::SubpassContents::INLINE,
+    );
+}
+
+pub unsafe fn set_full_viewport_and_scissor(
+    rrdevice: &RRDevice,
+    command_buffer: CommandBuffer,
+    extent: Extent2D,
+) {
+    let viewport = Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(extent.width as f32)
+        .height(extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0);
+    rrdevice
+        .device
+        .cmd_set_viewport(command_buffer, 0, &[viewport]);
+
+    let scissor = Rect2D::builder()
+        .offset(Offset2D { x: 0, y: 0 })
+        .extent(extent);
+    rrdevice
+        .device
+        .cmd_set_scissor(command_buffer, 0, &[scissor]);
+}
+
 pub unsafe fn clear_shadow_mask_to_lit(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,

@@ -19,6 +19,8 @@ use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
     acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
 };
+use thyllore_vulkan_core::renderer::{begin_render_pass_cleared, set_full_viewport_and_scissor};
+use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
     Buffer, CommandBuffer, Extent2D, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
     Sampler, Viewport,
@@ -273,30 +275,9 @@ impl App {
             return;
         };
 
-        let memory = self
-            .rrdevice
-            .device
-            .map_memory(
-                gbuffer.readback_staging_memory,
-                0,
-                thyllore_vulkan_core::resource::READBACK_STAGING_SIZE,
-                vk::MemoryMapFlags::empty(),
-            )
-            .ok();
-
-        let picked = memory.map(|ptr| {
-            let object_id = *(ptr as *const u32);
-            let position_ptr = (ptr as *const u8)
-                .add(thyllore_vulkan_core::resource::READBACK_POSITION_OFFSET as usize)
-                as *const f32;
-            let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
-            self.rrdevice
-                .device
-                .unmap_memory(gbuffer.readback_staging_memory);
-            (object_id, world_position)
-        });
-
-        if let Some((object_id, world_position)) = picked {
+        if let Some((object_id, world_position)) =
+            read_picked_texel(&self.rrdevice, gbuffer.readback_staging_memory)
+        {
             let mut readback = self.data.ecs_world.resource_mut::<ObjectIdReadback>();
             readback.last_read_object_id = Some(object_id);
             readback.last_read_world_position = (object_id != 0).then_some(world_position);
@@ -484,33 +465,14 @@ impl App {
         command_buffer: CommandBuffer,
         offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
     ) {
-        let render_area = Rect2D::builder()
-            .offset(Offset2D::default())
-            .extent(offscreen.extent());
-
-        let color_clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.1, 0.1, 0.1, 1.0],
-            },
-        };
-        let depth_clear_value = vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 0.0,
-                stencil: 0,
-            },
-        };
-        let clear_values = [color_clear_value, depth_clear_value];
-
-        let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(offscreen.render_pass)
-            .framebuffer(offscreen.framebuffer)
-            .render_area(render_area)
-            .clear_values(&clear_values);
-
-        self.rrdevice.device.cmd_begin_render_pass(
+        begin_render_pass_cleared(
+            &self.rrdevice,
             command_buffer,
-            &render_pass_info,
-            vk::SubpassContents::INLINE,
+            offscreen.render_pass,
+            offscreen.framebuffer,
+            offscreen.extent(),
+            [0.1, 0.1, 0.1, 1.0],
+            0.0,
         );
     }
 
@@ -521,24 +483,7 @@ impl App {
         offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
     ) -> Result<()> {
         let extent = offscreen.extent();
-
-        let viewport = Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(extent.width as f32)
-            .height(extent.height as f32)
-            .min_depth(0.0)
-            .max_depth(1.0);
-        self.rrdevice
-            .device
-            .cmd_set_viewport(command_buffer, 0, &[viewport]);
-
-        let scissor = Rect2D::builder()
-            .offset(Offset2D { x: 0, y: 0 })
-            .extent(extent);
-        self.rrdevice
-            .device
-            .cmd_set_scissor(command_buffer, 0, &[scissor]);
+        set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
@@ -576,34 +521,16 @@ impl App {
     }
 
     pub unsafe fn begin_main_render_pass(&self, command_buffer: CommandBuffer, image_index: usize) {
-        let render_area = Rect2D::builder()
-            .offset(Offset2D::default())
-            .extent(self.resource::<SwapchainState>().swapchain.swapchain_extent);
-
-        let color_clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        };
-        let depth_clear_value = vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 0.0,
-                stencil: 0,
-            },
-        };
-        let clear_values = [color_clear_value, depth_clear_value];
-
         let render_targets = self.resource::<RenderTargets>();
-        let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_targets.render.render_pass)
-            .framebuffer(render_targets.render.framebuffers[image_index])
-            .render_area(render_area)
-            .clear_values(&clear_values);
-
-        self.rrdevice.device.cmd_begin_render_pass(
+        let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
+        begin_render_pass_cleared(
+            &self.rrdevice,
             command_buffer,
-            &render_pass_info,
-            vk::SubpassContents::INLINE,
+            render_targets.render.render_pass,
+            render_targets.render.framebuffers[image_index],
+            extent,
+            [0.0, 0.0, 0.0, 1.0],
+            0.0,
         );
     }
 
@@ -693,24 +620,7 @@ impl App {
         image_index: usize,
     ) -> Result<()> {
         let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
-
-        let viewport = Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(extent.width as f32)
-            .height(extent.height as f32)
-            .min_depth(0.0)
-            .max_depth(1.0);
-        self.rrdevice
-            .device
-            .cmd_set_viewport(command_buffer, 0, &[viewport]);
-
-        let scissor = Rect2D::builder()
-            .offset(Offset2D { x: 0, y: 0 })
-            .extent(extent);
-        self.rrdevice
-            .device
-            .cmd_set_scissor(command_buffer, 0, &[scissor]);
+        set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;

@@ -27,8 +27,9 @@ pub use composite::{
 };
 pub use dof::record_dof_pass;
 pub use frame_commands::{
-    begin_frame_command_buffer, clear_shadow_mask_to_lit, end_frame_command_buffer,
-    end_render_pass, record_picked_texel_copy,
+    begin_frame_command_buffer, begin_render_pass_cleared, clear_shadow_mask_to_lit,
+    end_frame_command_buffer, end_render_pass, record_picked_texel_copy,
+    set_full_viewport_and_scissor,
 };
 pub use gbuffer::record_gbuffer_pass;
 pub use line_mesh_draw::{

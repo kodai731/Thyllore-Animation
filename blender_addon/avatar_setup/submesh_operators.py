@@ -12,6 +12,7 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from ..common.submesh_mask import mask_mesh_input, material_triangles, to_loop_triangle_indices
+from .mesh_data import mesh_arrays
 from .operators import bound_meshes, target_armature
 
 
@@ -49,22 +50,12 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
                 if slot.material is None:
                     continue
                 material_name = slot.material.name
-                role = tml.guess_submesh_role(mesh_obj.name, material_name)
-
-                existing_index = _material_index(submesh.roles, material_name)
-                if existing_index is not None and submesh.roles[existing_index].source == "user":
+                if _material_index(submesh.roles, material_name) is not None:
                     continue
 
-                if existing_index is not None:
-                    item = submesh.roles[existing_index]
-                    item.role = role
-                    item.source = "guessed"
-                else:
-                    item = submesh.roles.add()
-                    item.material = material_name
-                    item.role = role
-                    item.source = "guessed"
-
+                item = submesh.roles.add()
+                item.material = material_name
+                item.role = tml.guess_submesh_role(mesh_obj.name, material_name)
                 count += 1
 
         self.report({"INFO"}, f"Guessed roles for {count} materials")
@@ -130,7 +121,7 @@ class THYLLORE_OT_HideCoveredSkin(bpy.types.Operator):
         garment_inputs: list[dict] = []
         for g_mesh_obj, g_material_index in garment_materials:
             garment_input, loop_indices = mask_mesh_input(
-                *_mesh_arrays(g_mesh_obj), g_material_index, scale_length
+                *mesh_arrays(g_mesh_obj), g_material_index, scale_length
             )
             if not loop_indices:
                 continue
@@ -139,7 +130,7 @@ class THYLLORE_OT_HideCoveredSkin(bpy.types.Operator):
         total_hidden = 0
         for skin_mesh_obj, skin_material_index in skin_materials:
             body_input, loop_indices = mask_mesh_input(
-                *_mesh_arrays(skin_mesh_obj), skin_material_index, scale_length
+                *mesh_arrays(skin_mesh_obj), skin_material_index, scale_length
             )
             if not loop_indices:
                 continue
@@ -182,24 +173,6 @@ def _materials_by_role(meshes):
             elif role == "garment":
                 garment_materials.append((mesh_obj, material_index))
     return skin_materials, garment_materials
-
-
-def _mesh_arrays(mesh_obj):
-    """Collect raw mesh arrays from bpy for mask_mesh_input.
-
-    Returns (vertex_positions, vertex_normals, triangle_vertices, triangle_materials)
-    where positions and normals are in Blender world space."""
-    mesh = mesh_obj.data
-    matrix_world = mesh_obj.matrix_world
-    vertex_positions = [tuple(matrix_world @ v.co) for v in mesh.vertices]
-    vertex_normals = [tuple((matrix_world.to_3x3() @ v.normal).normalized()) for v in mesh.vertices]
-    mesh.calc_loop_triangles()
-    triangle_vertices = []
-    triangle_materials = []
-    for lt in mesh.loop_triangles:
-        triangle_vertices.extend(lt.vertices)
-        triangle_materials.append(lt.material_index)
-    return vertex_positions, vertex_normals, triangle_vertices, triangle_materials
 
 
 OPERATORS = (

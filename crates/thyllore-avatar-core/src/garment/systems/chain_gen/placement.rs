@@ -119,8 +119,8 @@ pub fn place_chains_with_strands(
     }
 
     let root_band = hair_root_band(input, params);
-    let azimuth_center = root_band.map_or(input.root_position, |band| band.center);
-    let frames = compute_vertex_frames(input, &vertices, azimuth_center);
+    let phi_center = root_band.map_or(input.root_position, |band| band.center);
+    let frames = compute_vertex_frames(input, &vertices, phi_center);
     let (columns, strands) = match root_band {
         Some(band) => {
             if let Some(card_placement) = place_hair_card_chains(input, &vertices, band, params) {

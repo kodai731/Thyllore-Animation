@@ -25,7 +25,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
-use crate::ecs::systems::avatar_submesh_role_systems::{collect_submesh_meshes, skin_role_skins};
+use crate::ecs::systems::avatar_submesh_role_systems::{
+    collect_submesh_meshes, skin_geometry_to_model, skin_role_skins,
+};
 use crate::ecs::systems::skeleton_edit_systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
     remove_bone_subtree,
@@ -69,7 +71,7 @@ fn generate_chain_bones(
     let body_collider = fit_body_collider(world, assets, graphics, geometry.skeleton_id, root);
     let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
     let root_global = compute_bone_global_transform(skeleton, root as usize);
-    let geometry_to_model = root_global * skeleton.bones[root as usize].inverse_bind_pose;
+    let geometry_to_model = skin_geometry_to_model(skeleton, root as usize);
     let model_to_geometry = geometry_to_model
         .invert()
         .ok_or_else(|| anyhow::anyhow!("geometry transform of the skin is singular"))?;
@@ -658,7 +660,11 @@ fn register_spring_chains(
         setup.next_chain_id += 1;
         chain.collider_group_ids.extend(fitted_body_group);
         for joint in &mut chain.joints {
-            joint.hit_radius *= world_units_per_skeleton_unit;
+            *joint = SpringJointParam {
+                bone_id: joint.bone_id,
+                hit_radius: joint.hit_radius * world_units_per_skeleton_unit,
+                ..SpringJointParam::for_force_model(setup.force_model)
+            };
         }
         setup.chains.push(chain);
     }

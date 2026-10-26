@@ -3,7 +3,7 @@ use std::f32::consts::TAU;
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{fit_principal_axis, resample_polyline, world_y_axis};
 
-use super::chain_gen::{build_azimuth_basis, progress_of};
+use super::chain_gen::{build_phi_basis, progress_of};
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint,
     StrandCenterlineRecord, StrandMode,
@@ -382,7 +382,7 @@ fn build_tuft_chain(
 pub(crate) fn place_card_chains(
     input: &ChainGenInput,
     components: &[Vec<u32>],
-    azimuth_center: Vector3<f32>,
+    phi_center: Vector3<f32>,
     params: &ChainGenParams,
 ) -> (Vec<GeneratedChain>, Vec<StrandCenterlineRecord>) {
     let strands: Vec<CardStrand> = components
@@ -403,17 +403,17 @@ pub(crate) fn place_card_chains(
     );
     let tufts = merge_strands(&centerlines, stop);
 
-    let (reference, side) = build_azimuth_basis(world_y_axis());
+    let (reference, side) = build_phi_basis(world_y_axis());
     let mut tuft_centerlines: Vec<(f32, Vec<usize>, Vec<Vector3<f32>>)> = tufts
         .into_iter()
         .map(|tuft| {
             let centerline = tuft_centerline(&centerlines, &weights, &tuft);
-            let offset = centerline[0] - azimuth_center;
-            let azimuth = offset
+            let offset = centerline[0] - phi_center;
+            let phi_around_up = offset
                 .dot(side)
                 .atan2(offset.dot(reference))
                 .rem_euclid(TAU);
-            (azimuth, tuft, centerline)
+            (phi_around_up, tuft, centerline)
         })
         .collect();
     tuft_centerlines.sort_by(|a, b| a.0.total_cmp(&b.0));

@@ -363,9 +363,13 @@ unsafe fn apply_hidden_triangles(
         let (ordered, visible_count) =
             order_visible_triangles_first(&mesh.vertex_data.indices, hidden);
         total_hidden += hidden.len() as u32;
-        mesh.index_buffer
-            .overwrite(&app.instance, &app.rrdevice, &pool, &ordered)?;
-        mesh.index_buffer.indices = visible_count;
+        mesh.index_buffer.overwrite(
+            &app.instance,
+            &app.rrdevice,
+            &pool,
+            &ordered,
+            visible_count,
+        )?;
     }
 
     crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(

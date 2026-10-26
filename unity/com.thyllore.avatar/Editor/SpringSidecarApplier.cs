@@ -41,6 +41,27 @@ namespace Thyllore.Avatar
 
 #if THYLLORE_UNIVRM
 
+        /// The engine extends a leaf joint along its own bone; VRM needs a node there to swing towards.
+        static VRM10SpringBoneJoint CreateLeafTailJoint(VRM10SpringBoneJoint last)
+        {
+            var bone = last.transform;
+            var parentPosition = bone.parent != null ? bone.parent.position : bone.position;
+            var end = FindOrCreateChild(bone.gameObject, bone.name + "_end");
+            end.transform.position = bone.position + (bone.position - parentPosition);
+
+            var joint = end.GetComponent<VRM10SpringBoneJoint>();
+            if (joint == null)
+            {
+                joint = Undo.AddComponent<VRM10SpringBoneJoint>(end);
+            }
+            joint.m_stiffnessForce = last.m_stiffnessForce;
+            joint.m_dragForce = last.m_dragForce;
+            joint.m_gravityPower = last.m_gravityPower;
+            joint.m_gravityDir = last.m_gravityDir;
+            joint.m_jointRadius = last.m_jointRadius;
+            return joint;
+        }
+
         static GameObject FindOrCreateChild(GameObject parent, string name)
         {
             foreach (Transform child in parent.transform)
@@ -187,6 +208,11 @@ namespace Thyllore.Avatar
                     joint.m_jointRadius = sj.hit_radius;
 
                     joints.Add(joint);
+                }
+
+                if (joints.Count > 0 && joints[joints.Count - 1].transform.childCount == 0)
+                {
+                    joints.Add(CreateLeafTailJoint(joints[joints.Count - 1]));
                 }
 
                 var spring = new Vrm10InstanceSpringBone.Spring(chain.name)

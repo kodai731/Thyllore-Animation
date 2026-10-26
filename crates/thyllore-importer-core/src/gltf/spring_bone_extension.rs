@@ -209,6 +209,7 @@ fn convert_springs(
         }
 
         let center_bone_id = vs.center.and_then(|node| resolve_bone_id(node));
+        let tail_bone_id = vs.joints.last().and_then(|tail| resolve_bone_id(tail.node));
 
         result.push(SpringChain {
             id: i as u32,
@@ -216,6 +217,7 @@ fn convert_springs(
             joints,
             collider_group_ids: vs.collider_groups.clone().unwrap_or_default(),
             center_bone_id,
+            tail_bone_id,
             enabled: true,
             origin: ChainOrigin::Authored,
         });
@@ -271,5 +273,6 @@ mod tests {
         assert_eq!(chains[0].joints.len(), 2);
         assert_eq!(chains[0].joints[0].bone_id, 0);
         assert_eq!(chains[0].joints[1].bone_id, 1);
+        assert_eq!(chains[0].tail_bone_id, Some(2));
     }
 }

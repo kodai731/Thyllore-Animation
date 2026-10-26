@@ -19,7 +19,7 @@ pub struct ChainGenSettings {
     /// Joints per chain
     #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
     pub joint_count: u32,
-    /// Chains per submesh; 0 takes the count from the azimuth distribution
+    /// Chains per submesh; 0 takes the count from the φ distribution
     #[persist(ui(min = 0.0, max = 32.0, format = "%.0f"))]
     pub column_count: u32,
     /// Centerline distance in model units under which two strands join one chain; 0 keeps every strand apart

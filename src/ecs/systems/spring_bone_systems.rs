@@ -19,13 +19,14 @@ use thyllore_anim_core::spring_bone::{chains_skinned_to, SpringChainId};
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
 
-/// The uniform scale the entity's ancestry applies to its skeleton, as the space the spring integrates in.
+/// The uniform scale the entity's ancestry applies to its skeleton; a mirrored axis counts by its magnitude.
 pub fn spring_space_for_entity(world: &World, entity: Entity) -> SpringSpace {
     let mut world_scale = 1.0;
     let mut current = Some(entity);
     while let Some(e) = current {
         if let Some(transform) = world.get_component::<Transform>(e) {
-            world_scale *= (transform.scale.x + transform.scale.y + transform.scale.z) / 3.0;
+            let scale = transform.scale;
+            world_scale *= (scale.x.abs() + scale.y.abs() + scale.z.abs()) / 3.0;
         }
         current = world.get_component::<Parent>(e).map(|p| p.0);
     }
@@ -67,7 +68,7 @@ pub fn spring_bone_initialize(
             collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
         let mut joint_states = Vec::new();
 
-        for joint_param in &chain.joints {
+        for (joint_index, joint_param) in chain.joints.iter().enumerate() {
             let bone_id = joint_param.bone_id;
             let idx = bone_id as usize;
 
@@ -85,14 +86,16 @@ pub fn spring_bone_initialize(
             let bone = &skeleton.bones[idx];
             let (_, initial_local_rotation, _) = decompose_transform(&bone.local_transform);
 
+            let tail_bone = joint_tail_bone(chain, joint_index, skeleton);
             let (bone_length, bone_axis) =
-                compute_bone_length_and_axis(skeleton, bone_id, global_transforms);
+                compute_bone_length_and_axis(skeleton, bone_id, tail_bone, global_transforms);
 
             let head_pos = extract_world_position(&global_transforms[idx]);
 
             let tail = compute_initial_tail_position(
                 skeleton,
                 bone_id,
+                tail_bone,
                 global_transforms,
                 initial_local_rotation,
                 bone_axis,
@@ -118,8 +121,12 @@ pub fn spring_bone_initialize(
                 bone_axis.z,
             );
 
-            let rest_axis_distances =
-                rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode);
+            let rest_axis_distances = match setup.force_model {
+                SpringForceModel::RestRelative => {
+                    rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode)
+                }
+                SpringForceModel::Vrm => Vec::new(),
+            };
             let parent_world_rotation =
                 extract_parent_world_rotation(skeleton, idx, global_transforms);
             let gravity_in_parent_rest =
@@ -430,9 +437,59 @@ fn rest_axis_distances(
         .collect()
 }
 
+/// The bone a joint swings towards: the next joint, the declared tail, or the first child.
+fn joint_tail_bone(
+    chain: &crate::ecs::component::SpringChain,
+    joint_index: usize,
+    skeleton: &Skeleton,
+) -> Option<BoneId> {
+    let declared = match chain.joints.get(joint_index + 1) {
+        Some(next) => Some(next.bone_id),
+        None => chain.tail_bone_id,
+    };
+    declared.or_else(|| {
+        skeleton
+            .bones
+            .get(chain.joints[joint_index].bone_id as usize)?
+            .children
+            .first()
+            .copied()
+    })
+}
+
+/// Moves every tail to where the bones point in `global_transforms` without touching the rest data.
+pub fn spring_bone_reseat_tails(
+    setup: &SpringBoneSetup,
+    state: &mut SpringBoneState,
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+) {
+    let enabled_chains = setup.chains.iter().filter(|chain| chain.enabled);
+    for (chain, chain_state) in enabled_chains.zip(&mut state.chain_states) {
+        let joints = chain.joints.iter().enumerate();
+        for ((joint_index, joint_param), joint_state) in joints.zip(&mut chain_state.joint_states) {
+            if joint_param.bone_id as usize >= global_transforms.len() {
+                continue;
+            }
+            let tail = compute_initial_tail_position(
+                skeleton,
+                joint_param.bone_id,
+                joint_tail_bone(chain, joint_index, skeleton),
+                global_transforms,
+                joint_state.initial_local_rotation,
+                joint_state.bone_axis,
+                joint_state.bone_length,
+            );
+            joint_state.prev_tail = tail;
+            joint_state.current_tail = tail;
+        }
+    }
+}
+
 fn compute_initial_tail_position(
     skeleton: &Skeleton,
     bone_id: BoneId,
+    tail_bone: Option<BoneId>,
     global_transforms: &[Matrix4<f32>],
     initial_local_rotation: Quaternion<f32>,
     bone_axis: Vector3<f32>,
@@ -440,11 +497,8 @@ fn compute_initial_tail_position(
 ) -> Vector3<f32> {
     let idx = bone_id as usize;
 
-    if let Some(&child_id) = skeleton.bones[idx].children.first() {
-        let cidx = child_id as usize;
-        if cidx < global_transforms.len() {
-            return extract_world_position(&global_transforms[cidx]);
-        }
+    if let Some(tail_transform) = tail_bone.and_then(|id| global_transforms.get(id as usize)) {
+        return extract_world_position(tail_transform);
     }
 
     let head_pos = extract_world_position(&global_transforms[idx]);
@@ -483,30 +537,22 @@ fn extract_parent_world_rotation(
 fn compute_bone_length_and_axis(
     skeleton: &Skeleton,
     bone_id: BoneId,
+    tail_bone: Option<BoneId>,
     global_transforms: &[Matrix4<f32>],
 ) -> (f32, Vector3<f32>) {
     let idx = bone_id as usize;
     let bone = &skeleton.bones[idx];
 
-    if let Some(&child_id) = bone.children.first() {
-        let cidx = child_id as usize;
-        if cidx < global_transforms.len() {
-            let parent_pos = extract_world_position(&global_transforms[idx]);
-            let child_pos = extract_world_position(&global_transforms[cidx]);
-            let diff = child_pos - parent_pos;
-            let length = (diff.x * diff.x + diff.y * diff.y + diff.z * diff.z).sqrt();
+    if let Some(tail_transform) = tail_bone.and_then(|id| global_transforms.get(id as usize)) {
+        let head_pos = extract_world_position(&global_transforms[idx]);
+        let tail_pos = extract_world_position(tail_transform);
+        let diff = tail_pos - head_pos;
+        let length = diff.magnitude();
 
-            if length > 1e-6 {
-                let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
-                let inv_q = cgmath::Quaternion::new(
-                    bone_rot.s,
-                    -bone_rot.v.x,
-                    -bone_rot.v.y,
-                    -bone_rot.v.z,
-                );
-                let local_dir = rotate_vec3_by_quat(inv_q, diff / length);
-                return (length, local_dir);
-            }
+        if length > 1e-6 {
+            let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
+            let local_dir = rotate_vec3_by_quat(conjugate(bone_rot), diff / length);
+            return (length, local_dir);
         }
     }
 

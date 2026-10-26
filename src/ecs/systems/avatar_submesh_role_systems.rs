@@ -2,12 +2,20 @@ use thyllore_avatar_core::garment::components::submesh_role::{
     refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 
-use crate::animation::{SkeletonId, SkinData};
+use cgmath::Matrix4;
+
+use crate::animation::{Skeleton, SkeletonId, SkinData};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::resource::{AvatarSetupState, HierarchyState, NodeAssets};
+use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+
+/// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
+pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Matrix4<f32> {
+    compute_bone_global_transform(skeleton, bone) * skeleton.bones[bone].inverse_bind_pose
+}
 
 pub(crate) fn collect_submesh_keys(
     assets: &AssetStorage,

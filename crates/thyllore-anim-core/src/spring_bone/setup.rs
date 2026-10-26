@@ -42,16 +42,39 @@ pub fn strand_bending_relaxation() -> f32 {
         / STRAND_LAG_REFERENCE_ANGLE_DEG.to_radians().tan()
 }
 
+/// VRM 1.0 reads `stiffness` in m/s and `gravity_power` as a plain factor, so its defaults differ.
+const VRM_DEFAULT_STIFFNESS: f32 = 1.0;
+const VRM_DEFAULT_DRAG_FORCE: f32 = 0.5;
+const VRM_DEFAULT_GRAVITY_POWER: f32 = 0.0;
+const VRM_DEFAULT_HIT_RADIUS: f32 = 0.02;
+
+impl SpringJointParam {
+    /// The parameters a joint added to a setup starts with, in the units of that setup's force model.
+    pub fn for_force_model(force_model: SpringForceModel) -> Self {
+        match force_model {
+            SpringForceModel::Vrm => Self {
+                bone_id: 0,
+                stiffness: VRM_DEFAULT_STIFFNESS,
+                drag_force: VRM_DEFAULT_DRAG_FORCE,
+                gravity_power: VRM_DEFAULT_GRAVITY_POWER,
+                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                hit_radius: VRM_DEFAULT_HIT_RADIUS,
+            },
+            SpringForceModel::RestRelative => Self {
+                bone_id: 0,
+                stiffness: strand_bending_relaxation(),
+                drag_force: DEFAULT_DRAG_FORCE,
+                gravity_power: 1.0,
+                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                hit_radius: 0.0,
+            },
+        }
+    }
+}
+
 impl Default for SpringJointParam {
     fn default() -> Self {
-        Self {
-            bone_id: 0,
-            stiffness: strand_bending_relaxation(),
-            drag_force: DEFAULT_DRAG_FORCE,
-            gravity_power: 1.0,
-            gravity_dir: Vector3::new(0.0, -1.0, 0.0),
-            hit_radius: 0.0,
-        }
+        Self::for_force_model(SpringForceModel::default())
     }
 }
 
@@ -77,6 +100,8 @@ pub struct SpringChain {
     pub joints: Vec<SpringJointParam>,
     pub collider_group_ids: Vec<SpringColliderGroupId>,
     pub center_bone_id: Option<BoneId>,
+    /// The bone the last joint swings towards when declared (VRM's final joint); otherwise its first child.
+    pub tail_bone_id: Option<BoneId>,
     pub enabled: bool,
     pub origin: ChainOrigin,
 }
@@ -89,6 +114,7 @@ impl Default for SpringChain {
             joints: Vec::new(),
             collider_group_ids: Vec::new(),
             center_bone_id: None,
+            tail_bone_id: None,
             enabled: true,
             origin: ChainOrigin::Authored,
         }

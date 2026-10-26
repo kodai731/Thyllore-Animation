@@ -9,8 +9,8 @@ use crate::garment::components::chain_gen::ChainGenInput;
 #[derive(Debug, Clone, Copy)]
 pub(super) struct VertexFrame {
     pub vertex: u32,
-    /// Angle about the world up axis through the azimuth center, from the reference axis of `build_azimuth_basis`.
-    pub azimuth: f32,
+    /// Spherical φ around the world up axis through `phi_center`, from the `build_phi_basis` reference.
+    pub phi_around_up: f32,
     /// Distance down the world up axis from the root bone.
     pub progress: f32,
 }
@@ -28,8 +28,8 @@ pub(crate) fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
         .collect()
 }
 
-/// The reference axis azimuth 0 points along and the side axis at azimuth +90°, both orthogonal to `up`.
-pub(crate) fn build_azimuth_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
+/// The reference axis φ = 0 points along and the side axis at φ = +90°, both orthogonal to `up`.
+pub(crate) fn build_phi_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     let seed = if up.x.abs() < 0.9 {
         Vector3::unit_x()
     } else {
@@ -50,19 +50,19 @@ pub(crate) fn progress_of(
 pub(super) fn compute_vertex_frames(
     input: &ChainGenInput,
     vertices: &[u32],
-    azimuth_center: Vector3<f32>,
+    phi_center: Vector3<f32>,
 ) -> Vec<VertexFrame> {
     let up = world_y_axis();
-    let (reference, side) = build_azimuth_basis(up);
+    let (reference, side) = build_phi_basis(up);
 
     vertices
         .iter()
         .map(|&vertex| {
             let position = input.positions[vertex as usize];
-            let offset = position - azimuth_center;
+            let offset = position - phi_center;
             VertexFrame {
                 vertex,
-                azimuth: offset.dot(side).atan2(offset.dot(reference)),
+                phi_around_up: offset.dot(side).atan2(offset.dot(reference)),
                 progress: progress_of(position, input.root_position, up),
             }
         })

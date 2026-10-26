@@ -29,7 +29,7 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 
 /// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
 /// `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
-/// `tex_coords` is per-vertex UV, empty uses the azimuth method.
+/// `tex_coords` is per-vertex UV, empty uses the φ-around-up method.
 #[pyfunction]
 #[pyo3(signature = (positions, triangles, root_position, role, target, settings, attachment_positions = Vec::new(), tex_coords = Vec::new()))]
 pub fn generate_chains<'py>(

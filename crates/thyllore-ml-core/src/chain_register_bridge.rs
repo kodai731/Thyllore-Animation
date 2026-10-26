@@ -71,7 +71,7 @@ pub fn register_generated_chains(
                 Ok(SpringJointParam {
                     bone_id: bone_id(&skeleton, &joint.name)?,
                     hit_radius: joint.hit_radius,
-                    ..SpringJointParam::default()
+                    ..SpringJointParam::for_force_model(setup.force_model)
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;

@@ -63,12 +63,13 @@ def _nearest_triangles(bvh, vertices):
 
 def _write_vertex_groups(obj, weights, source_vg_names):
     """Write weights to target vertex groups (create if missing, replace existing)."""
+    all_vertices = list(range(len(obj.data.vertices)))
     for bone_idx, name in enumerate(source_vg_names):
         vg = obj.vertex_groups.get(name)
         if vg is None:
             vg = obj.vertex_groups.new(name=name)
         else:
-            vg.clear()
+            vg.remove(all_vertices)
         for v_idx, w in enumerate(weights[:, bone_idx]):
             if w >= 1e-4:
                 vg.add([v_idx], w, "REPLACE")

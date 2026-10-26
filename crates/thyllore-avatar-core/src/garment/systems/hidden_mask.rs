@@ -81,15 +81,11 @@ pub fn find_hidden_triangle_indices(
     let garment_bvh = TriangleBvh::build(&garments.positions, &garments.triangles);
     let hidden_vertices =
         find_hidden_body_vertices(&body.positions, &body.normals, &garment_bvh, params);
-    body.triangles
+    find_hidden_body_triangles(&body.triangles, &hidden_vertices)
         .iter()
         .enumerate()
-        .filter(|(_, tri)| {
-            hidden_vertices[tri[0] as usize]
-                && hidden_vertices[tri[1] as usize]
-                && hidden_vertices[tri[2] as usize]
-        })
-        .map(|(i, _)| i as u32)
+        .filter(|(_, hidden)| **hidden)
+        .map(|(index, _)| index as u32)
         .collect()
 }
 

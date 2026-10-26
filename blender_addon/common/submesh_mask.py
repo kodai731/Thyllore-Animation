@@ -70,3 +70,19 @@ def mask_mesh_input(
         normals.append(engine_n)
 
     return {"positions": positions, "normals": normals, "triangles": triangles}, loop_indices
+
+
+def material_loop_indices(
+    triangle_materials: list[int],
+    material_names: list[str | None],
+) -> dict[str, list[int]]:
+    """Map each material name to the ``mesh.loop_triangles`` indices of its triangles, in order.
+
+    The position of a loop index in its list is the triangle's index inside that material's
+    submesh, which is the numbering the engine and the sidecar use."""
+    by_name: dict[str, list[int]] = {}
+    for triangle_index, material_index in enumerate(triangle_materials):
+        if material_index >= len(material_names) or material_names[material_index] is None:
+            continue
+        by_name.setdefault(material_names[material_index], []).append(triangle_index)
+    return by_name

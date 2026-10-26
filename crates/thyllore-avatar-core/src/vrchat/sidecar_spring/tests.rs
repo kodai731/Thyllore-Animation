@@ -75,6 +75,7 @@ fn test_full_mapping() {
         ],
         collider_group_ids: vec![0],
         center_bone_id: Some(0),
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });
@@ -200,6 +201,7 @@ fn setup_round_trips_through_the_sidecar() {
         ],
         collider_group_ids: vec![7],
         center_bone_id: Some(1),
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });
@@ -221,6 +223,7 @@ fn setup_round_trips_through_the_sidecar() {
     let chain = &restored.chains[0];
     assert_eq!(chain.name, "tail");
     assert_eq!(chain.center_bone_id, Some(1));
+    assert_eq!(chain.tail_bone_id, Some(4));
     let joint_bones: Vec<_> = chain.joints.iter().map(|j| j.bone_id).collect();
     assert_eq!(joint_bones, vec![2, 3]);
     assert_eq!(chain.joints[1].stiffness, 0.6);
@@ -419,6 +422,7 @@ fn test_tail_joint_appended_when_child_exists() {
         ],
         collider_group_ids: vec![],
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });
@@ -462,6 +466,7 @@ fn test_no_tail_joint_when_no_child() {
         ],
         collider_group_ids: vec![],
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 pub use thyllore_anim_core::spring_bone::{SubmeshKey, SubmeshSelector};
 
@@ -15,27 +16,29 @@ pub enum SubmeshRole {
     Accessory,
 }
 
-const HAIR_KEYWORDS: &[&str] = &["hair", "bang", "ponytail", "twintail"];
-const SKIN_KEYWORDS: &[&str] = &["body", "skin", "face", "head", "hand", "leg", "arm"];
-const ACCESSORY_KEYWORDS: &[&str] = &[
-    "accessory",
-    "acc_",
-    "ribbon",
-    "glasses",
-    "earring",
-    "necklace",
-    "hat",
-];
+#[derive(serde::Deserialize)]
+struct RoleKeywords {
+    hair: Vec<String>,
+    skin: Vec<String>,
+    accessory: Vec<String>,
+}
 
+static ROLE_KEYWORDS: LazyLock<RoleKeywords> = LazyLock::new(|| {
+    toml::from_str(include_str!("../../../data/submesh_role_keywords.toml"))
+        .expect("submesh_role_keywords.toml is valid TOML")
+});
+
+/// The role the mesh and material names suggest, from `data/submesh_role_keywords.toml`.
 pub fn guess_submesh_role(key: &SubmeshKey) -> SubmeshRole {
     let combined = format!("{}{}", key.mesh, key.material).to_lowercase();
-    let matches_any = |keywords: &[&str]| keywords.iter().any(|kw| combined.contains(kw));
+    let matches_any =
+        |keywords: &[String]| keywords.iter().any(|kw| combined.contains(kw.as_str()));
 
-    if matches_any(HAIR_KEYWORDS) {
+    if matches_any(&ROLE_KEYWORDS.hair) {
         SubmeshRole::Hair
-    } else if matches_any(SKIN_KEYWORDS) {
+    } else if matches_any(&ROLE_KEYWORDS.skin) {
         SubmeshRole::Skin
-    } else if matches_any(ACCESSORY_KEYWORDS) {
+    } else if matches_any(&ROLE_KEYWORDS.accessory) {
         SubmeshRole::Accessory
     } else {
         SubmeshRole::Garment

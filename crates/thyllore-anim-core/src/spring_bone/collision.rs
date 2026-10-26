@@ -2,6 +2,8 @@ use cgmath::{InnerSpace, Vector3};
 
 const DEGENERATE_SEGMENT_LENGTH_SQ: f32 = 1e-8;
 const MIN_TAIL_LEVER: f32 = 1e-3;
+/// A rest clearance below this is a joint authored on the collider axis, which the full radius pushes out.
+const MIN_REST_CLEARANCE: f32 = 1e-4;
 
 pub struct WorldCollider {
     pub center: Vector3<f32>,
@@ -10,7 +12,7 @@ pub struct WorldCollider {
 }
 
 /// Resolves the tail against every collider; `rest_axis_distances[i]` caps the clearance the joint
-/// had from collider `i` at rest so the rest pose is never pushed.
+/// had from collider `i` at rest so the rest pose is never pushed, and an empty slice keeps the full radius.
 pub fn resolve_all_segment_collisions(
     head: Vector3<f32>,
     tail: Vector3<f32>,
@@ -49,8 +51,8 @@ fn effective_min_distance(
 ) -> f32 {
     let full = joint_radius + collider.radius;
     match rest_axis_distance {
-        Some(&rest) => full.min(rest),
-        None => full,
+        Some(&rest) if rest >= MIN_REST_CLEARANCE => full.min(rest),
+        Some(_) | None => full,
     }
 }
 
@@ -447,6 +449,15 @@ mod tests {
         let rest = [segment_axis_distance(head, tail, &colliders[0])];
         let result = resolve_all_segment_collisions(head, tail, 0.1, &colliders, &rest);
         assert!(approx_eq(result, tail, 1e-6));
+    }
+
+    #[test]
+    fn a_rest_clearance_of_zero_keeps_the_collider_active() {
+        let colliders = unit_sphere_at_origin();
+        let rest = [0.0];
+        let result =
+            resolve_all_tail_collisions(Vector3::new(0.0, 0.0, 0.0), 0.1, &colliders, &rest);
+        assert!((magnitude(result) - 1.1).abs() < 1e-5);
     }
 
     #[test]

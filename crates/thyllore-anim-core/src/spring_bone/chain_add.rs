@@ -1,12 +1,13 @@
 use crate::{BoneId, Skeleton};
 
 use super::origin::ChainOrigin;
-use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
+use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringForceModel, SpringJointParam};
 
 fn build_chain_joints(
     root_bone_id: BoneId,
     chain_length: u32,
     skeleton: &Skeleton,
+    force_model: SpringForceModel,
 ) -> Vec<SpringJointParam> {
     let mut joints = Vec::new();
     let mut current_bone = root_bone_id;
@@ -14,7 +15,7 @@ fn build_chain_joints(
     for _ in 0..chain_length {
         joints.push(SpringJointParam {
             bone_id: current_bone,
-            ..Default::default()
+            ..SpringJointParam::for_force_model(force_model)
         });
 
         let children: Vec<BoneId> = skeleton
@@ -43,13 +44,14 @@ pub fn add_chain(
     let chain_id = setup.next_chain_id;
     setup.next_chain_id += 1;
 
-    let joints = build_chain_joints(root_bone_id, chain_length, skeleton);
+    let joints = build_chain_joints(root_bone_id, chain_length, skeleton, setup.force_model);
     let chain = SpringChain {
         id: chain_id,
         name: format!("Chain_{}", chain_id),
         joints,
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: ChainOrigin::Authored,
     };

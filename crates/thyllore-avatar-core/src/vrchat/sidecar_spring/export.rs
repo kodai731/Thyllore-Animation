@@ -189,7 +189,8 @@ fn collider_group_names(setup: &SpringBoneSetup, chain: &SpringChain) -> Vec<Str
         .collect()
 }
 
-/// The VRM tail joint: the first child of the chain's last bone, carrying the last joint's parameters.
+/// The VRM tail joint, on the bone the engine swings the last joint towards (`tail_bone_id`, else the
+/// first child in bone order); a leaf last bone gets none and the consumer extends it.
 fn build_tail_joint(
     chain: &SpringChain,
     last: &SidecarSpringJoint,
@@ -197,11 +198,14 @@ fn build_tail_joint(
 ) -> Option<SidecarSpringJoint> {
     let last_bone_id = chain.joints.last()?.bone_id as usize;
     bones.get(last_bone_id)?;
-    let child = bones
-        .iter()
-        .find(|bone| bone.parent == Some(last_bone_id))?;
+    let tail = match chain.tail_bone_id {
+        Some(tail_bone_id) => bones.get(tail_bone_id as usize)?,
+        None => bones
+            .iter()
+            .find(|bone| bone.parent == Some(last_bone_id))?,
+    };
     Some(SidecarSpringJoint {
-        bone: child.name.clone(),
+        bone: tail.name.clone(),
         ..last.clone()
     })
 }

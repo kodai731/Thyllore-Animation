@@ -328,6 +328,7 @@ fn load_ends_normal_chain() {
         ],
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     };
@@ -352,6 +353,7 @@ fn load_ends_empty_chain_is_noop() {
         joints: Vec::new(),
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     };

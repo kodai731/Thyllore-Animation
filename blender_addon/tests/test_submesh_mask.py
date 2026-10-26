@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from blender_addon.common.submesh_mask import (
     mask_mesh_input,
+    material_loop_indices,
     material_triangles,
     to_loop_triangle_indices,
 )
@@ -176,3 +177,10 @@ def test_mask_mesh_input_feeds_wheel():
         assert len(result) == 2
     finally:
         sys.path.remove(extract_dir)
+
+
+def test_material_loop_indices_groups_triangles_by_material_name():
+    """Each material lists its loop_triangles indices in order; empty slots are dropped."""
+    by_name = material_loop_indices([0, 1, 0, 2], ["Skin", "Cloth", None])
+
+    assert by_name == {"Skin": [0, 2], "Cloth": [1]}

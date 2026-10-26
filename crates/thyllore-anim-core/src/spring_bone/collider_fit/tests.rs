@@ -212,6 +212,7 @@ fn test_replace_fitted_body_colliders_basic() {
         }],
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });
@@ -255,6 +256,7 @@ fn test_replace_fitted_body_colliders_idempotent() {
         }],
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });
@@ -299,6 +301,7 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
         }],
         collider_group_ids: Vec::new(),
         center_bone_id: None,
+        tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
     });

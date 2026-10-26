@@ -138,16 +138,26 @@ impl RRIndexBuffer {
         Ok(rrindex_buffer)
     }
 
+    /// Replaces the buffer contents with `indices` and draws the first `drawn` of them.
     pub unsafe fn overwrite(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
         rr_command_pool: &RRCommandPool,
         indices: &[u32],
+        drawn: u32,
     ) -> Result<()> {
         if indices.len() > self.capacity {
             return Err(anyhow!("overwrite indices length exceeds buffer capacity"));
         }
+        if drawn as usize > indices.len() {
+            return Err(anyhow!("drawn index count exceeds the written indices"));
+        }
+        if indices.is_empty() {
+            self.indices = 0;
+            return Ok(());
+        }
+
         let size = (indices.len() * size_of::<u32>()) as u64;
         upload_through_staging(
             instance,
@@ -157,6 +167,7 @@ impl RRIndexBuffer {
             size,
             self.buffer,
         )?;
+        self.indices = drawn;
         Ok(())
     }
 

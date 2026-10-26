@@ -156,6 +156,10 @@ fn import_chain(
             .center
             .as_deref()
             .and_then(|name| bone_id_of(bones, name)),
+        tail_bone_id: chain
+            .tail
+            .as_deref()
+            .and_then(|name| bone_id_of(bones, name)),
         enabled: true,
         origin: chain_origin_from_sidecar(&chain.origin),
     });

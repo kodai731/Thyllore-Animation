@@ -18,6 +18,7 @@ from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sideca
 from ..common.collider_fit import bone_bind_matrix
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.armature import armature_of
+from .mesh_data import material_loop_indices_of
 
 
 def bound_meshes(arm) -> list:
@@ -125,7 +126,9 @@ def _sidecar_build_input(context, arm, meshes):
     all_roles = []
     all_hidden = []
     for mesh_obj in meshes:
-        roles, hidden = submesh_to_sidecar(mesh_obj.name, mesh_obj.thyllore_submesh)
+        roles, hidden = submesh_to_sidecar(
+            mesh_obj.name, mesh_obj.thyllore_submesh, material_loop_indices_of(mesh_obj)
+        )
         all_roles.extend(roles)
         all_hidden.extend(hidden)
 
@@ -197,6 +200,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
                 mesh_obj.name,
                 sidecar["submesh_roles"],
                 sidecar["hidden_triangles"],
+                material_loop_indices_of(mesh_obj),
             )
 
         chain_count = len(sidecar["spring"].get("chains", []))

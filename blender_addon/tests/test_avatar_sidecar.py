@@ -35,6 +35,9 @@ def _hidden_item_factory(material, triangles):
     return _FakeHiddenItem(material, triangles)
 
 
+IDENTITY_LOOPS = {"matA": [0, 1, 2, 3], "matB": [0, 1, 2, 3]}
+
+
 def test_bone_specs_blender_to_engine():
     """bone_specs converts Blender (0,0,1)*2 to engine (0,2,0)."""
     names = ["root", "child"]
@@ -75,7 +78,7 @@ def test_submesh_to_sidecar():
 
     submesh = SimpleNamespace(roles=roles_collection, hidden_triangles=hidden_collection)
 
-    roles, hidden = submesh_to_sidecar("meshA", submesh)
+    roles, hidden = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
     assert len(roles) == 1
     assert roles[0] == {"mesh": "meshA", "material": "matA", "role": "shell"}
@@ -92,7 +95,7 @@ def test_submesh_to_sidecar_empty_triangles_skipped():
 
     submesh = SimpleNamespace(roles=roles_collection, hidden_triangles=hidden_collection)
 
-    _, hidden = submesh_to_sidecar("meshA", submesh)
+    _, hidden = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
     assert len(hidden) == 0
 
@@ -107,8 +110,8 @@ def test_write_submesh_sidecar_round_trip():
         hidden_triangles=FakeCollection(lambda: _hidden_item_factory("", [])),
     )
 
-    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in)
-    roles_out, hidden_out = submesh_to_sidecar("meshA", submesh)
+    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in, IDENTITY_LOOPS)
+    roles_out, hidden_out = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
     assert roles_out == roles_in
     assert hidden_out == hidden_in
@@ -130,8 +133,8 @@ def test_write_submesh_sidecar_filters_by_mesh():
         hidden_triangles=FakeCollection(lambda: _hidden_item_factory("", [])),
     )
 
-    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in)
-    roles_out, hidden_out = submesh_to_sidecar("meshA", submesh)
+    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in, IDENTITY_LOOPS)
+    roles_out, hidden_out = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
     assert len(roles_out) == 1
     assert roles_out[0]["material"] == "matA"
@@ -149,13 +152,38 @@ def test_write_submesh_sidecar_idempotent():
         hidden_triangles=FakeCollection(lambda: _hidden_item_factory("", [])),
     )
 
-    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in)
-    first = submesh_to_sidecar("meshA", submesh)
+    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in, IDENTITY_LOOPS)
+    first = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
-    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in)
-    second = submesh_to_sidecar("meshA", submesh)
+    write_submesh_sidecar(submesh, "meshA", roles_in, hidden_in, IDENTITY_LOOPS)
+    second = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
 
     assert first == second
+
+
+def test_submesh_to_sidecar_numbers_triangles_inside_the_material():
+    """A loop_triangles index is written as the triangle's index inside its material submesh."""
+    roles_collection = FakeCollection(lambda: SimpleNamespace(material="", role=""))
+    hidden_collection = FakeCollection(lambda: _hidden_item_factory("Skin", [1, 3]))
+    hidden_collection.add()
+    submesh = SimpleNamespace(roles=roles_collection, hidden_triangles=hidden_collection)
+
+    _, hidden = submesh_to_sidecar("Body", submesh, {"Skin": [1, 3], "Cloth": [0, 2]})
+
+    assert hidden == [{"mesh": "Body", "material": "Skin", "triangles": [0, 1]}]
+
+
+def test_write_submesh_sidecar_restores_loop_triangle_indices():
+    """Sidecar triangle numbers come back as loop_triangles indices of the material."""
+    hidden_in = [{"mesh": "Body", "material": "Skin", "triangles": [0, 1, 9]}]
+    submesh = SimpleNamespace(
+        roles=FakeCollection(lambda: SimpleNamespace(material="", role="")),
+        hidden_triangles=FakeCollection(lambda: _hidden_item_factory("", [])),
+    )
+
+    write_submesh_sidecar(submesh, "Body", [], hidden_in, {"Skin": [1, 3]})
+
+    assert [item.get("triangles") for item in submesh.hidden_triangles] == [[1, 3]]
 
 
 def test_sidecar_stats():

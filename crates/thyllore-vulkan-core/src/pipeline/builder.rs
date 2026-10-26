@@ -241,6 +241,14 @@ impl PushConstantConfig {
     }
 }
 
+pub fn compute_push_constant_range(size: u32) -> vk::PushConstantRange {
+    vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::COMPUTE)
+        .offset(0)
+        .size(size)
+        .build()
+}
+
 /// Pipeline builder for flexible pipeline creation
 pub struct PipelineBuilder {
     pass: &'static PassShaders,

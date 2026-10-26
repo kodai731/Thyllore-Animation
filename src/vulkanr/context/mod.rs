@@ -1,7 +1,7 @@
 mod resources;
 
 pub use resources::{
-    CameraState, DebugState, GpuAssets, ImGuiState, PipelineState, RayTracingState, RenderConfig,
-    RenderTargets, SwapchainState,
+    DebugState, GpuAssets, ImGuiState, PipelineState, RayTracingState, RenderConfig, RenderTargets,
+    SwapchainState,
 };
 pub use thyllore_vulkan_core::core::{CommandState, FrameSync, SurfaceState};

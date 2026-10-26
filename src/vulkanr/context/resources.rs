@@ -69,38 +69,12 @@ impl GpuAssets {
     }
 }
 
-use crate::ecs::resource::Camera;
 use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::LightState;
-use crate::ecs::systems::camera_systems::{
-    compute_camera_direction, compute_camera_position, compute_camera_up,
-};
 use crate::platform::ImguiData;
 use thyllore_vulkan_core::pipeline::SampleCount;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::{Extent2D, Fence, SampleCountFlags};
-
-pub struct CameraState {
-    pub camera: Camera,
-}
-
-impl CameraState {
-    pub fn new(camera: Camera) -> Self {
-        Self { camera }
-    }
-
-    pub fn position(&self) -> cgmath::Vector3<f32> {
-        compute_camera_position(&self.camera)
-    }
-
-    pub fn direction(&self) -> cgmath::Vector3<f32> {
-        compute_camera_direction(&self.camera)
-    }
-
-    pub fn up(&self) -> cgmath::Vector3<f32> {
-        compute_camera_up(&self.camera)
-    }
-}
 
 pub struct RayTracingState {
     pub data: RayTracingData,

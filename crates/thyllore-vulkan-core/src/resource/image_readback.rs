@@ -56,7 +56,6 @@ pub unsafe fn copy_image_to_host_buffer(
     Ok((buffer, buffer_memory))
 }
 
-/// Copies an image to a host-visible buffer, reads the bytes back, and cleans up.
 pub unsafe fn read_image_bytes(
     instance: &Instance,
     rrdevice: &RRDevice,
@@ -77,6 +76,49 @@ pub unsafe fn read_image_bytes(
         height,
         byte_size,
         layout.as_vk_layout(),
+    )?;
+
+    let data =
+        rrdevice
+            .device
+            .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
+    let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
+    let bytes = slice.to_vec();
+    rrdevice.device.unmap_memory(buffer_memory);
+    rrdevice.device.free_memory(buffer_memory, None);
+    rrdevice.device.destroy_buffer(buffer, None);
+
+    Ok(bytes)
+}
+
+pub unsafe fn read_buffer_bytes(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    command_pool: vk::CommandPool,
+    source: vk::Buffer,
+    byte_size: vk::DeviceSize,
+) -> Result<Vec<u8>> {
+    let (buffer, buffer_memory) = create_buffer(
+        instance,
+        rrdevice,
+        byte_size,
+        vk::BufferUsageFlags::TRANSFER_DST,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+
+    let command_buffer = begin_single_time_commands(rrdevice, command_pool)?;
+    let region = vk::BufferCopy::builder()
+        .src_offset(0)
+        .dst_offset(0)
+        .size(byte_size);
+    rrdevice
+        .device
+        .cmd_copy_buffer(command_buffer, source, buffer, &[region.build()]);
+    end_single_time_commands(
+        rrdevice,
+        rrdevice.graphics_queue,
+        command_pool,
+        command_buffer,
     )?;
 
     let data =

@@ -740,6 +740,36 @@ impl RRDevice {
         let properties = instance.get_physical_device_properties(self.physical_device);
         properties.api_version
     }
+
+    pub unsafe fn gpu_identity(&self, instance: &Instance) -> GpuIdentity {
+        let properties = instance.get_physical_device_properties(self.physical_device);
+        let name = std::ffi::CStr::from_ptr(properties.device_name.as_ptr())
+            .to_string_lossy()
+            .to_string();
+        let driver_version = format_vulkan_version(properties.driver_version);
+        let api_version = format_vulkan_version(properties.api_version);
+        GpuIdentity {
+            name,
+            driver_version,
+            api_version,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GpuIdentity {
+    pub name: String,
+    pub driver_version: String,
+    pub api_version: String,
+}
+
+fn format_vulkan_version(version: u32) -> String {
+    format!(
+        "{}.{}.{}",
+        vk::version_major(version),
+        vk::version_minor(version),
+        vk::version_patch(version)
+    )
 }
 
 unsafe fn supports_wide_lines(instance: &Instance, physical_device: vk::PhysicalDevice) -> bool {

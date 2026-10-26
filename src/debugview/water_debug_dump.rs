@@ -1,5 +1,3 @@
-use std::ffi::CStr;
-
 use crate::ecs::resource::WaterDebugCapture;
 use crate::ecs::systems::{
     build_water_debug_record, current_unix_time, water_debug_caustic_accum_path,
@@ -8,15 +6,15 @@ use crate::ecs::systems::{
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::data::Vertex;
-use crate::vulkanr::vulkan::*;
+use anyhow::Result;
 use thyllore_math_core::write_npy_u32;
 use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
-use thyllore_vulkan_core::resource::ReadbackLayout;
-use thyllore_vulkan_core::types::{Buffer, CommandBuffer, CommandPool, DeviceMemory, DeviceSize};
+use thyllore_vulkan_core::resource::{read_buffer_bytes, ReadbackLayout};
+use thyllore_vulkan_core::types::DeviceSize;
 
 const VERTEX_PROBE_COUNT: usize = 64;
 
@@ -105,13 +103,7 @@ pub fn dump_water_debug(ctx: &CaptureContext) {
 }
 
 fn collect_water_debug_render_info(ctx: &CaptureContext) -> WaterDebugRenderInfo {
-    let properties = unsafe {
-        ctx.instance
-            .get_physical_device_properties(ctx.device.physical_device)
-    };
-    let gpu_name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
-        .to_string_lossy()
-        .to_string();
+    let gpu = unsafe { ctx.device.gpu_identity(&ctx.instance) };
 
     let swapchain_extent = ctx
         .world
@@ -125,9 +117,9 @@ fn collect_water_debug_render_info(ctx: &CaptureContext) -> WaterDebugRenderInfo
     let acceleration = ctx.raytracing.acceleration_structure.as_ref();
 
     WaterDebugRenderInfo {
-        gpu_name,
-        driver_version: format_vulkan_version(properties.driver_version),
-        api_version: format_vulkan_version(properties.api_version),
+        gpu_name: gpu.name,
+        driver_version: gpu.driver_version,
+        api_version: gpu.api_version,
         swapchain_size: [swapchain_extent.width, swapchain_extent.height],
         hdr_buffer_size: ctx.hdr.map(|b| [b.width, b.height]),
         water_buffer_size,
@@ -227,91 +219,23 @@ unsafe fn read_gpu_vertex_positions(
         return Ok(Vec::new());
     }
 
-    let device = &ctx.device.device;
     let stride = std::mem::size_of::<Vertex>();
     let copy_size = (stride * sample_count) as DeviceSize;
-    let command_pool = ctx.command_pool;
 
-    let (buffer, buffer_memory) = allocate_vertex_probe_buffer(ctx, copy_size)?;
-    let command_buffer = record_and_submit_vertex_copy(
-        ctx,
-        command_pool,
+    let bytes = read_buffer_bytes(
+        &ctx.instance,
+        &ctx.device,
+        ctx.command_pool,
         mesh.vertex_buffer.buffer,
-        buffer,
         copy_size,
     )?;
 
-    let mapped = device.map_memory(buffer_memory, 0, copy_size, vk::MemoryMapFlags::empty())?;
-    let bytes = std::slice::from_raw_parts(mapped as *const u8, copy_size as usize);
     let pos_offset = std::mem::offset_of!(Vertex, pos);
     let positions = (0..sample_count)
-        .map(|index| read_position(bytes, index * stride + pos_offset))
+        .map(|index| read_position(&bytes, index * stride + pos_offset))
         .collect();
 
-    device.unmap_memory(buffer_memory);
-    device.free_command_buffers(command_pool, &[command_buffer]);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
-
     Ok(positions)
-}
-
-unsafe fn allocate_vertex_probe_buffer(
-    ctx: &CaptureContext,
-    size: DeviceSize,
-) -> Result<(Buffer, DeviceMemory)> {
-    let device = &ctx.device.device;
-
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(size)
-        .usage(vk::BufferUsageFlags::TRANSFER_DST)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let buffer = device.create_buffer(&buffer_info, None)?;
-
-    let requirements = device.get_buffer_memory_requirements(buffer);
-    let memory_type_index = thyllore_vulkan_core::vulkan::get_memory_type_index(
-        ctx.instance,
-        ctx.device.physical_device,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        requirements,
-    )?;
-    let allocate_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(requirements.size)
-        .memory_type_index(memory_type_index);
-    let buffer_memory = device.allocate_memory(&allocate_info, None)?;
-    device.bind_buffer_memory(buffer, buffer_memory, 0)?;
-
-    Ok((buffer, buffer_memory))
-}
-
-unsafe fn record_and_submit_vertex_copy(
-    ctx: &CaptureContext,
-    command_pool: CommandPool,
-    source: Buffer,
-    destination: Buffer,
-    size: DeviceSize,
-) -> Result<CommandBuffer> {
-    let device = &ctx.device.device;
-
-    let allocate_info = vk::CommandBufferAllocateInfo::builder()
-        .command_pool(command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .command_buffer_count(1);
-    let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
-
-    let begin_info =
-        vk::CommandBufferBeginInfo::builder().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-    device.begin_command_buffer(command_buffer, &begin_info)?;
-    let region = vk::BufferCopy::builder()
-        .src_offset(0)
-        .dst_offset(0)
-        .size(size);
-    device.cmd_copy_buffer(command_buffer, source, destination, &[region]);
-    device.end_command_buffer(command_buffer)?;
-
-    ctx.device.submit_one_time(command_buffer)?;
-
-    Ok(command_buffer)
 }
 
 fn collect_gbuffer_mesh_indices(ctx: &CaptureContext) -> Vec<usize> {
@@ -350,13 +274,4 @@ fn average_position(positions: &[[f32; 3]]) -> Option<[f32; 3]> {
         sum[1] * inverse_count,
         sum[2] * inverse_count,
     ])
-}
-
-fn format_vulkan_version(version: u32) -> String {
-    format!(
-        "{}.{}.{}",
-        vk::version_major(version),
-        vk::version_minor(version),
-        vk::version_patch(version)
-    )
 }

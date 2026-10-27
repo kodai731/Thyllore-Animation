@@ -31,12 +31,12 @@ use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]
-    pub command_pool: vk::CommandPool,
+    pub(crate) command_pool: vk::CommandPool,
 
     pub gbuffer: Option<RRGBuffer>,
     pub gbuffer_pipeline: Option<RRPipeline>,
-    pub gbuffer_sampler: Option<vk::Sampler>,
-    pub object_id_sampler: Option<vk::Sampler>,
+    pub(crate) gbuffer_sampler: Option<vk::Sampler>,
+    pub(crate) object_id_sampler: Option<vk::Sampler>,
 
     pub acceleration_structure: Option<RRAccelerationStructure>,
 
@@ -67,6 +67,25 @@ pub struct RayTracingData {
 }
 
 impl RayTracingData {
+    #[inline]
+    pub fn command_pool(&self) -> crate::types::CommandPool {
+        self.command_pool
+    }
+
+    pub fn set_command_pool(&mut self, rrcommand_pool: &RRCommandPool) {
+        self.command_pool = rrcommand_pool.command_pool;
+    }
+
+    #[inline]
+    pub fn gbuffer_sampler(&self) -> Option<crate::types::Sampler> {
+        self.gbuffer_sampler
+    }
+
+    #[inline]
+    pub fn object_id_sampler(&self) -> Option<crate::types::Sampler> {
+        self.object_id_sampler
+    }
+
     pub fn has_valid_tlas(&self) -> bool {
         self.acceleration_structure
             .as_ref()

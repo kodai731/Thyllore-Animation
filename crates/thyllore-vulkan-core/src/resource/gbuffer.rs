@@ -13,34 +13,94 @@ pub const READBACK_STAGING_SIZE: vk::DeviceSize = READBACK_POSITION_OFFSET + 16;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRGBuffer {
-    pub position_image: vk::Image,
-    pub position_image_memory: vk::DeviceMemory,
-    pub position_image_view: vk::ImageView,
+    pub(crate) position_image: vk::Image,
+    pub(crate) position_image_memory: vk::DeviceMemory,
+    pub(crate) position_image_view: vk::ImageView,
 
-    pub normal_image: vk::Image,
-    pub normal_image_memory: vk::DeviceMemory,
-    pub normal_image_view: vk::ImageView,
+    pub(crate) normal_image: vk::Image,
+    pub(crate) normal_image_memory: vk::DeviceMemory,
+    pub(crate) normal_image_view: vk::ImageView,
 
-    pub albedo_image: vk::Image,
-    pub albedo_image_memory: vk::DeviceMemory,
-    pub albedo_image_view: vk::ImageView,
+    pub(crate) albedo_image: vk::Image,
+    pub(crate) albedo_image_memory: vk::DeviceMemory,
+    pub(crate) albedo_image_view: vk::ImageView,
 
-    pub object_id_image: vk::Image,
-    pub object_id_image_memory: vk::DeviceMemory,
-    pub object_id_image_view: vk::ImageView,
+    pub(crate) object_id_image: vk::Image,
+    pub(crate) object_id_image_memory: vk::DeviceMemory,
+    pub(crate) object_id_image_view: vk::ImageView,
 
-    pub shadow_mask_image: vk::Image,
-    pub shadow_mask_image_memory: vk::DeviceMemory,
-    pub shadow_mask_image_view: vk::ImageView,
+    pub(crate) shadow_mask_image: vk::Image,
+    pub(crate) shadow_mask_image_memory: vk::DeviceMemory,
+    pub(crate) shadow_mask_image_view: vk::ImageView,
 
-    pub readback_staging_buffer: vk::Buffer,
-    pub readback_staging_memory: vk::DeviceMemory,
+    pub(crate) readback_staging_buffer: vk::Buffer,
+    pub(crate) readback_staging_memory: vk::DeviceMemory,
 
     pub width: u32,
     pub height: u32,
 }
 
 impl RRGBuffer {
+    #[inline]
+    pub fn position_image(&self) -> crate::types::Image {
+        self.position_image
+    }
+
+    #[inline]
+    pub fn normal_image(&self) -> crate::types::Image {
+        self.normal_image
+    }
+
+    #[inline]
+    pub fn albedo_image(&self) -> crate::types::Image {
+        self.albedo_image
+    }
+
+    #[inline]
+    pub fn object_id_image(&self) -> crate::types::Image {
+        self.object_id_image
+    }
+
+    #[inline]
+    pub fn shadow_mask_image(&self) -> crate::types::Image {
+        self.shadow_mask_image
+    }
+
+    #[inline]
+    pub fn position_image_view(&self) -> crate::types::ImageView {
+        self.position_image_view
+    }
+
+    #[inline]
+    pub fn normal_image_view(&self) -> crate::types::ImageView {
+        self.normal_image_view
+    }
+
+    #[inline]
+    pub fn albedo_image_view(&self) -> crate::types::ImageView {
+        self.albedo_image_view
+    }
+
+    #[inline]
+    pub fn object_id_image_view(&self) -> crate::types::ImageView {
+        self.object_id_image_view
+    }
+
+    #[inline]
+    pub fn shadow_mask_image_view(&self) -> crate::types::ImageView {
+        self.shadow_mask_image_view
+    }
+
+    #[inline]
+    pub fn readback_staging_buffer(&self) -> crate::types::Buffer {
+        self.readback_staging_buffer
+    }
+
+    #[inline]
+    pub fn readback_staging_memory(&self) -> crate::types::DeviceMemory {
+        self.readback_staging_memory
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

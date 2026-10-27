@@ -19,12 +19,22 @@ impl HostBufferUsage {
 
 #[derive(Debug, Default)]
 pub struct HostBuffer {
-    pub buffer: vk::Buffer,
+    pub(crate) buffer: vk::Buffer,
     memory: vk::DeviceMemory,
-    pub size: vk::DeviceSize,
+    pub(crate) size: vk::DeviceSize,
 }
 
 impl HostBuffer {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        self.buffer
+    }
+
+    #[inline]
+    pub fn size(&self) -> crate::types::DeviceSize {
+        self.size
+    }
+
     pub unsafe fn create(
         instance: &Instance,
         rrdevice: &RRDevice,

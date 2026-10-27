@@ -12,8 +12,8 @@ pub unsafe fn record_tonemap_to_offscreen(
         .offscreen
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
-    let render_pass = offscreen.render_pass;
-    let framebuffer = offscreen.framebuffer;
+    let render_pass = offscreen.render_pass();
+    let framebuffer = offscreen.framebuffer();
     let extent = offscreen.extent();
 
     let pipeline = ctx

@@ -126,11 +126,11 @@ impl App {
         let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
             return Ok(());
         };
-        let position_view = gbuffer.position_image_view;
-        let normal_view = gbuffer.normal_image_view;
-        let shadow_mask_view = gbuffer.shadow_mask_image_view;
-        let albedo_view = gbuffer.albedo_image_view;
-        let object_id_view = gbuffer.object_id_image_view;
+        let position_view = gbuffer.position_image_view();
+        let normal_view = gbuffer.normal_image_view();
+        let shadow_mask_view = gbuffer.shadow_mask_image_view();
+        let albedo_view = gbuffer.albedo_image_view();
+        let object_id_view = gbuffer.object_id_image_view();
         self.recreate_gbuffer_framebuffer()?;
         self.attach_gbuffer_depth_to_hdr()?;
         self.update_gbuffer_descriptors(
@@ -187,8 +187,8 @@ impl App {
         albedo_view: ImageView,
         object_id_view: ImageView,
     ) -> Result<()> {
-        let gbuffer_sampler = self.data.raytracing.gbuffer_sampler.unwrap_or_default();
-        let object_id_sampler = self.data.raytracing.object_id_sampler.unwrap_or_default();
+        let gbuffer_sampler = self.data.raytracing.gbuffer_sampler().unwrap_or_default();
+        let object_id_sampler = self.data.raytracing.object_id_sampler().unwrap_or_default();
 
         if let Some(ref composite_desc) = self.data.raytracing.composite_descriptor {
             composite_desc.update_gbuffer_views(
@@ -242,7 +242,7 @@ impl App {
             onion_pass.recreate_on_resize(
                 &self.instance,
                 &self.rrdevice,
-                offscreen.resolve_color_image_view,
+                offscreen.resolve_color_image_view(),
                 offscreen.width,
                 offscreen.height,
             )?;
@@ -269,7 +269,7 @@ impl App {
         };
 
         if let Some((object_id, world_position)) =
-            read_picked_texel(&self.rrdevice, gbuffer.readback_staging_memory)
+            read_picked_texel(&self.rrdevice, gbuffer.readback_staging_memory())
         {
             let mut readback = self.data.ecs_world.resource_mut::<ObjectIdReadback>();
             readback.last_read_object_id = Some(object_id);
@@ -461,8 +461,8 @@ impl App {
         begin_render_pass_cleared(
             &self.rrdevice,
             command_buffer,
-            offscreen.render_pass,
-            offscreen.framebuffer,
+            offscreen.render_pass(),
+            offscreen.framebuffer(),
             offscreen.extent(),
             [0.1, 0.1, 0.1, 1.0],
             0.0,
@@ -542,8 +542,8 @@ impl App {
                 &self.rrdevice,
                 command_buffer,
                 pipeline.pipeline,
-                mesh.vertex_buffer.buffer,
-                mesh.index_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
+                mesh.index_buffer.buffer(),
                 IndexWidth::U32,
             );
 
@@ -716,11 +716,11 @@ impl App {
             .ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
         let vertex_buffer = self.data.imgui.vertex_buffers[frame_slot]
             .as_ref()
-            .map(|b| b.buffer)
+            .map(|b| b.buffer())
             .ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
         let index_buffer = self.data.imgui.index_buffers[frame_slot]
             .as_ref()
-            .map(|b| b.buffer)
+            .map(|b| b.buffer())
             .ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
         self.setup_imgui_render_state(

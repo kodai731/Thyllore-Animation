@@ -268,7 +268,7 @@ impl App {
                 "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
                 i,
                 mesh.render_to_gbuffer,
-                mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
                 mesh.index_buffer.indices
             );
             log!(

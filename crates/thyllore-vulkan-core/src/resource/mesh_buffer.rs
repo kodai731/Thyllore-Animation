@@ -9,6 +9,7 @@ use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::resource::image::Rgba8Texture;
 use crate::vulkan::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
@@ -17,11 +18,11 @@ pub struct MeshBuffer {
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
     pub vertex_data: VertexData,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
     pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub render_to_gbuffer: bool,
     pub object_index: usize,
     pub skin_data: Option<SkinData>,
@@ -56,6 +57,26 @@ impl Default for MeshBuffer {
 }
 
 impl MeshBuffer {
+    pub fn with_texture(texture: &Rgba8Texture) -> Self {
+        let mut mesh = Self::default();
+        mesh.image = texture.image;
+        mesh.image_memory = texture.memory;
+        mesh.mip_level = texture.mip_levels;
+        mesh.image_view = texture.view;
+        mesh.sampler = texture.sampler;
+        mesh
+    }
+
+    #[inline]
+    pub fn image_view(&self) -> crate::types::ImageView {
+        self.image_view
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
     pub unsafe fn upload_vertices(
         &mut self,
         instance: &Instance,

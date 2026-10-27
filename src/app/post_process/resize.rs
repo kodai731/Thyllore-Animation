@@ -19,13 +19,13 @@ impl App {
         ) {
             tonemap_descriptor.update_hdr_sampler(
                 &self.rrdevice,
-                hdr_buffer.color_image_view,
-                hdr_buffer.sampler,
+                hdr_buffer.color_image_view(),
+                hdr_buffer.sampler(),
             )?;
             tonemap_descriptor.update_bloom_sampler(
                 &self.rrdevice,
-                hdr_buffer.color_image_view,
-                hdr_buffer.sampler,
+                hdr_buffer.color_image_view(),
+                hdr_buffer.sampler(),
             )?;
         }
 
@@ -40,13 +40,13 @@ impl App {
                 let depth_sampler = self
                     .data
                     .raytracing
-                    .gbuffer_sampler
-                    .unwrap_or(hdr_buffer.sampler);
+                    .gbuffer_sampler()
+                    .unwrap_or(hdr_buffer.sampler());
 
                 dof_descriptor.update_image_views(
                     &self.rrdevice,
-                    hdr_buffer.color_image_view,
-                    hdr_buffer.sampler,
+                    hdr_buffer.color_image_view(),
+                    hdr_buffer.sampler(),
                     depth_image_view,
                     depth_sampler,
                 )?;
@@ -55,12 +55,12 @@ impl App {
 
         if let (Some(ref gbuffer), Some(gbuffer_sampler), Some(ref tonemap_descriptor)) = (
             &self.data.raytracing.gbuffer,
-            self.data.raytracing.gbuffer_sampler,
+            self.data.raytracing.gbuffer_sampler(),
             &self.data.raytracing.tonemap_descriptor,
         ) {
             tonemap_descriptor.update_position_sampler(
                 &self.rrdevice,
-                gbuffer.position_image_view,
+                gbuffer.position_image_view(),
                 gbuffer_sampler,
             )?;
         }
@@ -74,7 +74,7 @@ impl App {
         let Some(ref hdr_buffer) = self.data.viewport.hdr_buffer else {
             return Ok(());
         };
-        let (hdr_image_view, hdr_sampler) = (hdr_buffer.color_image_view, hdr_buffer.sampler);
+        let (hdr_image_view, hdr_sampler) = (hdr_buffer.color_image_view(), hdr_buffer.sampler());
 
         let ae_buffers = match self.data.viewport.auto_exposure_buffers {
             Some(ref buf) => buf,
@@ -86,7 +86,7 @@ impl App {
                 &self.rrdevice,
                 hdr_image_view,
                 hdr_sampler,
-                ae_buffers.histogram_buffer,
+                ae_buffers.histogram_buffer(),
                 (256 * 4) as u64,
             )?;
         }
@@ -94,9 +94,9 @@ impl App {
         if let Some(ref avg_desc) = self.data.raytracing.auto_exposure_average_descriptor {
             avg_desc.update_bindings(
                 &self.rrdevice,
-                ae_buffers.histogram_buffer,
+                ae_buffers.histogram_buffer(),
                 (256 * 4) as u64,
-                ae_buffers.luminance_buffer,
+                ae_buffers.luminance_buffer(),
                 (2 * 4) as u64,
             )?;
         }

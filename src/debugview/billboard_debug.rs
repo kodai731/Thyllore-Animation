@@ -25,7 +25,7 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
     };
 
     let gbuffer_debug_info = raytracing.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
-        position_image_view: gb.position_image_view,
+        position_image_view: gb.position_image_view(),
         extent_width: gb.width,
         extent_height: gb.height,
     });
@@ -38,7 +38,7 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
         swapchain,
         &billboard.render_state.descriptor_set,
         gbuffer_debug_info.as_ref(),
-        raytracing.gbuffer_sampler,
+        raytracing.gbuffer_sampler(),
     );
 }
 

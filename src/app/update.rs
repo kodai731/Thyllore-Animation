@@ -75,10 +75,10 @@ impl App {
 
         let needs_vertex_resize = data.imgui.vertex_buffers[frame_slot]
             .as_ref()
-            .map_or(true, |b| vtx_buffer_size > b.size);
+            .map_or(true, |b| vtx_buffer_size > b.size());
         let needs_index_resize = data.imgui.index_buffers[frame_slot]
             .as_ref()
-            .map_or(true, |b| idx_buffer_size > b.size);
+            .map_or(true, |b| idx_buffer_size > b.size());
 
         if needs_vertex_resize || needs_index_resize {
             rrdevice.wait_idle()?;

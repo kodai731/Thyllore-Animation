@@ -20,10 +20,10 @@ pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
 };
 
 fn insert_water_render_targets(ctx: &mut EffectContext, targets: WaterRenderTargets) {
-    for image in targets.history.images {
+    for image in targets.history.images() {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
-    ctx.pass_image_states.forget(targets.caustic_accum.image);
+    ctx.pass_image_states.forget(targets.caustic_accum.image());
     ctx.world.insert_resource(targets);
 }
 
@@ -36,7 +36,7 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
-        ctx.raytracing.command_pool,
+        ctx.raytracing.command_pool(),
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_color_view,
@@ -90,7 +90,7 @@ unsafe fn resize_water_render_targets(ctx: &mut EffectContext) -> Result<()> {
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
-        ctx.raytracing.command_pool,
+        ctx.raytracing.command_pool(),
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_view,
@@ -105,10 +105,10 @@ unsafe fn release_water_render_targets(ctx: &mut EffectContext) {
     let Some(mut targets) = ctx.world.get_resource_mut::<WaterRenderTargets>() else {
         return;
     };
-    for image in targets.history.images {
+    for image in targets.history.images() {
         ctx.pass_image_states.forget(image);
     }
-    ctx.pass_image_states.forget(targets.caustic_accum.image);
+    ctx.pass_image_states.forget(targets.caustic_accum.image());
     targets.destroy_gpu(ctx.rrdevice);
     targets.forget_bindings();
 }
@@ -117,7 +117,7 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
     let Some(caustic_accum_view) = ctx
         .world
         .get_resource::<WaterRenderTargets>()
-        .map(|targets| targets.caustic_accum.view)
+        .map(|targets| targets.caustic_accum.view())
     else {
         return Ok(());
     };
@@ -137,7 +137,7 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
         raytracing
             .gbuffer
             .as_ref()
-            .map(|gbuffer| gbuffer.position_image_view),
+            .map(|gbuffer| gbuffer.position_image_view()),
         raytracing.scene_uniform_buffer_handle(),
         gpu_state.ubo.as_ref().map(|ubo| ubo.handle()),
     ) else {

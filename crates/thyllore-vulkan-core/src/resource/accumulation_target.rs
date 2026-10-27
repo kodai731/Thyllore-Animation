@@ -10,11 +10,21 @@ use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorag
 /// GENERAL layout for its whole life. The storage owns the image; this only holds handles.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AccumulationTarget {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
 }
 
 impl AccumulationTarget {
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        self.image
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        self.view
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

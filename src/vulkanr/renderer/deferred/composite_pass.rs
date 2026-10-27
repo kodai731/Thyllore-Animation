@@ -112,8 +112,8 @@ pub unsafe fn record_composite_to_offscreen(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
-    let render_pass = offscreen.render_pass;
-    let framebuffer = offscreen.framebuffer;
+    let render_pass = offscreen.render_pass();
+    let framebuffer = offscreen.framebuffer();
     let extent = offscreen.extent();
 
     let (pipeline, descriptor, view_mode_value) =
@@ -158,8 +158,8 @@ pub unsafe fn record_composite_to_hdr(
         .hdr_buffer
         .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))?;
 
-    let render_pass = hdr_buffer.render_pass;
-    let framebuffer = hdr_buffer.framebuffer;
+    let render_pass = hdr_buffer.render_pass();
+    let framebuffer = hdr_buffer.framebuffer();
     let extent = hdr_buffer.extent();
     let (pipeline, descriptor, view_mode_value) =
         prepare_composite_resources(ctx.raytracing, ctx.world)?;

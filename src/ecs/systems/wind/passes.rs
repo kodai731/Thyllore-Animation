@@ -129,7 +129,7 @@ unsafe fn prepare_reduced_color_target(
     ctx.transient.framebuffer(
         &ctx.rrdevice,
         reduced_render_pass,
-        &[reduced_color.view],
+        &[reduced_color.view()],
         reduced_extent.width,
         reduced_extent.height,
     )?;
@@ -145,7 +145,7 @@ unsafe fn prepare_reduced_color_target(
         upsample_descriptor.update_image_views_at(
             ctx.rrdevice,
             frame_slot,
-            reduced_color.view,
+            reduced_color.view(),
             scene_depth_view,
         )?;
     }
@@ -345,7 +345,7 @@ unsafe fn record_reduced_scale_wind_passes(
     let reduced_color = pass_ctx.transient_image(REDUCED_COLOR_SLOT)?;
     let Some(reduced_framebuffer) = pass_ctx
         .transient
-        .cached_framebuffer(wind_buffer.reduced.render_pass, &[reduced_color.view])
+        .cached_framebuffer(wind_buffer.reduced.render_pass, &[reduced_color.view()])
     else {
         return Ok(());
     };

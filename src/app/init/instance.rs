@@ -210,7 +210,7 @@ impl App {
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
         Self::apply_loaded_scene(&mut data, loaded_scene)?;
-        data.raytracing.command_pool = rrcommand_pool.command_pool;
+        data.raytracing.set_command_pool(&rrcommand_pool);
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
             &rrdevice,
@@ -402,7 +402,7 @@ impl App {
                 .topology(Topology::LineList)
                 .polygon_mode(FillMode::Line)
                 .depth_test(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual))
-                .custom_render_pass(hdr_buffer.render_pass)
+                .custom_render_pass(hdr_buffer.render_pass())
                 .msaa_samples(SampleCount::One)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully

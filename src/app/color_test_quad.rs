@@ -13,7 +13,6 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::MeshBuffer;
-use thyllore_model_core::MeshMorph;
 use thyllore_render_core::MaterialUBO;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
 use thyllore_vulkan_core::resource::image::{create_rgba8_texture, TextureColorSpace};
@@ -190,24 +189,12 @@ unsafe fn create_quad_mesh_buffer(
 
     let object_index = graphics.objects.allocate_slot();
 
-    Ok(MeshBuffer {
-        vertex_buffer,
-        index_buffer,
-        vertex_data,
-        image: rgba8.image,
-        image_memory: rgba8.memory,
-        mip_level: rgba8.mip_levels,
-        image_view: rgba8.view,
-        sampler: rgba8.sampler,
-        render_to_gbuffer: true,
-        object_index,
-        skin_data: None,
-        skeleton_id: None,
-        node_index: None,
-        base_vertices: Vec::new(),
-        base_colors: None,
-        morph: MeshMorph::default(),
-    })
+    let mut mesh = MeshBuffer::with_texture(&rgba8);
+    mesh.vertex_buffer = vertex_buffer;
+    mesh.index_buffer = index_buffer;
+    mesh.vertex_data = vertex_data;
+    mesh.object_index = object_index;
+    Ok(mesh)
 }
 
 unsafe fn create_quad_material(
@@ -222,8 +209,8 @@ unsafe fn create_quad_material(
         instance,
         device,
         &name,
-        mesh.image_view,
-        mesh.sampler,
+        mesh.image_view(),
+        mesh.sampler(),
         MaterialUBO::default(),
     )?;
     Ok(material_id)

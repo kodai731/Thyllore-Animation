@@ -19,17 +19,27 @@ pub struct AutoExposureReadback {
 
 #[derive(Clone, Debug, Default)]
 pub struct AutoExposureBuffers {
-    pub histogram_buffer: vk::Buffer,
-    pub histogram_buffer_memory: vk::DeviceMemory,
-    pub luminance_buffer: vk::Buffer,
-    pub luminance_buffer_memory: vk::DeviceMemory,
-    pub readback_buffers: [vk::Buffer; 2],
-    pub readback_memories: [vk::DeviceMemory; 2],
+    pub(crate) histogram_buffer: vk::Buffer,
+    pub(crate) histogram_buffer_memory: vk::DeviceMemory,
+    pub(crate) luminance_buffer: vk::Buffer,
+    pub(crate) luminance_buffer_memory: vk::DeviceMemory,
+    pub(crate) readback_buffers: [vk::Buffer; 2],
+    pub(crate) readback_memories: [vk::DeviceMemory; 2],
     pub width: u32,
     pub height: u32,
 }
 
 impl AutoExposureBuffers {
+    #[inline]
+    pub fn histogram_buffer(&self) -> crate::types::Buffer {
+        self.histogram_buffer
+    }
+
+    #[inline]
+    pub fn luminance_buffer(&self) -> crate::types::Buffer {
+        self.luminance_buffer
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

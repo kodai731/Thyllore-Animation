@@ -104,7 +104,7 @@ impl ViewportState {
             .sampled_image(
                 shader_bindings::imgui::TEX_SAMPLER,
                 offscreen.resolve_image_view(),
-                offscreen.sampler,
+                offscreen.sampler(),
             )?
             .apply(rrdevice);
         Ok(())

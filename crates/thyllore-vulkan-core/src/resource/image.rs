@@ -9,13 +9,23 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRImage {
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
 }
 
 impl RRImage {
+    #[inline]
+    pub fn image_view(&self) -> crate::types::ImageView {
+        self.image_view
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -940,11 +950,34 @@ fn format_for_color_space(color_space: TextureColorSpace) -> vk::Format {
 
 #[derive(Debug)]
 pub struct Rgba8Texture {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub mip_levels: u32,
+}
+
+impl Rgba8Texture {
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        self.view
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+}
+
+impl From<&Rgba8Texture> for RRImage {
+    fn from(texture: &Rgba8Texture) -> Self {
+        Self {
+            image: texture.image,
+            image_memory: texture.memory,
+            image_view: texture.view,
+            sampler: texture.sampler,
+        }
+    }
 }
 
 pub unsafe fn create_rgba8_texture(

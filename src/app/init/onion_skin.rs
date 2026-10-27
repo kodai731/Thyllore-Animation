@@ -28,7 +28,7 @@ impl App {
         };
 
         let (resolve_image_view, offscreen_format) = match data.viewport.offscreen {
-            Some(ref offscreen) => (offscreen.resolve_color_image_view, offscreen.format),
+            Some(ref offscreen) => (offscreen.resolve_color_image_view(), offscreen.format()),
             None => {
                 log!("Offscreen not available, skipping onion skin pipeline");
                 return Ok(());
@@ -63,16 +63,21 @@ unsafe fn create_onion_skin_pass(
     height: u32,
 ) -> Result<OnionSkinPassResources> {
     let extent = Extent2D { width, height };
-    let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
-        OnionSkinPassResources::create_ghost_buffer(instance, rrdevice, width, height)?;
-    let ghost_render_pass = OnionSkinPassResources::create_ghost_render_pass(rrdevice)?;
+    let mut onion_skin_pass = OnionSkinPassResources::create(
+        instance,
+        rrdevice,
+        offscreen_resolve_image_view,
+        offscreen_format,
+        width,
+        height,
+    )?;
 
-    let ghost_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_GHOST)
+    onion_skin_pass.ghost_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_GHOST)
         .vertex_input(VertexInputConfig::Standard)
         .topology(Topology::TriangleList)
         .polygon_mode(FillMode::Fill)
         .cull_mode(CullFace::Back)
-        .custom_render_pass(ghost_render_pass)
+        .custom_render_pass(onion_skin_pass.ghost_render_pass())
         .mrt_attachments(1)
         .msaa_samples(SampleCount::One)
         .depth_test(DepthTestConfig {
@@ -92,23 +97,8 @@ unsafe fn create_onion_skin_pass(
             std::mem::size_of::<OnionSkinPushConstants>() as u32,
         ))
         .build(rrdevice, rrrender, Some(extent))?;
-    let ghost_framebuffer = OnionSkinPassResources::create_single_framebuffer(
-        rrdevice,
-        ghost_render_pass,
-        ghost_image_view,
-        width,
-        height,
-    )?;
 
-    let composite_render_pass =
-        OnionSkinPassResources::create_composite_render_pass(rrdevice, offscreen_format)?;
-    let (composite_descriptor_layout, composite_descriptor_set) =
-        OnionSkinPassResources::create_composite_descriptor(
-            rrdevice,
-            ghost_image_view,
-            ghost_sampler,
-        )?;
-    let composite_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_COMPOSITE)
+    onion_skin_pass.composite_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_COMPOSITE)
         .vertex_input(VertexInputConfig::Custom {
             bindings: vec![],
             attributes: vec![],
@@ -116,34 +106,12 @@ unsafe fn create_onion_skin_pass(
         .topology(Topology::TriangleList)
         .polygon_mode(FillMode::Fill)
         .no_depth_test()
-        .custom_render_pass(composite_render_pass)
+        .custom_render_pass(onion_skin_pass.composite_render_pass())
         .msaa_samples(SampleCount::One)
         .blend(OverlayBlend::Premultiplied.blend_config())
-        .descriptor_layouts(&[&composite_descriptor_layout])
+        .descriptor_layouts(&[&onion_skin_pass.composite_descriptor_layout])
         .build(rrdevice, rrrender, Some(extent))?;
-    let composite_framebuffer = OnionSkinPassResources::create_single_framebuffer(
-        rrdevice,
-        composite_render_pass,
-        offscreen_resolve_image_view,
-        width,
-        height,
-    )?;
 
     log!("Created onion skin pass: {}x{}", width, height);
-    Ok(OnionSkinPassResources {
-        ghost_image,
-        ghost_image_memory,
-        ghost_image_view,
-        ghost_sampler,
-        ghost_render_pass,
-        ghost_framebuffer,
-        ghost_pipeline,
-        composite_render_pass,
-        composite_framebuffer,
-        composite_pipeline,
-        composite_descriptor_layout,
-        composite_descriptor_set,
-        width,
-        height,
-    })
+    Ok(onion_skin_pass)
 }

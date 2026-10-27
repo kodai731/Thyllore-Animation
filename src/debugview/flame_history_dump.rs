@@ -65,7 +65,7 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
         .and_then(|&first| ctx.world.get_component::<FlameTemporalAccum>(first))
         .map(|temporal| (temporal.frame_index as usize) & 1)
         .unwrap_or(0);
-    let history_image = flame_history.images[history_index];
+    let history_image = flame_history.images()[history_index];
     let width = flame_history.width;
     let height = flame_history.height;
     let image_size = (width * height * 8) as DeviceSize;

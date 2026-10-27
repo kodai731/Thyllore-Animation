@@ -48,8 +48,8 @@ pub fn bloom_mip_count(ctx: &PassContext) -> usize {
 fn hdr_binding(ctx: &PassContext) -> Result<InputBinding> {
     ctx.hdr_buffer
         .map(|hdr| InputBinding {
-            view: hdr.color_image_view,
-            sampler: hdr.sampler,
+            view: hdr.color_image_view(),
+            sampler: hdr.sampler(),
             generation: HDR_DIRECT_GENERATION,
         })
         .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))
@@ -62,7 +62,7 @@ fn transient_binding(
 ) -> Result<InputBinding> {
     let image = ctx.transient_image(slot)?;
     Ok(InputBinding {
-        view: image.view,
+        view: image.view(),
         sampler,
         generation: image.generation,
     })
@@ -71,7 +71,7 @@ fn transient_binding(
 fn tonemap_input_binding(ctx: &PassContext) -> Result<InputBinding> {
     match ctx.dof_buffer {
         Some(dof_buffer) if is_dof_enabled(ctx) => {
-            transient_binding(ctx, DOF_OUTPUT, dof_buffer.sampler)
+            transient_binding(ctx, DOF_OUTPUT, dof_buffer.sampler())
         }
         _ => hdr_binding(ctx),
     }
@@ -80,7 +80,7 @@ fn tonemap_input_binding(ctx: &PassContext) -> Result<InputBinding> {
 fn bloom_input_binding(ctx: &PassContext) -> Result<InputBinding> {
     match ctx.bloom_chain {
         Some(chain) if bloom_mip_count(ctx) > 0 => {
-            transient_binding(ctx, BLOOM_MIPS[0], chain.sampler)
+            transient_binding(ctx, BLOOM_MIPS[0], chain.sampler())
         }
         _ => hdr_binding(ctx),
     }
@@ -94,8 +94,8 @@ pub unsafe fn prepare_dof_target(ctx: &mut PassContext) -> Result<()> {
     let output = ctx.transient_image(DOF_OUTPUT)?;
     ctx.transient.framebuffer(
         &ctx.rrdevice,
-        dof_buffer.render_pass,
-        &[output.view],
+        dof_buffer.render_pass(),
+        &[output.view()],
         desc.width,
         desc.height,
     )?;
@@ -109,8 +109,8 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
         targets.bloom_mips.clear();
         return Ok(());
     };
-    let sampler = bloom_chain.sampler;
-    let render_pass = bloom_chain.downsample_render_pass;
+    let sampler = bloom_chain.sampler();
+    let render_pass = bloom_chain.downsample_render_pass();
 
     let mut mips = Vec::with_capacity(mip_count);
     let mut generations = Vec::with_capacity(mip_count);
@@ -124,19 +124,19 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
         let framebuffer = ctx.transient.framebuffer(
             &ctx.rrdevice,
             render_pass,
-            &[image.view],
+            &[image.view()],
             extent.width,
             extent.height,
         )?;
-        mips.push(BloomMipTarget {
-            image: image.image,
-            view: image.view,
+        mips.push(BloomMipTarget::new(
+            image.image(),
+            image.view(),
             framebuffer,
             extent,
-        });
+        ));
         generations.push(image.generation);
     }
-    let views: Vec<ImageView> = mips.iter().map(|mip| mip.view).collect();
+    let views: Vec<ImageView> = mips.iter().map(|mip| mip.view()).collect();
     targets.bloom_mips = mips;
 
     if targets.bloom_bound.is_bound(frame_slot, &generations) {
@@ -148,7 +148,7 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
         bloom_descriptors.update_image_views_at(
             ctx.rrdevice,
             frame_slot,
-            hdr_buffer.color_image_view,
+            hdr_buffer.color_image_view(),
             &views,
             sampler,
         )?;

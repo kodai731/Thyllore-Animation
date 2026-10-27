@@ -44,12 +44,7 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
         ctx.world.insert_resource(FlameGpuState::default());
     }
     let mut gpu_state = ctx.world.resource_mut::<FlameGpuState>();
-    gpu_state.sdf = thyllore_vulkan_core::resource::RRImage {
-        image: rgba8.image,
-        image_memory: rgba8.memory,
-        image_view: rgba8.view,
-        sampler: rgba8.sampler,
-    };
+    gpu_state.sdf = thyllore_vulkan_core::resource::RRImage::from(&rgba8);
 
     let Some(flame_targets) = ctx.world.get_resource::<FlameRenderTargets>() else {
         return Ok(());
@@ -58,10 +53,10 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
         flame_descriptor.update_image_views(
             rrdevice,
             FlameImageBindings {
-                history_image_views: flame_targets.history.views,
-                flame_sampler: flame_targets.history.sampler,
-                sdf_image_view: rgba8.view,
-                sdf_sampler: rgba8.sampler,
+                history_image_views: flame_targets.history.views(),
+                flame_sampler: flame_targets.history.sampler(),
+                sdf_image_view: rgba8.view(),
+                sdf_sampler: rgba8.sampler(),
                 scene_depth_view: rrrender.gbuffer_depth_image_view,
             },
         )?;

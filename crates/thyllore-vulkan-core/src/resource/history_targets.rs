@@ -22,11 +22,11 @@ const COLOR_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
 #[derive(Clone, Copy, Debug)]
 pub struct HistoryTargetsDesc {
     pub keys: [RenderTargetKey; 2],
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
-    pub sampler: vk::SamplerCreateInfo,
-    pub history_load_op: vk::AttachmentLoadOp,
-    pub depth_view: Option<vk::ImageView>,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
+    pub(crate) sampler: vk::SamplerCreateInfo,
+    pub(crate) history_load_op: vk::AttachmentLoadOp,
+    pub(crate) depth_view: Option<vk::ImageView>,
 }
 
 /// A history ping-pong pair from `RenderTargetStorage` plus the render pass and the two
@@ -34,16 +34,36 @@ pub struct HistoryTargetsDesc {
 /// history[1 - i]. The images belong to the storage; `destroy` only owns the pass objects.
 #[derive(Clone, Debug, Default)]
 pub struct HistoryTargets {
-    pub images: [vk::Image; 2],
-    pub views: [vk::ImageView; 2],
-    pub sampler: vk::Sampler,
-    pub render_pass: vk::RenderPass,
-    pub framebuffers: [vk::Framebuffer; 2],
+    pub(crate) images: [vk::Image; 2],
+    pub(crate) views: [vk::ImageView; 2],
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) framebuffers: [vk::Framebuffer; 2],
     pub width: u32,
     pub height: u32,
 }
 
 impl HistoryTargets {
+    #[inline]
+    pub fn images(&self) -> [crate::types::Image; 2] {
+        self.images
+    }
+
+    #[inline]
+    pub fn views(&self) -> [crate::types::ImageView; 2] {
+        self.views
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

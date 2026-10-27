@@ -37,12 +37,17 @@ impl HitShadingRecord {
 /// HitShadingTable: a storage buffer holding an array of `HitShadingRecord`.
 #[derive(Clone, Debug)]
 pub struct HitShadingTable {
-    pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) memory: vk::DeviceMemory,
     pub capacity: usize,
 }
 
 impl HitShadingTable {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        self.buffer
+    }
+
     /// Create a new HitShadingTable with capacity for `capacity` instances.
     pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, capacity: usize) -> Result<Self> {
         let size = (std::mem::size_of::<HitShadingRecord>() * capacity) as vk::DeviceSize;

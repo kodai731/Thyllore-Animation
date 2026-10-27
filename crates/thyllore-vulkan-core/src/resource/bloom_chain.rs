@@ -8,21 +8,57 @@ use crate::resource::render_target_transient::TransientDesc;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BloomMipTarget {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
-    pub framebuffer: vk::Framebuffer,
-    pub extent: vk::Extent2D,
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) extent: vk::Extent2D,
+}
+
+impl BloomMipTarget {
+    pub fn new(
+        image: crate::types::Image,
+        view: crate::types::ImageView,
+        framebuffer: crate::types::Framebuffer,
+        extent: crate::types::Extent2D,
+    ) -> Self {
+        Self {
+            image,
+            view,
+            framebuffer,
+            extent,
+        }
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        self.view
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct BloomChain {
-    pub mip_extents: Vec<vk::Extent2D>,
-    pub downsample_render_pass: vk::RenderPass,
-    pub upsample_render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) mip_extents: Vec<vk::Extent2D>,
+    pub(crate) downsample_render_pass: vk::RenderPass,
+    pub(crate) upsample_render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
 }
 
 impl BloomChain {
+    #[inline]
+    pub fn downsample_render_pass(&self) -> crate::types::RenderPass {
+        self.downsample_render_pass
+    }
+
+    #[inline]
+    pub fn upsample_render_pass(&self) -> crate::types::RenderPass {
+        self.upsample_render_pass
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
     pub unsafe fn new(
         rrdevice: &RRDevice,
         base_width: u32,

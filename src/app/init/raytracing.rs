@@ -67,12 +67,16 @@ impl App {
     ) -> Result<()> {
         let (offscreen_render_pass, offscreen_extent) =
             if let Some(ref offscreen) = data.viewport.offscreen {
-                (Some(offscreen.render_pass), Some(offscreen.extent()))
+                (Some(offscreen.render_pass()), Some(offscreen.extent()))
             } else {
                 (None, None)
             };
 
-        let hdr_render_pass = data.viewport.hdr_buffer.as_ref().map(|hdr| hdr.render_pass);
+        let hdr_render_pass = data
+            .viewport
+            .hdr_buffer
+            .as_ref()
+            .map(|hdr| hdr.render_pass());
 
         {
             let mut billboard = data.ecs_world.resource_mut::<BillboardData>();

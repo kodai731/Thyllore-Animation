@@ -37,19 +37,33 @@ pub unsafe fn rebuild_acceleration_structures(
     let mut acceleration_structure = RRAccelerationStructure::new();
 
     // Collect vertex_buffers in the same order as BLAS creation
-    let vertex_buffers: Vec<_> = graphics
+    let mesh_buffers: Vec<_> = graphics
         .meshes
         .iter()
         .filter(|mesh| mesh.render_to_gbuffer)
         .map(|mesh| {
             (
-                &mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                mesh.index_buffer.buffer(),
                 mesh.vertex_data.indices.len() as u32,
             )
         })
+        .collect();
+    let vertex_buffers: Vec<_> = mesh_buffers
+        .iter()
+        .map(
+            |(vertex_buffer, vertex_count, stride, index_buffer, index_count)| {
+                (
+                    vertex_buffer,
+                    *vertex_count,
+                    *stride,
+                    index_buffer,
+                    *index_count,
+                )
+            },
+        )
         .collect();
 
     for (mesh_index, mesh) in graphics.meshes.iter().enumerate() {
@@ -61,10 +75,10 @@ pub unsafe fn rebuild_acceleration_structures(
             instance,
             device,
             command_pool.as_ref(),
-            &mesh.vertex_buffer.buffer,
+            &mesh.vertex_buffer.buffer(),
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
-            &mesh.index_buffer.buffer,
+            &mesh.index_buffer.buffer(),
             mesh.vertex_data.indices.len() as u32,
         )?;
 

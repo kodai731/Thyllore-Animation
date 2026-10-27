@@ -13,12 +13,19 @@ pub enum RenderTargetKey {
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderTargetEntry {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
+}
+
+impl RenderTargetEntry {
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        self.image
+    }
 }
 
 #[derive(Debug, Default)]

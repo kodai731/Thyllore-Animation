@@ -12,8 +12,8 @@ const MAX_FRAMEBUFFER_ATTACHMENTS: usize = 4;
 pub struct TransientDesc {
     pub width: u32,
     pub height: u32,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -24,10 +24,22 @@ pub struct TransientHandle {
 
 #[derive(Clone, Copy, Debug)]
 pub struct TransientImage {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
     pub desc: TransientDesc,
     pub generation: u64,
+}
+
+impl TransientImage {
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        self.image
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        self.view
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

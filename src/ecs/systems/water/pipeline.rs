@@ -43,7 +43,7 @@ pub unsafe fn create_water_pipeline(
     let water_shading_pipeline = WATER_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        water_targets.history.render_pass,
+        water_targets.history.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &water_descriptor.layout,
@@ -106,8 +106,8 @@ unsafe fn create_water_caustic_pipelines(
     let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
     descriptor.allocate_and_update(
         rrdevice,
-        water_targets.caustic_accum.view,
-        gbuffer.position_image_view,
+        water_targets.caustic_accum.view(),
+        gbuffer.position_image_view(),
         tlas,
         scene_buffer,
         water_ubo.handle(),

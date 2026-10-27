@@ -131,7 +131,7 @@ fn water_scene_bindings(ctx: &PassContext) -> Option<(AccelerationStructure, Buf
     }
     let accel = ctx.raytracing.acceleration_structure.as_ref()?;
     let tlas = accel.tlas.acceleration_structure?;
-    let hit_table = accel.hit_shading_table.as_ref()?.buffer;
+    let hit_table = accel.hit_shading_table.as_ref()?.buffer();
     Some((tlas, hit_table))
 }
 
@@ -346,8 +346,8 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         };
 
-        let history_views = targets.history.views;
-        let history_sampler = targets.history.sampler;
+        let history_views = targets.history.views();
+        let history_sampler = targets.history.sampler();
         let key = WaterBindingKey {
             tlas,
             hit_table,
@@ -370,11 +370,11 @@ impl RenderPassNode for WaterFrameNode {
                 ctx.rrdevice,
                 frame_slot,
                 water_ubo,
-                scene_color_image.view,
+                scene_color_image.view(),
                 history_sampler,
                 history_views,
                 history_sampler,
-                trace_image.view,
+                trace_image.view(),
                 history_sampler,
                 tlas,
                 hit_table,
@@ -389,7 +389,7 @@ impl RenderPassNode for WaterFrameNode {
                 ctx.rrdevice,
                 frame_slot,
                 tlas,
-                trace_image.view,
+                trace_image.view(),
                 hit_table,
             )?;
         }
@@ -461,7 +461,7 @@ impl RenderPassNode for WaterCausticClearNode {
         thyllore_vulkan_core::renderer::clear_color_image(
             &ctx.rrdevice,
             command_buffer,
-            targets.caustic_accum.image,
+            targets.caustic_accum.image(),
             ClearColor::Uint([0; 4]),
         );
         Ok(())
@@ -670,8 +670,8 @@ impl RenderPassNode for WaterSceneColorCopyNode {
 
         super::record_water_scene_color_copy(
             &render,
-            hdr_buffer.color_image,
-            scene_color_image.image,
+            hdr_buffer.color_image(),
+            scene_color_image.image(),
             targets.extent(),
             command_buffer,
         );
@@ -716,7 +716,7 @@ impl RenderPassNode for WaterHistoryClearNode {
             return Ok(());
         };
 
-        for &image in &targets.history.images {
+        for &image in &targets.history.images() {
             thyllore_vulkan_core::renderer::clear_color_image(
                 &ctx.rrdevice,
                 command_buffer,

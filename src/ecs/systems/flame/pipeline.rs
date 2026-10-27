@@ -43,8 +43,8 @@ pub unsafe fn create_flame_pipeline(
         rrdevice,
         &flame_ubo,
         FlameImageBindings {
-            history_image_views: flame_history.views,
-            flame_sampler: flame_history.sampler,
+            history_image_views: flame_history.views(),
+            flame_sampler: flame_history.sampler(),
             sdf_image_view: position_image_view,
             sdf_sampler: position_sampler,
             scene_depth_view,
@@ -54,7 +54,7 @@ pub unsafe fn create_flame_pipeline(
     let flame_shading_pipeline = FLAME_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        flame_history.render_pass,
+        flame_history.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &flame_descriptor.layout,

@@ -8,29 +8,59 @@ use crate::resource::image::{create_image, create_image_view, transition_image_l
 
 #[derive(Clone, Debug, Default)]
 pub struct OffscreenFramebuffer {
-    pub msaa_color_image: vk::Image,
-    pub msaa_color_image_memory: vk::DeviceMemory,
-    pub msaa_color_image_view: vk::ImageView,
+    pub(crate) msaa_color_image: vk::Image,
+    pub(crate) msaa_color_image_memory: vk::DeviceMemory,
+    pub(crate) msaa_color_image_view: vk::ImageView,
 
-    pub resolve_color_image: vk::Image,
-    pub resolve_color_image_memory: vk::DeviceMemory,
-    pub resolve_color_image_view: vk::ImageView,
+    pub(crate) resolve_color_image: vk::Image,
+    pub(crate) resolve_color_image_memory: vk::DeviceMemory,
+    pub(crate) resolve_color_image_view: vk::ImageView,
 
-    pub msaa_depth_image: vk::Image,
-    pub msaa_depth_image_memory: vk::DeviceMemory,
-    pub msaa_depth_image_view: vk::ImageView,
+    pub(crate) msaa_depth_image: vk::Image,
+    pub(crate) msaa_depth_image_memory: vk::DeviceMemory,
+    pub(crate) msaa_depth_image_view: vk::ImageView,
 
-    pub framebuffer: vk::Framebuffer,
-    pub render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
 
     pub width: u32,
     pub height: u32,
-    pub format: vk::Format,
-    pub msaa_samples: vk::SampleCountFlags,
+    pub(crate) format: vk::Format,
+    pub(crate) msaa_samples: vk::SampleCountFlags,
 }
 
 impl OffscreenFramebuffer {
+    #[inline]
+    pub fn resolve_color_image_view(&self) -> crate::types::ImageView {
+        self.resolve_color_image_view
+    }
+
+    #[inline]
+    pub fn format(&self) -> crate::types::Format {
+        self.format
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
+    #[inline]
+    pub fn resolve_color_image(&self) -> crate::types::Image {
+        self.resolve_color_image
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        self.framebuffer
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

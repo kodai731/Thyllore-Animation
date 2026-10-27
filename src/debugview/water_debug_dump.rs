@@ -32,7 +32,7 @@ unsafe fn save_water_caustic_accum_npy(
         .world
         .get_resource::<WaterRenderTargets>()
         .ok_or_else(|| anyhow::anyhow!("water buffer not initialized"))?;
-    let caustic_image = water_targets.caustic_accum.image;
+    let caustic_image = water_targets.caustic_accum.image();
     let width = water_targets.history.width;
     let height = water_targets.history.height;
     let image_size = (width * height * 4) as DeviceSize;
@@ -226,7 +226,7 @@ unsafe fn read_gpu_vertex_positions(
         &ctx.instance,
         &ctx.device,
         ctx.command_pool,
-        mesh.vertex_buffer.buffer,
+        mesh.vertex_buffer.buffer(),
         copy_size,
     )?;
 

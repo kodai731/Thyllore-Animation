@@ -25,13 +25,13 @@ unsafe fn create_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
-        ctx.raytracing.command_pool,
+        ctx.raytracing.command_pool(),
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_view,
     )?;
 
-    for image in history.images {
+    for image in history.images() {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
     ctx.world.insert_resource(FlameRenderTargets { history });
@@ -47,14 +47,14 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
     let flame_history = &flame_targets.history;
 
     let position_image_view = match ctx.raytracing.gbuffer {
-        Some(ref gbuffer) => gbuffer.position_image_view,
+        Some(ref gbuffer) => gbuffer.position_image_view(),
         None => {
             log!("GBuffer not available, skipping flame pipeline");
             return Ok(());
         }
     };
 
-    let position_sampler = match ctx.raytracing.gbuffer_sampler {
+    let position_sampler = match ctx.raytracing.gbuffer_sampler() {
         Some(sampler) => sampler,
         None => {
             log!("GBuffer sampler not available, skipping flame pipeline");
@@ -91,7 +91,7 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         return Ok(());
     };
     let (width, height) = (ctx.viewport_width, ctx.viewport_height);
-    let command_pool = ctx.raytracing.command_pool;
+    let command_pool = ctx.raytracing.command_pool();
     let scene_depth_view = ctx
         .world
         .resource::<RenderTargets>()
@@ -111,7 +111,7 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         height,
         hdr_view,
     )?;
-    for image in targets.history.images {
+    for image in targets.history.images() {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
 
@@ -120,10 +120,10 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
             descriptor.update_image_views(
                 ctx.rrdevice,
                 FlameImageBindings {
-                    history_image_views: targets.history.views,
-                    flame_sampler: targets.history.sampler,
-                    sdf_image_view: gpu_state.sdf.image_view,
-                    sdf_sampler: gpu_state.sdf.sampler,
+                    history_image_views: targets.history.views(),
+                    flame_sampler: targets.history.sampler(),
+                    sdf_image_view: gpu_state.sdf.image_view(),
+                    sdf_sampler: gpu_state.sdf.sampler(),
                     scene_depth_view,
                 },
             )?;

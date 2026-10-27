@@ -214,7 +214,7 @@ impl App {
         thyllore_vulkan_core::clear_shadow_mask_to_lit(
             &self.rrdevice,
             command_buffer,
-            gbuffer.shadow_mask_image,
+            gbuffer.shadow_mask_image(),
         );
     }
 
@@ -243,9 +243,9 @@ impl App {
         thyllore_vulkan_core::record_picked_texel_copy(
             &self.rrdevice,
             command_buffer,
-            gbuffer.object_id_image,
-            gbuffer.position_image,
-            gbuffer.readback_staging_buffer,
+            gbuffer.object_id_image(),
+            gbuffer.position_image(),
+            gbuffer.readback_staging_buffer(),
             (px, py),
         );
 

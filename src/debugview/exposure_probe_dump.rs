@@ -35,7 +35,7 @@ unsafe fn build_exposure_probe_record(ctx: &CaptureContext) -> Result<Value> {
     let hdr = ctx
         .hdr
         .ok_or_else(|| anyhow!("hdr buffer not initialized"))?;
-    let hdr_rgba = read_hdr_rgba16f(ctx, hdr.color_image, hdr.width, hdr.height)?;
+    let hdr_rgba = read_hdr_rgba16f(ctx, hdr.color_image(), hdr.width, hdr.height)?;
     let hdr_luminance: Vec<f32> = hdr_rgba
         .chunks_exact(4)
         .map(|px| rec709_luminance([px[0], px[1], px[2]]))

@@ -8,13 +8,23 @@ use crate::resource::render_target_transient::TransientDesc;
 
 #[derive(Clone, Debug, Default)]
 pub struct DofBuffer {
-    pub render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
     pub width: u32,
     pub height: u32,
 }
 
 impl DofBuffer {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice, width: u32, height: u32) -> Result<Self> {
         let render_pass = Self::create_render_pass(rrdevice)?;
 

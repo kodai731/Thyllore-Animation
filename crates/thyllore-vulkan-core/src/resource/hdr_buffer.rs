@@ -9,18 +9,43 @@ pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct HdrBuffer {
-    pub color_image: vk::Image,
-    pub color_image_memory: vk::DeviceMemory,
-    pub color_image_view: vk::ImageView,
-    pub depth_image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub framebuffer: vk::Framebuffer,
-    pub render_pass: vk::RenderPass,
+    pub(crate) color_image: vk::Image,
+    pub(crate) color_image_memory: vk::DeviceMemory,
+    pub(crate) color_image_view: vk::ImageView,
+    pub(crate) depth_image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) render_pass: vk::RenderPass,
     pub width: u32,
     pub height: u32,
 }
 
 impl HdrBuffer {
+    #[inline]
+    pub fn color_image(&self) -> crate::types::Image {
+        self.color_image
+    }
+
+    #[inline]
+    pub fn color_image_view(&self) -> crate::types::ImageView {
+        self.color_image_view
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        self.sampler
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        self.framebuffer
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

@@ -12,26 +12,89 @@ pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
 #[derive(Clone, Debug, Default)]
 pub struct OnionSkinPassResources {
-    pub ghost_image: vk::Image,
-    pub ghost_image_memory: vk::DeviceMemory,
-    pub ghost_image_view: vk::ImageView,
-    pub ghost_sampler: vk::Sampler,
+    pub(crate) ghost_image: vk::Image,
+    pub(crate) ghost_image_memory: vk::DeviceMemory,
+    pub(crate) ghost_image_view: vk::ImageView,
+    pub(crate) ghost_sampler: vk::Sampler,
 
-    pub ghost_render_pass: vk::RenderPass,
-    pub ghost_framebuffer: vk::Framebuffer,
+    pub(crate) ghost_render_pass: vk::RenderPass,
+    pub(crate) ghost_framebuffer: vk::Framebuffer,
     pub ghost_pipeline: RRPipeline,
 
-    pub composite_render_pass: vk::RenderPass,
-    pub composite_framebuffer: vk::Framebuffer,
+    pub(crate) composite_render_pass: vk::RenderPass,
+    pub(crate) composite_framebuffer: vk::Framebuffer,
     pub composite_pipeline: RRPipeline,
     pub composite_descriptor_layout: ReflectedSetLayout,
-    pub composite_descriptor_set: vk::DescriptorSet,
+    pub(crate) composite_descriptor_set: vk::DescriptorSet,
 
     pub width: u32,
     pub height: u32,
 }
 
 impl OnionSkinPassResources {
+    #[inline]
+    pub fn ghost_image(&self) -> crate::types::Image {
+        self.ghost_image
+    }
+
+    #[inline]
+    pub fn ghost_render_pass(&self) -> crate::types::RenderPass {
+        self.ghost_render_pass
+    }
+
+    #[inline]
+    pub fn composite_render_pass(&self) -> crate::types::RenderPass {
+        self.composite_render_pass
+    }
+
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        offscreen_resolve_image_view: vk::ImageView,
+        offscreen_format: vk::Format,
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
+            Self::create_ghost_buffer(instance, rrdevice, width, height)?;
+        let ghost_render_pass = Self::create_ghost_render_pass(rrdevice)?;
+        let ghost_framebuffer = Self::create_single_framebuffer(
+            rrdevice,
+            ghost_render_pass,
+            ghost_image_view,
+            width,
+            height,
+        )?;
+
+        let composite_render_pass = Self::create_composite_render_pass(rrdevice, offscreen_format)?;
+        let (composite_descriptor_layout, composite_descriptor_set) =
+            Self::create_composite_descriptor(rrdevice, ghost_image_view, ghost_sampler)?;
+        let composite_framebuffer = Self::create_single_framebuffer(
+            rrdevice,
+            composite_render_pass,
+            offscreen_resolve_image_view,
+            width,
+            height,
+        )?;
+
+        Ok(Self {
+            ghost_image,
+            ghost_image_memory,
+            ghost_image_view,
+            ghost_sampler,
+            ghost_render_pass,
+            ghost_framebuffer,
+            ghost_pipeline: RRPipeline::default(),
+            composite_render_pass,
+            composite_framebuffer,
+            composite_pipeline: RRPipeline::default(),
+            composite_descriptor_layout,
+            composite_descriptor_set,
+            width,
+            height,
+        })
+    }
+
     pub unsafe fn create_ghost_buffer(
         instance: &Instance,
         rrdevice: &RRDevice,

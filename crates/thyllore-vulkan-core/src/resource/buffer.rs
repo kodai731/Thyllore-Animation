@@ -9,8 +9,8 @@ use std::ptr::copy_nonoverlapping as memcpy;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRUniformBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub uniform_buffer_object: UniformBufferObject,
 }
 
@@ -94,12 +94,17 @@ impl Drop for RRUniformBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRIndexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub indices: u32,
 }
 
 impl RRIndexBuffer {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        self.buffer
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -178,15 +183,20 @@ impl Drop for RRIndexBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRVertexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub vertices: u32,
-    pub staging_buffer: vk::Buffer,
-    pub staging_memory: vk::DeviceMemory,
-    pub staging_capacity: u64,
+    pub(crate) staging_buffer: vk::Buffer,
+    pub(crate) staging_memory: vk::DeviceMemory,
+    pub(crate) staging_capacity: u64,
 }
 
 impl RRVertexBuffer {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        self.buffer
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -332,8 +342,8 @@ impl RRVertexBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub indices: u32,
 }
 

@@ -34,7 +34,7 @@ impl App {
         rrrender: &RRRender,
     ) -> Result<()> {
         let (hdr_image_view, hdr_sampler) = match data.viewport.hdr_buffer {
-            Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
+            Some(ref hdr) => (hdr.color_image_view(), hdr.sampler()),
             None => {
                 log!("HDR buffer not available, skipping tonemap pipeline");
                 return Ok(());
@@ -42,7 +42,7 @@ impl App {
         };
 
         let (offscreen_render_pass, offscreen_extent) = match data.viewport.offscreen {
-            Some(ref offscreen) => (offscreen.render_pass, offscreen.extent()),
+            Some(ref offscreen) => (offscreen.render_pass(), offscreen.extent()),
             None => {
                 log!("Offscreen not available, skipping tonemap pipeline");
                 return Ok(());
@@ -50,14 +50,14 @@ impl App {
         };
 
         let position_image_view = match data.raytracing.gbuffer {
-            Some(ref gbuffer) => gbuffer.position_image_view,
+            Some(ref gbuffer) => gbuffer.position_image_view(),
             None => {
                 log!("GBuffer not available, skipping tonemap pipeline");
                 return Ok(());
             }
         };
 
-        let gbuffer_sampler = match data.raytracing.gbuffer_sampler {
+        let gbuffer_sampler = match data.raytracing.gbuffer_sampler() {
             Some(s) => s,
             None => {
                 log!("GBuffer sampler not available, skipping tonemap pipeline");
@@ -135,7 +135,7 @@ impl App {
         rrrender: &RRRender,
     ) -> Result<()> {
         let (hdr_image_view, hdr_sampler) = match data.viewport.hdr_buffer {
-            Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
+            Some(ref hdr) => (hdr.color_image_view(), hdr.sampler()),
             None => {
                 log!("HDR buffer not available, skipping DOF pipeline");
                 return Ok(());
@@ -143,7 +143,7 @@ impl App {
         };
 
         let dof_render_pass = match data.viewport.dof_buffer {
-            Some(ref buf) => buf.render_pass,
+            Some(ref buf) => buf.render_pass(),
             None => {
                 log!("DOF buffer not available, skipping DOF pipeline");
                 return Ok(());
@@ -156,7 +156,7 @@ impl App {
             return Ok(());
         }
 
-        let depth_sampler = match data.raytracing.gbuffer_sampler {
+        let depth_sampler = match data.raytracing.gbuffer_sampler() {
             Some(s) => s,
             None => {
                 log!("GBuffer sampler not available, skipping DOF pipeline");
@@ -193,7 +193,7 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         let (histogram_buffer, luminance_buffer) = match data.viewport.auto_exposure_buffers {
-            Some(ref buf) => (buf.histogram_buffer, buf.luminance_buffer),
+            Some(ref buf) => (buf.histogram_buffer(), buf.luminance_buffer()),
             None => {
                 log!("AutoExposure buffers not available, skipping pipeline");
                 return Ok(());
@@ -203,7 +203,7 @@ impl App {
         let luminance_buffer_size = (2 * 4) as u64;
 
         let (hdr_image_view, hdr_sampler) = match data.viewport.hdr_buffer {
-            Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
+            Some(ref hdr) => (hdr.color_image_view(), hdr.sampler()),
             None => {
                 log!("No HDR input available for AutoExposure");
                 return Ok(());
@@ -266,7 +266,7 @@ unsafe fn build_bloom_pipelines(
 
     let downsample_pipeline = fullscreen_pipeline(&BLOOM_DOWNSAMPLE)
         .no_depth_test()
-        .custom_render_pass(bloom_chain.downsample_render_pass)
+        .custom_render_pass(bloom_chain.downsample_render_pass())
         .msaa_samples(SampleCount::One)
         .descriptor_layouts(&[&bloom_descriptors.layout])
         .push_constants(PushConstantConfig::new(ShaderStages::Fragment, 0, 12))
@@ -274,7 +274,7 @@ unsafe fn build_bloom_pipelines(
 
     let upsample_pipeline = fullscreen_pipeline(&BLOOM_UPSAMPLE)
         .no_depth_test()
-        .custom_render_pass(bloom_chain.upsample_render_pass)
+        .custom_render_pass(bloom_chain.upsample_render_pass())
         .msaa_samples(SampleCount::One)
         .blend(BlendConfig::additive())
         .descriptor_layouts(&[&bloom_descriptors.layout])

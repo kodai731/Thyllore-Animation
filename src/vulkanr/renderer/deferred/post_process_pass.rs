@@ -107,7 +107,7 @@ pub unsafe fn record_dof(ctx: &PassContext, command_buffer: CommandBuffer) -> Re
     let output = ctx.transient_image(crate::app::post_process::DOF_OUTPUT)?;
     let Some(dof_framebuffer) = ctx
         .transient
-        .cached_framebuffer(dof_buffer.render_pass, &[output.view])
+        .cached_framebuffer(dof_buffer.render_pass(), &[output.view()])
     else {
         return Ok(());
     };

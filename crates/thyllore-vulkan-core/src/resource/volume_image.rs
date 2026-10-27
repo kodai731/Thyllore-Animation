@@ -7,11 +7,11 @@ use crate::resource::image::{create_image_3d, create_image_view_3d};
 /// A 3D image with its view and a linear clamp-to-edge sampler.
 #[derive(Clone, Debug, Default)]
 pub struct VolumeImage {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub extent: vk::Extent3D,
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) extent: vk::Extent3D,
 }
 
 unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {

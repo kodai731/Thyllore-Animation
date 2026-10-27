@@ -36,7 +36,7 @@ unsafe fn setup_lightning(ctx: &mut EffectContext, rrrender: &RRRender) -> Resul
         rrrender,
         ctx.graphics,
         &targets,
-        rrrender.gbuffer_depth_image_view,
+        rrrender.gbuffer_depth_image_view(),
     )?;
     ctx.world.insert_resource(targets);
     ctx.world.insert_resource(gpu_state);
@@ -54,7 +54,7 @@ unsafe fn resize_lightning_render_targets(ctx: &mut EffectContext) -> Result<()>
         .world
         .resource::<RenderTargets>()
         .render
-        .gbuffer_depth_image_view;
+        .gbuffer_depth_image_view();
 
     let Some(mut targets) = ctx.world.get_resource_mut::<LightningRenderTargets>() else {
         return Ok(());

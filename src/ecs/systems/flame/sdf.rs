@@ -57,7 +57,7 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
                 flame_sampler: flame_targets.history.sampler(),
                 sdf_image_view: rgba8.view(),
                 sdf_sampler: rgba8.sampler(),
-                scene_depth_view: rrrender.gbuffer_depth_image_view,
+                scene_depth_view: rrrender.gbuffer_depth_image_view(),
             },
         )?;
     }

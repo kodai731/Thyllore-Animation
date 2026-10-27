@@ -9,8 +9,8 @@ use crate::resource::gpu_resource::GpuResource;
 
 #[derive(Debug)]
 pub struct OnionSkinGhostBuffer {
-    pub vertex_buffer: vk::Buffer,
-    pub vertex_buffer_memory: vk::DeviceMemory,
+    pub(crate) vertex_buffer: vk::Buffer,
+    pub(crate) vertex_buffer_memory: vk::DeviceMemory,
     pub vertex_count: u32,
     pub tint_color: [f32; 3],
     pub opacity: f32,
@@ -92,7 +92,7 @@ impl OnionSkinGhostBuffer {
 #[derive(Debug, Default)]
 pub struct OnionSkinGpuState {
     pub ghost_buffers: Vec<OnionSkinGhostBuffer>,
-    pub source_index_buffer: vk::Buffer,
+    pub(crate) source_index_buffer: vk::Buffer,
     pub source_index_count: u32,
     pub source_mesh_index: Option<usize>,
 }
@@ -123,6 +123,16 @@ impl OnionSkinGpuState {
         for buffer in self.ghost_buffers.drain(..) {
             buffer.destroy(rrdevice);
         }
+    }
+
+    #[inline]
+    pub fn source_index_buffer(&self) -> crate::types::Buffer {
+        self.source_index_buffer
+    }
+
+    #[inline]
+    pub fn set_source_index_buffer(&mut self, buffer: crate::types::Buffer) {
+        self.source_index_buffer = buffer;
     }
 
     pub fn active_ghost_count(&self) -> usize {

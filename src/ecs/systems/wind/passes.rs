@@ -111,7 +111,7 @@ unsafe fn prepare_reduced_color_target(
         .get_resource::<WindRenderTargets>()
         .map(|targets| {
             (
-                targets.reduced.render_pass,
+                targets.reduced.render_pass(),
                 scale.reduce_extent(targets.extent()),
             )
         })
@@ -121,7 +121,7 @@ unsafe fn prepare_reduced_color_target(
     let Some(scene_depth_view) = ctx
         .world
         .get_resource::<RenderTargets>()
-        .map(|targets| targets.render.gbuffer_depth_image_view)
+        .map(|targets| targets.render.gbuffer_depth_image_view())
     else {
         return Ok(());
     };
@@ -260,10 +260,10 @@ unsafe fn record_wind_passes(
             ubo,
             ShaderStage::Compute | ShaderStage::Fragment,
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![wind_ubo.slot_offset(slot)? as u32],
+        draws.push(OverlayInstanceDraw::new(
+            vec![wind_ubo.slot_offset(slot)? as u32],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());
@@ -296,7 +296,7 @@ unsafe fn record_wind_passes(
                     render.device,
                     command_buffer,
                     &pass,
-                    draw.scissor,
+                    draw.scissor(),
                     shading_pipeline,
                     Some(push_constants.as_bytes()),
                     &resolve_sets,
@@ -345,7 +345,7 @@ unsafe fn record_reduced_scale_wind_passes(
     let reduced_color = pass_ctx.transient_image(REDUCED_COLOR_SLOT)?;
     let Some(reduced_framebuffer) = pass_ctx
         .transient
-        .cached_framebuffer(wind_buffer.reduced.render_pass, &[reduced_color.view()])
+        .cached_framebuffer(wind_buffer.reduced.render_pass(), &[reduced_color.view()])
     else {
         return Ok(());
     };
@@ -357,9 +357,11 @@ unsafe fn record_reduced_scale_wind_passes(
             .overlay_pass(reduced_framebuffer, scale, wind_buffer.extent());
     let reduced_draws: Vec<OverlayInstanceDraw> = draws
         .iter()
-        .map(|draw| OverlayInstanceDraw {
-            dynamic_offsets: draw.dynamic_offsets.clone(),
-            scissor: scale.reduce_scissor(draw.scissor, reduced_pass.extent),
+        .map(|draw| {
+            OverlayInstanceDraw::new(
+                draw.dynamic_offsets.clone(),
+                scale.reduce_scissor(draw.scissor(), reduced_pass.extent()),
+            )
         })
         .collect();
     WIND_RESOLVE_OVERLAY.record(
@@ -373,8 +375,10 @@ unsafe fn record_reduced_scale_wind_passes(
         &reduced_draws,
     )?;
 
-    let upsample_scissor =
-        union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent());
+    let upsample_scissor = union_scissor(
+        draws.iter().map(|draw| draw.scissor()),
+        wind_buffer.extent(),
+    );
     UPSAMPLE_OVERLAY.record(
         rrdevice,
         command_buffer,
@@ -383,9 +387,6 @@ unsafe fn record_reduced_scale_wind_passes(
         upsample_pipeline,
         None,
         &[upsample_descriptor.descriptor_set(frame_slot)],
-        &[OverlayInstanceDraw {
-            dynamic_offsets: Vec::new(),
-            scissor: upsample_scissor,
-        }],
+        &[OverlayInstanceDraw::new(Vec::new(), upsample_scissor)],
     )
 }

@@ -253,13 +253,13 @@ impl TargetAccess {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PendingBarrier {
-    pub src_stage: vk::PipelineStageFlags,
-    pub dst_stage: vk::PipelineStageFlags,
-    pub image: vk::Image,
-    pub old_layout: vk::ImageLayout,
-    pub new_layout: vk::ImageLayout,
-    pub src_access: vk::AccessFlags,
-    pub dst_access: vk::AccessFlags,
+    pub(crate) src_stage: vk::PipelineStageFlags,
+    pub(crate) dst_stage: vk::PipelineStageFlags,
+    pub(crate) image: vk::Image,
+    pub(crate) old_layout: vk::ImageLayout,
+    pub(crate) new_layout: vk::ImageLayout,
+    pub(crate) src_access: vk::AccessFlags,
+    pub(crate) dst_access: vk::AccessFlags,
 }
 
 impl PendingBarrier {

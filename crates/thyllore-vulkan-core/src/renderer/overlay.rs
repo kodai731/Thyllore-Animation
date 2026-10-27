@@ -88,19 +88,47 @@ pub struct OverlayNodeSpec {
 #[derive(Clone, Debug)]
 pub struct OverlayInstanceDraw {
     pub dynamic_offsets: Vec<u32>,
-    pub scissor: vk::Rect2D,
+    pub(crate) scissor: vk::Rect2D,
 }
 
+impl OverlayInstanceDraw {
+    pub fn new(dynamic_offsets: Vec<u32>, scissor: crate::types::Rect2D) -> Self {
+        Self {
+            dynamic_offsets,
+            scissor,
+        }
+    }
+
+    #[inline]
+    pub fn scissor(&self) -> crate::types::Rect2D {
+        self.scissor
+    }
+}
 /// The render target an overlay pass draws into and what it finds there.
 #[derive(Clone, Copy, Debug)]
 pub struct OverlayPass {
-    pub render_pass: vk::RenderPass,
-    pub framebuffer: vk::Framebuffer,
-    pub extent: vk::Extent2D,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) extent: vk::Extent2D,
     pub load: OverlayAttachmentLoad,
 }
 
 impl OverlayPass {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        self.framebuffer
+    }
+
+    #[inline]
+    pub fn extent(&self) -> crate::types::Extent2D {
+        self.extent
+    }
+
     pub fn full_area(&self) -> vk::Rect2D {
         vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },

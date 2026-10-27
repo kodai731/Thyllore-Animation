@@ -109,11 +109,21 @@ pub const UPSAMPLE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
 /// and left readable for the upsample. The scale is chosen per frame, so only the format is fixed.
 #[derive(Clone, Debug, Default)]
 pub struct ReducedResolveTarget {
-    pub render_pass: vk::RenderPass,
-    pub format: vk::Format,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) format: vk::Format,
 }
 
 impl ReducedResolveTarget {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        self.render_pass
+    }
+
+    #[inline]
+    pub fn format(&self) -> crate::types::Format {
+        self.format
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {
         let render_pass = create_color_overlay_render_pass(
             rrdevice,

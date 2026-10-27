@@ -57,8 +57,8 @@ pub unsafe fn record_composite_pass(
     }
 
     let render_targets = app.resource::<crate::vulkanr::context::RenderTargets>();
-    let render_pass = render_targets.render.render_pass;
-    let framebuffer = render_targets.render.framebuffers[image_index];
+    let render_pass = render_targets.render.render_pass();
+    let framebuffer = render_targets.render.framebuffers()[image_index];
     let extent = app
         .resource::<crate::vulkanr::context::SwapchainState>()
         .swapchain

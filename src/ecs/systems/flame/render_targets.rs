@@ -70,7 +70,7 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         flame_history,
         position_image_view,
         position_sampler,
-        rrrender.gbuffer_depth_image_view,
+        rrrender.gbuffer_depth_image_view(),
     )?;
     drop(flame_targets);
     ctx.world.insert_resource(gpu_state);
@@ -96,7 +96,7 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         .world
         .resource::<RenderTargets>()
         .render
-        .gbuffer_depth_image_view;
+        .gbuffer_depth_image_view();
 
     let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() else {
         return Ok(());

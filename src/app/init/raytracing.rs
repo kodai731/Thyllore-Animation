@@ -30,7 +30,7 @@ impl App {
         log!("Created G-Buffer render pass and framebuffer");
 
         if let Some(hdr_buffer) = &mut data.viewport.hdr_buffer {
-            hdr_buffer.attach_depth(rrdevice, rrrender.gbuffer_depth_image_view)?;
+            hdr_buffer.attach_depth(rrdevice, rrrender.gbuffer_depth_image_view())?;
         }
 
         log!("Ray Tracing initialization complete");

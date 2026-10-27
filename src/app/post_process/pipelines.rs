@@ -150,7 +150,7 @@ impl App {
             }
         };
 
-        let depth_image_view = rrrender.gbuffer_depth_image_view;
+        let depth_image_view = rrrender.gbuffer_depth_image_view();
         if depth_image_view == ImageView::default() {
             log!("GBuffer depth image view not available, skipping DOF pipeline");
             return Ok(());

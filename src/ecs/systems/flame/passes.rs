@@ -275,10 +275,10 @@ unsafe fn record_flame_passes(
             ubo,
             ShaderStage::Fragment,
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![flame_ubo.slot_offset(slot)? as u32],
+        draws.push(OverlayInstanceDraw::new(
+            vec![flame_ubo.slot_offset(slot)? as u32],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());

@@ -40,7 +40,7 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_color_view,
-        rrrender.gbuffer_depth_image_view,
+        rrrender.gbuffer_depth_image_view(),
     )?;
     insert_water_render_targets(ctx, targets);
 
@@ -74,7 +74,7 @@ unsafe fn resize_water_render_targets(ctx: &mut EffectContext) -> Result<()> {
         .world
         .resource::<RenderTargets>()
         .render
-        .gbuffer_depth_image_view;
+        .gbuffer_depth_image_view();
     if !is_depth_view_ready(depth_view) {
         return Ok(());
     }

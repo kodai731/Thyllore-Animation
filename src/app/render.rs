@@ -150,7 +150,7 @@ impl App {
     unsafe fn attach_gbuffer_depth_to_hdr(&mut self) -> Result<()> {
         let depth_view = {
             let rt = self.resource::<RenderTargets>();
-            rt.render.gbuffer_depth_image_view
+            rt.render.gbuffer_depth_image_view()
         };
         if depth_view == ImageView::default() {
             return Ok(());
@@ -519,8 +519,8 @@ impl App {
         begin_render_pass_cleared(
             &self.rrdevice,
             command_buffer,
-            render_targets.render.render_pass,
-            render_targets.render.framebuffers[image_index],
+            render_targets.render.render_pass(),
+            render_targets.render.framebuffers()[image_index],
             extent,
             [0.0, 0.0, 0.0, 1.0],
             0.0,

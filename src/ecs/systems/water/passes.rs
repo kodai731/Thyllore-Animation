@@ -817,10 +817,7 @@ impl RenderPassNode for WaterShadingNode {
                 shading_pipeline,
                 Some(push_constants.as_bytes()),
                 &descriptor_sets,
-                &[OverlayInstanceDraw {
-                    dynamic_offsets: vec![*ubo_dynamic_offset],
-                    scissor,
-                }],
+                &[OverlayInstanceDraw::new(vec![*ubo_dynamic_offset], scissor)],
             )?;
         }
         Ok(())

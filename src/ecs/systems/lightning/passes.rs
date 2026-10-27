@@ -179,13 +179,13 @@ unsafe fn record_lightning_passes(
             instance_segments,
             ShaderStage::Fragment,
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![
+        draws.push(OverlayInstanceDraw::new(
+            vec![
                 ubo.slot_offset(slot)? as u32,
                 segments_ubo.slot_offset(slot)? as u32,
             ],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());

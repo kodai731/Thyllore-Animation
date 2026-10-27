@@ -31,7 +31,7 @@ impl App {
 
         {
             let render_targets = self.resource::<crate::vulkanr::context::RenderTargets>();
-            let depth_image_view = render_targets.render.gbuffer_depth_image_view;
+            let depth_image_view = render_targets.render.gbuffer_depth_image_view();
 
             if let (Some(ref hdr_buffer), Some(ref dof_descriptor)) = (
                 &self.data.viewport.hdr_buffer,

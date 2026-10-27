@@ -22,8 +22,8 @@ pub unsafe fn record_gbuffer_pass(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("G-Buffer pipeline not initialized"))?;
     let render_targets = app.resource::<crate::vulkanr::context::RenderTargets>();
-    let render_pass = render_targets.render.gbuffer_render_pass;
-    let framebuffer = render_targets.render.gbuffer_framebuffer;
+    let render_pass = render_targets.render.gbuffer_render_pass();
+    let framebuffer = render_targets.render.gbuffer_framebuffer();
     drop(render_targets);
 
     let draw_mesh_indices = collect_gbuffer_mesh_indices(app);

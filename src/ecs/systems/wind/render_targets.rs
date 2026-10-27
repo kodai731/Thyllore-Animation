@@ -37,7 +37,7 @@ unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()>
         rrrender,
         ctx.graphics,
         &targets,
-        rrrender.gbuffer_depth_image_view,
+        rrrender.gbuffer_depth_image_view(),
         MAX_FRAMES_IN_FLIGHT,
     )?;
     ctx.world.insert_resource(targets);
@@ -56,7 +56,7 @@ unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
         .world
         .resource::<RenderTargets>()
         .render
-        .gbuffer_depth_image_view;
+        .gbuffer_depth_image_view();
 
     let Some(mut targets) = ctx.world.get_resource_mut::<WindRenderTargets>() else {
         return Ok(());

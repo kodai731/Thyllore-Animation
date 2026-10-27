@@ -53,7 +53,7 @@ impl RenderTargetStorage {
 
         if !is_reusable {
             if let Some(outdated) = self.entries.remove(&key) {
-                destroy_entry(&rrdevice.device, &outdated);
+                destroy_entry(&rrdevice.device(), &outdated);
             }
 
             let entry = self.create_entry(instance, rrdevice, format, usage, sampler_info)?;
@@ -90,19 +90,19 @@ impl RenderTargetStorage {
         {
             Ok(view) => view,
             Err(error) => {
-                rrdevice.device.destroy_image(image, None);
-                rrdevice.device.free_memory(memory, None);
+                rrdevice.device().destroy_image(image, None);
+                rrdevice.device().free_memory(memory, None);
                 return Err(error);
             }
         };
 
         let sampler = match sampler_info {
-            Some(info) => match rrdevice.device.create_sampler(&info, None) {
+            Some(info) => match rrdevice.device().create_sampler(&info, None) {
                 Ok(sampler) => sampler,
                 Err(error) => {
-                    rrdevice.device.destroy_image_view(view, None);
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
+                    rrdevice.device().destroy_image_view(view, None);
+                    rrdevice.device().destroy_image(image, None);
+                    rrdevice.device().free_memory(memory, None);
                     return Err(error.into());
                 }
             },
@@ -141,7 +141,7 @@ impl RenderTargetStorage {
     }
 
     pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for (_, entry) in self.entries.drain() {
             destroy_entry(device, &entry);
         }

@@ -48,14 +48,14 @@ impl RRUniformBuffer {
         rrdevice: &RRDevice,
         ubo: &UniformBufferObject,
     ) -> anyhow::Result<()> {
-        let memory = rrdevice.device.map_memory(
+        let memory = rrdevice.device().map_memory(
             self.buffer_memory,
             0,
             size_of::<UniformBufferObject>() as u64,
             vk::MemoryMapFlags::empty(),
         )?;
         memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(self.buffer_memory);
+        rrdevice.device().unmap_memory(self.buffer_memory);
 
         self.uniform_buffer_object = ubo.clone();
 
@@ -64,11 +64,11 @@ impl RRUniformBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
     }
@@ -116,7 +116,7 @@ impl RRIndexBuffer {
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
-        let map_memory = rrdevice.device.map_memory(
+        let map_memory = rrdevice.device().map_memory(
             staging_buffer_memory,
             0,
             size,
@@ -124,7 +124,7 @@ impl RRIndexBuffer {
         )?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
+        rrdevice.device().unmap_memory(staging_buffer_memory);
 
         let (index_buffer, index_buffer_memory) = create_buffer(
             instance,
@@ -145,8 +145,8 @@ impl RRIndexBuffer {
             size,
         )?;
 
-        rrdevice.device.destroy_buffer(staging_buffer, None);
-        rrdevice.device.free_memory(staging_buffer_memory, None);
+        rrdevice.device().destroy_buffer(staging_buffer, None);
+        rrdevice.device().free_memory(staging_buffer_memory, None);
 
         rrindex_buffer.buffer = index_buffer;
         rrindex_buffer.buffer_memory = index_buffer_memory;
@@ -157,11 +157,11 @@ impl RRIndexBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
         self.indices = 0;
@@ -203,7 +203,7 @@ impl RRVertexBuffer {
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
-        let map_memory = rrdevice.device.map_memory(
+        let map_memory = rrdevice.device().map_memory(
             staging_buffer_memory,
             0,
             size,
@@ -211,7 +211,7 @@ impl RRVertexBuffer {
         )?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
+        rrdevice.device().unmap_memory(staging_buffer_memory);
 
         let (vertex_buffer, vertex_buffer_memory) = create_buffer(
             instance,
@@ -245,20 +245,20 @@ impl RRVertexBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.staging_buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.staging_buffer, None);
+            rrdevice.device().destroy_buffer(self.staging_buffer, None);
             self.staging_buffer = vk::Buffer::null();
         }
         if self.staging_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.staging_memory, None);
+            rrdevice.device().free_memory(self.staging_memory, None);
             self.staging_memory = vk::DeviceMemory::null();
         }
         self.staging_capacity = 0;
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
         self.vertices = 0;
@@ -293,10 +293,10 @@ impl RRVertexBuffer {
             if self.staging_buffer == vk::Buffer::null() || size > self.staging_capacity {
                 // Free old staging buffer if it exists
                 if self.staging_buffer != vk::Buffer::null() {
-                    rrdevice.device.destroy_buffer(self.staging_buffer, None);
+                    rrdevice.device().destroy_buffer(self.staging_buffer, None);
                 }
                 if self.staging_memory != vk::DeviceMemory::null() {
-                    rrdevice.device.free_memory(self.staging_memory, None);
+                    rrdevice.device().free_memory(self.staging_memory, None);
                 }
                 let new_capacity = size * 2;
                 let (buf, mem) = create_buffer(
@@ -316,11 +316,11 @@ impl RRVertexBuffer {
 
         let map_memory =
             rrdevice
-                .device
+                .device()
                 .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())?;
 
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_memory);
+        rrdevice.device().unmap_memory(staging_memory);
 
         copy_buffer(rrdevice, rr_command_pool, staging_buffer, self.buffer, size)?;
 
@@ -354,11 +354,11 @@ impl RRBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
         self.indices = 0;
@@ -385,8 +385,8 @@ pub unsafe fn create_buffer(
         .usage(usage)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-    let buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-    let requirements = rrdevice.device.get_buffer_memory_requirements(buffer);
+    let buffer = rrdevice.device().create_buffer(&buffer_info, None)?;
+    let requirements = rrdevice.device().get_buffer_memory_requirements(buffer);
 
     let mut memory_allocate_flags_info =
         vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
@@ -404,9 +404,9 @@ pub unsafe fn create_buffer(
         memory_info = memory_info.push_next(&mut memory_allocate_flags_info);
     }
 
-    let buffer_memory = rrdevice.device.allocate_memory(&memory_info, None)?;
+    let buffer_memory = rrdevice.device().allocate_memory(&memory_info, None)?;
     rrdevice
-        .device
+        .device()
         .bind_buffer_memory(buffer, buffer_memory, 0)?;
 
     Ok((buffer, buffer_memory))
@@ -422,7 +422,7 @@ pub unsafe fn copy_buffer(
     let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
     let regions = vk::BufferCopy::builder().size(size);
     rrdevice
-        .device
+        .device()
         .cmd_copy_buffer(command_buffer, source, destination, &[regions]);
     end_single_time_commands(
         rrdevice,
@@ -461,7 +461,7 @@ pub unsafe fn copy_buffer_to_image(
             depth: 1,
         });
 
-    rrdevice.device.cmd_copy_buffer_to_image(
+    rrdevice.device().cmd_copy_buffer_to_image(
         command_buffer,
         buffer,
         image,

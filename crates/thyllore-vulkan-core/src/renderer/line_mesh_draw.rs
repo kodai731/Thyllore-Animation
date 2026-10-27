@@ -60,7 +60,7 @@ pub unsafe fn record_line_mesh_draw(
 
     let index_count = options.index_count_override.unwrap_or(mesh.index_count());
 
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     device.cmd_draw_indexed(cmd, index_count, 1, 0, 0, 0);
 
     Ok(true)
@@ -71,7 +71,7 @@ unsafe fn bind_line_pipeline(
     pipeline: &RRPipeline,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 }
 
@@ -84,7 +84,7 @@ unsafe fn bind_line_mesh_buffers(
     options: &LineMeshDrawOptions,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let image_index = ctx.image_index;
     let graphics = ctx.graphics;
 
@@ -129,7 +129,7 @@ pub unsafe fn push_fragment_alpha_constant(
         &alpha as *const f32 as *const u8,
         std::mem::size_of::<f32>(),
     );
-    ctx.device.device.cmd_push_constants(
+    ctx.device.device().cmd_push_constants(
         cmd,
         pipeline_layout,
         vk::ShaderStageFlags::FRAGMENT,

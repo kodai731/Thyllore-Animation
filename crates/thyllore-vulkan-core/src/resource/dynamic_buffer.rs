@@ -34,7 +34,7 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
         let mapped_ptr =
             rrdevice
-                .device
+                .device()
                 .map_memory(memory, 0, total_size, vk::MemoryMapFlags::empty())?;
 
         Ok(Self {
@@ -107,17 +107,17 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.mapped_ptr != std::ptr::null_mut() {
-            rrdevice.device.unmap_memory(self.memory);
+            rrdevice.device().unmap_memory(self.memory);
             self.mapped_ptr = std::ptr::null_mut();
         }
 
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
 
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
     }

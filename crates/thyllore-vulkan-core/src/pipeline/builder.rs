@@ -541,7 +541,7 @@ impl PipelineBuilder {
             .push_constant_ranges(&push_constant_ranges);
 
         rrpipeline.pipeline_layout = rrdevice
-            .device
+            .device()
             .create_pipeline_layout(&pipeline_layout_info, None)?;
 
         // Create graphics pipeline
@@ -561,14 +561,14 @@ impl PipelineBuilder {
             .subpass(0);
 
         let pipelines = rrdevice
-            .device
+            .device()
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info.build()], None)
             .map_err(|e| anyhow::anyhow!("Failed to create pipeline: {:?}", e))?;
 
         rrpipeline.pipeline = pipelines.0[0];
 
         for stage in &shader_stages {
-            rrdevice.device.destroy_shader_module(stage.module, None);
+            rrdevice.device().destroy_shader_module(stage.module, None);
         }
 
         println!("Pipeline created successfully");
@@ -691,7 +691,7 @@ impl RRPipeline {
         descriptor_set_layouts: &[&ReflectedSetLayout],
         push_constant_ranges: &[vk::PushConstantRange],
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         let owned_layouts: Vec<ReflectedSetLayout> = descriptor_set_layouts
             .iter()
@@ -785,7 +785,7 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
         .code_size(bytecode.code_size())
         .code(bytecode.code());
 
-    Ok(rrdevice.device.create_shader_module(&info, None)?)
+    Ok(rrdevice.device().create_shader_module(&info, None)?)
 }
 
 type VertexInputDescriptions = (
@@ -907,7 +907,7 @@ fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions
 
 impl GpuResource for RRPipeline {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         self.pipeline = vk::Pipeline::null();
         self.pipeline_layout = vk::PipelineLayout::null();
     }

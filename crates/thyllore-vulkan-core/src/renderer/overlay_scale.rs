@@ -164,7 +164,7 @@ impl ReducedResolveTarget {
 
 impl GpuResource for ReducedResolveTarget {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

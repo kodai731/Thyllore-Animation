@@ -225,7 +225,9 @@ impl ReflectedSetLayout {
         let block_sizes = reflected_block_sizes(&table, set);
 
         let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
-        let handle = rrdevice.device.create_descriptor_set_layout(&info, None)?;
+        let handle = rrdevice
+            .device()
+            .create_descriptor_set_layout(&info, None)?;
         Ok(Self {
             handle,
             bindings,
@@ -296,7 +298,7 @@ impl ReflectedSetLayout {
         if self.handle != vk::DescriptorSetLayout::null() {
             rrdevice.forget_descriptor_layout(self.handle);
             rrdevice
-                .device
+                .device()
                 .destroy_descriptor_set_layout(self.handle, None);
             self.handle = vk::DescriptorSetLayout::null();
         }
@@ -486,7 +488,7 @@ impl DescriptorSetWriter<'_> {
             .collect();
 
         rrdevice
-            .device
+            .device()
             .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
     }
 }

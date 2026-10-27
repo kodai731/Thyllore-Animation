@@ -140,7 +140,7 @@ impl SampledTexture {
         )?;
         let copies = pack_regions(rrdevice, staging_memory, total_len, regions)?;
 
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let command_buffer = begin_single_time_commands(rrdevice, command_pool.command_pool)?;
         transition_for_transfer(device, command_buffer, self.image, old_layout);
         device.cmd_copy_buffer_to_image(
@@ -171,7 +171,7 @@ unsafe fn pack_regions(
     regions: &[PixelRegion<'_>],
 ) -> Result<Vec<vk::BufferImageCopy>> {
     let mapped = rrdevice
-        .device
+        .device()
         .map_memory(
             staging_memory,
             0,
@@ -196,7 +196,7 @@ unsafe fn pack_regions(
         offset += region.packed_len();
     }
 
-    rrdevice.device.unmap_memory(staging_memory);
+    rrdevice.device().unmap_memory(staging_memory);
     Ok(copies)
 }
 

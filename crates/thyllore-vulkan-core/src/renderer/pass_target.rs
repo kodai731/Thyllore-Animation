@@ -373,7 +373,7 @@ pub unsafe fn record_pending_barriers(
         .map(PendingBarrier::image_memory_barrier)
         .collect();
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         src_stage,
         dst_stage,

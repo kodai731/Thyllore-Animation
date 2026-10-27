@@ -97,7 +97,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         slot: usize,
     ) -> Result<vk::DeviceAddress> {
         let base = rrdevice
-            .device
+            .device()
             .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
         Ok(base + self.slot_offset(slot)?)
     }
@@ -105,14 +105,14 @@ impl<T: GpuBlock> UniformBuffer<T> {
     pub unsafe fn write_slot(&self, rrdevice: &RRDevice, slot: usize, value: &T) -> Result<()> {
         let offset = self.slot_offset(slot)?;
         let bytes = value.as_bytes();
-        let mapped = rrdevice.device.map_memory(
+        let mapped = rrdevice.device().map_memory(
             self.memory,
             offset,
             bytes.len() as vk::DeviceSize,
             vk::MemoryMapFlags::empty(),
         )?;
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), mapped.cast::<u8>(), bytes.len());
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
         Ok(())
     }
 
@@ -146,7 +146,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
             ),
         );
         rrdevice
-            .device
+            .device()
             .cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
         self.record_barrier(
             rrdevice,
@@ -178,7 +178,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
             .offset(offset)
             .size(self.block_size())
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             src_stage,
             dst_stage,
@@ -203,7 +203,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
 
 impl<T: GpuBlock> GpuResource for UniformBuffer<T> {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

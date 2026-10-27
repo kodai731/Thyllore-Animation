@@ -165,12 +165,14 @@ impl OverlayNodeSpec {
         self.ensure_push_constants_match(push_constants)?;
         self.begin_render_pass(rrdevice, cmd, pass, render_area);
 
-        rrdevice
-            .device
-            .cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-        set_full_viewport(&rrdevice.device, cmd, pass.extent);
+        rrdevice.device().cmd_bind_pipeline(
+            cmd,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
+        );
+        set_full_viewport(&rrdevice.device(), cmd, pass.extent);
         if let Some(bytes) = push_constants {
-            rrdevice.device.cmd_push_constants(
+            rrdevice.device().cmd_push_constants(
                 cmd,
                 pipeline.pipeline_layout,
                 vk::ShaderStageFlags::FRAGMENT,
@@ -180,8 +182,8 @@ impl OverlayNodeSpec {
         }
 
         for draw in draws {
-            rrdevice.device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-            rrdevice.device.cmd_bind_descriptor_sets(
+            rrdevice.device().cmd_set_scissor(cmd, 0, &[draw.scissor]);
+            rrdevice.device().cmd_bind_descriptor_sets(
                 cmd,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
@@ -189,10 +191,10 @@ impl OverlayNodeSpec {
                 descriptor_sets,
                 &draw.dynamic_offsets,
             );
-            draw_fullscreen_triangle(&rrdevice.device, cmd);
+            draw_fullscreen_triangle(&rrdevice.device(), cmd);
         }
 
-        rrdevice.device.cmd_end_render_pass(cmd);
+        rrdevice.device().cmd_end_render_pass(cmd);
         Ok(())
     }
 
@@ -217,9 +219,11 @@ impl OverlayNodeSpec {
             .framebuffer(pass.framebuffer)
             .render_area(render_area)
             .clear_values(&clear_values);
-        rrdevice
-            .device
-            .cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+        rrdevice.device().cmd_begin_render_pass(
+            cmd,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
     }
 
     fn ensure_push_constants_match(&self, push_constants: Option<&[u8]>) -> Result<()> {

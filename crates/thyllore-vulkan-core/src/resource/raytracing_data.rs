@@ -128,7 +128,7 @@ impl RayTracingData {
     ) -> Result<()> {
         log!("Building acceleration structures...");
         if let Some(mut previous) = self.acceleration_structure.take() {
-            rrdevice.device.device_wait_idle()?;
+            rrdevice.device().device_wait_idle()?;
             previous.destroy(rrdevice);
         }
 

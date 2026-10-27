@@ -34,7 +34,7 @@ unsafe fn create_framebuffer(
         .width(extent.width)
         .height(extent.height)
         .layers(1);
-    Ok(rrdevice.device.create_framebuffer(&info, None)?)
+    Ok(rrdevice.device().create_framebuffer(&info, None)?)
 }
 
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
@@ -114,7 +114,7 @@ pub unsafe fn create_wind_render_targets(
 
 impl GpuResource for WindRenderTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, &rrdevice.device);
+        destroy_render_targets(self, &rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {
@@ -145,7 +145,7 @@ pub unsafe fn recreate_wind_framebuffer(
     height: u32,
 ) -> Result<()> {
     rrdevice
-        .device
+        .device()
         .destroy_framebuffer(targets.framebuffer, None);
     targets.framebuffer = create_framebuffer(
         rrdevice,

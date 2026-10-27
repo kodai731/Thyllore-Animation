@@ -34,7 +34,7 @@ impl RRSwapchain {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for view in self.swapchain_image_views.drain(..) {
             device.destroy_image_view(view, None);
         }
@@ -161,9 +161,9 @@ pub unsafe fn create_swapchain(
         .old_swapchain(vk::SwapchainKHR::null());
 
     let mut rrswapchain = RRSwapchain::default();
-    rrswapchain.swapchain = rrdevice.device.create_swapchain_khr(&info, None)?;
+    rrswapchain.swapchain = rrdevice.device().create_swapchain_khr(&info, None)?;
     rrswapchain.swapchain_images = rrdevice
-        .device
+        .device()
         .get_swapchain_images_khr(rrswapchain.swapchain)?;
     rrswapchain.swapchain_format = surface_format.format;
     rrswapchain.swapchain_extent = extent;

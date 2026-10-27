@@ -19,7 +19,7 @@ pub unsafe fn begin_composite_render_pass(
     attachment_count: usize,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
         .extent(extent);
@@ -59,7 +59,7 @@ pub unsafe fn record_composite_draw(
     debug_view_mode_value: i32,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 
@@ -107,7 +107,7 @@ pub unsafe fn record_composite_draw(
 }
 
 pub unsafe fn end_composite_render_pass(ctx: &FrameRenderContext, cmd: vk::CommandBuffer) {
-    ctx.device.device.cmd_end_render_pass(cmd);
+    ctx.device.device().cmd_end_render_pass(cmd);
 }
 
 pub unsafe fn begin_hdr_render_pass(
@@ -118,7 +118,7 @@ pub unsafe fn begin_hdr_render_pass(
     background_radiance: f32,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
         .extent(extent);

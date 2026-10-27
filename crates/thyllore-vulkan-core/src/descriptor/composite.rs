@@ -151,7 +151,7 @@ impl RRCompositeDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         self.selection.destroy(device);
         self.layout.destroy(rrdevice);
     }

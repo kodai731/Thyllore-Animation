@@ -53,7 +53,7 @@ impl HdrBuffer {
 
         let render_pass = Self::create_render_pass(rrdevice)?;
 
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         log!(
             "Created HDR buffer: {}x{} format {:?}",
@@ -81,7 +81,9 @@ impl HdrBuffer {
         depth_image_view: vk::ImageView,
     ) -> Result<()> {
         if self.framebuffer != vk::Framebuffer::null() {
-            rrdevice.device.destroy_framebuffer(self.framebuffer, None);
+            rrdevice
+                .device()
+                .destroy_framebuffer(self.framebuffer, None);
             self.framebuffer = vk::Framebuffer::null();
         }
 
@@ -93,7 +95,7 @@ impl HdrBuffer {
             .height(self.height)
             .layers(1);
         let framebuffer = rrdevice
-            .device
+            .device()
             .create_framebuffer(&framebuffer_info, None)?;
 
         self.framebuffer = framebuffer;
@@ -192,7 +194,7 @@ impl HdrBuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -230,7 +232,7 @@ impl HdrBuffer {
         // The depth attachment belongs to the G-buffer, which is resized after
         // this call and re-attaches its new depth view; the old one has the
         // previous extent and would not fit this framebuffer.
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         *self = Self::new(instance, rrdevice, new_width, new_height)?;
 
         log!("Resized HDR buffer to: {}x{}", new_width, new_height);
@@ -284,7 +286,7 @@ impl Drop for HdrBuffer {
 
 impl GpuResource for HdrBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

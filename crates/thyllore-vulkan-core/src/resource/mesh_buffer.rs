@@ -75,21 +75,21 @@ impl MeshBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
         self.vertex_buffer.destroy(rrdevice);
         self.index_buffer.destroy(rrdevice);
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }

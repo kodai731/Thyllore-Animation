@@ -27,7 +27,7 @@ pub struct RRRender {
 
 impl RRRender {
     pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for fb in self.framebuffers.drain(..) {
             device.destroy_framebuffer(fb, None);
         }
@@ -47,7 +47,7 @@ impl RRRender {
     }
 
     pub unsafe fn destroy_gbuffer_attachments(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         if self.gbuffer_framebuffer != vk::Framebuffer::null() {
             device.destroy_framebuffer(self.gbuffer_framebuffer, None);
             self.gbuffer_framebuffer = vk::Framebuffer::null();
@@ -61,7 +61,7 @@ impl RRRender {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         self.destroy_size_dependent(rrdevice);
         self.destroy_gbuffer_attachments(rrdevice);
 
@@ -241,7 +241,7 @@ unsafe fn create_render_pass(
         .subpasses(subpasses)
         .dependencies(dependencies);
 
-    rrrender.render_pass = rrdevice.device.create_render_pass(&info, None)?;
+    rrrender.render_pass = rrdevice.device().create_render_pass(&info, None)?;
     println!("render pass {:?}", rrrender);
     Ok(())
 }
@@ -477,7 +477,7 @@ pub unsafe fn create_gbuffer_render_pass(
         .subpasses(&subpasses)
         .dependencies(&dependencies);
 
-    rrrender.gbuffer_render_pass = rrdevice.device.create_render_pass(&info, None)?;
+    rrrender.gbuffer_render_pass = rrdevice.device().create_render_pass(&info, None)?;
 
     log!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
@@ -546,5 +546,5 @@ pub unsafe fn create_color_overlay_render_pass(
         .subpasses(&subpasses)
         .dependencies(&dependencies);
 
-    Ok(rrdevice.device.create_render_pass(&info, None)?)
+    Ok(rrdevice.device().create_render_pass(&info, None)?)
 }

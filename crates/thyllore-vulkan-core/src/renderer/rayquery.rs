@@ -14,7 +14,7 @@ pub unsafe fn record_ray_query_pass(
     normal_offset: f32,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
 
     insert_pre_compute_barriers(device, gbuffer, cmd);
     dispatch_compute(device, gbuffer, pipeline, descriptor, normal_offset, cmd);

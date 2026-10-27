@@ -17,7 +17,7 @@ pub unsafe fn acquire_swapchain_image(
     swapchain: vk::SwapchainKHR,
     image_available: vk::Semaphore,
 ) -> Result<AcquireOutcome> {
-    let result = rrdevice.device.acquire_next_image_khr(
+    let result = rrdevice.device().acquire_next_image_khr(
         swapchain,
         u64::MAX,
         image_available,
@@ -60,9 +60,9 @@ pub unsafe fn submit_and_present(
         .command_buffers(command_buffers)
         .signal_semaphores(signal_semaphores);
 
-    rrdevice.device.reset_fences(&[frame.fence])?;
+    rrdevice.device().reset_fences(&[frame.fence])?;
     rrdevice
-        .device
+        .device()
         .queue_submit(rrdevice.graphics_queue, &[submit_info], frame.fence)?;
 
     let swapchains = &[frame.swapchain];
@@ -72,7 +72,7 @@ pub unsafe fn submit_and_present(
         .swapchains(swapchains)
         .image_indices(image_indices);
     let present_result = rrdevice
-        .device
+        .device()
         .queue_present_khr(rrdevice.present_queue, &present_info);
 
     match present_result {
@@ -124,7 +124,7 @@ impl FrameSync {
 
 impl GpuResource for FrameSync {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for semaphore in self
             .image_available
             .drain(..)
@@ -157,7 +157,7 @@ impl CommandState {
 
 impl GpuResource for CommandState {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         if !self.buffers.command_buffers.is_empty() {
             device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
             self.buffers.command_buffers.clear();

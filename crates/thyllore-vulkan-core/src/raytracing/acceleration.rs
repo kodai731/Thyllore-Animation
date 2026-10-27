@@ -64,7 +64,7 @@ unsafe fn allocate_device_buffer(
     usage: vk::BufferUsageFlags,
     memory_flags: vk::MemoryPropertyFlags,
 ) -> Result<DeviceBuffer> {
-    let device = &rrdevice.device;
+    let device = &rrdevice.device();
 
     let buffer_info = vk::BufferCreateInfo::builder().size(size).usage(usage);
     let buffer = device.create_buffer(&buffer_info, None)?;
@@ -120,7 +120,7 @@ unsafe fn execute_as_build(
 
     let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
 
-    rrdevice.device.cmd_build_acceleration_structures_khr(
+    rrdevice.device().cmd_build_acceleration_structures_khr(
         command_buffer,
         std::slice::from_ref(build_info),
         &[&build_range_infos[0]],
@@ -155,7 +155,7 @@ unsafe fn create_acceleration_structure_with_buffer(
         .type_(as_type);
 
     let acceleration_structure = rrdevice
-        .device
+        .device()
         .create_acceleration_structure_khr(&as_create_info, None)?;
 
     Ok((acceleration_structure, as_buf.buffer, as_buf.memory))
@@ -196,7 +196,7 @@ unsafe fn fill_instances_buffer(
 ) -> Result<()> {
     let ptr =
         rrdevice
-            .device
+            .device()
             .map_memory(buf.memory, 0, instances_size, vk::MemoryMapFlags::empty())?
             as *mut vk::AccelerationStructureInstanceKHR;
 
@@ -223,7 +223,7 @@ unsafe fn fill_instances_buffer(
     }
 
     std::ptr::copy_nonoverlapping(instances.as_ptr(), ptr, instances.len());
-    rrdevice.device.unmap_memory(buf.memory);
+    rrdevice.device().unmap_memory(buf.memory);
 
     Ok(())
 }
@@ -278,7 +278,7 @@ impl RRAccelerationStructure {
         index_buffer: &vk::Buffer,
         index_count: u32,
     ) -> Result<RRBLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         let vertex_addr = device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
@@ -358,7 +358,7 @@ impl RRAccelerationStructure {
         aabb_buffer: &vk::Buffer,
         aabb_count: u32,
     ) -> Result<RRBLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         let aabb_addr = device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder().buffer(*aabb_buffer),
@@ -461,13 +461,13 @@ impl RRAccelerationStructure {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
         let ptr = rrdevice
-            .device
+            .device()
             .map_memory(buf.memory, 0, size, vk::MemoryMapFlags::empty())?
             as *mut vk::AabbPositionsKHR;
         ptr.write(aabb);
-        rrdevice.device.unmap_memory(buf.memory);
+        rrdevice.device().unmap_memory(buf.memory);
         let mut blas = Self::create_aabb_blas(instance, rrdevice, rrcommand_pool, &buf.buffer, 1)?;
-        destroy_device_buffer(&rrdevice.device, &buf);
+        destroy_device_buffer(&rrdevice.device(), &buf);
         blas.transform = vk::TransformMatrixKHR {
             matrix: AffineRows3x4::from_mat4(*model).rows,
         };
@@ -481,7 +481,7 @@ impl RRAccelerationStructure {
         blas_list: &[RRBLAS],
         procedural_blas: &[RRBLAS],
     ) -> Result<RRTLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         let instances_buf = if blas_list.is_empty() && procedural_blas.is_empty() {
             // Empty case: allocate buffer with 1 zero-initialized instance (mask=0, accelerationStructureReference=0)
@@ -499,14 +499,14 @@ impl RRAccelerationStructure {
             )?;
 
             // Zero-initialize: write a single zeroed instance
-            let ptr = rrdevice.device.map_memory(
+            let ptr = rrdevice.device().map_memory(
                 buf.memory,
                 0,
                 instances_size,
                 vk::MemoryMapFlags::empty(),
             )? as *mut vk::AccelerationStructureInstanceKHR;
             std::ptr::write(ptr, vk::AccelerationStructureInstanceKHR::default());
-            rrdevice.device.unmap_memory(buf.memory);
+            rrdevice.device().unmap_memory(buf.memory);
 
             buf
         } else {
@@ -603,7 +603,7 @@ impl RRAccelerationStructure {
         index_buffer: &vk::Buffer,
         index_count: u32,
     ) -> Result<()> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         let vertex_addr = device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
@@ -686,7 +686,7 @@ impl RRAccelerationStructure {
         blas_list: &[RRBLAS],
         procedural_blas: &[RRBLAS],
     ) -> Result<()> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
         if blas_list.is_empty() && procedural_blas.is_empty() {
             return Ok(());
@@ -791,7 +791,7 @@ impl RRAccelerationStructure {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         if let Some(tlas_as) = self.tlas.acceleration_structure {
             device.destroy_acceleration_structure_khr(tlas_as, None);
         }
@@ -897,10 +897,10 @@ impl RRAccelerationStructure {
             Vec::with_capacity(vertex_buffers.len() + procedurals.len());
 
         for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
-            let vertex_address = rrdevice.device.get_buffer_device_address(
+            let vertex_address = rrdevice.device().get_buffer_device_address(
                 &vk::BufferDeviceAddressInfo::builder().buffer(**vertex_buffer),
             );
-            let index_address = rrdevice.device.get_buffer_device_address(
+            let index_address = rrdevice.device().get_buffer_device_address(
                 &vk::BufferDeviceAddressInfo::builder().buffer(**index_buffer),
             );
 

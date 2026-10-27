@@ -25,14 +25,14 @@ pub unsafe fn bind_graphics_mesh(
     index_width: IndexWidth,
 ) {
     rrdevice
-        .device
+        .device()
         .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
 
     rrdevice
-        .device
+        .device()
         .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-    rrdevice.device.cmd_bind_index_buffer(
+    rrdevice.device().cmd_bind_index_buffer(
         command_buffer,
         index_buffer,
         0,
@@ -47,7 +47,7 @@ pub unsafe fn bind_graphics_descriptor_set(
     set_index: u32,
     descriptor_set: DescriptorSet,
 ) {
-    rrdevice.device.cmd_bind_descriptor_sets(
+    rrdevice.device().cmd_bind_descriptor_sets(
         command_buffer,
         vk::PipelineBindPoint::GRAPHICS,
         pipeline_layout,
@@ -64,7 +64,7 @@ pub unsafe fn draw_indexed(
     first_index: u32,
     vertex_offset: i32,
 ) {
-    rrdevice.device.cmd_draw_indexed(
+    rrdevice.device().cmd_draw_indexed(
         command_buffer,
         index_count,
         1,
@@ -88,13 +88,13 @@ pub unsafe fn set_viewport_size(
         .min_depth(0.0)
         .max_depth(1.0);
     rrdevice
-        .device
+        .device()
         .cmd_set_viewport(command_buffer, 0, &[viewport]);
 }
 
 pub unsafe fn set_scissor(rrdevice: &RRDevice, command_buffer: CommandBuffer, scissor: Rect2D) {
     rrdevice
-        .device
+        .device()
         .cmd_set_scissor(command_buffer, 0, &[scissor]);
 }
 
@@ -104,7 +104,7 @@ pub unsafe fn push_vertex_constants(
     pipeline_layout: PipelineLayout,
     bytes: &[u8],
 ) {
-    rrdevice.device.cmd_push_constants(
+    rrdevice.device().cmd_push_constants(
         command_buffer,
         pipeline_layout,
         vk::ShaderStageFlags::VERTEX,

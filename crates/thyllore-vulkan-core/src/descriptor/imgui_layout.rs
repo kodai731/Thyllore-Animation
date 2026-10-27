@@ -14,15 +14,15 @@ pub unsafe fn destroy_imgui_pipeline_objects(
     sampler: Option<vk::Sampler>,
 ) {
     if let Some(pipeline) = pipeline {
-        rrdevice.device.destroy_pipeline(pipeline, None);
+        rrdevice.device().destroy_pipeline(pipeline, None);
     }
     if let Some(pipeline_layout) = pipeline_layout {
         rrdevice
-            .device
+            .device()
             .destroy_pipeline_layout(pipeline_layout, None);
     }
     if let Some(sampler) = sampler {
-        rrdevice.device.destroy_sampler(sampler, None);
+        rrdevice.device().destroy_sampler(sampler, None);
     }
 }
 

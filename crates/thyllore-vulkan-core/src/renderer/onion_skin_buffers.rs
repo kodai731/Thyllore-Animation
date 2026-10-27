@@ -59,7 +59,7 @@ impl OnionSkinGhostBuffer {
             ));
         }
 
-        let memory = rrdevice.device.map_memory(
+        let memory = rrdevice.device().map_memory(
             self.vertex_buffer_memory,
             0,
             data_size,
@@ -72,7 +72,7 @@ impl OnionSkinGhostBuffer {
             data_size as usize,
         );
 
-        rrdevice.device.unmap_memory(self.vertex_buffer_memory);
+        rrdevice.device().unmap_memory(self.vertex_buffer_memory);
 
         self.vertex_count = vertices.len() as u32;
         self.tint_color = tint_color;
@@ -82,8 +82,10 @@ impl OnionSkinGhostBuffer {
     }
 
     pub unsafe fn destroy(&self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.vertex_buffer, None);
-        rrdevice.device.free_memory(self.vertex_buffer_memory, None);
+        rrdevice.device().destroy_buffer(self.vertex_buffer, None);
+        rrdevice
+            .device()
+            .free_memory(self.vertex_buffer_memory, None);
     }
 }
 

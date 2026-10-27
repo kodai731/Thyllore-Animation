@@ -31,7 +31,7 @@ pub unsafe fn record_dof_pass(
     camera_near_plane: f32,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let extent = dof_buffer.extent();
 
     let push_constants = DofPushConstants {

@@ -72,7 +72,7 @@ pub unsafe fn recreate_flame_history(
     height: u32,
     hdr_view: vk::ImageView,
 ) -> Result<()> {
-    history.destroy(&rrdevice.device);
+    history.destroy(&rrdevice.device());
     *history = create_flame_history(
         instance,
         rrdevice,

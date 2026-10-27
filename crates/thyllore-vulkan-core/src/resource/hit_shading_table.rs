@@ -70,7 +70,7 @@ impl HitShadingTable {
         let data_len = records.len() * record_size;
         let data = std::slice::from_raw_parts(records.as_ptr() as *const u8, data_len);
 
-        let mapped = rrdevice.device.map_memory(
+        let mapped = rrdevice.device().map_memory(
             self.memory,
             0,
             data.len() as vk::DeviceSize,
@@ -79,7 +79,7 @@ impl HitShadingTable {
 
         std::ptr::copy_nonoverlapping(data.as_ptr(), mapped as *mut u8, data.len());
 
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
 
         Ok(())
     }
@@ -92,11 +92,11 @@ impl HitShadingTable {
     /// Destroy the underlying buffer and memory.
     pub unsafe fn destroy(mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
     }

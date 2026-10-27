@@ -59,7 +59,7 @@ impl OnionSkinPassResources {
             1,
         )?;
 
-        let sampler = Self::create_ghost_sampler(&rrdevice.device)?;
+        let sampler = Self::create_ghost_sampler(&rrdevice.device())?;
 
         Ok((image, memory, image_view, sampler))
     }
@@ -138,7 +138,7 @@ impl OnionSkinPassResources {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -199,7 +199,7 @@ impl OnionSkinPassResources {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -257,7 +257,7 @@ impl OnionSkinPassResources {
             .height(height)
             .layers(1);
 
-        let framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+        let framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         Ok(framebuffer)
     }
 
@@ -288,18 +288,18 @@ impl OnionSkinPassResources {
         height: u32,
     ) -> Result<()> {
         rrdevice
-            .device
+            .device()
             .destroy_framebuffer(self.ghost_framebuffer, None);
         rrdevice
-            .device
+            .device()
             .destroy_framebuffer(self.composite_framebuffer, None);
 
-        rrdevice.device.destroy_sampler(self.ghost_sampler, None);
+        rrdevice.device().destroy_sampler(self.ghost_sampler, None);
         rrdevice
-            .device
+            .device()
             .destroy_image_view(self.ghost_image_view, None);
-        rrdevice.device.destroy_image(self.ghost_image, None);
-        rrdevice.device.free_memory(self.ghost_image_memory, None);
+        rrdevice.device().destroy_image(self.ghost_image, None);
+        rrdevice.device().free_memory(self.ghost_image_memory, None);
 
         let (image, memory, view, sampler) =
             Self::create_ghost_buffer(instance, rrdevice, width, height)?;
@@ -337,7 +337,7 @@ impl OnionSkinPassResources {
 
 impl GpuResource for OnionSkinPassResources {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.ghost_image = vk::Image::null();
         self.ghost_render_pass = vk::RenderPass::null();

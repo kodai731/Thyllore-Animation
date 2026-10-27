@@ -42,7 +42,7 @@ pub unsafe fn record_auto_exposure_pass(
     frame_slot: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let pixel_count = buffers.width * buffers.height;
 
     let histogram_push = HistogramPushConstants {

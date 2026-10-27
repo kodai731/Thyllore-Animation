@@ -31,7 +31,7 @@ unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(0.0);
-    Ok(rrdevice.device.create_sampler(&info, None)?)
+    Ok(rrdevice.device().create_sampler(&info, None)?)
 }
 
 impl VolumeImage {

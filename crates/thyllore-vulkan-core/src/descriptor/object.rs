@@ -143,7 +143,7 @@ impl ObjectDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for buffer in &mut self.buffers {
             buffer.destroy(device);
         }

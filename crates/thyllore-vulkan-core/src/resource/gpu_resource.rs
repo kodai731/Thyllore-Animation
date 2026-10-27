@@ -25,7 +25,7 @@ macro_rules! raw_handle_resource {
         impl GpuResource for $handle {
             unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
                 if *self != <$handle>::null() {
-                    rrdevice.device.$destroy(*self, None);
+                    rrdevice.device().$destroy(*self, None);
                     *self = <$handle>::null();
                 }
             }

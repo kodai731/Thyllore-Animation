@@ -111,7 +111,7 @@ impl MaterialManager {
     /// The caller guarantees the device is idle: the sets go back to the allocator for reuse.
     pub unsafe fn clear_materials(&mut self, rrdevice: &RRDevice) {
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(&rrdevice.device);
+            material.uniform_buffer.destroy(&rrdevice.device());
             self.layout.release_set(rrdevice, material.descriptor_set);
         }
 
@@ -120,7 +120,7 @@ impl MaterialManager {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for material in self.materials.values_mut() {
             material.uniform_buffer.destroy(device);
         }

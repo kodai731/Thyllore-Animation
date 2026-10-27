@@ -129,7 +129,7 @@ impl RRRayTracingPipeline {
         push_constant_ranges: &[vk::PushConstantRange],
         recursion_depth: u32,
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let trace_stages = TraceStages::from_pass(pass)?;
 
         let mut modules = Vec::with_capacity(pass.stages.len());
@@ -292,7 +292,7 @@ impl ShaderBindingTable {
         rt_props: &vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
         hit_group_count: usize,
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let handle_size = rt_props.shader_group_handle_size as u64;
         let handle_alignment = rt_props.shader_group_handle_alignment as u64;
         let base_alignment = rt_props.shader_group_base_alignment as u64;
@@ -376,7 +376,7 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
         .code_size(bytecode.code_size())
         .code(bytecode.code());
 
-    Ok(rrdevice.device.create_shader_module(&info, None)?)
+    Ok(rrdevice.device().create_shader_module(&info, None)?)
 }
 
 pub fn align_up(v: u64, a: u64) -> u64 {
@@ -388,7 +388,7 @@ impl GpuResource for RRRayTracingPipeline {
         if self.pipeline == vk::Pipeline::null() {
             return;
         }
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         self.pipeline = vk::Pipeline::null();
         self.pipeline_layout = vk::PipelineLayout::null();
         self.sbt_buffer = vk::Buffer::null();

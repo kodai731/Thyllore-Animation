@@ -129,10 +129,10 @@ impl OffscreenFramebuffer {
             .height(height)
             .layers(1);
         let framebuffer = rrdevice
-            .device
+            .device()
             .create_framebuffer(&framebuffer_info, None)?;
 
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         log!(
             "Created offscreen framebuffer: {}x{} with MSAA {:?}",
@@ -265,7 +265,7 @@ impl OffscreenFramebuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -303,7 +303,7 @@ impl OffscreenFramebuffer {
 
         let msaa_samples = self.msaa_samples;
         let format = self.format;
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         let new_fb = Self::new(
             instance,
@@ -358,7 +358,7 @@ impl OffscreenFramebuffer {
 
 impl GpuResource for OffscreenFramebuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.sampler = vk::Sampler::null();
         self.framebuffer = vk::Framebuffer::null();

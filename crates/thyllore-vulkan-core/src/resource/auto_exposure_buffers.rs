@@ -52,7 +52,7 @@ impl AutoExposureBuffers {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        Self::zero_luminance_buffer(&rrdevice.device, luminance_buffer_memory)?;
+        Self::zero_luminance_buffer(&rrdevice.device(), luminance_buffer_memory)?;
 
         let mut readback_buffers = [vk::Buffer::null(); 2];
         let mut readback_memories = [vk::DeviceMemory::null(); 2];
@@ -65,7 +65,7 @@ impl AutoExposureBuffers {
                 vk::BufferUsageFlags::TRANSFER_DST,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
-            Self::zero_readback_buffer(&rrdevice.device, mem)?;
+            Self::zero_readback_buffer(&rrdevice.device(), mem)?;
             readback_buffers[i] = buf;
             readback_memories[i] = mem;
         }
@@ -134,7 +134,7 @@ impl AutoExposureBuffers {
             .size(LUMINANCE_BUFFER_SIZE)
             .build();
 
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::COMPUTE_SHADER,
             vk::PipelineStageFlags::TRANSFER,
@@ -144,7 +144,7 @@ impl AutoExposureBuffers {
             &[] as &[vk::ImageMemoryBarrier],
         );
 
-        rrdevice.device.cmd_copy_buffer(
+        rrdevice.device().cmd_copy_buffer(
             command_buffer,
             self.luminance_buffer,
             self.readback_buffers[slot],
@@ -161,7 +161,7 @@ impl AutoExposureBuffers {
         rrdevice: &RRDevice,
         slot: usize,
     ) -> Option<AutoExposureReadback> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let data = device
             .map_memory(
                 self.readback_memories[slot],
@@ -192,7 +192,7 @@ impl AutoExposureBuffers {
             return Ok(());
         }
 
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         let new_buf = Self::new(instance, rrdevice, new_width, new_height)?;
         *self = new_buf;
 
@@ -243,7 +243,7 @@ impl Drop for AutoExposureBuffers {
 
 impl GpuResource for AutoExposureBuffers {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

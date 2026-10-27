@@ -219,31 +219,31 @@ impl RRGBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.position_image_view,
             &mut self.position_image,
             &mut self.position_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.normal_image_view,
             &mut self.normal_image,
             &mut self.normal_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.albedo_image_view,
             &mut self.albedo_image,
             &mut self.albedo_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.object_id_image_view,
             &mut self.object_id_image,
             &mut self.object_id_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.shadow_mask_image_view,
             &mut self.shadow_mask_image,
             &mut self.shadow_mask_image_memory,
@@ -251,13 +251,13 @@ impl RRGBuffer {
 
         if self.readback_staging_buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.readback_staging_buffer, None);
             self.readback_staging_buffer = vk::Buffer::null();
         }
         if self.readback_staging_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.readback_staging_memory, None);
             self.readback_staging_memory = vk::DeviceMemory::null();
         }
@@ -334,7 +334,7 @@ pub unsafe fn read_picked_texel(
     staging_memory: vk::DeviceMemory,
 ) -> Option<(u32, [f32; 3])> {
     let ptr = rrdevice
-        .device
+        .device()
         .map_memory(
             staging_memory,
             0,
@@ -347,7 +347,7 @@ pub unsafe fn read_picked_texel(
     let position_ptr = (ptr as *const u8).add(READBACK_POSITION_OFFSET as usize) as *const f32;
     let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
 
-    rrdevice.device.unmap_memory(staging_memory);
+    rrdevice.device().unmap_memory(staging_memory);
     Some((object_id, world_position))
 }
 

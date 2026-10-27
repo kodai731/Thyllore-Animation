@@ -57,7 +57,7 @@ impl Deref for Device {
 
 #[derive(Debug, Default)]
 pub struct RRDevice {
-    pub(crate) device: Device,
+    device: Device,
     pub physical_device: vk::PhysicalDevice,
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
@@ -70,6 +70,11 @@ pub struct RRDevice {
 }
 
 impl RRDevice {
+    #[inline]
+    pub(crate) fn device(&self) -> &Device {
+        &self.device
+    }
+
     pub unsafe fn default() -> RRDevice {
         Self {
             device: std::mem::zeroed(),

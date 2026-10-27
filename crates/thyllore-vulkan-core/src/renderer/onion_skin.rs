@@ -13,7 +13,7 @@ pub unsafe fn record_onion_skin_ghost_pass(
     image_index: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     begin_ghost_render_pass(device, resources, cmd);
     bind_ghost_pipeline_and_state(device, resources, cmd);
     draw_ghosts(ctx, resources, onion_skin_gpu, image_index, cmd)?;
@@ -26,7 +26,7 @@ pub unsafe fn record_onion_skin_composite_pass(
     resources: &OnionSkinPassResources,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     begin_composite_render_pass(device, resources, cmd);
 
     device.cmd_bind_pipeline(
@@ -153,7 +153,7 @@ unsafe fn draw_ghosts(
     image_index: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let graphics_resources = ctx.graphics;
 
     let source_mesh_index = onion_skin_gpu

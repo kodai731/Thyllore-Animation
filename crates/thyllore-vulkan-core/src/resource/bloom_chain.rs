@@ -32,7 +32,7 @@ impl BloomChain {
         let downsample_render_pass =
             Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::DONT_CARE)?;
         let upsample_render_pass = Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::LOAD)?;
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         let mip_extents = compute_mip_extents(base_width, base_height, mip_count);
         for (index, extent) in mip_extents.iter().enumerate() {
@@ -117,7 +117,7 @@ impl BloomChain {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -173,7 +173,7 @@ fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec
 
 impl GpuResource for BloomChain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.sampler = vk::Sampler::null();
         self.downsample_render_pass = vk::RenderPass::null();

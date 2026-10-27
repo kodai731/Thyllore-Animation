@@ -37,7 +37,7 @@ pub unsafe fn record_water_scene_color_copy(
     extent: Extent2D,
     cmd: CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
 
     let subresource = vk::ImageSubresourceLayers::builder()
         .aspect_mask(vk::ImageAspectFlags::COLOR)

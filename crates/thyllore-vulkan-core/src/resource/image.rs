@@ -104,19 +104,19 @@ impl RRImage {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }
@@ -166,12 +166,14 @@ pub unsafe fn create_texture_image(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -218,8 +220,8 @@ pub unsafe fn create_texture_image(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
@@ -296,12 +298,14 @@ pub unsafe fn create_texture_image_from_file(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(rgba_pixels.as_ptr(), memory.cast(), rgba_pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -348,8 +352,8 @@ pub unsafe fn create_texture_image_from_file(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
@@ -383,8 +387,8 @@ pub unsafe fn create_image(
         .samples(samples)
         .flags(vk::ImageCreateFlags::empty());
 
-    let image = rrdevice.device.create_image(&info, None)?;
-    let requirements = rrdevice.device.get_image_memory_requirements(image);
+    let image = rrdevice.device().create_image(&info, None)?;
+    let requirements = rrdevice.device().get_image_memory_requirements(image);
     let info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
         .memory_type_index(get_memory_type_index(
@@ -393,8 +397,10 @@ pub unsafe fn create_image(
             properties,
             requirements,
         )?);
-    let image_memory = rrdevice.device.allocate_memory(&info, None)?;
-    rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+    let image_memory = rrdevice.device().allocate_memory(&info, None)?;
+    rrdevice
+        .device()
+        .bind_image_memory(image, image_memory, 0)?;
 
     Ok((image, image_memory))
 }
@@ -418,8 +424,8 @@ pub unsafe fn create_image_3d(
         .sharing_mode(vk::SharingMode::EXCLUSIVE)
         .samples(vk::SampleCountFlags::_1);
 
-    let image = rrdevice.device.create_image(&info, None)?;
-    let requirements = rrdevice.device.get_image_memory_requirements(image);
+    let image = rrdevice.device().create_image(&info, None)?;
+    let requirements = rrdevice.device().get_image_memory_requirements(image);
     let allocate_info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
         .memory_type_index(get_memory_type_index(
@@ -428,8 +434,10 @@ pub unsafe fn create_image_3d(
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
             requirements,
         )?);
-    let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
-    rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+    let image_memory = rrdevice.device().allocate_memory(&allocate_info, None)?;
+    rrdevice
+        .device()
+        .bind_image_memory(image, image_memory, 0)?;
 
     Ok((image, image_memory))
 }
@@ -451,7 +459,7 @@ pub unsafe fn create_image_view_3d(
         .format(format)
         .subresource_range(subresource_range);
 
-    Ok(rrdevice.device.create_image_view(&info, None)?)
+    Ok(rrdevice.device().create_image_view(&info, None)?)
 }
 
 pub unsafe fn transition_image_layout(
@@ -536,7 +544,7 @@ pub unsafe fn transition_image_layout(
         .src_access_mask(src_access_mask)
         .dst_access_mask(dst_access_mask);
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         src_stage_mask, // perations will wait on the barrier.
         dst_stage_mask, //
@@ -583,7 +591,7 @@ pub unsafe fn create_image_view(
         .format(format)
         .subresource_range(subresource_range);
 
-    Ok(rrdevice.device.create_image_view(&info, None)?)
+    Ok(rrdevice.device().create_image_view(&info, None)?)
 }
 
 unsafe fn generate_mipmaps(
@@ -630,7 +638,7 @@ unsafe fn generate_mipmaps(
         barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
         barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
 
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::TRANSFER,
@@ -672,7 +680,7 @@ unsafe fn generate_mipmaps(
             ])
             .dst_subresource(dst_subresource);
 
-        rrdevice.device.cmd_blit_image(
+        rrdevice.device().cmd_blit_image(
             command_buffer,
             image,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -687,7 +695,7 @@ unsafe fn generate_mipmaps(
         barrier.src_access_mask = vk::AccessFlags::TRANSFER_READ;
         barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -711,7 +719,7 @@ unsafe fn generate_mipmaps(
     barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
     barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::TRANSFER,
         vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -751,7 +759,7 @@ pub unsafe fn create_texture_sampler(
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(mip_levels as f32);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
     Ok((sampler))
 }
@@ -773,7 +781,7 @@ pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler>
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(0.0);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
     Ok(sampler)
 }
@@ -795,7 +803,7 @@ pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sam
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(1.0);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
     Ok(sampler)
 }
@@ -844,12 +852,14 @@ pub unsafe fn create_texture_image_pixel_with_format(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -896,8 +906,8 @@ pub unsafe fn create_texture_image_pixel_with_format(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
@@ -912,7 +922,7 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
         .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .build();
-    Ok(rrdevice.device.create_sampler(&info, None)?)
+    Ok(rrdevice.device().create_sampler(&info, None)?)
 }
 
 #[derive(Clone, Copy, Debug)]

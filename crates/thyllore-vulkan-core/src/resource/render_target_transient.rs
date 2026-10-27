@@ -84,7 +84,7 @@ impl RenderTargetTransient {
     }
 
     pub unsafe fn begin_frame(&mut self, rrdevice: &RRDevice, frame_index: usize) -> Result<()> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let evicted = self.advance_frame(frame_index)?;
 
         for pooled in evicted {
@@ -161,8 +161,8 @@ impl RenderTargetTransient {
             match create_image_view(rrdevice, image, desc.format, vk::ImageAspectFlags::COLOR, 1) {
                 Ok(view) => view,
                 Err(error) => {
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
+                    rrdevice.device().destroy_image(image, None);
+                    rrdevice.device().free_memory(memory, None);
                     return Err(error);
                 }
             };
@@ -319,7 +319,7 @@ impl RenderTargetTransient {
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+        let framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         self.framebuffers.insert(key, framebuffer);
 
         Ok(framebuffer)
@@ -430,7 +430,7 @@ unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
 
 impl GpuResource for RenderTargetTransient {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         self.destroy_all(device);
     }
 

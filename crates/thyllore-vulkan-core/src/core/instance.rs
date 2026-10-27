@@ -162,9 +162,9 @@ pub unsafe fn create_sync_objects(
     let mut in_flight = Vec::new();
 
     for _ in 0..count {
-        image_available.push(rrdevice.device.create_semaphore(&semaphore_info, None)?);
-        render_finished.push(rrdevice.device.create_semaphore(&semaphore_info, None)?);
-        in_flight.push(rrdevice.device.create_fence(&fence_info, None)?);
+        image_available.push(rrdevice.device().create_semaphore(&semaphore_info, None)?);
+        render_finished.push(rrdevice.device().create_semaphore(&semaphore_info, None)?);
+        in_flight.push(rrdevice.device().create_fence(&fence_info, None)?);
     }
 
     Ok((image_available, render_finished, in_flight))

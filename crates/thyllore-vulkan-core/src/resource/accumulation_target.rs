@@ -45,7 +45,7 @@ impl AccumulationTarget {
                 layer_count: 1,
             })
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::COMPUTE_SHADER,

@@ -28,7 +28,7 @@ pub unsafe fn record_bloom_downsample_mip(
     settings: &BloomSettings,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let Some(mip) = mips.get(mip_index) else {
         return Ok(());
     };
@@ -92,7 +92,7 @@ pub unsafe fn record_bloom_upsample_pass(
     frame_slot: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let Some(target_mip_index) = bloom_upsample_target_mip(mips.len(), pass_index) else {
         return Ok(());
     };

@@ -8,14 +8,14 @@ pub unsafe fn begin_frame_command_buffer(
     command_buffer: CommandBuffer,
 ) -> Result<()> {
     rrdevice
-        .device
+        .device()
         .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
 
     let begin_info =
         vk::CommandBufferBeginInfo::builder().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
     rrdevice
-        .device
+        .device()
         .begin_command_buffer(command_buffer, &begin_info)?;
 
     Ok(())
@@ -25,11 +25,11 @@ pub unsafe fn end_frame_command_buffer(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
 ) -> Result<()> {
-    Ok(rrdevice.device.end_command_buffer(command_buffer)?)
+    Ok(rrdevice.device().end_command_buffer(command_buffer)?)
 }
 
 pub unsafe fn end_render_pass(rrdevice: &RRDevice, command_buffer: CommandBuffer) {
-    rrdevice.device.cmd_end_render_pass(command_buffer);
+    rrdevice.device().cmd_end_render_pass(command_buffer);
 }
 
 pub unsafe fn begin_render_pass_cleared(
@@ -62,7 +62,7 @@ pub unsafe fn begin_render_pass_cleared(
         .render_area(render_area)
         .clear_values(&clear_values);
 
-    rrdevice.device.cmd_begin_render_pass(
+    rrdevice.device().cmd_begin_render_pass(
         command_buffer,
         &render_pass_info,
         vk::SubpassContents::INLINE,
@@ -82,14 +82,14 @@ pub unsafe fn set_full_viewport_and_scissor(
         .min_depth(0.0)
         .max_depth(1.0);
     rrdevice
-        .device
+        .device()
         .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
     let scissor = Rect2D::builder()
         .offset(Offset2D { x: 0, y: 0 })
         .extent(extent);
     rrdevice
-        .device
+        .device()
         .cmd_set_scissor(command_buffer, 0, &[scissor]);
 }
 
@@ -115,7 +115,7 @@ pub unsafe fn clear_shadow_mask_to_lit(
         .subresource_range(subresource_range)
         .build();
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::TOP_OF_PIPE,
         vk::PipelineStageFlags::TRANSFER,
@@ -128,7 +128,7 @@ pub unsafe fn clear_shadow_mask_to_lit(
     let clear_value = vk::ClearColorValue {
         float32: [1.0, 1.0, 1.0, 1.0],
     };
-    rrdevice.device.cmd_clear_color_image(
+    rrdevice.device().cmd_clear_color_image(
         command_buffer,
         shadow_mask_image,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -145,7 +145,7 @@ pub unsafe fn clear_shadow_mask_to_lit(
         .subresource_range(subresource_range)
         .build();
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::TRANSFER,
         vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -196,7 +196,7 @@ pub unsafe fn record_picked_texel_copy(
         .src_access_mask(vk::AccessFlags::SHADER_READ)
         .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::FRAGMENT_SHADER,
         vk::PipelineStageFlags::TRANSFER,
@@ -230,7 +230,7 @@ pub unsafe fn record_picked_texel_copy(
             .build()
     };
 
-    rrdevice.device.cmd_copy_image_to_buffer(
+    rrdevice.device().cmd_copy_image_to_buffer(
         command_buffer,
         object_id_image,
         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -238,7 +238,7 @@ pub unsafe fn record_picked_texel_copy(
         &[picked_texel(0)],
     );
 
-    rrdevice.device.cmd_copy_image_to_buffer(
+    rrdevice.device().cmd_copy_image_to_buffer(
         command_buffer,
         position_image,
         vk::ImageLayout::GENERAL,
@@ -266,7 +266,7 @@ pub unsafe fn record_picked_texel_copy(
         .src_access_mask(vk::AccessFlags::TRANSFER_READ)
         .dst_access_mask(vk::AccessFlags::SHADER_READ);
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::TRANSFER,
         vk::PipelineStageFlags::FRAGMENT_SHADER,

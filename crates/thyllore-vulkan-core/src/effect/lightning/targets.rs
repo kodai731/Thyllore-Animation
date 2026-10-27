@@ -58,7 +58,7 @@ pub unsafe fn create_lightning_render_targets(
         .height(height)
         .layers(1);
     let framebuffer = rrdevice
-        .device
+        .device()
         .create_framebuffer(&framebuffer_info, None)?;
 
     log!("Created lightning render targets: {}x{}", width, height);
@@ -72,7 +72,7 @@ pub unsafe fn create_lightning_render_targets(
 
 impl GpuResource for LightningRenderTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, &rrdevice.device);
+        destroy_render_targets(self, &rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {
@@ -101,7 +101,7 @@ pub unsafe fn recreate_lightning_render_targets(
     width: u32,
     height: u32,
 ) -> Result<()> {
-    destroy_render_targets(targets, &rrdevice.device);
+    destroy_render_targets(targets, &rrdevice.device());
     *targets = create_lightning_render_targets(rrdevice, width, height, hdr_view)?;
     Ok(())
 }

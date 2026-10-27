@@ -19,12 +19,12 @@ impl DofBuffer {
         let render_pass = Self::create_render_pass(rrdevice)?;
 
         let sampler = match rrdevice
-            .device
+            .device()
             .create_sampler(&Self::linear_clamp_sampler_info(), None)
         {
             Ok(sampler) => sampler,
             Err(error) => {
-                rrdevice.device.destroy_render_pass(render_pass, None);
+                rrdevice.device().destroy_render_pass(render_pass, None);
                 return Err(error.into());
             }
         };
@@ -96,7 +96,7 @@ impl DofBuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -154,7 +154,7 @@ impl Drop for DofBuffer {
 
 impl GpuResource for DofBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

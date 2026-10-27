@@ -60,7 +60,7 @@ pub struct PipelineCache {
 impl PipelineCache {
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let cache_info = vk::PipelineCacheCreateInfo::builder();
-        let vulkan_cache = rrdevice.device.create_pipeline_cache(&cache_info, None)?;
+        let vulkan_cache = rrdevice.device().create_pipeline_cache(&cache_info, None)?;
 
         Ok(Self {
             cache: HashMap::new(),

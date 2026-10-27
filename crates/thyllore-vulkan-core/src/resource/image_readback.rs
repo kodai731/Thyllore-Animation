@@ -43,7 +43,7 @@ pub unsafe fn copy_image_to_host_buffer(
 
     let command_buffer = begin_single_time_commands(rrdevice, command_pool)?;
     record_image_to_buffer_copy(
-        &rrdevice.device,
+        &rrdevice.device(),
         command_buffer,
         image,
         buffer,
@@ -80,13 +80,13 @@ pub unsafe fn read_image_bytes(
 
     let data =
         rrdevice
-            .device
+            .device()
             .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
     let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
     let bytes = slice.to_vec();
-    rrdevice.device.unmap_memory(buffer_memory);
-    rrdevice.device.free_memory(buffer_memory, None);
-    rrdevice.device.destroy_buffer(buffer, None);
+    rrdevice.device().unmap_memory(buffer_memory);
+    rrdevice.device().free_memory(buffer_memory, None);
+    rrdevice.device().destroy_buffer(buffer, None);
 
     Ok(bytes)
 }
@@ -112,7 +112,7 @@ pub unsafe fn read_buffer_bytes(
         .dst_offset(0)
         .size(byte_size);
     rrdevice
-        .device
+        .device()
         .cmd_copy_buffer(command_buffer, source, buffer, &[region.build()]);
     end_single_time_commands(
         rrdevice,
@@ -123,13 +123,13 @@ pub unsafe fn read_buffer_bytes(
 
     let data =
         rrdevice
-            .device
+            .device()
             .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
     let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
     let bytes = slice.to_vec();
-    rrdevice.device.unmap_memory(buffer_memory);
-    rrdevice.device.free_memory(buffer_memory, None);
-    rrdevice.device.destroy_buffer(buffer, None);
+    rrdevice.device().unmap_memory(buffer_memory);
+    rrdevice.device().free_memory(buffer_memory, None);
+    rrdevice.device().destroy_buffer(buffer, None);
 
     Ok(bytes)
 }

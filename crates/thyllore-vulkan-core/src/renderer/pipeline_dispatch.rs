@@ -15,12 +15,12 @@ pub unsafe fn bind_compute(
     descriptor_sets: &[vk::DescriptorSet],
     dynamic_offsets: &[u32],
 ) {
-    rrdevice.device.cmd_bind_pipeline(
+    rrdevice.device().cmd_bind_pipeline(
         command_buffer,
         vk::PipelineBindPoint::COMPUTE,
         pipeline.pipeline,
     );
-    rrdevice.device.cmd_bind_descriptor_sets(
+    rrdevice.device().cmd_bind_descriptor_sets(
         command_buffer,
         vk::PipelineBindPoint::COMPUTE,
         pipeline.pipeline_layout,
@@ -38,7 +38,7 @@ pub unsafe fn dispatch(
     group_z: u32,
 ) {
     rrdevice
-        .device
+        .device()
         .cmd_dispatch(command_buffer, group_x, group_y, group_z);
 }
 
@@ -48,12 +48,12 @@ pub unsafe fn bind_ray_tracing(
     pipeline: &RRRayTracingPipeline,
     descriptor_sets: &[vk::DescriptorSet],
 ) {
-    rrdevice.device.cmd_bind_pipeline(
+    rrdevice.device().cmd_bind_pipeline(
         command_buffer,
         vk::PipelineBindPoint::RAY_TRACING_KHR,
         pipeline.pipeline,
     );
-    rrdevice.device.cmd_bind_descriptor_sets(
+    rrdevice.device().cmd_bind_descriptor_sets(
         command_buffer,
         vk::PipelineBindPoint::RAY_TRACING_KHR,
         pipeline.pipeline_layout,
@@ -72,14 +72,14 @@ pub unsafe fn push_constants_and_trace_rays(
     width: u32,
     height: u32,
 ) {
-    rrdevice.device.cmd_push_constants(
+    rrdevice.device().cmd_push_constants(
         command_buffer,
         pipeline.pipeline_layout,
         push_range.stage_flags,
         push_range.offset,
         push_bytes,
     );
-    rrdevice.device.cmd_trace_rays_khr(
+    rrdevice.device().cmd_trace_rays_khr(
         command_buffer,
         &pipeline.raygen_region,
         &pipeline.miss_region,
@@ -108,7 +108,7 @@ pub unsafe fn clear_color_image(
         base_array_layer: 0,
         layer_count: 1,
     };
-    rrdevice.device.cmd_clear_color_image(
+    rrdevice.device().cmd_clear_color_image(
         command_buffer,
         image,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,

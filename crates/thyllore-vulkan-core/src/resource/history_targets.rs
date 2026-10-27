@@ -86,7 +86,7 @@ impl HistoryTargets {
                 .width(width)
                 .height(height)
                 .layers(1);
-            *framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+            *framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         }
 
         Ok(Self {
@@ -151,7 +151,7 @@ impl Drop for HistoryTargets {
 
 impl GpuResource for HistoryTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {
@@ -176,7 +176,7 @@ unsafe fn clear_to_shader_read_only(
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .subresource_range(COLOR_RANGE)
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
@@ -189,7 +189,7 @@ unsafe fn clear_to_shader_read_only(
         let clear_value = vk::ClearColorValue {
             float32: [0.0f32; 4],
         };
-        rrdevice.device.cmd_clear_color_image(
+        rrdevice.device().cmd_clear_color_image(
             cmd,
             image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -207,7 +207,7 @@ unsafe fn clear_to_shader_read_only(
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .subresource_range(COLOR_RANGE)
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -285,7 +285,7 @@ unsafe fn create_history_render_pass(
         .attachments(&attachments)
         .subpasses(&subpasses)
         .dependencies(&dependencies);
-    Ok(rrdevice.device.create_render_pass(&info, None)?)
+    Ok(rrdevice.device().create_render_pass(&info, None)?)
 }
 
 fn history_pass_dependencies(with_depth: bool) -> [vk::SubpassDependency; 2] {

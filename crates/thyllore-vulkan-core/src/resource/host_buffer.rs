@@ -51,24 +51,25 @@ impl HostBuffer {
         size: vk::DeviceSize,
         write: impl FnOnce(&mut [u8]),
     ) -> Result<()> {
-        let ptr = rrdevice
-            .device
-            .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
+        let ptr =
+            rrdevice
+                .device()
+                .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
 
         let slice = std::slice::from_raw_parts_mut(ptr as *mut u8, size as usize);
         write(slice);
 
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
         Ok(())
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
         self.size = 0;

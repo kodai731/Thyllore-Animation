@@ -19,7 +19,7 @@ pub unsafe fn record_gbuffer_pass(
     heatmap_mode: u32,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
 
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
@@ -142,7 +142,7 @@ unsafe fn draw_single_mesh(
     heatmap_mode: u32,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let graphics = ctx.graphics;
     let image_index = ctx.image_index;
 
@@ -247,7 +247,7 @@ pub unsafe fn create_gbuffer_framebuffer(
         .height(gbuffer.height)
         .layers(1);
 
-    rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+    rrrender.gbuffer_framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
 
     log!(
         "Created G-Buffer framebuffer: {}x{}",

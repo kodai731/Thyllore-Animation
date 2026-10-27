@@ -21,7 +21,7 @@ pub unsafe fn create_framebuffers(
                 .width(rrswapchain.swapchain_extent.width)
                 .height(rrswapchain.swapchain_extent.height)
                 .layers(1);
-            rrdevice.device.create_framebuffer(&create_info, None)
+            rrdevice.device().create_framebuffer(&create_info, None)
         })
         .collect::<Result<Vec<_>, _>>()?;
     println!("created framebuffers");

@@ -6,18 +6,18 @@ use winit::window::Window;
 
 #[derive(Clone, Debug)]
 pub struct SwapchainSupport {
-    pub capabilities: vk::SurfaceCapabilitiesKHR,
-    pub formats: Vec<vk::SurfaceFormatKHR>,
-    pub present_modes: Vec<vk::PresentModeKHR>,
+    pub(crate) capabilities: vk::SurfaceCapabilitiesKHR,
+    pub(crate) formats: Vec<vk::SurfaceFormatKHR>,
+    pub(crate) present_modes: Vec<vk::PresentModeKHR>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRSwapchain {
-    pub swapchain: vk::SwapchainKHR,
-    pub swapchain_images: Vec<vk::Image>,
-    pub swapchain_format: vk::Format,
-    pub swapchain_extent: vk::Extent2D,
-    pub swapchain_image_views: Vec<vk::ImageView>,
+    pub(crate) swapchain: vk::SwapchainKHR,
+    pub(crate) swapchain_images: Vec<vk::Image>,
+    pub(crate) swapchain_format: vk::Format,
+    pub(crate) swapchain_extent: vk::Extent2D,
+    pub(crate) swapchain_image_views: Vec<vk::ImageView>,
 }
 
 impl RRSwapchain {
@@ -43,6 +43,26 @@ impl RRSwapchain {
             device.destroy_swapchain_khr(self.swapchain, None);
             self.swapchain = vk::SwapchainKHR::null();
         }
+    }
+
+    #[inline]
+    pub fn swapchain(&self) -> crate::types::Swapchain {
+        self.swapchain
+    }
+
+    #[inline]
+    pub fn swapchain_images(&self) -> &[crate::types::Image] {
+        &self.swapchain_images
+    }
+
+    #[inline]
+    pub fn swapchain_format(&self) -> crate::types::Format {
+        self.swapchain_format
+    }
+
+    #[inline]
+    pub fn swapchain_extent(&self) -> crate::types::Extent2D {
+        self.swapchain_extent
     }
 }
 

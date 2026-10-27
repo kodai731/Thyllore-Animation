@@ -62,7 +62,7 @@ pub unsafe fn record_composite_pass(
     let extent = app
         .resource::<crate::vulkanr::context::SwapchainState>()
         .swapchain
-        .swapchain_extent;
+        .swapchain_extent();
 
     let (pipeline, descriptor, view_mode_value) =
         prepare_composite_resources(&app.data.raytracing, &app.data.ecs_world)?;

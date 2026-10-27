@@ -58,11 +58,11 @@ impl Deref for Device {
 #[derive(Debug, Default)]
 pub struct RRDevice {
     device: Device,
-    pub physical_device: vk::PhysicalDevice,
-    pub graphics_queue: vk::Queue,
-    pub present_queue: vk::Queue,
+    pub(crate) physical_device: vk::PhysicalDevice,
+    pub(crate) graphics_queue: vk::Queue,
+    pub(crate) present_queue: vk::Queue,
     pub graphics_queue_family_index: u32,
-    pub msaa_samples: vk::SampleCountFlags,
+    pub(crate) msaa_samples: vk::SampleCountFlags,
     pub min_uniform_buffer_offset_alignment: u64,
     pub timestamp_period: f32,
     pub wide_lines: bool,
@@ -73,6 +73,11 @@ impl RRDevice {
     #[inline]
     pub(crate) fn device(&self) -> &Device {
         &self.device
+    }
+
+    #[inline]
+    pub fn msaa_samples(&self) -> crate::types::SampleCountFlags {
+        self.msaa_samples
     }
 
     pub unsafe fn default() -> RRDevice {

@@ -65,19 +65,20 @@ impl App {
             swapchain_state.swapchain.destroy(&self.rrdevice);
         }
 
-        let command_pool_handle = {
+        let command_pool = {
             let command_state = self.resource::<CommandState>();
-            let pool_handle = command_state.pool.command_pool;
-            self.rrdevice
-                .free_command_buffers(pool_handle, &command_state.buffers.command_buffers);
-            pool_handle
+            self.rrdevice.free_command_buffers(
+                command_state.pool.command_pool(),
+                &command_state.buffers.command_buffers(),
+            );
+            std::rc::Rc::clone(&command_state.pool)
         };
 
         let surface = self
             .resource::<crate::vulkanr::context::SurfaceState>()
-            .surface;
+            .surface();
         let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice)?;
-        let image_count = new_swapchain.swapchain_images.len();
+        let image_count = new_swapchain.swapchain_images().len();
 
         {
             let mut render_targets = self.resource_mut::<RenderTargets>();
@@ -85,9 +86,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &new_swapchain,
-                &crate::vulkanr::command::RRCommandPool {
-                    command_pool: command_pool_handle,
-                },
+                &command_pool,
                 &mut render_targets.render,
             )?;
             create_color_objects(

@@ -46,7 +46,7 @@ pub unsafe fn end_single_time_commands(
 
 #[derive(Clone, Debug, Default)]
 pub struct RRCommandPool {
-    pub command_pool: vk::CommandPool, // Command pools manage the memory that is used to store the buffers
+    pub(crate) command_pool: vk::CommandPool, // Command pools manage the memory that is used to store the buffers
 }
 
 impl RRCommandPool {
@@ -58,12 +58,17 @@ impl RRCommandPool {
         println!("Created command pool");
         rrcommand_pool
     }
+
+    #[inline]
+    pub fn command_pool(&self) -> crate::types::CommandPool {
+        self.command_pool
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRCommandBuffer {
     pub rrcommand_pool: Rc<RRCommandPool>,
-    pub command_buffers: Vec<vk::CommandBuffer>,
+    pub(crate) command_buffers: Vec<vk::CommandBuffer>,
 }
 
 impl RRCommandBuffer {
@@ -71,6 +76,11 @@ impl RRCommandBuffer {
         let mut rrcommand_buffer = RRCommandBuffer::default();
         rrcommand_buffer.rrcommand_pool = Rc::clone(rrcommand_pool);
         rrcommand_buffer
+    }
+
+    #[inline]
+    pub fn command_buffers(&self) -> &[crate::types::CommandBuffer] {
+        &self.command_buffers
     }
 
     // grid, grid, model, model

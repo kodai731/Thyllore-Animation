@@ -125,10 +125,10 @@ impl App {
         data.ecs_world.insert_resource(curve_copilot_mode);
 
         let vulkan_context = thyllore_vulkan_core::create_vulkan_context(window)?;
+        let messenger = vulkan_context.messenger();
+        let surface = vulkan_context.surface();
         let entry = vulkan_context.entry;
         let instance = vulkan_context.instance;
-        let messenger = vulkan_context.messenger;
-        let surface = vulkan_context.surface;
         let rrdevice = vulkan_context.rrdevice;
         let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
@@ -266,7 +266,7 @@ impl App {
             &mut data,
             &vulkan_resources,
             &model_path,
-            rrdevice.msaa_samples,
+            rrdevice.msaa_samples(),
         );
 
         let grid_scale = create_default_grid_scale();
@@ -276,7 +276,7 @@ impl App {
         let gpu_timestamp_profiler = thyllore_vulkan_core::GpuTimestampProfiler::new(
             &rrdevice,
             rrdevice.timestamp_period,
-            vulkan_resources.rrswapchain.swapchain_images.len(),
+            vulkan_resources.rrswapchain.swapchain_images().len(),
         );
 
         Ok(Self {
@@ -333,7 +333,7 @@ impl App {
         rrrender: &RRRender,
         data: &mut AppData,
     ) -> Result<()> {
-        let swapchain_image_count = rrswapchain.swapchain_images.len();
+        let swapchain_image_count = rrswapchain.swapchain_images().len();
         data.graphics_resources =
             GraphicsResources::new(instance, rrdevice, swapchain_image_count, 64)
                 .context("Failed to create render resources")?;
@@ -374,16 +374,16 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::AutoRigState::default());
 
-        let viewport_width = rrswapchain.swapchain_extent.width;
-        let viewport_height = rrswapchain.swapchain_extent.height;
+        let viewport_width = rrswapchain.swapchain_extent().width;
+        let viewport_height = rrswapchain.swapchain_extent().height;
         data.viewport = crate::app::viewport::ViewportState::new(
             instance,
             rrdevice,
-            rrcommand_pool.command_pool,
+            rrcommand_pool.command_pool(),
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format,
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format(),
         )
         .context("Failed to create viewport state")?;
 
@@ -391,8 +391,8 @@ impl App {
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format()
         );
 
         let render_layouts = data.graphics_resources.get_layouts();
@@ -409,7 +409,7 @@ impl App {
                 // covered", which the tonemap needs to keep the grid color. Effects
                 // composite over it afterwards with premultiplied blending.
                 .blend(BlendConfig::default())
-                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent()))
                 .context("Failed to create HDR grid pipeline")?;
             let hdr_grid_id = data.pipeline_storage.register(hdr_grid);
             data.viewport.hdr_grid_pipeline_id = Some(hdr_grid_id);
@@ -432,7 +432,7 @@ impl App {
             .polygon_mode(FillMode::Line)
             .depth_test(DepthTestConfig::read_only(DepthCompare::GreaterOrEqual))
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create grid pipeline")?;
         let grid = pipeline_storage.register(grid);
         pipeline_allocate_id(pipeline_manager);
@@ -443,7 +443,7 @@ impl App {
             .polygon_mode(FillMode::Line)
             .no_depth_test()
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create gizmo pipeline")?;
         let gizmo = pipeline_storage.register(gizmo);
         pipeline_allocate_id(pipeline_manager);
@@ -598,7 +598,7 @@ impl App {
         }
 
         let pipeline = builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context(format!("Failed to create {} pipeline", label))?;
         let id = pipeline_storage.register(pipeline);
         pipeline_allocate_id(pipeline_manager);
@@ -985,7 +985,7 @@ impl App {
 
         data.ecs_world.insert_resource(SwapchainState::new(
             resources.rrswapchain.clone(),
-            resources.rrswapchain.swapchain_images.len(),
+            resources.rrswapchain.swapchain_images().len(),
         ));
 
         data.ecs_world

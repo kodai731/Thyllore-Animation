@@ -30,3 +30,4 @@ pub type Viewport = vk::Viewport;
 pub type SampleCountFlags = vk::SampleCountFlags;
 pub type DebugMessenger = vk::DebugUtilsMessengerEXT;
 pub type Surface = vk::SurfaceKHR;
+pub type Swapchain = vk::SwapchainKHR;

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::command::{RRCommandBuffer, RRCommandPool};
 use crate::core::device::RRDevice;
+use crate::core::swapchain::RRSwapchain;
 use crate::resource::GpuResource;
 use crate::types::{CommandPool, Fence, Semaphore};
 use crate::vulkan::*;
@@ -32,12 +33,30 @@ pub unsafe fn acquire_swapchain_image(
 }
 
 pub struct FrameSubmit {
-    pub command_buffer: vk::CommandBuffer,
-    pub image_available: vk::Semaphore,
-    pub render_finished: vk::Semaphore,
-    pub fence: vk::Fence,
-    pub swapchain: vk::SwapchainKHR,
+    pub(crate) command_buffer: vk::CommandBuffer,
+    pub(crate) image_available: vk::Semaphore,
+    pub(crate) render_finished: vk::Semaphore,
+    pub(crate) fence: vk::Fence,
+    pub(crate) swapchain: vk::SwapchainKHR,
     pub image_index: usize,
+}
+
+impl FrameSubmit {
+    pub fn new(
+        commands: &CommandState,
+        sync: &FrameSync,
+        swapchain: &RRSwapchain,
+        image_index: usize,
+    ) -> Self {
+        Self {
+            command_buffer: commands.buffers.command_buffers[image_index],
+            image_available: sync.current_image_available(),
+            render_finished: sync.current_render_finished(),
+            fence: sync.current_fence(),
+            swapchain: swapchain.swapchain,
+            image_index,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -173,13 +192,18 @@ impl GpuResource for CommandState {
 }
 
 pub struct SurfaceState {
-    pub surface: vk::SurfaceKHR,
-    pub messenger: vk::DebugUtilsMessengerEXT,
+    pub(crate) surface: vk::SurfaceKHR,
+    pub(crate) messenger: vk::DebugUtilsMessengerEXT,
 }
 
 impl SurfaceState {
     pub fn new(surface: vk::SurfaceKHR, messenger: vk::DebugUtilsMessengerEXT) -> Self {
         Self { surface, messenger }
+    }
+
+    #[inline]
+    pub fn surface(&self) -> crate::types::Surface {
+        self.surface
     }
 }
 

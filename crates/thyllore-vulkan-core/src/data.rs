@@ -12,11 +12,11 @@ pub use thyllore_model_core::mesh::{Vertex, VertexData};
 #[derive(Clone, Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
     pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,

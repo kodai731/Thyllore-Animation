@@ -66,8 +66,8 @@ impl CaptureContext<'_> {
     /// Saves this frame's swapchain image as PNG and returns the absolute path written.
     pub unsafe fn save_screenshot_to(&self, path: &Path) -> Result<String> {
         let swapchain = &self.world.resource::<SwapchainState>().swapchain;
-        let image = swapchain.swapchain_images[self.image_index];
-        let extent = swapchain.swapchain_extent;
+        let image = swapchain.swapchain_images()[self.image_index];
+        let extent = swapchain.swapchain_extent();
         let image_size = (extent.width * extent.height * 4) as DeviceSize;
 
         let bytes = self.read_image_bytes(

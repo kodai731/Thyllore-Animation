@@ -134,7 +134,7 @@ mod release_build_tests {
                 .query_physical_device_api_version(&headless.instance)
         };
         assert!(api_version > 0);
-        assert!(headless.rrdevice.msaa_samples.bits() > 0);
+        assert!(headless.rrdevice.msaa_samples().bits() > 0);
 
         unsafe { vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance) };
     }

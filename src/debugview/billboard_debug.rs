@@ -104,7 +104,7 @@ fn log_basic_info(
         info.camera_direction.z
     );
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
     log!(
         "Swapchain extent: {}x{}",
         swapchain_extent.width,
@@ -147,7 +147,7 @@ fn log_basic_info(
 fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
     use crate::math::{coordinate_system::perspective_infinite_reverse, view};
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
 
     let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
     let light_view_pos = view_matrix

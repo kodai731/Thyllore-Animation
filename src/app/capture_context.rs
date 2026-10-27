@@ -7,7 +7,7 @@ impl App {
         CaptureContext {
             instance: &self.instance,
             device: &self.rrdevice,
-            command_pool: self.resource::<CommandState>().pool.command_pool,
+            command_pool: self.resource::<CommandState>().pool.command_pool(),
             world: &self.data.ecs_world,
             graphics: &self.data.graphics_resources,
             raytracing: &self.data.raytracing,

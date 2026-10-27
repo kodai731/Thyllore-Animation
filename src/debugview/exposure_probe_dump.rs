@@ -114,8 +114,8 @@ unsafe fn read_viewport_display_luminance(
     ctx: &CaptureContext,
 ) -> Result<ViewportDisplayLuminance> {
     let swapchain = &ctx.world.resource::<SwapchainState>().swapchain;
-    let image = swapchain.swapchain_images[ctx.image_index];
-    let extent = swapchain.swapchain_extent;
+    let image = swapchain.swapchain_images()[ctx.image_index];
+    let extent = swapchain.swapchain_extent();
     let image_size = (extent.width * extent.height * 4) as DeviceSize;
 
     let bgra = ctx.read_image_bytes(

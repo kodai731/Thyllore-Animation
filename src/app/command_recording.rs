@@ -17,7 +17,7 @@ impl App {
         let command_buffer = self
             .resource::<crate::vulkanr::context::CommandState>()
             .buffers
-            .command_buffers[image_index];
+            .command_buffers()[image_index];
 
         thyllore_vulkan_core::begin_frame_command_buffer(&self.rrdevice, command_buffer)?;
 

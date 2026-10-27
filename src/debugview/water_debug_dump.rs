@@ -109,7 +109,7 @@ fn collect_water_debug_render_info(ctx: &CaptureContext) -> WaterDebugRenderInfo
         .world
         .resource::<SwapchainState>()
         .swapchain
-        .swapchain_extent;
+        .swapchain_extent();
     let water_buffer_size = ctx
         .world
         .get_resource::<WaterRenderTargets>()

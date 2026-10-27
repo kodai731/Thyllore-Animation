@@ -27,7 +27,7 @@ pub(super) unsafe fn upload_model_meshes(
     graphics.ensure_object_capacity(
         instance,
         device,
-        swapchain.swapchain_images.len(),
+        swapchain.swapchain_images().len(),
         load_result.meshes.len(),
     )?;
 

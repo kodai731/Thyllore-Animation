@@ -29,9 +29,21 @@ pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
 pub struct VulkanContext {
     pub entry: Entry,
     pub instance: Instance,
-    pub messenger: vk::DebugUtilsMessengerEXT,
-    pub surface: vk::SurfaceKHR,
+    pub(crate) messenger: vk::DebugUtilsMessengerEXT,
+    pub(crate) surface: vk::SurfaceKHR,
     pub rrdevice: RRDevice,
+}
+
+impl VulkanContext {
+    #[inline]
+    pub fn messenger(&self) -> crate::types::DebugMessenger {
+        self.messenger
+    }
+
+    #[inline]
+    pub fn surface(&self) -> crate::types::Surface {
+        self.surface
+    }
 }
 
 extern "system" fn debug_callback(

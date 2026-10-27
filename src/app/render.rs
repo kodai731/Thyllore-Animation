@@ -43,7 +43,7 @@ impl App {
         self.update_auto_exposure();
         self.read_object_id_readback();
 
-        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
+        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain();
         let image_available = self.resource::<FrameSync>().current_image_available();
         let image_index = match acquire_swapchain_image(&self.rrdevice, swapchain, image_available)?
         {
@@ -75,7 +75,7 @@ impl App {
 
         self.rrdevice.wait_idle()?;
         self.data.pass_image_states.clear();
-        let command_pool = self.resource::<CommandState>().pool.command_pool;
+        let command_pool = self.resource::<CommandState>().pool.command_pool();
         self.data
             .viewport
             .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
@@ -116,7 +116,7 @@ impl App {
             return Ok(());
         }
 
-        let command_pool = self.resource::<CommandState>().pool.command_pool;
+        let command_pool = self.resource::<CommandState>().pool.command_pool();
 
         if let Some(ref mut gbuffer) = self.data.raytracing.gbuffer {
             gbuffer.resize(&self.instance, &self.rrdevice, new_width, new_height)?;
@@ -421,24 +421,13 @@ impl App {
 
         self.record_command_buffer(image_index, draw_data, frame_slot)?;
 
-        let image_available = self.resource::<FrameSync>().current_image_available();
-        let render_finished = self.resource::<FrameSync>().current_render_finished();
-        let current_fence = self.resource::<FrameSync>().current_fence();
-
-        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
-
-        let outcome = submit_and_present(
-            &self.rrdevice,
-            FrameSubmit {
-                command_buffer: self.resource::<CommandState>().buffers.command_buffers
-                    [image_index],
-                image_available,
-                render_finished,
-                fence: current_fence,
-                swapchain,
-                image_index,
-            },
-        )?;
+        let frame_submit = FrameSubmit::new(
+            &self.resource::<CommandState>(),
+            &self.resource::<FrameSync>(),
+            &self.resource::<SwapchainState>().swapchain,
+            image_index,
+        );
+        let outcome = submit_and_present(&self.rrdevice, frame_submit)?;
 
         if matches!(outcome, PresentOutcome::OutOfDate) || self.resized {
             self.resized = false;
@@ -515,7 +504,10 @@ impl App {
 
     pub unsafe fn begin_main_render_pass(&self, command_buffer: CommandBuffer, image_index: usize) {
         let render_targets = self.resource::<RenderTargets>();
-        let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
+        let extent = self
+            .resource::<SwapchainState>()
+            .swapchain
+            .swapchain_extent();
         begin_render_pass_cleared(
             &self.rrdevice,
             command_buffer,
@@ -597,7 +589,10 @@ impl App {
         command_buffer: CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
+        let extent = self
+            .resource::<SwapchainState>()
+            .swapchain
+            .swapchain_extent();
         set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];

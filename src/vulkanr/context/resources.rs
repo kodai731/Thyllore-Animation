@@ -21,11 +21,11 @@ impl SwapchainState {
     }
 
     pub fn extent(&self) -> Extent2D {
-        self.swapchain.swapchain_extent
+        self.swapchain.swapchain_extent()
     }
 
     pub fn image_count(&self) -> usize {
-        self.swapchain.swapchain_images.len()
+        self.swapchain.swapchain_images().len()
     }
 }
 

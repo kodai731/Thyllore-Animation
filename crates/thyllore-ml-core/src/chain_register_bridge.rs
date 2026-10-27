@@ -1,7 +1,7 @@
 use cgmath::{Matrix, Matrix4, SquareMatrix, Vector3};
 use thyllore_anim_core::spring_bone::{
-    ensure_fitted_collider, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
-    SpringChain, SpringColliderGroupId, SpringJointParam, FITTED_BODY_GROUP_NAME,
+    add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
+    SpringChain, SpringJointParam, SpringSpace,
 };
 use thyllore_avatar_core::garment::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
@@ -58,37 +58,34 @@ pub fn register_generated_chains(
         Some(capsule) => Some(head_capsule_collider(&capsule, root, bones)?),
         None => fit_root_collider(&skeleton, root, skins),
     };
-    let fitted_body_group = match root_collider {
-        Some(capsule) => Some(ensure_fitted_collider(&mut setup, &capsule)),
-        None => fitted_body_group_id(&setup),
-    };
-
-    for generated in request.chains {
-        let joints = generated
-            .joints
-            .iter()
-            .map(|joint| {
-                Ok(SpringJointParam {
-                    bone_id: bone_id(&skeleton, &joint.name)?,
-                    hit_radius: joint.hit_radius,
-                    ..SpringJointParam::for_force_model(setup.force_model)
+    let chains: Vec<SpringChain> = request
+        .chains
+        .iter()
+        .map(|generated| {
+            let joints = generated
+                .joints
+                .iter()
+                .map(|joint| {
+                    Ok(SpringJointParam {
+                        bone_id: bone_id(&skeleton, &joint.name)?,
+                        hit_radius: joint.hit_radius,
+                        ..SpringJointParam::for_force_model(setup.force_model)
+                    })
                 })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            Ok(SpringChain {
+                name: generated.name.clone(),
+                joints,
+                origin: ChainOrigin::Generated {
+                    target: target.clone(),
+                    role,
+                },
+                ..SpringChain::default()
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let chain = SpringChain {
-            id: setup.next_chain_id,
-            name: generated.name.clone(),
-            joints,
-            collider_group_ids: fitted_body_group.into_iter().collect(),
-            origin: ChainOrigin::Generated {
-                target: target.clone(),
-                role,
-            },
-            ..SpringChain::default()
-        };
-        setup.next_chain_id += 1;
-        setup.chains.push(chain);
-    }
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    add_generated_chains(&mut setup, chains, root_collider, SpringSpace::IDENTITY);
 
     Ok(build_sidecar_spring(&setup, &bone_inputs))
 }
@@ -99,16 +96,6 @@ fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {
         .get(name)
         .copied()
         .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", name))
-}
-
-fn fitted_body_group_id(
-    setup: &thyllore_anim_core::spring_bone::SpringBoneSetup,
-) -> Option<SpringColliderGroupId> {
-    setup
-        .collider_groups
-        .iter()
-        .find(|group| group.name == FITTED_BODY_GROUP_NAME)
-        .map(|group| group.id)
 }
 
 fn head_capsule_collider(

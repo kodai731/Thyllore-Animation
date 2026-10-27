@@ -1,7 +1,7 @@
 use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_anim_core::spring_bone::{
-    ensure_fitted_collider, fit_bone_capsule, ChainOrigin, FittedCapsule, SpringBoneSetup,
-    SpringChain, SpringJointParam, FITTED_BODY_GROUP_NAME,
+    add_generated_chains, fit_bone_capsule, ChainOrigin, FittedCapsule, SpringBoneSetup,
+    SpringChain, SpringJointParam,
 };
 use thyllore_avatar_core::garment::components::chain_gen::{
     chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
@@ -30,7 +30,7 @@ use crate::ecs::systems::avatar_submesh_role_systems::{
 };
 use crate::ecs::systems::skeleton_edit_systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
-    remove_bone_subtree,
+    remove_bone_subtree, restore_skeleton_snapshot,
 };
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
@@ -562,11 +562,19 @@ pub fn generate_and_apply_chain_bones(
     request: &ChainGenRequest,
 ) -> anyhow::Result<()> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
-    let replaced = remove_generated_chains(world, assets, graphics, &request.target)?;
-    let generated = generate_chain_bones(world, assets, graphics, request)?;
-    apply_chain_generation(world, assets, graphics, generated, replaced);
-    record_skeleton_edit(world, assets, graphics, before, "Generate chains");
-    Ok(())
+    match replace_generated_chains(world, assets, graphics, request) {
+        Ok((replaced, generated)) => {
+            apply_chain_generation(world, assets, graphics, generated, replaced);
+            record_skeleton_edit(world, assets, graphics, before, "Generate chains");
+            Ok(())
+        }
+        Err(e) => {
+            if let Some(before) = before {
+                restore_skeleton_snapshot(world, assets, graphics, before);
+            }
+            Err(e)
+        }
+    }
 }
 
 fn remove_generated_chains(
@@ -581,6 +589,17 @@ fn remove_generated_chains(
         removed_chains += 1;
     }
     Ok(removed_chains)
+}
+
+fn replace_generated_chains(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    graphics: &mut GraphicsResources,
+    request: &ChainGenRequest,
+) -> anyhow::Result<(usize, GeneratedChainBones)> {
+    let replaced = remove_generated_chains(world, assets, graphics, &request.target)?;
+    let generated = generate_chain_bones(world, assets, graphics, request)?;
+    Ok((replaced, generated))
 }
 
 fn first_generated_root_joint(
@@ -642,32 +661,11 @@ fn register_spring_chains(
         msg_warn!("Generated chains are not spring chains: no animated model entity");
         return;
     };
-    let world_units_per_skeleton_unit = spring_space_for_entity(world, entity).world_scale();
+    let spring_space = spring_space_for_entity(world, entity);
     let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
         return;
     };
-
-    let fitted_body_group = match root_collider {
-        Some(capsule) => Some(ensure_fitted_collider(&mut setup, &capsule)),
-        None => setup
-            .collider_groups
-            .iter()
-            .find(|group| group.name == FITTED_BODY_GROUP_NAME)
-            .map(|group| group.id),
-    };
-    for mut chain in chains {
-        chain.id = setup.next_chain_id;
-        setup.next_chain_id += 1;
-        chain.collider_group_ids.extend(fitted_body_group);
-        for joint in &mut chain.joints {
-            *joint = SpringJointParam {
-                bone_id: joint.bone_id,
-                hit_radius: joint.hit_radius * world_units_per_skeleton_unit,
-                ..SpringJointParam::for_force_model(setup.force_model)
-            };
-        }
-        setup.chains.push(chain);
-    }
+    add_generated_chains(&mut setup, chains, root_collider, spring_space);
 
     reset_spring_bone_state(world);
 }

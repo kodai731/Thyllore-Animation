@@ -1,8 +1,4 @@
-# Substrings of the lower-cased "<mesh name><material name>" that `guess_submesh_role` matches when a
-# submesh first appears; the first role whose list matches wins, and no match means Garment.
-# This only seeds the role table: the user corrects a guess in the Avatar Setup window or the Blender
-# addon, and an assigned role is never re-guessed.
-
-hair = ["hair", "bang", "ponytail", "twintail"]
-skin = ["body", "skin", "face", "head", "hand", "leg", "arm"]
-accessory = ["accessory", "acc_", "ribbon", "glasses", "earring", "necklace", "hat"]
+# Whole-word keywords of mesh/material names; the first matching role wins, no match is Garment, and a user-assigned role is never re-guessed.
+hair = ["hair", "bangs", "ponytail", "twintail"]
+skin = ["body", "skin", "face", "head", "hand", "hands", "leg", "legs", "arm", "arms"]
+accessory = ["accessory", "acc", "ribbon", "glasses", "earring", "necklace", "hat"]

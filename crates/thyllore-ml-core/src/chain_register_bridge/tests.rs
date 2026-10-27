@@ -1,6 +1,6 @@
 use super::*;
 use crate::avatar_setup_bridge::BoneSpec;
-use thyllore_anim_core::spring_bone::ColliderShape;
+use thyllore_anim_core::spring_bone::{ColliderShape, FITTED_BODY_GROUP_NAME};
 
 fn fit_bone(name: &str, parent: Option<usize>, head: [f32; 3]) -> FitBone {
     let mut bind_matrix = [[0.0; 4]; 4];

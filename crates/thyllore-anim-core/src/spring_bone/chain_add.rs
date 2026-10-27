@@ -1,6 +1,8 @@
 use crate::{BoneId, Skeleton};
 
+use super::collider_fit::{ensure_fitted_collider, FittedCapsule, FITTED_BODY_GROUP_NAME};
 use super::origin::ChainOrigin;
+use super::space::SpringSpace;
 use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringForceModel, SpringJointParam};
 
 fn build_chain_joints(
@@ -60,9 +62,39 @@ pub fn add_chain(
     chain_id
 }
 
+pub fn add_generated_chains(
+    setup: &mut SpringBoneSetup,
+    chains: Vec<SpringChain>,
+    root_collider: Option<FittedCapsule>,
+    space: SpringSpace,
+) {
+    let fitted_body_group = match root_collider {
+        Some(capsule) => Some(ensure_fitted_collider(setup, &capsule)),
+        None => setup
+            .collider_groups
+            .iter()
+            .find(|group| group.name == FITTED_BODY_GROUP_NAME)
+            .map(|group| group.id),
+    };
+    for mut chain in chains {
+        chain.id = setup.next_chain_id;
+        setup.next_chain_id += 1;
+        chain.collider_group_ids.extend(fitted_body_group);
+        for joint in &mut chain.joints {
+            *joint = SpringJointParam {
+                bone_id: joint.bone_id,
+                hit_radius: joint.hit_radius * space.world_scale(),
+                ..SpringJointParam::for_force_model(setup.force_model)
+            };
+        }
+        setup.chains.push(chain);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spring_bone::{ChainOrigin, ChainRole, SubmeshSelector};
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -102,5 +134,82 @@ mod tests {
         assert_eq!(id1, 1);
         assert_eq!(setup.chains[0].name, "Chain_0");
         assert_eq!(setup.chains[1].name, "Chain_1");
+    }
+
+    #[test]
+    fn add_generated_chains_scales_hit_radius_and_joins_fitted_group() {
+        let space = SpringSpace::from_world_scale(0.01).expect("valid scale");
+
+        let mut setup = SpringBoneSetup::default();
+        let root_collider = FittedCapsule {
+            bone_id: 0,
+            head: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            tail: cgmath::Vector3::new(0.0, 1.0, 0.0),
+            radius: 0.1,
+        };
+
+        let chains = vec![
+            SpringChain {
+                id: 99,
+                name: "chain_a".to_string(),
+                joints: vec![SpringJointParam {
+                    bone_id: 1,
+                    hit_radius: 1.0,
+                    ..SpringJointParam::for_force_model(setup.force_model)
+                }],
+                collider_group_ids: Vec::new(),
+                center_bone_id: None,
+                tail_bone_id: None,
+                enabled: true,
+                origin: ChainOrigin::Generated {
+                    target: SubmeshSelector::Mesh("mesh".to_string()),
+                    role: ChainRole::Hair,
+                },
+            },
+            SpringChain {
+                id: 98,
+                name: "chain_b".to_string(),
+                joints: vec![SpringJointParam {
+                    bone_id: 2,
+                    hit_radius: 2.0,
+                    ..SpringJointParam::for_force_model(setup.force_model)
+                }],
+                collider_group_ids: Vec::new(),
+                center_bone_id: None,
+                tail_bone_id: None,
+                enabled: true,
+                origin: ChainOrigin::Generated {
+                    target: SubmeshSelector::Mesh("mesh".to_string()),
+                    role: ChainRole::Hair,
+                },
+            },
+        ];
+
+        add_generated_chains(&mut setup, chains, Some(root_collider), space);
+
+        assert_eq!(setup.chains.len(), 2);
+
+        let fitted_group = setup
+            .collider_groups
+            .iter()
+            .find(|g| g.name == FITTED_BODY_GROUP_NAME)
+            .expect("Fitted Body group should exist");
+
+        for (i, chain) in setup.chains.iter().enumerate() {
+            assert_eq!(chain.id, i as SpringChainId);
+            assert_eq!(chain.collider_group_ids, vec![fitted_group.id]);
+            let expected_hit_radius = match i {
+                0 => 1.0 * 0.01,
+                1 => 2.0 * 0.01,
+                _ => unreachable!(),
+            };
+            assert!(
+                (chain.joints[0].hit_radius - expected_hit_radius).abs() < 1e-6,
+                "chain {} hit_radius: expected {}, got {}",
+                i,
+                expected_hit_radius,
+                chain.joints[0].hit_radius
+            );
+        }
     }
 }

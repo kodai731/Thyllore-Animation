@@ -12,7 +12,7 @@ mod trajectory;
 mod verlet;
 
 pub use chain::*;
-pub use chain_add::add_chain;
+pub use chain_add::{add_chain, add_generated_chains};
 pub use collider_fit::*;
 pub use collision::*;
 pub use gizmo_scope::*;

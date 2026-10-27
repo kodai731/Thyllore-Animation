@@ -372,15 +372,13 @@ impl UiCommand for ApplyExpressionPresetCommand {
     fn apply(
         self: Box<Self>,
         world: &mut World,
-        _assets: &mut AssetStorage,
-        _graphics: &GraphicsResources,
+        assets: &mut AssetStorage,
+        graphics: &GraphicsResources,
     ) {
-        let entity = find_expression_morph_entity(
-            world,
-            &AssetStorage::default(),
-            &GraphicsResources::default(),
-        )
-        .unwrap_or_else(|| 0);
+        let Some(entity) = find_expression_morph_entity(world, assets, graphics) else {
+            msg_warn!("Apply expression preset: no expression morph entity found");
+            return;
+        };
         world.send_command(MorphEvent::ApplyExpressionPreset {
             entity,
             preset_index: self.preset_index,

@@ -441,6 +441,7 @@ fn draw_row<C>(
         }
         UiRow::Switch { label, get, set } => {
             let mut v = (*get)(value);
+            property_label_in_column(ui, label, label_column);
             if crate::platform::ui::theme::toggle_switch(ui, world, &format!("##{label}"), &mut v) {
                 (*set)(value, v);
                 return true;

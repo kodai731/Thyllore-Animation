@@ -28,11 +28,45 @@ static ROLE_KEYWORDS: LazyLock<RoleKeywords> = LazyLock::new(|| {
         .expect("submesh_role_keywords.toml is valid TOML")
 });
 
+fn is_word_boundary(prev: char, ch: char) -> bool {
+    prev.is_lowercase() && ch.is_uppercase()
+        || (prev.is_ascii_digit() && ch.is_ascii_alphabetic())
+        || (prev.is_ascii_alphabetic() && ch.is_ascii_digit())
+}
+
+fn extract_words(name: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut prev: Option<char> = None;
+
+    for ch in name.chars() {
+        if !ch.is_alphanumeric() || prev.is_some_and(|p| is_word_boundary(p, ch)) {
+            if !current.is_empty() {
+                words.push(std::mem::take(&mut current).to_lowercase());
+            }
+        }
+        if ch.is_alphanumeric() {
+            current.push(ch);
+        }
+        prev = Some(ch);
+    }
+    if !current.is_empty() {
+        words.push(std::mem::take(&mut current).to_lowercase());
+    }
+    words
+}
+
 /// The role the mesh and material names suggest, from `data/submesh_role_keywords.toml`.
 pub fn guess_submesh_role(key: &SubmeshKey) -> SubmeshRole {
-    let combined = format!("{}{}", key.mesh, key.material).to_lowercase();
-    let matches_any =
-        |keywords: &[String]| keywords.iter().any(|kw| combined.contains(kw.as_str()));
+    let words: Vec<String> = extract_words(&key.mesh)
+        .into_iter()
+        .chain(extract_words(&key.material))
+        .collect();
+    let matches_any = |keywords: &[String]| {
+        keywords
+            .iter()
+            .any(|kw| words.iter().any(|w| w == kw.as_str()))
+    };
 
     if matches_any(&ROLE_KEYWORDS.hair) {
         SubmeshRole::Hair
@@ -110,5 +144,54 @@ mod tests {
 
         let empty_keys: [SubmeshKey; 0] = [];
         assert!(refresh_submesh_roles(&assigned, &empty_keys).is_empty());
+    }
+
+    #[test]
+    fn test_guess_matches_whole_words_only() {
+        assert_eq!(
+            guess_submesh_role(&key("Garment", "Cloth")),
+            SubmeshRole::Garment
+        );
+        assert_eq!(
+            guess_submesh_role(&key("Bangle", "Metal")),
+            SubmeshRole::Garment
+        );
+        assert_eq!(
+            guess_submesh_role(&key("Leggings", "Cloth")),
+            SubmeshRole::Garment
+        );
+        assert_eq!(
+            guess_submesh_role(&key("HairFront", "Mat")),
+            SubmeshRole::Hair
+        );
+        assert_eq!(
+            guess_submesh_role(&key("Body01", "Skin")),
+            SubmeshRole::Skin
+        );
+    }
+
+    #[test]
+    fn test_guess_handles_non_ascii_names() {
+        assert_eq!(guess_submesh_role(&key("髪_前", "Hair")), SubmeshRole::Hair);
+        assert_eq!(guess_submesh_role(&key("服", "布")), SubmeshRole::Garment);
+    }
+
+    #[test]
+    fn test_guess_ignores_separators() {
+        assert_eq!(
+            guess_submesh_role(&key("Mesh_Hair", "Mat")),
+            SubmeshRole::Hair
+        );
+        assert_eq!(
+            guess_submesh_role(&key("Outfit.Arms", "Cloth")),
+            SubmeshRole::Skin
+        );
+    }
+
+    #[test]
+    fn test_extract_words_splits_at_boundaries() {
+        assert_eq!(extract_words("HairFront01"), ["hair", "front", "01"]);
+        assert_eq!(extract_words("Mesh_Hair"), ["mesh", "hair"]);
+        assert_eq!(extract_words("髪_前"), ["髪", "前"]);
     }
 }

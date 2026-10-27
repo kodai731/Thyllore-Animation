@@ -43,3 +43,11 @@ def bone_bind_matrix(armature_world_rows, bone_local_rows, scale_length: float) 
     rotate the bone's own axes a second time."""
     world = _mat4_mul(armature_world_rows, bone_local_rows)
     return scaled_bind_matrix(blender_frame_to_engine_matrix(world), scale_length)
+
+
+def bone_rest_frame(armature_world_rows, bone_local_rows, scale_length: float) -> list[list[float]]:
+    """The bone's rest axes as the sidecar reads colliders: bone-local (Blender units) to engine model
+    space (metres), as a row-major 3x3."""
+    world = _mat4_mul(armature_world_rows, bone_local_rows)
+    engine = blender_frame_to_engine_matrix(world)
+    return [[engine[i][j] * scale_length for j in range(3)] for i in range(3)]

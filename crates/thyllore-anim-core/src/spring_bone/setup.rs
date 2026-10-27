@@ -4,6 +4,7 @@ use cgmath::Vector3;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
+use super::force::{JointForce, SpringForceModel};
 use super::origin::ChainOrigin;
 use crate::BoneId;
 
@@ -15,12 +16,9 @@ pub type SpringColliderGroupId = u32;
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct SpringJointParam {
     pub bone_id: BoneId,
-    #[persist(ui(min = 0.0, max = 4.0))]
-    pub stiffness: f32,
+    pub force: JointForce,
     #[persist(ui(min = 0.0, max = 1.0))]
     pub drag_force: f32,
-    #[persist(ui(min = 0.0, max = 2.0))]
-    pub gravity_power: f32,
     #[persist(ui(kind = Offset, min = -1.0, max = 1.0))]
     pub gravity_dir: Vector3<f32>,
     #[persist(ui(min = 0.0, max = 0.5, format = "%.3f"))]
@@ -28,46 +26,23 @@ pub struct SpringJointParam {
 }
 
 pub const DEFAULT_SIMULATION_STEP: f32 = 1.0 / 30.0;
-pub const EARTH_GRAVITY_M_PER_S2: f32 = 9.80665;
 const DEFAULT_DRAG_FORCE: f32 = 0.4;
-
-/// The strand lag that defines the hair material: a strand of this length trails its root moving at this speed by this angle.
-pub const STRAND_LAG_REFERENCE_SPEED_M_PER_S: f32 = 0.5;
-pub const STRAND_LAG_REFERENCE_LENGTH_M: f32 = 0.1;
-pub const STRAND_LAG_REFERENCE_ANGLE_DEG: f32 = 20.0;
-
-/// Bending relaxation `D` [m²/s]: a strand of length `L` returns at the rate `D / L²`, so its lag is `v·L / D`.
-pub fn strand_bending_relaxation() -> f32 {
-    STRAND_LAG_REFERENCE_SPEED_M_PER_S * STRAND_LAG_REFERENCE_LENGTH_M
-        / STRAND_LAG_REFERENCE_ANGLE_DEG.to_radians().tan()
-}
-
-/// VRM 1.0 reads `stiffness` in m/s and `gravity_power` as a plain factor, so its defaults differ.
-const VRM_DEFAULT_STIFFNESS: f32 = 1.0;
 const VRM_DEFAULT_DRAG_FORCE: f32 = 0.5;
-const VRM_DEFAULT_GRAVITY_POWER: f32 = 0.0;
 const VRM_DEFAULT_HIT_RADIUS: f32 = 0.02;
 
 impl SpringJointParam {
-    /// The parameters a joint added to a setup starts with, in the units of that setup's force model.
+    /// The parameters a joint added to a setup starts with, in the units of its force model.
     pub fn for_force_model(force_model: SpringForceModel) -> Self {
-        match force_model {
-            SpringForceModel::Vrm => Self {
-                bone_id: 0,
-                stiffness: VRM_DEFAULT_STIFFNESS,
-                drag_force: VRM_DEFAULT_DRAG_FORCE,
-                gravity_power: VRM_DEFAULT_GRAVITY_POWER,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
-                hit_radius: VRM_DEFAULT_HIT_RADIUS,
-            },
-            SpringForceModel::RestRelative => Self {
-                bone_id: 0,
-                stiffness: strand_bending_relaxation(),
-                drag_force: DEFAULT_DRAG_FORCE,
-                gravity_power: 1.0,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
-                hit_radius: 0.0,
-            },
+        let (drag_force, hit_radius) = match force_model {
+            SpringForceModel::Vrm => (VRM_DEFAULT_DRAG_FORCE, VRM_DEFAULT_HIT_RADIUS),
+            SpringForceModel::RestRelative => (DEFAULT_DRAG_FORCE, 0.0),
+        };
+        Self {
+            bone_id: 0,
+            force: JointForce::default_for(force_model),
+            drag_force,
+            gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+            hit_radius,
         }
     }
 }
@@ -162,14 +137,6 @@ pub enum SpringCollisionMode {
     SegmentExtended,
 }
 
-/// How the joint forces are evaluated: the VRM formula, or forces that vanish in the rest pose.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SpringForceModel {
-    Vrm,
-    #[default]
-    RestRelative,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct SpringBoneSetup {
     pub chains: Vec<SpringChain>,
@@ -179,7 +146,22 @@ pub struct SpringBoneSetup {
     pub next_collider_id: SpringColliderId,
     pub next_group_id: SpringColliderGroupId,
     pub collision_mode: SpringCollisionMode,
-    pub force_model: SpringForceModel,
+}
+
+impl SpringBoneSetup {
+    /// New joints follow the force model of the joints already in the setup.
+    pub fn force_model(&self) -> SpringForceModel {
+        self.chains
+            .iter()
+            .flat_map(|chain| chain.joints.first())
+            .map(|joint| joint.force.model())
+            .next()
+            .unwrap_or_default()
+    }
+
+    pub fn new_joint_template(&self) -> SpringJointParam {
+        SpringJointParam::for_force_model(self.force_model())
+    }
 }
 
 pub fn set_chain_collider_groups(
@@ -209,15 +191,6 @@ mod tests {
             .iter()
             .map(|p| p.name.as_ref())
             .collect();
-        assert_eq!(
-            names,
-            [
-                "stiffness",
-                "drag_force",
-                "gravity_power",
-                "gravity_dir",
-                "hit_radius"
-            ]
-        );
+        assert_eq!(names, ["drag_force", "gravity_dir", "hit_radius"]);
     }
 }

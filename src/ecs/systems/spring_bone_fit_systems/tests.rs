@@ -1,5 +1,5 @@
 use super::*;
-use crate::animation::spring_bone::{SpringCollisionMode, SpringForceModel};
+use crate::animation::spring_bone::{JointForce, SpringCollisionMode, VrmJointForce};
 use crate::animation::{Bone, Keyframe, TransformChannel};
 use crate::ecs::component::SpringJointParam;
 use cgmath::{Matrix4, Vector3};
@@ -54,8 +54,10 @@ fn create_default_setup() -> SpringBoneSetup {
             name: "TestChain".to_string(),
             joints: vec![SpringJointParam {
                 bone_id: 1,
-                stiffness: 0.5,
-                gravity_power: 1.0,
+                force: JointForce::Vrm(VrmJointForce {
+                    stiffness: 0.5,
+                    gravity_power: 1.0,
+                }),
                 gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                 drag_force: 0.4,
                 hit_radius: 0.0,
@@ -72,7 +74,6 @@ fn create_default_setup() -> SpringBoneSetup {
         next_collider_id: 0,
         next_group_id: 0,
         collision_mode: SpringCollisionMode::VrmCompatible,
-        force_model: SpringForceModel::Vrm,
     }
 }
 
@@ -104,8 +105,10 @@ fn test_fit_improves_rms() {
             name: "TestChain".to_string(),
             joints: vec![SpringJointParam {
                 bone_id: 1,
-                stiffness: 1.5,
-                gravity_power: 0.3,
+                force: JointForce::Vrm(VrmJointForce {
+                    stiffness: 1.5,
+                    gravity_power: 0.3,
+                }),
                 gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                 drag_force: 0.2,
                 hit_radius: 0.0,
@@ -122,7 +125,6 @@ fn test_fit_improves_rms() {
         next_collider_id: 0,
         next_group_id: 0,
         collision_mode: SpringCollisionMode::VrmCompatible,
-        force_model: SpringForceModel::Vrm,
     };
 
     let config = BakeConfig {

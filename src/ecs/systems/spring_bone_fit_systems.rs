@@ -1,5 +1,5 @@
 use crate::animation::spring_bone::{
-    compare_tail_trajectories, SpringBoneSetup, SpringSpace, SpringTailSample,
+    compare_tail_trajectories, JointForce, SpringBoneSetup, SpringSpace, SpringTailSample,
 };
 use crate::animation::{AnimationClip, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringChain};
@@ -12,9 +12,8 @@ pub struct SpringChainFit {
     pub chain: String,
     pub before_rms: f32,
     pub after_rms: f32,
-    pub stiffness: f32,
+    pub force: JointForce,
     pub drag_force: f32,
-    pub gravity_power: f32,
 }
 
 pub struct SpringFitInputs<'a> {
@@ -34,6 +33,12 @@ fn clamp_values(values: &[f32]) -> [f32; 3] {
     ]
 }
 
+/// The fitted values in joint order: the restoring magnitude, the drag, the gravity magnitude.
+fn apply_values(joint: &mut crate::ecs::component::SpringJointParam, values: [f32; 3]) {
+    joint.force = joint.force.with_magnitudes([values[0], values[2]]);
+    joint.drag_force = values[1];
+}
+
 fn with_chain_values(
     setup: &SpringBoneSetup,
     chain_name: &str,
@@ -43,9 +48,7 @@ fn with_chain_values(
     for chain in &mut out.chains {
         if chain.name == chain_name {
             for joint in &mut chain.joints {
-                joint.stiffness = values[0];
-                joint.drag_force = values[1];
-                joint.gravity_power = values[2];
+                apply_values(joint, values);
             }
         }
     }
@@ -78,7 +81,8 @@ fn chain_rms(
 
 fn chain_start_values(chain: &SpringChain) -> Option<[f32; 3]> {
     let first = chain.joints.first()?;
-    Some([first.stiffness, first.drag_force, first.gravity_power])
+    let [restoring, gravity] = first.force.magnitudes();
+    Some([restoring, first.drag_force, gravity])
 }
 
 pub fn fit_spring_params(
@@ -114,17 +118,20 @@ pub fn fit_spring_params(
         let result = minimize_nelder_mead(objective, &start_values, params);
         let best_clamped = clamp_values(&result.point);
 
-        for joint in &mut current_setup
+        let Some(fitted_chain) = current_setup
             .chains
             .iter_mut()
             .find(|c| c.name == chain.name)
-            .unwrap()
-            .joints
-        {
-            joint.stiffness = best_clamped[0];
-            joint.drag_force = best_clamped[1];
-            joint.gravity_power = best_clamped[2];
+        else {
+            continue;
+        };
+        for joint in &mut fitted_chain.joints {
+            apply_values(joint, best_clamped);
         }
+        let Some(fitted_joint) = fitted_chain.joints.first() else {
+            continue;
+        };
+        let fitted_force = fitted_joint.force;
 
         let after_rms = chain_rms(inputs, &current_setup, &chain.name, best_clamped);
 
@@ -132,9 +139,8 @@ pub fn fit_spring_params(
             chain: chain.name.clone(),
             before_rms,
             after_rms,
-            stiffness: best_clamped[0],
+            force: fitted_force,
             drag_force: best_clamped[1],
-            gravity_power: best_clamped[2],
         });
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
 
 fn make_bones() -> Vec<FitBone> {
     let identity = [
@@ -13,6 +14,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -21,6 +23,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "Spine".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.1, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -29,6 +32,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "Chest".into(),
                 parent: Some(1),
                 rest_position: [0.0, 1.2, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -37,6 +41,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "UpperChest".into(),
                 parent: Some(2),
                 rest_position: [0.0, 1.25, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -45,6 +50,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "Neck".into(),
                 parent: Some(3),
                 rest_position: [0.0, 1.3, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -53,6 +59,7 @@ fn make_bones() -> Vec<FitBone> {
                 name: "Head".into(),
                 parent: Some(4),
                 rest_position: [0.0, 1.4, 0.0],
+                rest_frame: None,
             },
             bind_matrix: identity,
         },
@@ -111,9 +118,11 @@ fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
             joints: vec![
                 thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
                     bone: "Spine".into(),
-                    stiffness: 0.5,
+                    force: SidecarJointForce::Vrm {
+                        stiffness: 0.5,
+                        gravity_power: 1.0,
+                    },
                     drag_force: 0.0,
-                    gravity_power: 1.0,
                     gravity_dir: [0.0, -1.0, 0.0],
                     hit_radius: 0.0,
                 },
@@ -157,9 +166,11 @@ fn collider_bridge_assign_collider_groups_replaces() {
             joints: vec![
                 thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
                     bone: "Spine".into(),
-                    stiffness: 0.5,
+                    force: SidecarJointForce::Vrm {
+                        stiffness: 0.5,
+                        gravity_power: 1.0,
+                    },
                     drag_force: 0.0,
-                    gravity_power: 1.0,
                     gravity_dir: [0.0, -1.0, 0.0],
                     hit_radius: 0.0,
                 },
@@ -207,9 +218,11 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
             joints: vec![
                 thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
                     bone: "Spine".into(),
-                    stiffness: 0.5,
+                    force: SidecarJointForce::Vrm {
+                        stiffness: 0.5,
+                        gravity_power: 1.0,
+                    },
                     drag_force: 0.0,
-                    gravity_power: 1.0,
                     gravity_dir: [0.0, -1.0, 0.0],
                     hit_radius: 0.0,
                 },

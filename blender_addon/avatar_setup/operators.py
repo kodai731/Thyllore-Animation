@@ -1,6 +1,7 @@
 """Avatar sidecar import / export operators (thyllore.import_avatar_sidecar, thyllore.export_for_unity)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import bpy
@@ -15,7 +16,7 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sidecar, write_submesh_sidecar
-from ..common.collider_fit import bone_bind_matrix
+from ..common.collider_fit import bone_bind_matrix, bone_rest_frame
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.armature import armature_of
 from .mesh_data import material_loop_indices_of
@@ -65,21 +66,29 @@ def target_armature(context):
     return None
 
 
+def _matrix_rows(matrix):
+    return [[matrix[i][j] for j in range(4)] for i in range(4)]
+
+
 def armature_bone_specs(context, arm):
-    """Collect bone data from arm and build bone specs with context scale_length."""
+    """Collect bone data from arm and build bone specs with context scale_length and rest frames."""
     names, parent_indices, world_heads = _collect_bone_data(arm)
     scale_length = context.scene.unit_settings.scale_length
-    return bone_specs(names, parent_indices, world_heads, scale_length)
+    armature_rows = _matrix_rows(arm.matrix_world)
+    rest_frames = [
+        bone_rest_frame(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
+        for bone in arm.data.bones
+    ]
+    return bone_specs(names, parent_indices, world_heads, scale_length, rest_frames)
 
 
 def armature_fit_bones(context, arm):
     """Collect bone data from arm and build bone specs with bind_matrix for collider fit."""
     specs = armature_bone_specs(context, arm)
     scale_length = context.scene.unit_settings.scale_length
-    armature_rows = [[arm.matrix_world[i][j] for j in range(4)] for i in range(4)]
+    armature_rows = _matrix_rows(arm.matrix_world)
     for spec, bone in zip(specs, arm.data.bones):
-        bone_rows = [[bone.matrix_local[i][j] for j in range(4)] for i in range(4)]
-        spec["bind_matrix"] = bone_bind_matrix(armature_rows, bone_rows, scale_length)
+        spec["bind_matrix"] = bone_bind_matrix(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
     return specs
 
 
@@ -118,10 +127,14 @@ def _mesh_counts(meshes):
 
 
 def _sidecar_build_input(context, arm, meshes):
-    """Build the input dict for tml.sidecar_build from arm and meshes."""
-    bones = armature_bone_specs(context, arm)
+    """Build the input dict for tml.sidecar_build from arm and meshes.
 
-    spring = spring_settings_to_sidecar(arm.data.thyllore_spring)
+    The sidecar the rig was imported from (``thyllore_spring.sidecar_json``) is passed as the base so the
+    fields the addon does not edit survive the round trip."""
+    bones = armature_bone_specs(context, arm)
+    settings = arm.data.thyllore_spring
+
+    spring = tml.spring_colliders_to_model(spring_settings_to_sidecar(settings), bones)
 
     all_roles = []
     all_hidden = []
@@ -144,9 +157,9 @@ def _sidecar_build_input(context, arm, meshes):
         spring=spring,
     )
 
-    humanoid_overrides = humanoid_overrides_to_dict(arm.data.thyllore_spring)
+    humanoid_overrides = humanoid_overrides_to_dict(settings)
 
-    return {
+    build_input = {
         "bones": bones,
         "humanoid_overrides": humanoid_overrides,
         "spring": spring,
@@ -155,6 +168,9 @@ def _sidecar_build_input(context, arm, meshes):
         "materials": {},
         "stats": stats,
     }
+    if settings.sidecar_json:
+        build_input["base"] = json.loads(settings.sidecar_json)
+    return build_input
 
 
 class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
@@ -187,11 +203,14 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
         try:
             sidecar = tml.sidecar_read(text)
+            spring = tml.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
         except (RuntimeError, ValueError) as e:
             self.report({"ERROR"}, f"Invalid sidecar file: {e}")
             return {"CANCELLED"}
 
-        write_sidecar_spring(arm.data.thyllore_spring, sidecar["spring"])
+        settings = arm.data.thyllore_spring
+        settings.sidecar_json = text
+        write_sidecar_spring(settings, spring)
 
         meshes = bound_meshes(arm)
         for mesh_obj in meshes:

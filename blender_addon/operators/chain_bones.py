@@ -201,10 +201,11 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         _write_weights(obj, groups)
         assign_bones_to_chain_collection(arm, [name for name, _, _, _ in specs])
 
+        bones = armature_fit_bones(context, arm)
         try:
             spring = tml.register_generated_chains(
-                spring_settings_to_edit(settings),
-                armature_fit_bones(context, arm),
+                tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+                bones,
                 skins,
                 self.root_bone,
                 target,
@@ -216,7 +217,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             self.report({"ERROR"}, f"register_generated_chains failed: {e}")
             return {"CANCELLED"}
         disabled = disabled_chain_names(settings)
-        write_sidecar_spring(settings, spring)
+        write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
         restore_disabled_chains(settings, disabled)
 
         collider_note = " with a head collider" if output.get("head_capsule") else ""

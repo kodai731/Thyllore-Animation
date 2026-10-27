@@ -1,6 +1,7 @@
 use cgmath::Vector3;
 
 use super::*;
+use crate::spring_bone::{JointForce, VrmJointForce};
 
 fn make_chain(bone_ids: &[u32]) -> SpringChain {
     SpringChain {
@@ -8,9 +9,8 @@ fn make_chain(bone_ids: &[u32]) -> SpringChain {
             .iter()
             .map(|&bone_id| SpringJointParam {
                 bone_id,
-                stiffness: 1.0,
+                force: vrm_force(1.0),
                 drag_force: 0.5,
-                gravity_power: 1.0,
                 gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.1,
             })
@@ -19,14 +19,25 @@ fn make_chain(bone_ids: &[u32]) -> SpringChain {
     }
 }
 
+fn vrm_force(stiffness: f32) -> JointForce {
+    JointForce::Vrm(VrmJointForce {
+        stiffness,
+        gravity_power: 1.0,
+    })
+}
+
+fn stiffness_of(joint: &SpringJointParam) -> f32 {
+    joint.force.magnitudes()[0]
+}
+
 fn ramp(root_stiffness: f32, tip_stiffness: f32, shape: RampShape) -> ChainRamp {
     ChainRamp {
         root: SpringJointParam {
-            stiffness: root_stiffness,
+            force: vrm_force(root_stiffness),
             ..Default::default()
         },
         tip: SpringJointParam {
-            stiffness: tip_stiffness,
+            force: vrm_force(tip_stiffness),
             ..Default::default()
         },
         shape,
@@ -84,7 +95,7 @@ fn single_joint_is_root_value() {
     let result = apply_ramp(&chain, &ramp);
 
     assert_eq!(result.joints.len(), 1);
-    assert!((result.joints[0].stiffness - 0.8).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[0]) - 0.8).abs() < 1e-6);
 }
 
 #[test]
@@ -94,10 +105,10 @@ fn four_joints_linear_interpolation() {
     let result = apply_ramp(&chain, &ramp);
 
     assert_eq!(result.joints.len(), 4);
-    assert!((result.joints[0].stiffness - 0.8).abs() < 1e-6);
-    assert!((result.joints[1].stiffness - 0.6).abs() < 1e-6);
-    assert!((result.joints[2].stiffness - 0.4).abs() < 1e-6);
-    assert!((result.joints[3].stiffness - 0.2).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[0]) - 0.8).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[1]) - 0.6).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[2]) - 0.4).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[3]) - 0.2).abs() < 1e-6);
 }
 
 #[test]
@@ -108,7 +119,7 @@ fn four_joints_ease_in_second_joint_closer_to_root() {
 
     let result_linear = apply_ramp(&chain, &ramp_linear);
     let result_ease_in = apply_ramp(&chain, &ramp_ease_in);
-    assert!(result_ease_in.joints[1].stiffness > result_linear.joints[1].stiffness);
+    assert!(stiffness_of(&result_ease_in.joints[1]) > stiffness_of(&result_linear.joints[1]));
 }
 
 #[test]
@@ -282,12 +293,12 @@ fn set_end_root() {
     let mut ramp: ChainRamp = Default::default();
     let joint = SpringJointParam {
         bone_id: 5,
-        stiffness: 0.9,
+        force: vrm_force(0.9),
         ..Default::default()
     };
     ramp.set_end(RampEnd::Root, joint);
     assert_eq!(ramp.root.bone_id, 5);
-    assert_eq!(ramp.root.stiffness, 0.9);
+    assert_eq!(stiffness_of(&ramp.root), 0.9);
 }
 
 #[test]
@@ -295,12 +306,12 @@ fn set_end_tip() {
     let mut ramp: ChainRamp = Default::default();
     let joint = SpringJointParam {
         bone_id: 7,
-        stiffness: 0.1,
+        force: vrm_force(0.1),
         ..Default::default()
     };
     ramp.set_end(RampEnd::Tip, joint);
     assert_eq!(ramp.tip.bone_id, 7);
-    assert_eq!(ramp.tip.stiffness, 0.1);
+    assert_eq!(stiffness_of(&ramp.tip), 0.1);
 }
 
 #[test]
@@ -312,17 +323,17 @@ fn load_ends_normal_chain() {
         joints: vec![
             SpringJointParam {
                 bone_id: 1,
-                stiffness: 0.8,
+                force: vrm_force(0.8),
                 ..Default::default()
             },
             SpringJointParam {
                 bone_id: 2,
-                stiffness: 0.5,
+                force: vrm_force(0.5),
                 ..Default::default()
             },
             SpringJointParam {
                 bone_id: 3,
-                stiffness: 0.2,
+                force: vrm_force(0.2),
                 ..Default::default()
             },
         ],
@@ -334,9 +345,9 @@ fn load_ends_normal_chain() {
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 1);
-    assert_eq!(ramp.root.stiffness, 0.8);
+    assert_eq!(stiffness_of(&ramp.root), 0.8);
     assert_eq!(ramp.tip.bone_id, 3);
-    assert_eq!(ramp.tip.stiffness, 0.2);
+    assert_eq!(stiffness_of(&ramp.tip), 0.2);
 }
 
 #[test]
@@ -344,7 +355,7 @@ fn load_ends_empty_chain_is_noop() {
     let mut ramp: ChainRamp = Default::default();
     ramp.root = SpringJointParam {
         bone_id: 99,
-        stiffness: 0.5,
+        force: vrm_force(0.5),
         ..Default::default()
     };
     let chain = SpringChain {
@@ -359,7 +370,7 @@ fn load_ends_empty_chain_is_noop() {
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 99);
-    assert_eq!(ramp.root.stiffness, 0.5);
+    assert_eq!(stiffness_of(&ramp.root), 0.5);
 }
 
 #[test]
@@ -371,14 +382,10 @@ fn chain_ramp_ui_params_names() {
     assert_eq!(
         names,
         [
-            "root_stiffness",
             "root_drag_force",
-            "root_gravity_power",
             "root_gravity_dir",
             "root_hit_radius",
-            "tip_stiffness",
             "tip_drag_force",
-            "tip_gravity_power",
             "tip_gravity_dir",
             "tip_hit_radius"
         ]

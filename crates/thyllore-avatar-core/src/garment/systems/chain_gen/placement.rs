@@ -81,7 +81,7 @@ fn place_hair_card_chains(
     params: &ChainGenParams,
 ) -> Option<ChainPlacement> {
     let components = group_into_components(input, vertices);
-    match decide_strand_mode(input, &components, band.progress) {
+    match decide_strand_mode(input, &components, band.equator_progress) {
         StrandMode::Card => {
             let (chains, centerlines) = place_card_chains(input, &components, band.center, params);
             if chains.is_empty() {

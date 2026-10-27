@@ -3,7 +3,7 @@
 Usage:
     python tools/sidecar_diff.py <engine.avatar.json> <addon.avatar.json>
 
-Compares spring.chains, spring.colliders (fitted only), submesh_roles, and humanoid.
+Compares spring.chains, spring.colliders, submesh_roles, and humanoid.
 Prints one line per mismatch; exits 0 if identical, 1 otherwise."""
 from __future__ import annotations
 
@@ -62,8 +62,20 @@ def _diff_chains(engine_chains: list[dict], addon_chains: list[dict]) -> list[st
 
 
 def _diff_joint_values(engine: dict, addon: dict) -> str | None:
-    """Compare 5 joint values with math.isclose; return description of first mismatch or None."""
-    for key in ("stiffness", "drag_force", "gravity_power", "hit_radius"):
+    """Compare the force, drag, radius and gravity direction with math.isclose; return the first mismatch or None."""
+    ef = engine["force"]
+    af = addon["force"]
+    if ef["model"] != af["model"]:
+        return f"force.model engine={ef['model']} addon={af['model']}"
+    for key in sorted(set(ef) | set(af)):
+        if key == "model":
+            continue
+        ev = float(ef[key])
+        av = float(af[key])
+        if not math.isclose(ev, av, rel_tol=1e-6, abs_tol=1e-6):
+            return f"force.{key} engine={ev} addon={av}"
+
+    for key in ("drag_force", "hit_radius"):
         ev = float(engine[key])
         av = float(addon[key])
         if not math.isclose(ev, av, rel_tol=1e-6, abs_tol=1e-6):
@@ -80,35 +92,45 @@ def _diff_joint_values(engine: dict, addon: dict) -> str | None:
 
 def _diff_colliders(engine_colliders: list[dict], addon_colliders: list[dict],
                     tolerance: float) -> list[str]:
-    """Compare fitted colliders (origin == 'fitted') by bone set and per-bone radius.
-
-    offset / tail are not compared — they use different local coordinate systems."""
-    engine_fitted = [c for c in engine_colliders if c.get("origin") == "fitted"]
-    addon_fitted = [c for c in addon_colliders if c.get("origin") == "fitted"]
-
-    ebones = {c["bone"] for c in engine_fitted}
-    abones = {c["bone"] for c in addon_fitted}
+    """Compare colliders by name: bone, shape, origin, and the model-space radius, offset and tail within tolerance."""
+    engine_by_name = {c["name"]: c for c in engine_colliders}
+    addon_by_name = {c["name"]: c for c in addon_colliders}
 
     diffs: list[str] = []
-    if ebones != abones:
-        missing_in_addon = ebones - abones
-        missing_in_engine = abones - ebones
+    if set(engine_by_name) != set(addon_by_name):
         parts = []
+        missing_in_addon = set(engine_by_name) - set(addon_by_name)
+        missing_in_engine = set(addon_by_name) - set(engine_by_name)
         if missing_in_addon:
             parts.append(f"missing in addon: {sorted(missing_in_addon)}")
         if missing_in_engine:
             parts.append(f"missing in engine: {sorted(missing_in_engine)}")
-        diffs.append(f"spring.colliders (fitted): bone set mismatch — {'; '.join(parts)}")
+        diffs.append(f"spring.colliders: name set mismatch — {'; '.join(parts)}")
         return diffs
 
-    for bone in sorted(ebones):
-        ec = next(c for c in engine_fitted if c["bone"] == bone)
-        ac = next(c for c in addon_fitted if c["bone"] == bone)
+    for name in sorted(engine_by_name):
+        ec = engine_by_name[name]
+        ac = addon_by_name[name]
+        for key in ("bone", "shape", "origin"):
+            if ec.get(key) != ac.get(key):
+                diffs.append(f"spring.colliders[{name!r}]: {key} engine={ec.get(key)} addon={ac.get(key)}")
         er = float(ec["radius"])
         ar = float(ac["radius"])
         if abs(er - ar) > tolerance:
-            diffs.append(f"spring.colliders (fitted)[{bone}]: radius engine={er} addon={ar} "
+            diffs.append(f"spring.colliders[{name!r}]: radius engine={er} addon={ar} "
                          f"(diff={abs(er - ar):.6f} > {tolerance})")
+        for key in ("offset", "tail"):
+            ev = ec.get(key)
+            av = ac.get(key)
+            if ev is None and av is None:
+                continue
+            if ev is None or av is None:
+                diffs.append(f"spring.colliders[{name!r}]: {key} engine={ev} addon={av}")
+                continue
+            distance = math.dist([float(x) for x in ev], [float(x) for x in av])
+            if distance > tolerance:
+                diffs.append(f"spring.colliders[{name!r}]: {key} engine={list(ev)} addon={list(av)} "
+                             f"(distance={distance:.6f} > {tolerance})")
 
     return diffs
 

@@ -1,7 +1,8 @@
 use std::sync::LazyLock;
 
 use thyllore_anim_core::spring_bone::{
-    chains_in_scope, chains_under_bone, joint_count_of, RampShape, CHAIN_RAMP_UI_PARAMS,
+    chains_in_scope, chains_under_bone, joint_count_of, JointForceForm, RampShape,
+    SpringJointParam, CHAIN_RAMP_UI_PARAMS,
 };
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
@@ -14,6 +15,7 @@ use crate::ecs::world::Entity;
 
 use super::super::ui_rows::{ChoiceOption, ListRows, UiRow};
 use super::bone_section::BoneSpringView;
+use super::force_rows::force_field_row;
 
 /// Where a ramp item starts: a joint of the selected bone (scope widens it) or the bone above chain roots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +38,48 @@ pub struct RampFormView {
     pub chain_id: SpringChainId,
     pub targets: RampTargets,
     pub ramp: ChainRamp,
+    pub root_force: JointForceForm,
+    pub tip_force: JointForceForm,
     pub scope: RampScope,
+}
+
+impl RampFormView {
+    pub fn new(
+        entity: Entity,
+        origin: RampOrigin,
+        chain_id: SpringChainId,
+        targets: RampTargets,
+        ramp: ChainRamp,
+        scope: RampScope,
+    ) -> Self {
+        let root_force = JointForceForm::from(ramp.root.force);
+        let tip_force = JointForceForm::from(ramp.tip.force);
+        Self {
+            entity,
+            origin,
+            chain_id,
+            targets,
+            ramp,
+            root_force,
+            tip_force,
+            scope,
+        }
+    }
+
+    /// The ramp with the forces the two forms currently select.
+    pub fn ramp_param(&self) -> ChainRamp {
+        ChainRamp {
+            root: SpringJointParam {
+                force: self.root_force.into(),
+                ..self.ramp.root.clone()
+            },
+            tip: SpringJointParam {
+                force: self.tip_force.into(),
+                ..self.ramp.tip.clone()
+            },
+            shape: self.ramp.shape,
+        }
+    }
 }
 
 struct RampPath;
@@ -103,14 +146,14 @@ pub fn ramp_list_row() -> UiRow<BoneSpringView> {
                 .iter()
                 .zip(&view.ramp_targets)
                 .map(|(joint, targets)| {
-                    let item = RampFormView {
-                        entity: view.entity,
-                        origin: RampOrigin::Joint,
-                        chain_id: joint.chain_id,
-                        targets: targets.clone(),
-                        ramp: view.ramp.clone(),
-                        scope: view.ramp_scope,
-                    };
+                    let item = RampFormView::new(
+                        view.entity,
+                        RampOrigin::Joint,
+                        joint.chain_id,
+                        targets.clone(),
+                        view.ramp.clone(),
+                        view.ramp_scope,
+                    );
                     (joint.chain_name.clone(), item)
                 })
                 .collect();
@@ -121,22 +164,22 @@ pub fn ramp_list_row() -> UiRow<BoneSpringView> {
             {
                 items.push((
                     "Chains under this bone".to_string(),
-                    RampFormView {
-                        entity: view.entity,
-                        origin: RampOrigin::ChildChains,
-                        chain_id: first_chain,
-                        targets: targets.clone(),
-                        ramp: view.ramp.clone(),
-                        scope: view.ramp_scope,
-                    },
+                    RampFormView::new(
+                        view.entity,
+                        RampOrigin::ChildChains,
+                        first_chain,
+                        targets.clone(),
+                        view.ramp.clone(),
+                        view.ramp_scope,
+                    ),
                 ));
             }
             items
         },
-        rows: |form| ramp_form_rows(form.origin),
+        rows: ramp_form_rows,
         on_change: |_, _, form| {
             Box::new(SetChainRampForm {
-                ramp: form.ramp,
+                ramp: form.ramp_param(),
                 scope: form.scope,
             })
         },
@@ -155,21 +198,26 @@ fn ramp_param_rows(hidden: &[&str]) -> Vec<UiRow<RampFormView>> {
         .collect()
 }
 
-pub fn ramp_form_rows(origin: RampOrigin) -> Vec<UiRow<RampFormView>> {
+pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
+    let origin = form.origin;
     let mut rows = Vec::new();
     rows.push(UiRow::Heading("Root"));
+    rows.push(force_field_row(
+        &form.root_force,
+        |view: &mut RampFormView| &mut view.root_force,
+    ));
     rows.extend(ramp_param_rows(&[
-        "tip_stiffness",
         "tip_drag_force",
-        "tip_gravity_power",
         "tip_gravity_dir",
         "tip_hit_radius",
     ]));
     rows.push(UiRow::Heading("Tip"));
+    rows.push(force_field_row(
+        &form.tip_force,
+        |view: &mut RampFormView| &mut view.tip_force,
+    ));
     rows.extend(ramp_param_rows(&[
-        "root_stiffness",
         "root_drag_force",
-        "root_gravity_power",
         "root_gravity_dir",
         "root_hit_radius",
         "tip_gravity_dir",
@@ -235,7 +283,7 @@ pub fn ramp_form_rows(origin: RampOrigin) -> Vec<UiRow<RampFormView>> {
             Box::new(ApplyChainRamp {
                 entity: view.entity,
                 chain_ids: view.targets.chains.clone(),
-                ramp: view.ramp.clone(),
+                ramp: view.ramp_param(),
             }) as _
         },
     });
@@ -269,21 +317,31 @@ mod tests {
         }
     }
 
+    fn form(origin: RampOrigin, chains: Vec<SpringChainId>) -> RampFormView {
+        RampFormView::new(
+            0,
+            origin,
+            0,
+            RampTargets {
+                joint_count: chains.len(),
+                chains,
+            },
+            ChainRamp::default(),
+            RampScope::ThisChain,
+        )
+    }
+
     #[test]
     fn ramp_form_rows_label_order_and_no_duplicates() {
-        let rows = ramp_form_rows(RampOrigin::Joint);
+        let rows = ramp_form_rows(&form(RampOrigin::Joint, Vec::new()));
         let labels = visible_labels(&rows);
         assert_eq!(
             labels,
             [
-                "root_stiffness",
                 "root_drag_force",
-                "root_gravity_power",
                 "root_gravity_dir",
                 "root_hit_radius",
-                "tip_stiffness",
                 "tip_drag_force",
-                "tip_gravity_power",
                 "tip_hit_radius",
                 "Shape",
                 "Scope",
@@ -295,8 +353,18 @@ mod tests {
     }
 
     #[test]
+    fn ramp_blocks_start_with_a_force_form() {
+        let rows = ramp_form_rows(&form(RampOrigin::Joint, Vec::new()));
+        let field_count = rows
+            .iter()
+            .filter(|row| matches!(row, UiRow::Field(_)))
+            .count();
+        assert_eq!(field_count, 2);
+    }
+
+    #[test]
     fn child_chain_rows_have_no_scope_choice() {
-        let rows = ramp_form_rows(RampOrigin::ChildChains);
+        let rows = ramp_form_rows(&form(RampOrigin::ChildChains, Vec::new()));
         let labels = visible_labels(&rows);
         assert!(!labels.contains(&"Scope"));
         assert!(labels.contains(&"Apply Ramp"));
@@ -304,7 +372,7 @@ mod tests {
 
     #[test]
     fn ramp_root_block_shows_every_joint_param_and_tip_block_all_but_gravity_dir() {
-        let rows = ramp_form_rows(RampOrigin::Joint);
+        let rows = ramp_form_rows(&form(RampOrigin::Joint, Vec::new()));
         let heading_at = |label: &str| {
             rows.iter()
                 .position(|row| matches!(row, UiRow::Heading(heading) if *heading == label))
@@ -328,7 +396,7 @@ mod tests {
 
     #[test]
     fn apply_ramp_is_enabled_only_with_targets() {
-        let rows = ramp_form_rows(RampOrigin::Joint);
+        let rows = ramp_form_rows(&form(RampOrigin::Joint, Vec::new()));
         let Some(UiRow::Action { enabled, .. }) = rows
             .iter()
             .find(|row| matches!(row, UiRow::Action { label, .. } if *label == "Apply Ramp"))
@@ -336,20 +404,9 @@ mod tests {
             panic!("Apply Ramp row not found");
         };
         let world = crate::ecs::world::World::new();
-        let form = |chains: Vec<SpringChainId>| RampFormView {
-            entity: 0,
-            origin: RampOrigin::Joint,
-            chain_id: 1,
-            targets: RampTargets {
-                chains,
-                joint_count: 0,
-            },
-            ramp: ChainRamp::default(),
-            scope: RampScope::default(),
-        };
 
-        assert!(!enabled(&world, &form(Vec::new())));
-        assert!(enabled(&world, &form(vec![1])));
+        assert!(!enabled(&world, &form(RampOrigin::Joint, Vec::new())));
+        assert!(enabled(&world, &form(RampOrigin::Joint, vec![1])));
     }
 
     #[test]

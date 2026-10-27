@@ -4,13 +4,15 @@ use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
     chains_to_draw as anim_chains_to_draw, chains_under_bone as anim_chains_under_bone, ChainRamp,
-    RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode, SpringChainId, SpringJointParam,
+    JointForce, RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode, SpringChainId,
+    SpringJointParam,
 };
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarJointForce,
+    SidecarSpring,
 };
 use thyllore_model_core::{BoneId, Skeleton};
 
@@ -33,7 +35,8 @@ pub fn add_chains_under_bone(
     root_name: &str,
     min_joints: u32,
 ) -> anyhow::Result<SidecarSpring> {
-    let mut setup = spring_setup_from_sidecar(spring, bones);
+    let mut setup =
+        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
     let skeleton = skeleton_from_bones(bones);
     let root = skeleton
         .bone_name_to_id
@@ -65,7 +68,11 @@ pub fn add_chains_under_bone(
         add_chain(&mut setup, chain_root, chain.joints.len() as u32, &skeleton);
     }
 
-    Ok(build_sidecar_spring(&setup, bones))
+    Ok(build_sidecar_spring(
+        &setup,
+        bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -75,11 +82,11 @@ pub struct RampInput {
     pub shape: String,
 }
 
+/// The joint values the addon sends, in the sidecar joint's shape without the bone.
 #[derive(serde::Deserialize)]
 pub struct JointValues {
-    pub stiffness: f32,
+    pub force: SidecarJointForce,
     pub drag_force: f32,
-    pub gravity_power: f32,
     pub gravity_dir: [f32; 3],
     pub hit_radius: f32,
 }
@@ -88,9 +95,8 @@ impl JointValues {
     fn to_joint_param(&self) -> SpringJointParam {
         SpringJointParam {
             bone_id: 0,
-            stiffness: self.stiffness,
+            force: JointForce::from(self.force),
             drag_force: self.drag_force,
-            gravity_power: self.gravity_power,
             gravity_dir: Vector3::from(self.gravity_dir),
             hit_radius: self.hit_radius,
         }
@@ -119,7 +125,8 @@ pub fn apply_ramp_to_chains(
     chain_names: &[String],
     ramp: &RampInput,
 ) -> anyhow::Result<SidecarSpring> {
-    let mut setup = spring_setup_from_sidecar(spring, bones);
+    let mut setup =
+        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
 
     if chain_names.is_empty() {
         anyhow::bail!("chain_names must not be empty");
@@ -139,7 +146,11 @@ pub fn apply_ramp_to_chains(
         setup.chains[chain_idx] = new_chain;
     }
 
-    Ok(build_sidecar_spring(&setup, bones))
+    Ok(build_sidecar_spring(
+        &setup,
+        bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    ))
 }
 
 fn parse_scope(scope: &str) -> anyhow::Result<RampScope> {
@@ -169,7 +180,7 @@ pub fn chains_in_scope(
     chain_name: &str,
     scope: &str,
 ) -> anyhow::Result<Vec<String>> {
-    let setup = spring_setup_from_sidecar(spring, bones);
+    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
     let skeleton = skeleton_from_bones(bones);
 
     let chain_id = setup
@@ -190,7 +201,7 @@ pub fn chains_under_bone(
     bones: &[BoneInput],
     bone_name: &str,
 ) -> anyhow::Result<Vec<String>> {
-    let setup = spring_setup_from_sidecar(spring, bones);
+    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
     let skeleton = skeleton_from_bones(bones);
 
     let bone_id = skeleton
@@ -217,7 +228,7 @@ pub fn chains_to_draw(
     active: Option<usize>,
     mode: &str,
 ) -> anyhow::Result<ChainsToDraw> {
-    let setup = spring_setup_from_sidecar(spring, bones);
+    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
     let skeleton = skeleton_from_bones(bones);
 
     let gizmo_mode = match mode {

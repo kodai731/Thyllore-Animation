@@ -91,7 +91,7 @@ pub fn hair_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<
             Some(estimate_root_band(
                 &attachment_or_target(input, &vertices),
                 input.root_position,
-                params.settings.root_band_offset,
+                params.settings.azimuth.root_band_offset,
             ))
         }
         ChainRole::Garment => None,

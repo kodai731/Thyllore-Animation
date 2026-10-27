@@ -31,9 +31,28 @@ pub struct ChainGenSettings {
     /// Distance band in model units over which a vertex blends with the neighbouring column; 0 keeps columns hard
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
     pub column_blend_width: f32,
-    /// Azimuth: shift of the hair root band from the skin's widest cross-section in model units (positive = toward tips, negative = toward root bone); Card: length kept as root rigid body from each card's base in model units (0 = full card length is chain, negative clamped to 0)
-    #[persist(ui(min = -100.0, max = 100.0, format = "%.3f"))]
+    #[nested]
+    pub azimuth: AzimuthStrandSettings,
+    #[nested]
+    pub card: CardStrandSettings,
+}
+
+/// Settings of the azimuth placement, which rings the hair around the skin's widest cross-section.
+#[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct AzimuthStrandSettings {
+    /// Shift of the hair root band from the skin's widest cross-section in model units (positive = toward tips, negative = toward the root bone)
+    #[persist(renamed_from = ["root_band_offset"], ui(min = -100.0, max = 100.0, format = "%.3f"))]
     pub root_band_offset: f32,
+}
+
+/// Settings of the card placement, which follows each hair card's UV strand.
+#[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct CardStrandSettings {
+    /// Length from each card's base kept as a rigid root in model units (0 = the full card is chain)
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub root_rigid_length: f32,
 }
 
 impl Default for ChainGenSettings {
@@ -44,7 +63,8 @@ impl Default for ChainGenSettings {
             strand_merge_distance: 0.0,
             root_blend_width: 0.0,
             column_blend_width: 0.0,
-            root_band_offset: 0.0,
+            azimuth: AzimuthStrandSettings::default(),
+            card: CardStrandSettings::default(),
         }
     }
 }
@@ -275,7 +295,8 @@ mod tests {
                 "strand_merge_distance",
                 "root_blend_width",
                 "column_blend_width",
-                "root_band_offset"
+                "azimuth_root_band_offset",
+                "card_root_rigid_length"
             ]
         );
         let scalar_names: Vec<&str> = CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect();

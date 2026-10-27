@@ -3,13 +3,13 @@ use crate::{BoneId, Skeleton};
 use super::collider_fit::{ensure_fitted_collider, FittedCapsule, FITTED_BODY_GROUP_NAME};
 use super::origin::ChainOrigin;
 use super::space::SpringSpace;
-use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringForceModel, SpringJointParam};
+use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 
 fn build_chain_joints(
     root_bone_id: BoneId,
     chain_length: u32,
     skeleton: &Skeleton,
-    force_model: SpringForceModel,
+    template: &SpringJointParam,
 ) -> Vec<SpringJointParam> {
     let mut joints = Vec::new();
     let mut current_bone = root_bone_id;
@@ -17,7 +17,7 @@ fn build_chain_joints(
     for _ in 0..chain_length {
         joints.push(SpringJointParam {
             bone_id: current_bone,
-            ..SpringJointParam::for_force_model(force_model)
+            ..template.clone()
         });
 
         let children: Vec<BoneId> = skeleton
@@ -46,7 +46,8 @@ pub fn add_chain(
     let chain_id = setup.next_chain_id;
     setup.next_chain_id += 1;
 
-    let joints = build_chain_joints(root_bone_id, chain_length, skeleton, setup.force_model);
+    let template = setup.new_joint_template();
+    let joints = build_chain_joints(root_bone_id, chain_length, skeleton, &template);
     let chain = SpringChain {
         id: chain_id,
         name: format!("Chain_{}", chain_id),
@@ -76,6 +77,7 @@ pub fn add_generated_chains(
             .find(|group| group.name == FITTED_BODY_GROUP_NAME)
             .map(|group| group.id),
     };
+    let template = setup.new_joint_template();
     for mut chain in chains {
         chain.id = setup.next_chain_id;
         setup.next_chain_id += 1;
@@ -84,7 +86,7 @@ pub fn add_generated_chains(
             *joint = SpringJointParam {
                 bone_id: joint.bone_id,
                 hit_radius: joint.hit_radius * space.world_scale(),
-                ..SpringJointParam::for_force_model(setup.force_model)
+                ..template.clone()
             };
         }
         setup.chains.push(chain);
@@ -155,7 +157,7 @@ mod tests {
                 joints: vec![SpringJointParam {
                     bone_id: 1,
                     hit_radius: 1.0,
-                    ..SpringJointParam::for_force_model(setup.force_model)
+                    ..SpringJointParam::default()
                 }],
                 collider_group_ids: Vec::new(),
                 center_bone_id: None,
@@ -172,7 +174,7 @@ mod tests {
                 joints: vec![SpringJointParam {
                     bone_id: 2,
                     hit_radius: 2.0,
-                    ..SpringJointParam::for_force_model(setup.force_model)
+                    ..SpringJointParam::default()
                 }],
                 collider_group_ids: Vec::new(),
                 center_bone_id: None,

@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use crate::animation::spring_bone::{ChainRamp, RampEnd, RampScope, SpringForceModel, SpringSpace};
+use crate::animation::spring_bone::{
+    ChainRamp, JointForce, RampEnd, RampScope, SpringForceModel, SpringSpace,
+};
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -271,13 +273,12 @@ impl UiCommand for FitSpringParams {
 
         for fit in &fits {
             msg_info!(
-                "Fitted spring chain {}: rms {:.4} -> {:.4} (stiffness {:.3}, drag {:.3}, gravity {:.3})",
+                "Fitted spring chain {}: rms {:.4} -> {:.4} ({:?}, drag {:.3})",
                 fit.chain,
                 fit.before_rms,
                 fit.after_rms,
-                fit.stiffness,
-                fit.drag_force,
-                fit.gravity_power
+                fit.force,
+                fit.drag_force
             );
         }
 
@@ -815,7 +816,11 @@ impl UiCommand for SetSpringForceModel {
             return;
         };
         if let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) {
-            setup.force_model = self.force_model;
+            for joint in setup.chains.iter_mut().flat_map(|chain| &mut chain.joints) {
+                if joint.force.model() != self.force_model {
+                    joint.force = JointForce::default_for(self.force_model);
+                }
+            }
         }
         reset_spring_bone_state(world);
     }

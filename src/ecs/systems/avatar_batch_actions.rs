@@ -641,14 +641,10 @@ impl BatchAction for SpringForceModelAction {
 
 fn spring_force_model_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     let spec = text.strip_prefix("spring_force_model=")?;
-    let force_model = match spec {
-        "vrm" => SpringForceModel::Vrm,
-        "rest_relative" => SpringForceModel::RestRelative,
-        other => {
-            return Some(Err(anyhow!(
-                "spring_force_model expects vrm or rest_relative, got {other:?}"
-            )))
-        }
+    let Some(force_model) = SpringForceModel::from_key(spec) else {
+        return Some(Err(anyhow!(
+            "spring_force_model expects vrm or rest_relative, got {spec:?}"
+        )));
     };
     Some(Ok(Box::new(SpringForceModelAction { force_model })))
 }

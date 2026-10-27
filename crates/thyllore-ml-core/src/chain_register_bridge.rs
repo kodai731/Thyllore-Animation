@@ -11,7 +11,7 @@ use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
 use crate::chain_gen_bridge::{role_from_str, CapsuleOut};
 use crate::collider_bridge::{
-    skeleton_from_fit_bones, skin_data_from_fit_skin, to_bone_inputs, FitBone, FitSkin,
+    rest_frames, skeleton_from_fit_bones, skin_data_from_fit_skin, to_bone_inputs, FitBone, FitSkin,
 };
 
 #[derive(Clone, serde::Deserialize)]
@@ -49,7 +49,7 @@ pub fn register_generated_chains(
     let bone_inputs = to_bone_inputs(bones);
     let root = bone_id(&skeleton, request.root_name)?;
 
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs);
+    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &rest_frames(bones));
     setup
         .chains
         .retain(|chain| !chain.origin.is_generated_on(&target));
@@ -69,7 +69,7 @@ pub fn register_generated_chains(
                     Ok(SpringJointParam {
                         bone_id: bone_id(&skeleton, &joint.name)?,
                         hit_radius: joint.hit_radius,
-                        ..SpringJointParam::for_force_model(setup.force_model)
+                        ..setup.new_joint_template()
                     })
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
@@ -87,7 +87,11 @@ pub fn register_generated_chains(
 
     add_generated_chains(&mut setup, chains, root_collider, SpringSpace::IDENTITY);
 
-    Ok(build_sidecar_spring(&setup, &bone_inputs))
+    Ok(build_sidecar_spring(
+        &setup,
+        &bone_inputs,
+        &rest_frames(bones),
+    ))
 }
 
 fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {

@@ -210,15 +210,15 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
     rows
 }
 
-fn bone_joint_rows() -> Vec<UiRow<JointView>> {
-    let mut rows = joint_param_rows();
+fn bone_joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
+    let mut rows = joint_param_rows(view);
     rows.push(UiRow::Action {
         label: "Use As Ramp Root",
         enabled: |_, _: &JointView| true,
         on_click: |view: &JointView| {
             Box::new(SetChainRampEnd {
                 end: RampEnd::Root,
-                joint: view.joint.clone(),
+                joint: view.joint_param(),
             }) as _
         },
     });
@@ -228,7 +228,7 @@ fn bone_joint_rows() -> Vec<UiRow<JointView>> {
         on_click: |view: &JointView| {
             Box::new(SetChainRampEnd {
                 end: RampEnd::Tip,
-                joint: view.joint.clone(),
+                joint: view.joint_param(),
             }) as _
         },
     });
@@ -243,23 +243,20 @@ fn joint_list_row() -> UiRow<BoneSpringView> {
                 .iter()
                 .map(|joint| {
                     let header = format!("{} / Joint {}", joint.chain_name, joint.joint_index);
-                    let item = JointView {
-                        bones: view.bones.clone(),
-                        selected_bone: Some(view.bone_id),
-                        joint: joint.joint.clone(),
-                    };
+                    let item =
+                        JointView::new(view.bones.clone(), Some(view.bone_id), joint.joint.clone());
                     (header, item)
                 })
                 .collect()
         },
-        rows: |_| bone_joint_rows(),
+        rows: bone_joint_rows,
         on_change: |view, index, joint_view| {
             let source = &view.joints[index];
             Box::new(SpringBoneEvent::JointUpdate {
                 entity: view.entity,
                 chain_id: source.chain_id,
                 joint_index: source.joint_index,
-                joint: joint_view.joint,
+                joint: joint_view.joint_param(),
             })
         },
         initially_open: |_| true,
@@ -444,14 +441,13 @@ mod tests {
 
     #[test]
     fn bone_joint_rows_label_order() {
-        let rows = bone_joint_rows();
+        let joint_view = JointView::new(Rc::from(Vec::new()), None, SpringJointParam::default());
+        let rows = bone_joint_rows(&joint_view);
         let labels = visible_labels(&rows);
         assert_eq!(
             labels,
             [
-                "stiffness",
                 "drag_force",
-                "gravity_power",
                 "gravity_dir",
                 "hit_radius",
                 "Use As Ramp Root",

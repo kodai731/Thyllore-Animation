@@ -27,7 +27,7 @@ use thyllore_avatar_core::vrchat::sidecar::{
     AvatarSidecar, SidecarInput,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame,
 };
 use thyllore_model_core::MeshMorph;
 
@@ -45,7 +45,29 @@ use crate::ecs::world::{Animator, Entity, World};
 use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use crate::animation::spring_bone::{fit_bone_capsules, replace_fitted_body_colliders};
+use crate::animation::spring_bone::{
+    fit_bone_capsules, replace_fitted_body_colliders, SpringSpace,
+};
+use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
+
+/// Each bone's rest frame in the sidecar's model space: the rest global axes scaled into metres.
+pub fn skeleton_rest_frames(skeleton: &Skeleton, space: SpringSpace) -> Vec<BoneRestFrame> {
+    (0..skeleton.bones.len())
+        .map(|bone_index| {
+            let global_transform = compute_bone_global_transform(skeleton, bone_index);
+            BoneRestFrame::from_global_transform(&global_transform, space.world_scale())
+                .unwrap_or(BoneRestFrame::IDENTITY)
+        })
+        .collect()
+}
+
+pub fn animated_spring_space(world: &World) -> SpringSpace {
+    world
+        .iter_components::<Animator>()
+        .map(|(entity, _)| spring_space_for_entity(world, entity))
+        .next()
+        .unwrap_or(SpringSpace::IDENTITY)
+}
 
 pub fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
     skeleton
@@ -166,6 +188,7 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
+    let rest_frames = skeleton_rest_frames(skeleton, animated_spring_space(world));
     let imported = world.resource::<ModelState>().imported_humanoid.clone();
     let (mapping, missing_bone_names) =
         load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
@@ -174,6 +197,7 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     let node_assets = world.resource::<NodeAssets>();
     let mut state = world.resource_mut::<AvatarSetupState>();
     state.bones = bones;
+    state.rest_frames = rest_frames;
     state.mapping = mapping;
     state.missing_bone_names = missing_bone_names;
     state.stats = stats;
@@ -211,7 +235,7 @@ fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
                 *assigned = role.role;
             }
         }
-        spring_setup_from_sidecar(&sidecar.spring, &state.bones)
+        spring_setup_from_sidecar(&sidecar.spring, &state.bones, &state.rest_frames)
     };
 
     let chain_count = spring_setup.chains.len();
@@ -494,7 +518,7 @@ fn build_avatar_sidecar(
         })
         .unwrap_or_default();
     let spring = find_spring_bone_setup(world)
-        .map(|setup| build_sidecar_spring(setup, &state.bones))
+        .map(|setup| build_sidecar_spring(setup, &state.bones, &state.rest_frames))
         .unwrap_or_default();
     let materials: BTreeMap<String, String> = world
         .resource::<MaterialTextureState>()

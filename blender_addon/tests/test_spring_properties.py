@@ -5,6 +5,7 @@ import pytest
 from types import SimpleNamespace
 
 from blender_addon.common.spring_properties import (
+    configure_force_params,
     chain_with_joint,
     remove_chains_generated_on,
     copy_joint_values,
@@ -16,6 +17,16 @@ from blender_addon.common.spring_properties import (
     spring_settings_to_sidecar,
     write_sidecar_spring,
 )
+
+
+configure_force_params({
+    "vrm": ("stiffness", "gravity_power"),
+    "rest_relative": ("bending_relaxation", "gravity_scale"),
+})
+
+
+def _vrm_force(stiffness, gravity_power):
+    return {"model": "vrm", "stiffness": stiffness, "gravity_power": gravity_power}
 
 
 class _ItemProxy:
@@ -107,9 +118,12 @@ def _make_settings(chains_data, colliders_data, groups_data, collision_mode="vrm
         for jd in cd["joints"]:
             j = item.joints.add()
             j.bone = jd["bone"]
-            j.stiffness = jd["stiffness"]
+            j.force_model = jd["force"]["model"]
+            j.stiffness = jd["force"].get("stiffness", 0.0)
+            j.gravity_power = jd["force"].get("gravity_power", 0.0)
+            j.bending_relaxation = jd["force"].get("bending_relaxation", 0.0)
+            j.gravity_scale = jd["force"].get("gravity_scale", 0.0)
             j.drag_force = jd["drag_force"]
-            j.gravity_power = jd["gravity_power"]
             j.gravity_dir = jd["gravity_dir"]
             j.hit_radius = jd["hit_radius"]
         for cg in cd.get("collider_groups", []):
@@ -146,17 +160,15 @@ TEST_CHAINS = [
         "joints": [
             {
                 "bone": "Hips",
-                "stiffness": 1.0,
+                "force": _vrm_force(1.0, 1.0),
                 "drag_force": 0.5,
-                "gravity_power": 1.0,
                 "gravity_dir": (0.0, -1.0, 0.0),
                 "hit_radius": 0.05,
             },
             {
                 "bone": "Spine",
-                "stiffness": 0.8,
+                "force": _vrm_force(0.8, 0.5),
                 "drag_force": 0.3,
-                "gravity_power": 0.5,
                 "gravity_dir": (0.0, -1.0, 0.0),
                 "hit_radius": 0.03,
             },
@@ -190,15 +202,15 @@ def _expected_sidecar():
                 "center": "Hips",
                 "collider_groups": ["body"],
                 "joints": [
-                    {"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.05},
-                    {"bone": "Spine", "stiffness": 0.8, "drag_force": 0.3, "gravity_power": 0.5, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.03},
+                    {"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.05},
+                    {"bone": "Spine", "force": _vrm_force(0.8, 0.5), "drag_force": 0.3, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.03},
                 ],
                 "tail": "Spine3",
                 "origin": None,
             }
         ],
         "colliders": [
-            {"name": "torso", "bone": "Hips", "offset": (0.0, 0.0, -1.0), "shape": "capsule", "radius": 0.2, "tail": (0.0, 0.0, -3.0), "origin": "authored"}
+            {"name": "torso", "bone": "Hips", "offset": [0.0, 1.0, 0.0], "shape": "capsule", "radius": 0.2, "tail": [0.0, 3.0, 0.0], "origin": "authored"}
         ],
         "collider_groups": [{"name": "body", "colliders": ["torso"]}],
     }
@@ -227,9 +239,8 @@ def test_round_trip():
         assert rt_chain["collider_groups"] == exp_chain["collider_groups"]
         for rt_joint, exp_joint in zip(rt_chain["joints"], exp_chain["joints"]):
             assert rt_joint["bone"] == exp_joint["bone"]
-            assert rt_joint["stiffness"] == pytest.approx(exp_joint["stiffness"])
+            assert rt_joint["force"] == pytest.approx(exp_joint["force"])
             assert rt_joint["drag_force"] == pytest.approx(exp_joint["drag_force"])
-            assert rt_joint["gravity_power"] == pytest.approx(exp_joint["gravity_power"])
             assert rt_joint["gravity_dir"] == pytest.approx(exp_joint["gravity_dir"])
             assert rt_joint["hit_radius"] == pytest.approx(exp_joint["hit_radius"])
 
@@ -250,8 +261,8 @@ def test_round_trip():
 def test_disabled_chain_excluded():
     """A chain with enabled=False is not included in the output."""
     chains = [
-        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
-        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
     ]
     settings = _make_settings(chains, [], [])
     sidecar = spring_settings_to_sidecar(settings)
@@ -278,7 +289,7 @@ def test_idempotent_double_write():
 
 def test_empty_center_and_tail_become_none():
     """Empty string center/tail in settings becomes None in sidecar."""
-    chains = [{"name": "chain_0", "center": "", "enabled": True, "tail": "", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]}]
+    chains = [{"name": "chain_0", "center": "", "enabled": True, "tail": "", "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]}]
     settings = _make_settings(chains, [], [])
     sidecar = spring_settings_to_sidecar(settings)
 
@@ -318,8 +329,8 @@ def test_edit_write_restore_keeps_disabled():
     spring_settings_to_sidecar (export) drops disabled chains, so an operator that
     reads via spring_settings_to_edit and writes back must restore them."""
     chains = [
-        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
-        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+        {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
     ]
     settings = _make_settings(chains, [], [])
 
@@ -343,45 +354,54 @@ def test_edit_write_restore_keeps_disabled():
             assert c.enabled is False
 
 
-def test_joint_values():
-    """joint_values reads 5 param values from a Blender joint item with gravity_dir conversion."""
+def _joint_item(force_model, stiffness, gravity_power, bending_relaxation, gravity_scale, drag_force, gravity_dir, hit_radius):
     j = SimpleNamespace()
-    j.stiffness = 1.0
-    j.drag_force = 0.5
-    j.gravity_power = 1.0
-    j.gravity_dir = (0.0, -1.0, 0.0)
-    j.hit_radius = 0.05
+    j.force_model = force_model
+    j.stiffness = stiffness
+    j.gravity_power = gravity_power
+    j.bending_relaxation = bending_relaxation
+    j.gravity_scale = gravity_scale
+    j.drag_force = drag_force
+    j.gravity_dir = gravity_dir
+    j.hit_radius = hit_radius
+    return j
+
+
+def test_joint_values():
+    """joint_values reads the active model's force and the shared values with gravity_dir conversion."""
+    j = _joint_item("vrm", 1.0, 1.0, 0.3, 2.0, 0.5, (0.0, -1.0, 0.0), 0.05)
 
     values = joint_values(j)
 
-    assert values["stiffness"] == pytest.approx(1.0)
+    assert values["force"] == {"model": "vrm", "stiffness": pytest.approx(1.0), "gravity_power": pytest.approx(1.0)}
     assert values["drag_force"] == pytest.approx(0.5)
-    assert values["gravity_power"] == pytest.approx(1.0)
     assert values["gravity_dir"] == (0.0, 0.0, 1.0)
     assert values["hit_radius"] == pytest.approx(0.05)
 
 
-def test_copy_joint_values():
-    """copy_joint_values copies all 5 param values from source to target."""
-    source = SimpleNamespace()
-    source.stiffness = 2.0
-    source.drag_force = 0.8
-    source.gravity_power = 1.5
-    source.gravity_dir = (0.0, -1.0, 0.0)
-    source.hit_radius = 0.1
+def test_joint_values_rest_relative_reads_its_own_magnitudes():
+    j = _joint_item("rest_relative", 1.0, 1.0, 0.3, 2.0, 0.5, (0.0, -1.0, 0.0), 0.05)
 
-    target = SimpleNamespace()
-    target.stiffness = 0.0
-    target.drag_force = 0.0
-    target.gravity_power = 0.0
-    target.gravity_dir = (0.0, 0.0, 0.0)
-    target.hit_radius = 0.0
+    assert joint_values(j)["force"] == {
+        "model": "rest_relative",
+        "bending_relaxation": pytest.approx(0.3),
+        "gravity_scale": pytest.approx(2.0),
+    }
+
+
+def test_copy_joint_values():
+    """copy_joint_values copies the force model, every model's magnitudes and the shared values."""
+    source = _joint_item("rest_relative", 2.0, 1.5, 0.4, 3.0, 0.8, (0.0, -1.0, 0.0), 0.1)
+    target = _joint_item("vrm", 0.0, 0.0, 0.0, 0.0, 0.0, (0.0, 0.0, 0.0), 0.0)
 
     copy_joint_values(source, target)
 
+    assert target.force_model == "rest_relative"
     assert target.stiffness == pytest.approx(2.0)
-    assert target.drag_force == pytest.approx(0.8)
     assert target.gravity_power == pytest.approx(1.5)
+    assert target.bending_relaxation == pytest.approx(0.4)
+    assert target.gravity_scale == pytest.approx(3.0)
+    assert target.drag_force == pytest.approx(0.8)
     assert target.gravity_dir == (0.0, -1.0, 0.0)
     assert target.hit_radius == pytest.approx(0.1)
 
@@ -390,8 +410,8 @@ def test_chain_with_joint_found():
     """chain_with_joint finds the chain containing a joint with the given bone name."""
     settings = _make_settings(
         [
-            {"name": "chain_a", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
-            {"name": "chain_b", "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+            {"name": "chain_a", "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+            {"name": "chain_b", "joints": [{"bone": "Spine", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
         ],
         [],
         [],
@@ -406,7 +426,7 @@ def test_chain_with_joint_not_found():
     """chain_with_joint returns None when no joint matches the bone name."""
     settings = _make_settings(
         [
-            {"name": "chain_a", "joints": [{"bone": "Hips", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
+            {"name": "chain_a", "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
         ],
         [],
         [],
@@ -428,7 +448,7 @@ def test_generated_origin_round_trips_and_authored_is_none():
                 "name": "hair_hair_back_00",
                 "center": None,
                 "collider_groups": [],
-                "joints": [{"bone": "hair_hair_back_00_00", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}],
+                "joints": [{"bone": "hair_hair_back_00_00", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}],
                 "tail": None,
                 "origin": {"mesh": "Hair_back", "material": "Hair", "role": "hair"},
             },
@@ -436,7 +456,7 @@ def test_generated_origin_round_trips_and_authored_is_none():
                 "name": "authored",
                 "center": None,
                 "collider_groups": [],
-                "joints": [{"bone": "Spine", "stiffness": 1.0, "drag_force": 0.5, "gravity_power": 1.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}],
+                "joints": [{"bone": "Spine", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}],
                 "tail": None,
             },
         ],
@@ -456,7 +476,7 @@ def test_generated_chains_are_replaced_per_submesh():
     side = {"mesh": "Hair_side", "material": "Hair", "role": "hair"}
 
     def joint(bone):
-        return {"bone": bone, "stiffness": 1.0, "drag_force": 0.4, "gravity_power": 0.0, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
+        return {"bone": bone, "force": _vrm_force(1.0, 0.0), "drag_force": 0.4, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
 
     spring = spring_settings_to_sidecar(settings)
     spring["chains"] += [

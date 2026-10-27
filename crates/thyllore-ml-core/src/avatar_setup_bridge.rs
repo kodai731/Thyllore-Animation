@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::param_rows::{param_rows, ParamRow};
 use thyllore_anim_core::spring_bone::{
-    SpringJointParam, SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS,
+    RestRelativeJointForce, SpringForceModel, SpringJointParam, VrmJointForce,
+    REST_RELATIVE_JOINT_FORCE_SCALAR_PARAMS, REST_RELATIVE_JOINT_FORCE_UI_PARAMS,
+    SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS, VRM_JOINT_FORCE_SCALAR_PARAMS,
+    VRM_JOINT_FORCE_UI_PARAMS,
 };
 use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
@@ -14,7 +17,8 @@ use thyllore_avatar_core::vrchat::sidecar::{
     SidecarSubmeshRole,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring, SidecarSpringChain,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
+    SidecarSpringChain,
 };
 
 pub fn spring_joint_params() -> Vec<ParamRow> {
@@ -25,11 +29,89 @@ pub fn spring_joint_params() -> Vec<ParamRow> {
     )
 }
 
+#[derive(serde::Serialize)]
+pub struct ForceModelParams {
+    pub model: &'static str,
+    pub label: &'static str,
+    pub is_default: bool,
+    pub params: Vec<ParamRow>,
+}
+
+/// The magnitude rows of every force model, in the engine's model order.
+pub fn spring_joint_force_params() -> Vec<ForceModelParams> {
+    SpringForceModel::ALL
+        .iter()
+        .map(|model| ForceModelParams {
+            model: model.key(),
+            label: model.label(),
+            is_default: *model == SpringForceModel::default(),
+            params: match model {
+                SpringForceModel::Vrm => param_rows(
+                    &VRM_JOINT_FORCE_UI_PARAMS,
+                    &VRM_JOINT_FORCE_SCALAR_PARAMS,
+                    &VrmJointForce::default(),
+                ),
+                SpringForceModel::RestRelative => param_rows(
+                    &REST_RELATIVE_JOINT_FORCE_UI_PARAMS,
+                    &REST_RELATIVE_JOINT_FORCE_SCALAR_PARAMS,
+                    &RestRelativeJointForce::default(),
+                ),
+            },
+        })
+        .collect()
+}
+
 #[derive(Clone, serde::Deserialize)]
 pub struct BoneSpec {
     pub name: String,
     pub parent: Option<usize>,
     pub rest_position: [f32; 3],
+    /// Row-major bone-local to model-space (engine axes, metres) matrix of the rest pose
+    #[serde(default)]
+    pub rest_frame: Option<[[f32; 3]; 3]>,
+}
+
+fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
+    bones
+        .iter()
+        .map(|bone| {
+            let rows = bone
+                .rest_frame
+                .ok_or_else(|| anyhow::anyhow!("bone {:?} has no rest_frame", bone.name))?;
+            BoneRestFrame::from_rows(rows)
+                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular rest_frame", bone.name))
+        })
+        .collect()
+}
+
+/// The spring with its colliders moved from the sidecar's model space into each bone's rest frame.
+pub fn spring_colliders_to_local(
+    spring: &SidecarSpring,
+    bones: &[BoneSpec],
+) -> anyhow::Result<SidecarSpring> {
+    let frames = rest_frames(bones)?;
+    let bone_inputs: Vec<BoneInput> = bones.iter().cloned().map(BoneInput::from).collect();
+    let setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
+    Ok(build_sidecar_spring(
+        &setup,
+        &bone_inputs,
+        &BoneRestFrame::identity_for(bone_inputs.len()),
+    ))
+}
+
+/// The inverse of `spring_colliders_to_local`: colliders given in bone rest frames, written in model space.
+pub fn spring_colliders_to_model(
+    spring: &SidecarSpring,
+    bones: &[BoneSpec],
+) -> anyhow::Result<SidecarSpring> {
+    let frames = rest_frames(bones)?;
+    let bone_inputs: Vec<BoneInput> = bones.iter().cloned().map(BoneInput::from).collect();
+    let setup = spring_setup_from_sidecar(
+        spring,
+        &bone_inputs,
+        &BoneRestFrame::identity_for(bone_inputs.len()),
+    );
+    Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
 }
 
 impl From<BoneSpec> for BoneInput {
@@ -44,6 +126,9 @@ impl From<BoneSpec> for BoneInput {
 
 #[derive(serde::Deserialize)]
 pub struct SidecarBuildInput {
+    /// The sidecar the setup was loaded from; its fields the addon does not edit are kept
+    #[serde(default)]
+    pub base: Option<AvatarSidecar>,
     pub bones: Vec<BoneSpec>,
     pub humanoid_overrides: BTreeMap<String, String>,
     pub spring: SidecarSpring,
@@ -147,11 +232,12 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
 
     validate_sidecar_spring(&input.spring, &bones)?;
 
-    let setup = spring_setup_from_sidecar(&input.spring, &bones);
-    let normalized_spring = build_sidecar_spring(&setup, &bones);
+    let frames = BoneRestFrame::identity_for(bones.len());
+    let setup = spring_setup_from_sidecar(&input.spring, &bones, &frames);
+    let normalized_spring = build_sidecar_spring(&setup, &bones, &frames);
 
     let (mapping, _) = infer_mapping(&bones);
-    let mut sidecar = build_sidecar(SidecarInput {
+    let fresh = build_sidecar(SidecarInput {
         mapping: &mapping,
         bones: &bones,
         channel_names: &[],
@@ -163,6 +249,26 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
         hidden_triangles: &hidden_triangle_map(&input.hidden_triangles),
         stats: &input.stats,
     });
+    let mut sidecar = match &input.base {
+        Some(base) => AvatarSidecar {
+            schema: fresh.schema,
+            humanoid: fresh.humanoid,
+            spring: fresh.spring,
+            submesh_roles: fresh.submesh_roles,
+            hidden_triangles: fresh.hidden_triangles,
+            stats: fresh.stats,
+            materials: if input.materials.is_empty() {
+                base.materials.clone()
+            } else {
+                fresh.materials
+            },
+            visemes: base.visemes.clone(),
+            blink: base.blink.clone(),
+            expression_mesh: base.expression_mesh.clone(),
+            expressions: base.expressions.clone(),
+        },
+        None => fresh,
+    };
 
     apply_humanoid_overrides(&mut sidecar.humanoid, &input.humanoid_overrides, &bones)?;
 
@@ -246,7 +352,7 @@ mod tests {
     use thyllore_avatar_core::vrchat::sidecar::SidecarBlink;
     use thyllore_avatar_core::vrchat::sidecar_spring::{
         SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin, SidecarColliderShape,
-        SidecarSpringChain, SidecarSpringJoint,
+        SidecarJointForce, SidecarSpringChain, SidecarSpringJoint,
     };
 
     #[test]
@@ -262,10 +368,10 @@ mod tests {
         let params = spring_joint_params();
         let gravity_dir = params.iter().find(|p| p.name == "gravity_dir").unwrap();
         assert_eq!(gravity_dir.default, ParamDefault::Vector([0.0, -1.0, 0.0]));
-        let stiffness = params.iter().find(|p| p.name == "stiffness").unwrap();
+        let drag_force = params.iter().find(|p| p.name == "drag_force").unwrap();
         assert_eq!(
-            stiffness.default,
-            ParamDefault::Scalar(SpringJointParam::default().stiffness)
+            drag_force.default,
+            ParamDefault::Scalar(SpringJointParam::default().drag_force)
         );
     }
 
@@ -295,30 +401,32 @@ mod tests {
         );
     }
 
-    #[test]
-    fn avatar_setup_bridge_sidecar_build_roundtrip_preserves_spring() {
-        let input = SidecarBuildInput {
+    fn build_input() -> SidecarBuildInput {
+        SidecarBuildInput {
+            base: None,
             bones: vec![
                 BoneSpec {
                     name: "Bone0".into(),
                     parent: None,
                     rest_position: [0.0, 1.0, 0.0],
+                    rest_frame: None,
                 },
                 BoneSpec {
                     name: "Bone1".into(),
                     parent: Some(0),
                     rest_position: [0.0, 1.1, 0.0],
+                    rest_frame: None,
                 },
                 BoneSpec {
                     name: "Bone2".into(),
                     parent: Some(1),
                     rest_position: [0.0, 1.2, 0.0],
+                    rest_frame: None,
                 },
             ],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
-                force_model: Default::default(),
                 colliders: vec![SidecarCollider {
                     name: "collider0".into(),
                     bone: "Bone0".into(),
@@ -337,17 +445,21 @@ mod tests {
                     joints: vec![
                         SidecarSpringJoint {
                             bone: "Bone0".into(),
-                            stiffness: 0.5,
+                            force: SidecarJointForce::Vrm {
+                                stiffness: 0.5,
+                                gravity_power: 1.0,
+                            },
                             drag_force: 0.1,
-                            gravity_power: 1.0,
                             gravity_dir: [0.0, -1.0, 0.0],
                             hit_radius: 0.0,
                         },
                         SidecarSpringJoint {
                             bone: "Bone1".into(),
-                            stiffness: 0.5,
+                            force: SidecarJointForce::Vrm {
+                                stiffness: 0.5,
+                                gravity_power: 1.0,
+                            },
                             drag_force: 0.1,
-                            gravity_power: 1.0,
                             gravity_dir: [0.0, -1.0, 0.0],
                             hit_radius: 0.0,
                         },
@@ -362,7 +474,12 @@ mod tests {
             hidden_triangles: Vec::new(),
             materials: BTreeMap::new(),
             stats: AvatarStats::default(),
-        };
+        }
+    }
+
+    #[test]
+    fn avatar_setup_bridge_sidecar_build_roundtrip_preserves_spring() {
+        let input = build_input();
 
         let json = sidecar_build(&input).unwrap();
         let parsed = sidecar_read(&json).unwrap();
@@ -376,24 +493,27 @@ mod tests {
     #[test]
     fn avatar_setup_bridge_validate_unknown_joint_bone() {
         let input = SidecarBuildInput {
+            base: None,
             bones: vec![BoneSpec {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
+                rest_frame: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
-                force_model: Default::default(),
                 colliders: Vec::new(),
                 collider_groups: Vec::new(),
                 chains: vec![SidecarSpringChain {
                     name: "chain0".into(),
                     joints: vec![SidecarSpringJoint {
                         bone: "UnknownBone".into(),
-                        stiffness: 0.5,
+                        force: SidecarJointForce::Vrm {
+                            stiffness: 0.5,
+                            gravity_power: 1.0,
+                        },
                         drag_force: 0.1,
-                        gravity_power: 1.0,
                         gravity_dir: [0.0, -1.0, 0.0],
                         hit_radius: 0.0,
                     }],
@@ -421,24 +541,27 @@ mod tests {
     #[test]
     fn avatar_setup_bridge_validate_unknown_collider_group() {
         let input = SidecarBuildInput {
+            base: None,
             bones: vec![BoneSpec {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
+                rest_frame: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
                 collision_mode: Default::default(),
-                force_model: Default::default(),
                 colliders: Vec::new(),
                 collider_groups: Vec::new(),
                 chains: vec![SidecarSpringChain {
                     name: "chain0".into(),
                     joints: vec![SidecarSpringJoint {
                         bone: "Bone0".into(),
-                        stiffness: 0.5,
+                        force: SidecarJointForce::Vrm {
+                            stiffness: 0.5,
+                            gravity_power: 1.0,
+                        },
                         drag_force: 0.1,
-                        gravity_power: 1.0,
                         gravity_dir: [0.0, -1.0, 0.0],
                         hit_radius: 0.0,
                     }],
@@ -485,5 +608,83 @@ mod tests {
         let json = serde_json::to_string(&sidecar).unwrap();
         let parsed = sidecar_read(&json).unwrap();
         assert_eq!(parsed.schema, 1);
+    }
+
+    fn framed_bones() -> Vec<BoneSpec> {
+        vec![
+            BoneSpec {
+                name: "Hips".into(),
+                parent: None,
+                rest_position: [0.0, 0.0, 0.0],
+                rest_frame: Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+            },
+            BoneSpec {
+                name: "Head".into(),
+                parent: Some(0),
+                rest_position: [0.0, 1.0, 0.0],
+                rest_frame: Some([[0.0, -2.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 2.0]]),
+            },
+        ]
+    }
+
+    fn model_space_spring() -> SidecarSpring {
+        SidecarSpring {
+            colliders: vec![SidecarCollider {
+                name: "head".into(),
+                bone: "Head".into(),
+                offset: [0.0, 2.0, 0.0],
+                shape: SidecarColliderShape::Capsule,
+                radius: 1.0,
+                tail: Some([-4.0, 0.0, 0.0]),
+                origin: SidecarColliderOrigin::Authored,
+            }],
+            ..SidecarSpring::default()
+        }
+    }
+
+    #[test]
+    fn colliders_round_trip_between_model_space_and_bone_frames() {
+        let bones = framed_bones();
+        let local = spring_colliders_to_local(&model_space_spring(), &bones).unwrap();
+        let collider = &local.colliders[0];
+        assert!((collider.offset[0] - 1.0).abs() < 1e-5 && collider.offset[1].abs() < 1e-5);
+        assert!((collider.radius - 0.5).abs() < 1e-5);
+        let tail = collider.tail.unwrap();
+        assert!((tail[1] - 2.0).abs() < 1e-5 && tail[0].abs() < 1e-5);
+
+        let model = spring_colliders_to_model(&local, &bones).unwrap();
+        let mut expected = model_space_spring();
+        expected.colliders[0].name = "Head#0".into();
+        assert_eq!(model, expected);
+    }
+
+    #[test]
+    fn colliders_need_a_rest_frame_on_every_bone() {
+        let mut bones = framed_bones();
+        bones[1].rest_frame = None;
+        let error = spring_colliders_to_local(&model_space_spring(), &bones).unwrap_err();
+        assert!(error.to_string().contains("rest_frame"));
+    }
+
+    #[test]
+    fn sidecar_build_keeps_the_base_fields_the_addon_does_not_edit() {
+        let mut base = sidecar_read(&sidecar_build(&build_input()).unwrap()).unwrap();
+        base.expressions
+            .push(thyllore_avatar_core::vrchat::sidecar::SidecarExpression {
+                name: "smile".into(),
+                weights: BTreeMap::from([("mouth_smile".to_string(), 1.0)]),
+            });
+        base.materials
+            .insert("Body".into(), "textures/body.png".into());
+        base.visemes.insert("aa".into(), "vrc.v_aa".into());
+
+        let mut input = build_input();
+        input.base = Some(base.clone());
+        let rebuilt = sidecar_read(&sidecar_build(&input).unwrap()).unwrap();
+
+        assert_eq!(rebuilt.expressions, base.expressions);
+        assert_eq!(rebuilt.materials, base.materials);
+        assert_eq!(rebuilt.visemes, base.visemes);
+        assert_eq!(rebuilt.spring, base.spring);
     }
 }

@@ -269,6 +269,7 @@ pub fn handle_spring_chain_collider_groups_form(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::spring_bone::{JointForce, VrmJointForce};
 
     fn make_chain(id: SpringChainId) -> SpringChain {
         let first_bone = id * 3 + 1;
@@ -300,11 +301,17 @@ mod tests {
     fn make_ramp() -> ChainRamp {
         ChainRamp {
             root: SpringJointParam {
-                stiffness: 2.0,
+                force: JointForce::Vrm(VrmJointForce {
+                    stiffness: 2.0,
+                    gravity_power: 0.0,
+                }),
                 ..Default::default()
             },
             tip: SpringJointParam {
-                stiffness: 0.25,
+                force: JointForce::Vrm(VrmJointForce {
+                    stiffness: 0.25,
+                    gravity_power: 0.0,
+                }),
                 ..Default::default()
             },
             ..Default::default()
@@ -334,8 +341,8 @@ mod tests {
                 chain.joints,
                 apply_ramp(&make_chain(chain.id), &ramp).joints
             );
-            assert_eq!(chain.joints[0].stiffness, 2.0);
-            assert_eq!(chain.joints[2].stiffness, 0.25);
+            assert_eq!(chain.joints[0].force.magnitudes()[0], 2.0);
+            assert_eq!(chain.joints[2].force.magnitudes()[0], 0.25);
         }
         assert_eq!(chain_joints(&world, entity, 2), untouched_before);
     }
@@ -444,7 +451,10 @@ mod tests {
     fn ramp_set_end_writes_only_that_end() {
         let (mut world, _) = make_world_with_three_chains();
         let tip = SpringJointParam {
-            stiffness: 0.1,
+            force: JointForce::Vrm(VrmJointForce {
+                stiffness: 0.1,
+                gravity_power: 0.0,
+            }),
             ..Default::default()
         };
 

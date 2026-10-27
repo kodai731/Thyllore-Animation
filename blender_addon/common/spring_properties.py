@@ -3,6 +3,14 @@ from __future__ import annotations
 
 from .coordinates import blender_to_engine_point, engine_to_blender_point
 
+FORCE_PARAM_NAMES: dict[str, tuple[str, ...]] = {}
+
+
+def configure_force_params(names_by_model: dict[str, tuple[str, ...]]) -> None:
+    """Register the magnitude names of every force model, as the engine declares them."""
+    FORCE_PARAM_NAMES.clear()
+    FORCE_PARAM_NAMES.update(names_by_model)
+
 
 def spring_settings_to_sidecar(settings) -> dict:
     """Read spring settings from a Blender property group and build the sidecar dict.
@@ -82,14 +90,15 @@ def _joint_to_sidecar(joint) -> dict:
 
 
 def _collider_to_sidecar(collider) -> dict:
-    """Build sidecar dict for one collider item."""
+    """Build sidecar dict for one collider item; offset and tail stay in the bone's rest frame, the
+    operator moves them into model space through ``spring_colliders_to_model``."""
     tail_value = None
     if collider.has_tail and collider.tail is not None:
-        tail_value = blender_to_engine_point(tuple(collider.tail))
+        tail_value = list(collider.tail)
     return {
         "name": collider.name,
         "bone": collider.bone,
-        "offset": blender_to_engine_point(tuple(collider.offset)),
+        "offset": list(collider.offset),
         "shape": collider.shape,
         "radius": float(collider.radius),
         "tail": tail_value,
@@ -137,9 +146,8 @@ def _write_joint(joints_collection, joint: dict) -> None:
     """Write one joint dict into a Blender joints collection."""
     joint_item = joints_collection.add()
     joint_item.bone = joint["bone"]
-    joint_item.stiffness = joint["stiffness"]
+    write_joint_force(joint_item, joint["force"])
     joint_item.drag_force = joint["drag_force"]
-    joint_item.gravity_power = joint["gravity_power"]
     joint_item.gravity_dir = engine_to_blender_point(tuple(joint["gravity_dir"]))
     joint_item.hit_radius = joint["hit_radius"]
 
@@ -150,12 +158,12 @@ def _write_colliders(colliders, spring_colliders: list[dict]) -> None:
         collider_item = colliders.add()
         collider_item.name = collider["name"]
         collider_item.bone = collider["bone"]
-        collider_item.offset = engine_to_blender_point(tuple(collider["offset"]))
+        collider_item.offset = tuple(collider["offset"])
         collider_item.shape = collider["shape"]
         collider_item.radius = collider["radius"]
         if collider.get("tail") is not None:
             collider_item.has_tail = True
-            collider_item.tail = engine_to_blender_point(tuple(collider["tail"]))
+            collider_item.tail = tuple(collider["tail"])
         else:
             collider_item.has_tail = False
             collider_item.tail = (0.0, 0.0, 0.0)
@@ -180,24 +188,39 @@ def humanoid_overrides_to_dict(settings) -> dict[str, str]:
     return result
 
 
+def joint_force_values(joint) -> dict:
+    """The joint's force in the sidecar's shape: the model and that model's magnitudes."""
+    model = joint.force_model
+    force = {"model": model}
+    for name in FORCE_PARAM_NAMES[model]:
+        force[name] = float(getattr(joint, name))
+    return force
+
+
+def write_joint_force(joint_item, force: dict) -> None:
+    joint_item.force_model = force["model"]
+    for name in FORCE_PARAM_NAMES[force["model"]]:
+        setattr(joint_item, name, force[name])
+
+
 def joint_values(joint) -> dict:
-    """Read 5 joint param values from a Blender spring joint item (without bone)."""
+    """Read the joint param values from a Blender spring joint item (without bone)."""
     return {
-        "stiffness": float(joint.stiffness),
+        "force": joint_force_values(joint),
         "drag_force": float(joint.drag_force),
-        "gravity_power": float(joint.gravity_power),
         "gravity_dir": blender_to_engine_point(tuple(joint.gravity_dir)),
         "hit_radius": float(joint.hit_radius),
     }
 
 
 def copy_joint_values(source, target) -> None:
-    """Copy joint param values from source to target Blender spring joint item.
-
-    Copies stiffness, drag_force, gravity_power, gravity_dir, hit_radius."""
-    target.stiffness = source.stiffness
+    """Copy joint param values from source to target Blender spring joint item: the force model
+    with every model's magnitudes, drag_force, gravity_dir, hit_radius."""
+    target.force_model = source.force_model
+    for names in FORCE_PARAM_NAMES.values():
+        for name in names:
+            setattr(target, name, getattr(source, name))
     target.drag_force = source.drag_force
-    target.gravity_power = source.gravity_power
     target.gravity_dir = source.gravity_dir
     target.hit_radius = source.hit_radius
 

@@ -17,15 +17,30 @@ def _load_module():
     return mod
 
 
-def _joint(bone, stiffness=1.0):
+def _joint(bone, stiffness=1.0, model="vrm"):
     """Make a joint dict."""
+    force = {"model": model, "stiffness": stiffness, "gravity_power": 1.0}
+    if model == "rest_relative":
+        force = {"model": model, "bending_relaxation": stiffness, "gravity_scale": 1.0}
     return {
         "bone": bone,
-        "stiffness": stiffness,
+        "force": force,
         "drag_force": 0.5,
-        "gravity_power": 1.0,
         "gravity_dir": [0.0, -1.0, 0.0],
         "hit_radius": 0.05,
+    }
+
+
+def _collider(name, radius=0.1, offset=(0.0, 0.0, 0.0), tail=None):
+    """Make a collider dict."""
+    return {
+        "name": name,
+        "bone": "Hips",
+        "offset": list(offset),
+        "shape": "capsule" if tail is not None else "sphere",
+        "radius": radius,
+        "tail": list(tail) if tail is not None else None,
+        "origin": "fitted",
     }
 
 
@@ -86,28 +101,35 @@ def test_bone_name_mismatch():
     assert "bone order mismatch" in diffs[0]
 
 
-def test_fitted_collider_radius_diff():
-    """fitted collider radius differing by 0.002 (above default tolerance 1e-3) is a diff."""
+def test_collider_radius_diff():
+    """collider radius differing by 0.002 (above default tolerance 1e-3) is a diff."""
     mod = _load_module()
-    engine = {
-        "spring": {
-            "chains": [],
-            "colliders": [
-                {"name": "c1", "bone": "Hips", "radius": 0.1, "origin": "fitted"},
-            ],
-        },
-    }
-    addon = {
-        "spring": {
-            "chains": [],
-            "colliders": [
-                {"name": "c1", "bone": "Hips", "radius": 0.102, "origin": "fitted"},
-            ],
-        },
-    }
+    engine = {"spring": {"chains": [], "colliders": [_collider("c1", radius=0.1)]}}
+    addon = {"spring": {"chains": [], "colliders": [_collider("c1", radius=0.102)]}}
     diffs = mod.diff_sidecars(engine, addon)
     assert len(diffs) == 1
     assert "radius" in diffs[0]
+
+
+def test_collider_offset_and_tail_are_compared_in_model_space():
+    """offset and tail share the sidecar's model space, so a shifted collider is a diff."""
+    mod = _load_module()
+    engine = {"spring": {"chains": [], "colliders": [_collider("c1", offset=(0.0, 0.1, 0.0), tail=(0.0, 0.3, 0.0))]}}
+    same = {"spring": {"chains": [], "colliders": [_collider("c1", offset=(0.0, 0.1000001, 0.0), tail=(0.0, 0.3, 0.0))]}}
+    moved = {"spring": {"chains": [], "colliders": [_collider("c1", offset=(0.0, 0.1, 0.0), tail=(0.0, 0.31, 0.0))]}}
+    assert mod.diff_sidecars(engine, same) == []
+    diffs = mod.diff_sidecars(engine, moved)
+    assert len(diffs) == 1
+    assert "tail" in diffs[0]
+
+
+def test_joint_force_model_mismatch_is_a_diff():
+    mod = _load_module()
+    engine = {"spring": {"chains": [_chain("chain_0", [_joint("Hips")])], "colliders": []}}
+    addon = {"spring": {"chains": [_chain("chain_0", [_joint("Hips", model="rest_relative")])], "colliders": []}}
+    diffs = mod.diff_sidecars(engine, addon)
+    assert len(diffs) == 1
+    assert "force.model" in diffs[0]
 
 
 def test_submesh_mesh_name_only_diff_is_match():

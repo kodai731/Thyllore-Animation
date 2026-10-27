@@ -10,12 +10,15 @@ use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
 use thyllore_avatar_core::vrchat::rank::{Platform, RankReport};
+use thyllore_avatar_core::vrchat::sidecar_spring::BoneRestFrame;
 
 #[derive(Clone, Debug, Default)]
 pub struct AvatarSetupState {
     pub is_open: bool,
     pub source_model_path: String,
     pub bones: Vec<BoneInput>,
+    /// Per bone in `bones` order: the rest frame the sidecar converts colliders through
+    pub rest_frames: Vec<BoneRestFrame>,
     pub mapping: HumanoidMapping,
     pub unresolved: Vec<UnresolvedRole>,
     pub issues: Vec<MappingIssue>,

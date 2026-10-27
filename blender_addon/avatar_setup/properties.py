@@ -15,21 +15,41 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from ..common.effect_properties import build_param_properties
+from ..common.spring_properties import configure_force_params
 
 
-def _spring_joint_annotations() -> dict[str, object]:
-    """Property annotations for one spring joint item from the engine's UI params."""
-    if not _TML_AVAILABLE:
-        return {}
-    annotations: dict[str, object] = {}
-    for param in tml.spring_joint_ui_params():
-        annotations.update(build_param_properties(param))
-    return annotations
-
+SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
 
 SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
     tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
 )
+
+configure_force_params({
+    model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
+})
+
+
+def _force_model_property():
+    default = next((m["model"] for m in SPRING_JOINT_FORCE_MODELS if m["is_default"]), None)
+    return bpy.props.EnumProperty(
+        name="Force Model",
+        items=[(m["model"], m["label"], "") for m in SPRING_JOINT_FORCE_MODELS],
+        default=default,
+    )
+
+
+def _spring_joint_annotations() -> dict[str, object]:
+    """Property annotations for one spring joint item: the force model with every model's
+    magnitudes, then the parameters all models share, from the engine's UI params."""
+    if not _TML_AVAILABLE:
+        return {}
+    annotations: dict[str, object] = {"force_model": _force_model_property()}
+    for model in SPRING_JOINT_FORCE_MODELS:
+        for param in model["params"]:
+            annotations.update(build_param_properties(param))
+    for param in tml.spring_joint_ui_params():
+        annotations.update(build_param_properties(param))
+    return annotations
 
 
 class THYLLORE_PG_NameItem(bpy.types.PropertyGroup):
@@ -121,6 +141,11 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
         default="selected",
     )
     show_collider_gizmos: bpy.props.BoolProperty(name="Show Collider Gizmos")
+    sidecar_json: bpy.props.StringProperty(
+        name="Sidecar Source",
+        description="The sidecar this rig was imported from; its unedited fields are kept on export",
+        options={"HIDDEN"},
+    )
 
 
 class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):

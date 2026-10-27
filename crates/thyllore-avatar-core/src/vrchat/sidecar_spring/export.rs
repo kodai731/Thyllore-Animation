@@ -1,17 +1,23 @@
 use thyllore_anim_core::spring_bone::{
     ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderId,
-    SpringCollisionMode, SpringForceModel, SpringJointParam, FITTED_BODY_GROUP_NAME,
+    SpringCollisionMode, SpringJointParam, FITTED_BODY_GROUP_NAME,
 };
 
 use super::format::{
     SidecarChainOrigin, SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin,
-    SidecarColliderShape, SidecarCollisionMode, SidecarForceModel, SidecarSpring,
+    SidecarColliderShape, SidecarCollisionMode, SidecarJointForce, SidecarSpring,
     SidecarSpringChain, SidecarSpringJoint,
 };
+use super::frame::BoneRestFrame;
 use crate::humanoid::components::skeleton_input::BoneInput;
 
-pub fn build_sidecar_spring(setup: &SpringBoneSetup, bones: &[BoneInput]) -> SidecarSpring {
-    let named_colliders = build_sidecar_colliders(setup, bones);
+/// `frames` gives each bone's rest frame in `bones` order; colliders are written in model space through it.
+pub fn build_sidecar_spring(
+    setup: &SpringBoneSetup,
+    bones: &[BoneInput],
+    frames: &[BoneRestFrame],
+) -> SidecarSpring {
+    let named_colliders = build_sidecar_colliders(setup, bones, frames);
     let collider_groups = build_sidecar_collider_groups(setup, &named_colliders);
     let chains = setup
         .chains
@@ -21,7 +27,6 @@ pub fn build_sidecar_spring(setup: &SpringBoneSetup, bones: &[BoneInput]) -> Sid
 
     SidecarSpring {
         collision_mode: to_sidecar_collision_mode(setup.collision_mode),
-        force_model: to_sidecar_force_model(setup.force_model),
         colliders: named_colliders.into_iter().map(|(_, c)| c).collect(),
         collider_groups,
         chains,
@@ -35,13 +40,6 @@ fn to_sidecar_collision_mode(mode: SpringCollisionMode) -> SidecarCollisionMode 
     }
 }
 
-fn to_sidecar_force_model(model: SpringForceModel) -> SidecarForceModel {
-    match model {
-        SpringForceModel::Vrm => SidecarForceModel::Vrm,
-        SpringForceModel::RestRelative => SidecarForceModel::RestRelative,
-    }
-}
-
 fn bone_name(bones: &[BoneInput], bone_id: u32) -> Option<&str> {
     bones.get(bone_id as usize).map(|bone| bone.name.as_str())
 }
@@ -49,6 +47,7 @@ fn bone_name(bones: &[BoneInput], bone_id: u32) -> Option<&str> {
 fn build_sidecar_colliders(
     setup: &SpringBoneSetup,
     bones: &[BoneInput],
+    frames: &[BoneRestFrame],
 ) -> Vec<(SpringColliderId, SidecarCollider)> {
     let fitted_ids: Vec<SpringColliderId> = setup
         .collider_groups
@@ -62,12 +61,16 @@ fn build_sidecar_colliders(
         .iter()
         .filter_map(|collider| {
             let bone = bone_name(bones, collider.bone_id)?;
+            let frame = frames.get(collider.bone_id as usize)?;
             let origin = if fitted_ids.contains(&collider.id) {
                 SidecarColliderOrigin::Fitted
             } else {
                 SidecarColliderOrigin::Authored
             };
-            Some((collider.id, build_sidecar_collider(collider, bone, origin)))
+            Some((
+                collider.id,
+                build_sidecar_collider(collider, bone, frame, origin),
+            ))
         })
         .collect()
 }
@@ -75,6 +78,7 @@ fn build_sidecar_colliders(
 fn build_sidecar_collider(
     collider: &SpringColliderDef,
     bone: &str,
+    frame: &BoneRestFrame,
     origin: SidecarColliderOrigin,
 ) -> SidecarCollider {
     let name = match origin {
@@ -82,17 +86,21 @@ fn build_sidecar_collider(
         SidecarColliderOrigin::Authored => format!("{bone}#{}", collider.id),
     };
     let (shape, radius, tail) = match &collider.shape {
-        ColliderShape::Sphere { radius } => (SidecarColliderShape::Sphere, *radius, None),
+        ColliderShape::Sphere { radius } => (
+            SidecarColliderShape::Sphere,
+            frame.length_to_model(*radius),
+            None,
+        ),
         ColliderShape::Capsule { radius, tail } => (
             SidecarColliderShape::Capsule,
-            *radius,
-            Some([tail.x, tail.y, tail.z]),
+            frame.length_to_model(*radius),
+            Some(frame.to_model(*tail).into()),
         ),
     };
     SidecarCollider {
         name,
         bone: bone.to_string(),
-        offset: [collider.offset.x, collider.offset.y, collider.offset.z],
+        offset: frame.to_model(collider.offset).into(),
         shape,
         radius,
         tail,
@@ -163,9 +171,8 @@ fn build_sidecar_chain(
 fn build_sidecar_joint(joint: &SpringJointParam, bone: &str) -> SidecarSpringJoint {
     SidecarSpringJoint {
         bone: bone.to_string(),
-        stiffness: joint.stiffness,
+        force: SidecarJointForce::from(joint.force),
         drag_force: joint.drag_force,
-        gravity_power: joint.gravity_power,
         gravity_dir: [
             joint.gravity_dir.x,
             joint.gravity_dir.y,

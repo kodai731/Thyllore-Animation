@@ -68,7 +68,8 @@ def test_settings_table_lists_defaults(tml):
         "strand_merge_distance",
         "root_blend_width",
         "column_blend_width",
-        "root_band_offset",
+        "azimuth_root_band_offset",
+        "card_root_rigid_length",
     ]
     assert params[0]["default"] == 4
     assert params[0]["label"] == "Joint Count"

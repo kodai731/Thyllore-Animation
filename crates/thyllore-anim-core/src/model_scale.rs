@@ -74,7 +74,6 @@ mod tests {
         setup.chains.push(SpringChain {
             joints: vec![SpringJointParam {
                 hit_radius: 0.02,
-                stiffness: 0.5,
                 ..Default::default()
             }],
             ..Default::default()
@@ -93,7 +92,7 @@ mod tests {
 
         let joint = &setup.chains[0].joints[0];
         assert_eq!(joint.hit_radius, 0.02);
-        assert_eq!(joint.stiffness, 0.5);
+        assert_eq!(joint.force, SpringJointParam::default().force);
         assert_eq!(setup.colliders[0].offset, Vector3::new(100.0, 0.0, 0.0));
         match setup.colliders[0].shape {
             ColliderShape::Capsule { radius, tail } => {

@@ -4,8 +4,8 @@ use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
     extract_world_position, integrate_joint, recompute_global_transform,
     resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
-    segment_axis_distance, tail_axis_distance, JointForces, JointRestFrame, SpringCollisionMode,
-    SpringForceModel, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
+    segment_axis_distance, tail_axis_distance, JointForce, JointForces, JointRestFrame,
+    SpringCollisionMode, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -121,11 +121,11 @@ pub fn spring_bone_initialize(
                 bone_axis.z,
             );
 
-            let rest_axis_distances = match setup.force_model {
-                SpringForceModel::RestRelative => {
+            let rest_axis_distances = match joint_param.force {
+                JointForce::RestRelative(_) => {
                     rest_axis_distances(head_pos, tail, &world_colliders, setup.collision_mode)
                 }
-                SpringForceModel::Vrm => Vec::new(),
+                JointForce::Vrm(_) => Vec::new(),
             };
             let parent_world_rotation =
                 extract_parent_world_rotation(skeleton, idx, global_transforms);
@@ -216,7 +216,6 @@ pub fn spring_bone_update(
                 dt,
                 space,
                 setup.collision_mode,
-                setup.force_model,
             );
         }
     }
@@ -236,7 +235,6 @@ fn update_single_joint(
     dt: f32,
     space: SpringSpace,
     collision_mode: SpringCollisionMode,
-    force_model: SpringForceModel,
 ) {
     let bone_id = joint_param.bone_id;
     let idx = bone_id as usize;
@@ -258,20 +256,14 @@ fn update_single_joint(
         bone_length: joint_state.bone_length,
         gravity_in_parent_rest: joint_state.gravity_in_parent_rest,
     };
-    let forces = joint_forces(
-        joint_param,
-        strand_length,
-        joint_state.bone_length,
-        space,
-        force_model,
-    );
+    let forces = joint_forces(joint_param, strand_length, joint_state.bone_length, space);
 
     let next_tail = integrate_joint(
         joint_state.current_tail,
         joint_state.prev_tail,
         &rest_frame,
         &forces,
-        force_model,
+        joint_param.force.model(),
         dt,
     );
 
@@ -380,27 +372,24 @@ pub fn spring_bone_write_back_to_pose(
     }
 }
 
-/// VRM reads `stiffness` and `gravity_power` as metres per second; the rest-relative model reads
-/// `stiffness` as the bending relaxation `D` [m²/s] and `gravity_power` as a multiple of Earth gravity.
 fn joint_forces(
     joint_param: &crate::ecs::component::SpringJointParam,
     strand_length: f32,
     bone_length: f32,
     space: SpringSpace,
-    force_model: SpringForceModel,
 ) -> JointForces {
-    let (stiffness, gravity) = match force_model {
-        SpringForceModel::Vrm => (
-            space.skeleton_length(joint_param.stiffness),
-            space.skeleton_length(joint_param.gravity_power),
+    let (stiffness, gravity) = match joint_param.force {
+        JointForce::Vrm(force) => (
+            space.skeleton_length(force.stiffness),
+            space.skeleton_length(force.gravity_power),
         ),
-        SpringForceModel::RestRelative => (
+        JointForce::RestRelative(force) => (
             strand_return_rate(
-                space.skeleton_length(space.skeleton_length(joint_param.stiffness)),
+                space.skeleton_length(space.skeleton_length(force.bending_relaxation)),
                 strand_length,
                 bone_length,
             ),
-            space.skeleton_length(joint_param.gravity_power * EARTH_GRAVITY_M_PER_S2),
+            space.skeleton_length(force.gravity_scale * EARTH_GRAVITY_M_PER_S2),
         ),
     };
     JointForces {

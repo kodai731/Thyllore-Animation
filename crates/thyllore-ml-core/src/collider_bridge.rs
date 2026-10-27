@@ -7,7 +7,7 @@ use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collid
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
 };
 use thyllore_model_core::{Skeleton, SkinData};
 
@@ -26,6 +26,18 @@ pub struct FitBone {
 pub struct FitSkin {
     pub positions: Vec<[f32; 3]>,
     pub influences: Vec<Vec<(usize, f32)>>,
+}
+
+/// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.
+pub(crate) fn rest_frames(bones: &[FitBone]) -> Vec<BoneRestFrame> {
+    bones
+        .iter()
+        .map(|fit_bone| {
+            let bind_matrix = Matrix4::from(fit_bone.bind_matrix).transpose();
+            BoneRestFrame::from_global_transform(&bind_matrix, 1.0)
+                .unwrap_or(BoneRestFrame::IDENTITY)
+        })
+        .collect()
 }
 
 pub(crate) fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
@@ -110,10 +122,14 @@ pub fn fit_body_colliders(
 
     anyhow::ensure!(!fitted.is_empty(), "fit produced no body colliders");
 
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs);
+    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &rest_frames(bones));
     replace_fitted_body_colliders(&mut setup, &fitted);
 
-    Ok(build_sidecar_spring(&setup, &bone_inputs))
+    Ok(build_sidecar_spring(
+        &setup,
+        &bone_inputs,
+        &rest_frames(bones),
+    ))
 }
 
 pub fn assign_collider_groups(
@@ -122,7 +138,8 @@ pub fn assign_collider_groups(
     chain_names: &[String],
     group_names: &[String],
 ) -> anyhow::Result<SidecarSpring> {
-    let mut setup = spring_setup_from_sidecar(spring, bones);
+    let mut setup =
+        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
 
     let chain_ids: Vec<SpringChainId> = chain_names
         .iter()
@@ -150,7 +167,11 @@ pub fn assign_collider_groups(
 
     set_chain_collider_groups(&mut setup, &chain_ids, &group_ids);
 
-    Ok(build_sidecar_spring(&setup, bones))
+    Ok(build_sidecar_spring(
+        &setup,
+        bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    ))
 }
 
 pub fn capsule_fit_params() -> Vec<ParamRow> {

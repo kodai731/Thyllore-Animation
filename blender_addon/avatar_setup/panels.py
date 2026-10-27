@@ -10,6 +10,7 @@ from bpy.types import Panel, UIList
 
 from ..panels.main_panel import _CATEGORY
 from .operators import target_armature
+from ..common.spring_properties import FORCE_PARAM_NAMES
 from .properties import SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
@@ -18,6 +19,15 @@ def _active_mesh(context):
     """Return context.active_object if it is a MESH, else None."""
     obj = context.active_object
     return obj if obj is not None and obj.type == "MESH" else None
+
+
+def _draw_joint_params(row, joint) -> None:
+    """The force model, the magnitudes of that model, then the parameters every model shares."""
+    row.prop(joint, "force_model", text="")
+    for name in FORCE_PARAM_NAMES.get(joint.force_model, ()):
+        row.prop(joint, name)
+    for name in SPRING_JOINT_PARAM_NAMES:
+        row.prop(joint, name)
 
 
 class THYLLORE_UL_SpringChains(UIList):
@@ -85,8 +95,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             box = layout.box()
             row = box.row()
             row.label(text=joint.bone or "(empty)")
-            for name in SPRING_JOINT_PARAM_NAMES:
-                row.prop(joint, name)
+            _draw_joint_params(row, joint)
 
     @staticmethod
     def _draw_ramp(layout, context):
@@ -98,8 +107,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             joint = getattr(form, end_name)
             row = box.row()
             row.label(text=end_name.capitalize())
-            for name in SPRING_JOINT_PARAM_NAMES:
-                row.prop(joint, name)
+            _draw_joint_params(row, joint)
 
         box.prop(form, "shape")
         box.prop(form, "scope")

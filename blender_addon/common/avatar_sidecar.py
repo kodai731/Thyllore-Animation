@@ -4,19 +4,24 @@ from __future__ import annotations
 from .coordinates import blender_to_engine_point
 
 
-def bone_specs(names, parent_indices, world_heads, scale_length):
-    """Build bone spec list from names, parent indices, and world-space head positions.
+def bone_specs(names, parent_indices, world_heads, scale_length, rest_frames=None):
+    """Build bone spec list from names, parent indices, world-space head positions and, when
+    given, the per-bone rest frames (``collider_fit.bone_rest_frame``).
 
     Root bones have parent_index None (passed through as None); children have their
     parent's index in the bone list."""
     specs = []
-    for name, parent_index, world_head in zip(names, parent_indices, world_heads):
+    frames = rest_frames if rest_frames is not None else [None] * len(names)
+    for name, parent_index, world_head, rest_frame in zip(names, parent_indices, world_heads, frames):
         rest_position = [component * scale_length for component in blender_to_engine_point(world_head)]
-        specs.append({
+        spec = {
             "name": name,
             "parent": parent_index,
             "rest_position": list(rest_position),
-        })
+        }
+        if rest_frame is not None:
+            spec["rest_frame"] = rest_frame
+        specs.append(spec)
     return specs
 
 

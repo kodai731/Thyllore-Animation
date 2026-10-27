@@ -187,9 +187,11 @@ namespace Thyllore.Avatar
                 var bone = root.GetComponentsInChildren<Transform>(true).First(t => t.name == chain.joints[0].bone).GetComponent<VRCPhysBone>();
                 Check(bone != null, $"VRCPhysBone added to {chain.joints[0].bone}");
                 if (bone == null) continue;
-                Check(Mathf.Approximately(bone.pull, Mathf.Clamp01(chain.joints[0].stiffness)), $"{chain.joints[0].bone} pull {bone.pull}");
+                var force = chain.joints[0].force;
+                Check(force.model == "vrm", $"{chain.joints[0].bone} force model {force.model} is vrm");
+                Check(Mathf.Approximately(bone.pull, Mathf.Clamp01(force.stiffness ?? 0f)), $"{chain.joints[0].bone} pull {bone.pull}");
                 Check(Mathf.Approximately(bone.spring, Mathf.Clamp01(1f - chain.joints[0].drag_force)), $"{chain.joints[0].bone} spring {bone.spring}");
-                Check(Mathf.Approximately(bone.gravity, Mathf.Clamp01(chain.joints[0].gravity_power)), $"{chain.joints[0].bone} gravity {bone.gravity}");
+                Check(Mathf.Approximately(bone.gravity, Mathf.Clamp01(force.gravity_power ?? 0f)), $"{chain.joints[0].bone} gravity {bone.gravity}");
             }
         }
 

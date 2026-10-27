@@ -11,9 +11,9 @@ use crate::vrchat::blink::find_blink_candidates;
 use crate::vrchat::sidecar_spring::SidecarSpring;
 use crate::vrchat::viseme::VISEME_CHANNELS;
 
-pub const SIDECAR_SCHEMA_VERSION: u32 = 3;
+pub const SIDECAR_SCHEMA_VERSION: u32 = 4;
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct AvatarSidecar {
     pub schema: u32,
@@ -30,7 +30,7 @@ pub struct AvatarSidecar {
     pub stats: AvatarStats,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarSubmeshRole {
     pub mesh: String,
@@ -38,14 +38,14 @@ pub struct SidecarSubmeshRole {
     pub role: SubmeshRole,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct SidecarHiddenTriangles {
     pub mesh: String,
     pub material: String,
     pub triangles: Vec<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarBlink {
     pub both: Option<String>,
@@ -53,7 +53,7 @@ pub struct SidecarBlink {
     pub right: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarExpression {
     pub name: String,
@@ -283,7 +283,7 @@ mod tests {
 
         let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
 
-        assert_eq!(value["schema"], 3);
+        assert_eq!(value["schema"], SIDECAR_SCHEMA_VERSION);
         assert_eq!(value["materials"]["face"], "../PNG/face.png");
 
         assert_eq!(value["humanoid"]["Hips"], "Hips");
@@ -337,7 +337,7 @@ mod tests {
         let data = fs::read_to_string(&path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-        assert_eq!(parsed["schema"], 3);
+        assert_eq!(parsed["schema"], SIDECAR_SCHEMA_VERSION);
     }
 
     #[test]

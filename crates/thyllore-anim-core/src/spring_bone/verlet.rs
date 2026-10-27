@@ -1,6 +1,6 @@
 use cgmath::{InnerSpace, Matrix4, Quaternion, Vector3};
 
-use super::setup::SpringForceModel;
+use super::force::SpringForceModel;
 use crate::{compose_transform, decompose_transform, normalize_quat};
 
 /// The rest frame of a joint: where its bone points when the chain is undisturbed.

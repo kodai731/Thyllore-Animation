@@ -135,7 +135,7 @@ def tail_reach(chains: dict[str, dict], vertices: dict) -> dict:
 
 
 def root_height(chains: dict[str, dict], equator_height: float) -> dict:
-    """First joint height relative to the equator; for Azimuth mode the design expects it to equal `root_band_offset`."""
+    """First joint height relative to the equator; for Azimuth mode the design expects it to equal `azimuth_root_band_offset`."""
     diffs = [float(entry["heads"][0][UP_AXIS] - equator_height) for entry in chains.values() if entry["heads"]]
     if not diffs:
         return {"root_height_diff_mean": None, "root_height_diff_max_abs": None}

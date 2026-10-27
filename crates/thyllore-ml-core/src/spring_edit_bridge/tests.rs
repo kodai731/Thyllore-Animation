@@ -1,4 +1,5 @@
 use super::*;
+use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint;
 
 fn bone(name: &str, parent: Option<usize>) -> BoneInput {
     BoneInput {
@@ -23,16 +24,20 @@ fn test_bones() -> Vec<BoneInput> {
 fn ramp_input(shape: &str) -> RampInput {
     RampInput {
         root: JointValues {
-            stiffness: 1.0,
+            force: SidecarJointForce::Vrm {
+                stiffness: 1.0,
+                gravity_power: 0.0,
+            },
             drag_force: 0.0,
-            gravity_power: 0.0,
             gravity_dir: [0.0, -1.0, 0.0],
             hit_radius: 0.0,
         },
         tip: JointValues {
-            stiffness: 0.0,
+            force: SidecarJointForce::Vrm {
+                stiffness: 0.0,
+                gravity_power: 0.0,
+            },
             drag_force: 0.0,
-            gravity_power: 0.0,
             gravity_dir: [0.0, -1.0, 0.0],
             hit_radius: 0.0,
         },
@@ -106,9 +111,13 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
     assert_eq!(result.chains.len(), 1);
     let chain = &result.chains[0];
     assert_eq!(chain.joints.len(), 3);
-    assert!((chain.joints.first().unwrap().stiffness - 1.0).abs() < 1e-6);
-    assert!((chain.joints[1].stiffness - 0.5).abs() < 1e-6);
-    assert!((chain.joints[2].stiffness - 0.0).abs() < 1e-6);
+    let stiffness_of = |joint: &SidecarSpringJoint| match joint.force {
+        SidecarJointForce::Vrm { stiffness, .. } => stiffness,
+        SidecarJointForce::RestRelative { .. } => panic!("ramp keeps the VRM model"),
+    };
+    assert!((stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
+    assert!((stiffness_of(&chain.joints[1]) - 0.5).abs() < 1e-6);
+    assert!((stiffness_of(&chain.joints[2]) - 0.0).abs() < 1e-6);
 }
 
 #[test]

@@ -106,17 +106,17 @@ mod tests {
     }
 
     #[test]
-    fn param_rows_spring_joint_stiffness_is_scalar() {
+    fn param_rows_spring_joint_drag_force_is_scalar() {
         let rows = param_rows(
             &SPRING_JOINT_UI_PARAMS,
             &SPRING_JOINT_SCALAR_PARAMS,
             &SpringJointParam::default(),
         );
-        let stiffness = rows.iter().find(|r| r.name == "stiffness").unwrap();
-        assert_eq!(stiffness.kind, "scalar");
+        let drag_force = rows.iter().find(|r| r.name == "drag_force").unwrap();
+        assert_eq!(drag_force.kind, "scalar");
         assert_eq!(
-            stiffness.default,
-            ParamDefault::Scalar(SpringJointParam::default().stiffness)
+            drag_force.default,
+            ParamDefault::Scalar(SpringJointParam::default().drag_force)
         );
     }
 
@@ -153,8 +153,8 @@ mod tests {
             "error should mention 'unknown': {msg}"
         );
         assert!(
-            msg.contains("stiffness"),
-            "error should list valid names including 'stiffness': {msg}"
+            msg.contains("drag_force"),
+            "error should list valid names including 'drag_force': {msg}"
         );
     }
 }

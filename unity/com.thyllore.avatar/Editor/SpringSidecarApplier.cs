@@ -27,6 +27,46 @@ namespace Thyllore.Avatar
             return new Vector3(-a[0], a[1], a[2]);
         }
 
+        /// The sidecar keeps collider vectors in model space; UniVRM wants them in the bone's local space.
+        static Vector3 ToBoneLocal(GameObject root, Transform bone, float[] modelVector)
+        {
+            return bone.InverseTransformVector(root.transform.TransformVector(ToUnityVector(modelVector)));
+        }
+
+        /// The VRM speeds a joint force stands for; a rest-relative force maps `D / L` to the stiffness and has no gravity at rest.
+        public static void VrmMagnitudes(SidecarJointForce force, float strandLength, out float stiffness, out float gravityPower)
+        {
+            switch (force.model)
+            {
+                case "vrm":
+                    stiffness = force.stiffness ?? 0f;
+                    gravityPower = force.gravity_power ?? 0f;
+                    return;
+                case "rest_relative":
+                    var relaxation = force.bending_relaxation ?? 0f;
+                    stiffness = strandLength > 0f ? relaxation / strandLength : 0f;
+                    gravityPower = 0f;
+                    return;
+                default:
+                    throw new System.ArgumentException($"unknown spring force model {force.model}");
+            }
+        }
+
+        static float StrandLength(List<Transform> jointTransforms)
+        {
+            var length = 0f;
+            for (int i = 0; i + 1 < jointTransforms.Count; i++)
+            {
+                length += Vector3.Distance(jointTransforms[i].position, jointTransforms[i + 1].position);
+            }
+            var last = jointTransforms.Count > 0 ? jointTransforms[jointTransforms.Count - 1] : null;
+            if (last != null && last.childCount > 0)
+            {
+                length += Vector3.Distance(last.position, last.GetChild(0).position);
+            }
+            return length;
+        }
+
         static Transform FindBone(GameObject root, string name)
         {
             foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
@@ -115,13 +155,13 @@ namespace Thyllore.Avatar
                     collider = Undo.AddComponent<VRM10SpringBoneCollider>(childGo);
                 }
 
-                collider.Offset = ToUnityVector(sc.offset);
+                collider.Offset = ToBoneLocal(root, boneTransform, sc.offset);
                 collider.Radius = sc.radius;
 
                 if (sc.shape == "capsule")
                 {
                     collider.ColliderType = VRM10SpringBoneColliderTypes.Capsule;
-                    collider.Tail = ToUnityVector(sc.tail);
+                    collider.Tail = ToBoneLocal(root, boneTransform, sc.tail);
                 }
                 else
                 {
@@ -187,6 +227,15 @@ namespace Thyllore.Avatar
                     }
                 }
 
+                var jointTransforms = new List<Transform>();
+                foreach (var sj in chain.joints)
+                {
+                    var jointTransform = FindBone(root, sj.bone);
+                    if (jointTransform != null)
+                        jointTransforms.Add(jointTransform);
+                }
+                var strandLength = StrandLength(jointTransforms);
+
                 var joints = new List<VRM10SpringBoneJoint>();
 
                 for (int j = 0; j < chain.joints.Count; j++)
@@ -202,9 +251,10 @@ namespace Thyllore.Avatar
                         joint = Undo.AddComponent<VRM10SpringBoneJoint>(jointTransform.gameObject);
                     }
 
-                    joint.m_stiffnessForce = sj.stiffness;
+                    VrmMagnitudes(sj.force, strandLength, out var stiffness, out var gravityPower);
+                    joint.m_stiffnessForce = stiffness;
                     joint.m_dragForce = sj.drag_force;
-                    joint.m_gravityPower = sj.gravity_power;
+                    joint.m_gravityPower = gravityPower;
                     joint.m_gravityDir = ToUnityVector(sj.gravity_dir);
                     joint.m_jointRadius = sj.hit_radius;
 
@@ -249,9 +299,17 @@ namespace Thyllore.Avatar
                     physBone = Undo.AddComponent<VRCPhysBone>(boneTransform.gameObject);
                 }
 
-                physBone.pull = Mathf.Clamp01(firstJoint.stiffness);
+                var jointTransforms = new List<Transform>();
+                foreach (var sj in chain.joints)
+                {
+                    var jointTransform = FindBone(root, sj.bone);
+                    if (jointTransform != null)
+                        jointTransforms.Add(jointTransform);
+                }
+                VrmMagnitudes(firstJoint.force, StrandLength(jointTransforms), out var stiffness, out var gravityPower);
+                physBone.pull = Mathf.Clamp01(stiffness);
                 physBone.spring = Mathf.Clamp01(1f - firstJoint.drag_force);
-                physBone.gravity = Mathf.Clamp01(firstJoint.gravity_power);
+                physBone.gravity = Mathf.Clamp01(gravityPower);
             }
 
             foreach (var collider in spring.colliders)

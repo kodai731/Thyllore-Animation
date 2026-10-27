@@ -91,14 +91,14 @@ fn card_cutoff_progress(
     positions: &[Vector3<f32>],
     members: &[u32],
     root_position: Vector3<f32>,
-    root_offset: f32,
+    root_rigid_length: f32,
 ) -> Option<f32> {
     let up = world_y_axis();
     members
         .iter()
         .map(|&v| progress_of(positions[v as usize], root_position, up))
         .reduce(f32::min)
-        .map(|p| p + root_offset)
+        .map(|p| p + root_rigid_length)
 }
 
 pub fn strand_centerline(
@@ -106,7 +106,7 @@ pub fn strand_centerline(
     tex_coords: &[[f32; 2]],
     members: &[u32],
     root_position: Vector3<f32>,
-    root_offset: f32,
+    root_rigid_length: f32,
 ) -> Option<Vec<Vector3<f32>>> {
     let up = world_y_axis();
     let mut centroids = build_v_bin_centroids(positions, tex_coords, members);
@@ -116,7 +116,7 @@ pub fn strand_centerline(
         centroids.reverse();
     }
 
-    let cutoff = card_cutoff_progress(positions, members, root_position, root_offset)?;
+    let cutoff = card_cutoff_progress(positions, members, root_position, root_rigid_length)?;
     centroids.retain(|&centroid| progress_of(centroid, root_position, up) >= cutoff);
     let &tip = centroids.last()?;
     if centroids.len() < 2 {
@@ -309,7 +309,7 @@ impl CardStrand {
 fn build_card_strand(
     input: &ChainGenInput,
     members: &[u32],
-    root_offset: f32,
+    root_rigid_length: f32,
 ) -> Option<CardStrand> {
     let component = members.iter().copied().min()?;
     let correlation = uv_strand_correlation(input.positions, input.tex_coords, members)?;
@@ -321,11 +321,16 @@ fn build_card_strand(
         input.tex_coords,
         members,
         input.root_position,
-        root_offset,
+        root_rigid_length,
     )?;
 
     let up = world_y_axis();
-    let cutoff = card_cutoff_progress(input.positions, members, input.root_position, root_offset)?;
+    let cutoff = card_cutoff_progress(
+        input.positions,
+        members,
+        input.root_position,
+        root_rigid_length,
+    )?;
     let below_band = members
         .iter()
         .copied()
@@ -387,7 +392,9 @@ pub(crate) fn place_card_chains(
 ) -> (Vec<GeneratedChain>, Vec<StrandCenterlineRecord>) {
     let strands: Vec<CardStrand> = components
         .iter()
-        .filter_map(|members| build_card_strand(input, members, params.settings.root_band_offset))
+        .filter_map(|members| {
+            build_card_strand(input, members, params.settings.card.root_rigid_length)
+        })
         .collect();
     let centerlines: Vec<Vec<Vector3<f32>>> = strands
         .iter()

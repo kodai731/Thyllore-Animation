@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use thyllore_anim_core::spring_bone::{SpringJointParam, SPRING_JOINT_UI_PARAMS};
+use thyllore_anim_core::spring_bone::{JointForceForm, SpringJointParam, SPRING_JOINT_UI_PARAMS};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::animation::BoneId;
@@ -10,6 +10,7 @@ use crate::ecs::world::Entity;
 
 use super::super::bone_choice::bone_options;
 use super::super::ui_rows::{ListRows, UiRow};
+use super::force_rows::force_field_row;
 use super::section::SpringView;
 
 #[derive(Clone)]
@@ -25,6 +26,31 @@ pub struct JointView {
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
     pub joint: SpringJointParam,
+    pub force: JointForceForm,
+}
+
+impl JointView {
+    pub fn new(
+        bones: std::rc::Rc<[(BoneId, String)]>,
+        selected_bone: Option<BoneId>,
+        joint: SpringJointParam,
+    ) -> Self {
+        let force = JointForceForm::from(joint.force);
+        Self {
+            bones,
+            selected_bone,
+            joint,
+            force,
+        }
+    }
+
+    /// The joint with the force the form currently selects.
+    pub fn joint_param(&self) -> SpringJointParam {
+        SpringJointParam {
+            force: self.force.into(),
+            ..self.joint.clone()
+        }
+    }
 }
 
 struct JointPath;
@@ -97,22 +123,19 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
                 .enumerate()
                 .map(|(i, joint)| {
                     let header = format!("Joint {} (bone:{})", i, joint.bone_id);
-                    let item = JointView {
-                        bones: view.bones.clone(),
-                        selected_bone: view.selected_bone,
-                        joint: joint.clone(),
-                    };
+                    let item =
+                        JointView::new(view.bones.clone(), view.selected_bone, joint.clone());
                     (header, item)
                 })
                 .collect()
         },
-        rows: |_| joint_rows(),
+        rows: joint_rows,
         on_change: |chain_view, joint_index, joint_view| {
             Box::new(SpringBoneEvent::JointUpdate {
                 entity: chain_view.entity,
                 chain_id: chain_view.chain.id,
                 joint_index,
-                joint: joint_view.joint,
+                joint: joint_view.joint_param(),
             }) as _
         },
         initially_open: |_| false,
@@ -132,7 +155,7 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
     rows
 }
 
-pub fn joint_rows() -> Vec<UiRow<JointView>> {
+pub fn joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
     let mut rows: Vec<UiRow<JointView>> = Vec::new();
     rows.push(UiRow::Choice {
         label: "Bone",
@@ -155,18 +178,20 @@ pub fn joint_rows() -> Vec<UiRow<JointView>> {
         },
     });
 
-    rows.extend(joint_param_rows());
+    rows.extend(joint_param_rows(view));
     rows
 }
 
-pub fn joint_param_rows() -> Vec<UiRow<JointView>> {
-    SPRING_JOINT_UI_PARAMS
-        .iter()
-        .map(|param| UiRow::Scalar {
-            param,
-            scalars: &JOINT_SCALARS,
-        })
-        .collect()
+/// The force block of the joint's model, then the parameters every model shares.
+pub fn joint_param_rows(view: &JointView) -> Vec<UiRow<JointView>> {
+    let mut rows = vec![force_field_row(&view.force, |view: &mut JointView| {
+        &mut view.force
+    })];
+    rows.extend(SPRING_JOINT_UI_PARAMS.iter().map(|param| UiRow::Scalar {
+        param,
+        scalars: &JOINT_SCALARS,
+    }));
+    rows
 }
 
 #[cfg(test)]
@@ -174,18 +199,24 @@ mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
+    fn view() -> JointView {
+        JointView::new(
+            std::rc::Rc::from(Vec::new()),
+            None,
+            SpringJointParam::default(),
+        )
+    }
+
     #[test]
     fn joint_rows_label_order() {
-        let rows = joint_rows();
+        let rows = joint_rows(&view());
         let labels = visible_labels(&rows);
         assert_eq!(
             labels,
             [
                 "Bone",
                 "Use Selected Bone",
-                "stiffness",
                 "drag_force",
-                "gravity_power",
                 "gravity_dir",
                 "hit_radius",
             ]
@@ -193,8 +224,9 @@ mod tests {
     }
 
     #[test]
-    fn joint_param_rows_follow_the_declaration_order() {
-        let rows = joint_param_rows();
+    fn joint_param_rows_start_with_the_force_block() {
+        let rows = joint_param_rows(&view());
+        assert!(matches!(rows[0], UiRow::Field(_)));
         let labels = visible_labels(&rows);
         let declared: Vec<&str> = SPRING_JOINT_UI_PARAMS
             .iter()
@@ -204,8 +236,16 @@ mod tests {
     }
 
     #[test]
+    fn joint_param_round_trips_the_force_form() {
+        let mut joint_view = view();
+        joint_view.force.model = thyllore_anim_core::spring_bone::SpringForceModel::Vrm;
+        joint_view.force.vrm.stiffness = 2.5;
+        assert_eq!(joint_view.joint_param().force.magnitudes()[0], 2.5);
+    }
+
+    #[test]
     fn joint_rows_no_duplicate_labels() {
-        let rows = joint_rows();
+        let rows = joint_rows(&view());
         assert!(find_duplicate_labels(&rows).is_empty());
     }
 

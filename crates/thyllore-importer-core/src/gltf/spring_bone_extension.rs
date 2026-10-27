@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
-    SpringColliderGroup, SpringCollisionMode, SpringForceModel, SpringJointParam,
+    ChainOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringCollisionMode, SpringJointParam, VrmJointForce,
 };
 
 #[derive(Deserialize)]
@@ -95,7 +95,6 @@ pub fn parse_vrmc_spring_bone(
         next_collider_id,
         next_group_id,
         collision_mode: SpringCollisionMode::VrmCompatible,
-        force_model: SpringForceModel::Vrm,
     })
 }
 
@@ -188,9 +187,11 @@ fn convert_springs(
                 }
                 bone_id.map(|bid| SpringJointParam {
                     bone_id: bid,
-                    stiffness: vj.stiffness.unwrap_or(1.0),
+                    force: JointForce::Vrm(VrmJointForce {
+                        stiffness: vj.stiffness.unwrap_or(1.0),
+                        gravity_power: vj.gravity_power.unwrap_or(0.0),
+                    }),
                     drag_force: vj.drag_force.unwrap_or(0.5),
-                    gravity_power: vj.gravity_power.unwrap_or(0.0),
                     gravity_dir: vj
                         .gravity_dir
                         .map(|d| cgmath::Vector3::new(d[0], d[1], d[2]))

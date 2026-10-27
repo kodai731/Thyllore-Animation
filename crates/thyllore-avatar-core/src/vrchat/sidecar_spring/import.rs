@@ -1,26 +1,31 @@
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    ChainOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain, SpringColliderDef,
     SpringColliderGroup, SpringColliderGroupId, SpringColliderId, SpringCollisionMode,
-    SpringForceModel, SpringJointParam, SubmeshSelector,
+    SpringJointParam, SubmeshSelector,
 };
 use thyllore_anim_core::BoneId;
 
 use super::format::{
     SidecarChainOrigin, SidecarCollider, SidecarColliderGroup, SidecarColliderShape,
-    SidecarCollisionMode, SidecarForceModel, SidecarSpring, SidecarSpringChain, SidecarSpringJoint,
+    SidecarCollisionMode, SidecarSpring, SidecarSpringChain, SidecarSpringJoint,
 };
+use super::frame::BoneRestFrame;
 use crate::humanoid::components::skeleton_input::BoneInput;
 
 /// The engine setup a sidecar describes; joints and colliders on unknown bones are dropped.
-pub fn spring_setup_from_sidecar(spring: &SidecarSpring, bones: &[BoneInput]) -> SpringBoneSetup {
+/// `frames` gives each bone's rest frame in `bones` order and takes colliders back to bone space.
+pub fn spring_setup_from_sidecar(
+    spring: &SidecarSpring,
+    bones: &[BoneInput],
+    frames: &[BoneRestFrame],
+) -> SpringBoneSetup {
     let mut setup = SpringBoneSetup {
         collision_mode: from_sidecar_collision_mode(&spring.collision_mode),
-        force_model: from_sidecar_force_model(&spring.force_model),
         ..Default::default()
     };
 
-    let collider_ids_by_name = import_colliders(&mut setup, &spring.colliders, bones);
+    let collider_ids_by_name = import_colliders(&mut setup, &spring.colliders, bones, frames);
     let group_ids_by_name =
         import_collider_groups(&mut setup, &spring.collider_groups, &collider_ids_by_name);
     for chain in &spring.chains {
@@ -33,13 +38,6 @@ fn from_sidecar_collision_mode(mode: &SidecarCollisionMode) -> SpringCollisionMo
     match mode {
         SidecarCollisionMode::VrmCompatible => SpringCollisionMode::VrmCompatible,
         SidecarCollisionMode::SegmentExtended => SpringCollisionMode::SegmentExtended,
-    }
-}
-
-fn from_sidecar_force_model(model: &SidecarForceModel) -> SpringForceModel {
-    match model {
-        SidecarForceModel::Vrm => SpringForceModel::Vrm,
-        SidecarForceModel::RestRelative => SpringForceModel::RestRelative,
     }
 }
 
@@ -61,10 +59,14 @@ fn import_colliders(
     setup: &mut SpringBoneSetup,
     colliders: &[SidecarCollider],
     bones: &[BoneInput],
+    frames: &[BoneRestFrame],
 ) -> Vec<(String, SpringColliderId)> {
     let mut ids_by_name = Vec::new();
     for collider in colliders {
         let Some(bone_id) = bone_id_of(bones, &collider.bone) else {
+            continue;
+        };
+        let Some(frame) = frames.get(bone_id as usize) else {
             continue;
         };
         let id = setup.next_collider_id;
@@ -72,8 +74,8 @@ fn import_colliders(
         setup.colliders.push(SpringColliderDef {
             id,
             bone_id,
-            offset: Vector3::from(collider.offset),
-            shape: collider_shape(collider),
+            offset: frame.to_local(Vector3::from(collider.offset)),
+            shape: collider_shape(collider, frame),
         });
         ids_by_name.push((collider.name.clone(), id));
     }
@@ -81,16 +83,15 @@ fn import_colliders(
 }
 
 /// A capsule without a tail degrades to a sphere.
-fn collider_shape(collider: &SidecarCollider) -> ColliderShape {
+fn collider_shape(collider: &SidecarCollider, frame: &BoneRestFrame) -> ColliderShape {
+    let radius = frame.length_to_local(collider.radius);
     match (&collider.shape, collider.tail) {
         (SidecarColliderShape::Capsule, Some(tail)) => ColliderShape::Capsule {
-            radius: collider.radius,
-            tail: Vector3::from(tail),
+            radius,
+            tail: frame.to_local(Vector3::from(tail)),
         },
         (SidecarColliderShape::Capsule, None) | (SidecarColliderShape::Sphere, _) => {
-            ColliderShape::Sphere {
-                radius: collider.radius,
-            }
+            ColliderShape::Sphere { radius }
         }
     }
 }
@@ -129,9 +130,8 @@ fn import_chain(
         .filter_map(|joint| {
             Some(SpringJointParam {
                 bone_id: bone_id_of(bones, &joint.bone)?,
-                stiffness: joint.stiffness,
+                force: JointForce::from(joint.force),
                 drag_force: joint.drag_force,
-                gravity_power: joint.gravity_power,
                 gravity_dir: Vector3::from(joint.gravity_dir),
                 hit_radius: joint.hit_radius,
             })

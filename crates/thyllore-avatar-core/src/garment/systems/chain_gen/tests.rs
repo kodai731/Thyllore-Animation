@@ -579,7 +579,7 @@ fn root_band_offset_moves_the_band_down() {
     };
     let mut params = build_params(ChainRole::Hair, 3, 2);
     let baseline = place_chains(&input, &params).unwrap();
-    params.settings.root_band_offset = 0.2;
+    params.settings.azimuth.root_band_offset = 0.2;
 
     let shifted = place_chains(&input, &params).unwrap();
 
@@ -638,7 +638,7 @@ fn hair_root_band_reports_the_equator_and_the_offset_band() {
         tex_coords: &[],
     };
     let mut params = build_params(ChainRole::Hair, 3, 2);
-    params.settings.root_band_offset = 0.05;
+    params.settings.azimuth.root_band_offset = 0.05;
 
     let band = hair_root_band(&input, &params).unwrap();
 

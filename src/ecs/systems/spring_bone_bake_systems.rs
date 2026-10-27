@@ -334,7 +334,7 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::{SpringCollisionMode, SpringForceModel};
+    use crate::animation::spring_bone::{JointForce, SpringCollisionMode, VrmJointForce};
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
     use cgmath::{InnerSpace, Matrix4, Vector3};
@@ -389,8 +389,10 @@ mod tests {
                 name: "TestChain".to_string(),
                 joints: vec![SpringJointParam {
                     bone_id: 1,
-                    stiffness: 1.0,
-                    gravity_power: 0.0,
+                    force: JointForce::Vrm(VrmJointForce {
+                        stiffness: 1.0,
+                        gravity_power: 0.0,
+                    }),
                     gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                     drag_force: 1.0,
                     hit_radius: 0.0,
@@ -407,7 +409,6 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
-            force_model: SpringForceModel::Vrm,
         }
     }
 
@@ -428,9 +429,11 @@ mod tests {
         let mut setup = create_test_setup();
         setup.chains[0].joints[0] = SpringJointParam {
             bone_id: 1,
-            stiffness: 0.5,
+            force: JointForce::Vrm(VrmJointForce {
+                stiffness: 0.5,
+                gravity_power: 1.0,
+            }),
             drag_force: 0.4,
-            gravity_power: 1.0,
             gravity_dir: Vector3::new(1.0, 0.0, 0.0),
             hit_radius: 0.0,
         };
@@ -509,7 +512,6 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
-            force_model: SpringForceModel::Vrm,
         };
         let clip = AnimationClip::new("test");
 
@@ -593,8 +595,10 @@ mod tests {
                     name: "DisabledChain".to_string(),
                     joints: vec![SpringJointParam {
                         bone_id: 1,
-                        stiffness: 1.0,
-                        gravity_power: 0.0,
+                        force: JointForce::Vrm(VrmJointForce {
+                            stiffness: 1.0,
+                            gravity_power: 0.0,
+                        }),
                         gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                         drag_force: 1.0,
                         hit_radius: 0.0,
@@ -610,8 +614,10 @@ mod tests {
                     name: "EnabledChain".to_string(),
                     joints: vec![SpringJointParam {
                         bone_id: 1,
-                        stiffness: 1.0,
-                        gravity_power: 0.0,
+                        force: JointForce::Vrm(VrmJointForce {
+                            stiffness: 1.0,
+                            gravity_power: 0.0,
+                        }),
                         gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                         drag_force: 1.0,
                         hit_radius: 0.0,
@@ -629,7 +635,6 @@ mod tests {
             next_collider_id: 0,
             next_group_id: 0,
             collision_mode: SpringCollisionMode::VrmCompatible,
-            force_model: SpringForceModel::Vrm,
         };
 
         let setup_enabled_only = create_test_setup();

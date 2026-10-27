@@ -56,7 +56,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
             return {"CANCELLED"}
 
         bones = armature_fit_bones(context, arm)
-        sidecar = spring_settings_to_edit(settings)
+        sidecar = tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
         disabled = disabled_chain_names(settings)
 
         scale_length = context.scene.unit_settings.scale_length
@@ -73,7 +73,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
             self.report({"ERROR"}, f"fit_body_colliders failed: {e}")
             return {"CANCELLED"}
 
-        write_sidecar_spring(settings, output)
+        write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
         restore_disabled_chains(settings, disabled)
 
         collider_count = len(output.get("colliders", []))

@@ -9,9 +9,9 @@ use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {
     pub splat_layout: ReflectedSetLayout,
-    pub splat_descriptor_set: vk::DescriptorSet,
+    pub splat_descriptor_set: crate::types::DescriptorSet,
     pub apply_layout: ReflectedSetLayout,
-    pub apply_descriptor_set: vk::DescriptorSet,
+    pub apply_descriptor_set: crate::types::DescriptorSet,
 }
 
 impl RRWaterCausticDescriptorSet {
@@ -29,14 +29,14 @@ impl RRWaterCausticDescriptorSet {
 
         Ok(Self {
             splat_layout,
-            splat_descriptor_set: vk::DescriptorSet::null(),
+            splat_descriptor_set: crate::types::DescriptorSet::default(),
             apply_layout,
-            apply_descriptor_set: vk::DescriptorSet::null(),
+            apply_descriptor_set: crate::types::DescriptorSet::default(),
         })
     }
 
     pub fn is_allocated(&self) -> bool {
-        self.splat_descriptor_set != vk::DescriptorSet::null()
+        self.splat_descriptor_set.raw() != vk::DescriptorSet::null()
     }
 
     pub unsafe fn allocate_and_update(
@@ -49,28 +49,20 @@ impl RRWaterCausticDescriptorSet {
         water_ubo: crate::types::Buffer,
         hdr_color_image_view: crate::types::ImageView,
     ) -> Result<()> {
-        if self.splat_descriptor_set == vk::DescriptorSet::null() {
-            self.splat_descriptor_set = self.splat_layout.allocate_set(rrdevice)?;
+        if !self.is_allocated() {
+            self.splat_descriptor_set =
+                crate::types::DescriptorSet(self.splat_layout.allocate_set(rrdevice)?);
         }
-        if self.apply_descriptor_set == vk::DescriptorSet::null() {
-            self.apply_descriptor_set = self.apply_layout.allocate_set(rrdevice)?;
+        if self.apply_descriptor_set.raw() == vk::DescriptorSet::null() {
+            self.apply_descriptor_set =
+                crate::types::DescriptorSet(self.apply_layout.allocate_set(rrdevice)?);
         }
 
         let mut splat_writer = self
             .splat_layout
-            .writer(self.splat_descriptor_set)
-            .image(
-                water_caustic_splat::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view.raw(),
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .image(
-                water_caustic_splat::POSITION_IMAGE,
-                position_image_view.raw(),
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?;
+            .writer(self.splat_descriptor_set.raw())
+            .storage_image(water_caustic_splat::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
+            .storage_image(water_caustic_splat::POSITION_IMAGE, position_image_view)?;
         if let Some(tlas) = tlas {
             splat_writer = splat_writer
                 .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?;
@@ -91,19 +83,9 @@ impl RRWaterCausticDescriptorSet {
             .apply(rrdevice);
 
         self.apply_layout
-            .writer(self.apply_descriptor_set)
-            .image(
-                water_caustic_apply::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view.raw(),
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .image(
-                water_caustic_apply::HDR_COLOR_IMAGE,
-                hdr_color_image_view.raw(),
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
+            .writer(self.apply_descriptor_set.raw())
+            .storage_image(water_caustic_apply::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
+            .storage_image(water_caustic_apply::HDR_COLOR_IMAGE, hdr_color_image_view)?
             .buffer(
                 water_caustic_apply::SCENE_DATA,
                 scene_uniform_buffer.raw(),
@@ -126,11 +108,11 @@ impl RRWaterCausticDescriptorSet {
         rrdevice: &RRDevice,
         tlas: crate::types::AccelerationStructure,
     ) -> Result<()> {
-        if self.splat_descriptor_set == vk::DescriptorSet::null() {
+        if !self.is_allocated() {
             return Ok(());
         }
         self.splat_layout
-            .writer(self.splat_descriptor_set)
+            .writer(self.splat_descriptor_set.raw())
             .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?
             .apply(rrdevice);
         Ok(())

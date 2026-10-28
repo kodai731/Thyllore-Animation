@@ -13,10 +13,12 @@ pub unsafe fn bind_compute(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
     pipeline: &RRPipeline,
-    descriptor_sets: &[vk::DescriptorSet],
+    descriptor_sets: &[crate::types::DescriptorSet],
     dynamic_offsets: &[u32],
 ) {
     let command_buffer = command_buffer.raw();
+    let descriptor_sets: Vec<vk::DescriptorSet> =
+        descriptor_sets.iter().map(|set| set.raw()).collect();
     rrdevice.device().cmd_bind_pipeline(
         command_buffer,
         vk::PipelineBindPoint::COMPUTE,
@@ -27,7 +29,7 @@ pub unsafe fn bind_compute(
         vk::PipelineBindPoint::COMPUTE,
         pipeline.pipeline_layout,
         0,
-        descriptor_sets,
+        &descriptor_sets,
         dynamic_offsets,
     );
 }

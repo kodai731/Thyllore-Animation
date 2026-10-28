@@ -72,23 +72,20 @@ impl RRWaterDescriptorSet {
             self.layout
                 .writer(descriptor_set.raw())
                 .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
-                .image(
+                .sampled_image(
                     water_resolve::SCENE_COLOR_SAMPLER,
-                    scene_color_view.raw(),
-                    scene_color_sampler.raw(),
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    scene_color_view,
+                    scene_color_sampler,
                 )?
-                .image(
+                .sampled_image(
                     water_resolve::WATER_HISTORY_SAMPLER,
-                    previous_history_view.raw(),
-                    history_sampler.raw(),
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    previous_history_view,
+                    history_sampler,
                 )?
-                .image(
+                .sampled_storage_image(
                     water_resolve::WATER_TRACE_SAMPLER,
-                    trace_image_view.raw(),
-                    trace_sampler.raw(),
-                    vk::ImageLayout::GENERAL,
+                    trace_image_view,
+                    trace_sampler,
                 )?
                 .acceleration_structure(water_resolve::SCENE_TLAS, tlas.raw())?
                 .buffer(

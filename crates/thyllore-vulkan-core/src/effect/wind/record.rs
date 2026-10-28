@@ -1,14 +1,14 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::effect::wind::descriptors::WindShadowBakeDescriptorSet;
 use crate::effect::wind::targets::{wind_shadow_volume_extent, WindRenderTargets};
 use crate::pipeline::RRPipeline;
-use crate::types::CommandBuffer;
-use crate::{
-    insert_storage_image_read_barrier, insert_storage_image_write_barrier, FrameRenderContext,
-    OverlayInstanceDraw,
+use crate::renderer::{
+    bind_compute, dispatch, storage_image_read_barrier_for_fragment,
+    storage_image_write_barrier_for_fragment,
 };
+use crate::types::{CommandBuffer, DescriptorSet};
+use crate::{FrameRenderContext, OverlayInstanceDraw};
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
 
 /// Must match local_size in shadowBake.comp.
@@ -24,41 +24,26 @@ pub unsafe fn record_wind_shadow_bake_pass(
     image_index: usize,
     cmd: CommandBuffer,
 ) -> Result<()> {
-    let cmd = cmd.raw();
-    let device = &ctx.device.device();
     let volume = &targets.shadow_volume;
-    insert_storage_image_write_barrier(
-        device,
-        cmd,
-        volume.image,
-        volume.subresource_range(),
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-    );
+    storage_image_write_barrier_for_fragment(&ctx.device, cmd, volume);
 
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, pipeline.pipeline);
     let extent = wind_shadow_volume_extent();
     let group_count_x =
         (extent.width / WIND_SHADOW_VOLUME_SLOTS).div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let group_count_y = extent.height.div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let frame_set = ctx.graphics.frame_set.sets[image_index];
+    let bake_set = DescriptorSet(descriptor.descriptor_set);
     for draw in draws {
-        device.cmd_bind_descriptor_sets(
+        bind_compute(
+            &ctx.device,
             cmd,
-            vk::PipelineBindPoint::COMPUTE,
-            pipeline.pipeline_layout,
-            0,
-            &[frame_set.raw(), descriptor.descriptor_set],
+            pipeline,
+            &[frame_set, bake_set],
             &draw.dynamic_offsets,
         );
-        device.cmd_dispatch(cmd, group_count_x, group_count_y, extent.depth);
+        dispatch(&ctx.device, cmd, group_count_x, group_count_y, extent.depth);
     }
 
-    insert_storage_image_read_barrier(
-        device,
-        cmd,
-        volume.image,
-        volume.subresource_range(),
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-    );
+    storage_image_read_barrier_for_fragment(&ctx.device, cmd, volume);
     Ok(())
 }

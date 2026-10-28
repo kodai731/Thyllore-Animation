@@ -25,7 +25,7 @@ pub struct HistoryTargetsDesc {
     pub keys: [RenderTargetKey; 2],
     pub(crate) format: vk::Format,
     pub(crate) usage: vk::ImageUsageFlags,
-    pub(crate) sampler: vk::SamplerCreateInfo,
+    pub(crate) sampler: crate::resource::image::SamplerDesc,
     pub(crate) history_load_op: vk::AttachmentLoadOp,
     pub(crate) depth_view: Option<vk::ImageView>,
 }

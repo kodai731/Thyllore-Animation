@@ -62,11 +62,10 @@ impl WindResolveDescriptorSet {
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
-            .image(
+            .sampled_storage_image(
                 wind_resolve::SHADOW_VOLUME_SAMPLER,
-                shadow_volume.view,
-                shadow_volume.sampler,
-                vk::ImageLayout::GENERAL,
+                crate::types::ImageView(shadow_volume.view),
+                crate::types::Sampler(shadow_volume.sampler),
             )?
             .apply(rrdevice);
         Ok(())
@@ -79,11 +78,10 @@ impl WindResolveDescriptorSet {
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
-            .image(
+            .sampled_depth(
                 wind_resolve::SCENE_DEPTH_SAMPLER,
-                scene_depth_view.raw(),
-                self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                scene_depth_view,
+                crate::types::Sampler(self.scene_depth_sampler),
             )?
             .apply(rrdevice);
         Ok(())
@@ -139,11 +137,9 @@ impl WindShadowBakeDescriptorSet {
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
-            .image(
+            .storage_image(
                 wind_shadow_bake::SHADOW_VOLUME_IMAGE,
-                shadow_volume.view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
+                crate::types::ImageView(shadow_volume.view),
             )?
             .apply(rrdevice);
         Ok(())

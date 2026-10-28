@@ -46,7 +46,7 @@ pub unsafe fn write_imgui_texture_set(
 ) -> Result<()> {
     layout
         .writer(descriptor_set.raw())
-        .sampled_image(imgui::TEX_SAMPLER, image_view.raw(), sampler.raw())?
+        .sampled_image(imgui::TEX_SAMPLER, image_view, sampler)?
         .apply(rrdevice);
     Ok(())
 }

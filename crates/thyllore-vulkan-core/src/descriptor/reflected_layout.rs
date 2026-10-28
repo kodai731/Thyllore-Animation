@@ -418,7 +418,7 @@ impl DescriptorSetWriter<'_> {
         Ok(())
     }
 
-    pub fn image(
+    pub(crate) fn image(
         mut self,
         binding: ShaderBinding,
         image_view: vk::ImageView,
@@ -444,14 +444,55 @@ impl DescriptorSetWriter<'_> {
     pub fn sampled_image(
         self,
         binding: ShaderBinding,
-        image_view: vk::ImageView,
-        sampler: vk::Sampler,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
     ) -> Result<Self> {
         self.image(
             binding,
-            image_view,
-            sampler,
+            image_view.raw(),
+            sampler.raw(),
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        )
+    }
+
+    pub fn storage_image(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            vk::Sampler::null(),
+            vk::ImageLayout::GENERAL,
+        )
+    }
+
+    pub fn sampled_storage_image(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            sampler.raw(),
+            vk::ImageLayout::GENERAL,
+        )
+    }
+
+    pub fn sampled_depth(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            sampler.raw(),
+            vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
         )
     }
 

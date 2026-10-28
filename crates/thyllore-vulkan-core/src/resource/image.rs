@@ -1027,3 +1027,82 @@ impl GpuResource for RRImage {
         self.image.is_destroyed()
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerFilter {
+    Linear,
+    Nearest,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerAddress {
+    ClampToEdge,
+    ClampToBorder,
+    Repeat,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerBorder {
+    OpaqueBlackFloat,
+    OpaqueBlackInt,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SamplerDesc {
+    pub filter: SamplerFilter,
+    pub address: SamplerAddress,
+    pub border: SamplerBorder,
+}
+
+impl SamplerDesc {
+    fn mag_filter(self) -> vk::Filter {
+        match self.filter {
+            SamplerFilter::Linear => vk::Filter::LINEAR,
+            SamplerFilter::Nearest => vk::Filter::NEAREST,
+        }
+    }
+
+    fn address_mode(self) -> vk::SamplerAddressMode {
+        match self.address {
+            SamplerAddress::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            SamplerAddress::ClampToBorder => vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            SamplerAddress::Repeat => vk::SamplerAddressMode::REPEAT,
+        }
+    }
+
+    fn border_color(self) -> vk::BorderColor {
+        match self.border {
+            SamplerBorder::OpaqueBlackFloat => vk::BorderColor::FLOAT_OPAQUE_BLACK,
+            SamplerBorder::OpaqueBlackInt => vk::BorderColor::INT_OPAQUE_BLACK,
+        }
+    }
+}
+
+pub unsafe fn create_sampler(
+    rrdevice: &RRDevice,
+    desc: SamplerDesc,
+) -> Result<crate::types::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(desc.mag_filter())
+        .min_filter(desc.mag_filter())
+        .address_mode_u(desc.address_mode())
+        .address_mode_v(desc.address_mode())
+        .address_mode_w(desc.address_mode())
+        .anisotropy_enable(false)
+        .border_color(desc.border_color())
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(0.0);
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
+    Ok(crate::types::Sampler(sampler))
+}
+
+pub unsafe fn destroy_sampler(rrdevice: &RRDevice, sampler: &mut crate::types::Sampler) {
+    if sampler.raw() != vk::Sampler::null() {
+        rrdevice.device().destroy_sampler(sampler.raw(), None);
+        *sampler = crate::types::Sampler(vk::Sampler::null());
+    }
+}

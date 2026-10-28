@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::image::{SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter};
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::resource::{AccumulationTarget, GpuResource, HistoryTargets, HistoryTargetsDesc};
 use crate::types::Instance;
@@ -32,32 +33,25 @@ const WATER_HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(3),
 ];
 const WATER_CAUSTIC_ACCUM_KEY: RenderTargetKey = RenderTargetKey::EffectAccumulation(0);
-const WATER_CAUSTIC_ACCUM_FORMAT: vk::Format = vk::Format::R32_UINT;
+const WATER_CAUSTIC_ACCUM_FORMAT: crate::types::Format = crate::types::Format::R32_UINT;
 
 fn water_history_desc(depth_view: vk::ImageView) -> HistoryTargetsDesc {
     HistoryTargetsDesc {
         keys: WATER_HISTORY_KEYS,
         format: HDR_FORMAT.raw(),
         usage: vk::ImageUsageFlags::empty(),
-        sampler: linear_clamp_sampler_info(),
+        sampler: linear_clamp_sampler_desc(),
         history_load_op: vk::AttachmentLoadOp::DONT_CARE,
         depth_view: Some(depth_view),
     }
 }
 
-fn linear_clamp_sampler_info() -> vk::SamplerCreateInfo {
-    let address_mode = vk::SamplerAddressMode::CLAMP_TO_EDGE;
-    vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::LINEAR)
-        .min_filter(vk::Filter::LINEAR)
-        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
-        .address_mode_u(address_mode)
-        .address_mode_v(address_mode)
-        .address_mode_w(address_mode)
-        .border_color(vk::BorderColor::FLOAT_OPAQUE_BLACK)
-        .anisotropy_enable(false)
-        .max_anisotropy(1.0)
-        .build()
+fn linear_clamp_sampler_desc() -> SamplerDesc {
+    SamplerDesc {
+        filter: SamplerFilter::Linear,
+        address: SamplerAddress::ClampToEdge,
+        border: SamplerBorder::OpaqueBlackFloat,
+    }
 }
 
 pub unsafe fn create_water_gpu_targets(
@@ -87,7 +81,7 @@ pub unsafe fn create_water_gpu_targets(
         storage,
         command_pool,
         WATER_CAUSTIC_ACCUM_KEY,
-        WATER_CAUSTIC_ACCUM_FORMAT,
+        WATER_CAUSTIC_ACCUM_FORMAT.raw(),
     )?;
 
     Ok(WaterRenderTargets {
@@ -120,7 +114,7 @@ impl WaterRenderTargets {
         crate::resource::render_target_transient::TransientDesc {
             width: self.history.width,
             height: self.history.height,
-            format: vk::Format::R16G16B16A16_SFLOAT,
+            format: crate::types::Format::R16G16B16A16_SFLOAT.raw(),
             usage: vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
         }
     }

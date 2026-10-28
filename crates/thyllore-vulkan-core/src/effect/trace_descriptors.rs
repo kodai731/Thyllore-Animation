@@ -49,12 +49,7 @@ impl RREffectTraceDescriptorSet {
         self.layout
             .writer(self.descriptor_set(frame_slot)?)
             .acceleration_structure(effect_trace::TLAS, tlas.raw())?
-            .image(
-                effect_trace::OUT_IMAGE,
-                trace_image_view.raw(),
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
+            .storage_image(effect_trace::OUT_IMAGE, trace_image_view)?
             .buffer(
                 effect_trace::HIT_TABLE,
                 hit_table.raw(),

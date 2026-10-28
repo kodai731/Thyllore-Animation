@@ -1,7 +1,5 @@
-use vulkanalia::prelude::v1_0::*;
-
 use crate::frame_context::FrameRenderContext;
-use crate::types::{CommandBuffer, Extent2D, Extent3D, Image, Offset3D};
+use crate::types::{CommandBuffer, Extent2D, Image};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -37,34 +35,5 @@ pub unsafe fn record_water_scene_color_copy(
     extent: Extent2D,
     cmd: CommandBuffer,
 ) {
-    let device = &ctx.device.device();
-
-    let subresource = vk::ImageSubresourceLayers::builder()
-        .aspect_mask(vk::ImageAspectFlags::COLOR)
-        .mip_level(0)
-        .base_array_layer(0)
-        .layer_count(1)
-        .build();
-    let region = vk::ImageCopy::builder()
-        .src_subresource(subresource)
-        .src_offset(Offset3D { x: 0, y: 0, z: 0 }.raw())
-        .dst_subresource(subresource)
-        .dst_offset(Offset3D { x: 0, y: 0, z: 0 }.raw())
-        .extent(
-            Extent3D {
-                width: extent.width,
-                height: extent.height,
-                depth: 1,
-            }
-            .raw(),
-        )
-        .build();
-    device.cmd_copy_image(
-        cmd.raw(),
-        hdr_image.raw(),
-        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        scene_color_image.raw(),
-        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        &[region],
-    );
+    crate::renderer::copy_color_image(&ctx.device, cmd, hdr_image, scene_color_image, extent);
 }

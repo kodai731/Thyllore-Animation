@@ -67,11 +67,10 @@ impl LightningResolveDescriptorSet {
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
-            .image(
+            .sampled_depth(
                 lightning_resolve::SCENE_DEPTH_SAMPLER,
-                scene_depth_view.raw(),
-                self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                scene_depth_view,
+                crate::types::Sampler(self.scene_depth_sampler),
             )?
             .apply(rrdevice);
         Ok(())

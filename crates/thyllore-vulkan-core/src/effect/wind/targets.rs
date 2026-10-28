@@ -80,15 +80,8 @@ pub unsafe fn create_wind_render_targets(
     height: u32,
     hdr_image_view: crate::types::ImageView,
 ) -> Result<WindRenderTargets> {
-    let render_pass = create_color_overlay_render_pass(
-        rrdevice,
-        ColorOverlayPassDesc {
-            format: HDR_FORMAT.raw(),
-            load_op: vk::AttachmentLoadOp::LOAD,
-            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        },
-    )?;
+    let render_pass =
+        create_color_overlay_render_pass(rrdevice, ColorOverlayPassDesc::preserved(HDR_FORMAT))?;
     let framebuffer = create_framebuffer(
         rrdevice,
         render_pass,

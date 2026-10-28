@@ -44,7 +44,7 @@ impl RenderTargetStorage {
         key: RenderTargetKey,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_info: Option<vk::SamplerCreateInfo>,
+        sampler_desc: Option<crate::resource::image::SamplerDesc>,
     ) -> Result<&RenderTargetEntry> {
         if !self.has_valid_extent() {
             return Err(anyhow!(
@@ -64,7 +64,7 @@ impl RenderTargetStorage {
                 destroy_entry(&rrdevice.device(), &outdated);
             }
 
-            let entry = self.create_entry(instance, rrdevice, format, usage, sampler_info)?;
+            let entry = self.create_entry(instance, rrdevice, format, usage, sampler_desc)?;
             self.entries.insert(key, entry);
         }
 
@@ -79,7 +79,7 @@ impl RenderTargetStorage {
         rrdevice: &RRDevice,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_info: Option<vk::SamplerCreateInfo>,
+        sampler_desc: Option<crate::resource::image::SamplerDesc>,
     ) -> Result<RenderTargetEntry> {
         let (image, memory) = create_image(
             instance,
@@ -104,14 +104,14 @@ impl RenderTargetStorage {
             }
         };
 
-        let sampler = match sampler_info {
-            Some(info) => match rrdevice.device().create_sampler(&info, None) {
-                Ok(sampler) => sampler,
+        let sampler = match sampler_desc {
+            Some(desc) => match crate::resource::image::create_sampler(rrdevice, desc) {
+                Ok(sampler) => sampler.raw(),
                 Err(error) => {
                     rrdevice.device().destroy_image_view(view, None);
                     rrdevice.device().destroy_image(image, None);
                     rrdevice.device().free_memory(memory, None);
-                    return Err(error.into());
+                    return Err(error);
                 }
             },
             None => vk::Sampler::null(),

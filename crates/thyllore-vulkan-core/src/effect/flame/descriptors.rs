@@ -73,23 +73,20 @@ impl RRFlameDescriptorSet {
             let previous_history_view = images.history_image_views[1 - history_index];
             self.layout
                 .writer(descriptor_set)
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
-                    previous_history_view.raw(),
-                    images.flame_sampler.raw(),
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    previous_history_view,
+                    images.flame_sampler,
                 )?
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_SDF_SAMPLER,
-                    images.sdf_image_view.raw(),
-                    images.sdf_sampler.raw(),
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    images.sdf_image_view,
+                    images.sdf_sampler,
                 )?
-                .image(
+                .sampled_depth(
                     flame_resolve::SCENE_DEPTH_SAMPLER,
-                    images.scene_depth_view.raw(),
-                    self.scene_depth_sampler,
-                    vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    images.scene_depth_view,
+                    crate::types::Sampler(self.scene_depth_sampler),
                 )?
                 .apply(rrdevice);
         }

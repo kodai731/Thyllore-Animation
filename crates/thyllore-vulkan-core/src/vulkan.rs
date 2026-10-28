@@ -1,13 +1,13 @@
 pub use anyhow::{anyhow, Result};
 pub use core::result::Result::Ok;
 // pub use log::*;  // カスタムlog!マクロと競合するため、標準のlogクレートは使わない
-pub use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-pub use vulkanalia::prelude::v1_2::*;
-pub use vulkanalia::vk::ExtDebugUtilsExtension;
-pub use vulkanalia::vk::KhrSurfaceExtension;
-pub use vulkanalia::vk::KhrSwapchainExtension;
-pub use vulkanalia::window as vk_window;
-pub use vulkanalia::Version;
+pub(crate) use vulkanalia::loader::{LibloadingLoader, LIBRARY};
+pub(crate) use vulkanalia::prelude::v1_2::*;
+pub(crate) use vulkanalia::vk::ExtDebugUtilsExtension;
+pub(crate) use vulkanalia::vk::KhrSurfaceExtension;
+pub(crate) use vulkanalia::vk::KhrSwapchainExtension;
+pub(crate) use vulkanalia::window as vk_window;
+pub(crate) use vulkanalia::Version;
 
 use crate::types::Instance;
 

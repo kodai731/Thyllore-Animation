@@ -10,9 +10,9 @@ use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct OverlayUpsampleDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub reduced_color_sampler: vk::Sampler,
-    pub scene_depth_sampler: vk::Sampler,
+    pub(crate) descriptor_sets: Vec<vk::DescriptorSet>,
+    pub(crate) reduced_color_sampler: vk::Sampler,
+    pub(crate) scene_depth_sampler: vk::Sampler,
 }
 
 impl OverlayUpsampleDescriptorSet {

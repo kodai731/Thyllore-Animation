@@ -74,7 +74,7 @@ pub unsafe fn render_scene_objects(
         );
 
         let object_set_idx = objects.get_set_index(image_index, data.render_info.object_index);
-        let object_set = objects.sets[object_set_idx];
+        let object_set = objects.sets()[object_set_idx];
         bind_graphics_descriptor_set(
             rrdevice,
             command_buffer,

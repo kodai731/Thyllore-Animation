@@ -11,7 +11,7 @@ use thyllore_render_core::FrameUBO;
 #[derive(Clone, Debug, Default)]
 pub struct FrameDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub sets: Vec<vk::DescriptorSet>,
+    pub(crate) sets: Vec<vk::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<FrameUBO>>,
 }
 
@@ -65,6 +65,11 @@ impl FrameDescriptorSet {
         ubo: &FrameUBO,
     ) -> anyhow::Result<()> {
         self.buffers[image_index].write_slot(rrdevice, 0, ubo)
+    }
+
+    #[inline]
+    pub fn sets(&self) -> &[crate::types::DescriptorSet] {
+        &self.sets
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {

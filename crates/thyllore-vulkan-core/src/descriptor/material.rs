@@ -17,10 +17,17 @@ pub type MaterialId = u32;
 pub struct Material {
     pub id: MaterialId,
     pub name: String,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
     pub textures: Vec<RRImage>,
     pub uniform_buffer: UniformBuffer<MaterialUBO>,
     pub properties: MaterialUBO,
+}
+
+impl Material {
+    #[inline]
+    pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
+        self.descriptor_set
+    }
 }
 
 #[derive(Clone, Debug, Default)]

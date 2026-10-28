@@ -13,7 +13,7 @@ pub type ObjectId = u32;
 #[derive(Clone, Debug, Default)]
 pub struct ObjectDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub sets: Vec<vk::DescriptorSet>,
+    pub(crate) sets: Vec<vk::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<ObjectUBO>>,
     pub max_objects: usize,
     next_slot: usize,
@@ -148,5 +148,10 @@ impl ObjectDescriptorSet {
             buffer.destroy(device);
         }
         self.layout.destroy(rrdevice);
+    }
+
+    #[inline]
+    pub fn sets(&self) -> &[crate::types::DescriptorSet] {
+        &self.sets
     }
 }

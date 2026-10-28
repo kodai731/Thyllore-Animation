@@ -193,18 +193,15 @@ impl App {
         if let Some(ref composite_desc) = self.data.raytracing.composite_descriptor {
             composite_desc.update_gbuffer_views(
                 &self.rrdevice,
-                CompositeGBufferViews {
-                    position_image_view: position_view,
-                    position_sampler: gbuffer_sampler,
-                    normal_image_view: normal_view,
-                    normal_sampler: gbuffer_sampler,
-                    shadow_mask_image_view: shadow_mask_view,
-                    shadow_mask_sampler: gbuffer_sampler,
-                    albedo_image_view: albedo_view,
-                    albedo_sampler: gbuffer_sampler,
-                    object_id_image_view: object_id_view,
+                CompositeGBufferViews::new(
+                    position_view,
+                    normal_view,
+                    shadow_mask_view,
+                    albedo_view,
+                    object_id_view,
+                    gbuffer_sampler,
                     object_id_sampler,
-                },
+                ),
             )?;
         }
 
@@ -467,7 +464,7 @@ impl App {
         let extent = offscreen.extent();
         set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
 
-        let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
@@ -539,7 +536,7 @@ impl App {
                 IndexWidth::U32,
             );
 
-            let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+            let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
             bind_graphics_descriptor_set(
                 &self.rrdevice,
                 command_buffer,
@@ -555,7 +552,7 @@ impl App {
                         command_buffer,
                         pipeline.pipeline_layout,
                         1,
-                        material.descriptor_set,
+                        material.descriptor_set(),
                     );
                 }
             }
@@ -565,7 +562,7 @@ impl App {
                 .graphics_resources
                 .objects
                 .get_set_index(image_index, mesh.object_index);
-            let object_set = self.data.graphics_resources.objects.sets[object_set_idx];
+            let object_set = self.data.graphics_resources.objects.sets()[object_set_idx];
             bind_graphics_descriptor_set(
                 &self.rrdevice,
                 command_buffer,
@@ -595,7 +592,7 @@ impl App {
             .swapchain_extent();
         set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
 
-        let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
@@ -670,7 +667,7 @@ impl App {
             IndexWidth::U32,
         );
 
-        let descriptor_set = billboard.render_state.descriptor_set.descriptor_sets[image_index];
+        let descriptor_set = billboard.render_state.descriptor_set.descriptor_sets()[image_index];
         bind_graphics_descriptor_set(
             &self.rrdevice,
             command_buffer,

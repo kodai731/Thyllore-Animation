@@ -36,5 +36,32 @@ pub struct GpuPrimitive<'a> {
     pub base_color: [f32; 4],
     pub params: [f32; 4],
     /// Device address of the effect's own instance block, read by its closest hit shader; 0 when none.
-    pub effect_data_address: vk::DeviceAddress,
+    pub(crate) effect_data_address: vk::DeviceAddress,
+}
+
+impl<'a> GpuPrimitive<'a> {
+    pub fn new(
+        geometry: BlasGeometry<'a>,
+        model: cgmath::Matrix4<f32>,
+        base_color: [f32; 4],
+        params: [f32; 4],
+    ) -> Self {
+        Self {
+            geometry,
+            model,
+            base_color,
+            params,
+            effect_data_address: 0,
+        }
+    }
+
+    #[inline]
+    pub fn effect_data_address(&self) -> crate::types::DeviceAddress {
+        self.effect_data_address
+    }
+
+    #[inline]
+    pub fn set_effect_data_address(&mut self, address: crate::types::DeviceAddress) {
+        self.effect_data_address = address;
+    }
 }

@@ -12,7 +12,7 @@ use crate::vulkan::*;
 pub struct RRBillboardDescriptorSet {
     pub layout: ReflectedSetLayout,
     #[gpu_resource(skip)]
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub(crate) descriptor_sets: Vec<vk::DescriptorSet>,
     pub rrdata: Vec<RRData>,
 }
 
@@ -89,5 +89,10 @@ impl RRBillboardDescriptorSet {
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn descriptor_sets(&self) -> &[crate::types::DescriptorSet] {
+        &self.descriptor_sets
     }
 }

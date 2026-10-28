@@ -53,7 +53,7 @@ fn collect_from<C: Component + GpuPrimitiveSource>(world: &World) -> Vec<GpuPrim
         .enumerate()
         .map(|(ordinal, (_, component))| {
             let mut primitive = component.gpu_primitive();
-            primitive.effect_data_address = C::effect_data_address(world, ordinal);
+            primitive.set_effect_data_address(C::effect_data_address(world, ordinal));
             primitive
         })
         .collect()

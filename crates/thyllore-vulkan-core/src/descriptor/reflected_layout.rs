@@ -62,7 +62,7 @@ pub fn verify_pass_layouts(pass: &PassShaders, layouts: &[ReflectedSetLayout]) -
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DescriptorTypeOverride {
     pub binding: u32,
-    pub descriptor_type: vk::DescriptorType,
+    pub(crate) descriptor_type: vk::DescriptorType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -177,7 +177,7 @@ fn reflected_block_sizes(table: &DescriptorSetTable, set: u32) -> Vec<(u32, u32)
 
 #[derive(Clone, Debug, Default)]
 pub struct ReflectedSetLayout {
-    pub handle: vk::DescriptorSetLayout,
+    pub(crate) handle: vk::DescriptorSetLayout,
     bindings: Vec<vk::DescriptorSetLayoutBinding>,
     block_sizes: Vec<(u32, u32)>,
 }
@@ -500,5 +500,12 @@ impl GpuResource for ReflectedSetLayout {
 
     fn is_destroyed(&self) -> bool {
         self.handle == vk::DescriptorSetLayout::null()
+    }
+}
+
+impl ReflectedSetLayout {
+    #[inline]
+    pub fn handle(&self) -> crate::types::DescriptorSetLayout {
+        self.handle
     }
 }

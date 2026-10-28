@@ -8,7 +8,6 @@ use crate::resource::render_target_transient::TransientDesc;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BloomMipTarget {
-    pub(crate) image: vk::Image,
     pub(crate) view: vk::ImageView,
     pub(crate) framebuffer: vk::Framebuffer,
     pub(crate) extent: vk::Extent2D,
@@ -16,13 +15,11 @@ pub struct BloomMipTarget {
 
 impl BloomMipTarget {
     pub fn new(
-        image: crate::types::Image,
         view: crate::types::ImageView,
         framebuffer: crate::types::Framebuffer,
         extent: crate::types::Extent2D,
     ) -> Self {
         Self {
-            image,
             view,
             framebuffer,
             extent,

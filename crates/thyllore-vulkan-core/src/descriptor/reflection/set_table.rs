@@ -13,7 +13,7 @@ pub struct MergedBinding {
     pub kind: DescriptorKind,
     pub count: DescriptorCount,
     pub block: Option<ReflectedBlock>,
-    pub stages: vk::ShaderStageFlags,
+    pub(crate) stages: vk::ShaderStageFlags,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

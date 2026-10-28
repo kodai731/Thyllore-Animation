@@ -101,7 +101,7 @@ unsafe fn create_water_caustic_pipelines(
     let tlas = raytracing
         .acceleration_structure
         .as_ref()
-        .and_then(|accel| accel.tlas.acceleration_structure);
+        .and_then(|accel| accel.tlas.acceleration_structure());
 
     let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
     descriptor.allocate_and_update(

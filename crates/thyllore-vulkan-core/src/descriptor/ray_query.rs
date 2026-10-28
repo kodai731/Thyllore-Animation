@@ -8,7 +8,7 @@ use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RRRayQueryDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
 }
 
 impl RRRayQueryDescriptorSet {

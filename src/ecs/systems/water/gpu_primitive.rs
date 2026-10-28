@@ -12,16 +12,15 @@ impl GpuPrimitiveSource for WaterTorusEffect {
         let model = thyllore_effect_core::build_water_ubo(self, 0).model;
         let extent = self.major_radius + self.minor_radius;
 
-        GpuPrimitive {
-            geometry: BlasGeometry::procedural_aabb(
+        GpuPrimitive::new(
+            BlasGeometry::procedural_aabb(
                 [-extent, -self.minor_radius, -extent],
                 [extent, self.minor_radius, extent],
             ),
             model,
-            base_color: [1.0, 1.0, 1.0, 1.0],
-            params: [1.0, self.major_radius, self.minor_radius, 0.0],
-            effect_data_address: 0,
-        }
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, self.major_radius, self.minor_radius, 0.0],
+        )
     }
 
     fn effect_data_address(world: &World, ordinal: usize) -> DeviceAddress {

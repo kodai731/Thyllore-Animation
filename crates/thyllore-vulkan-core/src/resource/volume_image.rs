@@ -11,7 +11,6 @@ pub struct VolumeImage {
     pub(crate) memory: vk::DeviceMemory,
     pub(crate) view: vk::ImageView,
     pub(crate) sampler: vk::Sampler,
-    pub(crate) extent: vk::Extent3D,
 }
 
 unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
@@ -51,7 +50,6 @@ impl VolumeImage {
             memory,
             view,
             sampler,
-            extent,
         })
     }
 

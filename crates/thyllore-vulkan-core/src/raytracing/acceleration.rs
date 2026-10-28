@@ -11,28 +11,49 @@ use vulkanalia::vk::KhrAccelerationStructureExtension;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRBLAS {
-    pub acceleration_structure: Option<vk::AccelerationStructureKHR>,
-    pub buffer: Option<vk::Buffer>,
-    pub buffer_memory: Option<vk::DeviceMemory>,
-    pub device_address: vk::DeviceAddress,
+    pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
+    pub(crate) buffer: Option<vk::Buffer>,
+    pub(crate) buffer_memory: Option<vk::DeviceMemory>,
+    pub(crate) device_address: vk::DeviceAddress,
     pub update_scratch: Option<DeviceBuffer>,
-    pub transform: vk::TransformMatrixKHR,
+    pub(crate) transform: vk::TransformMatrixKHR,
 }
 
 impl RRBLAS {
     pub fn set_transform_rows(&mut self, rows: [[f32; 4]; 3]) {
         self.transform = vk::TransformMatrixKHR { matrix: rows };
     }
+
+    #[inline]
+    pub fn transform(&self) -> crate::types::TransformMatrix {
+        self.transform
+    }
+
+    #[inline]
+    pub fn device_address(&self) -> crate::types::DeviceAddress {
+        self.device_address
+    }
+
+    #[inline]
+    pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
+        self.acceleration_structure
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRTLAS {
-    pub acceleration_structure: Option<vk::AccelerationStructureKHR>,
-    pub buffer: Option<vk::Buffer>,
-    pub buffer_memory: Option<vk::DeviceMemory>,
-    pub device_address: vk::DeviceAddress,
+    pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
+    pub(crate) buffer: Option<vk::Buffer>,
+    pub(crate) buffer_memory: Option<vk::DeviceMemory>,
     pub update_scratch: Option<DeviceBuffer>,
     pub instances_buf: Option<DeviceBuffer>,
+}
+
+impl RRTLAS {
+    #[inline]
+    pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
+        self.acceleration_structure
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -577,7 +598,7 @@ impl RRAccelerationStructure {
         destroy_device_buffer(device, &scratch);
         destroy_device_buffer(device, &instances_buf);
 
-        let device_address = device.get_acceleration_structure_device_address_khr(
+        let _device_address = device.get_acceleration_structure_device_address_khr(
             &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
                 .acceleration_structure(acceleration_structure),
         );
@@ -586,7 +607,6 @@ impl RRAccelerationStructure {
             acceleration_structure: Some(acceleration_structure),
             buffer: Some(as_buffer),
             buffer_memory: Some(as_buffer_memory),
-            device_address,
             instances_buf: None,
             update_scratch: None,
         })

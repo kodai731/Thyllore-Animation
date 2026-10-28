@@ -132,7 +132,7 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
     let tlas = raytracing
         .acceleration_structure
         .as_ref()
-        .and_then(|accel| accel.tlas.acceleration_structure);
+        .and_then(|accel| accel.tlas.acceleration_structure());
     let (Some(position_image_view), Some(scene_buffer), Some(water_ubo)) = (
         raytracing
             .gbuffer

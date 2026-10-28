@@ -206,7 +206,7 @@ unsafe fn record_lightning_passes(
         pipeline,
         Some(push_constants.as_bytes()),
         &[
-            render.graphics.frame_set.sets[image_index],
+            render.graphics.frame_set.sets()[image_index],
             descriptor.descriptor_set,
         ],
         &draws,

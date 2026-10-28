@@ -128,12 +128,7 @@ pub unsafe fn prepare_bloom_targets(ctx: &mut PassContext, frame_slot: usize) ->
             extent.width,
             extent.height,
         )?;
-        mips.push(BloomMipTarget::new(
-            image.image(),
-            image.view(),
-            framebuffer,
-            extent,
-        ));
+        mips.push(BloomMipTarget::new(image.view(), framebuffer, extent));
         generations.push(image.generation);
     }
     let views: Vec<ImageView> = mips.iter().map(|mip| mip.view()).collect();

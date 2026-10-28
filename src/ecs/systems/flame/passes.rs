@@ -295,7 +295,7 @@ unsafe fn record_flame_passes(
         shading_pipeline,
         Some(push_constants.as_bytes()),
         &[
-            render.graphics.frame_set.sets[image_index],
+            render.graphics.frame_set.sets()[image_index],
             descriptor.descriptor_sets[frame.history_index],
         ],
         &draws,

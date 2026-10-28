@@ -284,7 +284,7 @@ impl<'a> OverlayRenderer<'a> {
         let descriptor_set = billboard
             .render_state
             .descriptor_set
-            .descriptor_sets
+            .descriptor_sets()
             .get(ctx.image_index)
             .copied();
         let Some(descriptor_set) = descriptor_set else {

@@ -30,22 +30,47 @@ impl Default for SelectionUBO {
 
 #[derive(Clone, Copy, Debug)]
 pub struct CompositeGBufferViews {
-    pub position_image_view: vk::ImageView,
-    pub position_sampler: vk::Sampler,
-    pub normal_image_view: vk::ImageView,
-    pub normal_sampler: vk::Sampler,
-    pub shadow_mask_image_view: vk::ImageView,
-    pub shadow_mask_sampler: vk::Sampler,
-    pub albedo_image_view: vk::ImageView,
-    pub albedo_sampler: vk::Sampler,
-    pub object_id_image_view: vk::ImageView,
-    pub object_id_sampler: vk::Sampler,
+    pub(crate) position_image_view: vk::ImageView,
+    pub(crate) position_sampler: vk::Sampler,
+    pub(crate) normal_image_view: vk::ImageView,
+    pub(crate) normal_sampler: vk::Sampler,
+    pub(crate) shadow_mask_image_view: vk::ImageView,
+    pub(crate) shadow_mask_sampler: vk::Sampler,
+    pub(crate) albedo_image_view: vk::ImageView,
+    pub(crate) albedo_sampler: vk::Sampler,
+    pub(crate) object_id_image_view: vk::ImageView,
+    pub(crate) object_id_sampler: vk::Sampler,
+}
+
+impl CompositeGBufferViews {
+    pub fn new(
+        position_image_view: crate::types::ImageView,
+        normal_image_view: crate::types::ImageView,
+        shadow_mask_image_view: crate::types::ImageView,
+        albedo_image_view: crate::types::ImageView,
+        object_id_image_view: crate::types::ImageView,
+        gbuffer_sampler: crate::types::Sampler,
+        object_id_sampler: crate::types::Sampler,
+    ) -> Self {
+        Self {
+            position_image_view,
+            position_sampler: gbuffer_sampler,
+            normal_image_view,
+            normal_sampler: gbuffer_sampler,
+            shadow_mask_image_view,
+            shadow_mask_sampler: gbuffer_sampler,
+            albedo_image_view,
+            albedo_sampler: gbuffer_sampler,
+            object_id_image_view,
+            object_id_sampler,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRCompositeDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
     pub selection: UniformBuffer<SelectionUBO>,
 }
 

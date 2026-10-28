@@ -93,7 +93,7 @@ impl RRAutoExposureHistogramDescriptorSet {
 #[derive(Clone, Debug, Default)]
 pub struct RRAutoExposureAverageDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
 }
 
 impl RRAutoExposureAverageDescriptorSet {

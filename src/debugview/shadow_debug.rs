@@ -56,13 +56,13 @@ pub fn log_shadow_debug_info(
             log!(
                 "    BLAS[{}]: AS={:?}, device_addr={:#x}",
                 i,
-                blas.acceleration_structure.is_some(),
-                blas.device_address
+                blas.acceleration_structure().is_some(),
+                blas.device_address()
             );
         }
         log!(
             "  TLAS: AS={:?}",
-            accel_struct.tlas.acceleration_structure.is_some()
+            accel_struct.tlas.acceleration_structure().is_some()
         );
     } else {
         log_warn!("No acceleration structure!");

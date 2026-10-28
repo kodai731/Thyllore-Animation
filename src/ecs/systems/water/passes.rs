@@ -130,7 +130,7 @@ fn water_scene_bindings(ctx: &PassContext) -> Option<(AccelerationStructure, Buf
         return None;
     }
     let accel = ctx.raytracing.acceleration_structure.as_ref()?;
-    let tlas = accel.tlas.acceleration_structure?;
+    let tlas = accel.tlas.acceleration_structure()?;
     let hit_table = accel.hit_shading_table.as_ref()?.buffer();
     Some((tlas, hit_table))
 }
@@ -797,7 +797,7 @@ impl RenderPassNode for WaterShadingNode {
             .history
             .overlay_pass(frame.history_index, OverlayAttachmentLoad::Keep);
         let descriptor_sets = [
-            render.graphics.frame_set.sets[image_index],
+            render.graphics.frame_set.sets()[image_index],
             descriptor.descriptor_set(frame_slot, frame.history_index)?,
         ];
         let push_constants = super::WaterPushConstants::new(

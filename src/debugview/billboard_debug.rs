@@ -140,7 +140,7 @@ fn log_basic_info(
     log!("  rrdata count: {}", billboard_descriptor_set.rrdata.len());
     log!(
         "  descriptor_sets count: {}",
-        billboard_descriptor_set.descriptor_sets.len()
+        billboard_descriptor_set.descriptor_sets().len()
     );
 }
 

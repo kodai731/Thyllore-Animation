@@ -1,13 +1,13 @@
 use anyhow::Result;
 
 use crate::ecs::resource::LightningGpuState;
+use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
+use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::LIGHTNING_RESOLVE;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::LIGHTNING_MAX_INSTANCES;
-use thyllore_vulkan_core::effect::lightning::descriptors::LightningResolveDescriptorSet;
-use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };

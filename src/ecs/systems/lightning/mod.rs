@@ -1,5 +1,7 @@
 mod cli;
 mod debug_dump;
+pub(crate) mod descriptors;
+pub(crate) mod gpu_targets;
 mod object_pick;
 mod passes;
 mod path;
@@ -25,6 +27,5 @@ pub use preset::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use target::*;
-pub use thyllore_vulkan_core::effect::lightning::descriptors::*;
 pub use time::*;
 pub use ui_command::*;

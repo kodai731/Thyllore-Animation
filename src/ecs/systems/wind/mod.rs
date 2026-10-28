@@ -1,12 +1,12 @@
 mod cli;
 mod debug_dump;
-pub mod descriptors;
-pub mod gpu_targets;
+pub(crate) mod descriptors;
+pub(crate) mod gpu_targets;
 mod object_pick;
 pub mod passes;
 mod pipeline;
 mod preset;
-pub mod record;
+pub(crate) mod record;
 mod render_targets;
 mod spawn;
 #[cfg(test)]

@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{LightningGpuState, LightningRenderSettings, ProjectionData};
+use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -13,7 +14,6 @@ use thyllore_effect_core::{
     build_lightning_ubo, compute_lightning_segment_aabb, inverse_view_proj_f64, LightningDebugView,
     LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_INSTANCES,
 };
-use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 

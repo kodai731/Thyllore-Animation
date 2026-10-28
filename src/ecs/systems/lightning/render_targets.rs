@@ -1,14 +1,13 @@
 use anyhow::Result;
 
 use crate::ecs::resource::LightningGpuState;
+use crate::ecs::systems::lightning::gpu_targets::{
+    create_lightning_render_targets, recreate_lightning_render_targets, LightningRenderTargets,
+};
 use crate::ecs::EffectContext;
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
-use thyllore_vulkan_core::effect::lightning::targets::LightningRenderTargets;
-use thyllore_vulkan_core::effect::lightning::targets::{
-    create_lightning_render_targets, recreate_lightning_render_targets,
-};
 
 pub const LIGHTNING_EFFECT_HOOK: EffectHook = EffectHook {
     name: "lightning",

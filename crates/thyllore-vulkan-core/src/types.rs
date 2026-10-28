@@ -1,7 +1,22 @@
 use crate::vulkan::vk;
 
-pub type Entry = vulkanalia::Entry;
-pub type Instance = vulkanalia::Instance;
+#[derive(Clone)]
+pub struct Entry(pub(crate) vulkanalia::Entry);
+impl Entry {
+    #[inline]
+    pub(crate) fn raw(&self) -> &vulkanalia::Entry {
+        &self.0
+    }
+}
+
+#[derive(Clone)]
+pub struct Instance(pub(crate) vulkanalia::Instance);
+impl Instance {
+    #[inline]
+    pub(crate) fn raw(&self) -> &vulkanalia::Instance {
+        &self.0
+    }
+}
 
 pub type CommandBuffer = vk::CommandBuffer;
 pub type CommandPool = vk::CommandPool;

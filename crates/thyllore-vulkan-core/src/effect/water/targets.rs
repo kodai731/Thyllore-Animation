@@ -5,6 +5,7 @@ use crate::core::RRDevice;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::resource::{AccumulationTarget, GpuResource, HistoryTargets, HistoryTargetsDesc};
+use crate::types::Instance;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct WaterBindingKey {

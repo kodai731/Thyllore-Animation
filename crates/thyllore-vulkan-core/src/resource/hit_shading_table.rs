@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_math_core::GpuMat4;
 

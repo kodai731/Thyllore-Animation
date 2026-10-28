@@ -5,6 +5,7 @@ use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::types::Instance;
 
 /// A storage image from `RenderTargetStorage` that compute passes accumulate into, kept in
 /// GENERAL layout for its whole life. The storage owns the image; this only holds handles.

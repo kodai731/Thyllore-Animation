@@ -5,6 +5,7 @@ use crate::core::RRDevice;
 use crate::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::{GpuResource, VolumeImage};
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,

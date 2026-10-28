@@ -26,6 +26,7 @@ use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
+use crate::types::Instance;
 
 #[must_use]
 #[derive(Clone, Debug, Default, GpuResource)]

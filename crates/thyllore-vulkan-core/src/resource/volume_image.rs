@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::image::{create_image_3d, create_image_view_3d};
+use crate::types::Instance;
 
 /// A 3D image with its view and a linear clamp-to-edge sampler.
 #[derive(Clone, Debug, Default)]

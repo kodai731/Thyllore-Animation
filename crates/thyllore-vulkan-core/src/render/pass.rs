@@ -4,6 +4,7 @@ use crate::core::swapchain::*;
 use crate::render::framebuffer::{create_color_objects, create_framebuffers};
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::*;
+use crate::types::Instance;
 use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RRRender {
@@ -298,8 +299,9 @@ unsafe fn get_suppoted_format(
         .iter()
         .cloned()
         .find(|f| {
-            let properties =
-                instance.get_physical_device_format_properties(rrdevice.physical_device, *f);
+            let properties = instance
+                .raw()
+                .get_physical_device_format_properties(rrdevice.physical_device, *f);
             match tiling {
                 vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
                 vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),

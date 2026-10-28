@@ -17,7 +17,7 @@ use crate::resource::graphics_resource::GraphicsResources;
 use crate::resource::image::RRImage;
 use crate::resource::raytracing_data::RayTracingData;
 use crate::resource::{BillboardRenderState, GpuBufferRegistry};
-use crate::vulkan::Instance;
+use crate::types::Instance;
 
 pub struct VulkanBackend<'a> {
     pub instance: &'a Instance,

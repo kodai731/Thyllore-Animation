@@ -4,6 +4,7 @@ use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayou
 use crate::descriptor::shader_bindings::composite;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_spirv_reflect::declare_gpu_block;
 

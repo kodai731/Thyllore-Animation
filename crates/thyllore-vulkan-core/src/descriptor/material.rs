@@ -8,7 +8,7 @@ use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayou
 use crate::descriptor::shader_bindings::model;
 use crate::resource::image::RRImage;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_render_core::MaterialUBO;
 
 pub type MaterialId = u32;

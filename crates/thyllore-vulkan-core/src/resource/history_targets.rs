@@ -7,6 +7,7 @@ use crate::renderer::{OverlayAttachmentLoad, OverlayPass};
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::types::Instance;
 
 const COLOR_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
     aspect_mask: vk::ImageAspectFlags::COLOR,

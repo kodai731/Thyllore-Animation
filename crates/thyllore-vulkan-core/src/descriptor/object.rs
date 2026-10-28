@@ -5,7 +5,7 @@ use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_render_core::ObjectUBO;
 
 pub type ObjectId = u32;

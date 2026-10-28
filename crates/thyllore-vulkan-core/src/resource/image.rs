@@ -2,6 +2,7 @@ use crate::command::*;
 use crate::core::device::*;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -615,6 +616,7 @@ unsafe fn generate_mipmaps(
     mip_levels: u32,
 ) -> Result<()> {
     if !instance
+        .raw()
         .get_physical_device_format_properties(rrdevice.physical_device, format)
         .optimal_tiling_features
         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)

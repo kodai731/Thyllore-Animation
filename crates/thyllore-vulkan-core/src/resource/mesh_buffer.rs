@@ -10,7 +10,7 @@ use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::resource::image::Rgba8Texture;
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
 #[derive(Clone, Debug)]

@@ -7,7 +7,7 @@ use vulkanalia::vk::DeviceV1_2;
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_spirv_reflect::GpuBlock;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

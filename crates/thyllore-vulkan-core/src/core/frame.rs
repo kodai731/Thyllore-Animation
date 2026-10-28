@@ -4,7 +4,7 @@ use crate::command::{RRCommandBuffer, RRCommandPool};
 use crate::core::device::RRDevice;
 use crate::core::swapchain::RRSwapchain;
 use crate::resource::GpuResource;
-use crate::types::{CommandPool, Fence, Semaphore};
+use crate::types::{CommandPool, Fence, Instance, Semaphore};
 use crate::vulkan::*;
 
 #[derive(Debug)]
@@ -212,10 +212,14 @@ pub unsafe fn destroy_surface_and_instance(
     surface_state: Option<SurfaceState>,
 ) {
     if let Some(surface_state) = surface_state {
-        instance.destroy_surface_khr(surface_state.surface, None);
+        instance
+            .raw()
+            .destroy_surface_khr(surface_state.surface, None);
         if surface_state.messenger != vk::DebugUtilsMessengerEXT::null() {
-            instance.destroy_debug_utils_messenger_ext(surface_state.messenger, None);
+            instance
+                .raw()
+                .destroy_debug_utils_messenger_ext(surface_state.messenger, None);
         }
     }
-    instance.destroy_instance(None);
+    instance.raw().destroy_instance(None);
 }

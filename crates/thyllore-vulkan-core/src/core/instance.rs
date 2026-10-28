@@ -1,7 +1,7 @@
 use crate::core::device::{
     create_headless_instance, destroy_headless_instance, RRDevice, VALIDATION_LAYER,
 };
-use crate::types::{Fence, Semaphore};
+use crate::types::{Entry, Fence, Instance, Semaphore};
 use crate::vulkan::*;
 use std::ffi::CStr;
 use std::os::raw::c_void;
@@ -107,7 +107,8 @@ pub unsafe fn create_instance_with_messenger(
         extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
     }
 
-    let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
+    let flags = if cfg!(target_os = "macos") && entry.raw().version()? >= PORTABILITY_MACOS_VERSION
+    {
         log!("Enabling extensions for macOS portability.");
         extensions.push(
             vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
@@ -121,6 +122,7 @@ pub unsafe fn create_instance_with_messenger(
     };
 
     let available_layers = entry
+        .raw()
         .enumerate_instance_layer_properties()?
         .iter()
         .map(|l| l.layer_name)
@@ -151,7 +153,7 @@ pub unsafe fn create_instance_with_messenger(
         info = info.push_next(&mut debug_info);
     }
 
-    let instance = entry.create_instance(&info, None)?;
+    let instance = entry.raw().create_instance(&info, None)?;
 
     let messenger = if VALIDATION_ENABLED {
         instance.create_debug_utils_messenger_ext(&debug_info, None)?
@@ -159,7 +161,7 @@ pub unsafe fn create_instance_with_messenger(
         vk::DebugUtilsMessengerEXT::null()
     };
 
-    Ok((instance, messenger))
+    Ok((Instance(instance), messenger))
 }
 
 pub unsafe fn create_sync_objects(
@@ -184,7 +186,8 @@ pub unsafe fn create_sync_objects(
 
 pub unsafe fn load_entry() -> Result<Entry> {
     let loader = LibloadingLoader::new(LIBRARY)?;
-    Entry::new(loader).map_err(|b| anyhow!("{}", b))
+    let entry = vulkanalia::Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
+    Ok(Entry(entry))
 }
 
 pub struct HeadlessContext {
@@ -219,7 +222,7 @@ pub unsafe fn create_headless_context() -> Result<HeadlessContext> {
 pub unsafe fn create_vulkan_context(window: &Window) -> Result<VulkanContext> {
     let entry = load_entry()?;
     let (instance, messenger) = create_instance_with_messenger(window, &entry)?;
-    let surface = vk_window::create_surface(&instance, &window, &window)?;
+    let surface = vk_window::create_surface(instance.raw(), &window, &window)?;
     let rrdevice = RRDevice::new(
         &entry,
         &instance,

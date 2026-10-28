@@ -1,5 +1,6 @@
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::types::Instance;
 use crate::vulkan::*;
 
 #[derive(Debug, Clone, Copy)]

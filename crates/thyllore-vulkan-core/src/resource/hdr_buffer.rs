@@ -4,6 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 
 pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 

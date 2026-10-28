@@ -8,6 +8,7 @@ use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::resource::buffer::{copy_buffer, create_buffer};
 use crate::resource::GpuResource;
+use crate::types::Instance;
 use thyllore_model_core::mesh::{compute_vertex_layout, create_interleaved_buffer, MeshData};
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 

@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::{PassShaders, ShaderStage};
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
@@ -270,7 +271,9 @@ unsafe fn ray_tracing_properties(
 ) -> vk::PhysicalDeviceRayTracingPipelinePropertiesKHR {
     let mut rt_props = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
     let mut props2 = vk::PhysicalDeviceProperties2::builder().push_next(&mut rt_props);
-    instance.get_physical_device_properties2(rrdevice.physical_device, &mut props2);
+    instance
+        .raw()
+        .get_physical_device_properties2(rrdevice.physical_device, &mut props2);
     rt_props
 }
 

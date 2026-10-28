@@ -5,6 +5,7 @@ use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::types::Instance;
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from
 /// the same pixel so a click can compare what an effect covers against what the surface covers.

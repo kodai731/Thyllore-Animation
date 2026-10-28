@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::command::*;
 use crate::core::device::*;
 use crate::resource::buffer::create_buffer;
+use crate::types::Instance;
 use crate::vulkan::*;
 
 #[derive(Clone, Copy, Debug)]

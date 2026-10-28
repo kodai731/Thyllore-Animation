@@ -77,12 +77,9 @@ impl<'a> OverlayRenderer<'a> {
             grid.xz_only_index_count
         };
 
-        let options = LineMeshDrawOptions {
-            index_count_override: Some(index_count),
-            bind_object_set: true,
-            frame_set_override: None,
-            pipeline_override,
-        };
+        let mut options = LineMeshDrawOptions::default();
+        options.index_count_override = Some(index_count);
+        options.pipeline_override = pipeline_override;
         record_line_mesh_draw(ctx, &grid.mesh, &grid.render_info, &options, command_buffer)?;
 
         Ok(())
@@ -291,12 +288,9 @@ impl<'a> OverlayRenderer<'a> {
             return Ok(());
         };
 
-        let options = LineMeshDrawOptions {
-            index_count_override: None,
-            bind_object_set: false,
-            frame_set_override: Some(descriptor_set),
-            pipeline_override: None,
-        };
+        let mut options = LineMeshDrawOptions::default();
+        options.bind_object_set = false;
+        options.set_frame_set_override(descriptor_set);
         record_line_mesh_draw(
             ctx,
             &billboard.mesh,

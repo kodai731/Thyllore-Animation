@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::render::pass::RRRender;
 use crate::resource::image::*;
+use crate::types::Instance;
 use crate::vulkan::*;
 use anyhow::Result;
 

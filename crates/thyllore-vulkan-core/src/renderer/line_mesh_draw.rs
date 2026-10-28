@@ -9,8 +9,14 @@ use thyllore_render_core::{MeshBuffers, RenderInfo};
 pub struct LineMeshDrawOptions {
     pub index_count_override: Option<u32>,
     pub bind_object_set: bool,
-    pub frame_set_override: Option<vk::DescriptorSet>,
+    pub(crate) frame_set_override: Option<vk::DescriptorSet>,
     pub pipeline_override: Option<usize>,
+}
+
+impl LineMeshDrawOptions {
+    pub fn set_frame_set_override(&mut self, descriptor_set: crate::types::DescriptorSet) {
+        self.frame_set_override = Some(descriptor_set);
+    }
 }
 
 impl Default for LineMeshDrawOptions {

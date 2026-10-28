@@ -9,6 +9,7 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 use thyllore_spirv_reflect::ShaderBinding;
 
 pub const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;

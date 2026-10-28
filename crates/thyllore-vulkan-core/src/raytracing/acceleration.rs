@@ -3,6 +3,7 @@ use crate::core::device::*;
 use crate::raytracing::GpuPrimitive;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
+use crate::types::Instance;
 use crate::vulkan::*;
 use anyhow::Result;
 use cgmath::Matrix4;

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::core::device::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 use crate::vulkan::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

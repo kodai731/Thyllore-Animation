@@ -1,6 +1,7 @@
 use super::device::*;
 use super::vulkan::*;
 use crate::render::pass::RRRender;
+use crate::types::Instance;
 use std::rc::Rc;
 
 pub unsafe fn begin_single_time_commands(

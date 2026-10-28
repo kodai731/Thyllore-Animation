@@ -1,5 +1,6 @@
 use super::descriptor_allocator::{DescriptorAllocator, PoolSignature};
 use super::swapchain::*;
+use crate::types::{Entry, Instance};
 use crate::vulkan::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -140,7 +141,9 @@ impl RRDevice {
             &physical_device,
         )?;
 
-        let properties = instance.get_physical_device_properties(physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
         let wide_lines = supports_wide_lines(instance, physical_device);
@@ -184,7 +187,9 @@ impl RRDevice {
             &physical_device,
         )?;
 
-        let properties = instance.get_physical_device_properties(physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
         let wide_lines = supports_wide_lines(instance, physical_device);
@@ -220,7 +225,9 @@ pub struct GraphicsQueueIndex(pub u32);
 
 impl GraphicsQueueIndex {
     pub unsafe fn find(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<Self> {
-        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_queue_family_properties(*physical_device);
         let index = properties
             .iter()
             .position(|p| p.queue_flags.contains(vk::QueueFlags::GRAPHICS))
@@ -239,9 +246,11 @@ impl PresentQueueIndex {
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
     ) -> Result<Self> {
-        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_queue_family_properties(*physical_device);
         for (index, _) in properties.iter().enumerate() {
-            if instance.get_physical_device_surface_support_khr(
+            if instance.raw().get_physical_device_surface_support_khr(
                 *physical_device,
                 index as u32,
                 *surface,
@@ -305,7 +314,7 @@ unsafe fn create_device_common(
     };
 
     let mut extensions: Vec<*const i8> = device_extensions.iter().map(|n| n.as_ptr()).collect();
-    if cfg!(target_os = "macos") && entry.version()? >= portability_macro_version {
+    if cfg!(target_os = "macos") && entry.raw().version()? >= portability_macro_version {
         extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
     }
 
@@ -339,7 +348,9 @@ unsafe fn create_device_common(
         .push_next(&mut ray_query_features)
         .push_next(&mut ray_tracing_pipeline_features);
 
-    let vulkan_device = instance.create_device(*physical_device, &info, None)?;
+    let vulkan_device = instance
+        .raw()
+        .create_device(*physical_device, &info, None)?;
     Ok(Device::new(vulkan_device))
 }
 
@@ -406,7 +417,9 @@ unsafe fn device_local_memory_bytes(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
 ) -> u64 {
-    let memory = instance.get_physical_device_memory_properties(physical_device);
+    let memory = instance
+        .raw()
+        .get_physical_device_memory_properties(physical_device);
     (0..memory.memory_heap_count as usize)
         .filter(|&i| {
             memory.memory_heaps[i]
@@ -439,8 +452,10 @@ unsafe fn pick_ranked_physical_device(
 ) -> Result<(vk::PhysicalDevice, vk::SampleCountFlags)> {
     let preferred_name = preferred_gpu_name_lowercase();
     let mut best: Option<(vk::PhysicalDevice, (bool, u64, bool))> = None;
-    for physical_device in instance.enumerate_physical_devices()? {
-        let properties = instance.get_physical_device_properties(physical_device);
+    for physical_device in instance.raw().enumerate_physical_devices()? {
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
 
         if let Err(error) =
             check_physical_device_capabilities(instance, &physical_device, device_extensions)
@@ -497,7 +512,9 @@ unsafe fn pick_ranked_physical_device(
             "Failed to find suitable physical device (headless)"
         })
     })?;
-    let properties = instance.get_physical_device_properties(physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(physical_device);
     log!("Selected Physical Device (`{}`).", properties.device_name);
     let sample_count = get_max_msaa_samples(instance, physical_device);
     Ok((physical_device, sample_count))
@@ -523,7 +540,9 @@ unsafe fn check_physical_device_capabilities(
     physical_device: &vk::PhysicalDevice,
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
-    let properties = instance.get_physical_device_properties(*physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(*physical_device);
     log!("Checking device: {}", properties.device_name);
     log!("Device type: {:?}", properties.device_type);
 
@@ -535,7 +554,9 @@ unsafe fn check_physical_device_capabilities(
     }
     log!("Device type check passed");
 
-    let features = instance.get_physical_device_features(*physical_device);
+    let features = instance
+        .raw()
+        .get_physical_device_features(*physical_device);
     if features.sampler_anisotropy != vk::TRUE {
         log!("Device rejected: No sampler anisotropy");
         return Err(anyhow!(SuitabilityError("No sampler anisotropy")));
@@ -594,6 +615,7 @@ unsafe fn check_physical_device_extensions(
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
     let extensions = instance
+        .raw()
         .enumerate_device_extension_properties(*physical_device, None)?
         .iter()
         .map(|e| e.extension_name)
@@ -633,7 +655,9 @@ unsafe fn get_max_msaa_samples(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
 ) -> vk::SampleCountFlags {
-    let properties = instance.get_physical_device_properties(physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(physical_device);
     let counts = properties.limits.framebuffer_color_sample_counts
         & properties.limits.framebuffer_depth_sample_counts;
     [
@@ -666,6 +690,7 @@ pub unsafe fn create_headless_instance(entry: &Entry) -> Result<Instance> {
     }
 
     let available_layers = entry
+        .raw()
         .enumerate_instance_layer_properties()?
         .iter()
         .map(|l| l.layer_name)
@@ -682,12 +707,12 @@ pub unsafe fn create_headless_instance(entry: &Entry) -> Result<Instance> {
         .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions);
 
-    let instance = entry.create_instance(&info, None)?;
-    Ok(instance)
+    let instance = entry.raw().create_instance(&info, None)?;
+    Ok(Instance(instance))
 }
 
 pub unsafe fn destroy_headless_instance(instance: &Instance) {
-    instance.destroy_instance(None);
+    instance.raw().destroy_instance(None);
 }
 
 pub unsafe fn destroy_headless_device(device: &RRDevice, instance: &Instance) {
@@ -774,12 +799,16 @@ impl RRDevice {
     }
 
     pub unsafe fn query_physical_device_api_version(&self, instance: &Instance) -> u32 {
-        let properties = instance.get_physical_device_properties(self.physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(self.physical_device);
         properties.api_version
     }
 
     pub unsafe fn gpu_identity(&self, instance: &Instance) -> GpuIdentity {
-        let properties = instance.get_physical_device_properties(self.physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(self.physical_device);
         let name = std::ffi::CStr::from_ptr(properties.device_name.as_ptr())
             .to_string_lossy()
             .to_string();
@@ -811,6 +840,7 @@ fn format_vulkan_version(version: u32) -> String {
 
 unsafe fn supports_wide_lines(instance: &Instance, physical_device: vk::PhysicalDevice) -> bool {
     instance
+        .raw()
         .get_physical_device_features(physical_device)
         .wide_lines
         == vk::TRUE

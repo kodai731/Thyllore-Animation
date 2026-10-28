@@ -4,6 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 
 const HISTOGRAM_BIN_COUNT: u32 = 256;

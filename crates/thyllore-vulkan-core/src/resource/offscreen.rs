@@ -5,6 +5,7 @@ use crate::core::RRDevice;
 use crate::render::pass::get_depth_format;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::types::Instance;
 
 #[derive(Clone, Debug, Default)]
 pub struct OffscreenFramebuffer {

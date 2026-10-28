@@ -8,6 +8,7 @@ use crate::render::pass::{get_depth_format, RRRender};
 use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::graphics_resource::MeshBuffer;
 use crate::resource::{create_image, create_image_view, RRGBuffer};
+use crate::types::Instance;
 
 pub unsafe fn record_gbuffer_pass(
     ctx: &FrameRenderContext,

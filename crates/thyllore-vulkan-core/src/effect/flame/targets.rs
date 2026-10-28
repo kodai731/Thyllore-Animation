@@ -4,6 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::resource::{HistoryTargets, HistoryTargetsDesc};
+use crate::types::Instance;
 
 const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(0),

@@ -11,6 +11,7 @@ use crate::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
 use crate::resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};

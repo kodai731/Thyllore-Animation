@@ -1,6 +1,7 @@
 use super::device::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::*;
+use crate::types::Instance;
 use crate::vulkan::*;
 use winit::window::Window;
 
@@ -84,10 +85,13 @@ impl SwapchainSupport {
     ) -> Result<Self> {
         Ok(Self {
             capabilities: instance
+                .raw()
                 .get_physical_device_surface_capabilities_khr(*physical_device, *surface)?,
             formats: instance
+                .raw()
                 .get_physical_device_surface_formats_khr(*physical_device, *surface)?,
             present_modes: instance
+                .raw()
                 .get_physical_device_surface_present_modes_khr(*physical_device, *surface)?,
         })
     }

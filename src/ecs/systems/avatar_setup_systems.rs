@@ -38,6 +38,7 @@ use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
     AvatarSetupState, ExpressionLibraryState, MaterialTextureState, ModelState, NodeAssets,
 };
+use crate::ecs::systems::avatar_hidden_mask_systems::restore_hidden_triangles;
 use crate::ecs::systems::avatar_submesh_role_systems::{refresh_submesh_roles, skin_role_skins};
 use crate::ecs::systems::spring_bone_edit_systems::{
     handle_spring_chain_add, reset_spring_bone_state,
@@ -212,11 +213,17 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     drop(state);
     drop(node_assets);
 
-    apply_avatar_sidecar(world, skeleton, Path::new(&model_path));
+    apply_avatar_sidecar(world, assets, graphics, Path::new(&model_path));
 }
 
-/// Restore the setup an earlier export wrote beside the model: submesh roles and spring bones.
-fn apply_avatar_sidecar(world: &mut World, skeleton: &Skeleton, model_path: &Path) {
+/// Restore the setup an earlier export wrote beside the model: submesh roles, the hidden skin
+/// triangles and spring bones.
+fn apply_avatar_sidecar(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    model_path: &Path,
+) {
     let path = sidecar_path(model_path);
     if !path.exists() {
         return;
@@ -241,7 +248,11 @@ fn apply_avatar_sidecar(world: &mut World, skeleton: &Skeleton, model_path: &Pat
             }
         }
     }
+    restore_hidden_triangles(world, assets, graphics, &sidecar.hidden_triangles);
 
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        return;
+    };
     let bones = world.resource::<AvatarSetupState>().bones.clone();
     let frames = match current_rest_frames(world, skeleton, &bones) {
         Ok(frames) => frames,

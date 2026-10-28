@@ -5,6 +5,7 @@ import numpy as np
 
 from blender_addon.common.skin_weight_transfer import (
     barycentric_coordinates,
+    connected_component_labels,
     cotangent_laplacian,
     find_matched_vertices,
     inpaint_weights,
@@ -129,3 +130,34 @@ def test_barycentric_coordinates_two_triangles():
     result = barycentric_coordinates(points, a, b, c)
     np.testing.assert_allclose(result[0], [0.5, 0.5, 0.0], atol=1e-6)
     np.testing.assert_allclose(result[1], [0.5, 0.0, 0.5], atol=1e-6)
+
+
+def test_connected_component_labels_split_separate_triangles():
+    triangles = np.array([[0, 1, 2], [3, 4, 5], [5, 6, 3]], dtype=np.int64)
+
+    labels = connected_component_labels(8, triangles)
+
+    np.testing.assert_array_equal(labels, [0, 0, 0, 3, 3, 3, 3, 7])
+
+
+def test_inpaint_weights_keeps_interpolated_weights_on_a_component_without_match():
+    """Two separate triangles; only the first has a matched vertex. The second keeps its weights."""
+    vertices = np.array([[0.0, 0.0, 0.0],
+                         [1.0, 0.0, 0.0],
+                         [0.0, 1.0, 0.0],
+                         [5.0, 0.0, 0.0],
+                         [6.0, 0.0, 0.0],
+                         [5.0, 1.0, 0.0]], dtype=np.float64)
+    triangles = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
+    weights = np.array([[1.0, 0.0],
+                        [0.5, 0.5],
+                        [0.5, 0.5],
+                        [0.0, 1.0],
+                        [0.2, 0.8],
+                        [0.4, 0.6]], dtype=np.float64)
+    matched = np.array([True, False, False, False, False, False], dtype=bool)
+
+    result = inpaint_weights(vertices, triangles, weights, matched)
+
+    np.testing.assert_allclose(result[3:], weights[3:], atol=1e-9)
+    np.testing.assert_allclose(result.sum(axis=1), 1.0, atol=1e-3)

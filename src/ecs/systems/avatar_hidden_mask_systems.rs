@@ -6,6 +6,7 @@ use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, Submes
 use thyllore_avatar_core::garment::systems::hidden_mask::{
     find_hidden_triangle_indices, merge_mask_meshes,
 };
+use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;
 
 use crate::animation::{Skeleton, SkinData};
 use crate::asset::AssetStorage;
@@ -80,6 +81,59 @@ pub fn compute_hidden_triangles(
     world
         .resource_mut::<crate::ecs::resource::OutputQueue>()
         .push(crate::ecs::resource::OutputCommand::ApplyHiddenTriangles { meshes });
+}
+
+/// Restore the hidden triangles a sidecar saved: into the setup state and onto the skin meshes.
+pub fn restore_hidden_triangles(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    saved: &[SidecarHiddenTriangles],
+) {
+    if saved.is_empty() {
+        return;
+    }
+    let pairs = {
+        let node_assets = world.resource::<NodeAssets>();
+        collect_submesh_meshes(assets, graphics, &node_assets.nodes)
+    };
+
+    let mut hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>> = BTreeMap::new();
+    let mut meshes: Vec<(usize, Vec<u32>)> = Vec::new();
+    for entry in saved {
+        let key = SubmeshKey {
+            mesh: entry.mesh.clone(),
+            material: entry.material.clone(),
+        };
+        let Some(&(_, mesh_index)) = pairs.iter().find(|(candidate, _)| *candidate == key) else {
+            msg_warn!(
+                "Avatar sidecar hides triangles of unknown submesh {}/{}",
+                key.mesh,
+                key.material
+            );
+            continue;
+        };
+        let triangle_count = (graphics.meshes[mesh_index].vertex_data.indices.len() / 3) as u32;
+        if let Some(&out_of_range) = entry.triangles.iter().find(|&&t| t >= triangle_count) {
+            msg_warn!(
+                "Avatar sidecar hides triangle {} of {}/{}, which has {} triangles; mask ignored",
+                out_of_range,
+                key.mesh,
+                key.material,
+                triangle_count
+            );
+            continue;
+        }
+        meshes.push((mesh_index, entry.triangles.clone()));
+        hidden_triangles.insert(key, entry.triangles.clone());
+    }
+
+    world.resource_mut::<AvatarSetupState>().hidden_triangles = hidden_triangles;
+    if !meshes.is_empty() {
+        world
+            .resource_mut::<crate::ecs::resource::OutputQueue>()
+            .push(crate::ecs::resource::OutputCommand::ApplyHiddenTriangles { meshes });
+    }
 }
 
 /// The submesh in the model space shared by every skin of its skeleton, or none when it is not skinned.

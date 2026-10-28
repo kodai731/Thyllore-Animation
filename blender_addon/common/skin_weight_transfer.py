@@ -57,16 +57,51 @@ def barycentric_coordinates(
     return np.stack([w0, w1, w2], axis=-1)
 
 
+def _triangle_double_areas(
+    vertices: NDArray[np.floating],
+    triangles: NDArray[np.integer],
+) -> NDArray[np.floating]:
+    corners = vertices[triangles]
+    return np.linalg.norm(
+        np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=-1
+    )
+
+
+def nondegenerate_triangles(
+    vertices: NDArray[np.floating],
+    triangles: NDArray[np.integer],
+) -> NDArray[np.integer]:
+    return triangles[_triangle_double_areas(vertices, triangles) > DEGENERATE_AREA_EPSILON]
+
+
+def connected_component_labels(
+    vertex_count: int,
+    triangles: NDArray[np.integer],
+) -> NDArray[np.integer]:
+    """Each vertex's component, as the smallest vertex index it is connected to through triangles."""
+    labels = np.arange(vertex_count)
+    if len(triangles) == 0:
+        return labels
+    edge_a = np.concatenate([triangles[:, 0], triangles[:, 1], triangles[:, 2]])
+    edge_b = np.concatenate([triangles[:, 1], triangles[:, 2], triangles[:, 0]])
+    while True:
+        lower = np.minimum(labels[edge_a], labels[edge_b])
+        propagated = labels.copy()
+        np.minimum.at(propagated, edge_a, lower)
+        np.minimum.at(propagated, edge_b, lower)
+        propagated = propagated[propagated]
+        if np.array_equal(propagated, labels):
+            return labels
+        labels = propagated
+
+
 def cotangent_laplacian(
     vertices: NDArray[np.floating],
     triangles: NDArray[np.integer],
 ) -> tuple[NDArray[np.integer], NDArray[np.integer], NDArray[np.floating]]:
+    triangles = nondegenerate_triangles(vertices, triangles)
     corners = vertices[triangles]
-    double_area = np.linalg.norm(
-        np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=-1
-    )
-    valid = double_area > DEGENERATE_AREA_EPSILON
-    triangles, corners, double_area = triangles[valid], corners[valid], double_area[valid]
+    double_area = _triangle_double_areas(vertices, triangles)
 
     rows, cols, values = [], [], []
     for opposite, i, j in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
@@ -128,6 +163,19 @@ def _normalize_rows(weights: NDArray[np.floating]) -> NDArray[np.floating]:
     return np.divide(clipped, row_sums, out=clipped.copy(), where=row_sums > 0.0)
 
 
+def _components_without_match(
+    vertices: NDArray[np.floating],
+    triangles: NDArray[np.integer],
+    matched: NDArray[np.bool_],
+) -> NDArray[np.bool_]:
+    """Vertices whose component has no matched vertex: with no boundary to inpaint from, they keep the
+    weights interpolated from the nearest source surface."""
+    labels = connected_component_labels(len(vertices), nondegenerate_triangles(vertices, triangles))
+    has_match = np.zeros(len(vertices), dtype=bool)
+    has_match[labels[matched]] = True
+    return ~has_match[labels]
+
+
 def inpaint_weights(
     vertices: NDArray[np.floating],
     triangles: NDArray[np.integer],
@@ -136,6 +184,7 @@ def inpaint_weights(
     max_iterations: int = 100,
     tolerance: float = 1e-6,
 ) -> NDArray[np.floating]:
+    matched = matched | _components_without_match(vertices, triangles, matched)
     if np.all(matched):
         return weights
 

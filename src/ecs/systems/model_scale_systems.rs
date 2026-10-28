@@ -145,8 +145,9 @@ pub fn model_root_entities(world: &World) -> Vec<Entity> {
 }
 
 /// The entity scale an export has to bake first, or None when the model is already at scale 1.
+/// Baking scales every loaded asset by one factor, so model roots of different scales are an error.
 pub fn pending_entity_scale(world: &World) -> anyhow::Result<Option<f32>> {
-    let mut pending = None;
+    let mut shared: Option<f32> = None;
     for root in model_root_entities(world) {
         let Some(scale) = world
             .get_component::<Transform>(root)
@@ -155,11 +156,19 @@ pub fn pending_entity_scale(world: &World) -> anyhow::Result<Option<f32>> {
             continue;
         };
         let factor = uniform_scale_factor(scale)?;
-        if (factor - 1.0).abs() > UNIFORM_SCALE_TOLERANCE {
-            pending = Some(factor);
+        match shared {
+            None => shared = Some(factor),
+            Some(first) if is_same_scale(first, factor) => {}
+            Some(first) => anyhow::bail!(
+                "model roots have different scales ({first} and {factor}); set them to one scale before baking"
+            ),
         }
     }
-    Ok(pending)
+    Ok(shared.filter(|factor| !is_same_scale(*factor, 1.0)))
+}
+
+fn is_same_scale(a: f32, b: f32) -> bool {
+    (a - b).abs() <= UNIFORM_SCALE_TOLERANCE * a.abs().max(b.abs()).max(1.0)
 }
 
 fn reset_model_root_scales(world: &mut World) {
@@ -206,6 +215,29 @@ mod tests {
         assert_eq!(pending_entity_scale(&world).unwrap(), Some(0.01));
 
         world.get_component_mut::<Transform>(root).unwrap().scale = Vector3::new(1.0, 2.0, 1.0);
+        assert!(pending_entity_scale(&world).is_err());
+    }
+
+    #[test]
+    fn pending_entity_scale_rejects_model_roots_of_different_scales() {
+        let mut world = World::new();
+        for (name, scale) in [("a", 1.0), ("b", 2.0)] {
+            let root = world
+                .entity()
+                .with_name(name)
+                .with_transform(Transform {
+                    scale: Vector3::new(scale, scale, scale),
+                    ..Default::default()
+                })
+                .build();
+            world
+                .entity()
+                .with_name("mesh")
+                .with_parent(root)
+                .with_mesh(0, 0)
+                .build();
+        }
+
         assert!(pending_entity_scale(&world).is_err());
     }
 

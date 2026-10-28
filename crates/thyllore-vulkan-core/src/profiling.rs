@@ -63,7 +63,13 @@ impl GpuTimestampProfiler {
         }
     }
 
-    pub unsafe fn begin_frame(&mut self, rrdevice: &RRDevice, cmd: vk::CommandBuffer, slot: usize) {
+    pub unsafe fn begin_frame(
+        &mut self,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
+        slot: usize,
+    ) {
+        let cmd = cmd.raw();
         rrdevice
             .device()
             .cmd_reset_query_pool(cmd, self.pools[slot], 0, TIMESTAMP_QUERY_COUNT);
@@ -80,7 +86,13 @@ impl GpuTimestampProfiler {
         self.next_query[slot] = 1;
     }
 
-    pub unsafe fn end_frame(&mut self, rrdevice: &RRDevice, cmd: vk::CommandBuffer, slot: usize) {
+    pub unsafe fn end_frame(
+        &mut self,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
+        slot: usize,
+    ) {
+        let cmd = cmd.raw();
         let q = self.next_query[slot];
         if q >= TIMESTAMP_QUERY_COUNT {
             return;
@@ -100,10 +112,11 @@ impl GpuTimestampProfiler {
     pub unsafe fn begin_scope(
         &mut self,
         rrdevice: &RRDevice,
-        cmd: vk::CommandBuffer,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
         label: String,
     ) {
+        let cmd = cmd.raw();
         let q = self.next_query[slot];
         if q >= TIMESTAMP_QUERY_COUNT {
             return;
@@ -118,7 +131,13 @@ impl GpuTimestampProfiler {
         self.labels[slot].push((label, q, q));
     }
 
-    pub unsafe fn end_scope(&mut self, rrdevice: &RRDevice, cmd: vk::CommandBuffer, slot: usize) {
+    pub unsafe fn end_scope(
+        &mut self,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
+        slot: usize,
+    ) {
+        let cmd = cmd.raw();
         let pending = match self.labels[slot].last_mut() {
             Some(entry) => entry,
             None => return,

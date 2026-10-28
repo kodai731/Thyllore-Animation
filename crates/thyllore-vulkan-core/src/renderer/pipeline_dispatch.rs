@@ -1,5 +1,6 @@
 use crate::core::device::RRDevice;
 use crate::pipeline::{RRPipeline, RRRayTracingPipeline};
+use crate::types::CommandBuffer;
 use crate::vulkan::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
@@ -10,11 +11,12 @@ pub enum ClearColor {
 
 pub unsafe fn bind_compute(
     rrdevice: &RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     pipeline: &RRPipeline,
     descriptor_sets: &[vk::DescriptorSet],
     dynamic_offsets: &[u32],
 ) {
+    let command_buffer = command_buffer.raw();
     rrdevice.device().cmd_bind_pipeline(
         command_buffer,
         vk::PipelineBindPoint::COMPUTE,
@@ -32,11 +34,12 @@ pub unsafe fn bind_compute(
 
 pub unsafe fn dispatch(
     rrdevice: &RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     group_x: u32,
     group_y: u32,
     group_z: u32,
 ) {
+    let command_buffer = command_buffer.raw();
     rrdevice
         .device()
         .cmd_dispatch(command_buffer, group_x, group_y, group_z);
@@ -44,10 +47,11 @@ pub unsafe fn dispatch(
 
 pub unsafe fn bind_ray_tracing(
     rrdevice: &RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     pipeline: &RRRayTracingPipeline,
     descriptor_sets: &[vk::DescriptorSet],
 ) {
+    let command_buffer = command_buffer.raw();
     rrdevice.device().cmd_bind_pipeline(
         command_buffer,
         vk::PipelineBindPoint::RAY_TRACING_KHR,
@@ -65,13 +69,14 @@ pub unsafe fn bind_ray_tracing(
 
 pub unsafe fn push_constants_and_trace_rays(
     rrdevice: &RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     pipeline: &RRRayTracingPipeline,
     push_range: &vk::PushConstantRange,
     push_bytes: &[u8],
     width: u32,
     height: u32,
 ) {
+    let command_buffer = command_buffer.raw();
     rrdevice.device().cmd_push_constants(
         command_buffer,
         pipeline.pipeline_layout,
@@ -93,10 +98,11 @@ pub unsafe fn push_constants_and_trace_rays(
 
 pub unsafe fn clear_color_image(
     rrdevice: &RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image: crate::types::Image,
     color: ClearColor,
 ) {
+    let command_buffer = command_buffer.raw();
     let clear_value = match color {
         ClearColor::Uint(uint32) => vk::ClearColorValue { uint32 },
         ClearColor::Float(float32) => vk::ClearColorValue { float32 },

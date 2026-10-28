@@ -7,6 +7,7 @@ pub unsafe fn begin_frame_command_buffer(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
 ) -> Result<()> {
+    let command_buffer = command_buffer.raw();
     rrdevice
         .device()
         .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
@@ -25,11 +26,11 @@ pub unsafe fn end_frame_command_buffer(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
 ) -> Result<()> {
-    Ok(rrdevice.device().end_command_buffer(command_buffer)?)
+    Ok(rrdevice.device().end_command_buffer(command_buffer.raw())?)
 }
 
 pub unsafe fn end_render_pass(rrdevice: &RRDevice, command_buffer: CommandBuffer) {
-    rrdevice.device().cmd_end_render_pass(command_buffer);
+    rrdevice.device().cmd_end_render_pass(command_buffer.raw());
 }
 
 pub unsafe fn begin_render_pass_cleared(
@@ -63,7 +64,7 @@ pub unsafe fn begin_render_pass_cleared(
         .clear_values(&clear_values);
 
     rrdevice.device().cmd_begin_render_pass(
-        command_buffer,
+        command_buffer.raw(),
         &render_pass_info,
         vk::SubpassContents::INLINE,
     );
@@ -74,6 +75,7 @@ pub unsafe fn set_full_viewport_and_scissor(
     command_buffer: CommandBuffer,
     extent: Extent2D,
 ) {
+    let command_buffer = command_buffer.raw();
     let viewport = Viewport::builder()
         .x(0.0)
         .y(0.0)
@@ -98,6 +100,7 @@ pub unsafe fn clear_shadow_mask_to_lit(
     command_buffer: CommandBuffer,
     shadow_mask_image: Image,
 ) {
+    let command_buffer = command_buffer.raw();
     let shadow_mask_image = shadow_mask_image.raw();
     let subresource_range = vk::ImageSubresourceRange {
         aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -165,6 +168,7 @@ pub unsafe fn record_picked_texel_copy(
     staging_buffer: Buffer,
     pixel: (u32, u32),
 ) {
+    let command_buffer = command_buffer.raw();
     let object_id_image = object_id_image.raw();
     let position_image = position_image.raw();
     let staging_buffer = staging_buffer.raw();

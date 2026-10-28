@@ -74,7 +74,7 @@ impl RRCommandPool {
 #[derive(Clone, Debug, Default)]
 pub struct RRCommandBuffer {
     pub rrcommand_pool: Rc<RRCommandPool>,
-    pub(crate) command_buffers: Vec<vk::CommandBuffer>,
+    pub(crate) command_buffers: Vec<crate::types::CommandBuffer>,
 }
 
 impl RRCommandBuffer {
@@ -99,7 +99,12 @@ impl RRCommandBuffer {
             .command_pool(rrcommand_buffer.rrcommand_pool.command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count((rrrender.framebuffers.len() * 2) as u32);
-        rrcommand_buffer.command_buffers = rrdevice.device().allocate_command_buffers(&info)?;
+        rrcommand_buffer.command_buffers = rrdevice
+            .device()
+            .allocate_command_buffers(&info)?
+            .into_iter()
+            .map(crate::types::CommandBuffer)
+            .collect();
         Ok(())
     }
 }

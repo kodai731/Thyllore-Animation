@@ -11,8 +11,9 @@ pub unsafe fn record_onion_skin_ghost_pass(
     resources: &OnionSkinPassResources,
     onion_skin_gpu: &OnionSkinGpuState,
     image_index: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     begin_ghost_render_pass(device, resources, cmd);
     bind_ghost_pipeline_and_state(device, resources, cmd);
@@ -24,8 +25,9 @@ pub unsafe fn record_onion_skin_ghost_pass(
 pub unsafe fn record_onion_skin_composite_pass(
     ctx: &FrameRenderContext,
     resources: &OnionSkinPassResources,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     begin_composite_render_pass(device, resources, cmd);
 

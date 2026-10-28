@@ -18,8 +18,9 @@ pub unsafe fn record_gbuffer_pass(
     framebuffer: crate::types::Framebuffer,
     draw_mesh_indices: &[usize],
     heatmap_mode: u32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
 
     let render_area = vk::Rect2D::builder()

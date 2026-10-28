@@ -29,8 +29,9 @@ pub unsafe fn record_dof_pass(
     settings: &DepthOfField,
     camera: &PhysicalCameraParameters,
     camera_near_plane: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     let extent = dof_buffer.extent();
 

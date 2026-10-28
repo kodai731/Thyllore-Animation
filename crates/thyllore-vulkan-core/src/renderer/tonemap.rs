@@ -27,8 +27,9 @@ pub unsafe fn begin_tonemap_render_pass(
     render_pass: crate::types::RenderPass,
     framebuffer: crate::types::Framebuffer,
     extent: vk::Extent2D,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
@@ -72,9 +73,10 @@ pub unsafe fn record_tonemap_draw(
     lens: &LensEffects,
     bloom: &BloomSettings,
     extent: vk::Extent2D,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
     plume: Option<([f32; 4], [f32; 4], [f32; 4], [f32; 4])>,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
@@ -157,6 +159,6 @@ pub unsafe fn record_tonemap_draw(
     Ok(())
 }
 
-pub unsafe fn end_tonemap_render_pass(ctx: &FrameRenderContext, cmd: vk::CommandBuffer) {
-    ctx.device.device().cmd_end_render_pass(cmd);
+pub unsafe fn end_tonemap_render_pass(ctx: &FrameRenderContext, cmd: crate::types::CommandBuffer) {
+    ctx.device.device().cmd_end_render_pass(cmd.raw());
 }

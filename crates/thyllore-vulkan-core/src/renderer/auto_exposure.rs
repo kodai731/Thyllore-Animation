@@ -40,8 +40,9 @@ pub unsafe fn record_auto_exposure_pass(
     settings: &AutoExposure,
     delta_time: f32,
     frame_slot: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     let pixel_count = buffers.width * buffers.height;
 

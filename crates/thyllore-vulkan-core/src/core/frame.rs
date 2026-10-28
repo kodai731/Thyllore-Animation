@@ -49,7 +49,7 @@ impl FrameSubmit {
         image_index: usize,
     ) -> Self {
         Self {
-            command_buffer: commands.buffers.command_buffers[image_index],
+            command_buffer: commands.buffers.command_buffers[image_index].raw(),
             image_available: sync.current_image_available().raw(),
             render_finished: sync.current_render_finished().raw(),
             fence: sync.current_fence().raw(),
@@ -178,7 +178,13 @@ impl GpuResource for CommandState {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         let device = &rrdevice.device();
         if !self.buffers.command_buffers.is_empty() {
-            device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
+            let raw: Vec<vk::CommandBuffer> = self
+                .buffers
+                .command_buffers
+                .iter()
+                .map(|cb| cb.raw())
+                .collect();
+            device.free_command_buffers(self.pool.command_pool, &raw);
             self.buffers.command_buffers.clear();
         }
         if self.pool.command_pool != vk::CommandPool::null() {

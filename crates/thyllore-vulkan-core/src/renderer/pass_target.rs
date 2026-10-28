@@ -360,9 +360,10 @@ impl ImageStateTracker {
 
 pub unsafe fn record_pending_barriers(
     rrdevice: &crate::core::device::RRDevice,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: crate::types::CommandBuffer,
     barriers: &[PendingBarrier],
 ) {
+    let command_buffer = command_buffer.raw();
     if barriers.is_empty() {
         return;
     }

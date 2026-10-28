@@ -12,8 +12,9 @@ pub unsafe fn record_ray_query_pass(
     pipeline: &RRPipeline,
     descriptor: &RRRayQueryDescriptorSet,
     normal_offset: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
 
     insert_pre_compute_barriers(device, gbuffer, cmd);

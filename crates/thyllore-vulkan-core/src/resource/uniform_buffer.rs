@@ -120,11 +120,12 @@ impl<T: GpuBlock> UniformBuffer<T> {
     pub unsafe fn record_update(
         &self,
         rrdevice: &RRDevice,
-        cmd: vk::CommandBuffer,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
         value: &T,
         reader_stage: impl Into<vk::PipelineStageFlags>,
     ) -> Result<()> {
+        let cmd = cmd.raw();
         let reader_stage: vk::PipelineStageFlags = reader_stage.into();
         if self.placement != Placement::DeviceUpdated {
             return Err(anyhow!(

@@ -182,7 +182,7 @@ impl OverlayNodeSpec {
     pub unsafe fn record(
         &self,
         rrdevice: &RRDevice,
-        cmd: vk::CommandBuffer,
+        cmd: crate::types::CommandBuffer,
         pass: &OverlayPass,
         render_area: vk::Rect2D,
         pipeline: &RRPipeline,
@@ -190,6 +190,7 @@ impl OverlayNodeSpec {
         descriptor_sets: &[crate::types::DescriptorSet],
         draws: &[OverlayInstanceDraw],
     ) -> Result<()> {
+        let cmd = cmd.raw();
         self.ensure_push_constants_match(push_constants)?;
         let descriptor_sets: Vec<vk::DescriptorSet> =
             descriptor_sets.iter().map(|set| set.raw()).collect();

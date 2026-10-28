@@ -782,10 +782,12 @@ impl RRDevice {
     pub unsafe fn free_command_buffers(
         &self,
         command_pool: crate::types::CommandPool,
-        command_buffers: &[vk::CommandBuffer],
+        command_buffers: &[crate::types::CommandBuffer],
     ) {
+        let command_buffers: Vec<vk::CommandBuffer> =
+            command_buffers.iter().map(|cb| cb.raw()).collect();
         self.device
-            .free_command_buffers(command_pool.raw(), command_buffers);
+            .free_command_buffers(command_pool.raw(), &command_buffers);
     }
 
     pub unsafe fn submit_one_time(&self, command_buffer: vk::CommandBuffer) -> Result<()> {

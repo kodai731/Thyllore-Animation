@@ -35,8 +35,9 @@ pub unsafe fn record_line_mesh_draw(
     mesh: &dyn MeshBuffers,
     render_info: &RenderInfo,
     options: &LineMeshDrawOptions,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<bool> {
+    let cmd = cmd.raw();
     let buffers: &GpuBufferRegistry = ctx.buffers;
     let frame_slot = ctx.frame_slot;
     let Some(vertex_buffer) = buffers.get_vertex_buffer(mesh.vertex_buffer_handle(frame_slot))
@@ -129,14 +130,14 @@ pub unsafe fn push_fragment_alpha_constant(
     ctx: &FrameRenderContext,
     pipeline_layout: crate::types::PipelineLayout,
     alpha: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
     let alpha_bytes = std::slice::from_raw_parts(
         &alpha as *const f32 as *const u8,
         std::mem::size_of::<f32>(),
     );
     ctx.device.device().cmd_push_constants(
-        cmd,
+        cmd.raw(),
         pipeline_layout.raw(),
         vk::ShaderStageFlags::FRAGMENT,
         0,

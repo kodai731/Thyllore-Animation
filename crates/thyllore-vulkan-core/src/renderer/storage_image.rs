@@ -2,7 +2,7 @@ use vulkanalia::prelude::v1_0::*;
 
 /// Makes a storage image writable by compute after `reader_stage` last sampled it; the previous
 /// contents are discarded.
-pub unsafe fn insert_storage_image_write_barrier(
+pub(crate) unsafe fn insert_storage_image_write_barrier(
     device: &Device,
     cmd: vk::CommandBuffer,
     image: vk::Image,
@@ -28,7 +28,7 @@ pub unsafe fn insert_storage_image_write_barrier(
 }
 
 /// Publishes a compute-written storage image to `reader_stage`, keeping the general layout.
-pub unsafe fn insert_storage_image_read_barrier(
+pub(crate) unsafe fn insert_storage_image_read_barrier(
     device: &Device,
     cmd: vk::CommandBuffer,
     image: vk::Image,

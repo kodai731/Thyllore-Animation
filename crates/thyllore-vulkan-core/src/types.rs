@@ -18,7 +18,15 @@ impl Instance {
     }
 }
 
-pub type CommandBuffer = vk::CommandBuffer;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CommandBuffer(pub(crate) vk::CommandBuffer);
+impl CommandBuffer {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::CommandBuffer {
+        self.0
+    }
+}
+
 pub type Format = vk::Format;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Image(pub(crate) vk::Image);
@@ -121,11 +129,6 @@ impl AccelerationStructure {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TransformMatrix(pub(crate) vk::TransformMatrixKHR);
 impl TransformMatrix {
-    #[inline]
-    pub(crate) fn raw(self) -> vk::TransformMatrixKHR {
-        self.0
-    }
-
     #[inline]
     pub fn matrix(&self) -> [[f32; 4]; 3] {
         self.0.matrix

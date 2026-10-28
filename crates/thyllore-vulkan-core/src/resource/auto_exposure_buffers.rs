@@ -132,9 +132,10 @@ impl AutoExposureBuffers {
     pub unsafe fn record_luminance_readback(
         &self,
         rrdevice: &RRDevice,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: crate::types::CommandBuffer,
         slot: usize,
     ) {
+        let command_buffer = command_buffer.raw();
         let barrier = vk::BufferMemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
             .dst_access_mask(vk::AccessFlags::TRANSFER_READ)

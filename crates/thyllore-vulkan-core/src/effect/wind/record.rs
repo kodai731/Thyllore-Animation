@@ -24,6 +24,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
     image_index: usize,
     cmd: CommandBuffer,
 ) -> Result<()> {
+    let cmd = cmd.raw();
     let device = &ctx.device.device();
     let volume = &targets.shadow_volume;
     insert_storage_image_write_barrier(

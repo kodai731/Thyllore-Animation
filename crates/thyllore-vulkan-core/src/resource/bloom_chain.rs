@@ -22,7 +22,7 @@ impl BloomMipTarget {
         Self {
             view: view.raw(),
             framebuffer: framebuffer.raw(),
-            extent,
+            extent: extent.raw(),
         }
     }
 

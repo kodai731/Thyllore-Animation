@@ -135,15 +135,116 @@ impl TransformMatrix {
     }
 }
 
-pub type DeviceAddress = vk::DeviceAddress;
-pub type DeviceSize = vk::DeviceSize;
+pub type DeviceAddress = u64;
+pub type DeviceSize = u64;
 
-pub type Extent2D = vk::Extent2D;
-pub type Extent3D = vk::Extent3D;
-pub type Rect2D = vk::Rect2D;
-pub type Offset2D = vk::Offset2D;
-pub type Offset3D = vk::Offset3D;
-pub type Viewport = vk::Viewport;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Extent2D {
+    pub width: u32,
+    pub height: u32,
+}
+impl Extent2D {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Extent2D {
+        vk::Extent2D {
+            width: self.width,
+            height: self.height,
+        }
+    }
+    #[inline]
+    pub(crate) fn from_raw(raw: vk::Extent2D) -> Self {
+        Self {
+            width: raw.width,
+            height: raw.height,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Extent3D {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+impl Extent3D {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Extent3D {
+        vk::Extent3D {
+            width: self.width,
+            height: self.height,
+            depth: self.depth,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Offset2D {
+    pub x: i32,
+    pub y: i32,
+}
+impl Offset2D {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Offset2D {
+        vk::Offset2D {
+            x: self.x,
+            y: self.y,
+        }
+    }
+    #[inline]
+    pub(crate) fn from_raw(raw: vk::Offset2D) -> Self {
+        Self { x: raw.x, y: raw.y }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Offset3D {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+impl Offset3D {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Offset3D {
+        vk::Offset3D {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Rect2D {
+    pub offset: Offset2D,
+    pub extent: Extent2D,
+}
+impl Rect2D {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Rect2D {
+        vk::Rect2D {
+            offset: self.offset.raw(),
+            extent: self.extent.raw(),
+        }
+    }
+    #[inline]
+    pub(crate) fn from_raw(raw: vk::Rect2D) -> Self {
+        Self {
+            offset: Offset2D::from_raw(raw.offset),
+            extent: Extent2D::from_raw(raw.extent),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Viewport {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub min_depth: f32,
+    pub max_depth: f32,
+}
+
 pub type SampleCountFlags = vk::SampleCountFlags;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

@@ -103,7 +103,7 @@ pub fn is_depth_view_ready(view: crate::types::ImageView) -> bool {
 }
 
 impl WaterRenderTargets {
-    pub fn extent(&self) -> vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
         self.history.extent()
     }
 

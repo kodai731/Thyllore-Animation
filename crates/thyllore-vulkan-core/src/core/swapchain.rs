@@ -63,7 +63,7 @@ impl RRSwapchain {
 
     #[inline]
     pub fn swapchain_extent(&self) -> crate::types::Extent2D {
-        self.swapchain_extent
+        crate::types::Extent2D::from_raw(self.swapchain_extent)
     }
 }
 

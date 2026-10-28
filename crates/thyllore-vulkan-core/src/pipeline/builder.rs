@@ -402,8 +402,9 @@ impl PipelineBuilder {
         self,
         rrdevice: &RRDevice,
         rrrender: &RRRender,
-        swapchain_extent: Option<vk::Extent2D>,
+        swapchain_extent: Option<crate::types::Extent2D>,
     ) -> Result<RRPipeline> {
+        let swapchain_extent = swapchain_extent.map(|e| e.raw());
         let mut rrpipeline = RRPipeline::default();
 
         if self.pass.is_compute() {
@@ -623,7 +624,13 @@ impl RRPipeline {
             });
         }
 
-        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        builder.build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
     }
 
     /// Create a pipeline with GraphicsResources layouts (Set 0, Set 2 only - no material)
@@ -652,7 +659,13 @@ impl RRPipeline {
             });
         }
 
-        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        builder.build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
     }
 
     /// Create ImGui rendering pipeline (backward compatibility)
@@ -691,7 +704,13 @@ impl RRPipeline {
             .polygon_mode(vk::PolygonMode::FILL)
             .blend(BlendConfig::default())
             .descriptor_layouts(&[descriptor_set_layout])
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(
+                rrdevice,
+                rrrender,
+                Some(crate::types::Extent2D::from_raw(
+                    rrswapchain.swapchain_extent,
+                )),
+            )
     }
 
     /// Create compute pipeline for ray query or other compute shaders

@@ -86,13 +86,14 @@ pub unsafe fn set_viewport_size(
     height: f32,
 ) {
     let command_buffer = command_buffer.raw();
-    let viewport = Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(width)
-        .height(height)
-        .min_depth(0.0)
-        .max_depth(1.0);
+    let viewport = vk::Viewport {
+        x: 0.0,
+        y: 0.0,
+        width,
+        height,
+        min_depth: 0.0,
+        max_depth: 1.0,
+    };
     rrdevice
         .device()
         .cmd_set_viewport(command_buffer, 0, &[viewport]);
@@ -102,7 +103,7 @@ pub unsafe fn set_scissor(rrdevice: &RRDevice, command_buffer: CommandBuffer, sc
     let command_buffer = command_buffer.raw();
     rrdevice
         .device()
-        .cmd_set_scissor(command_buffer, 0, &[scissor]);
+        .cmd_set_scissor(command_buffer, 0, &[scissor.raw()]);
 }
 
 pub unsafe fn push_vertex_constants(

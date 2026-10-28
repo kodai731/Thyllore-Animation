@@ -47,14 +47,17 @@ pub unsafe fn record_water_scene_color_copy(
         .build();
     let region = vk::ImageCopy::builder()
         .src_subresource(subresource)
-        .src_offset(Offset3D { x: 0, y: 0, z: 0 })
+        .src_offset(Offset3D { x: 0, y: 0, z: 0 }.raw())
         .dst_subresource(subresource)
-        .dst_offset(Offset3D { x: 0, y: 0, z: 0 })
-        .extent(Extent3D {
-            width: extent.width,
-            height: extent.height,
-            depth: 1,
-        })
+        .dst_offset(Offset3D { x: 0, y: 0, z: 0 }.raw())
+        .extent(
+            Extent3D {
+                width: extent.width,
+                height: extent.height,
+                depth: 1,
+            }
+            .raw(),
+        )
         .build();
     device.cmd_copy_image(
         cmd.raw(),

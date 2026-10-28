@@ -112,7 +112,7 @@ impl PipelineManager {
         rrrender: &RRRender,
         builder: PipelineBuilder,
         key: PipelineKey,
-        swapchain_extent: Option<vk::Extent2D>,
+        swapchain_extent: Option<crate::types::Extent2D>,
     ) -> Result<&RRPipeline> {
         if !self.cache.contains(&key) {
             let pipeline = builder.build(rrdevice, rrrender, swapchain_extent)?;

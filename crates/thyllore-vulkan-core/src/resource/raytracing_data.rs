@@ -259,7 +259,7 @@ impl RayTracingData {
         graphics_resources: &GraphicsResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
         offscreen_render_pass: Option<crate::types::RenderPass>,
-        offscreen_extent: Option<vk::Extent2D>,
+        offscreen_extent: Option<crate::types::Extent2D>,
         hdr_render_pass: Option<crate::types::RenderPass>,
     ) -> Result<()> {
         let render_layouts = [
@@ -397,7 +397,13 @@ unsafe fn build_gbuffer_pipeline(
             offset: 0,
             size: std::mem::size_of::<GBufferPushConstants>() as u32,
         })
-        .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        .build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
 }
 
 unsafe fn build_ray_query_pipeline(
@@ -455,7 +461,7 @@ unsafe fn build_composite_pipeline(
     scene_buffer: vk::Buffer,
     billboard_descriptor_set: &mut RRBillboardDescriptorSet,
     offscreen_render_pass: Option<crate::types::RenderPass>,
-    offscreen_extent: Option<vk::Extent2D>,
+    offscreen_extent: Option<crate::types::Extent2D>,
     hdr_render_pass: Option<crate::types::RenderPass>,
 ) -> Result<(RRCompositeDescriptorSet, RRPipeline)> {
     let mut descriptor = RRCompositeDescriptorSet::new(rrdevice)?;
@@ -522,7 +528,8 @@ unsafe fn build_composite_pipeline(
         });
     }
 
-    let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
+    let extent = offscreen_extent
+        .unwrap_or_else(|| crate::types::Extent2D::from_raw(rrswapchain.swapchain_extent));
     let pipeline = builder.build(rrdevice, rrrender, Some(extent))?;
 
     Ok((descriptor, pipeline))

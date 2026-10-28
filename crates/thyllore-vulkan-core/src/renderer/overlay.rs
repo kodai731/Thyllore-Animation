@@ -95,13 +95,13 @@ impl OverlayInstanceDraw {
     pub fn new(dynamic_offsets: Vec<u32>, scissor: crate::types::Rect2D) -> Self {
         Self {
             dynamic_offsets,
-            scissor,
+            scissor: scissor.raw(),
         }
     }
 
     #[inline]
     pub fn scissor(&self) -> crate::types::Rect2D {
-        self.scissor
+        crate::types::Rect2D::from_raw(self.scissor)
     }
 }
 /// The render target an overlay pass draws into and what it finds there.
@@ -126,13 +126,13 @@ impl OverlayPass {
 
     #[inline]
     pub fn extent(&self) -> crate::types::Extent2D {
-        self.extent
+        crate::types::Extent2D::from_raw(self.extent)
     }
 
-    pub fn full_area(&self) -> vk::Rect2D {
-        vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: self.extent,
+    pub fn full_area(&self) -> crate::types::Rect2D {
+        crate::types::Rect2D {
+            offset: crate::types::Offset2D { x: 0, y: 0 },
+            extent: crate::types::Extent2D::from_raw(self.extent),
         }
     }
 }
@@ -144,7 +144,7 @@ impl OverlayNodeSpec {
         rrrender: &RRRender,
         render_pass: crate::types::RenderPass,
         descriptor_layouts: &[&ReflectedSetLayout],
-        extent: vk::Extent2D,
+        extent: crate::types::Extent2D,
     ) -> Result<RRPipeline> {
         let mut builder = PipelineBuilder::from_pass(self.shaders)
             .vertex_input(VertexInputConfig::Custom {
@@ -184,7 +184,7 @@ impl OverlayNodeSpec {
         rrdevice: &RRDevice,
         cmd: crate::types::CommandBuffer,
         pass: &OverlayPass,
-        render_area: vk::Rect2D,
+        render_area: crate::types::Rect2D,
         pipeline: &RRPipeline,
         push_constants: Option<&[u8]>,
         descriptor_sets: &[crate::types::DescriptorSet],
@@ -194,7 +194,7 @@ impl OverlayNodeSpec {
         self.ensure_push_constants_match(push_constants)?;
         let descriptor_sets: Vec<vk::DescriptorSet> =
             descriptor_sets.iter().map(|set| set.raw()).collect();
-        self.begin_render_pass(rrdevice, cmd, pass, render_area);
+        self.begin_render_pass(rrdevice, cmd, pass, render_area.raw());
 
         rrdevice.device().cmd_bind_pipeline(
             cmd,

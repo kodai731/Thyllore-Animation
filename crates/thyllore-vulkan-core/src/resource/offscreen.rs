@@ -376,8 +376,8 @@ impl OffscreenFramebuffer {
         log!("Destroyed offscreen framebuffer");
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D {
             width: self.width,
             height: self.height,
         }

@@ -42,7 +42,11 @@ pub unsafe fn begin_render_pass_cleared(
     clear_color: [f32; 4],
     clear_depth: f32,
 ) {
-    let render_area = Rect2D::builder().offset(Offset2D::default()).extent(extent);
+    let extent = extent.raw();
+    let render_area = vk::Rect2D {
+        offset: vk::Offset2D { x: 0, y: 0 },
+        extent,
+    };
 
     let color_clear_value = vk::ClearValue {
         color: vk::ClearColorValue {
@@ -76,20 +80,23 @@ pub unsafe fn set_full_viewport_and_scissor(
     extent: Extent2D,
 ) {
     let command_buffer = command_buffer.raw();
-    let viewport = Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(extent.width as f32)
-        .height(extent.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0);
+    let extent = extent.raw();
+    let viewport = vk::Viewport {
+        x: 0.0,
+        y: 0.0,
+        width: extent.width as f32,
+        height: extent.height as f32,
+        min_depth: 0.0,
+        max_depth: 1.0,
+    };
     rrdevice
         .device()
         .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
-    let scissor = Rect2D::builder()
-        .offset(Offset2D { x: 0, y: 0 })
-        .extent(extent);
+    let scissor = vk::Rect2D {
+        offset: vk::Offset2D { x: 0, y: 0 },
+        extent,
+    };
     rrdevice
         .device()
         .cmd_set_scissor(command_buffer, 0, &[scissor]);
@@ -225,12 +232,12 @@ pub unsafe fn record_picked_texel_copy(
                 base_array_layer: 0,
                 layer_count: 1,
             })
-            .image_offset(Offset3D {
+            .image_offset(vk::Offset3D {
                 x: px as i32,
                 y: py as i32,
                 z: 0,
             })
-            .image_extent(Extent3D {
+            .image_extent(vk::Extent3D {
                 width: 1,
                 height: 1,
                 depth: 1,

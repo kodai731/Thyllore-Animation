@@ -121,8 +121,8 @@ impl HistoryTargets {
         })
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D {
             width: self.width,
             height: self.height,
         }
@@ -133,7 +133,7 @@ impl HistoryTargets {
         OverlayPass {
             render_pass: self.render_pass,
             framebuffer: self.framebuffers[history_index],
-            extent: self.extent(),
+            extent: self.extent().raw(),
             load,
         }
     }

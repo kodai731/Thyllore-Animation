@@ -27,7 +27,7 @@ impl RRBLAS {
 
     #[inline]
     pub fn transform(&self) -> crate::types::TransformMatrix {
-        self.transform
+        crate::types::TransformMatrix(self.transform)
     }
 
     #[inline]
@@ -38,6 +38,7 @@ impl RRBLAS {
     #[inline]
     pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
         self.acceleration_structure
+            .map(crate::types::AccelerationStructure)
     }
 }
 
@@ -54,6 +55,7 @@ impl RRTLAS {
     #[inline]
     pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
         self.acceleration_structure
+            .map(crate::types::AccelerationStructure)
     }
 }
 
@@ -293,16 +295,16 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        vertex_buffer: &vk::Buffer,
+        vertex_buffer: &crate::types::Buffer,
         vertex_count: u32,
         vertex_stride: u32,
-        index_buffer: &vk::Buffer,
+        index_buffer: &crate::types::Buffer,
         index_count: u32,
     ) -> Result<RRBLAS> {
         let device = &rrdevice.device();
 
-        let vertex_addr = rrdevice.buffer_address(*vertex_buffer);
-        let index_addr = rrdevice.buffer_address(*index_buffer);
+        let vertex_addr = rrdevice.buffer_address(vertex_buffer.raw());
+        let index_addr = rrdevice.buffer_address(index_buffer.raw());
 
         let geometry =
             build_triangle_geometry(vertex_addr, vertex_count, vertex_stride, index_addr);
@@ -851,7 +853,7 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
+        vertex_buffers: &[(&crate::types::Buffer, u32, u32, &crate::types::Buffer, u32)],
     ) -> Result<()> {
         for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in
             vertex_buffers.iter().enumerate()
@@ -862,10 +864,10 @@ impl RRAccelerationStructure {
                     rrdevice,
                     rrcommand_pool,
                     &mut self.blas_list[i],
-                    vertex_buffer,
+                    &vertex_buffer.raw(),
                     *vertex_count,
                     *vertex_stride,
-                    index_buffer,
+                    &index_buffer.raw(),
                     *index_count,
                 )?;
             }
@@ -889,15 +891,15 @@ impl RRAccelerationStructure {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
+        vertex_buffers: &[(&crate::types::Buffer, u32, u32, &crate::types::Buffer, u32)],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =
             Vec::with_capacity(vertex_buffers.len() + procedurals.len());
 
         for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
-            let vertex_address = rrdevice.buffer_address(**vertex_buffer);
-            let index_address = rrdevice.buffer_address(**index_buffer);
+            let vertex_address = rrdevice.buffer_address(vertex_buffer.raw());
+            let index_address = rrdevice.buffer_address(index_buffer.raw());
 
             records.push(HitShadingRecord {
                 vertex_address,

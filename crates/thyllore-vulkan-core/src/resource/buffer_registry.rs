@@ -243,7 +243,7 @@ impl GpuBufferRegistry {
             .unwrap_or(0)
     }
 
-    pub fn get_vertex_buffer(&self, handle: VertexBufferHandle) -> Option<vk::Buffer> {
+    pub fn get_vertex_buffer(&self, handle: VertexBufferHandle) -> Option<crate::types::Buffer> {
         if !handle.is_valid() {
             return None;
         }
@@ -251,10 +251,10 @@ impl GpuBufferRegistry {
         self.vertex_buffers
             .get(handle.index())
             .and_then(|opt| opt.as_ref())
-            .map(|buf| buf.buffer)
+            .map(|buf| crate::types::Buffer(buf.buffer))
     }
 
-    pub fn get_index_buffer(&self, handle: IndexBufferHandle) -> Option<vk::Buffer> {
+    pub fn get_index_buffer(&self, handle: IndexBufferHandle) -> Option<crate::types::Buffer> {
         if !handle.is_valid() {
             return None;
         }
@@ -262,7 +262,7 @@ impl GpuBufferRegistry {
         self.index_buffers
             .get(handle.index())
             .and_then(|opt| opt.as_ref())
-            .map(|buf| buf.buffer)
+            .map(|buf| crate::types::Buffer(buf.buffer))
     }
 
     pub unsafe fn destroy_vertex_buffer(&mut self, device: &RRDevice, handle: VertexBufferHandle) {

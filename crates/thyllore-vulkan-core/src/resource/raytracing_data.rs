@@ -155,18 +155,32 @@ impl RayTracingData {
         let mut acceleration_structure = RRAccelerationStructure::new();
 
         // Collect vertex_buffers in the same order as BLAS creation
-        let vertex_buffers: Vec<_> = meshes
+        let mesh_buffers: Vec<_> = meshes
             .iter()
             .filter(|mesh| mesh.render_to_gbuffer)
             .map(|mesh| {
                 (
-                    &mesh.vertex_buffer.buffer,
+                    mesh.vertex_buffer.buffer(),
                     mesh.vertex_data.vertices.len() as u32,
                     std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                    &mesh.index_buffer.buffer,
+                    mesh.index_buffer.buffer(),
                     mesh.vertex_data.indices.len() as u32,
                 )
             })
+            .collect();
+        let vertex_buffers: Vec<_> = mesh_buffers
+            .iter()
+            .map(
+                |(vertex_buffer, vertex_count, stride, index_buffer, index_count)| {
+                    (
+                        vertex_buffer,
+                        *vertex_count,
+                        *stride,
+                        index_buffer,
+                        *index_count,
+                    )
+                },
+            )
             .collect();
 
         for (mesh_index, mesh) in meshes.iter().enumerate() {
@@ -178,10 +192,10 @@ impl RayTracingData {
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.buffer(),
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.buffer(),
                 mesh.vertex_data.indices.len() as u32,
             )?;
 
@@ -244,9 +258,9 @@ impl RayTracingData {
         rrrender: &RRRender,
         graphics_resources: &GraphicsResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
-        offscreen_render_pass: Option<vk::RenderPass>,
+        offscreen_render_pass: Option<crate::types::RenderPass>,
         offscreen_extent: Option<vk::Extent2D>,
-        hdr_render_pass: Option<vk::RenderPass>,
+        hdr_render_pass: Option<crate::types::RenderPass>,
     ) -> Result<()> {
         let render_layouts = [
             &graphics_resources.frame_set.layout,
@@ -308,7 +322,10 @@ impl RayTracingData {
         else {
             return Ok(());
         };
-        let scene_buffer_handle = self.scene_uniform_buffer_handle();
+        let scene_buffer_handle = self
+            .scene_uniform_buffer
+            .as_ref()
+            .map(UniformBuffer::handle);
         let (Some(descriptor), Some(gbuffer), Some(scene_buffer)) = (
             self.ray_query_descriptor.as_mut(),
             self.gbuffer.as_ref(),
@@ -352,10 +369,11 @@ impl RayTracingData {
         Ok(handle)
     }
 
-    pub fn scene_uniform_buffer_handle(&self) -> Option<vk::Buffer> {
+    pub fn scene_uniform_buffer_handle(&self) -> Option<crate::types::Buffer> {
         self.scene_uniform_buffer
             .as_ref()
             .map(UniformBuffer::handle)
+            .map(crate::types::Buffer)
     }
 }
 
@@ -369,7 +387,7 @@ unsafe fn build_gbuffer_pipeline(
         .vertex_input(VertexInputConfig::Standard)
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
-        .custom_render_pass(rrrender.gbuffer_render_pass)
+        .custom_render_pass(rrrender.gbuffer_render_pass())
         .mrt_attachments(4)
         .no_blend_attachment(3)
         .msaa_samples(vk::SampleCountFlags::_1)
@@ -436,9 +454,9 @@ unsafe fn build_composite_pipeline(
     object_id_sampler: vk::Sampler,
     scene_buffer: vk::Buffer,
     billboard_descriptor_set: &mut RRBillboardDescriptorSet,
-    offscreen_render_pass: Option<vk::RenderPass>,
+    offscreen_render_pass: Option<crate::types::RenderPass>,
     offscreen_extent: Option<vk::Extent2D>,
-    hdr_render_pass: Option<vk::RenderPass>,
+    hdr_render_pass: Option<crate::types::RenderPass>,
 ) -> Result<(RRCompositeDescriptorSet, RRPipeline)> {
     let mut descriptor = RRCompositeDescriptorSet::new(rrdevice)?;
 

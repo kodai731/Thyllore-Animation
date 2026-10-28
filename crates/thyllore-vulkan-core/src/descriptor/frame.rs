@@ -1,5 +1,3 @@
-use vulkanalia::prelude::v1_0::*;
-
 use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
@@ -11,7 +9,7 @@ use thyllore_render_core::FrameUBO;
 #[derive(Clone, Debug, Default)]
 pub struct FrameDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub(crate) sets: Vec<vk::DescriptorSet>,
+    pub(crate) sets: Vec<crate::types::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<FrameUBO>>,
 }
 
@@ -22,7 +20,11 @@ impl FrameDescriptorSet {
         swapchain_image_count: usize,
     ) -> anyhow::Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let sets = layout.allocate_sets(rrdevice, swapchain_image_count)?;
+        let sets = layout
+            .allocate_sets(rrdevice, swapchain_image_count)?
+            .into_iter()
+            .map(crate::types::DescriptorSet)
+            .collect();
 
         let mut buffers = Vec::with_capacity(swapchain_image_count);
         for _ in 0..swapchain_image_count {
@@ -51,7 +53,7 @@ impl FrameDescriptorSet {
     unsafe fn write_descriptor_sets(&self, rrdevice: &RRDevice) -> anyhow::Result<()> {
         for (set, buffer) in self.sets.iter().zip(&self.buffers) {
             self.layout
-                .writer(*set)
+                .writer(set.raw())
                 .uniform(model::FRAME, buffer, 0)?
                 .apply(rrdevice);
         }

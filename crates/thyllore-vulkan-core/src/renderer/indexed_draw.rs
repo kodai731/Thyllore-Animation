@@ -24,17 +24,19 @@ pub unsafe fn bind_graphics_mesh(
     index_buffer: Buffer,
     index_width: IndexWidth,
 ) {
-    rrdevice
-        .device()
-        .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+    rrdevice.device().cmd_bind_pipeline(
+        command_buffer,
+        vk::PipelineBindPoint::GRAPHICS,
+        pipeline.raw(),
+    );
 
     rrdevice
         .device()
-        .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+        .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer.raw()], &[0]);
 
     rrdevice.device().cmd_bind_index_buffer(
         command_buffer,
-        index_buffer,
+        index_buffer.raw(),
         0,
         index_width.index_type(),
     );
@@ -50,9 +52,9 @@ pub unsafe fn bind_graphics_descriptor_set(
     rrdevice.device().cmd_bind_descriptor_sets(
         command_buffer,
         vk::PipelineBindPoint::GRAPHICS,
-        pipeline_layout,
+        pipeline_layout.raw(),
         set_index,
-        &[descriptor_set],
+        &[descriptor_set.raw()],
         &[],
     );
 }
@@ -106,7 +108,7 @@ pub unsafe fn push_vertex_constants(
 ) {
     rrdevice.device().cmd_push_constants(
         command_buffer,
-        pipeline_layout,
+        pipeline_layout.raw(),
         vk::ShaderStageFlags::VERTEX,
         0,
         bytes,

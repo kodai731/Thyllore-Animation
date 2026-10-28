@@ -98,8 +98,8 @@ impl SampledTexture {
         Ok(texture)
     }
 
-    pub fn descriptor_set(&self) -> vk::DescriptorSet {
-        self.descriptor_set.handle()
+    pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_set.handle())
     }
 
     pub unsafe fn upload_regions(

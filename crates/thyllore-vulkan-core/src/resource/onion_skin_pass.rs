@@ -40,12 +40,12 @@ impl OnionSkinPassResources {
 
     #[inline]
     pub fn ghost_render_pass(&self) -> crate::types::RenderPass {
-        self.ghost_render_pass
+        crate::types::RenderPass(self.ghost_render_pass)
     }
 
     #[inline]
     pub fn composite_render_pass(&self) -> crate::types::RenderPass {
-        self.composite_render_pass
+        crate::types::RenderPass(self.composite_render_pass)
     }
 
     pub unsafe fn create(

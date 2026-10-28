@@ -94,12 +94,12 @@ impl RRGBuffer {
 
     #[inline]
     pub fn readback_staging_buffer(&self) -> crate::types::Buffer {
-        self.readback_staging_buffer
+        crate::types::Buffer(self.readback_staging_buffer)
     }
 
     #[inline]
     pub fn readback_staging_memory(&self) -> crate::types::DeviceMemory {
-        self.readback_staging_memory
+        crate::types::DeviceMemory(self.readback_staging_memory)
     }
 
     pub unsafe fn new(
@@ -393,12 +393,12 @@ impl RRGBuffer {
 
 pub unsafe fn read_picked_texel(
     rrdevice: &RRDevice,
-    staging_memory: vk::DeviceMemory,
+    staging_memory: crate::types::DeviceMemory,
 ) -> Option<(u32, [f32; 3])> {
     let ptr = rrdevice
         .device()
         .map_memory(
-            staging_memory,
+            staging_memory.raw(),
             0,
             READBACK_STAGING_SIZE,
             vk::MemoryMapFlags::empty(),
@@ -409,7 +409,7 @@ pub unsafe fn read_picked_texel(
     let position_ptr = (ptr as *const u8).add(READBACK_POSITION_OFFSET as usize) as *const f32;
     let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
 
-    rrdevice.device().unmap_memory(staging_memory);
+    rrdevice.device().unmap_memory(staging_memory.raw());
     Some((object_id, world_position))
 }
 

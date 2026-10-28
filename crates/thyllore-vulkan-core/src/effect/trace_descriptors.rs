@@ -42,20 +42,25 @@ impl RREffectTraceDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        tlas: vk::AccelerationStructureKHR,
+        tlas: crate::types::AccelerationStructure,
         trace_image_view: vk::ImageView,
-        hit_table: vk::Buffer,
+        hit_table: crate::types::Buffer,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set(frame_slot)?)
-            .acceleration_structure(effect_trace::TLAS, tlas)?
+            .acceleration_structure(effect_trace::TLAS, tlas.raw())?
             .image(
                 effect_trace::OUT_IMAGE,
                 trace_image_view,
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?
-            .buffer(effect_trace::HIT_TABLE, hit_table, 0, vk::WHOLE_SIZE as u64)?
+            .buffer(
+                effect_trace::HIT_TABLE,
+                hit_table.raw(),
+                0,
+                vk::WHOLE_SIZE as u64,
+            )?
             .apply(rrdevice);
         Ok(())
     }

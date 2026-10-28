@@ -24,8 +24,8 @@ pub struct ToneMapPushConstants {
 
 pub unsafe fn begin_tonemap_render_pass(
     ctx: &FrameRenderContext,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
+    render_pass: crate::types::RenderPass,
+    framebuffer: crate::types::Framebuffer,
     extent: vk::Extent2D,
     cmd: vk::CommandBuffer,
 ) {
@@ -54,8 +54,8 @@ pub unsafe fn begin_tonemap_render_pass(
     let clear_values = vec![color_clear_value, depth_clear_value, resolve_clear_value];
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
+        .render_pass(render_pass.raw())
+        .framebuffer(framebuffer.raw())
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -99,7 +99,7 @@ pub unsafe fn record_tonemap_draw(
         vk::PipelineBindPoint::GRAPHICS,
         pipeline.pipeline_layout,
         0,
-        &[descriptor.descriptor_set(frame_slot)?],
+        &[descriptor.descriptor_set(frame_slot)?.raw()],
         &[],
     );
 

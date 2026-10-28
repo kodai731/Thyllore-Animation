@@ -23,17 +23,95 @@ pub type Format = vk::Format;
 pub type Image = vk::Image;
 pub type ImageView = vk::ImageView;
 pub type Sampler = vk::Sampler;
-pub type Buffer = vk::Buffer;
-pub type DeviceMemory = vk::DeviceMemory;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Buffer(pub(crate) vk::Buffer);
+impl Buffer {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Buffer {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DeviceMemory(pub(crate) vk::DeviceMemory);
+impl DeviceMemory {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::DeviceMemory {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DescriptorSet(pub(crate) vk::DescriptorSet);
+impl DescriptorSet {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::DescriptorSet {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct RenderPass(pub(crate) vk::RenderPass);
+impl RenderPass {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::RenderPass {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Framebuffer(pub(crate) vk::Framebuffer);
+impl Framebuffer {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Framebuffer {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Pipeline(pub(crate) vk::Pipeline);
+impl Pipeline {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Pipeline {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PipelineLayout(pub(crate) vk::PipelineLayout);
+impl PipelineLayout {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::PipelineLayout {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct AccelerationStructure(pub(crate) vk::AccelerationStructureKHR);
+impl AccelerationStructure {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::AccelerationStructureKHR {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TransformMatrix(pub(crate) vk::TransformMatrixKHR);
+impl TransformMatrix {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::TransformMatrixKHR {
+        self.0
+    }
+
+    #[inline]
+    pub fn matrix(&self) -> [[f32; 4]; 3] {
+        self.0.matrix
+    }
+}
+
 pub type DeviceAddress = vk::DeviceAddress;
 pub type DeviceSize = vk::DeviceSize;
-pub type DescriptorSet = vk::DescriptorSet;
-pub type RenderPass = vk::RenderPass;
-pub type Framebuffer = vk::Framebuffer;
-pub type Pipeline = vk::Pipeline;
-pub type PipelineLayout = vk::PipelineLayout;
-pub type AccelerationStructure = vk::AccelerationStructureKHR;
-pub type TransformMatrix = vk::TransformMatrixKHR;
+
 pub type Extent2D = vk::Extent2D;
 pub type Extent3D = vk::Extent3D;
 pub type Rect2D = vk::Rect2D;

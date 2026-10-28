@@ -21,7 +21,7 @@ impl BloomMipTarget {
     ) -> Self {
         Self {
             view,
-            framebuffer,
+            framebuffer: framebuffer.raw(),
             extent,
         }
     }
@@ -43,12 +43,12 @@ pub struct BloomChain {
 impl BloomChain {
     #[inline]
     pub fn downsample_render_pass(&self) -> crate::types::RenderPass {
-        self.downsample_render_pass
+        crate::types::RenderPass(self.downsample_render_pass)
     }
 
     #[inline]
     pub fn upsample_render_pass(&self) -> crate::types::RenderPass {
-        self.upsample_render_pass
+        crate::types::RenderPass(self.upsample_render_pass)
     }
 
     #[inline]

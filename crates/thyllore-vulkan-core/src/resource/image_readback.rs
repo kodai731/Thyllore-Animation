@@ -96,7 +96,7 @@ pub unsafe fn read_buffer_bytes(
     instance: &Instance,
     rrdevice: &RRDevice,
     command_pool: crate::types::CommandPool,
-    source: vk::Buffer,
+    source: crate::types::Buffer,
     byte_size: vk::DeviceSize,
 ) -> Result<Vec<u8>> {
     let (buffer, buffer_memory) = create_buffer(
@@ -114,7 +114,7 @@ pub unsafe fn read_buffer_bytes(
         .size(byte_size);
     rrdevice
         .device()
-        .cmd_copy_buffer(command_buffer, source, buffer, &[region.build()]);
+        .cmd_copy_buffer(command_buffer, source.raw(), buffer, &[region.build()]);
     end_single_time_commands(
         rrdevice,
         rrdevice.graphics_queue,

@@ -14,8 +14,8 @@ pub unsafe fn record_gbuffer_pass(
     ctx: &FrameRenderContext,
     gbuffer: &RRGBuffer,
     pipeline: &RRPipeline,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
+    render_pass: crate::types::RenderPass,
+    framebuffer: crate::types::Framebuffer,
     draw_mesh_indices: &[usize],
     heatmap_mode: u32,
     cmd: vk::CommandBuffer,
@@ -32,8 +32,8 @@ pub unsafe fn record_gbuffer_pass(
     let clear_values = create_clear_values();
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
+        .render_pass(render_pass.raw())
+        .framebuffer(framebuffer.raw())
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -157,7 +157,7 @@ unsafe fn draw_single_mesh(
         vk::PipelineBindPoint::GRAPHICS,
         pipeline.pipeline_layout,
         0,
-        &[frame_set],
+        &[frame_set.raw()],
         &[],
     );
 
@@ -183,7 +183,7 @@ unsafe fn draw_single_mesh(
         vk::PipelineBindPoint::GRAPHICS,
         pipeline.pipeline_layout,
         2,
-        &[object_set],
+        &[object_set.raw()],
         &[],
     );
 

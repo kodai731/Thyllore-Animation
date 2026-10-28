@@ -116,7 +116,7 @@ pub struct ReducedResolveTarget {
 impl ReducedResolveTarget {
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     #[inline]
@@ -152,13 +152,13 @@ impl ReducedResolveTarget {
 
     pub fn overlay_pass(
         &self,
-        framebuffer: vk::Framebuffer,
+        framebuffer: crate::types::Framebuffer,
         scale: OverlayResolveScale,
         full: vk::Extent2D,
     ) -> OverlayPass {
         OverlayPass {
             render_pass: self.render_pass,
-            framebuffer,
+            framebuffer: framebuffer.raw(),
             extent: scale.reduce_extent(full),
             load: OverlayAttachmentLoad::Clear([0.0; 4]),
         }

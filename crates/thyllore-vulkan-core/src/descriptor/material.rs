@@ -26,7 +26,7 @@ pub struct Material {
 impl Material {
     #[inline]
     pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
-        self.descriptor_set
+        crate::types::DescriptorSet(self.descriptor_set)
     }
 }
 

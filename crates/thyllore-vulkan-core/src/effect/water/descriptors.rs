@@ -39,7 +39,7 @@ impl RRWaterDescriptorSet {
         &self,
         frame_slot: usize,
         history_index: usize,
-    ) -> Result<vk::DescriptorSet> {
+    ) -> Result<crate::types::DescriptorSet> {
         let sets = self.frames.get(frame_slot).ok_or_else(|| {
             anyhow!(
                 "water descriptor slot {frame_slot} exceeds {} frames",
@@ -48,6 +48,7 @@ impl RRWaterDescriptorSet {
         })?;
         sets.get(history_index)
             .copied()
+            .map(crate::types::DescriptorSet)
             .ok_or_else(|| anyhow!("water history index {history_index} is out of range"))
     }
 
@@ -62,14 +63,14 @@ impl RRWaterDescriptorSet {
         history_sampler: vk::Sampler,
         trace_image_view: vk::ImageView,
         trace_sampler: vk::Sampler,
-        tlas: vk::AccelerationStructureKHR,
-        hit_table: vk::Buffer,
+        tlas: crate::types::AccelerationStructure,
+        hit_table: crate::types::Buffer,
     ) -> Result<()> {
         for i in 0..WATER_HISTORY_SET_COUNT {
             let descriptor_set = self.descriptor_set(frame_slot, i)?;
             let previous_history_view = history_image_views[1 - i];
             self.layout
-                .writer(descriptor_set)
+                .writer(descriptor_set.raw())
                 .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .image(
                     water_resolve::SCENE_COLOR_SAMPLER,
@@ -89,10 +90,10 @@ impl RRWaterDescriptorSet {
                     trace_sampler,
                     vk::ImageLayout::GENERAL,
                 )?
-                .acceleration_structure(water_resolve::SCENE_TLAS, tlas)?
+                .acceleration_structure(water_resolve::SCENE_TLAS, tlas.raw())?
                 .buffer(
                     water_resolve::HIT_TABLE,
-                    hit_table,
+                    hit_table.raw(),
                     0,
                     vk::WHOLE_SIZE as u64,
                 )?

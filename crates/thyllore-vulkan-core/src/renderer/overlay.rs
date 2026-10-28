@@ -116,12 +116,12 @@ pub struct OverlayPass {
 impl OverlayPass {
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     #[inline]
     pub fn framebuffer(&self) -> crate::types::Framebuffer {
-        self.framebuffer
+        crate::types::Framebuffer(self.framebuffer)
     }
 
     #[inline]
@@ -142,7 +142,7 @@ impl OverlayNodeSpec {
         &self,
         rrdevice: &RRDevice,
         rrrender: &RRRender,
-        render_pass: vk::RenderPass,
+        render_pass: crate::types::RenderPass,
         descriptor_layouts: &[&ReflectedSetLayout],
         extent: vk::Extent2D,
     ) -> Result<RRPipeline> {
@@ -187,10 +187,12 @@ impl OverlayNodeSpec {
         render_area: vk::Rect2D,
         pipeline: &RRPipeline,
         push_constants: Option<&[u8]>,
-        descriptor_sets: &[vk::DescriptorSet],
+        descriptor_sets: &[crate::types::DescriptorSet],
         draws: &[OverlayInstanceDraw],
     ) -> Result<()> {
         self.ensure_push_constants_match(push_constants)?;
+        let descriptor_sets: Vec<vk::DescriptorSet> =
+            descriptor_sets.iter().map(|set| set.raw()).collect();
         self.begin_render_pass(rrdevice, cmd, pass, render_area);
 
         rrdevice.device().cmd_bind_pipeline(
@@ -216,7 +218,7 @@ impl OverlayNodeSpec {
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
                 0,
-                descriptor_sets,
+                &descriptor_sets,
                 &draw.dynamic_offsets,
             );
             draw_fullscreen_triangle(&rrdevice.device(), cmd);

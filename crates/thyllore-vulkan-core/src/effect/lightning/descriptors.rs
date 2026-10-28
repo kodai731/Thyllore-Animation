@@ -12,7 +12,7 @@ use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
 #[derive(Clone, Debug, Default)]
 pub struct LightningResolveDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
     pub scene_depth_sampler: vk::Sampler,
 }
 
@@ -39,6 +39,10 @@ impl LightningResolveDescriptorSet {
             descriptor_set,
             scene_depth_sampler,
         })
+    }
+
+    pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_set)
     }
 
     pub unsafe fn write_all(

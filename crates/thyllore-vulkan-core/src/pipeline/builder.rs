@@ -4,7 +4,7 @@ use crate::descriptor::{
     shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
 };
 use crate::render::pass::RRRender;
-use crate::types::{Pipeline, PipelineLayout};
+use crate::types::{Pipeline, PipelineLayout, RenderPass};
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
@@ -313,8 +313,8 @@ impl PipelineBuilder {
     }
 
     /// Set custom render pass (for G-Buffer, etc.)
-    pub fn custom_render_pass(mut self, render_pass: vk::RenderPass) -> Self {
-        self.custom_render_pass = Some(render_pass);
+    pub fn custom_render_pass(mut self, render_pass: RenderPass) -> Self {
+        self.custom_render_pass = Some(render_pass.raw());
         self
     }
 
@@ -588,12 +588,12 @@ impl PipelineBuilder {
 impl RRPipeline {
     #[inline]
     pub fn pipeline_layout(&self) -> PipelineLayout {
-        self.pipeline_layout
+        PipelineLayout(self.pipeline_layout)
     }
 
     #[inline]
     pub fn pipeline(&self) -> Pipeline {
-        self.pipeline
+        Pipeline(self.pipeline)
     }
 
     /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)

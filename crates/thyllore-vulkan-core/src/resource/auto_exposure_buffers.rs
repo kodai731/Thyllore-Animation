@@ -33,12 +33,12 @@ pub struct AutoExposureBuffers {
 impl AutoExposureBuffers {
     #[inline]
     pub fn histogram_buffer(&self) -> crate::types::Buffer {
-        self.histogram_buffer
+        crate::types::Buffer(self.histogram_buffer)
     }
 
     #[inline]
     pub fn luminance_buffer(&self) -> crate::types::Buffer {
-        self.luminance_buffer
+        crate::types::Buffer(self.luminance_buffer)
     }
 
     pub unsafe fn new(

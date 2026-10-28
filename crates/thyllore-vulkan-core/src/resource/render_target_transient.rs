@@ -305,29 +305,31 @@ impl RenderTargetTransient {
     /// The framebuffer `framebuffer()` cached for this render pass and attachment set, if any.
     pub fn cached_framebuffer(
         &self,
-        render_pass: vk::RenderPass,
+        render_pass: crate::types::RenderPass,
         views: &[vk::ImageView],
-    ) -> Option<vk::Framebuffer> {
-        let key = FramebufferKey::new(render_pass, views).ok()?;
-        self.framebuffers.get(&key).copied()
+    ) -> Option<crate::types::Framebuffer> {
+        let key = FramebufferKey::new(render_pass.raw(), views).ok()?;
+        self.framebuffers
+            .get(&key)
+            .map(|fb| crate::types::Framebuffer(*fb))
     }
 
     pub unsafe fn framebuffer(
         &mut self,
         rrdevice: &RRDevice,
-        render_pass: vk::RenderPass,
+        render_pass: crate::types::RenderPass,
         views: &[vk::ImageView],
         width: u32,
         height: u32,
-    ) -> Result<vk::Framebuffer> {
-        let key = FramebufferKey::new(render_pass, views)?;
+    ) -> Result<crate::types::Framebuffer> {
+        let key = FramebufferKey::new(render_pass.raw(), views)?;
 
         if let Some(framebuffer) = self.framebuffers.get(&key) {
-            return Ok(*framebuffer);
+            return Ok(crate::types::Framebuffer(*framebuffer));
         }
 
         let info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass)
+            .render_pass(render_pass.raw())
             .attachments(views)
             .width(width)
             .height(height)
@@ -335,7 +337,7 @@ impl RenderTargetTransient {
         let framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         self.framebuffers.insert(key, framebuffer);
 
-        Ok(framebuffer)
+        Ok(crate::types::Framebuffer(framebuffer))
     }
 
     unsafe fn destroy_framebuffers_using(&mut self, device: &Device, view: vk::ImageView) {

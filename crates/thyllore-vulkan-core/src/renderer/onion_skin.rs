@@ -187,7 +187,7 @@ unsafe fn draw_ghosts(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline_layout,
             0,
-            &[frame_set],
+            &[frame_set.raw()],
             &[],
         );
 
@@ -213,7 +213,7 @@ unsafe fn draw_ghosts(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline_layout,
             2,
-            &[object_set],
+            &[object_set.raw()],
             &[],
         );
 

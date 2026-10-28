@@ -26,10 +26,11 @@ impl RRAutoExposureHistogramDescriptorSet {
         })
     }
 
-    pub fn descriptor_set(&self, frame_slot: usize) -> Result<vk::DescriptorSet> {
+    pub fn descriptor_set(&self, frame_slot: usize) -> Result<crate::types::DescriptorSet> {
         self.descriptor_sets
             .get(frame_slot)
             .copied()
+            .map(crate::types::DescriptorSet)
             .ok_or_else(|| {
                 anyhow!(
                     "auto exposure histogram descriptor slot {frame_slot} exceeds {} sets",
@@ -43,7 +44,7 @@ impl RRAutoExposureHistogramDescriptorSet {
         rrdevice: &RRDevice,
         hdr_image_view: vk::ImageView,
         hdr_sampler: vk::Sampler,
-        histogram_buffer: vk::Buffer,
+        histogram_buffer: crate::types::Buffer,
         histogram_buffer_size: u64,
     ) -> Result<()> {
         for descriptor_set in &self.descriptor_sets {
@@ -57,7 +58,7 @@ impl RRAutoExposureHistogramDescriptorSet {
                 )?
                 .buffer(
                     auto_exposure_histogram::HISTOGRAM,
-                    histogram_buffer,
+                    histogram_buffer.raw(),
                     0,
                     histogram_buffer_size,
                 )?
@@ -74,7 +75,7 @@ impl RRAutoExposureHistogramDescriptorSet {
         hdr_sampler: vk::Sampler,
     ) -> Result<()> {
         self.layout
-            .writer(self.descriptor_set(frame_slot)?)
+            .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 auto_exposure_histogram::HDR_IMAGE,
                 hdr_image_view,
@@ -114,22 +115,22 @@ impl RRAutoExposureAverageDescriptorSet {
     pub unsafe fn update_bindings(
         &self,
         rrdevice: &RRDevice,
-        histogram_buffer: vk::Buffer,
+        histogram_buffer: crate::types::Buffer,
         histogram_buffer_size: u64,
-        luminance_buffer: vk::Buffer,
+        luminance_buffer: crate::types::Buffer,
         luminance_buffer_size: u64,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
             .buffer(
                 auto_exposure_average::HISTOGRAM,
-                histogram_buffer,
+                histogram_buffer.raw(),
                 0,
                 histogram_buffer_size,
             )?
             .buffer(
                 auto_exposure_average::RESULT,
-                luminance_buffer,
+                luminance_buffer.raw(),
                 0,
                 luminance_buffer_size,
             )?

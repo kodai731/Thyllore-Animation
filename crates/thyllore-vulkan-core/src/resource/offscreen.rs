@@ -44,7 +44,7 @@ impl OffscreenFramebuffer {
 
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     #[inline]
@@ -54,7 +54,7 @@ impl OffscreenFramebuffer {
 
     #[inline]
     pub fn framebuffer(&self) -> crate::types::Framebuffer {
-        self.framebuffer
+        crate::types::Framebuffer(self.framebuffer)
     }
 
     #[inline]

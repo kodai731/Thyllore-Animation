@@ -9,8 +9,8 @@ use crate::types::Instance;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct WaterBindingKey {
-    pub tlas: vk::AccelerationStructureKHR,
-    pub hit_table: vk::Buffer,
+    pub tlas: crate::types::AccelerationStructure,
+    pub hit_table: crate::types::Buffer,
     pub history_views: [vk::ImageView; 2],
     pub scene_color_generation: u64,
     pub trace_generation: u64,

@@ -46,7 +46,7 @@ pub struct HitShadingTable {
 impl HitShadingTable {
     #[inline]
     pub fn buffer(&self) -> crate::types::Buffer {
-        self.buffer
+        crate::types::Buffer(self.buffer)
     }
 
     /// Create a new HitShadingTable with capacity for `capacity` instances.

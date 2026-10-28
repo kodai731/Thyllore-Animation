@@ -10,7 +10,7 @@ use crate::vulkan::*;
 pub struct RRRender {
     // Main render pass (for final presentation)
     pub(crate) render_pass: vk::RenderPass,
-    pub(crate) framebuffers: Vec<vk::Framebuffer>,
+    pub(crate) framebuffers: Vec<crate::types::Framebuffer>,
     pub(crate) depth_image: vk::Image,
     pub(crate) depth_image_memory: vk::DeviceMemory,
     pub(crate) depth_image_view: vk::ImageView,
@@ -29,7 +29,7 @@ pub struct RRRender {
 impl RRRender {
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     #[inline]
@@ -39,12 +39,12 @@ impl RRRender {
 
     #[inline]
     pub fn gbuffer_render_pass(&self) -> crate::types::RenderPass {
-        self.gbuffer_render_pass
+        crate::types::RenderPass(self.gbuffer_render_pass)
     }
 
     #[inline]
     pub fn gbuffer_framebuffer(&self) -> crate::types::Framebuffer {
-        self.gbuffer_framebuffer
+        crate::types::Framebuffer(self.gbuffer_framebuffer)
     }
 
     #[inline]
@@ -55,7 +55,7 @@ impl RRRender {
     pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {
         let device = &rrdevice.device();
         for fb in self.framebuffers.drain(..) {
-            device.destroy_framebuffer(fb, None);
+            device.destroy_framebuffer(fb.raw(), None);
         }
 
         destroy_image_objects(

@@ -57,8 +57,8 @@ pub unsafe fn begin_render_pass_cleared(
     let clear_values = [color_clear_value, depth_clear_value];
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
+        .render_pass(render_pass.raw())
+        .framebuffer(framebuffer.raw())
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -164,6 +164,7 @@ pub unsafe fn record_picked_texel_copy(
     staging_buffer: Buffer,
     pixel: (u32, u32),
 ) {
+    let staging_buffer = staging_buffer.raw();
     let (px, py) = pixel;
 
     let subresource_range = vk::ImageSubresourceRange {

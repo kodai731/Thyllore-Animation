@@ -24,7 +24,10 @@ pub unsafe fn create_framebuffers(
                 .layers(1);
             rrdevice.device().create_framebuffer(&create_info, None)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(crate::types::Framebuffer)
+        .collect();
     println!("created framebuffers");
     Ok(())
 }

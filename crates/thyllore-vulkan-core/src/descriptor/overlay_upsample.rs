@@ -36,8 +36,8 @@ impl OverlayUpsampleDescriptorSet {
         })
     }
 
-    pub fn descriptor_set(&self, frame_slot: usize) -> vk::DescriptorSet {
-        self.descriptor_sets[frame_slot]
+    pub fn descriptor_set(&self, frame_slot: usize) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_sets[frame_slot])
     }
 
     pub unsafe fn update_image_views_at(

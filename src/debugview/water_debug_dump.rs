@@ -152,7 +152,7 @@ fn build_tlas_instances_json(
             json!({
                 "blas_index": blas_index,
                 "mesh_index": mesh_index,
-                "transform": blas.transform().matrix,
+                "transform": blas.transform().matrix(),
                 "vertex_count": mesh.vertex_data.vertices.len(),
                 "index_count": mesh.vertex_data.indices.len(),
             })
@@ -169,7 +169,7 @@ fn build_tlas_instances_json(
                 json!({
                     "blas_index": blas_count + water_index,
                     "kind": "water",
-                    "transform": blas.transform().matrix,
+                    "transform": blas.transform().matrix(),
                 })
             }),
     );

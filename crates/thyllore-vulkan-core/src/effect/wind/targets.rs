@@ -43,7 +43,7 @@ unsafe fn create_framebuffer(
 /// shadow volume baked once per frame for every instance slot.
 #[derive(Debug, Default)]
 pub struct WindRenderTargets {
-    pub render_pass: vk::RenderPass,
+    pub(crate) render_pass: vk::RenderPass,
     pub framebuffer: vk::Framebuffer,
     pub reduced: crate::renderer::ReducedResolveTarget,
     pub shadow_volume: VolumeImage,
@@ -52,6 +52,10 @@ pub struct WindRenderTargets {
 }
 
 impl WindRenderTargets {
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
     pub fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,

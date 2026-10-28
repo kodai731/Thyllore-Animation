@@ -184,9 +184,7 @@ impl WaterFrame {
             && gpu_state
                 .caustic_descriptor
                 .as_ref()
-                .is_some_and(|descriptor| {
-                    descriptor.splat_descriptor_set != DescriptorSet::default()
-                })
+                .is_some_and(|descriptor| descriptor.is_allocated())
     }
 
     fn has_visible_instance(&self) -> bool {

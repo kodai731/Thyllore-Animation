@@ -103,7 +103,7 @@ pub struct RRIndexBuffer {
 impl RRIndexBuffer {
     #[inline]
     pub fn buffer(&self) -> crate::types::Buffer {
-        self.buffer
+        crate::types::Buffer(self.buffer)
     }
 
     pub unsafe fn new(
@@ -195,7 +195,7 @@ pub struct RRVertexBuffer {
 impl RRVertexBuffer {
     #[inline]
     pub fn buffer(&self) -> crate::types::Buffer {
-        self.buffer
+        crate::types::Buffer(self.buffer)
     }
 
     pub unsafe fn new(

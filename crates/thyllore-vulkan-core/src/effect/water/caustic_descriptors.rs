@@ -35,13 +35,17 @@ impl RRWaterCausticDescriptorSet {
         })
     }
 
+    pub fn is_allocated(&self) -> bool {
+        self.splat_descriptor_set != vk::DescriptorSet::null()
+    }
+
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
         caustic_accum_view: vk::ImageView,
         position_image_view: vk::ImageView,
-        tlas: Option<vk::AccelerationStructureKHR>,
-        scene_uniform_buffer: vk::Buffer,
+        tlas: Option<crate::types::AccelerationStructure>,
+        scene_uniform_buffer: crate::types::Buffer,
         water_ubo: vk::Buffer,
         hdr_color_image_view: vk::ImageView,
     ) -> Result<()> {
@@ -68,13 +72,13 @@ impl RRWaterCausticDescriptorSet {
                 vk::ImageLayout::GENERAL,
             )?;
         if let Some(tlas) = tlas {
-            splat_writer =
-                splat_writer.acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?;
+            splat_writer = splat_writer
+                .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?;
         }
         splat_writer
             .buffer(
                 water_caustic_splat::SCENE_DATA,
-                scene_uniform_buffer,
+                scene_uniform_buffer.raw(),
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
@@ -102,7 +106,7 @@ impl RRWaterCausticDescriptorSet {
             )?
             .buffer(
                 water_caustic_apply::SCENE_DATA,
-                scene_uniform_buffer,
+                scene_uniform_buffer.raw(),
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
@@ -120,14 +124,14 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn update_tlas(
         &mut self,
         rrdevice: &RRDevice,
-        tlas: vk::AccelerationStructureKHR,
+        tlas: crate::types::AccelerationStructure,
     ) -> Result<()> {
         if self.splat_descriptor_set == vk::DescriptorSet::null() {
             return Ok(());
         }
         self.splat_layout
             .writer(self.splat_descriptor_set)
-            .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?
+            .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?
             .apply(rrdevice);
         Ok(())
     }

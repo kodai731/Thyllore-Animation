@@ -28,7 +28,7 @@ pub struct HostBuffer {
 impl HostBuffer {
     #[inline]
     pub fn buffer(&self) -> crate::types::Buffer {
-        self.buffer
+        crate::types::Buffer(self.buffer)
     }
 
     #[inline]

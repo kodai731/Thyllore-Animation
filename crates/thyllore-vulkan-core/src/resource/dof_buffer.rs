@@ -17,7 +17,7 @@ pub struct DofBuffer {
 impl DofBuffer {
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     #[inline]

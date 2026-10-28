@@ -56,7 +56,7 @@ pub unsafe fn create_wind_gpu_state(
     let resolve_pipeline = WIND_RESOLVE_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &resolve_descriptor.layout,
@@ -67,7 +67,7 @@ pub unsafe fn create_wind_gpu_state(
     let upsample_pipeline = UPSAMPLE_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[&upsample_descriptor.layout],
         targets.extent(),
     )?;

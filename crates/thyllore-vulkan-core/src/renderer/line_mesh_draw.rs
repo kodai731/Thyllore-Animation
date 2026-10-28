@@ -9,7 +9,7 @@ use thyllore_render_core::{MeshBuffers, RenderInfo};
 pub struct LineMeshDrawOptions {
     pub index_count_override: Option<u32>,
     pub bind_object_set: bool,
-    pub(crate) frame_set_override: Option<vk::DescriptorSet>,
+    pub(crate) frame_set_override: Option<crate::types::DescriptorSet>,
     pub pipeline_override: Option<usize>,
 }
 
@@ -85,8 +85,8 @@ unsafe fn bind_line_mesh_buffers(
     ctx: &FrameRenderContext,
     pipeline: &RRPipeline,
     render_info: &RenderInfo,
-    vertex_buffer: vk::Buffer,
-    index_buffer: vk::Buffer,
+    vertex_buffer: crate::types::Buffer,
+    index_buffer: crate::types::Buffer,
     options: &LineMeshDrawOptions,
     cmd: vk::CommandBuffer,
 ) {
@@ -94,8 +94,8 @@ unsafe fn bind_line_mesh_buffers(
     let image_index = ctx.image_index;
     let graphics = ctx.graphics;
 
-    device.cmd_bind_vertex_buffers(cmd, 0, &[vertex_buffer], &[0]);
-    device.cmd_bind_index_buffer(cmd, index_buffer, 0, vk::IndexType::UINT32);
+    device.cmd_bind_vertex_buffers(cmd, 0, &[vertex_buffer.raw()], &[0]);
+    device.cmd_bind_index_buffer(cmd, index_buffer.raw(), 0, vk::IndexType::UINT32);
 
     let descriptor_set_zero = options
         .frame_set_override
@@ -105,7 +105,7 @@ unsafe fn bind_line_mesh_buffers(
         vk::PipelineBindPoint::GRAPHICS,
         pipeline.pipeline_layout,
         0,
-        &[descriptor_set_zero],
+        &[descriptor_set_zero.raw()],
         &[],
     );
 
@@ -119,7 +119,7 @@ unsafe fn bind_line_mesh_buffers(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             2,
-            &[object_set],
+            &[object_set.raw()],
             &[],
         );
     }
@@ -127,7 +127,7 @@ unsafe fn bind_line_mesh_buffers(
 
 pub unsafe fn push_fragment_alpha_constant(
     ctx: &FrameRenderContext,
-    pipeline_layout: vk::PipelineLayout,
+    pipeline_layout: crate::types::PipelineLayout,
     alpha: f32,
     cmd: vk::CommandBuffer,
 ) {
@@ -137,7 +137,7 @@ pub unsafe fn push_fragment_alpha_constant(
     );
     ctx.device.device().cmd_push_constants(
         cmd,
-        pipeline_layout,
+        pipeline_layout.raw(),
         vk::ShaderStageFlags::FRAGMENT,
         0,
         alpha_bytes,

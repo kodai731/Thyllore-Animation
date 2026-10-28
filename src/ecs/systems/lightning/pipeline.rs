@@ -46,7 +46,7 @@ pub unsafe fn create_lightning_gpu_state(
     let resolve_pipeline = LIGHTNING_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &resolve_descriptor.layout,

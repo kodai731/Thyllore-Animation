@@ -62,7 +62,7 @@ impl HistoryTargets {
 
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
-        self.render_pass
+        crate::types::RenderPass(self.render_pass)
     }
 
     pub(crate) unsafe fn new(

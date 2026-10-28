@@ -10,13 +10,17 @@ use crate::vulkan::*;
 /// Render pass and framebuffer that blend the lightning resolve pass onto the HDR color image.
 #[derive(Debug, Default)]
 pub struct LightningRenderTargets {
-    pub render_pass: vk::RenderPass,
+    pub(crate) render_pass: vk::RenderPass,
     pub framebuffer: vk::Framebuffer,
     pub width: u32,
     pub height: u32,
 }
 
 impl LightningRenderTargets {
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
     pub fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,

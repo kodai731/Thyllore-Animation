@@ -68,7 +68,7 @@ pub unsafe fn record_auto_exposure_pass(
     dispatch_histogram(
         device,
         histogram_pipeline,
-        histogram_descriptor.descriptor_set(frame_slot)?,
+        histogram_descriptor.descriptor_set(frame_slot)?.raw(),
         &histogram_push,
         buffers,
         cmd,

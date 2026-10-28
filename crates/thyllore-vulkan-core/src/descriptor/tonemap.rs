@@ -26,10 +26,11 @@ impl RRToneMapDescriptorSet {
         })
     }
 
-    pub fn descriptor_set(&self, frame_slot: usize) -> Result<vk::DescriptorSet> {
+    pub fn descriptor_set(&self, frame_slot: usize) -> Result<crate::types::DescriptorSet> {
         self.descriptor_sets
             .get(frame_slot)
             .copied()
+            .map(crate::types::DescriptorSet)
             .ok_or_else(|| {
                 anyhow!(
                     "tonemap descriptor slot {frame_slot} exceeds {} sets",
@@ -45,7 +46,7 @@ impl RRToneMapDescriptorSet {
         hdr_sampler: vk::Sampler,
         position_image_view: vk::ImageView,
         position_sampler: vk::Sampler,
-        scene_buffer: vk::Buffer,
+        scene_buffer: crate::types::Buffer,
         scene_buffer_size: vk::DeviceSize,
     ) -> Result<()> {
         self.update_hdr_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
@@ -74,7 +75,7 @@ impl RRToneMapDescriptorSet {
         hdr_sampler: vk::Sampler,
     ) -> Result<()> {
         self.layout
-            .writer(self.descriptor_set(frame_slot)?)
+            .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 tonemap::HDR_SAMPLER,
                 hdr_image_view,
@@ -105,7 +106,7 @@ impl RRToneMapDescriptorSet {
         bloom_sampler: vk::Sampler,
     ) -> Result<()> {
         self.layout
-            .writer(self.descriptor_set(frame_slot)?)
+            .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 tonemap::BLOOM_SAMPLER,
                 bloom_image_view,
@@ -139,13 +140,18 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn update_scene_buffer(
         &self,
         rrdevice: &RRDevice,
-        scene_buffer: vk::Buffer,
+        scene_buffer: crate::types::Buffer,
         scene_buffer_size: vk::DeviceSize,
     ) -> Result<()> {
         for descriptor_set in &self.descriptor_sets {
             self.layout
                 .writer(*descriptor_set)
-                .buffer(tonemap::SCENE_DATA, scene_buffer, 0, scene_buffer_size)?
+                .buffer(
+                    tonemap::SCENE_DATA,
+                    scene_buffer.raw(),
+                    0,
+                    scene_buffer_size,
+                )?
                 .apply(rrdevice);
         }
         Ok(())

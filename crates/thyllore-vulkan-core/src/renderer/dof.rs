@@ -25,7 +25,7 @@ pub unsafe fn record_dof_pass(
     pipeline: &RRPipeline,
     dof_descriptor: &RRDofDescriptorSet,
     dof_buffer: &DofBuffer,
-    framebuffer: vk::Framebuffer,
+    framebuffer: crate::types::Framebuffer,
     settings: &DepthOfField,
     camera: &PhysicalCameraParameters,
     camera_near_plane: f32,
@@ -45,7 +45,13 @@ pub unsafe fn record_dof_pass(
         enabled: if settings.enabled { 1 } else { 0 },
     };
 
-    begin_render_pass(device, dof_buffer.render_pass, framebuffer, cmd, extent);
+    begin_render_pass(
+        device,
+        dof_buffer.render_pass,
+        framebuffer.raw(),
+        cmd,
+        extent,
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 

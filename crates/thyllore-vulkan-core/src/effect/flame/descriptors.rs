@@ -21,7 +21,7 @@ pub struct FlameImageBindings {
 #[derive(Clone, Debug, Default)]
 pub struct RRFlameDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
+    pub(crate) descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
     pub scene_depth_sampler: vk::Sampler,
 }
 
@@ -43,6 +43,10 @@ impl RRFlameDescriptorSet {
             descriptor_sets: [sets[0], sets[1]],
             scene_depth_sampler,
         })
+    }
+
+    pub fn descriptor_set(&self, history_index: usize) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_sets[history_index])
     }
 
     pub unsafe fn write_all(

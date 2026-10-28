@@ -2,7 +2,8 @@ use anyhow::Result;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{
-    imgui_layout_spec, imgui_texture_id, shader_bindings, ReflectedSetLayout,
+    allocate_imgui_texture_set, imgui_layout_spec, imgui_texture_id, write_imgui_texture_set,
+    ReflectedSetLayout,
 };
 use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
@@ -86,7 +87,7 @@ impl ViewportState {
         offscreen: &OffscreenFramebuffer,
     ) -> Result<(ReflectedSetLayout, DescriptorSet)> {
         let layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+        let descriptor_set = allocate_imgui_texture_set(rrdevice, &layout)?;
 
         Self::update_descriptor_set(rrdevice, &layout, descriptor_set, offscreen)?;
 
@@ -99,15 +100,13 @@ impl ViewportState {
         descriptor_set: DescriptorSet,
         offscreen: &OffscreenFramebuffer,
     ) -> Result<()> {
-        layout
-            .writer(descriptor_set)
-            .sampled_image(
-                shader_bindings::imgui::TEX_SAMPLER,
-                offscreen.resolve_image_view(),
-                offscreen.sampler(),
-            )?
-            .apply(rrdevice);
-        Ok(())
+        write_imgui_texture_set(
+            rrdevice,
+            layout,
+            descriptor_set,
+            offscreen.resolve_image_view(),
+            offscreen.sampler(),
+        )
     }
 
     pub unsafe fn resize(

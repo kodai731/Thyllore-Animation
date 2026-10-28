@@ -128,12 +128,12 @@ impl OnionSkinGpuState {
 
     #[inline]
     pub fn source_index_buffer(&self) -> crate::types::Buffer {
-        self.source_index_buffer
+        crate::types::Buffer(self.source_index_buffer)
     }
 
     #[inline]
     pub fn set_source_index_buffer(&mut self, buffer: crate::types::Buffer) {
-        self.source_index_buffer = buffer;
+        self.source_index_buffer = buffer.raw();
     }
 
     pub fn active_ghost_count(&self) -> usize {

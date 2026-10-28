@@ -817,7 +817,7 @@ impl RRPipeline {
         })
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         if self.pipeline != vk::Pipeline::null() {
             device.destroy_pipeline(self.pipeline, None);
         }

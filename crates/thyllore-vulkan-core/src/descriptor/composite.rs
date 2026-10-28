@@ -91,7 +91,7 @@ impl RRCompositeDescriptorSet {
         })
     }
 
-    pub unsafe fn allocate_and_update(
+    pub(crate) unsafe fn allocate_and_update(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,

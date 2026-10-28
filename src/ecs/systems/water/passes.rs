@@ -860,7 +860,7 @@ unsafe fn record_water_ubo_updates(
             command_buffer,
             i,
             &ubo,
-            ShaderStage::Fragment | ShaderStage::Compute,
+            &[ShaderStage::Fragment, ShaderStage::Compute],
         )?;
         instance_ubos.push((ubo, water_ubo.slot_offset(i)? as u32));
     }

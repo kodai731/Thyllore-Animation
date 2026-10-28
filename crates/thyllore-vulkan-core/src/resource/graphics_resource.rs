@@ -319,32 +319,6 @@ impl GraphicsResources {
         self.meshes.clear();
         self.mesh_material_ids.clear();
     }
-
-    pub fn create_pipeline_key(
-        &self,
-        vertex_shader: &str,
-        fragment_shader: &str,
-        topology: vk::PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
-        depth_test_enable: bool,
-        blend_enable: bool,
-        render_pass: vk::RenderPass,
-    ) -> crate::pipeline::PipelineKey {
-        crate::pipeline::PipelineKey::new(
-            vertex_shader,
-            fragment_shader,
-            topology,
-            polygon_mode,
-            cull_mode,
-            depth_test_enable,
-            depth_test_enable,
-            blend_enable,
-            vk::SampleCountFlags::_1,
-            1,
-            render_pass,
-        )
-    }
 }
 
 impl GpuResource for GraphicsResources {

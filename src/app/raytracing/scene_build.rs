@@ -93,14 +93,12 @@ pub unsafe fn rebuild_acceleration_structures(
     }
 
     for primitive in procedural_primitives {
-        if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
-            let blas = RRAccelerationStructure::create_procedural_blas(
-                instance,
-                device,
-                command_pool.as_ref(),
-                &primitive.model,
-                *aabb,
-            )?;
+        if let Some(blas) = RRAccelerationStructure::create_procedural_blas(
+            instance,
+            device,
+            command_pool.as_ref(),
+            primitive,
+        )? {
             acceleration_structure.procedural_blas.push(blas);
         }
     }

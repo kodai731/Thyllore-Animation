@@ -51,7 +51,7 @@ pub unsafe fn bind_ray_tracing(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
     pipeline: &RRRayTracingPipeline,
-    descriptor_sets: &[vk::DescriptorSet],
+    descriptor_sets: &[crate::types::DescriptorSet],
 ) {
     let command_buffer = command_buffer.raw();
     rrdevice.device().cmd_bind_pipeline(
@@ -64,7 +64,10 @@ pub unsafe fn bind_ray_tracing(
         vk::PipelineBindPoint::RAY_TRACING_KHR,
         pipeline.pipeline_layout,
         0,
-        descriptor_sets,
+        &descriptor_sets
+            .iter()
+            .map(|ds| ds.raw())
+            .collect::<Vec<_>>(),
         &[],
     );
 }

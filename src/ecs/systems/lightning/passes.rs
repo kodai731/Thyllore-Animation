@@ -170,14 +170,14 @@ unsafe fn record_lightning_passes(
             command_buffer,
             slot,
             instance_ubo,
-            ShaderStage::Fragment,
+            &[ShaderStage::Fragment],
         )?;
         segments_ubo.record_update(
             render.device,
             command_buffer,
             slot,
             instance_segments,
-            ShaderStage::Fragment,
+            &[ShaderStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![

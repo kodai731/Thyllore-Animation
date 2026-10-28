@@ -193,7 +193,7 @@ impl HistoryTargets {
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for framebuffer in &mut self.framebuffers {
             if *framebuffer != vk::Framebuffer::null() {
                 device.destroy_framebuffer(*framebuffer, None);

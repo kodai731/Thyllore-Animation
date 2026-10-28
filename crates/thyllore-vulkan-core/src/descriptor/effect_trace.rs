@@ -8,7 +8,7 @@ use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RREffectTraceDescriptorSet {
     pub layout: ReflectedSetLayout,
-    descriptor_sets: Vec<vk::DescriptorSet>,
+    descriptor_sets: Vec<crate::types::DescriptorSet>,
 }
 
 impl RREffectTraceDescriptorSet {
@@ -18,7 +18,11 @@ impl RREffectTraceDescriptorSet {
 
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = layout.allocate_sets(rrdevice, frames_in_flight.max(1))?;
+        let descriptor_sets = layout
+            .allocate_sets(rrdevice, frames_in_flight.max(1))?
+            .into_iter()
+            .map(crate::types::DescriptorSet)
+            .collect();
 
         Ok(Self {
             layout,
@@ -26,7 +30,7 @@ impl RREffectTraceDescriptorSet {
         })
     }
 
-    pub fn descriptor_set(&self, frame_slot: usize) -> Result<vk::DescriptorSet> {
+    pub fn descriptor_set(&self, frame_slot: usize) -> Result<crate::types::DescriptorSet> {
         self.descriptor_sets
             .get(frame_slot)
             .copied()
@@ -47,7 +51,7 @@ impl RREffectTraceDescriptorSet {
         hit_table: crate::types::Buffer,
     ) -> Result<()> {
         self.layout
-            .writer(self.descriptor_set(frame_slot)?)
+            .writer(self.descriptor_set(frame_slot)?.raw())
             .acceleration_structure(effect_trace::TLAS, tlas)?
             .storage_image(effect_trace::OUT_IMAGE, trace_image_view)?
             .buffer(

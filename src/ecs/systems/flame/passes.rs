@@ -273,7 +273,7 @@ unsafe fn record_flame_passes(
             command_buffer,
             slot,
             ubo,
-            ShaderStage::Fragment,
+            &[ShaderStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![flame_ubo.slot_offset(slot)? as u32],

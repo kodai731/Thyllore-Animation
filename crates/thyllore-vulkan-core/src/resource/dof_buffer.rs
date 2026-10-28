@@ -133,7 +133,7 @@ impl DofBuffer {
         self.height = new_height;
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.sampler != vk::Sampler::null() {
             device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();

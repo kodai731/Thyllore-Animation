@@ -6,7 +6,6 @@ use crate::resource::{HitShadingRecord, HitShadingTable};
 use crate::types::Instance;
 use crate::vulkan::*;
 use anyhow::Result;
-use cgmath::Matrix4;
 use thyllore_math_core::{AffineRows3x4, GpuMat4};
 use vulkanalia::vk::KhrAccelerationStructureExtension;
 
@@ -367,7 +366,7 @@ impl RRAccelerationStructure {
         })
     }
 
-    pub unsafe fn create_aabb_blas(
+    pub(crate) unsafe fn create_aabb_blas(
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
@@ -459,9 +458,11 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        model: &Matrix4<f32>,
-        aabb: vk::AabbPositionsKHR,
-    ) -> Result<RRBLAS> {
+        primitive: &GpuPrimitive,
+    ) -> Result<Option<RRBLAS>> {
+        let crate::raytracing::BlasGeometry::ProceduralAabb { aabb } = primitive.geometry else {
+            return Ok(None);
+        };
         let size = std::mem::size_of::<vk::AabbPositionsKHR>() as vk::DeviceSize;
         let buf = allocate_device_buffer(
             instance,
@@ -480,9 +481,9 @@ impl RRAccelerationStructure {
         let mut blas = Self::create_aabb_blas(instance, rrdevice, rrcommand_pool, &buf.buffer, 1)?;
         destroy_device_buffer(&rrdevice.device(), &buf);
         blas.transform = vk::TransformMatrixKHR {
-            matrix: AffineRows3x4::from_mat4(*model).rows,
+            matrix: AffineRows3x4::from_mat4(primitive.model).rows,
         };
-        Ok(blas)
+        Ok(Some(blas))
     }
 
     pub unsafe fn create_tlas(
@@ -597,7 +598,7 @@ impl RRAccelerationStructure {
         })
     }
 
-    pub unsafe fn update_blas(
+    pub(crate) unsafe fn update_blas(
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,

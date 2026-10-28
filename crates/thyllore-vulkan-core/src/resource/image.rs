@@ -141,7 +141,7 @@ impl Drop for RRImage {
     }
 }
 
-pub unsafe fn create_texture_image(
+pub(crate) unsafe fn create_texture_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
@@ -237,7 +237,7 @@ pub unsafe fn create_texture_image(
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
-pub unsafe fn create_texture_image_from_file(
+pub(crate) unsafe fn create_texture_image_from_file(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
@@ -369,7 +369,7 @@ pub unsafe fn create_texture_image_from_file(
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
-pub unsafe fn create_image(
+pub(crate) unsafe fn create_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     width: u32,
@@ -416,7 +416,7 @@ pub unsafe fn create_image(
     Ok((image, image_memory))
 }
 
-pub unsafe fn create_image_3d(
+pub(crate) unsafe fn create_image_3d(
     instance: &Instance,
     rrdevice: &RRDevice,
     extent: vk::Extent3D,
@@ -453,7 +453,7 @@ pub unsafe fn create_image_3d(
     Ok((image, image_memory))
 }
 
-pub unsafe fn create_image_view_3d(
+pub(crate) unsafe fn create_image_view_3d(
     rrdevice: &RRDevice,
     image: vk::Image,
     format: vk::Format,
@@ -582,7 +582,7 @@ pub(crate) unsafe fn transition_image_layout(
 //     Ok(())
 // }
 
-pub unsafe fn create_image_view(
+pub(crate) unsafe fn create_image_view(
     rrdevice: &RRDevice,
     image: vk::Image,
     format: vk::Format,
@@ -751,7 +751,7 @@ unsafe fn generate_mipmaps(
     Ok(())
 }
 
-pub unsafe fn create_texture_sampler(
+pub(crate) unsafe fn create_texture_sampler(
     rrdevice: &RRDevice,
     mip_levels: u32,
 ) -> Result<(vk::Sampler)> {
@@ -820,7 +820,7 @@ pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<crate::
     Ok(crate::types::Sampler(sampler))
 }
 
-pub unsafe fn create_texture_image_pixel(
+pub(crate) unsafe fn create_texture_image_pixel(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &Rc<RRCommandPool>,
@@ -839,7 +839,7 @@ pub unsafe fn create_texture_image_pixel(
     )
 }
 
-pub unsafe fn create_texture_image_pixel_with_format(
+pub(crate) unsafe fn create_texture_image_pixel_with_format(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &Rc<RRCommandPool>,

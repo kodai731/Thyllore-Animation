@@ -22,7 +22,7 @@ pub struct PipelineKey {
 }
 
 impl PipelineKey {
-    pub fn new(
+    pub(crate) fn new(
         vertex_shader: &str,
         fragment_shader: &str,
         topology: vk::PrimitiveTopology,
@@ -80,7 +80,7 @@ impl PipelineCache {
         self.cache.contains_key(key)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for (_, pipeline) in self.cache.drain() {
             pipeline.destroy(device);
         }
@@ -125,7 +125,7 @@ impl PipelineManager {
         self.cache.get(key)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.cache.destroy(device);
     }
 }

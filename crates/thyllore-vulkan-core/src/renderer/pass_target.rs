@@ -61,14 +61,6 @@ impl From<ShaderStage> for vk::PipelineStageFlags {
     }
 }
 
-impl std::ops::BitOr for ShaderStage {
-    type Output = vk::PipelineStageFlags;
-
-    fn bitor(self, other: ShaderStage) -> vk::PipelineStageFlags {
-        self.pipeline_stage() | other.pipeline_stage()
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AttachmentStart {
     Discard,

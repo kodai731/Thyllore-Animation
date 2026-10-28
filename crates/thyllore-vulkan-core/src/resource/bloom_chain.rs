@@ -180,7 +180,7 @@ impl BloomChain {
         log!("Resized bloom chain for {}x{}", new_width, new_height);
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         device.destroy_sampler(self.sampler, None);
         device.destroy_render_pass(self.downsample_render_pass, None);
         device.destroy_render_pass(self.upsample_render_pass, None);

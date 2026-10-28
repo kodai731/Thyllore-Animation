@@ -258,7 +258,7 @@ unsafe fn record_wind_passes(
             command_buffer,
             slot,
             ubo,
-            ShaderStage::Compute | ShaderStage::Fragment,
+            &[ShaderStage::Compute, ShaderStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![wind_ubo.slot_offset(slot)? as u32],

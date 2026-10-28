@@ -64,7 +64,7 @@ pub unsafe fn read_image_bytes(
     image: crate::types::Image,
     width: u32,
     height: u32,
-    byte_size: vk::DeviceSize,
+    byte_size: crate::types::DeviceSize,
     layout: ReadbackLayout,
 ) -> Result<Vec<u8>> {
     let (buffer, buffer_memory) = copy_image_to_host_buffer(
@@ -97,7 +97,7 @@ pub unsafe fn read_buffer_bytes(
     rrdevice: &RRDevice,
     command_pool: crate::types::CommandPool,
     source: crate::types::Buffer,
-    byte_size: vk::DeviceSize,
+    byte_size: crate::types::DeviceSize,
 ) -> Result<Vec<u8>> {
     let (buffer, buffer_memory) = create_buffer(
         instance,

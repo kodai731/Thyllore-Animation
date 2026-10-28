@@ -19,8 +19,7 @@ use crate::pipeline::{
     compute_push_constant_range, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
     RRPipeline, SampleCount, Topology, VertexInputConfig,
 };
-use crate::raytracing::RRAccelerationStructure;
-use crate::raytracing::{BlasGeometry, GpuPrimitive};
+use crate::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use crate::render::RRRender;
 use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
@@ -213,14 +212,12 @@ impl RayTracingData {
         }
 
         for primitive in procedurals {
-            if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
-                let blas = RRAccelerationStructure::create_procedural_blas(
-                    instance,
-                    rrdevice,
-                    rrcommand_pool,
-                    &primitive.model,
-                    *aabb,
-                )?;
+            if let Some(blas) = RRAccelerationStructure::create_procedural_blas(
+                instance,
+                rrdevice,
+                rrcommand_pool,
+                primitive,
+            )? {
                 acceleration_structure.procedural_blas.push(blas);
             }
         }

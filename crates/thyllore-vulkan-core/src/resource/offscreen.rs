@@ -358,7 +358,7 @@ impl OffscreenFramebuffer {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         device.destroy_sampler(self.sampler, None);
         device.destroy_framebuffer(self.framebuffer, None);
         device.destroy_render_pass(self.render_pass, None);

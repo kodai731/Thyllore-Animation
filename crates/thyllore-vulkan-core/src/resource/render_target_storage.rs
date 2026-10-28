@@ -37,7 +37,7 @@ pub struct RenderTargetStorage {
 }
 
 impl RenderTargetStorage {
-    pub unsafe fn ensure(
+    pub(crate) unsafe fn ensure(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,

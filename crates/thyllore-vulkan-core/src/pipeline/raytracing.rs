@@ -210,7 +210,7 @@ impl RRRayTracingPipeline {
         })
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         device.destroy_pipeline(self.pipeline, None);
         device.destroy_pipeline_layout(self.pipeline_layout, None);
         device.destroy_buffer(self.sbt_buffer, None);

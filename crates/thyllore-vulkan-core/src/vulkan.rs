@@ -11,7 +11,7 @@ pub use vulkanalia::Version;
 
 use crate::types::Instance;
 
-pub unsafe fn get_memory_type_index(
+pub(crate) unsafe fn get_memory_type_index(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
     properties: vk::MemoryPropertyFlags,

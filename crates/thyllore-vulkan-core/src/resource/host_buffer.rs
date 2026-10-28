@@ -39,7 +39,7 @@ impl HostBuffer {
     pub unsafe fn create(
         instance: &Instance,
         rrdevice: &RRDevice,
-        size: vk::DeviceSize,
+        size: crate::types::DeviceSize,
         usage: HostBufferUsage,
     ) -> Result<Self> {
         let (buffer, memory) = create_buffer(
@@ -59,7 +59,7 @@ impl HostBuffer {
     pub unsafe fn write_with(
         &self,
         rrdevice: &RRDevice,
-        size: vk::DeviceSize,
+        size: crate::types::DeviceSize,
         write: impl FnOnce(&mut [u8]),
     ) -> Result<()> {
         let ptr =

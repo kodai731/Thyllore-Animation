@@ -25,7 +25,7 @@ impl RRRayQueryDescriptorSet {
         })
     }
 
-    pub unsafe fn allocate_and_update(
+    pub(crate) unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
         position_image_view: crate::types::ImageView,
@@ -92,7 +92,7 @@ impl RRRayQueryDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn update_tlas(
+    pub(crate) unsafe fn update_tlas(
         &mut self,
         rrdevice: &RRDevice,
         tlas: vk::AccelerationStructureKHR,

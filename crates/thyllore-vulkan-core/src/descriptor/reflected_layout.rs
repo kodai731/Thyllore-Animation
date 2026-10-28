@@ -200,7 +200,7 @@ pub struct ReflectedSetLayout {
 }
 
 impl ReflectedSetLayout {
-    pub fn resolve_bindings(
+    pub(crate) fn resolve_bindings(
         table: &DescriptorSetTable,
         set: u32,
         overrides: &[DescriptorTypeOverride],
@@ -272,7 +272,7 @@ impl ReflectedSetLayout {
             .ok_or_else(|| anyhow!("descriptor set layout has no binding {binding}"))
     }
 
-    pub unsafe fn allocate_sets(
+    pub(crate) unsafe fn allocate_sets(
         &self,
         rrdevice: &RRDevice,
         count: usize,
@@ -315,14 +315,6 @@ impl ReflectedSetLayout {
     /// The caller guarantees no pending command buffer binds the set, as for `vkFreeDescriptorSets`.
     pub(crate) fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
         rrdevice.release_descriptor_sets(self.handle, [set]);
-    }
-
-    pub fn release_sets(
-        &self,
-        rrdevice: &RRDevice,
-        sets: impl IntoIterator<Item = vk::DescriptorSet>,
-    ) {
-        rrdevice.release_descriptor_sets(self.handle, sets);
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
@@ -371,7 +363,7 @@ impl DescriptorSetWriter<'_> {
         Ok(descriptor_type)
     }
 
-    pub fn buffer(
+    pub(crate) fn buffer(
         mut self,
         binding: ShaderBinding,
         buffer: vk::Buffer,

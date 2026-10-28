@@ -211,7 +211,7 @@ impl AutoExposureBuffers {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.histogram_buffer != vk::Buffer::null() {
             device.destroy_buffer(self.histogram_buffer, None);
             self.histogram_buffer = vk::Buffer::null();

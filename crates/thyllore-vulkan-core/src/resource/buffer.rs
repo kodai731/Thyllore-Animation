@@ -349,20 +349,6 @@ pub struct RRBuffer {
 }
 
 impl RRBuffer {
-    pub unsafe fn new(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        size: vk::DeviceSize,
-        usage: vk::BufferUsageFlags,
-        properties: vk::MemoryPropertyFlags,
-    ) -> Result<Self> {
-        let mut rrbuffer = RRBuffer::default();
-        let (buffer, buffer_memory) = create_buffer(instance, rrdevice, size, usage, properties)?;
-        rrbuffer.buffer = buffer;
-        rrbuffer.buffer_memory = buffer_memory;
-        Ok(rrbuffer)
-    }
-
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
             rrdevice.device().destroy_buffer(self.buffer, None);
@@ -384,7 +370,7 @@ impl Drop for RRBuffer {
     }
 }
 
-pub unsafe fn create_buffer(
+pub(crate) unsafe fn create_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     size: vk::DeviceSize,
@@ -423,7 +409,7 @@ pub unsafe fn create_buffer(
     Ok((buffer, buffer_memory))
 }
 
-pub unsafe fn copy_buffer(
+pub(crate) unsafe fn copy_buffer(
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
     source: vk::Buffer,
@@ -445,7 +431,7 @@ pub unsafe fn copy_buffer(
     Ok(())
 }
 
-pub unsafe fn copy_buffer_to_image(
+pub(crate) unsafe fn copy_buffer_to_image(
     rrdevice: &RRDevice,
     rrcommand_buffer: &RRCommandPool,
     buffer: vk::Buffer,

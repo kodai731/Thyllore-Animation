@@ -163,7 +163,7 @@ impl RRDevice {
         })
     }
 
-    pub unsafe fn new_headless(
+    pub(crate) unsafe fn new_headless(
         entry: &Entry,
         instance: &Instance,
         device_extensions: &[vk::ExtensionName],

@@ -47,7 +47,7 @@ impl RRToneMapDescriptorSet {
         position_image_view: crate::types::ImageView,
         position_sampler: crate::types::Sampler,
         scene_buffer: crate::types::Buffer,
-        scene_buffer_size: vk::DeviceSize,
+        scene_buffer_size: crate::types::DeviceSize,
     ) -> Result<()> {
         self.update_hdr_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
         self.update_bloom_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
@@ -137,11 +137,11 @@ impl RRToneMapDescriptorSet {
         Ok(())
     }
 
-    pub unsafe fn update_scene_buffer(
+    pub(crate) unsafe fn update_scene_buffer(
         &self,
         rrdevice: &RRDevice,
         scene_buffer: crate::types::Buffer,
-        scene_buffer_size: vk::DeviceSize,
+        scene_buffer_size: crate::types::DeviceSize,
     ) -> Result<()> {
         for descriptor_set in &self.descriptor_sets {
             self.layout

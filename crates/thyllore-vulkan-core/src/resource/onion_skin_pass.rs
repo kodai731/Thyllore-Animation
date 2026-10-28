@@ -97,7 +97,7 @@ impl OnionSkinPassResources {
         })
     }
 
-    pub unsafe fn create_ghost_buffer(
+    pub(crate) unsafe fn create_ghost_buffer(
         instance: &Instance,
         rrdevice: &RRDevice,
         width: u32,
@@ -207,7 +207,7 @@ impl OnionSkinPassResources {
         Ok(render_pass)
     }
 
-    pub unsafe fn create_composite_render_pass(
+    pub(crate) unsafe fn create_composite_render_pass(
         rrdevice: &RRDevice,
         offscreen_format: vk::Format,
     ) -> Result<vk::RenderPass> {
@@ -268,7 +268,7 @@ impl OnionSkinPassResources {
         Ok(render_pass)
     }
 
-    pub unsafe fn create_composite_descriptor(
+    pub(crate) unsafe fn create_composite_descriptor(
         rrdevice: &RRDevice,
         ghost_image_view: vk::ImageView,
         ghost_sampler: vk::Sampler,
@@ -287,7 +287,7 @@ impl OnionSkinPassResources {
         Ok((layout, descriptor_set))
     }
 
-    pub unsafe fn update_composite_descriptor(
+    pub(crate) unsafe fn update_composite_descriptor(
         rrdevice: &RRDevice,
         layout: &ReflectedSetLayout,
         descriptor_set: vk::DescriptorSet,
@@ -306,7 +306,7 @@ impl OnionSkinPassResources {
         Ok(())
     }
 
-    pub unsafe fn create_single_framebuffer(
+    pub(crate) unsafe fn create_single_framebuffer(
         rrdevice: &RRDevice,
         render_pass: vk::RenderPass,
         image_view: vk::ImageView,
@@ -326,7 +326,7 @@ impl OnionSkinPassResources {
         Ok(framebuffer)
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         device.destroy_framebuffer(self.composite_framebuffer, None);
         self.composite_pipeline.destroy(device);
         device.destroy_render_pass(self.composite_render_pass, None);

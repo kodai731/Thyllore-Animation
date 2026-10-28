@@ -95,7 +95,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         &self,
         rrdevice: &RRDevice,
         slot: usize,
-    ) -> Result<vk::DeviceAddress> {
+    ) -> Result<crate::types::DeviceAddress> {
         let base = rrdevice
             .device()
             .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
@@ -123,10 +123,14 @@ impl<T: GpuBlock> UniformBuffer<T> {
         cmd: crate::types::CommandBuffer,
         slot: usize,
         value: &T,
-        reader_stage: impl Into<vk::PipelineStageFlags>,
+        reader_stages: &[crate::renderer::ShaderStage],
     ) -> Result<()> {
         let cmd = cmd.raw();
-        let reader_stage: vk::PipelineStageFlags = reader_stage.into();
+        let reader_stage = reader_stages
+            .iter()
+            .fold(vk::PipelineStageFlags::empty(), |stages, &stage| {
+                stages | vk::PipelineStageFlags::from(stage)
+            });
         if self.placement != Placement::DeviceUpdated {
             return Err(anyhow!(
                 "{} uniform buffer is {:?}; record_update needs Placement::DeviceUpdated",
@@ -190,7 +194,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         );
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.buffer != vk::Buffer::null() {
             device.destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();

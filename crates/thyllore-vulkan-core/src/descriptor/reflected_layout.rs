@@ -287,6 +287,20 @@ impl ReflectedSetLayout {
             .ok_or_else(|| anyhow!("descriptor allocator returned no set"))
     }
 
+    pub unsafe fn allocate_descriptor_set(
+        &self,
+        rrdevice: &RRDevice,
+    ) -> Result<crate::types::DescriptorSet> {
+        Ok(crate::types::DescriptorSet(self.allocate_set(rrdevice)?))
+    }
+
+    pub fn descriptor_writer(
+        &self,
+        dst_set: crate::types::DescriptorSet,
+    ) -> DescriptorSetWriter<'_> {
+        self.writer(dst_set.raw())
+    }
+
     pub(crate) fn writer(&self, dst_set: vk::DescriptorSet) -> DescriptorSetWriter<'_> {
         DescriptorSetWriter {
             layout: self,

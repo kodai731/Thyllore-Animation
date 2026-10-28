@@ -70,6 +70,26 @@ impl GpuResource for crate::types::Sampler {
     }
 }
 
+impl GpuResource for crate::types::RenderPass {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::Framebuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
 #[derive(Clone, Copy, Debug, Default)]

@@ -61,9 +61,9 @@ pub use pipeline_dispatch::{
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
-pub(crate) use storage_image::{
-    copy_color_image, storage_image_read_barrier_for_fragment,
-    storage_image_write_barrier_for_fragment,
+pub(crate) use storage_image::copy_color_image;
+pub use storage_image::{
+    storage_image_read_barrier_for_fragment, storage_image_write_barrier_for_fragment,
 };
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use trace_push::TracePush;

@@ -925,7 +925,7 @@ pub unsafe fn create_texture_image_pixel_with_format(
 }
 
 // Depth formats must not be sampled with LINEAR filtering.
-pub(crate) unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<crate::types::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::NEAREST)
         .min_filter(vk::Filter::NEAREST)
@@ -934,7 +934,9 @@ pub(crate) unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<v
         .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .build();
-    Ok(rrdevice.device().create_sampler(&info, None)?)
+    Ok(crate::types::Sampler(
+        rrdevice.device().create_sampler(&info, None)?,
+    ))
 }
 
 #[derive(Clone, Copy, Debug)]

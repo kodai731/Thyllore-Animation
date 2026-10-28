@@ -36,7 +36,7 @@ impl RRFlameDescriptorSet {
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
         let sets = layout.allocate_sets(rrdevice, FLAME_HISTORY_SET_COUNT)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?.raw();
 
         Ok(Self {
             layout,

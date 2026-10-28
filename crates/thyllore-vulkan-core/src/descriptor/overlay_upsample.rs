@@ -26,7 +26,7 @@ impl OverlayUpsampleDescriptorSet {
             .map(|_| layout.allocate_set(rrdevice))
             .collect::<Result<Vec<_>>>()?;
         let reduced_color_sampler = create_nearest_sampler(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?.raw();
 
         Ok(Self {
             layout,

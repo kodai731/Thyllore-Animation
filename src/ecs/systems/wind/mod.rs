@@ -1,9 +1,12 @@
 mod cli;
 mod debug_dump;
+pub mod descriptors;
+pub mod gpu_targets;
 mod object_pick;
 pub mod passes;
 mod pipeline;
 mod preset;
+pub mod record;
 mod render_targets;
 mod spawn;
 #[cfg(test)]
@@ -16,10 +19,8 @@ pub use cli::*;
 pub use debug_dump::*;
 pub use object_pick::*;
 pub use preset::*;
+pub use record::*;
 pub use render_targets::*;
 pub use spawn::*;
-pub use thyllore_vulkan_core::effect::wind::record::*;
 pub use time::*;
 pub use ui_command::*;
-
-pub use thyllore_vulkan_core::effect::wind::descriptors::*;

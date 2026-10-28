@@ -1,14 +1,14 @@
 use thyllore_effect_core::WindUBO;
 use thyllore_vulkan_core::descriptor::OverlayUpsampleDescriptorSet;
-use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 use crate::ecs::resource::BoundGenerations;
-use crate::gpu_resource;
-use thyllore_vulkan_core::effect::wind::descriptors::{
+use crate::ecs::systems::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
 };
+use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
+use crate::gpu_resource;
 
 /// Pipelines, descriptor sets and the per-instance UBO of the wind passes.
 #[must_use]

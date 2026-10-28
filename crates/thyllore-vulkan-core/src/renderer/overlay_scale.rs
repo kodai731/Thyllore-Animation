@@ -128,19 +128,20 @@ impl ReducedResolveTarget {
         crate::types::Format(self.format)
     }
 
-    pub(crate) unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {
+    pub unsafe fn new(rrdevice: &RRDevice, format: crate::types::Format) -> Result<Self> {
         let render_pass = create_color_overlay_render_pass(
             rrdevice,
             ColorOverlayPassDesc {
-                format,
+                format: format.raw(),
                 load_op: vk::AttachmentLoadOp::CLEAR,
                 initial_layout: vk::ImageLayout::UNDEFINED,
                 final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             },
-        )?;
+        )?
+        .raw();
         Ok(Self {
             render_pass,
-            format,
+            format: format.raw(),
         })
     }
 

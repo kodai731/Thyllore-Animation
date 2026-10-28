@@ -1,14 +1,13 @@
 use anyhow::Result;
 
 use crate::ecs::resource::WindGpuState;
+use crate::ecs::systems::wind::gpu_targets::{
+    create_wind_render_targets, recreate_wind_framebuffer, WindRenderTargets,
+};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
-use thyllore_vulkan_core::effect::wind::targets::WindRenderTargets;
-use thyllore_vulkan_core::effect::wind::targets::{
-    create_wind_render_targets, recreate_wind_framebuffer,
-};
 
 pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     name: "wind",

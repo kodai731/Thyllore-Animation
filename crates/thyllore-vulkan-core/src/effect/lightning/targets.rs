@@ -45,7 +45,8 @@ pub unsafe fn create_lightning_render_targets(
     hdr_image_view: crate::types::ImageView,
 ) -> Result<LightningRenderTargets> {
     let render_pass =
-        create_color_overlay_render_pass(rrdevice, ColorOverlayPassDesc::preserved(HDR_FORMAT))?;
+        create_color_overlay_render_pass(rrdevice, ColorOverlayPassDesc::preserved(HDR_FORMAT))?
+            .raw();
 
     let attachments = [hdr_image_view.raw()];
     let framebuffer_info = vk::FramebufferCreateInfo::builder()

@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::image::{create_image_3d, create_image_view_3d};
+use crate::resource::GpuResource;
 use crate::types::Instance;
 
 #[derive(Clone, Copy, Debug)]
@@ -83,6 +84,14 @@ impl VolumeImage {
         })
     }
 
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
+
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub(crate) fn subresource_range(&self) -> vk::ImageSubresourceRange {
         vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -110,5 +119,18 @@ impl VolumeImage {
             device.free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
+    }
+}
+
+impl GpuResource for VolumeImage {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device());
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.sampler.is_destroyed()
+            && self.view.is_destroyed()
+            && self.image.is_destroyed()
+            && self.memory.is_destroyed()
     }
 }

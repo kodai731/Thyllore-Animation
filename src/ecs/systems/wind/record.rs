@@ -1,15 +1,15 @@
 use anyhow::Result;
 
-use crate::effect::wind::descriptors::WindShadowBakeDescriptorSet;
-use crate::effect::wind::targets::{wind_shadow_volume_extent, WindRenderTargets};
-use crate::pipeline::RRPipeline;
-use crate::renderer::{
+use crate::ecs::systems::wind::descriptors::WindShadowBakeDescriptorSet;
+use crate::ecs::systems::wind::gpu_targets::{wind_shadow_volume_extent, WindRenderTargets};
+use crate::vulkanr::pipeline::RRPipeline;
+use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
+use thyllore_vulkan_core::renderer::{
     bind_compute, dispatch, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,
 };
-use crate::types::{CommandBuffer, DescriptorSet};
-use crate::{FrameRenderContext, OverlayInstanceDraw};
-use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
+use thyllore_vulkan_core::types::CommandBuffer;
+use thyllore_vulkan_core::{FrameRenderContext, OverlayInstanceDraw};
 
 /// Must match local_size in shadowBake.comp.
 const SHADOW_BAKE_WORKGROUP_SIZE: u32 = 8;
@@ -31,8 +31,8 @@ pub unsafe fn record_wind_shadow_bake_pass(
     let group_count_x =
         (extent.width / WIND_SHADOW_VOLUME_SLOTS).div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let group_count_y = extent.height.div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
-    let bake_set = DescriptorSet(descriptor.descriptor_set);
+    let frame_set = ctx.graphics.frame_set.sets()[image_index];
+    let bake_set = descriptor.descriptor_set;
     for draw in draws {
         bind_compute(
             &ctx.device,

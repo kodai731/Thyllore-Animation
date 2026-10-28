@@ -114,6 +114,20 @@ pub struct OverlayPass {
 }
 
 impl OverlayPass {
+    pub fn new(
+        render_pass: crate::types::RenderPass,
+        framebuffer: crate::types::Framebuffer,
+        extent: crate::types::Extent2D,
+        load: OverlayAttachmentLoad,
+    ) -> Self {
+        Self {
+            render_pass: render_pass.raw(),
+            framebuffer: framebuffer.raw(),
+            extent: extent.raw(),
+            load,
+        }
+    }
+
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
         crate::types::RenderPass(self.render_pass)

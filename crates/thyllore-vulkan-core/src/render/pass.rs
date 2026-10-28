@@ -536,7 +536,7 @@ impl ColorOverlayPassDesc {
 pub unsafe fn create_color_overlay_render_pass(
     rrdevice: &RRDevice,
     desc: ColorOverlayPassDesc,
-) -> Result<vk::RenderPass> {
+) -> Result<crate::types::RenderPass> {
     let color_attachment = vk::AttachmentDescription::builder()
         .format(desc.format)
         .samples(vk::SampleCountFlags::_1)
@@ -587,5 +587,7 @@ pub unsafe fn create_color_overlay_render_pass(
         .subpasses(&subpasses)
         .dependencies(&dependencies);
 
-    Ok(rrdevice.device().create_render_pass(&info, None)?)
+    Ok(crate::types::RenderPass(
+        rrdevice.device().create_render_pass(&info, None)?,
+    ))
 }

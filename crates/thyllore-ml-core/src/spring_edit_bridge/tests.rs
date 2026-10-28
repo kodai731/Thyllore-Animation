@@ -100,10 +100,22 @@ fn spring_edit_bridge_unknown_root_or_short_runs_return_error() {
     assert!(add_chains_under_bone(&spring, &bones, "Head", 4).is_err());
 }
 
+fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
+    for joint in spring.chains.iter_mut().flat_map(|chain| &mut chain.joints) {
+        joint.force = SidecarJointForce::Vrm {
+            stiffness: 1.0,
+            gravity_power: 0.0,
+        };
+    }
+    spring
+}
+
 #[test]
 fn spring_edit_bridge_ramp_linear_interpolation() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring = with_vrm_joints(
+        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+    );
     let ramp = ramp_input("linear");
 
     let result = apply_ramp_to_chains(&spring, &bones, &["Chain_0".to_string()], &ramp).unwrap();
@@ -113,11 +125,26 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
     assert_eq!(chain.joints.len(), 3);
     let stiffness_of = |joint: &SidecarSpringJoint| match joint.force {
         SidecarJointForce::Vrm { stiffness, .. } => stiffness,
-        SidecarJointForce::RestRelative { .. } => panic!("ramp keeps the VRM model"),
+        SidecarJointForce::RestRelative { .. } => panic!("the chain stays on the VRM model"),
     };
     assert!((stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
     assert!((stiffness_of(&chain.joints[1]) - 0.5).abs() < 1e-6);
     assert!((stiffness_of(&chain.joints[2]) - 0.0).abs() < 1e-6);
+}
+
+#[test]
+fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
+    let bones = test_bones();
+    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+
+    let result = apply_ramp_to_chains(
+        &spring,
+        &bones,
+        &["Chain_0".to_string()],
+        &ramp_input("linear"),
+    );
+
+    assert!(result.is_err());
 }
 
 #[test]

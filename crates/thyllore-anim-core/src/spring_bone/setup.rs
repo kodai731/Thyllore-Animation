@@ -53,6 +53,15 @@ impl Default for SpringJointParam {
     }
 }
 
+/// The force model every joint shares; None when there are no joints or they mix models.
+pub fn shared_force_model<'a>(
+    joints: impl IntoIterator<Item = &'a SpringJointParam>,
+) -> Option<SpringForceModel> {
+    let mut models = joints.into_iter().map(|joint| joint.force.model());
+    let first = models.next()?;
+    models.all(|model| model == first).then_some(first)
+}
+
 pub static SPRING_JOINT_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<SpringJointParam>>> =
     LazyLock::new(|| {
         let mut out: Vec<ScalarParam<SpringJointParam>> = Vec::new();
@@ -146,21 +155,13 @@ pub struct SpringBoneSetup {
     pub next_collider_id: SpringColliderId,
     pub next_group_id: SpringColliderGroupId,
     pub collision_mode: SpringCollisionMode,
+    /// The force model of chains created from now on; existing joints keep their own.
+    pub new_joint_force_model: SpringForceModel,
 }
 
 impl SpringBoneSetup {
-    /// New joints follow the force model of the joints already in the setup.
-    pub fn force_model(&self) -> SpringForceModel {
-        self.chains
-            .iter()
-            .flat_map(|chain| chain.joints.first())
-            .map(|joint| joint.force.model())
-            .next()
-            .unwrap_or_default()
-    }
-
     pub fn new_joint_template(&self) -> SpringJointParam {
-        SpringJointParam::for_force_model(self.force_model())
+        SpringJointParam::for_force_model(self.new_joint_force_model)
     }
 }
 

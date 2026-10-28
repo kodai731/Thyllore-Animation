@@ -10,9 +10,7 @@ use crate::ecs::resource::{
     SkeletonSnapshot, SkinSnapshot, SpringBoneState, TimelineState, TransformGizmoData,
 };
 use crate::ecs::storage::Component;
-use crate::ecs::systems::avatar_setup_systems::{
-    animated_spring_space, skeleton_rest_frames, skeleton_to_bone_inputs,
-};
+use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::humanoid_rig_systems::invalidate_humanoid_rig;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
@@ -529,11 +527,7 @@ pub fn refresh_after_skeleton_edit(
             );
         bone_gizmo.cached_global_transforms = rest_globals;
     }
-    let rest_frames = skeleton_rest_frames(skeleton, animated_spring_space(world));
-    let mut avatar_setup = world.resource_mut::<AvatarSetupState>();
-    avatar_setup.bones = skeleton_to_bone_inputs(skeleton);
-    avatar_setup.rest_frames = rest_frames;
-    drop(avatar_setup);
+    world.resource_mut::<AvatarSetupState>().bones = skeleton_to_bone_inputs(skeleton);
 
     sync_fbx_clusters(world, assets, graphics, skeleton_asset.skeleton_id);
 }

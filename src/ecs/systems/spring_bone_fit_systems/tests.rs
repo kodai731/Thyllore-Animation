@@ -1,5 +1,7 @@
 use super::*;
-use crate::animation::spring_bone::{JointForce, SpringCollisionMode, VrmJointForce};
+use crate::animation::spring_bone::{
+    JointForce, SpringCollisionMode, SpringForceModel, VrmJointForce,
+};
 use crate::animation::{Bone, Keyframe, TransformChannel};
 use crate::ecs::component::SpringJointParam;
 use cgmath::{Matrix4, Vector3};
@@ -74,6 +76,7 @@ fn create_default_setup() -> SpringBoneSetup {
         next_collider_id: 0,
         next_group_id: 0,
         collision_mode: SpringCollisionMode::VrmCompatible,
+        new_joint_force_model: SpringForceModel::Vrm,
     }
 }
 
@@ -125,6 +128,7 @@ fn test_fit_improves_rms() {
         next_collider_id: 0,
         next_group_id: 0,
         collision_mode: SpringCollisionMode::VrmCompatible,
+        new_joint_force_model: SpringForceModel::Vrm,
     };
 
     let config = BakeConfig {
@@ -166,4 +170,47 @@ fn test_fit_improves_rms() {
         "after_rms {} should be less than 1e-3",
         fit.after_rms
     );
+}
+
+#[test]
+fn test_fit_skips_chain_mixing_force_models() {
+    let skeleton = create_test_skeleton();
+    let clip = create_test_clip();
+    let config = BakeConfig {
+        start_time: 0.0,
+        end_time: 1.0,
+        sample_rate: 30.0,
+        space: SpringSpace::IDENTITY,
+    };
+    let reference = simulate_spring_tails(
+        &config,
+        &create_default_setup(),
+        &skeleton,
+        &clip,
+        None,
+        false,
+    );
+
+    let mut mixed_setup = create_default_setup();
+    let mut rest_relative_joint = mixed_setup.chains[0].joints[0].clone();
+    rest_relative_joint.force = JointForce::default_for(SpringForceModel::RestRelative);
+    mixed_setup.chains[0].joints.push(rest_relative_joint);
+
+    let inputs = SpringFitInputs {
+        config: &config,
+        skeleton: &skeleton,
+        clip: &clip,
+        constraints: None,
+        looping: false,
+        reference: &reference,
+    };
+    let opt_params = NelderMeadParams {
+        initial_step: 0.2,
+        max_iterations: 10,
+        tolerance: 1e-7,
+    };
+    let (fitted_setup, fits) = fit_spring_params(&inputs, &mixed_setup, &opt_params);
+
+    assert!(fits.is_empty());
+    assert_eq!(fitted_setup.chains[0].joints, mixed_setup.chains[0].joints);
 }

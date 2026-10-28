@@ -17,8 +17,8 @@ use thyllore_avatar_core::vrchat::sidecar::{
     SidecarSubmeshRole,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
-    SidecarSpringChain,
+    build_sidecar_spring, map_sidecar_colliders, spring_setup_from_sidecar, BoneRestFrame,
+    ColliderSpace, SidecarSpring, SidecarSpringChain,
 };
 
 pub fn spring_joint_params() -> Vec<ParamRow> {
@@ -89,14 +89,7 @@ pub fn spring_colliders_to_local(
     spring: &SidecarSpring,
     bones: &[BoneSpec],
 ) -> anyhow::Result<SidecarSpring> {
-    let frames = rest_frames(bones)?;
-    let bone_inputs: Vec<BoneInput> = bones.iter().cloned().map(BoneInput::from).collect();
-    let setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
-    Ok(build_sidecar_spring(
-        &setup,
-        &bone_inputs,
-        &BoneRestFrame::identity_for(bone_inputs.len()),
-    ))
+    map_spring_colliders(spring, bones, ColliderSpace::BoneLocal)
 }
 
 /// The inverse of `spring_colliders_to_local`: colliders given in bone rest frames, written in model space.
@@ -104,14 +97,17 @@ pub fn spring_colliders_to_model(
     spring: &SidecarSpring,
     bones: &[BoneSpec],
 ) -> anyhow::Result<SidecarSpring> {
+    map_spring_colliders(spring, bones, ColliderSpace::Model)
+}
+
+fn map_spring_colliders(
+    spring: &SidecarSpring,
+    bones: &[BoneSpec],
+    target: ColliderSpace,
+) -> anyhow::Result<SidecarSpring> {
     let frames = rest_frames(bones)?;
     let bone_inputs: Vec<BoneInput> = bones.iter().cloned().map(BoneInput::from).collect();
-    let setup = spring_setup_from_sidecar(
-        spring,
-        &bone_inputs,
-        &BoneRestFrame::identity_for(bone_inputs.len()),
-    );
-    Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
+    Ok(map_sidecar_colliders(spring, &bone_inputs, &frames, target))
 }
 
 impl From<BoneSpec> for BoneInput {
@@ -653,9 +649,7 @@ mod tests {
         assert!((tail[1] - 2.0).abs() < 1e-5 && tail[0].abs() < 1e-5);
 
         let model = spring_colliders_to_model(&local, &bones).unwrap();
-        let mut expected = model_space_spring();
-        expected.colliders[0].name = "Head#0".into();
-        assert_eq!(model, expected);
+        assert_eq!(model, model_space_spring());
     }
 
     #[test]

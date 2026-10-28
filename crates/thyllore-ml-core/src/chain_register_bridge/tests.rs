@@ -81,7 +81,7 @@ fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
     let collider = &spring.colliders[0];
     assert_eq!(collider.bone, "Head");
     let bone_inputs = to_bone_inputs(&bones());
-    let setup = spring_setup_from_sidecar(&spring, &bone_inputs, &rest_frames(&bones()));
+    let setup = spring_setup_from_sidecar(&spring, &bone_inputs, &rest_frames(&bones()).unwrap());
     match setup.colliders[0].shape {
         ColliderShape::Capsule { radius, tail } => {
             assert!((radius - 0.09).abs() < 1e-6);

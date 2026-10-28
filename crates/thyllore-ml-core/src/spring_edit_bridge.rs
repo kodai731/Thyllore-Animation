@@ -142,7 +142,8 @@ pub fn apply_ramp_to_chains(
             .ok_or_else(|| anyhow::anyhow!("chain \"{}\" not found", chain_name))?;
 
         let old_chain = &setup.chains[chain_idx];
-        let new_chain = apply_ramp(old_chain, &chain_ramp);
+        let new_chain = apply_ramp(old_chain, &chain_ramp)
+            .map_err(|mismatch| anyhow::anyhow!("chain \"{}\": {mismatch}", chain_name))?;
         setup.chains[chain_idx] = new_chain;
     }
 

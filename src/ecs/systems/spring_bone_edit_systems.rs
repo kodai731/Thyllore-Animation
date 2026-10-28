@@ -190,9 +190,29 @@ pub fn handle_spring_chain_ramp_apply(
     let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) else {
         return;
     };
-    for chain in &mut setup.chains {
-        if chain_ids.contains(&chain.id) {
-            *chain = apply_ramp(chain, ramp);
+    let ramped: Result<Vec<SpringChain>, _> = setup
+        .chains
+        .iter()
+        .filter(|chain| chain_ids.contains(&chain.id))
+        .map(|chain| {
+            apply_ramp(chain, ramp)
+                .map_err(|mismatch| format!("chain {:?}: {mismatch}", chain.name))
+        })
+        .collect();
+    let ramped = match ramped {
+        Ok(ramped) => ramped,
+        Err(reason) => {
+            msg_warn!("Chain ramp not applied: {reason}; load the ends from a chain first");
+            return;
+        }
+    };
+    for new_chain in ramped {
+        if let Some(chain) = setup
+            .chains
+            .iter_mut()
+            .find(|chain| chain.id == new_chain.id)
+        {
+            *chain = new_chain;
         }
     }
 
@@ -269,7 +289,7 @@ pub fn handle_spring_chain_collider_groups_form(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::{JointForce, VrmJointForce};
+    use crate::animation::spring_bone::{JointForce, SpringForceModel, VrmJointForce};
 
     fn make_chain(id: SpringChainId) -> SpringChain {
         let first_bone = id * 3 + 1;
@@ -278,7 +298,7 @@ mod tests {
             joints: (first_bone..first_bone + 3)
                 .map(|bone_id| SpringJointParam {
                     bone_id,
-                    ..Default::default()
+                    ..SpringJointParam::for_force_model(SpringForceModel::Vrm)
                 })
                 .collect(),
             ..Default::default()
@@ -339,12 +359,25 @@ mod tests {
         for chain in &setup.chains[..2] {
             assert_eq!(
                 chain.joints,
-                apply_ramp(&make_chain(chain.id), &ramp).joints
+                apply_ramp(&make_chain(chain.id), &ramp)
+                    .expect("one force model")
+                    .joints
             );
             assert_eq!(chain.joints[0].force.magnitudes()[0], 2.0);
             assert_eq!(chain.joints[2].force.magnitudes()[0], 0.25);
         }
         assert_eq!(chain_joints(&world, entity, 2), untouched_before);
+    }
+
+    #[test]
+    fn ramp_of_another_force_model_leaves_every_chain_untouched() {
+        let (mut world, entity) = make_world_with_three_chains();
+        let before: Vec<_> = (0..3).map(|i| chain_joints(&world, entity, i)).collect();
+
+        handle_spring_chain_ramp_apply(&mut world, entity, &[0, 1, 2], &ChainRamp::default());
+
+        let after: Vec<_> = (0..3).map(|i| chain_joints(&world, entity, i)).collect();
+        assert_eq!(after, before);
     }
 
     #[test]

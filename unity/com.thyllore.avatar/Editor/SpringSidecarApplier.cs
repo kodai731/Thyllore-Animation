@@ -33,6 +33,18 @@ namespace Thyllore.Avatar
             return bone.InverseTransformVector(root.transform.TransformVector(ToUnityVector(modelVector)));
         }
 
+        /// Radii follow their offsets into bone-local units; a length scales by the mean axis length, as in the engine's rest frame.
+        static float ToBoneLocalLength(GameObject root, Transform bone, float modelLength)
+        {
+            return modelLength * MeanAxisScale(root.transform) / MeanAxisScale(bone);
+        }
+
+        static float MeanAxisScale(Transform transform)
+        {
+            var scale = transform.lossyScale;
+            return (Mathf.Abs(scale.x) + Mathf.Abs(scale.y) + Mathf.Abs(scale.z)) / 3f;
+        }
+
         /// The VRM speeds a joint force stands for; a rest-relative force maps `D / L` to the stiffness and has no gravity at rest.
         public static void VrmMagnitudes(SidecarJointForce force, float strandLength, out float stiffness, out float gravityPower)
         {
@@ -156,7 +168,7 @@ namespace Thyllore.Avatar
                 }
 
                 collider.Offset = ToBoneLocal(root, boneTransform, sc.offset);
-                collider.Radius = sc.radius;
+                collider.Radius = ToBoneLocalLength(root, boneTransform, sc.radius);
 
                 if (sc.shape == "capsule")
                 {
@@ -256,7 +268,7 @@ namespace Thyllore.Avatar
                     joint.m_dragForce = sj.drag_force;
                     joint.m_gravityPower = gravityPower;
                     joint.m_gravityDir = ToUnityVector(sj.gravity_dir);
-                    joint.m_jointRadius = sj.hit_radius;
+                    joint.m_jointRadius = ToBoneLocalLength(root, jointTransform, sj.hit_radius);
 
                     joints.Add(joint);
                 }

@@ -24,6 +24,11 @@ pub fn mat4_from_array_transpose(a: [[f32; 4]; 4]) -> Mat4 {
     )
 }
 
+/// The scalar a length takes through `linear`: the mean length of its axes.
+pub fn mean_axis_scale(linear: &Matrix3<f32>) -> f32 {
+    (linear.x.magnitude() + linear.y.magnitude() + linear.z.magnitude()) / 3.0
+}
+
 pub fn decompose(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
     let translation = Vector3::new(m.w.x, m.w.y, m.w.z);
 

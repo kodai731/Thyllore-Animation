@@ -140,16 +140,17 @@ impl JointForce {
         }
     }
 
-    pub fn lerp(&self, to: &JointForce, weight: f32) -> Self {
+    /// None across force models, whose magnitudes are different quantities.
+    pub fn lerp(&self, to: &JointForce, weight: f32) -> Option<Self> {
         if self.model() != to.model() {
-            return *self;
+            return None;
         }
         let from = self.magnitudes();
         let target = to.magnitudes();
-        self.with_magnitudes([
+        Some(self.with_magnitudes([
             from[0] + (target[0] - from[0]) * weight,
             from[1] + (target[1] - from[1]) * weight,
-        ])
+        ]))
     }
 }
 
@@ -230,10 +231,10 @@ mod tests {
     }
 
     #[test]
-    fn lerp_keeps_the_from_force_across_models() {
+    fn lerp_refuses_to_cross_models() {
         let from = JointForce::default_for(SpringForceModel::RestRelative);
         let to = JointForce::default_for(SpringForceModel::Vrm);
-        assert_eq!(from.lerp(&to, 0.5), from);
+        assert_eq!(from.lerp(&to, 0.5), None);
     }
 
     #[test]
@@ -246,7 +247,10 @@ mod tests {
             stiffness: 2.0,
             gravity_power: 1.0,
         });
-        assert_eq!(from.lerp(&to, 0.5).magnitudes(), [1.0, 0.5]);
+        assert_eq!(
+            from.lerp(&to, 0.5).map(|force| force.magnitudes()),
+            Some([1.0, 0.5])
+        );
     }
 
     #[test]

@@ -27,7 +27,8 @@ use thyllore_avatar_core::vrchat::sidecar::{
     AvatarSidecar, SidecarInput,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame,
+    build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
+    SidecarSpring,
 };
 use thyllore_model_core::MeshMorph;
 
@@ -50,15 +51,21 @@ use crate::animation::spring_bone::{
 };
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 
-/// Each bone's rest frame in the sidecar's model space: the rest global axes scaled into metres.
-pub fn skeleton_rest_frames(skeleton: &Skeleton, space: SpringSpace) -> Vec<BoneRestFrame> {
-    (0..skeleton.bones.len())
-        .map(|bone_index| {
-            let global_transform = compute_bone_global_transform(skeleton, bone_index);
-            BoneRestFrame::from_global_transform(&global_transform, space.world_scale())
-                .unwrap_or(BoneRestFrame::IDENTITY)
-        })
-        .collect()
+/// Each bone's rest frame in the sidecar's model space, taken at the model's current scale.
+fn current_rest_frames(
+    world: &World,
+    skeleton: &Skeleton,
+    bones: &[BoneInput],
+) -> anyhow::Result<Vec<BoneRestFrame>> {
+    let rest_globals = crate::ecs::compute_pose_global_transforms(
+        skeleton,
+        &crate::ecs::create_pose_from_rest(skeleton),
+    );
+    rest_frames_from_globals(
+        &rest_globals,
+        bones,
+        animated_spring_space(world).world_scale(),
+    )
 }
 
 pub fn animated_spring_space(world: &World) -> SpringSpace {
@@ -188,7 +195,6 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     };
 
     let bones = skeleton_to_bone_inputs(skeleton);
-    let rest_frames = skeleton_rest_frames(skeleton, animated_spring_space(world));
     let imported = world.resource::<ModelState>().imported_humanoid.clone();
     let (mapping, missing_bone_names) =
         load_or_infer_mapping(Path::new(&model_path), &bones, imported.as_ref());
@@ -197,7 +203,6 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     let node_assets = world.resource::<NodeAssets>();
     let mut state = world.resource_mut::<AvatarSetupState>();
     state.bones = bones;
-    state.rest_frames = rest_frames;
     state.mapping = mapping;
     state.missing_bone_names = missing_bone_names;
     state.stats = stats;
@@ -207,11 +212,11 @@ pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &Gr
     drop(state);
     drop(node_assets);
 
-    apply_avatar_sidecar(world, Path::new(&model_path));
+    apply_avatar_sidecar(world, skeleton, Path::new(&model_path));
 }
 
 /// Restore the setup an earlier export wrote beside the model: submesh roles and spring bones.
-fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
+fn apply_avatar_sidecar(world: &mut World, skeleton: &Skeleton, model_path: &Path) {
     let path = sidecar_path(model_path);
     if !path.exists() {
         return;
@@ -224,7 +229,7 @@ fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
         }
     };
 
-    let spring_setup = {
+    {
         let mut state = world.resource_mut::<AvatarSetupState>();
         for role in &sidecar.submesh_roles {
             let key = SubmeshKey {
@@ -235,8 +240,20 @@ fn apply_avatar_sidecar(world: &mut World, model_path: &Path) {
                 *assigned = role.role;
             }
         }
-        spring_setup_from_sidecar(&sidecar.spring, &state.bones, &state.rest_frames)
+    }
+
+    let bones = world.resource::<AvatarSetupState>().bones.clone();
+    let frames = match current_rest_frames(world, skeleton, &bones) {
+        Ok(frames) => frames,
+        Err(error) => {
+            msg_error!(
+                "Avatar sidecar {}: spring bones not restored: {error:#}",
+                path.display()
+            );
+            return;
+        }
     };
+    let spring_setup = spring_setup_from_sidecar(&sidecar.spring, &bones, &frames);
 
     let chain_count = spring_setup.chains.len();
     let collider_count = spring_setup.colliders.len();
@@ -487,8 +504,17 @@ pub fn export_avatar_sidecar_beside(
     graphics: &GraphicsResources,
     model_path: &Path,
 ) {
-    let sidecar = build_avatar_sidecar(world, assets, graphics);
     let path = sidecar_path(model_path);
+    let sidecar = match build_avatar_sidecar(world, assets, graphics) {
+        Ok(sidecar) => sidecar,
+        Err(error) => {
+            msg_error!(
+                "Failed to export avatar sidecar {}: {error:#}",
+                path.display()
+            );
+            return;
+        }
+    };
     match write_sidecar_json(&path, &sidecar) {
         Ok(()) => msg_info!("Exported avatar sidecar to {}", path.display()),
         Err(error) => msg_error!(
@@ -503,7 +529,7 @@ fn build_avatar_sidecar(
     world: &World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
-) -> AvatarSidecar {
+) -> anyhow::Result<AvatarSidecar> {
     let state = world.resource::<AvatarSetupState>();
     let library_state = world.resource::<ExpressionLibraryState>();
 
@@ -517,9 +543,13 @@ fn build_avatar_sidecar(
                 .collect()
         })
         .unwrap_or_default();
-    let spring = find_spring_bone_setup(world)
-        .map(|setup| build_sidecar_spring(setup, &state.bones, &state.rest_frames))
-        .unwrap_or_default();
+    let spring = match (find_spring_bone_setup(world), find_first_skeleton(assets)) {
+        (Some(setup), Some(skeleton)) => {
+            let frames = current_rest_frames(world, skeleton, &state.bones)?;
+            build_sidecar_spring(setup, &state.bones, &frames)
+        }
+        _ => SidecarSpring::default(),
+    };
     let materials: BTreeMap<String, String> = world
         .resource::<MaterialTextureState>()
         .slots
@@ -531,7 +561,7 @@ fn build_avatar_sidecar(
         })
         .collect();
 
-    build_sidecar(SidecarInput {
+    Ok(build_sidecar(SidecarInput {
         mapping: &state.mapping,
         bones: &state.bones,
         channel_names: &channel_names,
@@ -542,7 +572,7 @@ fn build_avatar_sidecar(
         stats: &state.stats,
         submesh_roles: &state.submesh_roles,
         hidden_triangles: &state.hidden_triangles,
-    })
+    }))
 }
 
 pub(crate) fn find_expression_morph_entity(

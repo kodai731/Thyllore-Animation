@@ -1,5 +1,6 @@
 use crate::animation::spring_bone::{
-    compare_tail_trajectories, JointForce, SpringBoneSetup, SpringSpace, SpringTailSample,
+    compare_tail_trajectories, shared_force_model, JointForce, SpringBoneSetup, SpringSpace,
+    SpringTailSample,
 };
 use crate::animation::{AnimationClip, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringChain};
@@ -100,6 +101,14 @@ pub fn fit_spring_params(
 
         let has_reference = inputs.reference.iter().any(|s| s.chain == chain.name);
         if !has_reference {
+            continue;
+        }
+
+        if shared_force_model(&chain.joints).is_none() {
+            log_warn!(
+                "Spring fit: skipped chain {:?}, its joints mix force models",
+                chain.name
+            );
             continue;
         }
 

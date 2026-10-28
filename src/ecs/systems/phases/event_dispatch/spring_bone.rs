@@ -816,6 +816,7 @@ impl UiCommand for SetSpringForceModel {
             return;
         };
         if let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) {
+            setup.new_joint_force_model = self.force_model;
             for joint in setup.chains.iter_mut().flat_map(|chain| &mut chain.joints) {
                 if joint.force.model() != self.force_model {
                     joint.force = JointForce::default_for(self.force_model);

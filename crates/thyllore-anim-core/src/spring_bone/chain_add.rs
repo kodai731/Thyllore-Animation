@@ -96,7 +96,7 @@ pub fn add_generated_chains(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spring_bone::{ChainOrigin, ChainRole, SubmeshSelector};
+    use crate::spring_bone::{ChainOrigin, ChainRole, SpringForceModel, SubmeshSelector};
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -136,6 +136,22 @@ mod tests {
         assert_eq!(id1, 1);
         assert_eq!(setup.chains[0].name, "Chain_0");
         assert_eq!(setup.chains[1].name, "Chain_1");
+    }
+
+    #[test]
+    fn add_chain_takes_the_setup_force_model_even_when_empty() {
+        let skeleton = make_linear_skeleton(4);
+        let mut setup = SpringBoneSetup {
+            new_joint_force_model: SpringForceModel::Vrm,
+            ..Default::default()
+        };
+
+        add_chain(&mut setup, 1, 3, &skeleton);
+
+        assert!(setup.chains[0]
+            .joints
+            .iter()
+            .all(|joint| joint.force.model() == SpringForceModel::Vrm));
     }
 
     #[test]

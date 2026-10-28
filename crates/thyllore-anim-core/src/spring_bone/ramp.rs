@@ -1,9 +1,12 @@
+use std::fmt;
 use std::sync::LazyLock;
 
 use thyllore_model_core::{BoneId, Skeleton};
 use thyllore_scene_core::{SceneFields, UiParam};
 
-use crate::spring_bone::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
+use crate::spring_bone::{
+    SpringBoneSetup, SpringChain, SpringChainId, SpringForceModel, SpringJointParam,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum RampShape {
@@ -71,10 +74,59 @@ fn lerp(from: f32, to: f32, weight: f32) -> f32 {
     from + (to - from) * weight
 }
 
-pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> SpringChain {
+/// A ramp interpolates force magnitudes, which only compare within one force model.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RampForceMismatch {
+    EndsDiffer {
+        root: SpringForceModel,
+        tip: SpringForceModel,
+    },
+    JointDiffers {
+        ramp: SpringForceModel,
+        joint: SpringForceModel,
+    },
+}
+
+impl fmt::Display for RampForceMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RampForceMismatch::EndsDiffer { root, tip } => write!(
+                f,
+                "the ramp ends use different force models ({} / {})",
+                root.label(),
+                tip.label()
+            ),
+            RampForceMismatch::JointDiffers { ramp, joint } => write!(
+                f,
+                "the ramp uses {} but the chain has {} joints",
+                ramp.label(),
+                joint.label()
+            ),
+        }
+    }
+}
+
+pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> Result<SpringChain, RampForceMismatch> {
+    let ends_differ = RampForceMismatch::EndsDiffer {
+        root: ramp.root.force.model(),
+        tip: ramp.tip.force.model(),
+    };
+    if ramp.root.force.model() != ramp.tip.force.model() {
+        return Err(ends_differ);
+    }
+    if let Some(joint) = chain
+        .joints
+        .iter()
+        .find(|joint| joint.force.model() != ramp.root.force.model())
+    {
+        return Err(RampForceMismatch::JointDiffers {
+            ramp: ramp.root.force.model(),
+            joint: joint.force.model(),
+        });
+    }
+
     let n = chain.joints.len();
     let mut out = chain.clone();
-
     for (i, joint) in out.joints.iter_mut().enumerate() {
         let t = if n <= 1 {
             0.0
@@ -83,13 +135,16 @@ pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> SpringChain {
         };
         let w = ramp.shape.weight(t);
 
-        joint.force = ramp.root.force.lerp(&ramp.tip.force, w);
+        joint.force = ramp
+            .root
+            .force
+            .lerp(&ramp.tip.force, w)
+            .ok_or(ends_differ)?;
         joint.drag_force = lerp(ramp.root.drag_force, ramp.tip.drag_force, w);
         joint.hit_radius = lerp(ramp.root.hit_radius, ramp.tip.hit_radius, w);
         joint.gravity_dir = ramp.root.gravity_dir;
     }
-
-    out
+    Ok(out)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

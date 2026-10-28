@@ -1,4 +1,7 @@
-use cgmath::{InnerSpace, Matrix, Matrix3, Matrix4, SquareMatrix, Vector3};
+use cgmath::{Matrix, Matrix3, Matrix4, SquareMatrix, Vector3};
+use thyllore_math_core::mean_axis_scale;
+
+use crate::humanoid::components::skeleton_input::BoneInput;
 
 /// A bone's rest frame as the sidecar sees it: bone-local vectors to model space (engine axes, metres).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -51,8 +54,7 @@ impl BoneRestFrame {
 
     /// Metres per bone-local unit, as the mean axis length; radii are scalars and take this.
     pub fn metres_per_local_unit(&self) -> f32 {
-        (self.to_model.x.magnitude() + self.to_model.y.magnitude() + self.to_model.z.magnitude())
-            / 3.0
+        mean_axis_scale(&self.to_model)
     }
 
     pub fn length_to_model(&self, local_length: f32) -> f32 {
@@ -64,10 +66,27 @@ impl BoneRestFrame {
     }
 }
 
+/// Every bone's rest frame from its rest global transform; a singular one is an error, since colliders
+/// on that bone could not be mapped back.
+pub fn rest_frames_from_globals(
+    rest_globals: &[Matrix4<f32>],
+    bones: &[BoneInput],
+    metres_per_skeleton_unit: f32,
+) -> anyhow::Result<Vec<BoneRestFrame>> {
+    rest_globals
+        .iter()
+        .zip(bones)
+        .map(|(global, bone)| {
+            BoneRestFrame::from_global_transform(global, metres_per_skeleton_unit)
+                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular rest frame", bone.name))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{Deg, Rotation3};
+    use cgmath::{Deg, InnerSpace, Rotation3};
 
     #[test]
     fn rotated_and_scaled_frame_round_trips_vectors_and_lengths() {

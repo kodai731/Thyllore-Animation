@@ -49,7 +49,8 @@ pub fn register_generated_chains(
     let bone_inputs = to_bone_inputs(bones);
     let root = bone_id(&skeleton, request.root_name)?;
 
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &rest_frames(bones));
+    let frames = rest_frames(bones)?;
+    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
     setup
         .chains
         .retain(|chain| !chain.origin.is_generated_on(&target));
@@ -87,11 +88,7 @@ pub fn register_generated_chains(
 
     add_generated_chains(&mut setup, chains, root_collider, SpringSpace::IDENTITY);
 
-    Ok(build_sidecar_spring(
-        &setup,
-        &bone_inputs,
-        &rest_frames(bones),
-    ))
+    Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
 }
 
 fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {

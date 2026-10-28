@@ -7,7 +7,8 @@ use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collid
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
+    build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
+    SidecarSpring,
 };
 use thyllore_model_core::{Skeleton, SkinData};
 
@@ -29,15 +30,12 @@ pub struct FitSkin {
 }
 
 /// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.
-pub(crate) fn rest_frames(bones: &[FitBone]) -> Vec<BoneRestFrame> {
-    bones
+pub(crate) fn rest_frames(bones: &[FitBone]) -> anyhow::Result<Vec<BoneRestFrame>> {
+    let bind_matrices: Vec<Matrix4<f32>> = bones
         .iter()
-        .map(|fit_bone| {
-            let bind_matrix = Matrix4::from(fit_bone.bind_matrix).transpose();
-            BoneRestFrame::from_global_transform(&bind_matrix, 1.0)
-                .unwrap_or(BoneRestFrame::IDENTITY)
-        })
-        .collect()
+        .map(|fit_bone| Matrix4::from(fit_bone.bind_matrix).transpose())
+        .collect();
+    rest_frames_from_globals(&bind_matrices, &to_bone_inputs(bones), 1.0)
 }
 
 pub(crate) fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
@@ -122,14 +120,11 @@ pub fn fit_body_colliders(
 
     anyhow::ensure!(!fitted.is_empty(), "fit produced no body colliders");
 
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &rest_frames(bones));
+    let frames = rest_frames(bones)?;
+    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
     replace_fitted_body_colliders(&mut setup, &fitted);
 
-    Ok(build_sidecar_spring(
-        &setup,
-        &bone_inputs,
-        &rest_frames(bones),
-    ))
+    Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
 }
 
 pub fn assign_collider_groups(

@@ -92,7 +92,7 @@ fn build_full_test_data(chain_count: usize, chain_length: usize) -> (Skeleton, S
 fn single_joint_is_root_value() {
     let chain = make_chain(&[0]);
     let ramp = ramp(0.8, 0.2, RampShape::Linear);
-    let result = apply_ramp(&chain, &ramp);
+    let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     assert_eq!(result.joints.len(), 1);
     assert!((stiffness_of(&result.joints[0]) - 0.8).abs() < 1e-6);
@@ -102,7 +102,7 @@ fn single_joint_is_root_value() {
 fn four_joints_linear_interpolation() {
     let chain = make_chain(&[0, 1, 2, 3]);
     let ramp = ramp(0.8, 0.2, RampShape::Linear);
-    let result = apply_ramp(&chain, &ramp);
+    let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     assert_eq!(result.joints.len(), 4);
     assert!((stiffness_of(&result.joints[0]) - 0.8).abs() < 1e-6);
@@ -117,8 +117,8 @@ fn four_joints_ease_in_second_joint_closer_to_root() {
     let ramp_linear = ramp(0.8, 0.2, RampShape::Linear);
     let ramp_ease_in = ramp(0.8, 0.2, RampShape::EaseIn);
 
-    let result_linear = apply_ramp(&chain, &ramp_linear);
-    let result_ease_in = apply_ramp(&chain, &ramp_ease_in);
+    let result_linear = apply_ramp(&chain, &ramp_linear).expect("one force model");
+    let result_ease_in = apply_ramp(&chain, &ramp_ease_in).expect("one force model");
     assert!(stiffness_of(&result_ease_in.joints[1]) > stiffness_of(&result_linear.joints[1]));
 }
 
@@ -127,16 +127,18 @@ fn gravity_dir_is_root_for_all_joints() {
     let chain = make_chain(&[0, 1, 2]);
     let ramp = ChainRamp {
         root: SpringJointParam {
+            force: vrm_force(0.8),
             gravity_dir: Vector3::new(1.0, 0.0, 0.0),
             ..Default::default()
         },
         tip: SpringJointParam {
+            force: vrm_force(0.2),
             gravity_dir: Vector3::new(0.0, 1.0, 0.0),
             ..Default::default()
         },
         shape: RampShape::Linear,
     };
-    let result = apply_ramp(&chain, &ramp);
+    let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     for joint in &result.joints {
         assert_eq!(joint.gravity_dir, Vector3::new(1.0, 0.0, 0.0));
@@ -147,11 +149,39 @@ fn gravity_dir_is_root_for_all_joints() {
 fn bone_ids_preserved_from_input_chain() {
     let chain = make_chain(&[5, 12, 7]);
     let ramp = ramp(0.8, 0.2, RampShape::Linear);
-    let result = apply_ramp(&chain, &ramp);
+    let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     assert_eq!(result.joints[0].bone_id, 5);
     assert_eq!(result.joints[1].bone_id, 12);
     assert_eq!(result.joints[2].bone_id, 7);
+}
+
+#[test]
+fn ramp_with_ends_of_different_models_is_rejected() {
+    let chain = make_chain(&[0, 1]);
+    let mut mixed = ramp(0.8, 0.2, RampShape::Linear);
+    mixed.tip.force = JointForce::default_for(SpringForceModel::RestRelative);
+
+    assert_eq!(
+        apply_ramp(&chain, &mixed).err(),
+        Some(RampForceMismatch::EndsDiffer {
+            root: SpringForceModel::Vrm,
+            tip: SpringForceModel::RestRelative,
+        })
+    );
+}
+
+#[test]
+fn ramp_of_another_model_than_the_chain_is_rejected() {
+    let chain = make_chain(&[0, 1]);
+
+    assert_eq!(
+        apply_ramp(&chain, &ChainRamp::default()).err(),
+        Some(RampForceMismatch::JointDiffers {
+            ramp: SpringForceModel::RestRelative,
+            joint: SpringForceModel::Vrm,
+        })
+    );
 }
 
 #[test]

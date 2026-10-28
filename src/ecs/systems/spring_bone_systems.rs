@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix4, Quaternion, SquareMatrix, Vector3};
+use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
@@ -16,6 +16,7 @@ use crate::ecs::MeshRef;
 use crate::hooks::model_load::LoadedModel;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::spring_bone::{chains_skinned_to, SpringChainId};
+use thyllore_math_core::mean_axis_scale;
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
 
@@ -662,6 +663,15 @@ fn transform_point(matrix: &Matrix4<f32>, offset: Vector3<f32>) -> Vector3<f32> 
     Vector3::new(x, y, z)
 }
 
+/// Collider radii are bone-local like their offsets (VRM 1.0), so they take the bone's scale.
+fn bone_length_scale(bone_transform: &Matrix4<f32>) -> f32 {
+    mean_axis_scale(&Matrix3::from_cols(
+        bone_transform.x.truncate(),
+        bone_transform.y.truncate(),
+        bone_transform.z.truncate(),
+    ))
+}
+
 fn collect_world_colliders(
     setup: &SpringBoneSetup,
     collider_group_ids: &[u32],
@@ -684,12 +694,13 @@ fn collect_world_colliders(
 
             let bone_transform = &global_transforms[bone_idx];
             let center = transform_point(bone_transform, def.offset);
+            let radius = collider_shape_radius(&def.shape) * bone_length_scale(bone_transform);
 
             match &def.shape {
                 ColliderShape::Sphere { .. } => {
                     world_colliders.push(WorldCollider {
                         center,
-                        radius: collider_shape_radius(&def.shape),
+                        radius,
                         tail: None,
                     });
                 }
@@ -697,7 +708,7 @@ fn collect_world_colliders(
                     let world_tail = transform_point(bone_transform, *tail);
                     world_colliders.push(WorldCollider {
                         center,
-                        radius: collider_shape_radius(&def.shape),
+                        radius,
                         tail: Some(world_tail),
                     });
                 }

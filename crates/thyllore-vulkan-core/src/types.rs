@@ -27,7 +27,15 @@ impl CommandBuffer {
     }
 }
 
-pub type Format = vk::Format;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Format(pub(crate) vk::Format);
+impl Format {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Format {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Image(pub(crate) vk::Image);
 impl Image {
@@ -244,8 +252,6 @@ pub struct Viewport {
     pub min_depth: f32,
     pub max_depth: f32,
 }
-
-pub type SampleCountFlags = vk::SampleCountFlags;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Surface(pub(crate) vk::SurfaceKHR);

@@ -125,7 +125,7 @@ impl ReducedResolveTarget {
 
     #[inline]
     pub fn format(&self) -> crate::types::Format {
-        self.format
+        crate::types::Format(self.format)
     }
 
     pub unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {

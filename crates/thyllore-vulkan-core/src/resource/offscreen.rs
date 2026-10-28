@@ -39,7 +39,7 @@ impl OffscreenFramebuffer {
 
     #[inline]
     pub fn format(&self) -> crate::types::Format {
-        self.format
+        crate::types::Format(self.format)
     }
 
     #[inline]
@@ -68,10 +68,12 @@ impl OffscreenFramebuffer {
         command_pool: crate::types::CommandPool,
         width: u32,
         height: u32,
-        msaa_samples: vk::SampleCountFlags,
-        format: vk::Format,
+        msaa_samples: crate::pipeline::builder::SampleCount,
+        format: crate::types::Format,
     ) -> Result<Self> {
         let command_pool = command_pool.raw();
+        let msaa_samples: vk::SampleCountFlags = msaa_samples.into();
+        let format = format.raw();
         let (msaa_color_image, msaa_color_image_memory) = create_image(
             instance,
             rrdevice,
@@ -333,8 +335,8 @@ impl OffscreenFramebuffer {
             return Ok(());
         }
 
-        let msaa_samples = self.msaa_samples;
-        let format = self.format;
+        let msaa_samples = crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples);
+        let format = crate::types::Format(self.format);
         self.destroy(&rrdevice.device());
 
         let new_fb = Self::new(

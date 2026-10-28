@@ -52,10 +52,11 @@ impl OnionSkinPassResources {
         instance: &Instance,
         rrdevice: &RRDevice,
         offscreen_resolve_image_view: crate::types::ImageView,
-        offscreen_format: vk::Format,
+        offscreen_format: crate::types::Format,
         width: u32,
         height: u32,
     ) -> Result<Self> {
+        let offscreen_format = offscreen_format.raw();
         let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
             Self::create_ghost_buffer(instance, rrdevice, width, height)?;
         let ghost_render_pass = Self::create_ghost_render_pass(rrdevice)?;

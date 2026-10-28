@@ -35,9 +35,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::{anyhow, Context, Result};
 use std::rc::Rc;
 use std::time::Instant;
-use thyllore_vulkan_core::types::{
-    DebugMessenger, Fence, Instance, SampleCountFlags, Semaphore, Surface,
-};
+use thyllore_vulkan_core::types::{DebugMessenger, Fence, Instance, Semaphore, Surface};
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use winit::window::Window;
@@ -961,7 +959,7 @@ impl App {
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
         Self::register_editor_resources(data);
@@ -975,7 +973,7 @@ impl App {
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         data.ecs_world.insert_resource(FrameSync::new(
             resources.image_available_semaphores.clone(),
@@ -1126,14 +1124,7 @@ impl App {
         let descriptor_set_layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
         let sampler = crate::vulkanr::image::create_linear_clamp_sampler(rrdevice)?;
 
-        let msaa_samples = {
-            let render_config = data.ecs_world.resource::<RenderConfig>();
-            if !render_config.msaa_samples.is_empty() {
-                render_config.msaa_samples
-            } else {
-                SampleCount::Eight.into()
-            }
-        };
+        let msaa_samples = data.ecs_world.resource::<RenderConfig>().msaa_samples;
         let imgui_pipeline = RRPipeline::new_imgui(
             rrdevice,
             rrrender,

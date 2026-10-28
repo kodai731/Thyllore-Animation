@@ -74,7 +74,7 @@ use crate::ecs::resource::LightState;
 use crate::platform::ImguiData;
 use thyllore_vulkan_core::pipeline::SampleCount;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::types::{Extent2D, Fence, SampleCountFlags};
+use thyllore_vulkan_core::types::{Extent2D, Fence};
 
 pub struct RayTracingState {
     pub data: RayTracingData,
@@ -137,11 +137,11 @@ impl Default for ImGuiState {
 }
 
 pub struct RenderConfig {
-    pub msaa_samples: SampleCountFlags,
+    pub msaa_samples: SampleCount,
 }
 
 impl RenderConfig {
-    pub fn new(msaa_samples: SampleCountFlags) -> Self {
+    pub fn new(msaa_samples: SampleCount) -> Self {
         Self { msaa_samples }
     }
 }
@@ -149,7 +149,7 @@ impl RenderConfig {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self {
-            msaa_samples: SampleCount::One.into(),
+            msaa_samples: SampleCount::One,
         }
     }
 }

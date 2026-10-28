@@ -72,16 +72,49 @@ impl From<DepthCompare> for vk::CompareOp {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SampleCount {
     One,
+    Two,
+    Four,
     Eight,
+    Sixteen,
+    ThirtyTwo,
+    SixtyFour,
 }
 impl From<SampleCount> for vk::SampleCountFlags {
     fn from(count: SampleCount) -> Self {
         match count {
             SampleCount::One => vk::SampleCountFlags::_1,
+            SampleCount::Two => vk::SampleCountFlags::_2,
+            SampleCount::Four => vk::SampleCountFlags::_4,
             SampleCount::Eight => vk::SampleCountFlags::_8,
+            SampleCount::Sixteen => vk::SampleCountFlags::_16,
+            SampleCount::ThirtyTwo => vk::SampleCountFlags::_32,
+            SampleCount::SixtyFour => vk::SampleCountFlags::_64,
+        }
+    }
+}
+impl SampleCount {
+    #[inline]
+    pub fn bits(self) -> u32 {
+        let flags: vk::SampleCountFlags = self.into();
+        flags.bits()
+    }
+
+    pub(crate) fn from_raw(flags: vk::SampleCountFlags) -> Self {
+        match flags {
+            vk::SampleCountFlags::_1 => SampleCount::One,
+            vk::SampleCountFlags::_2 => SampleCount::Two,
+            vk::SampleCountFlags::_4 => SampleCount::Four,
+            vk::SampleCountFlags::_8 => SampleCount::Eight,
+            vk::SampleCountFlags::_16 => SampleCount::Sixteen,
+            vk::SampleCountFlags::_32 => SampleCount::ThirtyTwo,
+            vk::SampleCountFlags::_64 => SampleCount::SixtyFour,
+            _ => panic!(
+                "SampleCount::from_raw: unexpected flags (bits={:#x}), not a single-bit sample count",
+                flags.bits()
+            ),
         }
     }
 }
@@ -674,7 +707,7 @@ impl RRPipeline {
         rrrender: &RRRender,
         descriptor_set_layout: &ReflectedSetLayout,
         pass: &'static PassShaders,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: SampleCount,
     ) -> Result<Self> {
         PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::ImGui)

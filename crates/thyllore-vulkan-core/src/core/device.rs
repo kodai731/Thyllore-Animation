@@ -95,8 +95,8 @@ impl RRDevice {
     }
 
     #[inline]
-    pub fn msaa_samples(&self) -> crate::types::SampleCountFlags {
-        self.msaa_samples
+    pub fn msaa_samples(&self) -> crate::pipeline::builder::SampleCount {
+        crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples)
     }
 
     pub unsafe fn default() -> RRDevice {

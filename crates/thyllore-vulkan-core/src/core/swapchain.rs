@@ -58,7 +58,7 @@ impl RRSwapchain {
 
     #[inline]
     pub fn swapchain_format(&self) -> crate::types::Format {
-        self.swapchain_format
+        crate::types::Format(self.swapchain_format)
     }
 
     #[inline]

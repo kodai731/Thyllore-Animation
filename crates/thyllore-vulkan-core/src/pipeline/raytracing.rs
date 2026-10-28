@@ -127,13 +127,17 @@ impl RRRayTracingPipeline {
         rrdevice: &RRDevice,
         pass: &PassShaders,
         descriptor_set_layouts: &[crate::types::DescriptorSetLayout],
-        push_constant_ranges: &[vk::PushConstantRange],
+        push_constant_ranges: &[crate::types::PushConstantRange],
         recursion_depth: u32,
     ) -> Result<Self> {
         let device = &rrdevice.device();
         let descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = descriptor_set_layouts
             .iter()
             .map(|layout| layout.raw())
+            .collect();
+        let push_constant_ranges: Vec<vk::PushConstantRange> = push_constant_ranges
+            .iter()
+            .map(|range| range.raw())
             .collect();
         let trace_stages = TraceStages::from_pass(pass)?;
 
@@ -158,7 +162,7 @@ impl RRRayTracingPipeline {
         let mut layout_info =
             vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_set_layouts);
         if !push_constant_ranges.is_empty() {
-            layout_info = layout_info.push_constant_ranges(push_constant_ranges);
+            layout_info = layout_info.push_constant_ranges(&push_constant_ranges);
         }
         let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 

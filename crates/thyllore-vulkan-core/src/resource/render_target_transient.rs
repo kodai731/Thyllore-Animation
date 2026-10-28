@@ -355,7 +355,7 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy_all(&mut self, device: &Device) {
         for (_, framebuffer) in self.framebuffers.drain() {
             device.destroy_framebuffer(framebuffer, None);
         }

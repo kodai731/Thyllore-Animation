@@ -46,7 +46,7 @@ impl RRWaterCausticDescriptorSet {
         position_image_view: crate::types::ImageView,
         tlas: Option<crate::types::AccelerationStructure>,
         scene_uniform_buffer: crate::types::Buffer,
-        water_ubo: vk::Buffer,
+        water_ubo: crate::types::Buffer,
         hdr_color_image_view: crate::types::ImageView,
     ) -> Result<()> {
         if self.splat_descriptor_set == vk::DescriptorSet::null() {
@@ -84,7 +84,7 @@ impl RRWaterCausticDescriptorSet {
             )?
             .buffer(
                 water_caustic_splat::WATER_BLOCK,
-                water_ubo,
+                water_ubo.raw(),
                 0,
                 vk::WHOLE_SIZE as u64,
             )?
@@ -112,7 +112,7 @@ impl RRWaterCausticDescriptorSet {
             )?
             .buffer(
                 water_caustic_apply::WATER_BLOCK,
-                water_ubo,
+                water_ubo.raw(),
                 0,
                 vk::WHOLE_SIZE as u64,
             )?

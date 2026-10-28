@@ -49,7 +49,11 @@ impl RRBloomDescriptorSets {
         })
     }
 
-    pub fn downsample_set(&self, frame_slot: usize, mip_index: usize) -> Result<vk::DescriptorSet> {
+    pub(crate) fn downsample_set(
+        &self,
+        frame_slot: usize,
+        mip_index: usize,
+    ) -> Result<vk::DescriptorSet> {
         self.frame(frame_slot)?
             .downsample_sets
             .get(mip_index)
@@ -57,7 +61,11 @@ impl RRBloomDescriptorSets {
             .ok_or_else(|| anyhow!("bloom downsample set {mip_index} is missing"))
     }
 
-    pub fn upsample_set(&self, frame_slot: usize, pass_index: usize) -> Result<vk::DescriptorSet> {
+    pub(crate) fn upsample_set(
+        &self,
+        frame_slot: usize,
+        pass_index: usize,
+    ) -> Result<vk::DescriptorSet> {
         self.frame(frame_slot)?
             .upsample_sets
             .get(pass_index)

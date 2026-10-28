@@ -54,7 +54,7 @@ impl VolumeImage {
         })
     }
 
-    pub fn subresource_range(&self) -> vk::ImageSubresourceRange {
+    pub(crate) fn subresource_range(&self) -> vk::ImageSubresourceRange {
         vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,
             base_mip_level: 0,

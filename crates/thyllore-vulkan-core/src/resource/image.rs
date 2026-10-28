@@ -776,7 +776,7 @@ pub unsafe fn create_texture_sampler(
     Ok((sampler))
 }
 
-pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub(crate) unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::NEAREST)
         .min_filter(vk::Filter::NEAREST)
@@ -925,7 +925,7 @@ pub unsafe fn create_texture_image_pixel_with_format(
 }
 
 // Depth formats must not be sampled with LINEAR filtering.
-pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub(crate) unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::NEAREST)
         .min_filter(vk::Filter::NEAREST)

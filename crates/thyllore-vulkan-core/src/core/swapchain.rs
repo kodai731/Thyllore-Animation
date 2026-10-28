@@ -96,7 +96,9 @@ impl SwapchainSupport {
         })
     }
 
-    pub fn get_swapchain_surface_format(formats: &[vk::SurfaceFormatKHR]) -> vk::SurfaceFormatKHR {
+    pub(crate) fn get_swapchain_surface_format(
+        formats: &[vk::SurfaceFormatKHR],
+    ) -> vk::SurfaceFormatKHR {
         formats
             .iter()
             .cloned()
@@ -107,7 +109,9 @@ impl SwapchainSupport {
             .unwrap_or_else(|| formats[0])
     }
 
-    pub fn get_swapchain_present_mode(present_modes: &[vk::PresentModeKHR]) -> vk::PresentModeKHR {
+    pub(crate) fn get_swapchain_present_mode(
+        present_modes: &[vk::PresentModeKHR],
+    ) -> vk::PresentModeKHR {
         present_modes
             .iter()
             .cloned()
@@ -115,7 +119,7 @@ impl SwapchainSupport {
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
 
-    pub fn get_swapchain_extent(
+    pub(crate) fn get_swapchain_extent(
         window: &Window,
         capabilities: vk::SurfaceCapabilitiesKHR,
     ) -> vk::Extent2D {

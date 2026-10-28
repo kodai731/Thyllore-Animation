@@ -71,15 +71,15 @@ impl<T: GpuBlock> UniformBuffer<T> {
         })
     }
 
-    pub fn handle(&self) -> vk::Buffer {
-        self.buffer
+    pub fn handle(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.buffer)
     }
 
-    pub fn block_size(&self) -> vk::DeviceSize {
+    pub(crate) fn block_size(&self) -> vk::DeviceSize {
         T::SIZE as vk::DeviceSize
     }
 
-    pub fn slot_offset(&self, slot: usize) -> Result<vk::DeviceSize> {
+    pub fn slot_offset(&self, slot: usize) -> Result<crate::types::DeviceSize> {
         if slot >= self.slot_count {
             return Err(anyhow!(
                 "{} slot {slot} is out of range (slot count {})",

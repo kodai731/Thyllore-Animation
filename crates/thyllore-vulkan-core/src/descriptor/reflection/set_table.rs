@@ -120,7 +120,7 @@ impl DescriptorSetTable {
             .and_then(|bindings| bindings.get(&binding))
     }
 
-    pub fn layout_bindings(&self, set: u32) -> Vec<vk::DescriptorSetLayoutBinding> {
+    pub(crate) fn layout_bindings(&self, set: u32) -> Vec<vk::DescriptorSetLayoutBinding> {
         self.sets
             .get(&set)
             .map(|bindings| {
@@ -143,6 +143,16 @@ impl DescriptorSetTable {
     }
 
     pub fn verify_layout(
+        &self,
+        set: u32,
+        layout: &[crate::types::DescriptorSetLayoutBinding],
+    ) -> Vec<LayoutMismatch> {
+        let layout: Vec<vk::DescriptorSetLayoutBinding> =
+            layout.iter().map(|binding| binding.raw()).collect();
+        self.verify_bindings(set, &layout)
+    }
+
+    pub(crate) fn verify_bindings(
         &self,
         set: u32,
         layout: &[vk::DescriptorSetLayoutBinding],
@@ -212,7 +222,7 @@ fn compare_binding(
     mismatches
 }
 
-pub fn kind_accepts(kind: DescriptorKind, descriptor_type: vk::DescriptorType) -> bool {
+pub(crate) fn kind_accepts(kind: DescriptorKind, descriptor_type: vk::DescriptorType) -> bool {
     match kind {
         DescriptorKind::UniformBuffer => matches!(
             descriptor_type,
@@ -233,7 +243,7 @@ pub fn kind_accepts(kind: DescriptorKind, descriptor_type: vk::DescriptorType) -
     }
 }
 
-pub fn default_descriptor_type(kind: DescriptorKind) -> vk::DescriptorType {
+pub(crate) fn default_descriptor_type(kind: DescriptorKind) -> vk::DescriptorType {
     match kind {
         DescriptorKind::Sampler => vk::DescriptorType::SAMPLER,
         DescriptorKind::CombinedImageSampler => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
@@ -248,21 +258,23 @@ pub fn default_descriptor_type(kind: DescriptorKind) -> vk::DescriptorType {
     }
 }
 
-pub fn push_constant_range(layout: &PushConstantLayout) -> vk::PushConstantRange {
+pub fn push_constant_range(layout: &PushConstantLayout) -> crate::types::PushConstantRange {
     let stage_flags = layout
         .stages
         .iter()
         .fold(vk::ShaderStageFlags::empty(), |flags, stage| {
             flags | shader_stage_flags(*stage)
         });
-    vk::PushConstantRange::builder()
-        .stage_flags(stage_flags)
-        .offset(0)
-        .size(layout.size)
-        .build()
+    crate::types::PushConstantRange(
+        vk::PushConstantRange::builder()
+            .stage_flags(stage_flags)
+            .offset(0)
+            .size(layout.size)
+            .build(),
+    )
 }
 
-pub fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
+pub(crate) fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
     match stage {
         ShaderStage::Vertex => vk::ShaderStageFlags::VERTEX,
         ShaderStage::TessellationControl => vk::ShaderStageFlags::TESSELLATION_CONTROL,
@@ -424,7 +436,7 @@ mod tests {
             ),
         ];
 
-        let mismatches = table.verify_layout(0, &layout);
+        let mismatches = table.verify_bindings(0, &layout);
         assert_eq!(
             mismatches,
             vec![
@@ -445,6 +457,8 @@ mod tests {
     #[test]
     fn verify_layout_accepts_matching_layout() {
         let table = vertex_and_fragment_table();
-        assert!(table.verify_layout(0, &table.layout_bindings(0)).is_empty());
+        assert!(table
+            .verify_bindings(0, &table.layout_bindings(0))
+            .is_empty());
     }
 }

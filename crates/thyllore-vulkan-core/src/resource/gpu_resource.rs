@@ -83,7 +83,7 @@ impl OwnedDescriptorSet {
         Self { set, layout }
     }
 
-    pub fn handle(&self) -> vk::DescriptorSet {
+    pub(crate) fn handle(&self) -> vk::DescriptorSet {
         self.set
     }
 }

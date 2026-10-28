@@ -125,6 +125,24 @@ impl PipelineLayout {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DescriptorSetLayoutBinding(pub(crate) vk::DescriptorSetLayoutBinding);
+impl DescriptorSetLayoutBinding {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::DescriptorSetLayoutBinding {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PushConstantRange(pub(crate) vk::PushConstantRange);
+impl PushConstantRange {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::PushConstantRange {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct AccelerationStructure(pub(crate) vk::AccelerationStructureKHR);
 impl AccelerationStructure {

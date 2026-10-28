@@ -2,7 +2,7 @@ use crate::core::RRDevice;
 use crate::descriptor::{PassShaders, ReflectedSetLayout};
 use crate::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, SampleCount,
-    VertexInputConfig,
+    Topology, VertexInputConfig,
 };
 use crate::render::RRRender;
 use anyhow::{ensure, Result};
@@ -151,7 +151,7 @@ impl OverlayNodeSpec {
                 bindings: vec![],
                 attributes: vec![],
             })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .topology(Topology::TriangleList)
             .custom_render_pass(render_pass)
             .msaa_samples(SampleCount::One)
             .mrt_attachments(self.blends.len() as u32)

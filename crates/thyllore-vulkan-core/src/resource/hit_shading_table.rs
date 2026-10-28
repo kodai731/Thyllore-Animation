@@ -90,11 +90,6 @@ impl HitShadingTable {
         Ok(())
     }
 
-    /// Get the Vulkan buffer handle.
-    pub fn vk_buffer(&self) -> vk::Buffer {
-        self.buffer
-    }
-
     /// Destroy the underlying buffer and memory.
     pub unsafe fn destroy(mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {

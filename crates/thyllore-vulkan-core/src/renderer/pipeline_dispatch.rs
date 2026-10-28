@@ -71,12 +71,13 @@ pub unsafe fn push_constants_and_trace_rays(
     rrdevice: &RRDevice,
     command_buffer: CommandBuffer,
     pipeline: &RRRayTracingPipeline,
-    push_range: &vk::PushConstantRange,
+    push_range: &crate::types::PushConstantRange,
     push_bytes: &[u8],
     width: u32,
     height: u32,
 ) {
     let command_buffer = command_buffer.raw();
+    let push_range = push_range.raw();
     rrdevice.device().cmd_push_constants(
         command_buffer,
         pipeline.pipeline_layout,

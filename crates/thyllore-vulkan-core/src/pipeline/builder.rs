@@ -9,9 +9,8 @@ use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
-use vulkanalia::vk::PrimitiveTopology;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Topology {
     TriangleList,
     LineList,
@@ -283,12 +282,14 @@ impl PushConstantConfig {
     }
 }
 
-pub fn compute_push_constant_range(size: u32) -> vk::PushConstantRange {
-    vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::COMPUTE)
-        .offset(0)
-        .size(size)
-        .build()
+pub fn compute_push_constant_range(size: u32) -> crate::types::PushConstantRange {
+    crate::types::PushConstantRange(
+        vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .offset(0)
+            .size(size)
+            .build(),
+    )
 }
 
 /// Pipeline builder for flexible pipeline creation
@@ -364,13 +365,13 @@ impl PipelineBuilder {
     }
 
     /// Set primitive topology (TRIANGLE_LIST, LINE_LIST, etc.)
-    pub fn topology(mut self, topology: impl Into<vk::PrimitiveTopology>) -> Self {
+    pub fn topology(mut self, topology: Topology) -> Self {
         self.topology = topology.into();
         self
     }
 
     /// Set polygon mode (FILL, LINE, POINT)
-    pub fn polygon_mode(mut self, mode: impl Into<vk::PolygonMode>) -> Self {
+    pub fn polygon_mode(mut self, mode: FillMode) -> Self {
         self.polygon_mode = mode.into();
         self
     }
@@ -382,7 +383,7 @@ impl PipelineBuilder {
         self
     }
 
-    pub fn cull_mode(mut self, mode: impl Into<vk::CullModeFlags>) -> Self {
+    pub fn cull_mode(mut self, mode: CullFace) -> Self {
         self.cull_mode = mode.into();
         self
     }
@@ -413,7 +414,7 @@ impl PipelineBuilder {
     }
 
     /// Set dynamic states
-    pub fn dynamic_states(mut self, states: Vec<vk::DynamicState>) -> Self {
+    pub(crate) fn dynamic_states(mut self, states: Vec<vk::DynamicState>) -> Self {
         self.dynamic_states = states;
         self
     }
@@ -425,7 +426,7 @@ impl PipelineBuilder {
     }
 
     /// Set MSAA samples
-    pub fn msaa_samples(mut self, samples: impl Into<vk::SampleCountFlags>) -> Self {
+    pub fn msaa_samples(mut self, samples: SampleCount) -> Self {
         self.msaa_samples = samples.into();
         self
     }
@@ -637,11 +638,10 @@ impl RRPipeline {
         rrrender: &RRRender,
         layouts: &[&ReflectedSetLayout; 3],
         pass: &'static PassShaders,
-        topology: impl Into<PrimitiveTopology>,
-        polygon_mode: impl Into<vk::PolygonMode>,
-        cull_mode: impl Into<vk::CullModeFlags>,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: CullFace,
     ) -> Result<Self> {
-        let topology = topology.into();
         let mut builder = PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
@@ -649,7 +649,7 @@ impl RRPipeline {
             .cull_mode(cull_mode)
             .descriptor_layouts(layouts);
 
-        if topology == vk::PrimitiveTopology::LINE_LIST {
+        if topology == Topology::LineList {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
@@ -673,9 +673,9 @@ impl RRPipeline {
         rrrender: &RRRender,
         layouts: &[&ReflectedSetLayout; 2],
         pass: &'static PassShaders,
-        topology: PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: CullFace,
     ) -> Result<Self> {
         let mut builder = PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Standard)
@@ -684,7 +684,7 @@ impl RRPipeline {
             .cull_mode(cull_mode)
             .descriptor_layouts(layouts);
 
-        if topology == vk::PrimitiveTopology::LINE_LIST {
+        if topology == Topology::LineList {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
@@ -733,8 +733,8 @@ impl RRPipeline {
     ) -> Result<Self> {
         PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Billboard)
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
+            .topology(Topology::TriangleList)
+            .polygon_mode(FillMode::Fill)
             .blend(BlendConfig::default())
             .descriptor_layouts(&[descriptor_set_layout])
             .build(
@@ -760,9 +760,13 @@ impl RRPipeline {
         rrdevice: &RRDevice,
         pass: &'static PassShaders,
         descriptor_set_layouts: &[&ReflectedSetLayout],
-        push_constant_ranges: &[vk::PushConstantRange],
+        push_constant_ranges: &[crate::types::PushConstantRange],
     ) -> Result<Self> {
         let device = &rrdevice.device();
+        let push_constant_ranges: Vec<vk::PushConstantRange> = push_constant_ranges
+            .iter()
+            .map(|range| range.raw())
+            .collect();
 
         let owned_layouts: Vec<ReflectedSetLayout> = descriptor_set_layouts
             .iter()
@@ -790,7 +794,7 @@ impl RRPipeline {
         // Create pipeline layout
         let mut layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&layout_handles);
         if !push_constant_ranges.is_empty() {
-            layout_info = layout_info.push_constant_ranges(push_constant_ranges);
+            layout_info = layout_info.push_constant_ranges(&push_constant_ranges);
         }
         let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 

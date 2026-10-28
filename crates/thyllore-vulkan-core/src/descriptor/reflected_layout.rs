@@ -43,7 +43,7 @@ pub fn verify_pass_layouts(pass: &PassShaders, layouts: &[ReflectedSetLayout]) -
             )
         })?;
         let mismatches: Vec<String> = table
-            .verify_layout(set, layout.bindings())
+            .verify_bindings(set, layout.bindings())
             .into_iter()
             .filter(|mismatch| !matches!(mismatch, LayoutMismatch::UnusedInShaders { .. }))
             .map(|mismatch| format!("{mismatch:?}"))
@@ -152,12 +152,16 @@ impl ReflectedLayoutSpec {
         Ok(DescriptorSetTable::from_reflections(&reflections)?)
     }
 
-    pub fn resolve_bindings(&self) -> Result<Vec<vk::DescriptorSetLayoutBinding>> {
-        ReflectedSetLayout::resolve_bindings(
+    pub fn resolve_bindings(&self) -> Result<Vec<crate::types::DescriptorSetLayoutBinding>> {
+        let bindings = ReflectedSetLayout::resolve_bindings(
             &self.reflect_table()?,
             self.set_index()?,
             &self.overrides,
-        )
+        )?;
+        Ok(bindings
+            .into_iter()
+            .map(crate::types::DescriptorSetLayoutBinding)
+            .collect())
     }
 }
 
@@ -235,7 +239,7 @@ impl ReflectedSetLayout {
         })
     }
 
-    pub fn bindings(&self) -> &[vk::DescriptorSetLayoutBinding] {
+    pub(crate) fn bindings(&self) -> &[vk::DescriptorSetLayoutBinding] {
         &self.bindings
     }
 
@@ -247,7 +251,7 @@ impl ReflectedSetLayout {
             .ok_or_else(|| anyhow!("descriptor set layout binding {binding} is not a buffer block"))
     }
 
-    pub fn descriptor_type(&self, binding: u32) -> Result<vk::DescriptorType> {
+    pub(crate) fn descriptor_type(&self, binding: u32) -> Result<vk::DescriptorType> {
         self.bindings
             .iter()
             .find(|entry| entry.binding == binding)
@@ -264,13 +268,13 @@ impl ReflectedSetLayout {
         rrdevice.allocate_descriptor_sets(self.handle, &signature, count)
     }
 
-    pub unsafe fn allocate_set(&self, rrdevice: &RRDevice) -> Result<vk::DescriptorSet> {
+    pub(crate) unsafe fn allocate_set(&self, rrdevice: &RRDevice) -> Result<vk::DescriptorSet> {
         self.allocate_sets(rrdevice, 1)?
             .pop()
             .ok_or_else(|| anyhow!("descriptor allocator returned no set"))
     }
 
-    pub fn writer(&self, dst_set: vk::DescriptorSet) -> DescriptorSetWriter<'_> {
+    pub(crate) fn writer(&self, dst_set: vk::DescriptorSet) -> DescriptorSetWriter<'_> {
         DescriptorSetWriter {
             layout: self,
             dst_set,
@@ -282,7 +286,7 @@ impl ReflectedSetLayout {
     }
 
     /// The caller guarantees no pending command buffer binds the set, as for `vkFreeDescriptorSets`.
-    pub fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
+    pub(crate) fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
         rrdevice.release_descriptor_sets(self.handle, [set]);
     }
 
@@ -371,7 +375,12 @@ impl DescriptorSetWriter<'_> {
     ) -> Result<Self> {
         self.check_block_covers::<T>(binding)?;
         let offset = uniform.slot_offset(slot)?;
-        self.buffer(binding, uniform.handle(), offset, uniform.block_size())
+        self.buffer(
+            binding,
+            uniform.handle().raw(),
+            offset,
+            uniform.block_size(),
+        )
     }
 
     pub fn uniform_dynamic<T: GpuBlock>(
@@ -380,7 +389,7 @@ impl DescriptorSetWriter<'_> {
         uniform: &UniformBuffer<T>,
     ) -> Result<Self> {
         self.check_block_covers::<T>(binding)?;
-        self.buffer(binding, uniform.handle(), 0, uniform.block_size())
+        self.buffer(binding, uniform.handle().raw(), 0, uniform.block_size())
     }
 
     fn check_block_covers<T: GpuBlock>(&self, binding: ShaderBinding) -> Result<()> {

@@ -128,7 +128,7 @@ impl ReducedResolveTarget {
         crate::types::Format(self.format)
     }
 
-    pub unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {
+    pub(crate) unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {
         let render_pass = create_color_overlay_render_pass(
             rrdevice,
             ColorOverlayPassDesc {
@@ -172,7 +172,7 @@ impl ReducedResolveTarget {
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
         if self.render_pass != vk::RenderPass::null() {
             device.destroy_render_pass(self.render_pass, None);
             self.render_pass = vk::RenderPass::null();

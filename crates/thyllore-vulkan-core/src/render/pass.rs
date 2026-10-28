@@ -272,7 +272,10 @@ unsafe fn create_render_pass(
     Ok(())
 }
 
-pub unsafe fn get_depth_format(instance: &Instance, rrdevice: &RRDevice) -> Result<vk::Format> {
+pub(crate) unsafe fn get_depth_format(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+) -> Result<vk::Format> {
     let candidates = &[
         vk::Format::D32_SFLOAT,
         vk::Format::D32_SFLOAT_S8_UINT,

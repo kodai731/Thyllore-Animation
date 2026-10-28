@@ -16,7 +16,8 @@ use crate::descriptor::{
     COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
-    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+    compute_push_constant_range, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
+    RRPipeline, SampleCount, Topology, VertexInputConfig,
 };
 use crate::raytracing::RRAccelerationStructure;
 use crate::raytracing::{BlasGeometry, GpuPrimitive};
@@ -325,7 +326,7 @@ impl RayTracingData {
         let scene_buffer_handle = self
             .scene_uniform_buffer
             .as_ref()
-            .map(UniformBuffer::handle);
+            .map(|buffer| buffer.handle().raw());
         let (Some(descriptor), Some(gbuffer), Some(scene_buffer)) = (
             self.ray_query_descriptor.as_mut(),
             self.gbuffer.as_ref(),
@@ -364,7 +365,7 @@ impl RayTracingData {
     ) -> Result<vk::Buffer> {
         let scene_uniform_buffer =
             UniformBuffer::new(instance, rrdevice, 1, Placement::HostMapped)?;
-        let handle = scene_uniform_buffer.handle();
+        let handle = scene_uniform_buffer.handle().raw();
         self.scene_uniform_buffer = Some(scene_uniform_buffer);
         Ok(handle)
     }
@@ -373,7 +374,6 @@ impl RayTracingData {
         self.scene_uniform_buffer
             .as_ref()
             .map(UniformBuffer::handle)
-            .map(crate::types::Buffer)
     }
 }
 
@@ -385,12 +385,12 @@ unsafe fn build_gbuffer_pipeline(
 ) -> Result<RRPipeline> {
     PipelineBuilder::from_pass(&GBUFFER)
         .vertex_input(VertexInputConfig::Standard)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
         .custom_render_pass(rrrender.gbuffer_render_pass())
         .mrt_attachments(4)
         .no_blend_attachment(3)
-        .msaa_samples(vk::SampleCountFlags::_1)
+        .msaa_samples(SampleCount::One)
         .descriptor_layouts(render_layouts)
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -433,17 +433,13 @@ unsafe fn build_ray_query_pipeline(
         }
     }
 
-    let push_constant_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::COMPUTE)
-        .offset(0)
-        .size(std::mem::size_of::<f32>() as u32)
-        .build();
-
     let pipeline = RRPipeline::new_compute_with_push_constants(
         rrdevice,
         &RAY_QUERY_SHADOW,
         &[&descriptor.layout],
-        &[push_constant_range],
+        &[compute_push_constant_range(
+            std::mem::size_of::<f32>() as u32
+        )],
     )?;
 
     Ok((descriptor, pipeline))
@@ -498,8 +494,8 @@ unsafe fn build_composite_pipeline(
             bindings: vec![],
             attributes: vec![],
         })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
         .descriptor_layouts(&[&descriptor.layout])
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -511,7 +507,7 @@ unsafe fn build_composite_pipeline(
         builder = builder
             .no_depth_test()
             .custom_render_pass(render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1);
+            .msaa_samples(SampleCount::One);
     } else if let Some(render_pass) = offscreen_render_pass {
         builder = builder
             .depth_test(DepthTestConfig {

@@ -12,7 +12,7 @@ pub struct PoolSignature {
 }
 
 impl PoolSignature {
-    pub fn from_bindings(bindings: &[vk::DescriptorSetLayoutBinding]) -> Self {
+    pub(crate) fn from_bindings(bindings: &[vk::DescriptorSetLayoutBinding]) -> Self {
         let mut counts: BTreeMap<i32, u32> = BTreeMap::new();
         for binding in bindings {
             *counts.entry(binding.descriptor_type.as_raw()).or_default() +=
@@ -148,7 +148,7 @@ impl DescriptorAllocator {
         self.recycled.forget_layout(layout);
     }
 
-    pub unsafe fn destroy(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
         for block in self.pools.values().flatten() {
             device.destroy_descriptor_pool(block.pool, None);
         }

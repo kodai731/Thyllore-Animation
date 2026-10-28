@@ -189,7 +189,7 @@ impl Default for SceneUniformData {
     }
 }
 
-pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
+pub(crate) fn vertex_binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
         .binding(0)
         .stride(size_of::<Vertex>() as u32)
@@ -197,7 +197,7 @@ pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
         .build()
 }
 
-pub fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
+pub(crate) fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
     let pos = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(0)

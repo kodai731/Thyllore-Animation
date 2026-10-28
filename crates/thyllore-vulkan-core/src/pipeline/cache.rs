@@ -80,10 +80,6 @@ impl PipelineCache {
         self.cache.contains_key(key)
     }
 
-    pub fn vulkan_cache(&self) -> vk::PipelineCache {
-        self.vulkan_cache
-    }
-
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for (_, pipeline) in self.cache.drain() {
             pipeline.destroy(device);

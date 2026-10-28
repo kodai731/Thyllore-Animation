@@ -146,7 +146,7 @@ impl DofBuffer {
         log!("Destroyed DOF buffer");
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
+    pub(crate) fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,
             height: self.height,

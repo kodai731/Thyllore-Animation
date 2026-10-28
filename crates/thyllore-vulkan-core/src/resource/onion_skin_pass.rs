@@ -149,7 +149,7 @@ impl OnionSkinPassResources {
         Ok(sampler)
     }
 
-    pub unsafe fn create_ghost_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
+    pub(crate) unsafe fn create_ghost_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(GHOST_BUFFER_FORMAT)
             .samples(vk::SampleCountFlags::_1)

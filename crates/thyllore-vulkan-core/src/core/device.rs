@@ -225,7 +225,10 @@ impl RRDevice {
 pub struct GraphicsQueueIndex(pub u32);
 
 impl GraphicsQueueIndex {
-    pub unsafe fn find(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<Self> {
+    pub(crate) unsafe fn find(
+        instance: &Instance,
+        physical_device: &vk::PhysicalDevice,
+    ) -> Result<Self> {
         let properties = instance
             .raw()
             .get_physical_device_queue_family_properties(*physical_device);
@@ -788,18 +791,6 @@ impl RRDevice {
             command_buffers.iter().map(|cb| cb.raw()).collect();
         self.device
             .free_command_buffers(command_pool.raw(), &command_buffers);
-    }
-
-    pub unsafe fn submit_one_time(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
-        let command_buffers = [command_buffer];
-        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
-        self.device.queue_submit(
-            self.graphics_queue,
-            &[submit_info.build()],
-            vk::Fence::null(),
-        )?;
-        self.device.queue_wait_idle(self.graphics_queue)?;
-        Ok(())
     }
 
     pub unsafe fn query_physical_device_api_version(&self, instance: &Instance) -> u32 {

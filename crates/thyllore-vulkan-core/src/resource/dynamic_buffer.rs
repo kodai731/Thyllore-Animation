@@ -53,10 +53,6 @@ impl<T: Copy> DynamicUniformBuffer<T> {
         (size + alignment - 1) & !(alignment - 1)
     }
 
-    pub fn buffer(&self) -> vk::Buffer {
-        self.buffer
-    }
-
     pub fn alignment(&self) -> u64 {
         self.alignment
     }

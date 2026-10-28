@@ -263,7 +263,7 @@ pub struct PendingBarrier {
 }
 
 impl PendingBarrier {
-    pub fn image_memory_barrier(&self) -> vk::ImageMemoryBarrier {
+    pub(crate) fn image_memory_barrier(&self) -> vk::ImageMemoryBarrier {
         vk::ImageMemoryBarrier::builder()
             .image(self.image)
             .old_layout(self.old_layout)

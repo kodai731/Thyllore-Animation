@@ -10,11 +10,14 @@ STAGE_DIR="$REPO_ROOT/build/docker_gui"
 MODEL="$DEFAULT_MODEL"
 MODE="degrade"
 REBUILD_ZIP=1
+HEADLESS=0
 GUI_ARGS=()
+EXTRA_PYTHON_ARGS=()
 
 usage() {
     cat <<USAGE
-Usage: $0 [--mode degrade|full|private] [--skip-build] [--software-gl] [model.fbx]
+Usage: $0 [--mode degrade|full|private] [--skip-build] [--software-gl] [--headless]
+          [--python PATH.py]... [model.fbx]
 
 Builds the debug addon ZIP of this checkout (wheel with debug-log + ONNX model),
 launches the pristine Blender Docker image on the NVIDIA GPU
@@ -24,10 +27,20 @@ panels can be used at once. The model's .avatar.json sidecar, when present, is
 staged beside it under /scenes for Import Avatar Sidecar. Blender's console
 output is mirrored to <repo>/log/log_blender_avatar_setup.log.
 
+Screenshots: with THYLLORE_SCREENSHOT_DIR=/screenshots the whole window is saved
+as /tmp/thyllore_screenshots/avatar_setup.png THYLLORE_SCREENSHOT_DELAY seconds
+(default 3) after start; THYLLORE_SCREENSHOT_QUIT=1 closes Blender afterwards.
+--headless runs Blender on Xvfb inside the container (no window on the host),
+switches the sidebar to the avatar setup tab, takes that screenshot and quits;
+the three variables keep any value set by the caller.
+
 Options:
   --mode MODE          degrade=A, full=B, private=C (default: degrade)
   --skip-build         Reuse dist/.last_built_zip
   --software-gl        Passed through to run_gui.sh (Mesa llvmpipe)
+  --headless           Screenshot without a window (see above)
+  --python PATH        Extra script inside the repo run after the model import
+                       (e.g. to generate chains before the screenshot); repeatable
   -h, --help           Show this help
 USAGE
 }
@@ -87,6 +100,8 @@ while [[ $# -gt 0 ]]; do
         --mode) MODE="$2"; shift 2 ;;
         --skip-build) REBUILD_ZIP=0; shift ;;
         --software-gl) GUI_ARGS+=(--software-gl); shift ;;
+        --headless) HEADLESS=1; GUI_ARGS+=(--headless); shift ;;
+        --python) EXTRA_PYTHON_ARGS+=(--python "$2"); shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) MODEL="$1"; shift ;;
     esac
@@ -104,6 +119,10 @@ ZIP="$(cat "$REPO_ROOT/dist/.last_built_zip")"
 
 stage_model
 export THYLLORE_AVATAR_MODEL="/scenes/$(basename "$MODEL")"
+if [[ "$HEADLESS" -eq 1 ]]; then
+    export THYLLORE_SCREENSHOT_DIR="${THYLLORE_SCREENSHOT_DIR:-/screenshots}"
+    export THYLLORE_SCREENSHOT_QUIT="${THYLLORE_SCREENSHOT_QUIT:-1}"
+fi
 
 LOG="$REPO_ROOT/log/log_blender_avatar_setup.log"
 mkdir -p "$REPO_ROOT/log"
@@ -111,5 +130,6 @@ echo "[avatar_setup/launch] launching Blender (docker, NVIDIA) with $(basename "
 echo "[avatar_setup/launch] Blender stdout/stderr -> $LOG"
 bash "$REPO_ROOT/blender/docker/run_gui.sh" \
     --zip "$ZIP" \
-    --python "$REPO_ROOT/scripts/blender/avatar_setup/import_model.py" \
+    --python "$REPO_ROOT/scripts/blender/avatar_setup/setup_scene.py" \
+    ${EXTRA_PYTHON_ARGS[@]+"${EXTRA_PYTHON_ARGS[@]}"} \
     ${GUI_ARGS[@]+"${GUI_ARGS[@]}"} 2>&1 | tee "$LOG"

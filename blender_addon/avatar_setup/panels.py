@@ -21,13 +21,26 @@ def _active_mesh(context):
     return obj if obj is not None and obj.type == "MESH" else None
 
 
-def _draw_joint_params(row, joint) -> None:
+LABEL_COLUMN_FACTOR = 0.5
+
+
+def _draw_labelled_prop(layout, owner, name) -> None:
+    """One property per line, its name in a left column wide enough for the joint parameter names."""
+    split = layout.split(factor=LABEL_COLUMN_FACTOR)
+    label_column = split.column()
+    label_column.alignment = "RIGHT"
+    label_column.label(text=owner.bl_rna.properties[name].name)
+    split.column(align=True).prop(owner, name, text="")
+
+
+def _draw_joint_params(layout, joint) -> None:
     """The force model, the magnitudes of that model, then the parameters every model shares."""
-    row.prop(joint, "force_model", text="")
+    column = layout.column(align=True)
+    _draw_labelled_prop(column, joint, "force_model")
     for name in FORCE_PARAM_NAMES.get(joint.force_model, ()):
-        row.prop(joint, name)
+        _draw_labelled_prop(column, joint, name)
     for name in SPRING_JOINT_PARAM_NAMES:
-        row.prop(joint, name)
+        _draw_labelled_prop(column, joint, name)
 
 
 class THYLLORE_UL_SpringChains(UIList):
@@ -93,9 +106,8 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
 
         for joint in joints:
             box = layout.box()
-            row = box.row()
-            row.label(text=joint.bone or "(empty)")
-            _draw_joint_params(row, joint)
+            box.label(text=joint.bone or "(empty)", icon="BONE_DATA")
+            _draw_joint_params(box, joint)
 
     @staticmethod
     def _draw_ramp(layout, context):
@@ -104,13 +116,12 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         form = context.window_manager.thyllore_ramp
         box = layout.box()
         for end_name in ("root", "tip"):
-            joint = getattr(form, end_name)
-            row = box.row()
-            row.label(text=end_name.capitalize())
-            _draw_joint_params(row, joint)
+            box.label(text=end_name.capitalize())
+            _draw_joint_params(box, getattr(form, end_name))
+            box.separator()
 
-        box.prop(form, "shape")
-        box.prop(form, "scope")
+        _draw_labelled_prop(box, form, "shape")
+        _draw_labelled_prop(box, form, "scope")
         box.operator("thyllore.load_ramp_from_chain")
         row = box.row(align=True)
         row.operator("thyllore.use_as_ramp_end", text="End=Root").end = "root"
@@ -122,7 +133,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         arm = target_armature(context)
         if arm is None:
             return
-        layout.prop(arm.data.thyllore_spring, "gizmo_mode")
+        _draw_labelled_prop(layout, arm.data.thyllore_spring, "gizmo_mode")
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
         self._draw_ramp(layout, context)
@@ -141,8 +152,8 @@ class THYLLORE_PT_AvatarSetupExport(Panel):
         layout = self.layout
         arm = target_armature(context)
 
-        layout.operator("thyllore.import_avatar_sidecar", icon="FILE_IMPORT")
-        layout.operator("thyllore.export_for_unity", icon="FILE_EXPORT")
+        layout.operator("thyllore.import_avatar_sidecar", icon="IMPORT")
+        layout.operator("thyllore.export_for_unity", icon="EXPORT")
 
         if arm is not None:
             layout.prop(arm.data.thyllore_spring, "collision_mode")

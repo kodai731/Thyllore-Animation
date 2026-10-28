@@ -6,37 +6,73 @@ use crate::ecs::systems::phases::event_dispatch::scene::SceneEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::CameraMotion;
 use crate::ecs::world::World;
+use crate::platform::ui::key_modifier::current_key_modifier;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyChord {
+    pub modifiers: ModifierKeys,
+    pub key: imgui::Key,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Binding<A> {
+    pub chord: KeyChord,
+    pub label: &'static str,
+    pub action: A,
+}
+
+pub fn dispatch_bindings<A: Copy>(ui: &imgui::Ui, bindings: &[Binding<A>]) -> Option<A> {
+    let modifiers = current_key_modifier(ui);
+    for binding in bindings {
+        if binding.chord.modifiers == modifiers && ui.is_key_pressed(binding.chord.key) {
+            return Some(binding.action);
+        }
+    }
+    None
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ModifierKeys {
     pub ctrl: bool,
     pub shift: bool,
+    pub alt: bool,
 }
 
 impl ModifierKeys {
-    pub fn none() -> Self {
+    pub const fn none() -> Self {
         Self {
             ctrl: false,
             shift: false,
+            alt: false,
         }
     }
 
-    pub fn ctrl() -> Self {
+    pub const fn ctrl() -> Self {
         Self {
             ctrl: true,
             shift: false,
+            alt: false,
         }
     }
 
-    pub fn shift() -> Self {
+    pub const fn shift() -> Self {
         Self {
             ctrl: false,
             shift: true,
+            alt: false,
+        }
+    }
+
+    pub const fn ctrl_shift() -> Self {
+        Self {
+            ctrl: true,
+            shift: true,
+            alt: false,
         }
     }
 
     pub fn has_any(&self) -> bool {
-        self.ctrl || self.shift
+        self.ctrl || self.shift || self.alt
     }
 }
 

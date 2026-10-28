@@ -1,6 +1,5 @@
 use imgui::{Condition, Key};
 
-use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     CommandPaletteSession, CommandPaletteState, HierarchyState, UiWidgetState,
@@ -9,7 +8,9 @@ use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
-use crate::platform::key_bindings::default_bindings;
+use crate::platform::key_bindings::{
+    default_bindings, dispatch_bindings, Binding, KeyChord, ModifierKeys,
+};
 use crate::platform::ui::shortcuts::format_chord;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
@@ -29,16 +30,13 @@ const START_BONUS: u32 = 3;
 const WORD_START_BONUS: u32 = 2;
 const CONSECUTIVE_BONUS: u32 = 1;
 
-pub(crate) struct PaletteKeyBinding {
-    pub(crate) key: Key,
-    pub(crate) modifier: KeyModifier,
-    pub(crate) label: &'static str,
-}
-
-pub(crate) const PALETTE_KEY_BINDING: PaletteKeyBinding = PaletteKeyBinding {
-    key: Key::K,
-    modifier: KeyModifier::Ctrl,
+pub(crate) const PALETTE_KEY_BINDING: Binding<()> = Binding {
+    chord: KeyChord {
+        key: Key::K,
+        modifiers: ModifierKeys::ctrl(),
+    },
     label: "Command palette",
+    action: (),
 };
 
 pub enum PaletteItem {
@@ -149,8 +147,7 @@ fn toggle_command_palette_on_hotkey(ui: &imgui::Ui, world: &World) {
     let mut state = world.resource_mut::<UiWidgetState>();
     let palette_is_open = matches!(state.command_palette, CommandPaletteState::Open(_));
     let hotkey_available = !ui.io().want_text_input() || palette_is_open;
-    let hotkey_pressed = current_key_modifier(ui) == PALETTE_KEY_BINDING.modifier
-        && ui.is_key_pressed(PALETTE_KEY_BINDING.key);
+    let hotkey_pressed = dispatch_bindings(ui, &[PALETTE_KEY_BINDING]).is_some();
     if !hotkey_available || !hotkey_pressed {
         return;
     }

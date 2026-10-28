@@ -12,10 +12,11 @@ use crate::ecs::resource::{
 use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSuggestionEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
-use crate::platform::ui::key_modifier::{current_key_modifier, KeyModifier};
+use crate::platform::key_bindings::{dispatch_bindings, Binding, KeyChord, ModifierKeys};
+use crate::platform::ui::key_modifier::current_key_modifier;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum CurveEditorKeyAction {
+pub(crate) enum CurveEditorKeyAction {
     FrameSelected,
     FrameAll,
     FramePlayhead,
@@ -27,89 +28,108 @@ enum CurveEditorKeyAction {
     ToggleViewMode,
 }
 
-pub(crate) struct CurveEditorKeyBinding {
-    pub(crate) key: imgui::Key,
-    pub(crate) modifier: KeyModifier,
-    pub(crate) label: &'static str,
-    action: CurveEditorKeyAction,
-}
-
-pub(crate) const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
-    CurveEditorKeyBinding {
-        key: imgui::Key::F,
-        modifier: KeyModifier::None,
+pub(crate) const CURVE_EDITOR_KEY_BINDINGS: &[Binding<CurveEditorKeyAction>] = &[
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::F,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Frame selection",
         action: CurveEditorKeyAction::FrameSelected,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Home,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Home,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Frame all",
         action: CurveEditorKeyAction::FrameAll,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::A,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::A,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Select all",
         action: CurveEditorKeyAction::SelectAll,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::A,
-        modifier: KeyModifier::Ctrl,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::A,
+            modifiers: ModifierKeys::ctrl(),
+        },
         label: "Select all",
         action: CurveEditorKeyAction::SelectAll,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Keypad0,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Keypad0,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Frame playhead",
         action: CurveEditorKeyAction::FramePlayhead,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::E,
-        modifier: KeyModifier::Shift,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::E,
+            modifiers: ModifierKeys::shift(),
+        },
         label: "Extrapolation menu",
         action: CurveEditorKeyAction::OpenExtrapolationMenu,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Key1,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Key1,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Auto Clamped",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Clamped),
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Key2,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Key2,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Auto (Spline)",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Spline),
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Key3,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Key3,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Flat",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Flat),
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Key4,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Key4,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Linear",
         action: CurveEditorKeyAction::SetTangentType(TangentType::Linear),
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Key5,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Key5,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Stepped",
         action: CurveEditorKeyAction::SetInterpolation(InterpolationType::Stepped),
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::B,
-        modifier: KeyModifier::None,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::B,
+            modifiers: ModifierKeys::none(),
+        },
         label: "Break / Unify tangents",
         action: CurveEditorKeyAction::ToggleTangentContinuity,
     },
-    CurveEditorKeyBinding {
-        key: imgui::Key::Tab,
-        modifier: KeyModifier::Ctrl,
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Tab,
+            modifiers: ModifierKeys::ctrl(),
+        },
         label: "Toggle view mode",
         action: CurveEditorKeyAction::ToggleViewMode,
     },
@@ -134,7 +154,8 @@ pub(super) fn handle_curve_editor_keyboard(
     let modifier = current_key_modifier(ui);
 
     if editor_state.tween.is_some() {
-        let accept_pressed = (modifier == KeyModifier::None && ui.is_key_pressed(imgui::Key::Tab))
+        let accept_pressed = (modifier == ModifierKeys::none()
+            && ui.is_key_pressed(imgui::Key::Tab))
             || ui.is_key_pressed(imgui::Key::Enter);
         if ui.is_key_pressed(imgui::Key::Escape) {
             editor_state.tween = None;
@@ -143,38 +164,36 @@ pub(super) fn handle_curve_editor_keyboard(
         }
     }
 
-    for binding in CURVE_EDITOR_KEY_BINDINGS {
-        if modifier == binding.modifier && ui.is_key_pressed(binding.key) {
-            match binding.action {
-                CurveEditorKeyAction::FrameSelected => {
-                    editor_state.frame_request = Some(FrameRequest::Selected);
-                }
-                CurveEditorKeyAction::FrameAll => {
-                    editor_state.frame_request = Some(FrameRequest::All);
-                }
-                CurveEditorKeyAction::FramePlayhead => {
-                    editor_state.frame_request = Some(FrameRequest::Playhead);
-                }
-                CurveEditorKeyAction::SelectAll => {
-                    let selected = select_all_keyframes(target.curves);
-                    editor_state.selected_keyframes = selected;
-                    editor_state.interaction = CurveInteractionMode::Idle;
-                }
-                CurveEditorKeyAction::OpenExtrapolationMenu => {
-                    ui.open_popup(CURVE_EXTRAPOLATION_MENU);
-                }
-                CurveEditorKeyAction::SetTangentType(tangent_type) => {
-                    send_tangent_type(editor_state, target, tangent_type);
-                }
-                CurveEditorKeyAction::SetInterpolation(interpolation) => {
-                    send_interpolation(editor_state, target, interpolation);
-                }
-                CurveEditorKeyAction::ToggleTangentContinuity => {
-                    send_toggled_continuity(editor_state, target);
-                }
-                CurveEditorKeyAction::ToggleViewMode => {
-                    editor_state.view_mode = editor_state.view_mode.toggled();
-                }
+    if let Some(action) = dispatch_bindings(ui, CURVE_EDITOR_KEY_BINDINGS) {
+        match action {
+            CurveEditorKeyAction::FrameSelected => {
+                editor_state.frame_request = Some(FrameRequest::Selected);
+            }
+            CurveEditorKeyAction::FrameAll => {
+                editor_state.frame_request = Some(FrameRequest::All);
+            }
+            CurveEditorKeyAction::FramePlayhead => {
+                editor_state.frame_request = Some(FrameRequest::Playhead);
+            }
+            CurveEditorKeyAction::SelectAll => {
+                let selected = select_all_keyframes(target.curves);
+                editor_state.selected_keyframes = selected;
+                editor_state.interaction = CurveInteractionMode::Idle;
+            }
+            CurveEditorKeyAction::OpenExtrapolationMenu => {
+                ui.open_popup(CURVE_EXTRAPOLATION_MENU);
+            }
+            CurveEditorKeyAction::SetTangentType(tangent_type) => {
+                send_tangent_type(editor_state, target, tangent_type);
+            }
+            CurveEditorKeyAction::SetInterpolation(interpolation) => {
+                send_interpolation(editor_state, target, interpolation);
+            }
+            CurveEditorKeyAction::ToggleTangentContinuity => {
+                send_toggled_continuity(editor_state, target);
+            }
+            CurveEditorKeyAction::ToggleViewMode => {
+                editor_state.view_mode = editor_state.view_mode.toggled();
             }
         }
     }
@@ -262,6 +281,40 @@ pub(super) fn select_all_keyframes(
     selected
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum SuggestionKeyAction {
+    Request,
+    Accept,
+    Dismiss,
+}
+
+pub(crate) const SUGGESTION_KEY_BINDINGS: &[Binding<SuggestionKeyAction>] = &[
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::C,
+            modifiers: ModifierKeys::shift(),
+        },
+        label: "Request suggestion",
+        action: SuggestionKeyAction::Request,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Tab,
+            modifiers: ModifierKeys::none(),
+        },
+        label: "Accept suggestion",
+        action: SuggestionKeyAction::Accept,
+    },
+    Binding {
+        chord: KeyChord {
+            key: imgui::Key::Escape,
+            modifiers: ModifierKeys::none(),
+        },
+        label: "Dismiss suggestion",
+        action: SuggestionKeyAction::Dismiss,
+    },
+];
+
 #[cfg(feature = "ml")]
 pub(super) fn handle_suggestion_keyboard(
     ui: &imgui::Ui,
@@ -270,24 +323,27 @@ pub(super) fn handle_suggestion_keyboard(
     editor_state: &CurveEditorState,
     suggestion_overlays: &[SuggestionOverlay],
 ) {
-    let io = ui.io();
-    let shift = io.key_shift();
-
-    if shift && ui.is_key_pressed(imgui::Key::C) {
-        for property_type in &editor_state.visible_curves {
-            world.send_command(CurveSuggestionEvent::Request {
-                bone_id,
-                property_type: *property_type,
-            });
+    if let Some(action) = dispatch_bindings(ui, SUGGESTION_KEY_BINDINGS) {
+        match action {
+            SuggestionKeyAction::Request => {
+                for property_type in &editor_state.visible_curves {
+                    world.send_command(CurveSuggestionEvent::Request {
+                        bone_id,
+                        property_type: *property_type,
+                    });
+                }
+            }
+            SuggestionKeyAction::Accept => {
+                if !suggestion_overlays.is_empty() {
+                    world.send_command(CurveSuggestionEvent::Accept);
+                }
+            }
+            SuggestionKeyAction::Dismiss => {
+                if !suggestion_overlays.is_empty() {
+                    world.send_command(CurveSuggestionEvent::Dismiss);
+                }
+            }
         }
-    }
-
-    if !io.key_ctrl() && ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
-        world.send_command(CurveSuggestionEvent::Accept);
-    }
-
-    if ui.is_key_pressed(imgui::Key::Escape) && !suggestion_overlays.is_empty() {
-        world.send_command(CurveSuggestionEvent::Dismiss);
     }
 }
 

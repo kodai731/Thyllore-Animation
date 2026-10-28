@@ -17,4 +17,4 @@ Before opening a PR or finishing an edit, run the branch diff through these 11 i
 8. Split oversized files and structs with many fields into sub-modules / sub-structs → `coding.md` §5
 9. UI interactions are self-applying `UiCommand`s sent with `World::send_command`, not new central event enums; one-off work runs where it is triggered → `hierarchy.md` "Hook or command?"
 10. No hard-coded tuning numbers and no golden-text comparisons; pin facts at their declaration → `hierarchy.md`, `ui.md`
-11. `vk::` / `vulkanalia` / raw `Device` calls only inside `thyllore-vulkan-core`; outside it use `thyllore_vulkan_core::types` and core helpers → `hierarchy.md`, `rendering-architecture.md`
+11. `vk::` / `vulkanalia` / raw `Device` calls only inside `thyllore-vulkan-core`; outside it use `thyllore_vulkan_core::types` and core helpers; a public function or field of vulkan-core must not expose a `vk::` type (use `types::*` / the core enums; `pub(crate)` otherwise); effect GPU code belongs in `src/ecs/systems/<effect>/`, not in vulkan-core → `hierarchy.md`, `rendering-architecture.md`

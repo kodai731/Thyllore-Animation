@@ -695,6 +695,12 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_label_multibyte_cuts_at_char_boundary() {
+        let result = truncate_label("左腕のねじれ補助ボーン", 5);
+        assert_eq!(result, "左腕のねじ…");
+    }
+
+    #[test]
     fn test_truncate_label_empty() {
         let result = truncate_label("", 5);
         assert_eq!(result, "");

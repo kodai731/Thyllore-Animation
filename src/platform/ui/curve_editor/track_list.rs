@@ -10,6 +10,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
+use crate::platform::ui::theme::widgets::truncate_label;
 
 pub(super) fn collect_humanoid_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
     world
@@ -108,16 +109,9 @@ pub(super) fn build_track_list(
                 role_label
             }
         } else if is_spring_bone {
-            let name = if bone_name.len() > 13 {
-                &bone_name[..10]
-            } else {
-                bone_name
-            };
-            format!("[SB] {}", name)
-        } else if bone_name.len() > 18 {
-            format!("{}...", &bone_name[..15])
+            format!("[SB] {}", truncate_label(bone_name, 12))
         } else {
-            bone_name.clone()
+            truncate_label(bone_name, 17).into_owned()
         };
 
         if ui.selectable_config(&label).selected(is_selected).build() {

@@ -27,7 +27,7 @@ use crate::platform::ui::pointer::{
 };
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{
-    icon_button, segmented_control, toolbar_divider, ButtonState,
+    icon_button, segmented_control, toolbar_divider, truncate_label, ButtonState,
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -558,7 +558,7 @@ fn build_clip_tracks_section(
         build_group_headers(ui, world, entry);
 
         let cursor_pos = ui.cursor_screen_pos();
-        ui.text(&truncate_label(&entry.entity_name, 15));
+        ui.text(&truncate_label(&entry.entity_name, 14));
         ui.same_line_with_pos(TRACK_LABEL_WIDTH);
 
         let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
@@ -1120,18 +1120,10 @@ fn compute_border_color(
     }
 }
 
-fn truncate_label(name: &str, max_chars: usize) -> String {
-    if name.len() > max_chars {
-        format!("{}...", &name[..max_chars.saturating_sub(3)])
-    } else {
-        name.to_string()
-    }
-}
-
 fn truncate_label_by_width(name: &str, available_width: f32) -> String {
     let approx_char_width = 7.0;
     let max_chars = (available_width / approx_char_width) as usize;
-    truncate_label(name, max_chars)
+    truncate_label(name, max_chars.saturating_sub(1)).into_owned()
 }
 
 fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> bool {

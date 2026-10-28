@@ -25,7 +25,7 @@ pub struct RenderTargetEntry {
 impl RenderTargetEntry {
     #[inline]
     pub fn image(&self) -> crate::types::Image {
-        self.image
+        crate::types::Image(self.image)
     }
 }
 

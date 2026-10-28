@@ -47,17 +47,17 @@ pub struct HistoryTargets {
 impl HistoryTargets {
     #[inline]
     pub fn images(&self) -> [crate::types::Image; 2] {
-        self.images
+        self.images.map(crate::types::Image)
     }
 
     #[inline]
     pub fn views(&self) -> [crate::types::ImageView; 2] {
-        self.views
+        self.views.map(crate::types::ImageView)
     }
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     #[inline]

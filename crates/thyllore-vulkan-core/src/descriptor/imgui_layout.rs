@@ -4,7 +4,7 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::IMGUI;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::imgui;
-use crate::types::{DescriptorSet, Pipeline, PipelineLayout};
+use crate::types::{DescriptorSet, ImageView, Pipeline, PipelineLayout, Sampler};
 use crate::vulkan::*;
 
 pub fn imgui_layout_spec() -> ReflectedLayoutSpec {
@@ -15,7 +15,7 @@ pub unsafe fn destroy_imgui_pipeline_objects(
     rrdevice: &RRDevice,
     pipeline: Option<Pipeline>,
     pipeline_layout: Option<PipelineLayout>,
-    sampler: Option<vk::Sampler>,
+    sampler: Option<Sampler>,
 ) {
     if let Some(pipeline) = pipeline {
         rrdevice.device().destroy_pipeline(pipeline.raw(), None);
@@ -26,7 +26,7 @@ pub unsafe fn destroy_imgui_pipeline_objects(
             .destroy_pipeline_layout(pipeline_layout.raw(), None);
     }
     if let Some(sampler) = sampler {
-        rrdevice.device().destroy_sampler(sampler, None);
+        rrdevice.device().destroy_sampler(sampler.raw(), None);
     }
 }
 
@@ -41,12 +41,12 @@ pub unsafe fn write_imgui_texture_set(
     rrdevice: &RRDevice,
     layout: &ReflectedSetLayout,
     descriptor_set: DescriptorSet,
-    image_view: vk::ImageView,
-    sampler: vk::Sampler,
+    image_view: ImageView,
+    sampler: Sampler,
 ) -> Result<()> {
     layout
         .writer(descriptor_set.raw())
-        .sampled_image(imgui::TEX_SAMPLER, image_view, sampler)?
+        .sampled_image(imgui::TEX_SAMPLER, image_view.raw(), sampler.raw())?
         .apply(rrdevice);
     Ok(())
 }

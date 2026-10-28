@@ -64,8 +64,8 @@ impl MaterialManager {
             instance,
             rrdevice,
             name,
-            texture.image_view,
-            texture.sampler,
+            texture.image_view(),
+            texture.sampler(),
             properties,
         )
     }
@@ -75,8 +75,8 @@ impl MaterialManager {
         instance: &Instance,
         rrdevice: &RRDevice,
         name: &str,
-        image_view: vk::ImageView,
-        sampler: vk::Sampler,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
         properties: MaterialUBO,
     ) -> anyhow::Result<MaterialId> {
         let descriptor_set = self.layout.allocate_set(rrdevice)?;
@@ -88,8 +88,8 @@ impl MaterialManager {
             .writer(descriptor_set)
             .image(
                 model::TEX_SAMPLER,
-                image_view,
-                sampler,
+                image_view.raw(),
+                sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .uniform(model::MATERIAL, &uniform_buffer, 0)?

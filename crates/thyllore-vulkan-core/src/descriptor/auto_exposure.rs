@@ -42,8 +42,8 @@ impl RRAutoExposureHistogramDescriptorSet {
     pub unsafe fn update_bindings(
         &self,
         rrdevice: &RRDevice,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
         histogram_buffer: crate::types::Buffer,
         histogram_buffer_size: u64,
     ) -> Result<()> {
@@ -52,8 +52,8 @@ impl RRAutoExposureHistogramDescriptorSet {
                 .writer(*descriptor_set)
                 .image(
                     auto_exposure_histogram::HDR_IMAGE,
-                    hdr_image_view,
-                    hdr_sampler,
+                    hdr_image_view.raw(),
+                    hdr_sampler.raw(),
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
                 .buffer(
@@ -71,15 +71,15 @@ impl RRAutoExposureHistogramDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 auto_exposure_histogram::HDR_IMAGE,
-                hdr_image_view,
-                hdr_sampler,
+                hdr_image_view.raw(),
+                hdr_sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);

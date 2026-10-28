@@ -42,12 +42,12 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
-        caustic_accum_view: vk::ImageView,
-        position_image_view: vk::ImageView,
+        caustic_accum_view: crate::types::ImageView,
+        position_image_view: crate::types::ImageView,
         tlas: Option<crate::types::AccelerationStructure>,
         scene_uniform_buffer: crate::types::Buffer,
         water_ubo: vk::Buffer,
-        hdr_color_image_view: vk::ImageView,
+        hdr_color_image_view: crate::types::ImageView,
     ) -> Result<()> {
         if self.splat_descriptor_set == vk::DescriptorSet::null() {
             self.splat_descriptor_set = self.splat_layout.allocate_set(rrdevice)?;
@@ -61,13 +61,13 @@ impl RRWaterCausticDescriptorSet {
             .writer(self.splat_descriptor_set)
             .image(
                 water_caustic_splat::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view,
+                caustic_accum_view.raw(),
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?
             .image(
                 water_caustic_splat::POSITION_IMAGE,
-                position_image_view,
+                position_image_view.raw(),
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?;
@@ -94,13 +94,13 @@ impl RRWaterCausticDescriptorSet {
             .writer(self.apply_descriptor_set)
             .image(
                 water_caustic_apply::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view,
+                caustic_accum_view.raw(),
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?
             .image(
                 water_caustic_apply::HDR_COLOR_IMAGE,
-                hdr_color_image_view,
+                hdr_color_image_view.raw(),
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?

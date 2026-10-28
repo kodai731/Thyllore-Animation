@@ -22,7 +22,7 @@ impl DofBuffer {
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     pub unsafe fn new(rrdevice: &RRDevice, width: u32, height: u32) -> Result<Self> {

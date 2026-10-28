@@ -45,7 +45,7 @@ impl WindResolveDescriptorSet {
         rrdevice: &RRDevice,
         wind_ubo: &UniformBuffer<WindUBO>,
         shadow_volume: &VolumeImage,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
@@ -75,13 +75,13 @@ impl WindResolveDescriptorSet {
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
             .image(
                 wind_resolve::SCENE_DEPTH_SAMPLER,
-                scene_depth_view,
+                scene_depth_view.raw(),
                 self.scene_depth_sampler,
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?

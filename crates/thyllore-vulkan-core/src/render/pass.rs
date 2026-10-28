@@ -49,7 +49,7 @@ impl RRRender {
 
     #[inline]
     pub fn gbuffer_depth_image_view(&self) -> crate::types::ImageView {
-        self.gbuffer_depth_image_view
+        crate::types::ImageView(self.gbuffer_depth_image_view)
     }
 
     pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {

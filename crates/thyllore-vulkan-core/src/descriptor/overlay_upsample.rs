@@ -44,20 +44,20 @@ impl OverlayUpsampleDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        reduced_color_view: vk::ImageView,
-        scene_depth_view: vk::ImageView,
+        reduced_color_view: crate::types::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_sets[frame_slot])
             .image(
                 overlay_upsample::REDUCED_COLOR_SAMPLER,
-                reduced_color_view,
+                reduced_color_view.raw(),
                 self.reduced_color_sampler,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .image(
                 overlay_upsample::SCENE_DEPTH_SAMPLER,
-                scene_depth_view,
+                scene_depth_view.raw(),
                 self.scene_depth_sampler,
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?

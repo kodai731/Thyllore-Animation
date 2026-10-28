@@ -42,7 +42,7 @@ pub unsafe fn create_lightning_render_targets(
     rrdevice: &RRDevice,
     width: u32,
     height: u32,
-    hdr_image_view: vk::ImageView,
+    hdr_image_view: crate::types::ImageView,
 ) -> Result<LightningRenderTargets> {
     let render_pass = create_color_overlay_render_pass(
         rrdevice,
@@ -54,7 +54,7 @@ pub unsafe fn create_lightning_render_targets(
         },
     )?;
 
-    let attachments = [hdr_image_view];
+    let attachments = [hdr_image_view.raw()];
     let framebuffer_info = vk::FramebufferCreateInfo::builder()
         .render_pass(render_pass)
         .attachments(&attachments)
@@ -101,7 +101,7 @@ unsafe fn destroy_render_targets(
 pub unsafe fn recreate_lightning_render_targets(
     rrdevice: &RRDevice,
     targets: &mut LightningRenderTargets,
-    hdr_view: vk::ImageView,
+    hdr_view: crate::types::ImageView,
     width: u32,
     height: u32,
 ) -> Result<()> {

@@ -78,7 +78,7 @@ pub unsafe fn create_wind_render_targets(
     rrdevice: &RRDevice,
     width: u32,
     height: u32,
-    hdr_image_view: vk::ImageView,
+    hdr_image_view: crate::types::ImageView,
 ) -> Result<WindRenderTargets> {
     let render_pass = create_color_overlay_render_pass(
         rrdevice,
@@ -92,7 +92,7 @@ pub unsafe fn create_wind_render_targets(
     let framebuffer = create_framebuffer(
         rrdevice,
         render_pass,
-        hdr_image_view,
+        hdr_image_view.raw(),
         vk::Extent2D { width, height },
     )?;
 
@@ -145,7 +145,7 @@ pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &v
 pub unsafe fn recreate_wind_framebuffer(
     rrdevice: &RRDevice,
     targets: &mut WindRenderTargets,
-    hdr_view: vk::ImageView,
+    hdr_view: crate::types::ImageView,
     width: u32,
     height: u32,
 ) -> Result<()> {
@@ -155,7 +155,7 @@ pub unsafe fn recreate_wind_framebuffer(
     targets.framebuffer = create_framebuffer(
         rrdevice,
         targets.render_pass,
-        hdr_view,
+        hdr_view.raw(),
         vk::Extent2D { width, height },
     )?;
     targets.width = width;

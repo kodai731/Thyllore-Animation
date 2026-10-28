@@ -58,9 +58,9 @@ pub unsafe fn record_water_scene_color_copy(
         .build();
     device.cmd_copy_image(
         cmd,
-        hdr_image,
+        hdr_image.raw(),
         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        scene_color_image,
+        scene_color_image.raw(),
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         &[region],
     );

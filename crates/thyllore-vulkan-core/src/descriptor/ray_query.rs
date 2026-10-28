@@ -28,9 +28,9 @@ impl RRRayQueryDescriptorSet {
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
-        position_image_view: vk::ImageView,
-        normal_image_view: vk::ImageView,
-        shadow_mask_image_view: vk::ImageView,
+        position_image_view: crate::types::ImageView,
+        normal_image_view: crate::types::ImageView,
+        shadow_mask_image_view: crate::types::ImageView,
         tlas: vk::AccelerationStructureKHR,
         scene_uniform_buffer: vk::Buffer,
         hit_shading_table_buffer: vk::Buffer,
@@ -59,9 +59,9 @@ impl RRRayQueryDescriptorSet {
     pub unsafe fn update_gbuffer_views(
         &self,
         rrdevice: &RRDevice,
-        position_image_view: vk::ImageView,
-        normal_image_view: vk::ImageView,
-        shadow_mask_image_view: vk::ImageView,
+        position_image_view: crate::types::ImageView,
+        normal_image_view: crate::types::ImageView,
+        shadow_mask_image_view: crate::types::ImageView,
     ) -> Result<()> {
         if self.descriptor_set == vk::DescriptorSet::null() {
             return Ok(());
@@ -72,19 +72,19 @@ impl RRRayQueryDescriptorSet {
             .writer(self.descriptor_set)
             .image(
                 ray_query_shadow::POSITION_IMAGE,
-                position_image_view,
+                position_image_view.raw(),
                 storage_sampler,
                 vk::ImageLayout::GENERAL,
             )?
             .image(
                 ray_query_shadow::NORMAL_IMAGE,
-                normal_image_view,
+                normal_image_view.raw(),
                 storage_sampler,
                 vk::ImageLayout::GENERAL,
             )?
             .image(
                 ray_query_shadow::SHADOW_MASK_IMAGE,
-                shadow_mask_image_view,
+                shadow_mask_image_view.raw(),
                 storage_sampler,
                 vk::ImageLayout::GENERAL,
             )?

@@ -20,7 +20,7 @@ impl BloomMipTarget {
         extent: crate::types::Extent2D,
     ) -> Self {
         Self {
-            view,
+            view: view.raw(),
             framebuffer: framebuffer.raw(),
             extent,
         }
@@ -28,7 +28,7 @@ impl BloomMipTarget {
 
     #[inline]
     pub fn view(&self) -> crate::types::ImageView {
-        self.view
+        crate::types::ImageView(self.view)
     }
 }
 
@@ -53,7 +53,7 @@ impl BloomChain {
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     pub unsafe fn new(

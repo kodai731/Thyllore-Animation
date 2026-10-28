@@ -18,12 +18,12 @@ pub struct AccumulationTarget {
 impl AccumulationTarget {
     #[inline]
     pub fn image(&self) -> crate::types::Image {
-        self.image
+        crate::types::Image(self.image)
     }
 
     #[inline]
     pub fn view(&self) -> crate::types::ImageView {
-        self.view
+        crate::types::ImageView(self.view)
     }
 
     pub(crate) unsafe fn new(

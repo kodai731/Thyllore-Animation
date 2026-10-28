@@ -76,8 +76,8 @@ impl RRBillboardDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
+        position_image_view: crate::types::ImageView,
+        position_sampler: crate::types::Sampler,
     ) -> Result<()> {
         let set_count = self.rrdata.len() * rrswapchain.swapchain_images.len();
 
@@ -86,8 +86,8 @@ impl RRBillboardDescriptorSet {
                 .writer(descriptor_set.raw())
                 .image(
                     billboard::POSITION_SAMPLER,
-                    position_image_view,
-                    position_sampler,
+                    position_image_view.raw(),
+                    position_sampler.raw(),
                     vk::ImageLayout::GENERAL,
                 )?
                 .apply(rrdevice);

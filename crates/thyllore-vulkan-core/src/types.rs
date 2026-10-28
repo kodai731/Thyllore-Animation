@@ -20,9 +20,32 @@ impl Instance {
 
 pub type CommandBuffer = vk::CommandBuffer;
 pub type Format = vk::Format;
-pub type Image = vk::Image;
-pub type ImageView = vk::ImageView;
-pub type Sampler = vk::Sampler;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Image(pub(crate) vk::Image);
+impl Image {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Image {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ImageView(pub(crate) vk::ImageView);
+impl ImageView {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::ImageView {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Sampler(pub(crate) vk::Sampler);
+impl Sampler {
+    #[inline]
+    pub(crate) fn raw(self) -> vk::Sampler {
+        self.0
+    }
+}
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Buffer(pub(crate) vk::Buffer);
 impl Buffer {

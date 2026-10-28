@@ -94,7 +94,7 @@ pub unsafe fn push_constants_and_trace_rays(
 pub unsafe fn clear_color_image(
     rrdevice: &RRDevice,
     command_buffer: vk::CommandBuffer,
-    image: vk::Image,
+    image: crate::types::Image,
     color: ClearColor,
 ) {
     let clear_value = match color {
@@ -110,7 +110,7 @@ pub unsafe fn clear_color_image(
     };
     rrdevice.device().cmd_clear_color_image(
         command_buffer,
-        image,
+        image.raw(),
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         &clear_value,
         &[subresource_range],

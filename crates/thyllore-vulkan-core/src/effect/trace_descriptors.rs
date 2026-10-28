@@ -43,7 +43,7 @@ impl RREffectTraceDescriptorSet {
         rrdevice: &RRDevice,
         frame_slot: usize,
         tlas: crate::types::AccelerationStructure,
-        trace_image_view: vk::ImageView,
+        trace_image_view: crate::types::ImageView,
         hit_table: crate::types::Buffer,
     ) -> Result<()> {
         self.layout
@@ -51,7 +51,7 @@ impl RREffectTraceDescriptorSet {
             .acceleration_structure(effect_trace::TLAS, tlas.raw())?
             .image(
                 effect_trace::OUT_IMAGE,
-                trace_image_view,
+                trace_image_view.raw(),
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?

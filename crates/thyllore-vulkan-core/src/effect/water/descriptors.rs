@@ -57,12 +57,12 @@ impl RRWaterDescriptorSet {
         rrdevice: &RRDevice,
         frame_slot: usize,
         water_ubo: &UniformBuffer<WaterUBO>,
-        scene_color_view: vk::ImageView,
-        scene_color_sampler: vk::Sampler,
-        history_image_views: [vk::ImageView; 2],
-        history_sampler: vk::Sampler,
-        trace_image_view: vk::ImageView,
-        trace_sampler: vk::Sampler,
+        scene_color_view: crate::types::ImageView,
+        scene_color_sampler: crate::types::Sampler,
+        history_image_views: [crate::types::ImageView; 2],
+        history_sampler: crate::types::Sampler,
+        trace_image_view: crate::types::ImageView,
+        trace_sampler: crate::types::Sampler,
         tlas: crate::types::AccelerationStructure,
         hit_table: crate::types::Buffer,
     ) -> Result<()> {
@@ -74,20 +74,20 @@ impl RRWaterDescriptorSet {
                 .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .image(
                     water_resolve::SCENE_COLOR_SAMPLER,
-                    scene_color_view,
-                    scene_color_sampler,
+                    scene_color_view.raw(),
+                    scene_color_sampler.raw(),
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
                 .image(
                     water_resolve::WATER_HISTORY_SAMPLER,
-                    previous_history_view,
-                    history_sampler,
+                    previous_history_view.raw(),
+                    history_sampler.raw(),
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
                 .image(
                     water_resolve::WATER_TRACE_SAMPLER,
-                    trace_image_view,
-                    trace_sampler,
+                    trace_image_view.raw(),
+                    trace_sampler.raw(),
                     vk::ImageLayout::GENERAL,
                 )?
                 .acceleration_structure(water_resolve::SCENE_TLAS, tlas.raw())?

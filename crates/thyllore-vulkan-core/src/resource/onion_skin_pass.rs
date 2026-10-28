@@ -35,7 +35,7 @@ pub struct OnionSkinPassResources {
 impl OnionSkinPassResources {
     #[inline]
     pub fn ghost_image(&self) -> crate::types::Image {
-        self.ghost_image
+        crate::types::Image(self.ghost_image)
     }
 
     #[inline]
@@ -51,7 +51,7 @@ impl OnionSkinPassResources {
     pub unsafe fn create(
         instance: &Instance,
         rrdevice: &RRDevice,
-        offscreen_resolve_image_view: vk::ImageView,
+        offscreen_resolve_image_view: crate::types::ImageView,
         offscreen_format: vk::Format,
         width: u32,
         height: u32,
@@ -73,7 +73,7 @@ impl OnionSkinPassResources {
         let composite_framebuffer = Self::create_single_framebuffer(
             rrdevice,
             composite_render_pass,
-            offscreen_resolve_image_view,
+            offscreen_resolve_image_view.raw(),
             width,
             height,
         )?;
@@ -347,7 +347,7 @@ impl OnionSkinPassResources {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        offscreen_resolve_image_view: vk::ImageView,
+        offscreen_resolve_image_view: crate::types::ImageView,
         width: u32,
         height: u32,
     ) -> Result<()> {
@@ -378,7 +378,7 @@ impl OnionSkinPassResources {
         self.composite_framebuffer = Self::create_single_framebuffer(
             rrdevice,
             self.composite_render_pass,
-            offscreen_resolve_image_view,
+            offscreen_resolve_image_view.raw(),
             width,
             height,
         )?;

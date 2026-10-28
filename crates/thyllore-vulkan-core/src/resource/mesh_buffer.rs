@@ -69,12 +69,12 @@ impl MeshBuffer {
 
     #[inline]
     pub fn image_view(&self) -> crate::types::ImageView {
-        self.image_view
+        crate::types::ImageView(self.image_view)
     }
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     pub unsafe fn upload_vertices(

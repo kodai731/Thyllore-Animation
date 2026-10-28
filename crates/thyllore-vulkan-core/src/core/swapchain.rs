@@ -15,7 +15,7 @@ pub struct SwapchainSupport {
 #[derive(Clone, Debug, Default)]
 pub struct RRSwapchain {
     pub(crate) swapchain: vk::SwapchainKHR,
-    pub(crate) swapchain_images: Vec<vk::Image>,
+    pub(crate) swapchain_images: Vec<crate::types::Image>,
     pub(crate) swapchain_format: vk::Format,
     pub(crate) swapchain_extent: vk::Extent2D,
     pub(crate) swapchain_image_views: Vec<vk::ImageView>,
@@ -188,7 +188,10 @@ pub(crate) unsafe fn create_swapchain(
     rrswapchain.swapchain = rrdevice.device().create_swapchain_khr(&info, None)?;
     rrswapchain.swapchain_images = rrdevice
         .device()
-        .get_swapchain_images_khr(rrswapchain.swapchain)?;
+        .get_swapchain_images_khr(rrswapchain.swapchain)?
+        .into_iter()
+        .map(crate::types::Image)
+        .collect();
     rrswapchain.swapchain_format = surface_format.format;
     rrswapchain.swapchain_extent = extent;
     Ok((rrswapchain))
@@ -204,7 +207,7 @@ pub unsafe fn create_swapchain_image_view(
         .map(|i| {
             create_image_view(
                 rrdevice,
-                *i,
+                i.raw(),
                 rrswapchain.swapchain_format,
                 vk::ImageAspectFlags::COLOR,
                 1,

@@ -98,6 +98,7 @@ pub unsafe fn clear_shadow_mask_to_lit(
     command_buffer: CommandBuffer,
     shadow_mask_image: Image,
 ) {
+    let shadow_mask_image = shadow_mask_image.raw();
     let subresource_range = vk::ImageSubresourceRange {
         aspect_mask: vk::ImageAspectFlags::COLOR,
         base_mip_level: 0,
@@ -164,6 +165,8 @@ pub unsafe fn record_picked_texel_copy(
     staging_buffer: Buffer,
     pixel: (u32, u32),
 ) {
+    let object_id_image = object_id_image.raw();
+    let position_image = position_image.raw();
     let staging_buffer = staging_buffer.raw();
     let (px, py) = pixel;
 

@@ -34,7 +34,7 @@ pub struct OffscreenFramebuffer {
 impl OffscreenFramebuffer {
     #[inline]
     pub fn resolve_color_image_view(&self) -> crate::types::ImageView {
-        self.resolve_color_image_view
+        crate::types::ImageView(self.resolve_color_image_view)
     }
 
     #[inline]
@@ -49,7 +49,7 @@ impl OffscreenFramebuffer {
 
     #[inline]
     pub fn resolve_color_image(&self) -> crate::types::Image {
-        self.resolve_color_image
+        crate::types::Image(self.resolve_color_image)
     }
 
     #[inline]
@@ -59,7 +59,7 @@ impl OffscreenFramebuffer {
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     pub unsafe fn new(
@@ -383,8 +383,8 @@ impl OffscreenFramebuffer {
         }
     }
 
-    pub fn resolve_image_view(&self) -> vk::ImageView {
-        self.resolve_color_image_view
+    pub fn resolve_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.resolve_color_image_view)
     }
 }
 

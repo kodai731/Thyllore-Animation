@@ -48,7 +48,7 @@ impl SampledTexture {
         command_pool: &RRCommandPool,
         layout: &ReflectedSetLayout,
         sampler_binding: ShaderBinding,
-        sampler: vk::Sampler,
+        sampler: crate::types::Sampler,
         region: PixelRegion<'_>,
     ) -> Result<Self> {
         let (image, memory) = create_image(
@@ -77,7 +77,7 @@ impl SampledTexture {
             .image(
                 sampler_binding,
                 view,
-                sampler,
+                sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);

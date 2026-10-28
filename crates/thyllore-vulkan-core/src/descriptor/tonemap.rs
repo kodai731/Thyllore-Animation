@@ -42,10 +42,10 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn write_all(
         &self,
         rrdevice: &RRDevice,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
+        position_image_view: crate::types::ImageView,
+        position_sampler: crate::types::Sampler,
         scene_buffer: crate::types::Buffer,
         scene_buffer_size: vk::DeviceSize,
     ) -> Result<()> {
@@ -58,8 +58,8 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn update_hdr_sampler(
         &self,
         rrdevice: &RRDevice,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
     ) -> Result<()> {
         for frame_slot in 0..self.descriptor_sets.len() {
             self.update_hdr_sampler_at(rrdevice, frame_slot, hdr_image_view, hdr_sampler)?;
@@ -71,15 +71,15 @@ impl RRToneMapDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 tonemap::HDR_SAMPLER,
-                hdr_image_view,
-                hdr_sampler,
+                hdr_image_view.raw(),
+                hdr_sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
@@ -89,8 +89,8 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn update_bloom_sampler(
         &self,
         rrdevice: &RRDevice,
-        bloom_image_view: vk::ImageView,
-        bloom_sampler: vk::Sampler,
+        bloom_image_view: crate::types::ImageView,
+        bloom_sampler: crate::types::Sampler,
     ) -> Result<()> {
         for frame_slot in 0..self.descriptor_sets.len() {
             self.update_bloom_sampler_at(rrdevice, frame_slot, bloom_image_view, bloom_sampler)?;
@@ -102,15 +102,15 @@ impl RRToneMapDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        bloom_image_view: vk::ImageView,
-        bloom_sampler: vk::Sampler,
+        bloom_image_view: crate::types::ImageView,
+        bloom_sampler: crate::types::Sampler,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set(frame_slot)?.raw())
             .image(
                 tonemap::BLOOM_SAMPLER,
-                bloom_image_view,
-                bloom_sampler,
+                bloom_image_view.raw(),
+                bloom_sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
@@ -120,16 +120,16 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn update_position_sampler(
         &self,
         rrdevice: &RRDevice,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
+        position_image_view: crate::types::ImageView,
+        position_sampler: crate::types::Sampler,
     ) -> Result<()> {
         for descriptor_set in &self.descriptor_sets {
             self.layout
                 .writer(*descriptor_set)
                 .image(
                     tonemap::POSITION_SAMPLER,
-                    position_image_view,
-                    position_sampler,
+                    position_image_view.raw(),
+                    position_sampler.raw(),
                     vk::ImageLayout::GENERAL,
                 )?
                 .apply(rrdevice);

@@ -53,17 +53,18 @@ impl CompositeGBufferViews {
         gbuffer_sampler: crate::types::Sampler,
         object_id_sampler: crate::types::Sampler,
     ) -> Self {
+        let gbuffer_sampler = gbuffer_sampler.raw();
         Self {
-            position_image_view,
+            position_image_view: position_image_view.raw(),
             position_sampler: gbuffer_sampler,
-            normal_image_view,
+            normal_image_view: normal_image_view.raw(),
             normal_sampler: gbuffer_sampler,
-            shadow_mask_image_view,
+            shadow_mask_image_view: shadow_mask_image_view.raw(),
             shadow_mask_sampler: gbuffer_sampler,
-            albedo_image_view,
+            albedo_image_view: albedo_image_view.raw(),
             albedo_sampler: gbuffer_sampler,
-            object_id_image_view,
-            object_id_sampler,
+            object_id_image_view: object_id_image_view.raw(),
+            object_id_sampler: object_id_sampler.raw(),
         }
     }
 }

@@ -29,23 +29,23 @@ impl RRDofDescriptorSet {
     pub unsafe fn update_image_views(
         &self,
         rrdevice: &RRDevice,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
-        depth_image_view: vk::ImageView,
-        depth_sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        hdr_sampler: crate::types::Sampler,
+        depth_image_view: crate::types::ImageView,
+        depth_sampler: crate::types::Sampler,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
             .image(
                 dof::HDR_SAMPLER,
-                hdr_image_view,
-                hdr_sampler,
+                hdr_image_view.raw(),
+                hdr_sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .image(
                 dof::DEPTH_SAMPLER,
-                depth_image_view,
-                depth_sampler,
+                depth_image_view.raw(),
+                depth_sampler.raw(),
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);

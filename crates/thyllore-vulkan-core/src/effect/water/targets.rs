@@ -11,7 +11,7 @@ use crate::types::Instance;
 pub struct WaterBindingKey {
     pub tlas: crate::types::AccelerationStructure,
     pub hit_table: crate::types::Buffer,
-    pub history_views: [vk::ImageView; 2],
+    pub history_views: [crate::types::ImageView; 2],
     pub scene_color_generation: u64,
     pub trace_generation: u64,
 }
@@ -67,8 +67,8 @@ pub unsafe fn create_water_gpu_targets(
     command_pool: crate::types::CommandPool,
     width: u32,
     height: u32,
-    hdr_view: vk::ImageView,
-    depth_view: vk::ImageView,
+    hdr_view: crate::types::ImageView,
+    depth_view: crate::types::ImageView,
 ) -> Result<WaterRenderTargets> {
     let command_pool = command_pool.raw();
     let history = HistoryTargets::new(
@@ -78,8 +78,8 @@ pub unsafe fn create_water_gpu_targets(
         command_pool,
         width,
         height,
-        hdr_view,
-        water_history_desc(depth_view),
+        hdr_view.raw(),
+        water_history_desc(depth_view.raw()),
     )?;
     let caustic_accum = AccumulationTarget::new(
         instance,
@@ -98,8 +98,8 @@ pub unsafe fn create_water_gpu_targets(
     })
 }
 
-pub fn is_depth_view_ready(view: vk::ImageView) -> bool {
-    view != vk::ImageView::null()
+pub fn is_depth_view_ready(view: crate::types::ImageView) -> bool {
+    view.raw() != vk::ImageView::null()
 }
 
 impl WaterRenderTargets {

@@ -291,15 +291,15 @@ pub struct ImageStateTracker {
 }
 
 impl ImageStateTracker {
-    pub fn forget(&mut self, image: vk::Image) {
-        self.states.remove(&image);
+    pub fn forget(&mut self, image: crate::types::Image) {
+        self.states.remove(&image.raw());
     }
 
     /// Records an image that was transitioned to SHADER_READ_ONLY_OPTIMAL outside the graph
     /// (history images cleared at creation), so its first read needs no barrier.
-    pub fn mark_shader_read_only(&mut self, image: vk::Image) {
+    pub fn mark_shader_read_only(&mut self, image: crate::types::Image) {
         self.states.insert(
-            image,
+            image.raw(),
             ImageState {
                 layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -313,7 +313,12 @@ impl ImageStateTracker {
         self.states.clear();
     }
 
-    pub fn transition(&mut self, image: vk::Image, access: TargetAccess) -> Option<PendingBarrier> {
+    pub fn transition(
+        &mut self,
+        image: crate::types::Image,
+        access: TargetAccess,
+    ) -> Option<PendingBarrier> {
+        let image = image.raw();
         let current = self.states.get(&image).copied().unwrap_or(UNKNOWN_STATE);
         let entry = access.entry_state();
         self.states.insert(image, access.exit_state());
@@ -388,8 +393,8 @@ pub unsafe fn record_pending_barriers(
 mod tests {
     use super::*;
 
-    fn image(id: u64) -> vk::Image {
-        vk::Image::from_raw(id)
+    fn image(id: u64) -> crate::types::Image {
+        crate::types::Image(vk::Image::from_raw(id))
     }
 
     #[test]

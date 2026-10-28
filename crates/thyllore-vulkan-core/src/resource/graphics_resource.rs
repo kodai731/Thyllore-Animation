@@ -221,8 +221,8 @@ impl GraphicsResources {
             instance,
             rrdevice,
             source.material_name,
-            mesh.image_view,
-            mesh.sampler,
+            mesh.image_view(),
+            mesh.sampler(),
             properties,
         )?;
 

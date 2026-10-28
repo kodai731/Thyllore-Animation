@@ -11,11 +11,11 @@ const FLAME_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlameImageBindings {
-    pub history_image_views: [vk::ImageView; FLAME_HISTORY_SET_COUNT],
-    pub flame_sampler: vk::Sampler,
-    pub sdf_image_view: vk::ImageView,
-    pub sdf_sampler: vk::Sampler,
-    pub scene_depth_view: vk::ImageView,
+    pub history_image_views: [crate::types::ImageView; FLAME_HISTORY_SET_COUNT],
+    pub flame_sampler: crate::types::Sampler,
+    pub sdf_image_view: crate::types::ImageView,
+    pub sdf_sampler: crate::types::Sampler,
+    pub scene_depth_view: crate::types::ImageView,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -75,19 +75,19 @@ impl RRFlameDescriptorSet {
                 .writer(descriptor_set)
                 .image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
-                    previous_history_view,
-                    images.flame_sampler,
+                    previous_history_view.raw(),
+                    images.flame_sampler.raw(),
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
                 .image(
                     flame_resolve::FLAME_SDF_SAMPLER,
-                    images.sdf_image_view,
-                    images.sdf_sampler,
+                    images.sdf_image_view.raw(),
+                    images.sdf_sampler.raw(),
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
                 .image(
                     flame_resolve::SCENE_DEPTH_SAMPLER,
-                    images.scene_depth_view,
+                    images.scene_depth_view.raw(),
                     self.scene_depth_sampler,
                     vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 )?

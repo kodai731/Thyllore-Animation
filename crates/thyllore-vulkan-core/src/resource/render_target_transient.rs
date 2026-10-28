@@ -34,12 +34,12 @@ pub struct TransientImage {
 impl TransientImage {
     #[inline]
     pub fn image(&self) -> crate::types::Image {
-        self.image
+        crate::types::Image(self.image)
     }
 
     #[inline]
     pub fn view(&self) -> crate::types::ImageView {
-        self.view
+        crate::types::ImageView(self.view)
     }
 }
 
@@ -306,7 +306,7 @@ impl RenderTargetTransient {
     pub fn cached_framebuffer(
         &self,
         render_pass: crate::types::RenderPass,
-        views: &[vk::ImageView],
+        views: &[crate::types::ImageView],
     ) -> Option<crate::types::Framebuffer> {
         let key = FramebufferKey::new(render_pass.raw(), views).ok()?;
         self.framebuffers
@@ -318,7 +318,7 @@ impl RenderTargetTransient {
         &mut self,
         rrdevice: &RRDevice,
         render_pass: crate::types::RenderPass,
-        views: &[vk::ImageView],
+        views: &[crate::types::ImageView],
         width: u32,
         height: u32,
     ) -> Result<crate::types::Framebuffer> {
@@ -330,7 +330,7 @@ impl RenderTargetTransient {
 
         let info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass.raw())
-            .attachments(views)
+            .attachments(key.attachments())
             .width(width)
             .height(height)
             .layers(1);
@@ -408,7 +408,7 @@ impl Drop for RenderTargetTransient {
 }
 
 impl FramebufferKey {
-    fn new(render_pass: vk::RenderPass, views: &[vk::ImageView]) -> Result<Self> {
+    fn new(render_pass: vk::RenderPass, views: &[crate::types::ImageView]) -> Result<Self> {
         if views.is_empty() || views.len() > MAX_FRAMEBUFFER_ATTACHMENTS {
             return Err(anyhow!(
                 "framebuffer attachment count {} is outside 1..={MAX_FRAMEBUFFER_ATTACHMENTS}",
@@ -417,7 +417,9 @@ impl FramebufferKey {
         }
 
         let mut padded = [vk::ImageView::null(); MAX_FRAMEBUFFER_ATTACHMENTS];
-        padded[..views.len()].copy_from_slice(views);
+        for (slot, view) in padded.iter_mut().zip(views) {
+            *slot = view.raw();
+        }
 
         Ok(Self {
             render_pass,
@@ -426,8 +428,12 @@ impl FramebufferKey {
         })
     }
 
+    fn attachments(&self) -> &[vk::ImageView] {
+        &self.views[..self.view_count as usize]
+    }
+
     fn contains(&self, view: vk::ImageView) -> bool {
-        self.views[..self.view_count as usize].contains(&view)
+        self.attachments().contains(&view)
     }
 }
 
@@ -608,7 +614,8 @@ mod tests {
     fn test_framebuffer_key_rejects_empty_and_oversized_attachments() {
         let render_pass = vk::RenderPass::null();
         assert!(FramebufferKey::new(render_pass, &[]).is_err());
-        assert!(FramebufferKey::new(render_pass, &[vk::ImageView::null(); 5]).is_err());
-        assert!(FramebufferKey::new(render_pass, &[vk::ImageView::null(); 4]).is_ok());
+        let view = crate::types::ImageView::default();
+        assert!(FramebufferKey::new(render_pass, &[view; 5]).is_err());
+        assert!(FramebufferKey::new(render_pass, &[view; 4]).is_ok());
     }
 }

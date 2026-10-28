@@ -79,12 +79,12 @@ impl RayTracingData {
 
     #[inline]
     pub fn gbuffer_sampler(&self) -> Option<crate::types::Sampler> {
-        self.gbuffer_sampler
+        self.gbuffer_sampler.map(crate::types::Sampler)
     }
 
     #[inline]
     pub fn object_id_sampler(&self) -> Option<crate::types::Sampler> {
-        self.object_id_sampler
+        self.object_id_sampler.map(crate::types::Sampler)
     }
 
     pub fn has_valid_tlas(&self) -> bool {
@@ -343,9 +343,9 @@ impl RayTracingData {
         if descriptor.descriptor_set == vk::DescriptorSet::null() {
             descriptor.allocate_and_update(
                 rrdevice,
-                gbuffer.position_image_view,
-                gbuffer.normal_image_view,
-                gbuffer.shadow_mask_image_view,
+                gbuffer.position_image_view(),
+                gbuffer.normal_image_view(),
+                gbuffer.shadow_mask_image_view(),
                 tlas,
                 scene_buffer,
                 hit_shading_table_buffer,
@@ -417,9 +417,9 @@ unsafe fn build_ray_query_pipeline(
                 .unwrap_or(vk::Buffer::null());
             descriptor.allocate_and_update(
                 rrdevice,
-                gbuffer.position_image_view,
-                gbuffer.normal_image_view,
-                gbuffer.shadow_mask_image_view,
+                gbuffer.position_image_view(),
+                gbuffer.normal_image_view(),
+                gbuffer.shadow_mask_image_view(),
                 tlas,
                 scene_buffer,
                 hit_shading_table_buffer,
@@ -482,8 +482,8 @@ unsafe fn build_composite_pipeline(
         billboard_descriptor_set.update_position_sampler(
             rrdevice,
             rrswapchain,
-            gbuffer.position_image_view,
-            gbuffer_sampler,
+            gbuffer.position_image_view(),
+            crate::types::Sampler(gbuffer_sampler),
         )?;
     }
 

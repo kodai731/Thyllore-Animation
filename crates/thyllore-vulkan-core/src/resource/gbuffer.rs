@@ -44,52 +44,52 @@ pub struct RRGBuffer {
 impl RRGBuffer {
     #[inline]
     pub fn position_image(&self) -> crate::types::Image {
-        self.position_image
+        crate::types::Image(self.position_image)
     }
 
     #[inline]
     pub fn normal_image(&self) -> crate::types::Image {
-        self.normal_image
+        crate::types::Image(self.normal_image)
     }
 
     #[inline]
     pub fn albedo_image(&self) -> crate::types::Image {
-        self.albedo_image
+        crate::types::Image(self.albedo_image)
     }
 
     #[inline]
     pub fn object_id_image(&self) -> crate::types::Image {
-        self.object_id_image
+        crate::types::Image(self.object_id_image)
     }
 
     #[inline]
     pub fn shadow_mask_image(&self) -> crate::types::Image {
-        self.shadow_mask_image
+        crate::types::Image(self.shadow_mask_image)
     }
 
     #[inline]
     pub fn position_image_view(&self) -> crate::types::ImageView {
-        self.position_image_view
+        crate::types::ImageView(self.position_image_view)
     }
 
     #[inline]
     pub fn normal_image_view(&self) -> crate::types::ImageView {
-        self.normal_image_view
+        crate::types::ImageView(self.normal_image_view)
     }
 
     #[inline]
     pub fn albedo_image_view(&self) -> crate::types::ImageView {
-        self.albedo_image_view
+        crate::types::ImageView(self.albedo_image_view)
     }
 
     #[inline]
     pub fn object_id_image_view(&self) -> crate::types::ImageView {
-        self.object_id_image_view
+        crate::types::ImageView(self.object_id_image_view)
     }
 
     #[inline]
     pub fn shadow_mask_image_view(&self) -> crate::types::ImageView {
-        self.shadow_mask_image_view
+        crate::types::ImageView(self.shadow_mask_image_view)
     }
 
     #[inline]

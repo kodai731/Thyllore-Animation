@@ -49,7 +49,7 @@ pub unsafe fn create_flame_history(
     command_pool: crate::types::CommandPool,
     width: u32,
     height: u32,
-    hdr_view: vk::ImageView,
+    hdr_view: crate::types::ImageView,
 ) -> Result<HistoryTargets> {
     HistoryTargets::new(
         instance,
@@ -58,7 +58,7 @@ pub unsafe fn create_flame_history(
         command_pool.raw(),
         width,
         height,
-        hdr_view,
+        hdr_view.raw(),
         flame_history_desc(),
     )
 }
@@ -71,7 +71,7 @@ pub unsafe fn recreate_flame_history(
     history: &mut HistoryTargets,
     width: u32,
     height: u32,
-    hdr_view: vk::ImageView,
+    hdr_view: crate::types::ImageView,
 ) -> Result<()> {
     history.destroy(&rrdevice.device());
     *history = create_flame_history(

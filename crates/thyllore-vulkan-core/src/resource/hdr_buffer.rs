@@ -24,17 +24,17 @@ pub struct HdrBuffer {
 impl HdrBuffer {
     #[inline]
     pub fn color_image(&self) -> crate::types::Image {
-        self.color_image
+        crate::types::Image(self.color_image)
     }
 
     #[inline]
     pub fn color_image_view(&self) -> crate::types::ImageView {
-        self.color_image_view
+        crate::types::ImageView(self.color_image_view)
     }
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     #[inline]
@@ -104,7 +104,7 @@ impl HdrBuffer {
     pub unsafe fn attach_depth(
         &mut self,
         rrdevice: &RRDevice,
-        depth_image_view: vk::ImageView,
+        depth_image_view: crate::types::ImageView,
     ) -> Result<()> {
         if self.framebuffer != vk::Framebuffer::null() {
             rrdevice
@@ -113,7 +113,7 @@ impl HdrBuffer {
             self.framebuffer = vk::Framebuffer::null();
         }
 
-        let attachments = [self.color_image_view, depth_image_view];
+        let attachments = [self.color_image_view, depth_image_view.raw()];
         let framebuffer_info = vk::FramebufferCreateInfo::builder()
             .render_pass(self.render_pass)
             .attachments(&attachments)
@@ -125,7 +125,7 @@ impl HdrBuffer {
             .create_framebuffer(&framebuffer_info, None)?;
 
         self.framebuffer = framebuffer;
-        self.depth_image_view = depth_image_view;
+        self.depth_image_view = depth_image_view.raw();
 
         log!("Attached depth to HDR buffer");
 

@@ -50,7 +50,7 @@ impl LightningResolveDescriptorSet {
         rrdevice: &RRDevice,
         lightning_ubo: &UniformBuffer<LightningUBO>,
         segments_ubo: &UniformBuffer<LightningSegmentsUBO>,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
@@ -63,13 +63,13 @@ impl LightningResolveDescriptorSet {
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set)
             .image(
                 lightning_resolve::SCENE_DEPTH_SAMPLER,
-                scene_depth_view,
+                scene_depth_view.raw(),
                 self.scene_depth_sampler,
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?

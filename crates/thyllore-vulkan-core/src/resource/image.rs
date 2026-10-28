@@ -19,12 +19,12 @@ pub struct RRImage {
 impl RRImage {
     #[inline]
     pub fn image_view(&self) -> crate::types::ImageView {
-        self.image_view
+        crate::types::ImageView(self.image_view)
     }
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 
     pub unsafe fn new(
@@ -798,7 +798,7 @@ pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler>
     Ok(sampler)
 }
 
-pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<crate::types::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
@@ -817,7 +817,7 @@ pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sam
         .max_lod(1.0);
     let sampler = rrdevice.device().create_sampler(&info, None)?;
 
-    Ok(sampler)
+    Ok(crate::types::Sampler(sampler))
 }
 
 pub unsafe fn create_texture_image_pixel(
@@ -962,12 +962,12 @@ pub struct Rgba8Texture {
 impl Rgba8Texture {
     #[inline]
     pub fn view(&self) -> crate::types::ImageView {
-        self.view
+        crate::types::ImageView(self.view)
     }
 
     #[inline]
     pub fn sampler(&self) -> crate::types::Sampler {
-        self.sampler
+        crate::types::Sampler(self.sampler)
     }
 }
 

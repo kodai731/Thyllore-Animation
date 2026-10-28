@@ -57,6 +57,12 @@ Commands:
       the NVIDIA GPU and open blender/lightning.blend with a lightning bolt already
       added (scripts/blender/lightning/launch.sh):
         ./run.sh blender --lightning
+  blender --avatar-setup [--mode degrade|full|private] [--skip-build] [--software-gl] [model.fbx]
+      Build the debug addon ZIP of this checkout, install it into a pristine
+      Docker Blender on the NVIDIA GPU and import the test model
+      (default: assets/models/fuse-woman-1/edited/woman-1-fix-scale-only.fbx)
+      for the avatar setup panels (scripts/blender/avatar_setup/launch.sh):
+        ./run.sh blender --avatar-setup
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
@@ -186,6 +192,10 @@ case "$command" in
         if [[ "${1:-}" == "--lightning" ]]; then
             shift
             exec bash "$REPO_ROOT/scripts/blender/lightning/launch.sh" "$@"
+        fi
+        if [[ "${1:-}" == "--avatar-setup" ]]; then
+            shift
+            exec bash "$REPO_ROOT/scripts/blender/avatar_setup/launch.sh" "$@"
         fi
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;

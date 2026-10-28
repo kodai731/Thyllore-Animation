@@ -70,7 +70,7 @@ pub struct RayTracingData {
 impl RayTracingData {
     #[inline]
     pub fn command_pool(&self) -> crate::types::CommandPool {
-        self.command_pool
+        crate::types::CommandPool(self.command_pool)
     }
 
     pub fn set_command_pool(&mut self, rrcommand_pool: &RRCommandPool) {
@@ -124,7 +124,7 @@ impl RayTracingData {
 
         log!("init_gbuffer: RRGBuffer::new succeeded");
 
-        if let Err(e) = gbuffer.transition_layouts(rrdevice, rrcommand_pool.command_pool) {
+        if let Err(e) = gbuffer.transition_layouts(rrdevice, rrcommand_pool.command_pool()) {
             log_warn!("init_gbuffer: transition_layouts failed (ignored): {:?}", e);
         }
 

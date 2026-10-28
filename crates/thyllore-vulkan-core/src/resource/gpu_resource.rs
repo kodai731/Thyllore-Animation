@@ -59,7 +59,7 @@ pub struct OwnedDescriptorSet {
 }
 
 impl OwnedDescriptorSet {
-    pub fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
+    pub(crate) fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
         Self { set, layout }
     }
 

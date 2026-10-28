@@ -329,8 +329,9 @@ impl RRGBuffer {
     pub unsafe fn transition_layouts(
         &self,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
     ) -> Result<()> {
+        let command_pool = command_pool.raw();
         transition_image_layout(
             rrdevice,
             rrdevice.graphics_queue,

@@ -37,12 +37,12 @@ pub struct VulkanContext {
 impl VulkanContext {
     #[inline]
     pub fn messenger(&self) -> crate::types::DebugMessenger {
-        self.messenger
+        crate::types::DebugMessenger(self.messenger)
     }
 
     #[inline]
     pub fn surface(&self) -> crate::types::Surface {
-        self.surface
+        crate::types::Surface(self.surface)
     }
 }
 
@@ -87,7 +87,7 @@ extern "system" fn debug_callback(
     vk::FALSE
 }
 
-pub unsafe fn create_instance_with_messenger(
+pub(crate) unsafe fn create_instance_with_messenger(
     window: &Window,
     entry: &Entry,
 ) -> Result<(Instance, vk::DebugUtilsMessengerEXT)> {
@@ -176,9 +176,13 @@ pub unsafe fn create_sync_objects(
     let mut in_flight = Vec::new();
 
     for _ in 0..count {
-        image_available.push(rrdevice.device().create_semaphore(&semaphore_info, None)?);
-        render_finished.push(rrdevice.device().create_semaphore(&semaphore_info, None)?);
-        in_flight.push(rrdevice.device().create_fence(&fence_info, None)?);
+        image_available.push(Semaphore(
+            rrdevice.device().create_semaphore(&semaphore_info, None)?,
+        ));
+        render_finished.push(Semaphore(
+            rrdevice.device().create_semaphore(&semaphore_info, None)?,
+        ));
+        in_flight.push(Fence(rrdevice.device().create_fence(&fence_info, None)?));
     }
 
     Ok((image_available, render_finished, in_flight))

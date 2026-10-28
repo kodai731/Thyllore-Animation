@@ -83,7 +83,7 @@ pub struct DescriptorAllocator {
 }
 
 impl DescriptorAllocator {
-    pub unsafe fn allocate(
+    pub(crate) unsafe fn allocate(
         &mut self,
         device: &Device,
         layout: vk::DescriptorSetLayout,
@@ -136,7 +136,7 @@ impl DescriptorAllocator {
     }
 
     /// The caller guarantees no pending command buffer binds the sets, as for `vkFreeDescriptorSets`.
-    pub fn release(
+    pub(crate) fn release(
         &mut self,
         layout: vk::DescriptorSetLayout,
         sets: impl IntoIterator<Item = vk::DescriptorSet>,
@@ -144,7 +144,7 @@ impl DescriptorAllocator {
         self.recycled.put(layout, sets);
     }
 
-    pub fn forget_layout(&mut self, layout: vk::DescriptorSetLayout) {
+    pub(crate) fn forget_layout(&mut self, layout: vk::DescriptorSetLayout) {
         self.recycled.forget_layout(layout);
     }
 

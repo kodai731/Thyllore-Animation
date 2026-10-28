@@ -26,7 +26,7 @@ impl AccumulationTarget {
         self.view
     }
 
-    pub unsafe fn new(
+    pub(crate) unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
         storage: &mut RenderTargetStorage,

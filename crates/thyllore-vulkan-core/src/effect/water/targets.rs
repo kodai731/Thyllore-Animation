@@ -64,12 +64,13 @@ pub unsafe fn create_water_gpu_targets(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
-    command_pool: vk::CommandPool,
+    command_pool: crate::types::CommandPool,
     width: u32,
     height: u32,
     hdr_view: vk::ImageView,
     depth_view: vk::ImageView,
 ) -> Result<WaterRenderTargets> {
+    let command_pool = command_pool.raw();
     let history = HistoryTargets::new(
         instance,
         rrdevice,

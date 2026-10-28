@@ -23,7 +23,7 @@ impl ReadbackLayout {
     }
 }
 
-pub unsafe fn copy_image_to_host_buffer(
+pub(crate) unsafe fn copy_image_to_host_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     queue: vk::Queue,
@@ -60,7 +60,7 @@ pub unsafe fn copy_image_to_host_buffer(
 pub unsafe fn read_image_bytes(
     instance: &Instance,
     rrdevice: &RRDevice,
-    command_pool: vk::CommandPool,
+    command_pool: crate::types::CommandPool,
     image: vk::Image,
     width: u32,
     height: u32,
@@ -71,7 +71,7 @@ pub unsafe fn read_image_bytes(
         instance,
         rrdevice,
         rrdevice.graphics_queue,
-        command_pool,
+        command_pool.raw(),
         image,
         width,
         height,
@@ -95,7 +95,7 @@ pub unsafe fn read_image_bytes(
 pub unsafe fn read_buffer_bytes(
     instance: &Instance,
     rrdevice: &RRDevice,
-    command_pool: vk::CommandPool,
+    command_pool: crate::types::CommandPool,
     source: vk::Buffer,
     byte_size: vk::DeviceSize,
 ) -> Result<Vec<u8>> {
@@ -107,7 +107,7 @@ pub unsafe fn read_buffer_bytes(
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
 
-    let command_buffer = begin_single_time_commands(rrdevice, command_pool)?;
+    let command_buffer = begin_single_time_commands(rrdevice, command_pool.raw())?;
     let region = vk::BufferCopy::builder()
         .src_offset(0)
         .dst_offset(0)
@@ -118,7 +118,7 @@ pub unsafe fn read_buffer_bytes(
     end_single_time_commands(
         rrdevice,
         rrdevice.graphics_queue,
-        command_pool,
+        command_pool.raw(),
         command_buffer,
     )?;
 

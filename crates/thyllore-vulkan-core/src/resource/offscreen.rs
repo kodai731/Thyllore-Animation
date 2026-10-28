@@ -65,12 +65,13 @@ impl OffscreenFramebuffer {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
         width: u32,
         height: u32,
         msaa_samples: vk::SampleCountFlags,
         format: vk::Format,
     ) -> Result<Self> {
+        let command_pool = command_pool.raw();
         let (msaa_color_image, msaa_color_image_memory) = create_image(
             instance,
             rrdevice,
@@ -324,7 +325,7 @@ impl OffscreenFramebuffer {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
         new_width: u32,
         new_height: u32,
     ) -> Result<()> {

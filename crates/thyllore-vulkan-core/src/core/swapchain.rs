@@ -25,10 +25,10 @@ impl RRSwapchain {
     pub unsafe fn new(
         window: &Window,
         instance: &Instance,
-        surface: &vk::SurfaceKHR,
+        surface: &crate::types::Surface,
         rrdevice: &RRDevice,
     ) -> Result<Self> {
-        let mut rrswapchain = create_swapchain(window, instance, surface, rrdevice)?;
+        let mut rrswapchain = create_swapchain(window, instance, &surface.raw(), rrdevice)?;
         create_swapchain_image_view(rrdevice, &mut rrswapchain)?;
         log!("Created swapchain");
         Ok(rrswapchain)
@@ -48,7 +48,7 @@ impl RRSwapchain {
 
     #[inline]
     pub fn swapchain(&self) -> crate::types::Swapchain {
-        self.swapchain
+        crate::types::Swapchain(self.swapchain)
     }
 
     #[inline]
@@ -78,7 +78,7 @@ impl GpuResource for RRSwapchain {
 }
 
 impl SwapchainSupport {
-    pub unsafe fn get(
+    pub(crate) unsafe fn get(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
@@ -140,7 +140,7 @@ impl SwapchainSupport {
     }
 }
 
-pub unsafe fn create_swapchain(
+pub(crate) unsafe fn create_swapchain(
     window: &Window,
     instance: &Instance,
     surface: &vk::SurfaceKHR,

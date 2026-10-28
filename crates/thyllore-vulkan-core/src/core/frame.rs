@@ -4,7 +4,7 @@ use crate::command::{RRCommandBuffer, RRCommandPool};
 use crate::core::device::RRDevice;
 use crate::core::swapchain::RRSwapchain;
 use crate::resource::GpuResource;
-use crate::types::{CommandPool, Fence, Instance, Semaphore};
+use crate::types::{Fence, Instance, Semaphore};
 use crate::vulkan::*;
 
 #[derive(Debug)]
@@ -15,13 +15,13 @@ pub enum AcquireOutcome {
 
 pub unsafe fn acquire_swapchain_image(
     rrdevice: &RRDevice,
-    swapchain: vk::SwapchainKHR,
-    image_available: vk::Semaphore,
+    swapchain: crate::types::Swapchain,
+    image_available: crate::types::Semaphore,
 ) -> Result<AcquireOutcome> {
     let result = rrdevice.device().acquire_next_image_khr(
-        swapchain,
+        swapchain.raw(),
         u64::MAX,
-        image_available,
+        image_available.raw(),
         vk::Fence::null(),
     );
 
@@ -50,9 +50,9 @@ impl FrameSubmit {
     ) -> Self {
         Self {
             command_buffer: commands.buffers.command_buffers[image_index],
-            image_available: sync.current_image_available(),
-            render_finished: sync.current_render_finished(),
-            fence: sync.current_fence(),
+            image_available: sync.current_image_available().raw(),
+            render_finished: sync.current_render_finished().raw(),
+            fence: sync.current_fence().raw(),
             swapchain: swapchain.swapchain,
             image_index,
         }
@@ -149,10 +149,10 @@ impl GpuResource for FrameSync {
             .drain(..)
             .chain(self.render_finished.drain(..))
         {
-            device.destroy_semaphore(semaphore, None);
+            device.destroy_semaphore(semaphore.raw(), None);
         }
         for fence in self.in_flight.drain(..) {
-            device.destroy_fence(fence, None);
+            device.destroy_fence(fence.raw(), None);
         }
     }
 
@@ -181,7 +181,7 @@ impl GpuResource for CommandState {
             device.free_command_buffers(self.pool.command_pool, &self.buffers.command_buffers);
             self.buffers.command_buffers.clear();
         }
-        if self.pool.command_pool != CommandPool::null() {
+        if self.pool.command_pool != vk::CommandPool::null() {
             device.destroy_command_pool(self.pool.command_pool, None);
         }
     }
@@ -197,13 +197,16 @@ pub struct SurfaceState {
 }
 
 impl SurfaceState {
-    pub fn new(surface: vk::SurfaceKHR, messenger: vk::DebugUtilsMessengerEXT) -> Self {
-        Self { surface, messenger }
+    pub fn new(surface: crate::types::Surface, messenger: crate::types::DebugMessenger) -> Self {
+        Self {
+            surface: surface.raw(),
+            messenger: messenger.raw(),
+        }
     }
 
     #[inline]
     pub fn surface(&self) -> crate::types::Surface {
-        self.surface
+        crate::types::Surface(self.surface)
     }
 }
 

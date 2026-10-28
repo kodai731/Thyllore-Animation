@@ -506,6 +506,6 @@ impl GpuResource for ReflectedSetLayout {
 impl ReflectedSetLayout {
     #[inline]
     pub fn handle(&self) -> crate::types::DescriptorSetLayout {
-        self.handle
+        crate::types::DescriptorSetLayout(self.handle)
     }
 }

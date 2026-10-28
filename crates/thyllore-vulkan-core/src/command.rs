@@ -4,7 +4,7 @@ use crate::render::pass::RRRender;
 use crate::types::Instance;
 use std::rc::Rc;
 
-pub unsafe fn begin_single_time_commands(
+pub(crate) unsafe fn begin_single_time_commands(
     rrdevice: &RRDevice,
     command_pool: vk::CommandPool,
 ) -> Result<vk::CommandBuffer> {
@@ -23,7 +23,7 @@ pub unsafe fn begin_single_time_commands(
     Ok(command_buffer)
 }
 
-pub unsafe fn end_single_time_commands(
+pub(crate) unsafe fn end_single_time_commands(
     rrdevice: &RRDevice,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
@@ -51,9 +51,14 @@ pub struct RRCommandPool {
 }
 
 impl RRCommandPool {
-    pub unsafe fn new(instance: &Instance, surface: &vk::SurfaceKHR, rrdevice: &RRDevice) -> Self {
+    pub unsafe fn new(
+        instance: &Instance,
+        surface: &crate::types::Surface,
+        rrdevice: &RRDevice,
+    ) -> Self {
         let mut rrcommand_pool = RRCommandPool::default();
-        if let Err(e) = create_command_pool(instance, surface, rrdevice, &mut rrcommand_pool) {
+        if let Err(e) = create_command_pool(instance, &surface.raw(), rrdevice, &mut rrcommand_pool)
+        {
             eprintln!("Create command pool failed {:?}", e);
         }
         println!("Created command pool");
@@ -62,7 +67,7 @@ impl RRCommandPool {
 
     #[inline]
     pub fn command_pool(&self) -> crate::types::CommandPool {
-        self.command_pool
+        crate::types::CommandPool(self.command_pool)
     }
 }
 

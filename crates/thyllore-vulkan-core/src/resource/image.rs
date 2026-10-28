@@ -473,7 +473,7 @@ pub unsafe fn create_image_view_3d(
     Ok(rrdevice.device().create_image_view(&info, None)?)
 }
 
-pub unsafe fn transition_image_layout(
+pub(crate) unsafe fn transition_image_layout(
     rrdevice: &RRDevice,
     queue: vk::Queue,
     command_pool: vk::CommandPool,

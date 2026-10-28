@@ -114,7 +114,7 @@ impl RRDevice {
         }
     }
 
-    pub unsafe fn new(
+    pub(crate) unsafe fn new(
         entry: &Entry,
         instance: &Instance,
         surface: &vk::SurfaceKHR,
@@ -212,9 +212,10 @@ impl RRDevice {
     pub unsafe fn connect_surface(
         &mut self,
         instance: &Instance,
-        surface: &vk::SurfaceKHR,
+        surface: &crate::types::Surface,
     ) -> Result<()> {
-        let present_index = PresentQueueIndex::find(instance, surface, &self.physical_device)?;
+        let present_index =
+            PresentQueueIndex::find(instance, &surface.raw(), &self.physical_device)?;
         self.present_queue = self.device.get_device_queue(present_index.0, 0);
         Ok(())
     }
@@ -241,7 +242,7 @@ impl GraphicsQueueIndex {
 pub struct PresentQueueIndex(pub u32);
 
 impl PresentQueueIndex {
-    pub unsafe fn find(
+    pub(crate) unsafe fn find(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
@@ -269,7 +270,7 @@ pub struct QueueFamilyIndices {
 }
 
 impl QueueFamilyIndices {
-    pub unsafe fn get(
+    pub(crate) unsafe fn get(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
@@ -730,7 +731,7 @@ impl RRDevice {
         self.present_queue != vk::Queue::null()
     }
 
-    pub unsafe fn allocate_descriptor_sets(
+    pub(crate) unsafe fn allocate_descriptor_sets(
         &self,
         layout: vk::DescriptorSetLayout,
         signature: &PoolSignature,
@@ -741,7 +742,7 @@ impl RRDevice {
             .allocate(&self.device, layout, signature, count)
     }
 
-    pub fn release_descriptor_sets(
+    pub(crate) fn release_descriptor_sets(
         &self,
         layout: vk::DescriptorSetLayout,
         sets: impl IntoIterator<Item = vk::DescriptorSet>,
@@ -749,7 +750,7 @@ impl RRDevice {
         self.descriptor_allocator.borrow_mut().release(layout, sets);
     }
 
-    pub fn forget_descriptor_layout(&self, layout: vk::DescriptorSetLayout) {
+    pub(crate) fn forget_descriptor_layout(&self, layout: vk::DescriptorSetLayout) {
         self.descriptor_allocator.borrow_mut().forget_layout(layout);
     }
 
@@ -772,18 +773,19 @@ impl RRDevice {
         Ok(())
     }
 
-    pub unsafe fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        self.device.wait_for_fences(&[fence], true, u64::MAX)?;
+    pub unsafe fn wait_for_fence(&self, fence: crate::types::Fence) -> Result<()> {
+        self.device
+            .wait_for_fences(&[fence.raw()], true, u64::MAX)?;
         Ok(())
     }
 
     pub unsafe fn free_command_buffers(
         &self,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
         command_buffers: &[vk::CommandBuffer],
     ) {
         self.device
-            .free_command_buffers(command_pool, command_buffers);
+            .free_command_buffers(command_pool.raw(), command_buffers);
     }
 
     pub unsafe fn submit_one_time(&self, command_buffer: vk::CommandBuffer) -> Result<()> {

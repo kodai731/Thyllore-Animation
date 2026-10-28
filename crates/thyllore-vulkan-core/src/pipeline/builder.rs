@@ -4,6 +4,7 @@ use crate::descriptor::{
     shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
 };
 use crate::render::pass::RRRender;
+use crate::types::{Pipeline, PipelineLayout};
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
@@ -103,8 +104,8 @@ impl From<ShaderStages> for vk::ShaderStageFlags {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRPipeline {
-    pub pipeline_layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
+    pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub(crate) pipeline: vk::Pipeline,
 }
 
 use crate::resource::gpu_resource::GpuResource;
@@ -141,7 +142,7 @@ fn vertex_format_to_vk(format: VertexFormat) -> vk::Format {
 pub struct DepthTestConfig {
     pub test_enable: bool,
     pub write_enable: bool,
-    pub compare_op: vk::CompareOp,
+    pub(crate) compare_op: vk::CompareOp,
 }
 
 impl Default for DepthTestConfig {
@@ -155,6 +156,14 @@ impl Default for DepthTestConfig {
 }
 
 impl DepthTestConfig {
+    pub const fn disabled() -> Self {
+        Self {
+            test_enable: false,
+            write_enable: false,
+            compare_op: DepthCompare::Always.compare_op(),
+        }
+    }
+
     pub const fn read_only(compare: DepthCompare) -> Self {
         Self {
             test_enable: true,
@@ -176,12 +185,12 @@ impl DepthTestConfig {
 #[derive(Clone, Copy)]
 pub struct BlendConfig {
     pub enable: bool,
-    pub src_color_factor: vk::BlendFactor,
-    pub dst_color_factor: vk::BlendFactor,
-    pub color_op: vk::BlendOp,
-    pub src_alpha_factor: vk::BlendFactor,
-    pub dst_alpha_factor: vk::BlendFactor,
-    pub alpha_op: vk::BlendOp,
+    pub(crate) src_color_factor: vk::BlendFactor,
+    pub(crate) dst_color_factor: vk::BlendFactor,
+    pub(crate) color_op: vk::BlendOp,
+    pub(crate) src_alpha_factor: vk::BlendFactor,
+    pub(crate) dst_alpha_factor: vk::BlendFactor,
+    pub(crate) alpha_op: vk::BlendOp,
 }
 
 impl Default for BlendConfig {
@@ -226,7 +235,7 @@ impl BlendConfig {
 
 #[derive(Clone, Copy)]
 pub struct PushConstantConfig {
-    pub stage_flags: vk::ShaderStageFlags,
+    pub(crate) stage_flags: vk::ShaderStageFlags,
     pub offset: u32,
     pub size: u32,
 }
@@ -577,6 +586,16 @@ impl PipelineBuilder {
 }
 
 impl RRPipeline {
+    #[inline]
+    pub fn pipeline_layout(&self) -> PipelineLayout {
+        self.pipeline_layout
+    }
+
+    #[inline]
+    pub fn pipeline(&self) -> Pipeline {
+        self.pipeline
+    }
+
     /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)
     pub unsafe fn new_with_graphics_resources(
         rrdevice: &RRDevice,

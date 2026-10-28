@@ -4,8 +4,8 @@ use crate::app::{App, AppData};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST};
 use crate::vulkanr::pipeline::{
-    BlendConfig, CullFace, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder,
-    PushConstantConfig, SampleCount, ShaderStages, Topology, VertexInputConfig,
+    BlendConfig, CullFace, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
+    SampleCount, ShaderStages, Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
@@ -80,11 +80,7 @@ unsafe fn create_onion_skin_pass(
         .custom_render_pass(onion_skin_pass.ghost_render_pass())
         .mrt_attachments(1)
         .msaa_samples(SampleCount::One)
-        .depth_test(DepthTestConfig {
-            test_enable: false,
-            write_enable: false,
-            compare_op: DepthCompare::Always.into(),
-        })
+        .depth_test(DepthTestConfig::disabled())
         .blend(BlendConfig::alpha())
         .descriptor_layouts(&[
             &graphics_resources.frame_set.layout,

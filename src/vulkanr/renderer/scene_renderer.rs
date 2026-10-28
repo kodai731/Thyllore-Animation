@@ -59,7 +59,7 @@ pub unsafe fn render_scene_objects(
         bind_graphics_mesh(
             rrdevice,
             command_buffer,
-            pipeline.pipeline,
+            pipeline.pipeline(),
             vertex_buffer,
             index_buffer,
             IndexWidth::U32,
@@ -68,7 +68,7 @@ pub unsafe fn render_scene_objects(
         bind_graphics_descriptor_set(
             rrdevice,
             command_buffer,
-            pipeline.pipeline_layout,
+            pipeline.pipeline_layout(),
             0,
             frame_set,
         );
@@ -78,7 +78,7 @@ pub unsafe fn render_scene_objects(
         bind_graphics_descriptor_set(
             rrdevice,
             command_buffer,
-            pipeline.pipeline_layout,
+            pipeline.pipeline_layout(),
             2,
             object_set,
         );

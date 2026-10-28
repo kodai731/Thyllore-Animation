@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
 use thiserror::Error;
+use vulkanalia::vk::KhrAccelerationStructureExtension;
 use vulkanalia::Device as VulkanDevice;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +74,23 @@ impl RRDevice {
     #[inline]
     pub(crate) fn device(&self) -> &Device {
         &self.device
+    }
+
+    #[inline]
+    pub(crate) unsafe fn buffer_address(&self, buffer: vk::Buffer) -> vk::DeviceAddress {
+        self.device
+            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(buffer))
+    }
+
+    #[inline]
+    pub(crate) unsafe fn acceleration_structure_address(
+        &self,
+        acceleration_structure: vk::AccelerationStructureKHR,
+    ) -> vk::DeviceAddress {
+        self.device.get_acceleration_structure_device_address_khr(
+            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                .acceleration_structure(acceleration_structure),
+        )
     }
 
     #[inline]

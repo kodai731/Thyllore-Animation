@@ -530,7 +530,7 @@ impl App {
             bind_graphics_mesh(
                 &self.rrdevice,
                 command_buffer,
-                pipeline.pipeline,
+                pipeline.pipeline(),
                 mesh.vertex_buffer.buffer(),
                 mesh.index_buffer.buffer(),
                 IndexWidth::U32,
@@ -540,7 +540,7 @@ impl App {
             bind_graphics_descriptor_set(
                 &self.rrdevice,
                 command_buffer,
-                pipeline.pipeline_layout,
+                pipeline.pipeline_layout(),
                 0,
                 frame_set,
             );
@@ -550,7 +550,7 @@ impl App {
                     bind_graphics_descriptor_set(
                         &self.rrdevice,
                         command_buffer,
-                        pipeline.pipeline_layout,
+                        pipeline.pipeline_layout(),
                         1,
                         material.descriptor_set(),
                     );
@@ -566,7 +566,7 @@ impl App {
             bind_graphics_descriptor_set(
                 &self.rrdevice,
                 command_buffer,
-                pipeline.pipeline_layout,
+                pipeline.pipeline_layout(),
                 2,
                 object_set,
             );
@@ -661,7 +661,7 @@ impl App {
         bind_graphics_mesh(
             &self.rrdevice,
             command_buffer,
-            pipeline.pipeline,
+            pipeline.pipeline(),
             vertex_buffer,
             index_buffer,
             IndexWidth::U32,
@@ -671,7 +671,7 @@ impl App {
         bind_graphics_descriptor_set(
             &self.rrdevice,
             command_buffer,
-            pipeline.pipeline_layout,
+            pipeline.pipeline_layout(),
             0,
             descriptor_set,
         );

@@ -109,8 +109,7 @@ unsafe fn allocate_device_buffer(
     let memory = device.allocate_memory(&memory_info, None)?;
     device.bind_buffer_memory(buffer, memory, 0)?;
 
-    let address =
-        device.get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(buffer));
+    let address = rrdevice.buffer_address(buffer);
 
     Ok(DeviceBuffer {
         buffer,
@@ -301,12 +300,8 @@ impl RRAccelerationStructure {
     ) -> Result<RRBLAS> {
         let device = &rrdevice.device();
 
-        let vertex_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
-        );
-        let index_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*index_buffer),
-        );
+        let vertex_addr = rrdevice.buffer_address(*vertex_buffer);
+        let index_addr = rrdevice.buffer_address(*index_buffer);
 
         let geometry =
             build_triangle_geometry(vertex_addr, vertex_count, vertex_stride, index_addr);
@@ -355,10 +350,7 @@ impl RRAccelerationStructure {
         execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
         destroy_device_buffer(device, &scratch);
 
-        let device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
+        let device_address = rrdevice.acceleration_structure_address(acceleration_structure);
 
         Ok(RRBLAS {
             acceleration_structure: Some(acceleration_structure),
@@ -381,9 +373,7 @@ impl RRAccelerationStructure {
     ) -> Result<RRBLAS> {
         let device = &rrdevice.device();
 
-        let aabb_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*aabb_buffer),
-        );
+        let aabb_addr = rrdevice.buffer_address(*aabb_buffer);
 
         let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
             .data(vk::DeviceOrHostAddressConstKHR {
@@ -448,10 +438,7 @@ impl RRAccelerationStructure {
         execute_as_build(rrdevice, rrcommand_pool, &build_info, aabb_count)?;
         destroy_device_buffer(device, &scratch);
 
-        let device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
+        let device_address = rrdevice.acceleration_structure_address(acceleration_structure);
 
         Ok(RRBLAS {
             acceleration_structure: Some(acceleration_structure),
@@ -598,11 +585,6 @@ impl RRAccelerationStructure {
         destroy_device_buffer(device, &scratch);
         destroy_device_buffer(device, &instances_buf);
 
-        let _device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
-
         Ok(RRTLAS {
             acceleration_structure: Some(acceleration_structure),
             buffer: Some(as_buffer),
@@ -625,12 +607,8 @@ impl RRAccelerationStructure {
     ) -> Result<()> {
         let device = &rrdevice.device();
 
-        let vertex_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
-        );
-        let index_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*index_buffer),
-        );
+        let vertex_addr = rrdevice.buffer_address(*vertex_buffer);
+        let index_addr = rrdevice.buffer_address(*index_buffer);
 
         let geometry =
             build_triangle_geometry(vertex_addr, vertex_count, vertex_stride, index_addr);
@@ -917,12 +895,8 @@ impl RRAccelerationStructure {
             Vec::with_capacity(vertex_buffers.len() + procedurals.len());
 
         for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
-            let vertex_address = rrdevice.device().get_buffer_device_address(
-                &vk::BufferDeviceAddressInfo::builder().buffer(**vertex_buffer),
-            );
-            let index_address = rrdevice.device().get_buffer_device_address(
-                &vk::BufferDeviceAddressInfo::builder().buffer(**index_buffer),
-            );
+            let vertex_address = rrdevice.buffer_address(**vertex_buffer);
+            let index_address = rrdevice.buffer_address(**index_buffer);
 
             records.push(HitShadingRecord {
                 vertex_address,

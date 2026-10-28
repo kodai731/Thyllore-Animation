@@ -326,7 +326,7 @@ impl<'a> OverlayRenderer<'a> {
             return Ok(());
         };
 
-        push_fragment_alpha_constant(ctx, pipeline.pipeline_layout, alpha, command_buffer);
+        push_fragment_alpha_constant(ctx, pipeline.pipeline_layout(), alpha, command_buffer);
         record_line_mesh_draw(ctx, mesh, render_info, &options, command_buffer)?;
         Ok(())
     }

@@ -10,14 +10,14 @@ use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 #[derive(Clone, Debug)]
 pub struct RRRayTracingPipeline {
-    pub pipeline_layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
-    pub sbt_buffer: vk::Buffer,
-    pub sbt_memory: vk::DeviceMemory,
-    pub raygen_region: vk::StridedDeviceAddressRegionKHR,
-    pub miss_region: vk::StridedDeviceAddressRegionKHR,
-    pub hit_region: vk::StridedDeviceAddressRegionKHR,
-    pub callable_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub(crate) pipeline: vk::Pipeline,
+    pub(crate) sbt_buffer: vk::Buffer,
+    pub(crate) sbt_memory: vk::DeviceMemory,
+    pub(crate) raygen_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) miss_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) hit_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) callable_region: vk::StridedDeviceAddressRegionKHR,
 }
 
 /// One SBT hit record: a triangle group (closest hit only) or a procedural group

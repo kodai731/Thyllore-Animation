@@ -2,14 +2,14 @@ use anyhow::Result;
 
 use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
+use crate::ecs::systems::water::gpu_targets::{
+    create_water_gpu_targets, is_depth_view_ready, WaterRenderTargets,
+};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::GpuResource;
-use thyllore_vulkan_core::effect::water::targets::{
-    create_water_gpu_targets, is_depth_view_ready, WaterRenderTargets,
-};
 
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",

@@ -26,6 +26,24 @@ impl AccumulationTarget {
         crate::types::ImageView(self.view)
     }
 
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        storage: &mut RenderTargetStorage,
+        command_pool: crate::types::CommandPool,
+        key: RenderTargetKey,
+        format: crate::types::Format,
+    ) -> Result<Self> {
+        Self::new(
+            instance,
+            rrdevice,
+            storage,
+            command_pool.raw(),
+            key,
+            format.raw(),
+        )
+    }
+
     pub(crate) unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

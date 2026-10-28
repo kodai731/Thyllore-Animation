@@ -394,6 +394,24 @@ impl DescriptorSetWriter<'_> {
         Ok(self)
     }
 
+    pub fn buffer_range(
+        self,
+        binding: ShaderBinding,
+        buffer: crate::types::Buffer,
+        offset: u64,
+        range: u64,
+    ) -> Result<Self> {
+        self.buffer(binding, buffer.raw(), offset, range)
+    }
+
+    pub fn whole_buffer(
+        self,
+        binding: ShaderBinding,
+        buffer: crate::types::Buffer,
+    ) -> Result<Self> {
+        self.buffer(binding, buffer.raw(), 0, vk::WHOLE_SIZE as u64)
+    }
+
     pub fn uniform<T: GpuBlock>(
         self,
         binding: ShaderBinding,
@@ -513,10 +531,11 @@ impl DescriptorSetWriter<'_> {
     pub fn acceleration_structure(
         mut self,
         binding: ShaderBinding,
-        acceleration_structure: vk::AccelerationStructureKHR,
+        acceleration_structure: crate::types::AccelerationStructure,
     ) -> Result<Self> {
         let descriptor_type = self.resolve_descriptor_type(binding)?;
-        self.acceleration_structures.push(acceleration_structure);
+        self.acceleration_structures
+            .push(acceleration_structure.raw());
         self.entries.push(WriteEntry {
             binding: binding.binding,
             descriptor_type,

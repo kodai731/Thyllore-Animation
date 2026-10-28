@@ -48,7 +48,7 @@ impl RREffectTraceDescriptorSet {
     ) -> Result<()> {
         self.layout
             .writer(self.descriptor_set(frame_slot)?)
-            .acceleration_structure(effect_trace::TLAS, tlas.raw())?
+            .acceleration_structure(effect_trace::TLAS, tlas)?
             .storage_image(effect_trace::OUT_IMAGE, trace_image_view)?
             .buffer(
                 effect_trace::HIT_TABLE,

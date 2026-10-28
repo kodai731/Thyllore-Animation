@@ -3,7 +3,7 @@ use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
-use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
+pub use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::gpu_resource;
 
 /// Pipeline, descriptor set and the per-instance UBOs of the lightning resolve pass.
@@ -16,5 +16,4 @@ pub struct LightningGpuState {
     pub resolve_descriptor: Option<LightningResolveDescriptorSet>,
 }
 
-gpu_resource!(LightningRenderTargets);
 gpu_resource!(LightningGpuState);

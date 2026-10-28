@@ -2,13 +2,13 @@ use anyhow::Result;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
 use crate::ecs::resource::WaterGpuState;
+use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
 use crate::vulkanr::pipeline::{DepthCompare, DepthTestConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
-use thyllore_vulkan_core::effect::water::targets::WaterRenderTargets;
 use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
 use thyllore_vulkan_core::types::{ImageView, Instance};
 

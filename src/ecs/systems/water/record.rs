@@ -1,5 +1,6 @@
-use crate::frame_context::FrameRenderContext;
-use crate::types::{CommandBuffer, Extent2D, Image};
+use thyllore_vulkan_core::renderer::copy_color_image;
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Image};
+use thyllore_vulkan_core::FrameRenderContext;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -35,5 +36,5 @@ pub unsafe fn record_water_scene_color_copy(
     extent: Extent2D,
     cmd: CommandBuffer,
 ) {
-    crate::renderer::copy_color_image(&ctx.device, cmd, hdr_image, scene_color_image, extent);
+    copy_color_image(&ctx.device, cmd, hdr_image, scene_color_image, extent);
 }

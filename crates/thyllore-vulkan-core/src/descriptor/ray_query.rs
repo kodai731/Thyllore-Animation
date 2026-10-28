@@ -105,7 +105,10 @@ impl RRRayQueryDescriptorSet {
         let mut writer = self
             .layout
             .writer(self.descriptor_set)
-            .acceleration_structure(ray_query_shadow::TOP_LEVEL_AS, tlas)?;
+            .acceleration_structure(
+                ray_query_shadow::TOP_LEVEL_AS,
+                crate::types::AccelerationStructure(tlas),
+            )?;
         if hit_shading_table != vk::Buffer::null() {
             writer = writer.buffer(
                 ray_query_shadow::HIT_TABLE,

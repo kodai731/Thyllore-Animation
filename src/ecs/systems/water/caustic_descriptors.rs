@@ -1,17 +1,20 @@
-use crate::core::device::*;
-use crate::data::SceneUniformData;
-use crate::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::resource::gpu_resource::GpuResource;
-use crate::vulkan::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::data::SceneUniformData;
+use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
+use crate::vulkanr::descriptor::{
+    ReflectedLayoutSpec, ReflectedSetLayout, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT,
+};
+use thyllore_vulkan_core::resource::GpuResource;
+use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, DescriptorSet, ImageView};
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {
     pub splat_layout: ReflectedSetLayout,
-    pub splat_descriptor_set: crate::types::DescriptorSet,
+    pub splat_descriptor_set: DescriptorSet,
     pub apply_layout: ReflectedSetLayout,
-    pub apply_descriptor_set: crate::types::DescriptorSet,
+    pub apply_descriptor_set: DescriptorSet,
 }
 
 impl RRWaterCausticDescriptorSet {
@@ -29,75 +32,63 @@ impl RRWaterCausticDescriptorSet {
 
         Ok(Self {
             splat_layout,
-            splat_descriptor_set: crate::types::DescriptorSet::default(),
+            splat_descriptor_set: DescriptorSet::default(),
             apply_layout,
-            apply_descriptor_set: crate::types::DescriptorSet::default(),
+            apply_descriptor_set: DescriptorSet::default(),
         })
     }
 
     pub fn is_allocated(&self) -> bool {
-        self.splat_descriptor_set.raw() != vk::DescriptorSet::null()
+        self.splat_descriptor_set != DescriptorSet::default()
     }
 
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
-        caustic_accum_view: crate::types::ImageView,
-        position_image_view: crate::types::ImageView,
-        tlas: Option<crate::types::AccelerationStructure>,
-        scene_uniform_buffer: crate::types::Buffer,
-        water_ubo: crate::types::Buffer,
-        hdr_color_image_view: crate::types::ImageView,
+        caustic_accum_view: ImageView,
+        position_image_view: ImageView,
+        tlas: Option<AccelerationStructure>,
+        scene_uniform_buffer: Buffer,
+        water_ubo: Buffer,
+        hdr_color_image_view: ImageView,
     ) -> Result<()> {
         if !self.is_allocated() {
-            self.splat_descriptor_set =
-                crate::types::DescriptorSet(self.splat_layout.allocate_set(rrdevice)?);
+            self.splat_descriptor_set = self.splat_layout.allocate_descriptor_set(rrdevice)?;
         }
-        if self.apply_descriptor_set.raw() == vk::DescriptorSet::null() {
-            self.apply_descriptor_set =
-                crate::types::DescriptorSet(self.apply_layout.allocate_set(rrdevice)?);
+        if self.apply_descriptor_set == DescriptorSet::default() {
+            self.apply_descriptor_set = self.apply_layout.allocate_descriptor_set(rrdevice)?;
         }
 
         let mut splat_writer = self
             .splat_layout
-            .writer(self.splat_descriptor_set.raw())
+            .descriptor_writer(self.splat_descriptor_set)
             .storage_image(water_caustic_splat::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
             .storage_image(water_caustic_splat::POSITION_IMAGE, position_image_view)?;
         if let Some(tlas) = tlas {
-            splat_writer = splat_writer
-                .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?;
+            splat_writer =
+                splat_writer.acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?;
         }
         splat_writer
-            .buffer(
+            .buffer_range(
                 water_caustic_splat::SCENE_DATA,
-                scene_uniform_buffer.raw(),
+                scene_uniform_buffer,
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
-            .buffer(
-                water_caustic_splat::WATER_BLOCK,
-                water_ubo.raw(),
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
+            .whole_buffer(water_caustic_splat::WATER_BLOCK, water_ubo)?
             .apply(rrdevice);
 
         self.apply_layout
-            .writer(self.apply_descriptor_set.raw())
+            .descriptor_writer(self.apply_descriptor_set)
             .storage_image(water_caustic_apply::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
             .storage_image(water_caustic_apply::HDR_COLOR_IMAGE, hdr_color_image_view)?
-            .buffer(
+            .buffer_range(
                 water_caustic_apply::SCENE_DATA,
-                scene_uniform_buffer.raw(),
+                scene_uniform_buffer,
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
-            .buffer(
-                water_caustic_apply::WATER_BLOCK,
-                water_ubo.raw(),
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
+            .whole_buffer(water_caustic_apply::WATER_BLOCK, water_ubo)?
             .apply(rrdevice);
 
         Ok(())
@@ -106,14 +97,14 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn update_tlas(
         &mut self,
         rrdevice: &RRDevice,
-        tlas: crate::types::AccelerationStructure,
+        tlas: AccelerationStructure,
     ) -> Result<()> {
         if !self.is_allocated() {
             return Ok(());
         }
         self.splat_layout
-            .writer(self.splat_descriptor_set.raw())
-            .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas.raw())?
+            .descriptor_writer(self.splat_descriptor_set)
+            .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?
             .apply(rrdevice);
         Ok(())
     }

@@ -7,7 +7,7 @@ use crate::ecs::resource::BoundGenerations;
 use crate::ecs::systems::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
 };
-use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
+pub use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
 use crate::gpu_resource;
 
 /// Pipelines, descriptor sets and the per-instance UBO of the wind passes.
@@ -26,4 +26,3 @@ pub struct WindGpuState {
 }
 
 gpu_resource!(WindGpuState);
-gpu_resource!(WindRenderTargets);

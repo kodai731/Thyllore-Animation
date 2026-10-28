@@ -45,6 +45,22 @@ impl HistoryTargetsDesc {
             depth_view: None,
         }
     }
+
+    pub fn with_depth(
+        keys: [RenderTargetKey; 2],
+        format: crate::types::Format,
+        sampler: crate::resource::image::SamplerDesc,
+        depth_view: crate::types::ImageView,
+    ) -> Self {
+        Self {
+            keys,
+            format: format.raw(),
+            usage: vk::ImageUsageFlags::empty(),
+            sampler,
+            history_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            depth_view: Some(depth_view.raw()),
+        }
+    }
 }
 
 /// A history ping-pong pair from `RenderTargetStorage` plus the render pass and the two

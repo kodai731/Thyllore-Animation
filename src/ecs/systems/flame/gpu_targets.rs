@@ -7,6 +7,14 @@ use crate::vulkanr::resource::{
 };
 use thyllore_vulkan_core::types::{CommandPool, Format, ImageView, Instance};
 
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
+pub struct FlameRenderTargets {
+    pub history: HistoryTargets,
+}
+
+crate::gpu_resource!(FlameRenderTargets);
+
 const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(0),
     RenderTargetKey::EffectHistory(1),

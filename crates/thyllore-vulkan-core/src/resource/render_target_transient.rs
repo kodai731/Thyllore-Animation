@@ -17,6 +17,22 @@ pub struct TransientDesc {
     pub(crate) usage: vk::ImageUsageFlags,
 }
 
+impl TransientDesc {
+    pub fn new(
+        width: u32,
+        height: u32,
+        format: crate::types::Format,
+        usage: crate::resource::volume_image::VolumeUsage,
+    ) -> Self {
+        Self {
+            width,
+            height,
+            format: format.raw(),
+            usage: usage.to_flags(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TransientHandle {
     slot: u32,

@@ -3,6 +3,7 @@ use cgmath::SquareMatrix;
 
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{EffectTraceGpuState, WaterGpuState};
+use crate::ecs::systems::water::gpu_targets::{WaterBindingKey, WaterRenderTargets};
 use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
@@ -13,7 +14,6 @@ use crate::hooks::pass::{
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
-use thyllore_vulkan_core::effect::water::targets::{WaterBindingKey, WaterRenderTargets};
 use thyllore_vulkan_core::renderer::{ClearColor, TracePush};
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;

@@ -1,25 +1,29 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::WATER_RESOLVE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::water_resolve;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::uniform_buffer::UniformBuffer;
-use crate::vulkan::*;
+use anyhow::{anyhow, Result};
+
+use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::descriptor::shader_bindings::water_resolve;
+use crate::vulkanr::descriptor::{
+    DescriptorKind, ReflectedLayoutSpec, ReflectedSetLayout, WATER_RESOLVE,
+};
 use thyllore_effect_core::WaterUBO;
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
+use thyllore_vulkan_core::types::{
+    AccelerationStructure, Buffer, DescriptorSet, ImageView, Sampler,
+};
 
 const WATER_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterDescriptorSet {
     pub layout: ReflectedSetLayout,
-    frames: Vec<[vk::DescriptorSet; WATER_HISTORY_SET_COUNT]>,
+    frames: Vec<[DescriptorSet; WATER_HISTORY_SET_COUNT]>,
 }
 
 impl RRWaterDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
             water_resolve::WATER_BLOCK,
-            crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
+            DescriptorKind::UniformBufferDynamic,
         )
     }
 
@@ -28,18 +32,16 @@ impl RRWaterDescriptorSet {
 
         let mut frames = Vec::with_capacity(frames_in_flight.max(1));
         for _ in 0..frames_in_flight.max(1) {
-            let sets = layout.allocate_sets(rrdevice, WATER_HISTORY_SET_COUNT)?;
-            frames.push([sets[0], sets[1]]);
+            frames.push([
+                layout.allocate_descriptor_set(rrdevice)?,
+                layout.allocate_descriptor_set(rrdevice)?,
+            ]);
         }
 
         Ok(Self { layout, frames })
     }
 
-    pub fn descriptor_set(
-        &self,
-        frame_slot: usize,
-        history_index: usize,
-    ) -> Result<crate::types::DescriptorSet> {
+    pub fn descriptor_set(&self, frame_slot: usize, history_index: usize) -> Result<DescriptorSet> {
         let sets = self.frames.get(frame_slot).ok_or_else(|| {
             anyhow!(
                 "water descriptor slot {frame_slot} exceeds {} frames",
@@ -48,7 +50,6 @@ impl RRWaterDescriptorSet {
         })?;
         sets.get(history_index)
             .copied()
-            .map(crate::types::DescriptorSet)
             .ok_or_else(|| anyhow!("water history index {history_index} is out of range"))
     }
 
@@ -57,20 +58,20 @@ impl RRWaterDescriptorSet {
         rrdevice: &RRDevice,
         frame_slot: usize,
         water_ubo: &UniformBuffer<WaterUBO>,
-        scene_color_view: crate::types::ImageView,
-        scene_color_sampler: crate::types::Sampler,
-        history_image_views: [crate::types::ImageView; 2],
-        history_sampler: crate::types::Sampler,
-        trace_image_view: crate::types::ImageView,
-        trace_sampler: crate::types::Sampler,
-        tlas: crate::types::AccelerationStructure,
-        hit_table: crate::types::Buffer,
+        scene_color_view: ImageView,
+        scene_color_sampler: Sampler,
+        history_image_views: [ImageView; 2],
+        history_sampler: Sampler,
+        trace_image_view: ImageView,
+        trace_sampler: Sampler,
+        tlas: AccelerationStructure,
+        hit_table: Buffer,
     ) -> Result<()> {
         for i in 0..WATER_HISTORY_SET_COUNT {
             let descriptor_set = self.descriptor_set(frame_slot, i)?;
             let previous_history_view = history_image_views[1 - i];
             self.layout
-                .writer(descriptor_set.raw())
+                .descriptor_writer(descriptor_set)
                 .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .sampled_image(
                     water_resolve::SCENE_COLOR_SAMPLER,
@@ -87,13 +88,8 @@ impl RRWaterDescriptorSet {
                     trace_image_view,
                     trace_sampler,
                 )?
-                .acceleration_structure(water_resolve::SCENE_TLAS, tlas.raw())?
-                .buffer(
-                    water_resolve::HIT_TABLE,
-                    hit_table.raw(),
-                    0,
-                    vk::WHOLE_SIZE as u64,
-                )?
+                .acceleration_structure(water_resolve::SCENE_TLAS, tlas)?
+                .whole_buffer(water_resolve::HIT_TABLE, hit_table)?
                 .apply(rrdevice);
         }
         Ok(())

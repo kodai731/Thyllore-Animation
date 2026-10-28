@@ -15,7 +15,7 @@ pub enum VolumeUsage {
 }
 
 impl VolumeUsage {
-    fn to_flags(self) -> vk::ImageUsageFlags {
+    pub(crate) fn to_flags(self) -> vk::ImageUsageFlags {
         match self {
             VolumeUsage::StorageSampled => {
                 vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED

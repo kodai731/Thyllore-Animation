@@ -71,6 +71,8 @@ impl GpuResource for LightningRenderTargets {
     }
 }
 
+crate::gpu_resource!(LightningRenderTargets);
+
 pub unsafe fn destroy_render_targets(targets: &mut LightningRenderTargets, rrdevice: &RRDevice) {
     thyllore_vulkan_core::render::destroy_framebuffer(rrdevice, &mut targets.framebuffer);
     thyllore_vulkan_core::render::destroy_render_pass(rrdevice, &mut targets.render_pass);

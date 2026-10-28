@@ -104,6 +104,8 @@ impl GpuResource for WindRenderTargets {
     }
 }
 
+crate::gpu_resource!(WindRenderTargets);
+
 pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, rrdevice: &RRDevice) {
     targets.shadow_volume.destroy_gpu(rrdevice);
     targets.reduced.destroy_gpu(rrdevice);

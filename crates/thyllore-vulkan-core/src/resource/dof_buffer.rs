@@ -3,8 +3,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
+use crate::types::HDR_FORMAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct DofBuffer {
@@ -53,14 +53,14 @@ impl DofBuffer {
         TransientDesc {
             width: self.width,
             height: self.height,
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
         }
     }
 
     unsafe fn create_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
-            .format(HDR_FORMAT)
+            .format(HDR_FORMAT.raw())
             .samples(vk::SampleCountFlags::_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)

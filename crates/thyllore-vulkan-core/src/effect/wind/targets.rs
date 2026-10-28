@@ -3,9 +3,9 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::{GpuResource, VolumeImage};
 use crate::types::Instance;
+use crate::types::HDR_FORMAT;
 use crate::vulkan::*;
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
@@ -83,7 +83,7 @@ pub unsafe fn create_wind_render_targets(
     let render_pass = create_color_overlay_render_pass(
         rrdevice,
         ColorOverlayPassDesc {
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             load_op: vk::AttachmentLoadOp::LOAD,
             initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -96,14 +96,18 @@ pub unsafe fn create_wind_render_targets(
         vk::Extent2D { width, height },
     )?;
 
-    let reduced = crate::renderer::ReducedResolveTarget::new(rrdevice, HDR_FORMAT)?;
+    let reduced = crate::renderer::ReducedResolveTarget::new(rrdevice, HDR_FORMAT.raw())?;
 
     let shadow_volume = VolumeImage::new(
         instance,
         rrdevice,
-        wind_shadow_volume_extent(),
-        WIND_SHADOW_VOLUME_FORMAT,
-        vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+        crate::types::Extent3D {
+            width: wind_shadow_volume_extent().width,
+            height: wind_shadow_volume_extent().height,
+            depth: wind_shadow_volume_extent().depth,
+        },
+        crate::types::Format::R16G16_SFLOAT,
+        crate::resource::volume_image::VolumeUsage::StorageSampled,
     )?;
 
     log!("Created wind render targets: {}x{}", width, height);

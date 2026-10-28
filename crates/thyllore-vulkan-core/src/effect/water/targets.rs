@@ -2,10 +2,10 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::resource::{AccumulationTarget, GpuResource, HistoryTargets, HistoryTargetsDesc};
 use crate::types::Instance;
+use crate::types::HDR_FORMAT;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct WaterBindingKey {
@@ -37,7 +37,7 @@ const WATER_CAUSTIC_ACCUM_FORMAT: vk::Format = vk::Format::R32_UINT;
 fn water_history_desc(depth_view: vk::ImageView) -> HistoryTargetsDesc {
     HistoryTargetsDesc {
         keys: WATER_HISTORY_KEYS,
-        format: HDR_FORMAT,
+        format: HDR_FORMAT.raw(),
         usage: vk::ImageUsageFlags::empty(),
         sampler: linear_clamp_sampler_info(),
         history_load_op: vk::AttachmentLoadOp::DONT_CARE,
@@ -111,7 +111,7 @@ impl WaterRenderTargets {
         crate::resource::render_target_transient::TransientDesc {
             width: self.history.width,
             height: self.history.height,
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
         }
     }

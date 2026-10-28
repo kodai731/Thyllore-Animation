@@ -29,7 +29,7 @@ impl RRFlameDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&FLAME_RESOLVE).with_override(
             flame_resolve::FLAME,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
         )
     }
 

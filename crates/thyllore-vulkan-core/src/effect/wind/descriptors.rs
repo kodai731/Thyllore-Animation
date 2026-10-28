@@ -20,7 +20,7 @@ impl WindResolveDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WIND_RESOLVE).with_override(
             wind_resolve::WIND,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
         )
     }
 
@@ -105,7 +105,7 @@ impl WindShadowBakeDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE).with_override(
             wind_shadow_bake::WIND,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
         )
     }
 

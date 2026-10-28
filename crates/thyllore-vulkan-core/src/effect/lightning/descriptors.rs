@@ -21,11 +21,11 @@ impl LightningResolveDescriptorSet {
         ReflectedLayoutSpec::local(&LIGHTNING_RESOLVE)
             .with_override(
                 lightning_resolve::LIGHTNING,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
             )
             .with_override(
                 lightning_resolve::SEGMENTS,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
             )
     }
 

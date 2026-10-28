@@ -11,6 +11,19 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use thyllore_spirv_reflect::{GpuBlock, ShaderBinding};
 
+#[derive(Clone, Copy, Debug)]
+pub enum DescriptorKind {
+    UniformBufferDynamic,
+}
+
+impl DescriptorKind {
+    fn to_vk(self) -> vk::DescriptorType {
+        match self {
+            DescriptorKind::UniformBufferDynamic => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+        }
+    }
+}
+
 fn load_reflections(files: &[ShaderFile]) -> Result<Vec<ShaderReflection>> {
     let mut reflections = Vec::with_capacity(files.len());
     for file in files {
@@ -99,11 +112,11 @@ impl ReflectedLayoutSpec {
     pub fn with_override(
         mut self,
         binding: ShaderBinding,
-        descriptor_type: vk::DescriptorType,
+        descriptor_kind: DescriptorKind,
     ) -> Self {
         self.overrides.push(DescriptorTypeOverride {
             binding: binding.binding,
-            descriptor_type,
+            descriptor_type: descriptor_kind.to_vk(),
         });
         self
     }

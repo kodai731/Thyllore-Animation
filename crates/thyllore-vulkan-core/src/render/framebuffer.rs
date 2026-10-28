@@ -65,3 +65,41 @@ pub unsafe fn create_color_objects(
     println!("created color objects");
     Ok(())
 }
+
+pub unsafe fn create_framebuffer(
+    rrdevice: &RRDevice,
+    render_pass: crate::types::RenderPass,
+    attachment: crate::types::ImageView,
+    extent: crate::types::Extent2D,
+) -> Result<crate::types::Framebuffer> {
+    let attachments = &[attachment.raw()];
+    let create_info = vk::FramebufferCreateInfo::builder()
+        .render_pass(render_pass.raw())
+        .attachments(attachments)
+        .width(extent.width)
+        .height(extent.height)
+        .layers(1);
+    let fb = rrdevice.device().create_framebuffer(&create_info, None)?;
+    Ok(crate::types::Framebuffer(fb))
+}
+
+pub unsafe fn destroy_framebuffer(
+    rrdevice: &RRDevice,
+    framebuffer: &mut crate::types::Framebuffer,
+) {
+    if framebuffer.raw() != vk::Framebuffer::null() {
+        rrdevice
+            .device()
+            .destroy_framebuffer(framebuffer.raw(), None);
+        *framebuffer = crate::types::Framebuffer::default();
+    }
+}
+
+pub unsafe fn destroy_render_pass(rrdevice: &RRDevice, render_pass: &mut crate::types::RenderPass) {
+    if render_pass.raw() != vk::RenderPass::null() {
+        rrdevice
+            .device()
+            .destroy_render_pass(render_pass.raw(), None);
+        *render_pass = crate::types::RenderPass::default();
+    }
+}

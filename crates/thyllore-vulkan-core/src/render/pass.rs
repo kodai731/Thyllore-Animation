@@ -522,6 +522,17 @@ pub struct ColorOverlayPassDesc {
     pub(crate) final_layout: vk::ImageLayout,
 }
 
+impl ColorOverlayPassDesc {
+    pub fn preserved(format: crate::types::Format) -> Self {
+        Self {
+            format: format.raw(),
+            load_op: vk::AttachmentLoadOp::LOAD,
+            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        }
+    }
+}
+
 pub unsafe fn create_color_overlay_render_pass(
     rrdevice: &RRDevice,
     desc: ColorOverlayPassDesc,

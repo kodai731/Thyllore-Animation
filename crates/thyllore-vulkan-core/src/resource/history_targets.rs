@@ -5,9 +5,9 @@ use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::renderer::{OverlayAttachmentLoad, OverlayPass};
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::types::Instance;
+use crate::types::HDR_FORMAT;
 
 const COLOR_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
     aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -246,7 +246,7 @@ unsafe fn create_history_render_pass(
     desc: &HistoryTargetsDesc,
 ) -> Result<vk::RenderPass> {
     let hdr_attachment = vk::AttachmentDescription::builder()
-        .format(HDR_FORMAT)
+        .format(HDR_FORMAT.raw())
         .samples(vk::SampleCountFlags::_1)
         .load_op(vk::AttachmentLoadOp::LOAD)
         .store_op(vk::AttachmentStoreOp::STORE)

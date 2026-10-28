@@ -35,6 +35,13 @@ impl Format {
         self.0
     }
 }
+impl Format {
+    pub const R16G16_SFLOAT: Format = Format(vk::Format::R16G16_SFLOAT);
+    pub const R16G16B16A16_SFLOAT: Format = Format(vk::Format::R16G16B16A16_SFLOAT);
+    pub const R32_UINT: Format = Format(vk::Format::R32_UINT);
+}
+
+pub const HDR_FORMAT: Format = Format(vk::Format::R16G16B16A16_SFLOAT);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Image(pub(crate) vk::Image);

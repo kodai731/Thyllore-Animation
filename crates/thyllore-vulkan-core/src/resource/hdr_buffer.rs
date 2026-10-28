@@ -6,7 +6,7 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::types::Instance;
 
-pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
+pub const HDR_FORMAT_RAW: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct HdrBuffer {
@@ -60,7 +60,7 @@ impl HdrBuffer {
             height,
             1,
             vk::SampleCountFlags::_1,
-            HDR_FORMAT,
+            HDR_FORMAT_RAW,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED
@@ -72,7 +72,7 @@ impl HdrBuffer {
         let color_image_view = create_image_view(
             rrdevice,
             color_image,
-            HDR_FORMAT,
+            HDR_FORMAT_RAW,
             vk::ImageAspectFlags::COLOR,
             1,
         )?;
@@ -85,7 +85,7 @@ impl HdrBuffer {
             "Created HDR buffer: {}x{} format {:?}",
             width,
             height,
-            HDR_FORMAT
+            HDR_FORMAT_RAW
         );
 
         Ok(Self {
@@ -134,7 +134,7 @@ impl HdrBuffer {
 
     unsafe fn create_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
-            .format(HDR_FORMAT)
+            .format(HDR_FORMAT_RAW)
             .samples(vk::SampleCountFlags::_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)

@@ -3,8 +3,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::GpuResource;
+use crate::types::HDR_FORMAT;
 use crate::vulkan::*;
 
 /// Render pass and framebuffer that blend the lightning resolve pass onto the HDR color image.
@@ -47,7 +47,7 @@ pub unsafe fn create_lightning_render_targets(
     let render_pass = create_color_overlay_render_pass(
         rrdevice,
         ColorOverlayPassDesc {
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             load_op: vk::AttachmentLoadOp::LOAD,
             initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,

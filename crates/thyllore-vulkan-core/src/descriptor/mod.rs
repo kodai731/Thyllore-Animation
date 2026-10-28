@@ -29,6 +29,7 @@ pub use onion_skin::*;
 pub use overlay_upsample::*;
 pub use pass_manifest::*;
 pub use ray_query::*;
+pub use reflected_layout::DescriptorKind;
 pub use reflected_layout::*;
 pub use reflection::*;
 pub use tonemap::*;

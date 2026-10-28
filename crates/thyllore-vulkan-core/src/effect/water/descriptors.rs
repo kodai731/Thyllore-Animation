@@ -19,7 +19,7 @@ impl RRWaterDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
             water_resolve::WATER_BLOCK,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            crate::descriptor::reflected_layout::DescriptorKind::UniformBufferDynamic,
         )
     }
 

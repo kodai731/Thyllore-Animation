@@ -5,6 +5,29 @@ use crate::core::RRDevice;
 use crate::resource::image::{create_image_3d, create_image_view_3d};
 use crate::types::Instance;
 
+#[derive(Clone, Copy, Debug)]
+pub enum VolumeUsage {
+    StorageSampled,
+    TransferDstSampled,
+    TransferSrc,
+    None,
+}
+
+impl VolumeUsage {
+    fn to_flags(self) -> vk::ImageUsageFlags {
+        match self {
+            VolumeUsage::StorageSampled => {
+                vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED
+            }
+            VolumeUsage::TransferDstSampled => {
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED
+            }
+            VolumeUsage::TransferSrc => vk::ImageUsageFlags::TRANSFER_SRC,
+            VolumeUsage::None => vk::ImageUsageFlags::empty(),
+        }
+    }
+}
+
 /// A 3D image with its view and a linear clamp-to-edge sampler.
 #[derive(Clone, Debug, Default)]
 pub struct VolumeImage {
@@ -38,12 +61,18 @@ impl VolumeImage {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        extent: vk::Extent3D,
-        format: vk::Format,
-        usage: vk::ImageUsageFlags,
+        extent: crate::types::Extent3D,
+        format: crate::types::Format,
+        usage: VolumeUsage,
     ) -> Result<Self> {
-        let (image, memory) = create_image_3d(instance, rrdevice, extent, format, usage)?;
-        let view = create_image_view_3d(rrdevice, image, format)?;
+        let (image, memory) = create_image_3d(
+            instance,
+            rrdevice,
+            extent.raw(),
+            format.raw(),
+            usage.to_flags(),
+        )?;
+        let view = create_image_view_3d(rrdevice, image, format.raw())?;
         let sampler = create_linear_clamp_sampler(rrdevice)?;
 
         Ok(Self {

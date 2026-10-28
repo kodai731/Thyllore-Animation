@@ -1,4 +1,4 @@
-use crate::ecs::systems::flame::RRFlameDescriptorSet;
+use crate::ecs::systems::flame::descriptors::RRFlameDescriptorSet;
 use crate::gpu_resource;
 use thyllore_effect_core::FlameUBO;
 use thyllore_vulkan_core::pipeline::RRPipeline;

@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
+use crate::ecs::systems::flame::descriptors::FlameImageBindings;
 use crate::ecs::EffectContext;
 use crate::vulkanr::context::CommandState;
 use crate::vulkanr::render::RRRender;

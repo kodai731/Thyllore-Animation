@@ -1,18 +1,18 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use crate::core::RRDevice;
-use crate::resource::image::{SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter};
-use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
-use crate::resource::{HistoryTargets, HistoryTargetsDesc};
-use crate::types::Instance;
+use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::image::{SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter};
+use crate::vulkanr::resource::{
+    GpuResource, HistoryTargets, HistoryTargetsDesc, RenderTargetKey, RenderTargetStorage,
+};
+use thyllore_vulkan_core::types::{CommandPool, Format, ImageView, Instance};
 
 const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(0),
     RenderTargetKey::EffectHistory(1),
 ];
 
-pub const FLAME_HISTORY_FORMAT: crate::types::Format = crate::types::Format::R16G16B16A16_SFLOAT;
+pub const FLAME_HISTORY_FORMAT: Format = Format::R16G16B16A16_SFLOAT;
 
 fn nearest_clamp_sampler_desc() -> SamplerDesc {
     SamplerDesc {
@@ -23,33 +23,30 @@ fn nearest_clamp_sampler_desc() -> SamplerDesc {
 }
 
 pub fn flame_history_desc() -> HistoryTargetsDesc {
-    HistoryTargetsDesc {
-        keys: FLAME_HISTORY_KEYS,
-        format: FLAME_HISTORY_FORMAT.raw(),
-        usage: vk::ImageUsageFlags::TRANSFER_SRC,
-        sampler: nearest_clamp_sampler_desc(),
-        history_load_op: vk::AttachmentLoadOp::CLEAR,
-        depth_view: None,
-    }
+    HistoryTargetsDesc::cleared_readback(
+        FLAME_HISTORY_KEYS,
+        FLAME_HISTORY_FORMAT,
+        nearest_clamp_sampler_desc(),
+    )
 }
 
 pub unsafe fn create_flame_history(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
-    command_pool: crate::types::CommandPool,
+    command_pool: CommandPool,
     width: u32,
     height: u32,
-    hdr_view: crate::types::ImageView,
+    hdr_view: ImageView,
 ) -> Result<HistoryTargets> {
-    HistoryTargets::new(
+    HistoryTargets::create(
         instance,
         rrdevice,
         storage,
-        command_pool.raw(),
+        command_pool,
         width,
         height,
-        hdr_view.raw(),
+        hdr_view,
         flame_history_desc(),
     )
 }
@@ -58,13 +55,13 @@ pub unsafe fn recreate_flame_history(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
-    command_pool: crate::types::CommandPool,
+    command_pool: CommandPool,
     history: &mut HistoryTargets,
     width: u32,
     height: u32,
-    hdr_view: crate::types::ImageView,
+    hdr_view: ImageView,
 ) -> Result<()> {
-    history.destroy(&rrdevice.device());
+    history.destroy_gpu(rrdevice);
     *history = create_flame_history(
         instance,
         rrdevice,

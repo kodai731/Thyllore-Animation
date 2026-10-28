@@ -1,12 +1,12 @@
 use anyhow::Result;
 
-use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameHistorySnapshotState, FlameRenderTargets};
+use crate::ecs::systems::flame::descriptors::FlameImageBindings;
+use crate::ecs::systems::flame::gpu_targets::{create_flame_history, recreate_flame_history};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
-use thyllore_vulkan_core::effect::flame::targets::{create_flame_history, recreate_flame_history};
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",

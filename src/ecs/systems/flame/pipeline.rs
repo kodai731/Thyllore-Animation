@@ -1,11 +1,11 @@
 use crate::ecs::resource::FlameGpuState;
+use crate::ecs::systems::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use anyhow::Result;
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
-use thyllore_vulkan_core::effect::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };

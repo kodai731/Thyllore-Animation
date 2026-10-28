@@ -30,6 +30,23 @@ pub struct HistoryTargetsDesc {
     pub(crate) depth_view: Option<vk::ImageView>,
 }
 
+impl HistoryTargetsDesc {
+    pub fn cleared_readback(
+        keys: [RenderTargetKey; 2],
+        format: crate::types::Format,
+        sampler: crate::resource::image::SamplerDesc,
+    ) -> Self {
+        Self {
+            keys,
+            format: format.raw(),
+            usage: vk::ImageUsageFlags::TRANSFER_SRC,
+            sampler,
+            history_load_op: vk::AttachmentLoadOp::CLEAR,
+            depth_view: None,
+        }
+    }
+}
+
 /// A history ping-pong pair from `RenderTargetStorage` plus the render pass and the two
 /// framebuffers that shade onto the HDR image while writing history[i] and sampling
 /// history[1 - i]. The images belong to the storage; `destroy` only owns the pass objects.
@@ -63,6 +80,28 @@ impl HistoryTargets {
     #[inline]
     pub fn render_pass(&self) -> crate::types::RenderPass {
         crate::types::RenderPass(self.render_pass)
+    }
+
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        storage: &mut RenderTargetStorage,
+        command_pool: crate::types::CommandPool,
+        width: u32,
+        height: u32,
+        hdr_view: crate::types::ImageView,
+        desc: HistoryTargetsDesc,
+    ) -> Result<Self> {
+        Self::new(
+            instance,
+            rrdevice,
+            storage,
+            command_pool.raw(),
+            width,
+            height,
+            hdr_view.raw(),
+            desc,
+        )
     }
 
     pub(crate) unsafe fn new(

@@ -1,22 +1,21 @@
-use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
+use cgmath::{InnerSpace, Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
     extract_world_position, integrate_joint, recompute_global_transform,
     resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
-    segment_axis_distance, tail_axis_distance, JointForce, JointForces, JointRestFrame,
-    SpringCollisionMode, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
+    segment_axis_distance, tail_axis_distance, world_collider, JointForce, JointForces,
+    JointRestFrame, SpringCollisionMode, SpringSpace, WorldCollider, EARTH_GRAVITY_M_PER_S2,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{ColliderShape, SpringBoneSetup, WithSpringBone};
+use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneState, SpringChainState, SpringJointState};
 use crate::ecs::world::{Animator, Entity, Parent, Transform, World};
 use crate::ecs::MeshRef;
 use crate::hooks::model_load::LoadedModel;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::spring_bone::{chains_skinned_to, SpringChainId};
-use thyllore_math_core::mean_axis_scale;
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
 
@@ -32,13 +31,6 @@ pub fn spring_space_for_entity(world: &World, entity: Entity) -> SpringSpace {
         current = world.get_component::<Parent>(e).map(|p| p.0);
     }
     SpringSpace::from_world_scale(world_scale).unwrap_or(SpringSpace::IDENTITY)
-}
-
-pub fn collider_shape_radius(shape: &ColliderShape) -> f32 {
-    match shape {
-        ColliderShape::Sphere { radius } => *radius,
-        ColliderShape::Capsule { radius, .. } => *radius,
-    }
 }
 
 pub fn spring_bone_initialize(
@@ -653,25 +645,6 @@ fn recompute_children_globals(
     }
 }
 
-fn transform_point(matrix: &Matrix4<f32>, offset: Vector3<f32>) -> Vector3<f32> {
-    let x =
-        matrix[0][0] * offset.x + matrix[1][0] * offset.y + matrix[2][0] * offset.z + matrix[3][0];
-    let y =
-        matrix[0][1] * offset.x + matrix[1][1] * offset.y + matrix[2][1] * offset.z + matrix[3][1];
-    let z =
-        matrix[0][2] * offset.x + matrix[1][2] * offset.y + matrix[2][2] * offset.z + matrix[3][2];
-    Vector3::new(x, y, z)
-}
-
-/// Collider radii are bone-local like their offsets (VRM 1.0), so they take the bone's scale.
-fn bone_length_scale(bone_transform: &Matrix4<f32>) -> f32 {
-    mean_axis_scale(&Matrix3::from_cols(
-        bone_transform.x.truncate(),
-        bone_transform.y.truncate(),
-        bone_transform.z.truncate(),
-    ))
-}
-
 fn collect_world_colliders(
     setup: &SpringBoneSetup,
     collider_group_ids: &[u32],
@@ -692,27 +665,7 @@ fn collect_world_colliders(
                 continue;
             }
 
-            let bone_transform = &global_transforms[bone_idx];
-            let center = transform_point(bone_transform, def.offset);
-            let radius = collider_shape_radius(&def.shape) * bone_length_scale(bone_transform);
-
-            match &def.shape {
-                ColliderShape::Sphere { .. } => {
-                    world_colliders.push(WorldCollider {
-                        center,
-                        radius,
-                        tail: None,
-                    });
-                }
-                ColliderShape::Capsule { tail, .. } => {
-                    let world_tail = transform_point(bone_transform, *tail);
-                    world_colliders.push(WorldCollider {
-                        center,
-                        radius,
-                        tail: Some(world_tail),
-                    });
-                }
-            }
+            world_colliders.push(world_collider(def, &global_transforms[bone_idx]));
         }
     }
 

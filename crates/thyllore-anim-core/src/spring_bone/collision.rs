@@ -1,5 +1,7 @@
-use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::{closest_segment_parameters, project_point_to_segment};
+use cgmath::{EuclideanSpace, InnerSpace, Matrix3, Matrix4, Point3, Transform, Vector3};
+use thyllore_math_core::{closest_segment_parameters, mean_axis_scale, project_point_to_segment};
+
+use super::setup::{ColliderShape, SpringColliderDef};
 
 const MIN_TAIL_LEVER: f32 = 1e-3;
 /// A rest clearance below this is a joint authored on the collider axis, which the full radius pushes out.
@@ -9,6 +11,29 @@ pub struct WorldCollider {
     pub center: Vector3<f32>,
     pub radius: f32,
     pub tail: Option<Vector3<f32>>,
+}
+
+/// The collider placed by its bone's transform; offset, tail and radius are bone-local (VRM 1.0).
+pub fn world_collider(def: &SpringColliderDef, bone_transform: &Matrix4<f32>) -> WorldCollider {
+    let place = |local: Vector3<f32>| {
+        bone_transform
+            .transform_point(Point3::from_vec(local))
+            .to_vec()
+    };
+    let bone_scale = mean_axis_scale(&Matrix3::from_cols(
+        bone_transform.x.truncate(),
+        bone_transform.y.truncate(),
+        bone_transform.z.truncate(),
+    ));
+    let (radius, tail) = match &def.shape {
+        ColliderShape::Sphere { radius } => (*radius, None),
+        ColliderShape::Capsule { radius, tail } => (*radius, Some(place(*tail))),
+    };
+    WorldCollider {
+        center: place(def.offset),
+        radius: radius * bone_scale,
+        tail,
+    }
 }
 
 /// Resolves the tail against every collider; `rest_axis_distances[i]` caps the clearance the joint
@@ -138,6 +163,29 @@ mod tests {
 
     fn approx_eq(a: Vector3<f32>, b: Vector3<f32>, eps: f32) -> bool {
         (a.x - b.x).abs() < eps && (a.y - b.y).abs() < eps && (a.z - b.z).abs() < eps
+    }
+
+    #[test]
+    fn world_collider_follows_bone_rotation_and_scale() {
+        let bone_transform = Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0))
+            * Matrix4::from_angle_z(cgmath::Deg(90.0))
+            * Matrix4::from_scale(2.0);
+        let def = SpringColliderDef {
+            id: 0,
+            bone_id: 0,
+            offset: Vector3::new(0.1, 0.0, 0.0),
+            shape: ColliderShape::Capsule {
+                radius: 0.05,
+                tail: Vector3::new(0.3, 0.0, 0.0),
+            },
+        };
+
+        let placed = world_collider(&def, &bone_transform);
+
+        assert!(approx_eq(placed.center, Vector3::new(0.0, 1.2, 0.0), 1e-5));
+        let tail = placed.tail.expect("a capsule keeps its tail");
+        assert!(approx_eq(tail, Vector3::new(0.0, 1.6, 0.0), 1e-5));
+        assert!((placed.radius - 0.1).abs() < 1e-6);
     }
 
     fn magnitude(v: Vector3<f32>) -> f32 {

@@ -1,11 +1,9 @@
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::component::{
-    ColliderShape, ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId,
-};
+use crate::ecs::component::{ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId};
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 use thyllore_anim_core::spring_bone::{
-    CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
+    world_collider, CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,38 +55,25 @@ pub fn build_spring_bone_gizmo_mesh(
 
     for collider in &setup.colliders {
         let bone_idx = collider.bone_id as usize;
-        if bone_idx >= display_positions.len() {
+        if bone_idx >= global_transforms.len() {
             continue;
         }
 
-        let bone_pos = display_positions[bone_idx];
-        let center = [
-            bone_pos[0] + collider.offset.x * mesh_scale,
-            bone_pos[1] + collider.offset.y * mesh_scale,
-            bone_pos[2] + collider.offset.z * mesh_scale,
-        ];
+        let placed = world_collider(collider, &global_transforms[bone_idx]);
+        let to_display = |point: Vector3<f32>| (point * mesh_scale).into();
+        let center = to_display(placed.center);
+        let radius = placed.radius * mesh_scale;
 
-        match &collider.shape {
-            ColliderShape::Sphere { radius } => {
-                let scaled_radius = radius * mesh_scale;
-                append_wire_sphere(mesh, center, scaled_radius, COLOR_COLLIDER, CIRCLE_SEGMENTS);
-            }
-            ColliderShape::Capsule { radius, tail } => {
-                let scaled_radius = radius * mesh_scale;
-                let tail_pos = [
-                    bone_pos[0] + tail.x * mesh_scale,
-                    bone_pos[1] + tail.y * mesh_scale,
-                    bone_pos[2] + tail.z * mesh_scale,
-                ];
-                append_wire_capsule(
-                    mesh,
-                    center,
-                    tail_pos,
-                    scaled_radius,
-                    COLOR_COLLIDER,
-                    CIRCLE_SEGMENTS,
-                );
-            }
+        match placed.tail {
+            None => append_wire_sphere(mesh, center, radius, COLOR_COLLIDER, CIRCLE_SEGMENTS),
+            Some(tail) => append_wire_capsule(
+                mesh,
+                center,
+                to_display(tail),
+                radius,
+                COLOR_COLLIDER,
+                CIRCLE_SEGMENTS,
+            ),
         }
     }
 }

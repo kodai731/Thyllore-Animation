@@ -1,0 +1,42 @@
+name: VK Confinement
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  grep-checks:
+    name: Grep checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: no vk in src / tests
+        run: "! grep -rn 'vk::\\|vulkanalia' src tests"
+      - name: no re-export
+        run: "! grep -rn 'pub use vulkan::\\*\\|pub use vulkanalia' crates/thyllore-vulkan-core/src"
+      - name: no alias
+        run: "! grep -n 'pub type .* = vk::' crates/thyllore-vulkan-core/src/types.rs"
+
+  dependency-graph:
+    name: Dependency graph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: check vulkanalia dependents
+        run: test "$(cargo tree -i vulkanalia --depth 1 -e normal --workspace --prefix none | tail -n +2 | awk '{print $1}' | sort -u)" = "thyllore-vulkan-core"
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+      - name: clippy
+        run: cargo clippy -p thyllore-animation --lib --no-default-features -- -D clippy::disallowed_methods

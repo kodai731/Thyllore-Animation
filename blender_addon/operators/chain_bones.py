@@ -163,10 +163,13 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
         skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
-        root_index = arm.data.bones.find(self.root_bone)
-        if root_index < 0:
-            self.report({"ERROR"}, f"Root bone {self.root_bone!r} not found")
+        fit_bones = armature_fit_bones(context, arm)
+        try:
+            root_name = tml.resolve_root_bone(fit_bones, self.root_bone)
+        except ValueError as e:
+            self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
+        root_index = arm.data.bones.find(root_name)
 
         material_name = _material_name(obj, self.material_index)
         target = f"{obj.name}/{material_name}"
@@ -179,7 +182,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         output = tml.generate_chains(
             positions,
             triangles,
-            _root_engine_position(arm, self.root_bone, scale_length),
+            _root_engine_position(arm, root_name, scale_length),
             self.role,
             target,
             settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
@@ -188,8 +191,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         )
 
         blender_output = output_to_blender(output, scale_length)
-        specs = bone_specs(blender_output, self.root_bone)
-        groups = group_weights(blender_output, self.root_bone)
+        specs = bone_specs(blender_output, root_name)
+        groups = group_weights(blender_output, root_name)
 
         try:
             _add_bones(context, arm, specs)
@@ -207,7 +210,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
                 tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
                 bones,
                 skins,
-                self.root_bone,
+                root_name,
                 target,
                 self.role,
                 output["chains"],

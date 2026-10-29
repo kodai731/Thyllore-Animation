@@ -63,6 +63,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(spring_edit::chains_in_scope, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_under_bone, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_to_draw, m)?)?;
+    m.add_function(wrap_pyfunction!(spring_edit::resolve_root_bone, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::spring_gizmo_style, m)?)?;
     m.add_function(wrap_pyfunction!(collider::capsule_fit_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;

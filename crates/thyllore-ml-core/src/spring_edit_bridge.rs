@@ -7,6 +7,8 @@ use thyllore_anim_core::spring_bone::{
     JointForce, RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode, SpringChainId,
     SpringJointParam,
 };
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
@@ -27,6 +29,27 @@ pub fn skeleton_from_bones(bones: &[BoneInput]) -> Skeleton {
     skeleton
 }
 
+fn resolve_root_bone(
+    skeleton: &Skeleton,
+    mapping: &HumanoidMapping,
+    root_name: &str,
+) -> anyhow::Result<BoneId> {
+    if let Some(&id) = skeleton.bone_name_to_id.get(root_name) {
+        return Ok(id);
+    }
+    HumanoidRole::from_unity_name(root_name)
+        .and_then(|role| mapping.by_role.get(&role))
+        .map(|&index| index as BoneId)
+        .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", root_name))
+}
+
+pub fn resolve_root_bone_name(bones: &[BoneInput], root_name: &str) -> anyhow::Result<String> {
+    let skeleton = skeleton_from_bones(bones);
+    let (mapping, _) = infer_mapping(bones);
+    let resolved_id = resolve_root_bone(&skeleton, &mapping, root_name)?;
+    Ok(bones[resolved_id as usize].name.clone())
+}
+
 /// Every run of non-humanoid bones under `root_name` becomes a chain; a run that already heads a
 /// chain is kept. The humanoid bones are inferred from the bone names, as the collider fit does.
 pub fn add_chains_under_bone(
@@ -38,13 +61,9 @@ pub fn add_chains_under_bone(
     let mut setup =
         spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
     let skeleton = skeleton_from_bones(bones);
-    let root = skeleton
-        .bone_name_to_id
-        .get(root_name)
-        .copied()
-        .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", root_name))?;
-
     let (mapping, _) = infer_mapping(bones);
+    let root = resolve_root_bone(&skeleton, &mapping, root_name)?;
+
     let chains = find_chains_under(&skeleton, &mapping, root, min_joints as usize);
     if chains.is_empty() {
         anyhow::bail!(

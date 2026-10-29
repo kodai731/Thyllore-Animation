@@ -12,7 +12,7 @@ use crate::collider_bridge::{FitBone, FitSkin};
 use crate::spring_edit_bridge::{
     add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
     chains_in_scope as bridge_chains_in_scope, chains_to_draw as bridge_chains_to_draw,
-    chains_under_bone as bridge_chains_under_bone, RampInput,
+    chains_under_bone as bridge_chains_under_bone, resolve_root_bone_name, RampInput,
 };
 
 /// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
@@ -151,4 +151,11 @@ struct SpringGizmoStyle {
     collider_color: [f32; 3],
     circle_segments: u32,
     chain_radius_segments: u32,
+}
+
+#[pyfunction]
+pub fn resolve_root_bone(bones: &Bound<PyAny>, root_bone: &str) -> PyResult<String> {
+    let bone_inputs = bones_from_py(bones)?;
+    resolve_root_bone_name(&bone_inputs, root_bone)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }

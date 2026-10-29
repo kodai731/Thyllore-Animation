@@ -220,3 +220,61 @@ fn spring_edit_bridge_chains_to_draw_unknown_mode_returns_error() {
     let result = chains_to_draw(&spring, &bones, &[], None, "unknown");
     assert!(result.is_err());
 }
+
+#[test]
+fn spring_edit_bridge_resolves_humanoid_role_on_prefixed_bones() {
+    let bones: Vec<BoneInput> = vec![
+        bone("mixamorig:Hips", None),
+        bone("mixamorig:Spine", Some(0)),
+        bone("mixamorig:Neck", Some(1)),
+        bone("mixamorig:Head", Some(2)),
+        bone("hair_a", Some(3)),
+        bone("hair_a.001", Some(4)),
+        bone("hair_b", Some(3)),
+        bone("hair_b.001", Some(6)),
+        bone("hair_b.002", Some(7)),
+    ];
+    let spring = SidecarSpring::default();
+
+    let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+
+    assert_eq!(result.chains.len(), 2);
+
+    let chain_a = result
+        .chains
+        .iter()
+        .find(|c| c.joints.first().is_some_and(|j| j.bone == "hair_a"))
+        .expect("chain starting with hair_a");
+    assert_eq!(chain_a.joints.len(), 2);
+    assert_eq!(chain_a.joints.first().unwrap().bone, "hair_a");
+    assert_eq!(chain_a.joints[1].bone, "hair_a.001");
+
+    let chain_b = result
+        .chains
+        .iter()
+        .find(|c| c.joints.first().is_some_and(|j| j.bone == "hair_b"))
+        .expect("chain starting with hair_b");
+    assert_eq!(chain_b.joints.len(), 3);
+    assert_eq!(chain_b.joints.first().unwrap().bone, "hair_b");
+    assert_eq!(chain_b.joints[1].bone, "hair_b.001");
+    assert_eq!(chain_b.joints[2].bone, "hair_b.002");
+}
+
+#[test]
+fn spring_edit_bridge_resolve_root_bone_name_maps_role_to_prefixed_bone() {
+    let bones: Vec<BoneInput> = vec![
+        bone("mixamorig:Hips", None),
+        bone("mixamorig:Spine", Some(0)),
+        bone("mixamorig:Neck", Some(1)),
+        bone("mixamorig:Head", Some(2)),
+    ];
+
+    let resolved = resolve_root_bone_name(&bones, "Head").unwrap();
+    assert_eq!(resolved, "mixamorig:Head");
+
+    let resolved = resolve_root_bone_name(&bones, "mixamorig:Hips").unwrap();
+    assert_eq!(resolved, "mixamorig:Hips");
+
+    let err = resolve_root_bone_name(&bones, "Unknown").unwrap_err();
+    assert!(err.to_string().contains("not found"));
+}

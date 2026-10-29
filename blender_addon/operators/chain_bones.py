@@ -16,7 +16,7 @@ except ImportError:
 from ..avatar_setup.operators import armature_fit_bones, bound_meshes
 from ..common import coordinates
 from ..common.armature import armature_of
-from ..common.bone_collections import assign_bones_to_chain_collection
+from ..common.chain_bone_display import apply_chain_bone_display
 from ..common.chain_bones import (
     bone_specs,
     group_weights,
@@ -202,7 +202,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
-        assign_bones_to_chain_collection(arm, [name for name, _, _, _ in specs])
+        apply_chain_bone_display(arm, [name for name, _, _, _ in specs], self.role)
 
         bones = armature_fit_bones(context, arm)
         try:

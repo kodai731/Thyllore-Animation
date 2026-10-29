@@ -8,11 +8,6 @@ from __future__ import annotations
 import math
 
 
-def polyline_segments(points: list[tuple[float, float, float]]) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-    """Connect adjacent points with line segments."""
-    return [(points[i], points[i + 1]) for i in range(len(points) - 1)]
-
-
 def wire_sphere_segments(
     center: tuple[float, float, float],
     radius: float,

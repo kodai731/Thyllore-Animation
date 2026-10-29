@@ -14,6 +14,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.chain_bone_display import set_chain_bones_visible
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
 
@@ -120,6 +121,10 @@ class THYLLORE_PG_HumanoidOverride(bpy.types.PropertyGroup):
     bone: bpy.props.StringProperty(name="Bone")
 
 
+def _show_chain_bones_for_gizmo_mode(settings, _context) -> None:
+    set_chain_bones_visible(settings.id_data, settings.gizmo_mode != "none")
+
+
 class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     """Spring bone settings stored on the armature (bpy.types.Armature.thyllore_spring)."""
 
@@ -137,8 +142,10 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     active_group_index: bpy.props.IntProperty(name="Active Group Index", default=-1)
     gizmo_mode: bpy.props.EnumProperty(
         name="Gizmo Mode",
-        items=[("selected", "Selected", ""), ("all", "All", ""), ("none", "None", "")],
-        default="selected",
+        description="Show the chain bones and the hit radii of the active bone's chains, or hide them",
+        items=[("all", "All", ""), ("none", "None", "")],
+        default="all",
+        update=_show_chain_bones_for_gizmo_mode,
     )
     show_collider_gizmos: bpy.props.BoolProperty(name="Show Collider Gizmos")
     sidecar_json: bpy.props.StringProperty(

@@ -11,8 +11,8 @@ use crate::chain_register_bridge::{
 use crate::collider_bridge::{FitBone, FitSkin};
 use crate::spring_edit_bridge::{
     add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
-    chains_in_scope as bridge_chains_in_scope, chains_to_draw as bridge_chains_to_draw,
-    chains_under_bone as bridge_chains_under_bone, resolve_root_bone_name, RampInput,
+    chains_in_scope as bridge_chains_in_scope, chains_under_bone as bridge_chains_under_bone,
+    chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name, RampInput,
 };
 
 /// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
@@ -115,20 +115,17 @@ pub fn chains_under_bone(
 }
 
 #[pyfunction]
-pub fn chains_to_draw<'py>(
-    py: Python<'py>,
+pub fn chains_with_radius(
     spring: &Bound<PyAny>,
     bones: &Bound<PyAny>,
-    selected: Vec<usize>,
     active: Option<usize>,
     mode: &str,
-) -> PyResult<Bound<'py, PyAny>> {
+) -> PyResult<Vec<String>> {
     let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
         depythonize(spring).map_err(depythonize_error_to_pyerr)?;
     let bone_inputs = bones_from_py(bones)?;
-    let output = bridge_chains_to_draw(&spring, &bone_inputs, &selected, active, mode)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
-    pythonize_value(py, &output)
+    bridge_chains_with_radius(&spring, &bone_inputs, active, mode)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]

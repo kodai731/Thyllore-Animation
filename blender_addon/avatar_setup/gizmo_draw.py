@@ -1,4 +1,4 @@
-"""Spring chain gizmo draw handler."""
+"""Spring chain gizmo draw handler: hit radii of the active bone's chains and collider shapes."""
 from __future__ import annotations
 
 from mathutils import Vector
@@ -15,46 +15,17 @@ except ImportError:
     _STYLE = None
     _TML_AVAILABLE = False
 
-from ..common.spring_gizmo import capsule_segments, polyline_segments, wire_sphere_segments
+from ..common.spring_gizmo import capsule_segments, wire_sphere_segments
 from ..common.spring_properties import spring_settings_to_edit
 from .operators import armature_bone_specs, target_armature
 
 _handle: int | None = None
 
 
-def _selected_bone_indices(arm):
-    """Bone indices of selected pose bones."""
-    return [arm.data.bones.find(pose_bone.name) for pose_bone in arm.pose.bones if pose_bone.select]
-
-
 def _active_bone_index(arm):
     """Index of the active data bone, or None."""
     active = arm.data.bones.active
     return arm.data.bones.find(active.name) if active is not None else None
-
-
-def _chain_segments(chains_by_name, chain_names, arm):
-    """Build (color, [(start, end), ...]) pairs for chain lines."""
-    if not chain_names:
-        return None
-    color = tuple(_STYLE["chain_color"])
-    segments = []
-    for chain_name in chain_names:
-        chain = chains_by_name.get(chain_name)
-        if chain is None:
-            continue
-        points = []
-        for joint in chain.joints:
-            pb = arm.pose.bones.get(joint.bone)
-            if pb is not None:
-                points.append(tuple(arm.matrix_world @ pb.head))
-        if points:
-            last_joint = chain.joints[-1]
-            pb = arm.pose.bones.get(last_joint.bone)
-            if pb is not None:
-                points.append(tuple(arm.matrix_world @ pb.tail))
-        segments.extend(polyline_segments(points))
-    return (color, segments)
 
 
 def _radius_segments(chains_by_name, chain_names, arm, scale_length):
@@ -116,7 +87,7 @@ def _draw_segments(shader, color, segments):
 
 
 def _draw():
-    """Draw handler callback: draw chain lines, radii, and colliders."""
+    """Draw handler callback: draw hit radii and colliders; chain bones are Blender's own stick bones."""
     import gpu
 
     context = bpy.context
@@ -126,21 +97,16 @@ def _draw():
 
     settings = arm.data.thyllore_spring
     bones = armature_bone_specs(context, arm)
-    selected = _selected_bone_indices(arm)
     active = _active_bone_index(arm)
 
     spring = spring_settings_to_edit(settings)
     scale_length = context.scene.unit_settings.scale_length
-    chains_result = tml.chains_to_draw(spring, bones, selected, active, settings.gizmo_mode)
+    radius_chain_names = tml.chains_with_radius(spring, bones, active, settings.gizmo_mode)
 
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
     chains_by_name = {chain.name: chain for chain in settings.chains}
 
-    pair = _chain_segments(chains_by_name, chains_result.get("lines", []), arm)
-    if pair is not None:
-        _draw_segments(shader, *pair)
-
-    pair = _radius_segments(chains_by_name, chains_result.get("radii", []), arm, scale_length)
+    pair = _radius_segments(chains_by_name, radius_chain_names, arm, scale_length)
     if pair is not None:
         _draw_segments(shader, *pair)
 

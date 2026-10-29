@@ -4,22 +4,7 @@ from __future__ import annotations
 
 import math
 
-from blender_addon.common.spring_gizmo import capsule_segments, polyline_segments, wire_sphere_segments
-
-
-def test_polyline_segments_count():
-    """4 points produce 3 segments."""
-    points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (2.0, 1.0, 0.0)]
-    segs = polyline_segments(points)
-    assert len(segs) == 3
-
-
-def test_polyline_segments_connectivity():
-    """Each segment connects adjacent points."""
-    points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)]
-    segs = polyline_segments(points)
-    assert segs[0] == (points[0], points[1])
-    assert segs[1] == (points[1], points[2])
+from blender_addon.common.spring_gizmo import capsule_segments, wire_sphere_segments
 
 
 def test_wire_sphere_segments_count():
@@ -51,28 +36,6 @@ def test_capsule_segments_count():
     """Non-degenerate capsule: 2 spheres (3 circles each * 8 segments) + 4 axis lines."""
     segs = capsule_segments((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), 0.5, 8)
     assert len(segs) == 3 * 8 * 2 + 4
-
-
-def test_chain_two_bones():
-    """A chain of 2 bones (1 joint) has 0 segments (no line to draw)."""
-    points = [(0.0, 0.0, 0.0)]
-    segs = polyline_segments(points)
-    assert len(segs) == 0
-
-
-def test_chain_four_bones():
-    """A chain of 4 bones (4 joints) has 3 segments."""
-    points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (3.0, 0.0, 0.0)]
-    segs = polyline_segments(points)
-    assert len(segs) == 3
-
-
-def test_two_chains_total():
-    """Two chains of 4 joints each: 3 + 3 = 6 segments."""
-    chain1 = [(i, 0.0, 0.0) for i in range(4)]
-    chain2 = [(i, 1.0, 0.0) for i in range(4)]
-    total = len(polyline_segments(chain1)) + len(polyline_segments(chain2))
-    assert total == 6
 
 
 def test_four_joints_sphere_count():

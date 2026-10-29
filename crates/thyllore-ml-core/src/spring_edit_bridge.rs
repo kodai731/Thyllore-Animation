@@ -1,11 +1,9 @@
-use std::collections::HashSet;
-
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
-    chains_to_draw as anim_chains_to_draw, chains_under_bone as anim_chains_under_bone, ChainRamp,
-    JointForce, RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode, SpringChainId,
-    SpringJointParam,
+    chains_under_bone as anim_chains_under_bone, chains_with_radius as anim_chains_with_radius,
+    ChainRamp, JointForce, RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode,
+    SpringChainId, SpringJointParam,
 };
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -235,38 +233,23 @@ pub fn chains_under_bone(
     Ok(chain_names_of(&setup, &ids))
 }
 
-#[derive(serde::Serialize)]
-pub struct ChainsToDraw {
-    pub lines: Vec<String>,
-    pub radii: Vec<String>,
-}
-
-pub fn chains_to_draw(
+/// Chains whose joint hit radii the Blender gizmo draws: those holding the active bone.
+pub fn chains_with_radius(
     spring: &SidecarSpring,
     bones: &[BoneInput],
-    selected: &[usize],
     active: Option<usize>,
     mode: &str,
-) -> anyhow::Result<ChainsToDraw> {
+) -> anyhow::Result<Vec<String>> {
     let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
-    let skeleton = skeleton_from_bones(bones);
 
     let gizmo_mode = match mode {
-        "selected" => SpringChainGizmoMode::Selected,
         "all" => SpringChainGizmoMode::All,
         "none" => SpringChainGizmoMode::None,
         other => anyhow::bail!("unknown mode \"{}\"", other),
     };
 
-    let selected_set: HashSet<usize> = selected.iter().copied().collect();
-    let line_ids = anim_chains_to_draw(&setup, &skeleton, &selected_set, gizmo_mode);
-    let radius_ids =
-        thyllore_anim_core::spring_bone::chains_with_radius(&setup, active, gizmo_mode);
-
-    Ok(ChainsToDraw {
-        lines: chain_names_of(&setup, &line_ids),
-        radii: chain_names_of(&setup, &radius_ids),
-    })
+    let ids = anim_chains_with_radius(&setup, active, gizmo_mode);
+    Ok(chain_names_of(&setup, &ids))
 }
 
 #[cfg(test)]

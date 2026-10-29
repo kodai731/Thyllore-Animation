@@ -17,6 +17,7 @@ except ImportError:
 
 from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sidecar, write_submesh_sidecar
 from ..common.collider_fit import bone_bind_matrix, bone_rest_frame
+from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.armature import armature_of
 from .mesh_data import material_loop_indices_of
@@ -211,6 +212,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
         settings = arm.data.thyllore_spring
         settings.sidecar_json = text
         write_sidecar_spring(settings, spring)
+        apply_chain_display(arm)
 
         meshes = bound_meshes(arm)
         for mesh_obj in meshes:

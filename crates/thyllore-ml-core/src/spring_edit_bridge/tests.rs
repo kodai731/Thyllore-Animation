@@ -181,44 +181,30 @@ fn spring_edit_bridge_unknown_shape_returns_error() {
 }
 
 #[test]
-fn spring_edit_bridge_chains_to_draw_selected_head() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
-
-    let result = chains_to_draw(&spring, &bones, &[1], None, "selected").unwrap();
-
-    assert_eq!(result.lines.len(), 2);
-    assert!(result.radii.is_empty());
-}
-
-#[test]
-fn spring_edit_bridge_chains_to_draw_selected_joint_with_active() {
+fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
     let bones = test_bones();
     let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
 
-    let result = chains_to_draw(&spring, &bones, &[2], Some(2), "selected").unwrap();
-
-    assert_eq!(result.lines.len(), 1);
-    assert_eq!(result.radii.len(), 1);
+    assert!(chains_with_radius(&spring, &bones, None, "all")
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        chains_with_radius(&spring, &bones, Some(2), "all")
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(chains_with_radius(&spring, &bones, Some(2), "none")
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
-fn spring_edit_bridge_chains_to_draw_mode_all() {
+fn spring_edit_bridge_chains_with_radius_unknown_mode_returns_error() {
     let bones = test_bones();
     let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
-    let result = chains_to_draw(&spring, &bones, &[], None, "all").unwrap();
-
-    assert_eq!(result.lines.len(), 2);
-}
-
-#[test]
-fn spring_edit_bridge_chains_to_draw_unknown_mode_returns_error() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
-
-    let result = chains_to_draw(&spring, &bones, &[], None, "unknown");
-    assert!(result.is_err());
+    assert!(chains_with_radius(&spring, &bones, None, "unknown").is_err());
 }
 
 #[test]

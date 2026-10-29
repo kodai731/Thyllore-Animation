@@ -8,9 +8,11 @@ mod debuglog;
 mod error;
 mod feedback;
 mod spring_edit;
+mod spring_preview;
 mod submesh;
 mod v2_curve_copilot;
 
+pub use spring_preview::PySpringPreview;
 pub use v2_curve_copilot::PyV2CurveCopilotSession;
 
 #[pymodule]
@@ -19,6 +21,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add("__abi_marker__", thyllore_ml_api::ABI_MARKER)?;
 
     m.add_class::<PyV2CurveCopilotSession>()?;
+    m.add_class::<PySpringPreview>()?;
 
     m.add_function(wrap_pyfunction!(v2_curve_copilot::capabilities, m)?)?;
     m.add_function(wrap_pyfunction!(v2_curve_copilot::deploy_fps, m)?)?;

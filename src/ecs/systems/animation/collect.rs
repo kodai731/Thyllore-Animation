@@ -37,7 +37,7 @@ pub(crate) fn collect_animated_entities(
     let should_log = is_baked
         && world
             .get_resource::<SpringBoneState>()
-            .map_or(false, |s| s.frame_count < 3);
+            .map_or(false, |s| s.simulation.frame_count < 3);
 
     let solo_clip_id = world
         .get_resource::<TimelineState>()

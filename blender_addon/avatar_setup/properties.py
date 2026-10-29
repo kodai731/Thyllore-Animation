@@ -121,6 +121,14 @@ class THYLLORE_PG_HumanoidOverride(bpy.types.PropertyGroup):
     bone: bpy.props.StringProperty(name="Bone")
 
 
+def _restart_swing_preview(settings, _context) -> None:
+    from .spring_preview import invalidate_preview
+
+    for obj in bpy.data.objects:
+        if obj.type == "ARMATURE" and obj.data == settings.id_data:
+            invalidate_preview(obj.name)
+
+
 def _show_chain_bones_for_gizmo_mode(settings, _context) -> None:
     set_chain_bones_visible(settings.id_data, settings.gizmo_mode != "none")
 
@@ -148,6 +156,11 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
         update=_show_chain_bones_for_gizmo_mode,
     )
     show_collider_gizmos: bpy.props.BoolProperty(name="Show Collider Gizmos")
+    preview_swing: bpy.props.BoolProperty(
+        name="Preview Swing",
+        description="Simulate the chains with the engine's spring solver while the frame changes",
+        update=_restart_swing_preview,
+    )
     sidecar_json: bpy.props.StringProperty(
         name="Sidecar Source",
         description="The sidecar this rig was imported from; its unedited fields are kept on export",

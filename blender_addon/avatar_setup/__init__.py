@@ -9,6 +9,7 @@ from . import (
     panels,
     properties,
     ramp_operators,
+    spring_preview,
     submesh_operators,
     submesh_roles,
 )
@@ -22,6 +23,7 @@ def register() -> None:
     ramp_operators.register()
     submesh_operators.register()
     submesh_roles.register()
+    spring_preview.register()
     panels.register()
     gizmo_draw.register()
 
@@ -29,6 +31,7 @@ def register() -> None:
 def unregister() -> None:
     gizmo_draw.unregister()
     panels.unregister()
+    spring_preview.unregister()
     submesh_roles.unregister()
     submesh_operators.unregister()
     ramp_operators.unregister()

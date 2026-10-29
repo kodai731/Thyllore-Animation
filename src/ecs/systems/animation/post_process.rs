@@ -76,7 +76,7 @@ fn apply_spring_bone_simulation(
     dt: f32,
     space: SpringSpace,
 ) {
-    use crate::ecs::systems::spring_bone_systems::{
+    use crate::animation::spring_bone::{
         collect_affected_bone_ids, spring_bone_initialize, spring_bone_reseat_tails,
         spring_bone_update, spring_bone_write_back_to_pose,
     };
@@ -87,11 +87,20 @@ fn apply_spring_bone_simulation(
                 if !sb_state.initialized {
                     let rest_globals =
                         compute_pose_global_transforms(skeleton, &create_pose_from_rest(skeleton));
-                    *sb_state = spring_bone_initialize(setup, skeleton, &rest_globals);
-                    spring_bone_reseat_tails(setup, &mut sb_state, skeleton, globals);
+                    sb_state.simulation = spring_bone_initialize(setup, skeleton, &rest_globals);
+                    sb_state.initialized = true;
+                    spring_bone_reseat_tails(setup, &mut sb_state.simulation, skeleton, globals);
                 }
 
-                spring_bone_update(setup, &mut sb_state, skeleton, globals, pose, dt, space);
+                spring_bone_update(
+                    setup,
+                    &mut sb_state.simulation,
+                    skeleton,
+                    globals,
+                    pose,
+                    dt,
+                    space,
+                );
 
                 let affected_ids = collect_affected_bone_ids(setup);
                 spring_bone_write_back_to_pose(skeleton, globals, pose, &affected_ids);

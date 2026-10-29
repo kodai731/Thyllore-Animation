@@ -70,7 +70,6 @@ def write_submesh_sidecar(submesh, mesh_name, roles, hidden, material_loop_indic
             continue
         item = submesh.hidden_triangles.add()
         item.material = entry["material"]
-        item.source = "user"
         item["triangles"] = triangles
 
 

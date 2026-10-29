@@ -15,6 +15,7 @@ from ..common.submesh_mask import mask_mesh_input, material_triangles, to_loop_t
 from ..common.logged_report import report
 from .mesh_data import mesh_arrays
 from .operators import bound_meshes, target_armature
+from .submesh_roles import refresh_submesh_roles
 
 
 def _material_index(collection, material: str) -> int | None:
@@ -23,7 +24,7 @@ def _material_index(collection, material: str) -> int | None:
 
 
 class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
-    """Guess submesh roles from mesh/material names."""
+    """Guess the role of every material again, keeping the rows the user set by hand."""
 
     bl_idname = "thyllore.guess_submesh_roles"
     bl_label = "Guess Submesh Roles"
@@ -46,17 +47,12 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
 
         count = 0
         for mesh_obj in meshes:
-            submesh = mesh_obj.thyllore_submesh
-            for slot in mesh_obj.material_slots:
-                if slot.material is None:
+            refresh_submesh_roles(mesh_obj)
+            for item in mesh_obj.thyllore_submesh.roles:
+                if item.source == "user":
                     continue
-                material_name = slot.material.name
-                if _material_index(submesh.roles, material_name) is not None:
-                    continue
-
-                item = submesh.roles.add()
-                item.material = material_name
-                item.role = tml.guess_submesh_role(mesh_obj.name, material_name)
+                item.role = tml.guess_submesh_role(mesh_obj.name, item.material)
+                item.source = "guessed"
                 count += 1
 
         report(self, "INFO", f"Guessed roles for {count} materials")

@@ -155,8 +155,12 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     )
 
 
+def _mark_role_as_user(item, _context) -> None:
+    item.source = "user"
+
+
 class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
-    """One submesh role assignment: material -> role."""
+    """One submesh role assignment: material -> role; a role set by hand marks the row as user."""
 
     material: bpy.props.StringProperty(name="Material")
     role: bpy.props.EnumProperty(
@@ -168,6 +172,7 @@ class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
             ("accessory", "Accessory", ""),
         ],
         default="skin",
+        update=_mark_role_as_user,
     )
     source: bpy.props.EnumProperty(
         name="Source",

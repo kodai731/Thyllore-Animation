@@ -9,16 +9,10 @@ import bpy
 from bpy.types import Panel, UIList
 
 from ..panels.main_panel import _CATEGORY
-from .operators import target_armature
+from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
 from .properties import SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
-
-
-def _active_mesh(context):
-    """Return context.active_object if it is a MESH, else None."""
-    obj = context.active_object
-    return obj if obj is not None and obj.type == "MESH" else None
 
 
 LABEL_COLUMN_FACTOR = 0.5
@@ -254,7 +248,7 @@ class THYLLORE_UL_SubmeshRoles(UIList):
 
 
 class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
-    """Submeshes sub-panel: role list, guess/hide buttons, hidden triangle counts."""
+    """Submeshes sub-panel: one role list per bound mesh, guess/hide buttons, hidden triangle counts."""
 
     bl_label = "Submeshes"
     bl_idname = "THYLLORE_PT_avatar_setup_submeshes"
@@ -264,18 +258,27 @@ class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        mesh_obj = _active_mesh(context)
-        if mesh_obj is None:
-            layout.label(text="Select a skinned mesh", icon="ERROR")
+        arm = target_armature(context)
+        if arm is None:
+            return
+        meshes = bound_meshes(arm)
+        if not meshes:
+            layout.label(text="No mesh is bound to the armature", icon="ERROR")
             return
 
-        submesh = mesh_obj.thyllore_submesh
-        layout.template_list(
-            "THYLLORE_UL_SubmeshRoles", "", submesh, "roles", submesh, "active_role_index"
-        )
+        for mesh_obj in meshes:
+            self._draw_mesh_roles(layout, mesh_obj)
         layout.operator("thyllore.guess_submesh_roles")
         layout.operator("thyllore.hide_covered_skin")
 
+    @staticmethod
+    def _draw_mesh_roles(layout, mesh_obj) -> None:
+        submesh = mesh_obj.thyllore_submesh
+        layout.label(text=mesh_obj.name, icon="MESH_DATA")
+        layout.template_list(
+            "THYLLORE_UL_SubmeshRoles", mesh_obj.name, submesh, "roles", submesh, "active_role_index",
+            rows=max(1, len(submesh.roles)),
+        )
         for item in submesh.hidden_triangles:
             triangles = list(item.get("triangles", []))
             layout.label(text=f"{item.material}: {len(triangles)} hidden triangles")

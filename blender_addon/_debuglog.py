@@ -130,8 +130,8 @@ def log_exception(message: str) -> None:
         logger.exception(f"ERROR {message}")
 
 
-def log_error(message: str) -> None:
-    """Record an error shown to the user (``Operator.report``) in the debug log."""
+def log_report(level: str, source: str, message: str) -> None:
+    """Record a message shown to the user (``Operator.report``) in the debug log."""
     logger = get_logger()
     if logger is not None:
-        logger.info(f"ERROR {message}")
+        logger.info(f"{level} {source}: {message}")

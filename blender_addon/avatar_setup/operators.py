@@ -20,6 +20,7 @@ from ..common.collider_fit import bone_bind_matrix, bone_rest_frame
 from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.armature import armature_of
+from ..common.logged_report import report
 from .mesh_data import material_loop_indices_of
 
 
@@ -190,7 +191,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         if not _TML_AVAILABLE:
-            self.report({"ERROR"}, "thyllore_ml_core not available")
+            report(self, "ERROR", "thyllore_ml_core not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -199,14 +200,14 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
             with open(self.filepath, encoding="utf-8") as f:
                 text = f.read()
         except OSError as e:
-            self.report({"ERROR"}, f"Cannot read file: {e}")
+            report(self, "ERROR", f"Cannot read file: {e}")
             return {"CANCELLED"}
 
         try:
             sidecar = tml.sidecar_read(text)
             spring = tml.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
         except (RuntimeError, ValueError) as e:
-            self.report({"ERROR"}, f"Invalid sidecar file: {e}")
+            report(self, "ERROR", f"Invalid sidecar file: {e}")
             return {"CANCELLED"}
 
         settings = arm.data.thyllore_spring
@@ -226,7 +227,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
         chain_count = len(sidecar["spring"].get("chains", []))
         collider_count = len(sidecar["spring"].get("colliders", []))
-        self.report({"INFO"}, f"Imported {chain_count} chains, {collider_count} colliders")
+        report(self, "INFO", f"Imported {chain_count} chains, {collider_count} colliders")
 
         return {"FINISHED"}
 
@@ -246,7 +247,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         if not _TML_AVAILABLE:
-            self.report({"ERROR"}, "thyllore_ml_core not available")
+            report(self, "ERROR", "thyllore_ml_core not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -260,7 +261,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
         try:
             json_text = tml.sidecar_build(sidecar_input)
         except ValueError as e:
-            self.report({"ERROR"}, f"Sidecar build failed: {e}")
+            report(self, "ERROR", f"Sidecar build failed: {e}")
             return {"CANCELLED"}
 
         _select_only(context, [arm] + meshes)
@@ -286,15 +287,15 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             with open(sidecar_path, "w", encoding="utf-8") as f:
                 f.write(json_text)
         except OSError as e:
-            self.report({"ERROR"}, f"Cannot write sidecar file: {e}")
+            report(self, "ERROR", f"Cannot write sidecar file: {e}")
             return {"CANCELLED"}
 
         result = tml.infer_humanoid_mapping(sidecar_input["bones"])
         unresolved = result.get("unresolved", [])
         if unresolved:
-            self.report({"WARNING"}, f"Humanoid mapping unresolved: {len(unresolved)} roles")
+            report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
 
-        self.report({"INFO"}, f"Exported FBX and sidecar to {sidecar_path}")
+        report(self, "INFO", f"Exported FBX and sidecar to {sidecar_path}")
         return {"FINISHED"}
 
 

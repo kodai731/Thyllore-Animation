@@ -21,6 +21,7 @@ from ..common.spring_properties import (
     spring_settings_to_edit,
     write_sidecar_spring,
 )
+from ..common.logged_report import report
 from .operators import armature_bone_specs, target_armature
 
 
@@ -61,7 +62,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
 
         bone_name = active_bone_name(context)
         if bone_name is None:
-            self.report({"ERROR"}, "No active pose bone")
+            report(self, "ERROR", "No active pose bone")
             return {"CANCELLED"}
 
         spring = spring_settings_to_edit(settings)
@@ -70,11 +71,11 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         try:
             names = target_chain_names(settings, spring, bones, bone_name, form.scope)
         except ValueError as e:
-            self.report({"ERROR"}, str(e))
+            report(self, "ERROR", str(e))
             return {"CANCELLED"}
 
         if not names:
-            self.report({"WARNING"}, f"No chains found for bone '{bone_name}'")
+            report(self, "WARNING", f"No chains found for bone '{bone_name}'")
             return {"CANCELLED"}
 
         disabled = disabled_chain_names(settings)
@@ -91,14 +92,14 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
                 },
             )
         except ValueError as e:
-            self.report({"ERROR"}, f"apply_ramp failed: {e}")
+            report(self, "ERROR", f"apply_ramp failed: {e}")
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, output)
         restore_disabled_chains(settings, disabled)
 
         joint_count = sum(len(c.joints) for c in settings.chains if c.name in names)
-        self.report({"INFO"}, f"Applied ramp to {len(names)} chains ({joint_count} joints)")
+        report(self, "INFO", f"Applied ramp to {len(names)} chains ({joint_count} joints)")
         return {"FINISHED"}
 
 
@@ -120,12 +121,12 @@ class THYLLORE_OT_LoadRampFromChain(bpy.types.Operator):
         index = settings.active_chain_index
 
         if index < 0 or index >= len(chains):
-            self.report({"ERROR"}, "Active chain index out of range")
+            report(self, "ERROR", "Active chain index out of range")
             return {"CANCELLED"}
 
         chain = chains[index]
         if len(chain.joints) == 0:
-            self.report({"ERROR"}, "Chain has no joints")
+            report(self, "ERROR", "Chain has no joints")
             return {"CANCELLED"}
 
         form = context.window_manager.thyllore_ramp
@@ -133,7 +134,7 @@ class THYLLORE_OT_LoadRampFromChain(bpy.types.Operator):
         copy_joint_values(chain.joints[0], form.root)
         copy_joint_values(chain.joints[-1], form.tip)
 
-        self.report({"INFO"}, f"Loaded ramp from chain '{chain.name}'")
+        report(self, "INFO", f"Loaded ramp from chain '{chain.name}'")
         return {"FINISHED"}
 
 
@@ -160,12 +161,12 @@ class THYLLORE_OT_UseAsRampEnd(bpy.types.Operator):
 
         bone_name = active_bone_name(context)
         if bone_name is None:
-            self.report({"ERROR"}, "No active pose bone")
+            report(self, "ERROR", "No active pose bone")
             return {"CANCELLED"}
 
         source_joint = joint_for_bone(settings, bone_name)
         if source_joint is None:
-            self.report({"ERROR"}, f"No spring joint found for bone '{bone_name}'")
+            report(self, "ERROR", f"No spring joint found for bone '{bone_name}'")
             return {"CANCELLED"}
 
         form = context.window_manager.thyllore_ramp
@@ -173,7 +174,7 @@ class THYLLORE_OT_UseAsRampEnd(bpy.types.Operator):
 
         copy_joint_values(source_joint, target)
 
-        self.report({"INFO"}, f"Copied joint from '{bone_name}' to ramp {self.end}")
+        report(self, "INFO", f"Copied joint from '{bone_name}' to ramp {self.end}")
         return {"FINISHED"}
 
 

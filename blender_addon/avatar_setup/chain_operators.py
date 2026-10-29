@@ -18,6 +18,7 @@ from ..common.spring_properties import (
     spring_settings_to_edit,
     write_sidecar_spring,
 )
+from ..common.logged_report import report
 from .operators import armature_bone_specs, target_armature
 
 
@@ -48,7 +49,7 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
 
     def execute(self, context):
         if not _TML_AVAILABLE:
-            self.report({"ERROR"}, "thyllore_ml_core not available")
+            report(self, "ERROR", "thyllore_ml_core not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -59,7 +60,7 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
             bones = armature_bone_specs(context, arm)
             output = tml.add_chains_under_bone(sidecar, bones, self.root_bone, self.min_joints)
         except ValueError as e:
-            self.report({"ERROR"}, f"add_chains_under_bone failed: {e}")
+            report(self, "ERROR", f"add_chains_under_bone failed: {e}")
             return {"CANCELLED"}
 
         disabled = disabled_chain_names(settings)
@@ -70,7 +71,7 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
         apply_chain_display(arm)
 
         chain_count = len(output["chains"])
-        self.report({"INFO"}, f"{chain_count} chains under '{self.root_bone}'")
+        report(self, "INFO", f"{chain_count} chains under '{self.root_bone}'")
         return {"FINISHED"}
 
 
@@ -92,7 +93,7 @@ class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):
         index = settings.active_chain_index
 
         if index < 0 or index >= len(chains):
-            self.report({"ERROR"}, "Active chain index out of range")
+            report(self, "ERROR", "Active chain index out of range")
             return {"CANCELLED"}
 
         chains.remove(index)
@@ -100,7 +101,7 @@ class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):
         if settings.active_chain_index >= len(chains):
             settings.active_chain_index = max(0, len(chains) - 1)
 
-        self.report({"INFO"}, "Removed spring chain")
+        report(self, "INFO", "Removed spring chain")
         return {"FINISHED"}
 
 

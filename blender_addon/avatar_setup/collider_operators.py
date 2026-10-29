@@ -20,6 +20,7 @@ from ..common.spring_properties import (
     spring_settings_to_edit,
     write_sidecar_spring,
 )
+from ..common.logged_report import report
 from .operators import armature_bone_specs, armature_fit_bones, bound_meshes, target_armature
 from .ramp_operators import active_bone_name, target_chain_names
 
@@ -52,7 +53,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
 
         skin_meshes = skin_role_meshes(bound_meshes(arm))
         if not skin_meshes:
-            self.report({"ERROR"}, "No skin mesh found (no bound mesh has role 'skin')")
+            report(self, "ERROR", "No skin mesh found (no bound mesh has role 'skin')")
             return {"CANCELLED"}
 
         bones = armature_fit_bones(context, arm)
@@ -70,14 +71,14 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
                 settings_from_properties(CAPSULE_FIT_UI_PARAMS, self),
             )
         except ValueError as e:
-            self.report({"ERROR"}, f"fit_body_colliders failed: {e}")
+            report(self, "ERROR", f"fit_body_colliders failed: {e}")
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
         restore_disabled_chains(settings, disabled)
 
         collider_count = len(output.get("colliders", []))
-        self.report({"INFO"}, f"Fitted {collider_count} body colliders")
+        report(self, "INFO", f"Fitted {collider_count} body colliders")
         return {"FINISHED"}
 
 def _unique_name(existing_names, base_name):
@@ -114,7 +115,7 @@ class THYLLORE_OT_AddCollider(bpy.types.Operator):
 
         bone_name = active_bone_name(context)
         if bone_name is None:
-            self.report({"ERROR"}, "No active pose bone")
+            report(self, "ERROR", "No active pose bone")
             return {"CANCELLED"}
 
         base_name = f"{bone_name}/Collider"
@@ -132,7 +133,7 @@ class THYLLORE_OT_AddCollider(bpy.types.Operator):
             collider.has_tail = True
             collider.tail = (0.0, self.radius * 2, 0.0)
 
-        self.report({"INFO"}, f"Added collider '{name}' to bone '{bone_name}'")
+        report(self, "INFO", f"Added collider '{name}' to bone '{bone_name}'")
         return {"FINISHED"}
 
 
@@ -174,7 +175,7 @@ class THYLLORE_OT_RemoveCollider(bpy.types.Operator):
         if index >= len(settings.colliders):
             settings.active_collider_index = max(0, len(settings.colliders) - 1)
 
-        self.report({"INFO"}, f"Removed collider '{name_to_remove}'")
+        report(self, "INFO", f"Removed collider '{name_to_remove}'")
         return {"FINISHED"}
 
 
@@ -195,7 +196,7 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
 
         bone_name = active_bone_name(context)
         if bone_name is None:
-            self.report({"ERROR"}, "No active pose bone")
+            report(self, "ERROR", "No active pose bone")
             return {"CANCELLED"}
 
         spring = spring_settings_to_edit(settings)
@@ -204,16 +205,16 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
         try:
             chains = target_chain_names(settings, spring, bones, bone_name, "subtree")
         except ValueError as e:
-            self.report({"ERROR"}, str(e))
+            report(self, "ERROR", str(e))
             return {"CANCELLED"}
 
         if not chains:
-            self.report({"WARNING"}, f"No chains found for bone '{bone_name}'")
+            report(self, "WARNING", f"No chains found for bone '{bone_name}'")
             return {"CANCELLED"}
 
         groups = [g.name for g in settings.collider_groups if g.assigned]
         if not groups:
-            self.report({"WARNING"}, "No collider groups are assigned")
+            report(self, "WARNING", "No collider groups are assigned")
             return {"CANCELLED"}
 
         disabled = disabled_chain_names(settings)
@@ -221,7 +222,7 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
         try:
             output = tml.assign_collider_groups(spring, bones, chains, groups)
         except ValueError as e:
-            self.report({"ERROR"}, f"assign_collider_groups failed: {e}")
+            report(self, "ERROR", f"assign_collider_groups failed: {e}")
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, output)
@@ -232,7 +233,7 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             if g.name in assigned_names:
                 g.assigned = True
 
-        self.report({"INFO"}, f"Applied {len(groups)} collider groups to {len(chains)} chains")
+        report(self, "INFO", f"Applied {len(groups)} collider groups to {len(chains)} chains")
         return {"FINISHED"}
 
 

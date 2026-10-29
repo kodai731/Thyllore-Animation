@@ -12,6 +12,7 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from ..common.submesh_mask import mask_mesh_input, material_triangles, to_loop_triangle_indices
+from ..common.logged_report import report
 from .mesh_data import mesh_arrays
 from .operators import bound_meshes, target_armature
 
@@ -35,12 +36,12 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         if arm is None:
-            self.report({"ERROR"}, "No target armature")
+            report(self, "ERROR", "No target armature")
             return {"CANCELLED"}
 
         meshes = bound_meshes(arm)
         if not meshes:
-            self.report({"WARNING"}, "No bound meshes found")
+            report(self, "WARNING", "No bound meshes found")
             return {"CANCELLED"}
 
         count = 0
@@ -58,7 +59,7 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
                 item.role = tml.guess_submesh_role(mesh_obj.name, material_name)
                 count += 1
 
-        self.report({"INFO"}, f"Guessed roles for {count} materials")
+        report(self, "INFO", f"Guessed roles for {count} materials")
         return {"FINISHED"}
 
 
@@ -101,18 +102,18 @@ class THYLLORE_OT_HideCoveredSkin(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         if arm is None:
-            self.report({"ERROR"}, "No target armature")
+            report(self, "ERROR", "No target armature")
             return {"CANCELLED"}
 
         meshes = bound_meshes(arm)
         if not meshes:
-            self.report({"WARNING"}, "No bound meshes found")
+            report(self, "WARNING", "No bound meshes found")
             return {"CANCELLED"}
 
         skin_materials, garment_materials = _materials_by_role(meshes)
 
         if not garment_materials:
-            self.report({"WARNING"}, "No garment materials found — cancelled")
+            report(self, "WARNING", "No garment materials found — cancelled")
             return {"CANCELLED"}
 
         scale_length = context.scene.unit_settings.scale_length
@@ -151,7 +152,7 @@ class THYLLORE_OT_HideCoveredSkin(bpy.types.Operator):
 
             total_hidden += len(loop_hidden)
 
-        self.report({"INFO"}, f"Hidden {total_hidden} skin triangles")
+        report(self, "INFO", f"Hidden {total_hidden} skin triangles")
         return {"FINISHED"}
 
 

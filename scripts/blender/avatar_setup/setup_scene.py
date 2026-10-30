@@ -4,6 +4,7 @@ from pathlib import Path
 import bpy
 
 MODEL_PATH = os.environ["THYLLORE_AVATAR_MODEL"]
+CLIP_PATH = Path(__file__).resolve().parents[3] / "assets" / "templates" / "hips_sway.anim.ron"
 SCREENSHOT_DIR = os.environ.get("THYLLORE_SCREENSHOT_DIR", "")
 SCREENSHOT_DELAY_SECONDS = float(os.environ.get("THYLLORE_SCREENSHOT_DELAY", "3"))
 QUIT_AFTER_SCREENSHOT = os.environ.get("THYLLORE_SCREENSHOT_QUIT", "") == "1"
@@ -26,6 +27,13 @@ def import_model():
         obj.select_set(obj == armature)
     bpy.context.view_layer.objects.active = armature
     print(f"[avatar_setup/setup_scene] imported {MODEL_PATH}, active armature {armature.name}", flush=True)
+
+
+def load_default_clip():
+    if bpy.context.view_layer.objects.active is None:
+        return
+    result = bpy.ops.thyllore.load_engine_clip(filepath=str(CLIP_PATH))
+    print(f"[avatar_setup/setup_scene] clip {CLIP_PATH.name}: {result}", flush=True)
 
 
 def find_view3d():
@@ -76,6 +84,7 @@ def take_screenshot():
 bpy.context.preferences.view.show_splash = False
 remove_startup_objects()
 import_model()
+load_default_clip()
 bpy.app.timers.register(frame_model_and_open_sidebar, first_interval=0.5)
 if bpy.app.use_event_simulate:
     bpy.app.timers.register(cycle_sidebar_to_avatar_setup, first_interval=1.0)

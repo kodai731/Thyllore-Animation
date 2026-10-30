@@ -129,6 +129,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             return
         _draw_labelled_prop(layout, arm.data.thyllore_spring, "gizmo_mode")
         layout.prop(arm.data.thyllore_spring, "preview_swing")
+        layout.operator("thyllore.load_engine_clip", icon="IMPORT")
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
         self._draw_ramp(layout, context)

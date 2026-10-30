@@ -257,6 +257,23 @@ def same_origin(chain, origin: dict) -> bool:
     )
 
 
+def chains_generated_on(settings, origin: dict) -> list[str]:
+    """Names of the chains generated on ``origin``'s submesh; when its material matches none, every
+    chain generated on that mesh."""
+    exact = [chain.name for chain in settings.chains if same_origin(chain, origin)]
+    if exact:
+        return exact
+    return [chain.name for chain in settings.chains if getattr(chain, "origin_mesh", "") == origin["mesh"]]
+
+
+def active_chain(settings):
+    """The chain selected in the Chains list, or None when nothing is selected."""
+    index = settings.active_chain_index
+    if 0 <= index < len(settings.chains):
+        return settings.chains[index]
+    return None
+
+
 def remove_chains_generated_on(settings, origin: dict) -> list[str]:
     """Drop the chains generated on ``origin`` from the settings; returns their joint bone names."""
     bone_names: list[str] = []

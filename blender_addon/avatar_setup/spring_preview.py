@@ -70,18 +70,18 @@ def _animated_locals(arm, root_frame: Matrix) -> list[Matrix]:
     return [_animated_local(arm.pose.bones[bone.name], root_frame) for bone in arm.data.bones]
 
 
-def _rest_relative_to_parent(bone) -> Matrix:
+def rest_relative_to_parent(bone) -> Matrix:
     if bone.parent is None:
         return bone.matrix_local.copy()
     return bone.parent.matrix_local.inverted() @ bone.matrix_local
 
 
-def _write_joint_rotation(arm, animated_local: Matrix, bone_name: str, rotation) -> None:
+def write_joint_rotation(arm, animated_local: Matrix, bone_name: str, rotation) -> None:
     pose_bone = arm.pose.bones[bone_name]
     translation = Matrix.Translation(animated_local.to_translation())
     scale = Matrix.Diagonal(animated_local.to_scale()).to_4x4()
     swung_local = translation @ Quaternion(rotation).to_matrix().to_4x4() @ scale
-    pose_bone.matrix_basis = _rest_relative_to_parent(pose_bone.bone).inverted() @ swung_local
+    pose_bone.matrix_basis = rest_relative_to_parent(pose_bone.bone).inverted() @ swung_local
 
 
 def _preview_for(arm, context) -> _ArmaturePreview | None:
@@ -118,7 +118,7 @@ def _step_armature(arm, context) -> None:
     dt = scene.render.fps_base / scene.render.fps
     bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
     for joint in cached.preview.step(rows, dt):
-        _write_joint_rotation(arm, animated[bone_index[joint["bone"]]], joint["bone"], joint["rotation"])
+        write_joint_rotation(arm, animated[bone_index[joint["bone"]]], joint["bone"], joint["rotation"])
 
 
 def _previewed_armatures(scene):

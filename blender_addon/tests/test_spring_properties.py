@@ -5,6 +5,8 @@ import pytest
 from types import SimpleNamespace
 
 from blender_addon.common.spring_properties import (
+    active_chain,
+    chains_generated_on,
     configure_force_params,
     chain_with_joint,
     remove_chains_generated_on,
@@ -495,3 +497,47 @@ def test_generated_chains_are_replaced_per_submesh():
     assert sorted(removed) == ["hair_hair_back_00_00", "hair_hair_back_00_01", "hair_hair_back_01_00"]
     assert [c.name for c in settings.chains] == ["chain_0", "hair_hair_side_00"]
     assert remove_chains_generated_on(settings, back) == []
+
+
+def _settings_with_generated_chains():
+    settings = _make_settings([], [], [])
+    spring = spring_settings_to_sidecar(settings)
+    for name, origin in (
+        ("hair_hair_back_00", {"mesh": "Hair_back", "material": "Hair", "role": "hair"}),
+        ("hair_hair_back_01", {"mesh": "Hair_back", "material": "Hair", "role": "hair"}),
+        ("hair_hair_back_fringe_00", {"mesh": "Hair_back", "material": "Fringe", "role": "hair"}),
+        ("hair_hair_side_00", {"mesh": "Hair_side", "material": "Hair", "role": "hair"}),
+    ):
+        joint = {"bone": f"{name}_00", "force": _vrm_force(1.0, 0.0), "drag_force": 0.4, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
+        spring["chains"].append({"name": name, "center": None, "tail": None, "collider_groups": [], "origin": origin, "joints": [joint]})
+    write_sidecar_spring(settings, spring)
+    return settings
+
+
+def test_chains_generated_on_selects_the_submesh_by_mesh_and_material():
+    settings = _settings_with_generated_chains()
+
+    assert chains_generated_on(settings, {"mesh": "Hair_back", "material": "Hair"}) == ["hair_hair_back_00", "hair_hair_back_01"]
+    assert chains_generated_on(settings, {"mesh": "Hair_back", "material": "Fringe"}) == ["hair_hair_back_fringe_00"]
+
+
+def test_chains_generated_on_falls_back_to_every_chain_of_the_mesh():
+    settings = _settings_with_generated_chains()
+
+    assert chains_generated_on(settings, {"mesh": "Hair_back", "material": "Skin"}) == [
+        "hair_hair_back_00",
+        "hair_hair_back_01",
+        "hair_hair_back_fringe_00",
+    ]
+    assert chains_generated_on(settings, {"mesh": "Body", "material": "Skin"}) == []
+
+
+def test_active_chain_follows_the_list_index():
+    settings = _settings_with_generated_chains()
+
+    settings.active_chain_index = 3
+    assert active_chain(settings).name == "hair_hair_side_00"
+    settings.active_chain_index = -1
+    assert active_chain(settings) is None
+    settings.active_chain_index = 4
+    assert active_chain(settings) is None

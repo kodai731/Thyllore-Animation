@@ -4223,6 +4223,7 @@ dependencies = [
  "ort",
  "pyo3",
  "pythonize",
+ "ron",
  "serde",
  "serde_json",
  "sha2",

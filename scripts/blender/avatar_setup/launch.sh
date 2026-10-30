@@ -22,8 +22,9 @@ Usage: $0 [--mode degrade|full|private] [--skip-build] [--software-gl] [--headle
 Builds the debug addon ZIP of this checkout (wheel with debug-log + ONNX model),
 launches the pristine Blender Docker image on the NVIDIA GPU
 (blender/docker/run_gui.sh) with the ZIP installed into a fresh profile, and
-imports the test model (default: woman-1-fix-scale-only.fbx) so the avatar setup
-panels can be used at once. The model's .avatar.json sidecar, when present, is
+imports the test model (default: woman-1-fix-scale-only.fbx) and bakes
+assets/templates/hips_sway.anim.ron onto it, so the avatar setup panels and the
+swing preview can be used at once. The model's .avatar.json sidecar, when present, is
 staged beside it under /scenes for Import Avatar Sidecar. Blender's console
 output is mirrored to <repo>/log/log_blender_avatar_setup.log.
 

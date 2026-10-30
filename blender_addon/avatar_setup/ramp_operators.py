@@ -11,8 +11,11 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.armature import armature_of
 from ..common.spring_properties import (
+    active_chain,
     chain_with_joint,
+    chains_generated_on,
     copy_joint_values,
     disabled_chain_names,
     joint_for_bone,
@@ -36,16 +39,40 @@ def active_bone_name(context):
     return None
 
 
-def target_chain_names(settings, spring, bones, bone_name, scope):
-    """Determine which chain names to apply ramp to based on active bone and scope."""
-    chain = chain_with_joint(settings, bone_name)
+def active_submesh_origin(context, arm):
+    """The submesh the active mesh object selects (its active material), when the mesh is bound to arm."""
+    obj = context.active_object
+    if obj is None or obj.type != "MESH" or armature_of(obj) is not arm:
+        return None
+    material = obj.active_material
+    return {"mesh": obj.name, "material": material.name if material is not None else ""}
+
+
+def target_chain_names(context, arm, settings, spring, bones, scope):
+    """The chains the ramp applies to, from what is selected: the submesh the chains were generated on,
+    a bone, or the entry selected in the Chains list."""
+    if scope == "all_chains":
+        return [chain.name for chain in settings.chains]
+
+    origin = active_submesh_origin(context, arm)
+    if origin is not None:
+        return chains_generated_on(settings, origin)
+
+    bone_name = active_bone_name(context)
+    if bone_name is not None:
+        chain = chain_with_joint(settings, bone_name)
+        if chain is not None:
+            return tml.chains_in_scope(spring, bones, chain.name, scope)
+        return tml.chains_under_bone(spring, bones, bone_name)
+
+    chain = active_chain(settings)
     if chain is not None:
         return tml.chains_in_scope(spring, bones, chain.name, scope)
-    return tml.chains_under_bone(spring, bones, bone_name)
+    raise ValueError("Select the submesh the chains were generated on, a bone, or a chain in the list")
 
 
 class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
-    """Apply ramp interpolation to spring chains from form root/tip values."""
+    """Apply the root/tip ramp to the chains of the selected submesh, bone or list entry"""
 
     bl_idname = "thyllore.apply_ramp"
     bl_label = "Apply Ramp"
@@ -60,22 +87,17 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         settings = arm.data.thyllore_spring
         form = context.window_manager.thyllore_ramp
 
-        bone_name = active_bone_name(context)
-        if bone_name is None:
-            report(self, "ERROR", "No active pose bone")
-            return {"CANCELLED"}
-
         spring = spring_settings_to_edit(settings)
         bones = armature_bone_specs(context, arm)
 
         try:
-            names = target_chain_names(settings, spring, bones, bone_name, form.scope)
+            names = target_chain_names(context, arm, settings, spring, bones, form.scope)
         except ValueError as e:
             report(self, "ERROR", str(e))
             return {"CANCELLED"}
 
         if not names:
-            report(self, "WARNING", f"No chains found for bone '{bone_name}'")
+            report(self, "WARNING", "No chains for the current selection")
             return {"CANCELLED"}
 
         disabled = disabled_chain_names(settings)

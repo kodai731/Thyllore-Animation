@@ -6,6 +6,7 @@ using System.IO;
 using UnityEngine;
 using UnityEditor;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Dynamics.PhysBone.Components;
 using VRC.SDKBase;
 
 namespace Thyllore.Avatar
@@ -87,7 +88,7 @@ namespace Thyllore.Avatar
             EditorGUILayout.LabelField("Humanoid bones", loaded_sidecar.humanoid.Count.ToString());
             EditorGUILayout.LabelField("Visemes", loaded_sidecar.visemes.Count.ToString());
             EditorGUILayout.LabelField("Expressions", loaded_sidecar.expressions.Count.ToString());
-            EditorGUILayout.LabelField("Spring chains", loaded_sidecar.spring.chains.Count.ToString());
+            EditorGUILayout.LabelField("Spring chains", loaded_sidecar.spring_chains.Count.ToString());
             EditorGUILayout.LabelField("Materials", loaded_sidecar.materials.Count.ToString());
             EditorGUILayout.LabelField("Expression mesh", loaded_sidecar.expression_mesh ?? "(none)");
         }
@@ -354,7 +355,34 @@ namespace Thyllore.Avatar
                 return;
             }
 
-            SpringSidecarApplier.Apply(root, sidecar.spring);
+            foreach (var chain in sidecar.spring_chains)
+            {
+                var transform = FindTransformByName(root, chain.root);
+                if (transform == null)
+                {
+                    Debug.LogWarning($"Spring chain root \"{chain.root}\" not found — skipping.");
+                    continue;
+                }
+
+                var bone = transform.GetComponent<VRCPhysBone>();
+                if (bone == null)
+                {
+                    bone = Undo.AddComponent<VRCPhysBone>(transform.gameObject);
+                    Debug.Log($"Added VRCPhysBone to {chain.root}");
+                }
+
+                Undo.RecordObject(bone, "Apply Spring Chain");
+                MapSpringToPhysBone(chain, bone);
+                EditorUtility.SetDirty(bone);
+                Debug.Log($"Applied spring chain to {chain.root} (pull={bone.pull}, spring={bone.spring}, gravity={bone.gravity})");
+            }
+        }
+
+        private static void MapSpringToPhysBone(SidecarSpringChain chain, VRCPhysBone bone)
+        {
+            bone.pull = Mathf.Clamp01(chain.stiffness);
+            bone.spring = Mathf.Clamp01(1f - chain.drag);
+            bone.gravity = Mathf.Clamp01(chain.gravity);
         }
 
         /// Builds one Standard material per sidecar entry from the texture copied next to the model

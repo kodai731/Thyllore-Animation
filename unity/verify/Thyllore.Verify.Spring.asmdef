@@ -1,1 +1,0 @@
-{"name": "Thyllore.Verify.Spring", "references": ["Thyllore.Avatar.Editor", "VRM10", "UniGLTF", "UniGLTF.Utils"], "includePlatforms": ["Editor"], "autoReferenced": false}

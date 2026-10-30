@@ -5,11 +5,15 @@ import bpy
 from mathutils import Vector
 
 sys.path.insert(0, "/workspace")
-from blender_addon.common.coordinates import engine_to_blender_point, orbit_camera
+from blender_addon.common.coordinates import orbit_camera
 
 ENGINE_DEFAULT_CAMERA = {"yaw_deg": 45.0, "pitch_deg": math.degrees(math.asin(5.0 / math.sqrt(75.0))), "distance": math.sqrt(75.0), "pivot": (0.0, 0.0, 0.0)}
 ENGINE_DEFAULT_FOV_Y_DEG = 45.0
 ENGINE_DEFAULT_LIGHT_POSITION = (1.0, 1.0, 2.0)
+
+
+def engine_to_blender_point(p):
+    return (p[0], -p[2], p[1])
 
 
 for obj in list(bpy.data.objects):

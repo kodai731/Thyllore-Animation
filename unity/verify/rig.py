@@ -3,7 +3,13 @@ import os
 import sys
 from mathutils import Vector
 
-OUT_DIR = sys.argv[sys.argv.index("--") + 1]
+
+def parse_args():
+    rest = sys.argv[sys.argv.index("--") + 1 :]
+    sway = "--sway" in rest
+    out_dir = [a for a in rest if a != "--sway"][0]
+    return out_dir, sway
+
 
 BONES = [
     ("Hips", None, (0, 0, 0.95), (0, 0, 1.05)),
@@ -30,7 +36,9 @@ BONES = [
 ]
 
 VISEMES = ["sil", "pp", "ff", "th", "dd", "kk", "ch", "ss", "nn", "rr", "aa", "e", "ih", "oh", "ou"]
-SHAPE_KEYS = [f"vrc.v_{v}" for v in VISEMES] + ["eye_blink", "eye_blink_L", "eye_blink_R", "mouth_smile"]
+SHAPE_KEYS = [f"vrc.v_{v}" for v in VISEMES] + [
+    "eye_blink", "eye_blink_L", "eye_blink_R", "mouth_smile",
+]
 
 
 def clear_scene():
@@ -94,24 +102,66 @@ def add_shape_keys(body):
         key.data[0].co.z += 0.01 * (index + 1)
 
 
-def export(arm_obj, body):
-    fbx_path = os.path.join(OUT_DIR, "synthetic_avatar.fbx")
+def export(arm_obj, body, out_dir, sway):
+    fbx_path = os.path.join(out_dir, "synthetic_avatar.fbx")
     bpy.ops.object.select_all(action="DESELECT")
     arm_obj.select_set(True)
     body.select_set(True)
+    bake_args = BAKE_SWAY_ARGS if sway else NO_BAKE_ARGS
     bpy.ops.export_scene.fbx(
         filepath=fbx_path,
         use_selection=True,
         add_leaf_bones=False,
-        bake_anim=False,
         mesh_smooth_type="FACE",
+        **bake_args,
     )
     print("EXPORTED", fbx_path)
 
+BAKE_SWAY_ARGS = {
+    "bake_anim": True,
+    "bake_anim_use_all_actions": False,
+    "bake_anim_use_nla_strips": False,
+    "bake_anim_simplify_factor": 0.0,
+}
+NO_BAKE_ARGS = {"bake_anim": False}
+
+SWAY_KEYS = [
+    (1, (0, 0, 0)), (8, (0.15, 0, 0)),
+    (16, (-0.15, 0, 0)), (24, (0.15, 0, 0)),
+    (31, (0, 0, 0)),
+]
+
+
+def set_sway_timeline():
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = 31
+    bpy.context.scene.render.fps = 30
+
+
+def add_sway_action(arm_obj):
+    bpy.context.view_layer.objects.active = arm_obj
+    bpy.ops.object.mode_set(mode="POSE")
+    pose_bone = arm_obj.pose.bones["Hips"]
+    for frame, loc in SWAY_KEYS:
+        pose_bone.location = loc
+        pose_bone.keyframe_insert(data_path="location", frame=frame)
+    arm_obj.animation_data.action.name = "Sway"
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+out_dir, sway = parse_args()
 
 clear_scene()
+
+if sway:
+    set_sway_timeline()
+
 arm_obj = build_armature()
 body = build_body_mesh()
 assign_weights(body, arm_obj)
 add_shape_keys(body)
-export(arm_obj, body)
+
+if sway:
+    add_sway_action(arm_obj)
+
+export(arm_obj, body, out_dir, sway)

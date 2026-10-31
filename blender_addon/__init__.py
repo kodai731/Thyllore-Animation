@@ -30,7 +30,7 @@ _bootstrap.insert_wheels_to_sys_path()
 
 # Expected ABI marker -- must match crates/thyllore-ml-api/src/lib.rs::ABI_MARKER.
 # Bump in lockstep with that constant when the L2 trait has breaking changes.
-EXPECTED_ABI_MARKER: int = 4
+EXPECTED_ABI_MARKER: int = 5
 
 
 # Skip importing bpy-dependent modules during pure-package consumption (e.g.,
@@ -48,6 +48,7 @@ except ImportError:
 if _BPY_AVAILABLE:
     import os  # noqa: E402
 
+    from . import avatar_setup  # noqa: E402
     from . import operators  # noqa: E402
     from . import panels  # noqa: E402
     from . import preferences  # noqa: E402
@@ -131,6 +132,7 @@ if _BPY_AVAILABLE:
             return
 
         preferences.register()
+        avatar_setup.register()
         operators.register()
         panels.register()
         if _FEEDBACK_MESSAGE_AVAILABLE:
@@ -151,5 +153,6 @@ if _BPY_AVAILABLE:
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:
             operators.unregister()
+            avatar_setup.unregister()
         preferences.unregister()
         _REGISTERED_ABI_FAILURE = False

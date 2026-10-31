@@ -95,7 +95,7 @@ namespace Thyllore.Avatar
 
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var sidecar = AvatarSidecarLoader.Load(sidecarPath);
-            Check(sidecar.schema == 2, "sidecar schema");
+          Check(sidecar.schema == 3, "sidecar schema");
             Check(sidecar.humanoid.Count == 19, $"sidecar humanoid count {sidecar.humanoid.Count}");
             Check(sidecar.visemes.Count == 15, $"sidecar viseme count {sidecar.visemes.Count}");
 
@@ -181,15 +181,17 @@ namespace Thyllore.Avatar
 
         private static void CheckSpringChains(GameObject root, AvatarSidecar sidecar)
         {
-            Check(sidecar.spring_chains.Count > 0, $"sidecar spring chains {sidecar.spring_chains.Count}");
-            foreach (var chain in sidecar.spring_chains)
+            Check(sidecar.spring.chains.Count > 0, $"sidecar spring chains {sidecar.spring.chains.Count}");
+            foreach (var chain in sidecar.spring.chains)
             {
-                var bone = root.GetComponentsInChildren<Transform>(true).First(t => t.name == chain.root).GetComponent<VRCPhysBone>();
-                Check(bone != null, $"VRCPhysBone added to {chain.root}");
+                var bone = root.GetComponentsInChildren<Transform>(true).First(t => t.name == chain.joints[0].bone).GetComponent<VRCPhysBone>();
+                Check(bone != null, $"VRCPhysBone added to {chain.joints[0].bone}");
                 if (bone == null) continue;
-                Check(Mathf.Approximately(bone.pull, Mathf.Clamp01(chain.stiffness)), $"{chain.root} pull {bone.pull}");
-                Check(Mathf.Approximately(bone.spring, Mathf.Clamp01(1f - chain.drag)), $"{chain.root} spring {bone.spring}");
-                Check(Mathf.Approximately(bone.gravity, Mathf.Clamp01(chain.gravity)), $"{chain.root} gravity {bone.gravity}");
+                var force = chain.joints[0].force;
+                Check(force.model == "vrm", $"{chain.joints[0].bone} force model {force.model} is vrm");
+                Check(Mathf.Approximately(bone.pull, Mathf.Clamp01(force.stiffness ?? 0f)), $"{chain.joints[0].bone} pull {bone.pull}");
+                Check(Mathf.Approximately(bone.spring, Mathf.Clamp01(1f - chain.joints[0].drag_force)), $"{chain.joints[0].bone} spring {bone.spring}");
+                Check(Mathf.Approximately(bone.gravity, Mathf.Clamp01(force.gravity_power ?? 0f)), $"{chain.joints[0].bone} gravity {bone.gravity}");
             }
         }
 

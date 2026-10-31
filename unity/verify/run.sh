@@ -21,7 +21,7 @@ MODEL_FBX="$WORK_DIR/$MODEL_NAME.fbx"
 SIDECAR_JSON="$WORK_DIR/$MODEL_NAME.avatar.json"
 UNITY_EXPORT_DIR="$WORK_DIR/${MODEL_NAME}_unity"
 EXPRESSION_NAME="happy"
-SPRING_BONE_PREFIX="Left_braid"
+SPRING_BONE_ROOT="Head"
 ENGINE_FRAME_COUNT=30
 
 ENGINE_EDITS=(
@@ -42,7 +42,7 @@ ENGINE_EDITS=(
     "14:morph_weight=mouth_smile:0.2"
     "14:key_morph_weights"
 
-    "16:add_spring_chains=$SPRING_BONE_PREFIX"
+    "16:add_spring_chains_under=$SPRING_BONE_ROOT,min_joints=2"
     "16:export_unity_avatar"
 
     "18:dump_morph_track_samples"

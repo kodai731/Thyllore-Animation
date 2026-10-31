@@ -1,0 +1,527 @@
+{
+  "$defs": {
+    "AvatarStats": {
+      "properties": {
+        "bones": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "materials": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "meshes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "morph_meshes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skinned_meshes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spring_chains": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spring_colliders": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spring_transforms": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "texture_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "triangles": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "triangles",
+        "bones",
+        "materials",
+        "skinned_meshes",
+        "meshes",
+        "morph_meshes",
+        "spring_chains",
+        "spring_transforms",
+        "spring_colliders",
+        "texture_bytes"
+      ],
+      "type": "object"
+    },
+    "ChainRole": {
+      "enum": [
+        "hair",
+        "garment"
+      ],
+      "type": "string"
+    },
+    "SidecarBlink": {
+      "properties": {
+        "both": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "left": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "right": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "SidecarChainOrigin": {
+      "description": "The submesh a generated chain was placed on; absent for hand-authored chains.",
+      "properties": {
+        "material": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mesh": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/ChainRole"
+        }
+      },
+      "required": [
+        "mesh",
+        "role"
+      ],
+      "type": "object"
+    },
+    "SidecarCollider": {
+      "properties": {
+        "bone": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "offset": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "origin": {
+          "$ref": "#/$defs/SidecarColliderOrigin"
+        },
+        "radius": {
+          "format": "float",
+          "type": "number"
+        },
+        "shape": {
+          "$ref": "#/$defs/SidecarColliderShape"
+        },
+        "tail": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "bone",
+        "offset",
+        "shape",
+        "radius",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "SidecarColliderGroup": {
+      "properties": {
+        "colliders": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "colliders"
+      ],
+      "type": "object"
+    },
+    "SidecarColliderOrigin": {
+      "enum": [
+        "authored",
+        "fitted"
+      ],
+      "type": "string"
+    },
+    "SidecarColliderShape": {
+      "enum": [
+        "sphere",
+        "capsule"
+      ],
+      "type": "string"
+    },
+    "SidecarCollisionMode": {
+      "enum": [
+        "vrm_compatible",
+        "segment_extended"
+      ],
+      "type": "string"
+    },
+    "SidecarExpression": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "weights": {
+          "additionalProperties": {
+            "format": "float",
+            "type": "number"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "weights"
+      ],
+      "type": "object"
+    },
+    "SidecarHiddenTriangles": {
+      "properties": {
+        "material": {
+          "type": "string"
+        },
+        "mesh": {
+          "type": "string"
+        },
+        "triangles": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mesh",
+        "material",
+        "triangles"
+      ],
+      "type": "object"
+    },
+    "SidecarJointForce": {
+      "description": "The joint's force model and its two magnitudes in that model's units.",
+      "oneOf": [
+        {
+          "description": "VRM 1.0: both in metres per second",
+          "properties": {
+            "gravity_power": {
+              "format": "float",
+              "type": "number"
+            },
+            "model": {
+              "const": "vrm",
+              "type": "string"
+            },
+            "stiffness": {
+              "format": "float",
+              "type": "number"
+            }
+          },
+          "required": [
+            "model",
+            "stiffness",
+            "gravity_power"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Zero in the rest pose: `bending_relaxation` in m²/s, `gravity_scale` a multiple of Earth gravity",
+          "properties": {
+            "bending_relaxation": {
+              "format": "float",
+              "type": "number"
+            },
+            "gravity_scale": {
+              "format": "float",
+              "type": "number"
+            },
+            "model": {
+              "const": "rest_relative",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "bending_relaxation",
+            "gravity_scale"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SidecarSpring": {
+      "description": "The spring section of the avatar sidecar: bones are referenced by name so the file survives re-export.",
+      "properties": {
+        "chains": {
+          "items": {
+            "$ref": "#/$defs/SidecarSpringChain"
+          },
+          "type": "array"
+        },
+        "collider_groups": {
+          "items": {
+            "$ref": "#/$defs/SidecarColliderGroup"
+          },
+          "type": "array"
+        },
+        "colliders": {
+          "items": {
+            "$ref": "#/$defs/SidecarCollider"
+          },
+          "type": "array"
+        },
+        "collision_mode": {
+          "$ref": "#/$defs/SidecarCollisionMode"
+        }
+      },
+      "required": [
+        "collision_mode",
+        "colliders",
+        "collider_groups",
+        "chains"
+      ],
+      "type": "object"
+    },
+    "SidecarSpringChain": {
+      "properties": {
+        "center": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "collider_groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "joints": {
+          "items": {
+            "$ref": "#/$defs/SidecarSpringJoint"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SidecarChainOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tail": {
+          "default": null,
+          "description": "The bone of the appended VRM tail joint, which is not a simulated joint of the engine chain",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "collider_groups",
+        "joints"
+      ],
+      "type": "object"
+    },
+    "SidecarSpringJoint": {
+      "properties": {
+        "bone": {
+          "type": "string"
+        },
+        "drag_force": {
+          "format": "float",
+          "type": "number"
+        },
+        "force": {
+          "$ref": "#/$defs/SidecarJointForce"
+        },
+        "gravity_dir": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "hit_radius": {
+          "format": "float",
+          "type": "number"
+        }
+      },
+      "required": [
+        "bone",
+        "force",
+        "drag_force",
+        "gravity_dir",
+        "hit_radius"
+      ],
+      "type": "object"
+    },
+    "SidecarSubmeshRole": {
+      "properties": {
+        "material": {
+          "type": "string"
+        },
+        "mesh": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/SubmeshRole"
+        }
+      },
+      "required": [
+        "mesh",
+        "material",
+        "role"
+      ],
+      "type": "object"
+    },
+    "SubmeshRole": {
+      "description": "What the avatar setup does with a submesh: skin is hidden under garments and fit by colliders,\ngarment and hair grow spring chains, an accessory takes part in neither.",
+      "enum": [
+        "skin",
+        "garment",
+        "hair",
+        "accessory"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "blink": {
+      "$ref": "#/$defs/SidecarBlink"
+    },
+    "expression_mesh": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expressions": {
+      "items": {
+        "$ref": "#/$defs/SidecarExpression"
+      },
+      "type": "array"
+    },
+    "hidden_triangles": {
+      "items": {
+        "$ref": "#/$defs/SidecarHiddenTriangles"
+      },
+      "type": "array"
+    },
+    "humanoid": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "materials": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Base colour texture per material name, as a `/` separated path relative to the model.",
+      "type": "object"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "spring": {
+      "$ref": "#/$defs/SidecarSpring"
+    },
+    "stats": {
+      "$ref": "#/$defs/AvatarStats"
+    },
+    "submesh_roles": {
+      "items": {
+        "$ref": "#/$defs/SidecarSubmeshRole"
+      },
+      "type": "array"
+    },
+    "visemes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "humanoid",
+    "visemes",
+    "blink",
+    "expressions",
+    "spring",
+    "materials",
+    "submesh_roles",
+    "hidden_triangles",
+    "stats"
+  ],
+  "title": "AvatarSidecar",
+  "type": "object"
+}

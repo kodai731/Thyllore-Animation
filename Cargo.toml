@@ -28,6 +28,10 @@ path = "src/bin/flame_param_fit.rs"
 name = "flame_sdf_bake"
 path = "src/bin/flame_sdf_bake.rs"
 
+[[bin]]
+name = "spring_tail_compare"
+path = "src/bin/spring_tail_compare.rs"
+
 [lib]
 crate-type = ["dylib", "rlib"]
 

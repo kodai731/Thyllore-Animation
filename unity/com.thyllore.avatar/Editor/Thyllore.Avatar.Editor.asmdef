@@ -2,11 +2,19 @@
   "name": "Thyllore.Avatar.Editor",
   "rootNamespace": "Thyllore.Avatar",
   "references": [
+    "VRM10",
     "VRC.SDK3A",
     "VRC.SDKBase"
   ],
   "includePlatforms": [
     "Editor"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.vrmc.vrm",
+      "expression": "0.131.0",
+      "define": "THYLLORE_UNIVRM"
+    }
   ],
   "autoReferenced": true
 }

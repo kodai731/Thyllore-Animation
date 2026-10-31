@@ -6,7 +6,7 @@ use super::columns::{group_into_components, split_garment_columns, split_hair_co
 use super::frame::{collect_target_vertices, compute_vertex_frames, VertexFrame};
 use super::root_band::{hair_root_band, RootBand};
 use super::strand_mode::decide_strand_mode;
-use crate::garment::components::chain_gen::{
+use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainPlacement, GeneratedChain, GeneratedJoint,
     StrandMode, StrandPlacement,
 };

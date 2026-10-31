@@ -7,7 +7,7 @@ use thyllore_math_core::{
 
 use super::frame::VertexFrame;
 use super::root_band::RootBand;
-use crate::garment::components::chain_gen::{ChainGenInput, ChainGenParams};
+use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams};
 
 const AZIMUTH_BIN_COUNT: usize = 36;
 const KMEANS_ITERATION_COUNT: usize = 16;

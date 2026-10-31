@@ -2,7 +2,7 @@ use cgmath::{InnerSpace, Matrix4, Vector3};
 use thyllore_math_core::{cone_directions, TriangleBvh};
 use thyllore_model_core::SkinData;
 
-use crate::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
+use crate::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 
 pub fn find_hidden_body_vertices(
     body_positions: &[Vector3<f32>],

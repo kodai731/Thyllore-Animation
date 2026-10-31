@@ -4,10 +4,10 @@ use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
-use thyllore_avatar_core::garment::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_role_of_submesh, chain_root_role, ChainGenRequest, ChainGenSettings, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::garment::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
 };
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;

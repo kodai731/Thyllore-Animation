@@ -1,7 +1,9 @@
 use cgmath::Vector3;
 use thyllore_math_core::{distance_to_segment, median};
 
-use crate::garment::components::chain_gen::{GeneratedChain, InfluenceTarget, VertexInfluences};
+use crate::cloth_setup::components::chain_gen::{
+    GeneratedChain, InfluenceTarget, VertexInfluences,
+};
 
 /// Per chain and joint, the median distance of the vertices the joint dominates from its bone segment.
 pub fn joint_half_thicknesses(
@@ -58,7 +60,7 @@ fn joint_segment(chain: &GeneratedChain, joint: usize) -> (Vector3<f32>, Vector3
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::garment::components::chain_gen::GeneratedJoint;
+    use crate::cloth_setup::components::chain_gen::GeneratedJoint;
 
     fn chain_along_y(heads: &[f32]) -> GeneratedChain {
         GeneratedChain {

@@ -3,12 +3,12 @@ use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
-use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
-use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::garment::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
+use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
 };
-use thyllore_avatar_core::garment::systems::chain_gen;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_cli_core::scalar_assignment_parse;
 

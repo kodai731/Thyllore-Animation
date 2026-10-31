@@ -150,7 +150,7 @@ struct AnimDumpJson {
     curve_editor: serde_json::Value,
     hierarchy: Option<HierarchyJson>,
     skeleton_bones: Vec<SkeletonBoneJson>,
-    chain_gen: Option<thyllore_avatar_core::garment::components::chain_gen::ChainGenReport>,
+    chain_gen: Option<thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenReport>,
 }
 
 fn skeleton_bones_dump(world: &World) -> Vec<SkeletonBoneJson> {

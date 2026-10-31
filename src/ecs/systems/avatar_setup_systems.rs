@@ -306,7 +306,7 @@ pub(crate) fn load_or_infer_mapping(
     }
 }
 
-fn refresh_avatar_validation(state: &mut AvatarSetupState) {
+pub(crate) fn refresh_avatar_validation(state: &mut AvatarSetupState) {
     state.unresolved = collect_unresolved_roles(&state.mapping);
     state.issues = validate_mapping(&state.mapping, &state.bones);
     state.geometry_warnings = derive_humanoid_frame(&state.mapping, &state.bones)

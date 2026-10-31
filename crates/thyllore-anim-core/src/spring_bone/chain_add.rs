@@ -1,7 +1,7 @@
 use crate::{BoneId, Skeleton};
 
+use super::chain_origin::ChainOrigin;
 use super::collider_fit::{ensure_fitted_collider, FittedCapsule, FITTED_BODY_GROUP_NAME};
-use super::origin::ChainOrigin;
 use super::space::SpringSpace;
 use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 

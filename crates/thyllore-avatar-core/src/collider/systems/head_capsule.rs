@@ -1,23 +1,16 @@
 use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::{tangent_frame_around, world_y_axis};
+use thyllore_math_core::{
+    tangent_frame_around, widest_cross_section, world_y_axis, CROSS_SECTION_SLICE_COUNT,
+};
 
-use super::chain_gen::{attachment_or_target, collect_target_vertices, widest_slice};
-use crate::garment::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
-
-/// A vertical capsule standing on the widest cross-section of the skin the root bone drives.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HeadCapsule {
-    pub bottom: Vector3<f32>,
-    pub top: Vector3<f32>,
-    pub radius: f32,
-}
+use crate::collider::components::capsule::HeadCapsule;
 
 pub fn estimate_head_capsule(
     attachment: &[Vector3<f32>],
     root_position: Vector3<f32>,
 ) -> Option<HeadCapsule> {
     let up = world_y_axis();
-    let slice = widest_slice(attachment, root_position)?;
+    let slice = widest_cross_section(attachment, root_position, -up, CROSS_SECTION_SLICE_COUNT)?;
     let (reference, side) = tangent_frame_around(up);
 
     let extent = |axis: Vector3<f32>| -> (f32, f32) {
@@ -30,7 +23,7 @@ pub fn estimate_head_capsule(
     let (side_lo, side_hi) = extent(side);
     let radius = ((reference_hi - reference_lo) * 0.5).max((side_hi - side_lo) * 0.5);
 
-    let bottom_height = root_position.dot(up) - slice.progress;
+    let bottom_height = root_position.dot(up) - slice.distance;
     let bottom = reference * (reference_lo + reference_hi) * 0.5
         + side * (side_lo + side_hi) * 0.5
         + up * bottom_height;
@@ -46,16 +39,6 @@ pub fn estimate_head_capsule(
         top,
         radius,
     })
-}
-
-pub fn hair_head_capsule(input: &ChainGenInput, params: &ChainGenParams) -> Option<HeadCapsule> {
-    match params.role {
-        ChainRole::Hair => {
-            let vertices = collect_target_vertices(input);
-            estimate_head_capsule(&attachment_or_target(input, &vertices), input.root_position)
-        }
-        ChainRole::Garment => None,
-    }
 }
 
 #[cfg(test)]

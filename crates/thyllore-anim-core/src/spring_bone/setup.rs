@@ -5,8 +5,8 @@ use thyllore_math_core::world_y_down;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
+use super::chain_origin::ChainOrigin;
 use super::force::{JointForce, SpringForceModel};
-use super::origin::ChainOrigin;
 use crate::BoneId;
 
 pub type SpringChainId = u32;
@@ -106,7 +106,7 @@ impl Default for SpringChain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ColliderShape {
     Sphere { radius: f32 },
     Capsule { radius: f32, tail: Vector3<f32> },

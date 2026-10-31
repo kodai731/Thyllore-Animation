@@ -1,5 +1,5 @@
 use cgmath::{Vector3, Vector4};
-use thyllore_model_core::{BoneRemap, SkinData};
+use thyllore_model_core::{BoneRemap, SkinData, INFLUENCES_PER_VERTEX};
 
 use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
@@ -10,7 +10,9 @@ use crate::ecs::resource::{
     SkeletonSnapshot, SkinSnapshot, SpringBoneState, TimelineState, TransformGizmoData,
 };
 use crate::ecs::storage::Component;
-use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
+use crate::ecs::systems::avatar_setup_systems::{
+    refresh_avatar_validation, skeleton_to_bone_inputs,
+};
 use crate::ecs::systems::humanoid_rig_systems::invalidate_humanoid_rig;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
@@ -303,7 +305,7 @@ pub fn merge_removed_bone_weights(
     remap: &BoneRemap,
 ) {
     for (indices, weights) in skin.bone_indices.iter_mut().zip(&mut skin.bone_weights) {
-        let mut influences: Vec<(BoneId, f32)> = (0..4)
+        let mut influences: Vec<(BoneId, f32)> = (0..INFLUENCES_PER_VERTEX)
             .map(|slot| (indices[slot], weights[slot]))
             .filter(|(_, weight)| *weight > 0.0)
             .filter_map(|(bone, weight)| match (removed.contains(&bone), parent) {
@@ -371,7 +373,34 @@ fn remap_bone_references(world: &mut World, remap: &BoneRemap) {
     drop(clips);
 
     remap_editor_bone_state(world, remap);
+    remap_humanoid_mapping(world, remap);
     invalidate_humanoid_rig(world);
+}
+
+/// Follows the humanoid roles to their renumbered bones; a role whose bone was removed is dropped and reported.
+fn remap_humanoid_mapping(world: &mut World, remap: &BoneRemap) {
+    let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() else {
+        return;
+    };
+    let mut lost_roles = Vec::new();
+    state.mapping.by_role = state
+        .mapping
+        .by_role
+        .iter()
+        .filter_map(|(&role, &bone)| match remap.map(bone as BoneId) {
+            Some(new_bone) => Some((role, new_bone as usize)),
+            None => {
+                lost_roles.push(role.unity_name());
+                None
+            }
+        })
+        .collect();
+    if !lost_roles.is_empty() {
+        msg_warn!(
+            "Skeleton edit removed the bones of humanoid roles: {}",
+            lost_roles.join(", ")
+        );
+    }
 }
 
 fn remap_spring_setup(setup: &mut SpringBoneSetup, remap: &BoneRemap) {
@@ -527,9 +556,26 @@ pub fn refresh_after_skeleton_edit(
             );
         bone_gizmo.cached_global_transforms = rest_globals;
     }
-    world.resource_mut::<AvatarSetupState>().bones = skeleton_to_bone_inputs(skeleton);
+    let mut state = world.resource_mut::<AvatarSetupState>();
+    state.bones = skeleton_to_bone_inputs(skeleton);
+    refresh_avatar_validation(&mut state);
+    report_humanoid_rig_issues(&state);
+    drop(state);
 
     sync_fbx_clusters(world, assets, graphics, skeleton_asset.skeleton_id);
+}
+
+/// A skeleton edit must leave a mapped humanoid rig intact; every issue the validation finds is logged.
+fn report_humanoid_rig_issues(state: &AvatarSetupState) {
+    if state.mapping.by_role.is_empty() {
+        return;
+    }
+    for issue in &state.issues {
+        msg_warn!("Humanoid rig after the skeleton edit: {}", issue);
+    }
+    for warning in &state.geometry_warnings {
+        msg_warn!("Humanoid rig after the skeleton edit: {:?}", warning);
+    }
 }
 
 fn sync_fbx_clusters(

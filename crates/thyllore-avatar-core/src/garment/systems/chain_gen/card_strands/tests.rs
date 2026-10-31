@@ -1,6 +1,10 @@
 use super::*;
-use crate::garment::components::chain_gen::{ChainGenSettings, ChainRole};
+use crate::garment::components::chain_gen::{ChainGenSettings, ChainRole, StrandMode};
 use crate::garment::components::submesh_role::SubmeshSelector;
+use crate::garment::systems::chain_gen::strand_merge::{
+    merge_strands, tuft_centerline, StrandMergeStop,
+};
+use crate::garment::systems::chain_gen::strand_mode::{decide_strand_mode, uv_strand_correlation};
 use crate::garment::systems::chain_gen::{hair_root_band, place_chains, place_chains_with_strands};
 
 const KEEP_ALL_BAND: f32 = -1.0;

@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::f32::consts::PI;
 
 use thyllore_math_core::{
     angle_bin, circular_mean_and_concentration, cluster_angles, count_circular_modes,
-    smoothed_circular_histogram, triangle_component_labels, WeightedAngle,
+    smoothed_circular_histogram, triangle_component_labels, WeightedAngle, PI,
 };
 
 use super::frame::VertexFrame;

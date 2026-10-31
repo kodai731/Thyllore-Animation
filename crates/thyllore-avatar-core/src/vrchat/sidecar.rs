@@ -13,7 +13,7 @@ use crate::vrchat::viseme::VISEME_CHANNELS;
 
 pub const SIDECAR_SCHEMA_VERSION: u32 = 4;
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AvatarSidecar {
     pub schema: u32,
@@ -30,7 +30,7 @@ pub struct AvatarSidecar {
     pub stats: AvatarStats,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarSubmeshRole {
     pub mesh: String,
@@ -38,14 +38,14 @@ pub struct SidecarSubmeshRole {
     pub role: SubmeshRole,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SidecarHiddenTriangles {
     pub mesh: String,
     pub material: String,
     pub triangles: Vec<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarBlink {
     pub both: Option<String>,
@@ -53,7 +53,7 @@ pub struct SidecarBlink {
     pub right: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SidecarExpression {
     pub name: String,

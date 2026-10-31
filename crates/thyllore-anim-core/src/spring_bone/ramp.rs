@@ -1,6 +1,7 @@
 use std::fmt;
 use std::sync::LazyLock;
 
+use thyllore_math_core::lerp;
 use thyllore_model_core::{BoneId, Skeleton};
 use thyllore_scene_core::{SceneFields, UiParam};
 
@@ -68,10 +69,6 @@ impl ChainRamp {
         self.root = joints[0].clone();
         self.tip = joints[joints.len() - 1].clone();
     }
-}
-
-fn lerp(from: f32, to: f32, weight: f32) -> f32 {
-    from + (to - from) * weight
 }
 
 /// A ramp interpolates force magnitudes, which only compare within one force model.
@@ -221,6 +218,50 @@ pub fn joint_count_of(setup: &SpringBoneSetup, chain_ids: &[SpringChainId]) -> u
         .filter(|c| chain_ids.contains(&c.id))
         .map(|c| c.joints.len())
         .sum()
+}
+
+/// The chains a ramp (or a collider group assignment) reaches and how many joints they hold.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct RampTargets {
+    pub chains: Vec<SpringChainId>,
+    pub joint_count: usize,
+}
+
+impl RampTargets {
+    /// The chains reached from `chain_id` under `scope`; without a skeleton only the chain itself.
+    pub fn in_scope(
+        setup: &SpringBoneSetup,
+        skeleton: Option<&Skeleton>,
+        chain_id: SpringChainId,
+        scope: RampScope,
+    ) -> Self {
+        let chains = match skeleton {
+            Some(skeleton) => chains_in_scope(setup, skeleton, chain_id, scope),
+            None => vec![chain_id],
+        };
+        Self::of_chains(setup, chains)
+    }
+
+    /// The chains rooted directly under `bone_id`, or None when the bone has none.
+    pub fn under_bone(
+        setup: &SpringBoneSetup,
+        skeleton: Option<&Skeleton>,
+        bone_id: BoneId,
+    ) -> Option<Self> {
+        let chains = chains_under_bone(setup, skeleton?, bone_id);
+        if chains.is_empty() {
+            return None;
+        }
+        Some(Self::of_chains(setup, chains))
+    }
+
+    fn of_chains(setup: &SpringBoneSetup, chains: Vec<SpringChainId>) -> Self {
+        let joint_count = joint_count_of(setup, &chains);
+        Self {
+            chains,
+            joint_count,
+        }
+    }
 }
 
 pub static CHAIN_RAMP_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {

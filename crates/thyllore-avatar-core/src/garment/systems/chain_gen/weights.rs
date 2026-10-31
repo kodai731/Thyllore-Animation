@@ -2,13 +2,12 @@ use std::collections::BTreeSet;
 
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::project_point_to_segment;
+use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 use super::frame::collect_target_vertices;
 use crate::garment::components::chain_gen::{
     ChainGenInput, ChainGenParams, GeneratedChain, InfluenceTarget, VertexInfluences,
 };
-
-pub(super) const MAX_INFLUENCES_PER_VERTEX: usize = 4;
 
 /// Arc length at every joint head of a chain and its total length to the tail.
 struct ChainArc {
@@ -148,7 +147,7 @@ fn apply_root_blend(influences: &mut Vec<(InfluenceTarget, f32)>, arc_position: 
 fn normalize_influences(influences: &mut Vec<(InfluenceTarget, f32)>) {
     influences.retain(|(_, weight)| *weight > 0.0);
     influences.sort_by(|a, b| b.1.total_cmp(&a.1));
-    influences.truncate(MAX_INFLUENCES_PER_VERTEX);
+    influences.truncate(INFLUENCES_PER_VERTEX);
 
     let sum: f32 = influences.iter().map(|(_, w)| w).sum();
     if sum > 1e-8 {

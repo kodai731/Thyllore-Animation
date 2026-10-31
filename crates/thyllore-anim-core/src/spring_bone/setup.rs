@@ -1,11 +1,12 @@
 use std::sync::LazyLock;
 
 use cgmath::Vector3;
+use thyllore_math_core::world_y_down;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
+use super::chain_origin::ChainOrigin;
 use super::force::{JointForce, SpringForceModel};
-use super::origin::ChainOrigin;
 use crate::BoneId;
 
 pub type SpringChainId = u32;
@@ -41,7 +42,7 @@ impl SpringJointParam {
             bone_id: 0,
             force: JointForce::default_for(force_model),
             drag_force,
-            gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+            gravity_dir: world_y_down(),
             hit_radius,
         }
     }
@@ -105,7 +106,7 @@ impl Default for SpringChain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ColliderShape {
     Sphere { radius: f32 },
     Capsule { radius: f32, tail: Vector3<f32> },

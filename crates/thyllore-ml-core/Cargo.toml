@@ -22,13 +22,10 @@ debug-log = []
 thyllore-ml-api = { path = "../thyllore-ml-api" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-anim-core = { path = "../thyllore-anim-core" }
-thyllore-avatar-core = { path = "../thyllore-avatar-core" }
-thyllore-scene-core = { path = "../thyllore-scene-core" }
 ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "load-dynamic", "download-binaries", "copy-dylibs", "tls-native"] }
 anyhow = "1"
 base64 = "0.22"
 cgmath = "0.18"
-ron = "0.8"
 ed25519-dalek = "2"
 flate2 = "1"
 serde = { version = "1", features = ["derive"] }

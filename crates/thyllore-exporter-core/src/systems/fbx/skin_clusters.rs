@@ -4,14 +4,14 @@ use cgmath::{Matrix4, SquareMatrix};
 
 use thyllore_anim_core::Skeleton;
 use thyllore_file_format_core::fbx::components::ClusterInfo;
-use thyllore_model_core::SkinData;
+use thyllore_model_core::{SkinData, INFLUENCES_PER_VERTEX};
 
 pub fn clusters_from_skin_data(skin: &SkinData, skeleton: &Skeleton) -> Vec<ClusterInfo> {
     let mut bone_map: BTreeMap<u32, (Vec<usize>, Vec<f32>)> = BTreeMap::new();
 
     for (k, weights) in skin.bone_weights.iter().enumerate() {
         let indices = &skin.bone_indices[k];
-        for s in 0..4 {
+        for s in 0..INFLUENCES_PER_VERTEX {
             let w = weights[s];
             if w > 0.0 {
                 let bone_id = indices[s];

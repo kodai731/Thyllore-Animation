@@ -167,3 +167,23 @@ fn spring_chains_drop_removed_joints_and_empty_chains() {
     assert_eq!(setup.chains[0].joints.len(), 1);
     assert_eq!(setup.chains[0].joints[0].bone_id, 1);
 }
+
+#[test]
+fn humanoid_mapping_follows_renumbered_bones_and_drops_removed_roles() {
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let (_, remap, _) = remove_middle_of_three();
+    let mut world = World::new();
+    let mut state = AvatarSetupState::default();
+    state.mapping.by_role.insert(HumanoidRole::Hips, 0);
+    state.mapping.by_role.insert(HumanoidRole::Spine, 1);
+    state.mapping.by_role.insert(HumanoidRole::Head, 3);
+    world.insert_resource(state);
+
+    remap_humanoid_mapping(&mut world, &remap);
+
+    let mapping = &world.resource::<AvatarSetupState>().mapping;
+    assert_eq!(mapping.by_role.get(&HumanoidRole::Hips), Some(&0));
+    assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), None);
+    assert_eq!(mapping.by_role.get(&HumanoidRole::Head), Some(&1));
+}

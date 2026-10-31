@@ -2,14 +2,14 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::world_y_axis;
+use thyllore_math_core::{tangent_frame_around, world_y_axis};
 
 use crate::garment::components::chain_gen::ChainGenInput;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct VertexFrame {
     pub vertex: u32,
-    /// Spherical φ around the world up axis through `phi_center`, from the `build_phi_basis` reference.
+    /// Azimuth φ about the world up axis through `phi_center`, from the reference axis of `tangent_frame_around(up)`.
     pub phi_around_up: f32,
     /// Distance down the world up axis from the root bone.
     pub progress: f32,
@@ -28,17 +28,6 @@ pub(crate) fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
         .collect()
 }
 
-/// The reference axis φ = 0 points along and the side axis at φ = +90°, both orthogonal to `up`.
-pub(crate) fn build_phi_basis(up: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
-    let seed = if up.x.abs() < 0.9 {
-        Vector3::unit_x()
-    } else {
-        Vector3::unit_z()
-    };
-    let reference = (seed - up * seed.dot(up)).normalize();
-    (reference, up.cross(reference))
-}
-
 pub(crate) fn progress_of(
     position: Vector3<f32>,
     root_position: Vector3<f32>,
@@ -53,7 +42,7 @@ pub(super) fn compute_vertex_frames(
     phi_center: Vector3<f32>,
 ) -> Vec<VertexFrame> {
     let up = world_y_axis();
-    let (reference, side) = build_phi_basis(up);
+    let (reference, side) = tangent_frame_around(up);
 
     vertices
         .iter()

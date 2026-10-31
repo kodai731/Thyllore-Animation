@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 
-use cgmath::{InnerSpace, Matrix4, Vector3};
 use thyllore_avatar_core::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::garment::systems::hidden_mask::{
-    find_hidden_triangle_indices, merge_mask_meshes,
+    find_hidden_triangle_indices, mask_mesh_from_skin, merge_mask_meshes,
 };
 use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;
 
-use crate::animation::{Skeleton, SkinData};
+use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_submesh_role_systems::{
@@ -159,7 +158,7 @@ fn model_space_mask_mesh(
         return None;
     };
     let geometry_to_model = skin_geometry_to_model(skeleton, skeleton_root_bone(skeleton));
-    Some(skin_to_mask_mesh(
+    Some(mask_mesh_from_skin(
         skin,
         &mesh.vertex_data.indices,
         geometry_to_model,
@@ -172,32 +171,6 @@ fn skeleton_root_bone(skeleton: &Skeleton) -> usize {
         .iter()
         .position(|bone| bone.parent_id.is_none())
         .unwrap_or(0)
-}
-
-fn skin_to_mask_mesh(
-    skin: &SkinData,
-    indices: &[u32],
-    geometry_to_model: Matrix4<f32>,
-) -> MaskMesh {
-    let positions: Vec<Vector3<f32>> = skin
-        .base_positions
-        .iter()
-        .map(|p| (geometry_to_model * p.extend(1.0)).truncate())
-        .collect();
-    let normals: Vec<Vector3<f32>> = skin
-        .base_normals
-        .iter()
-        .map(|n| (geometry_to_model * n.extend(0.0)).truncate().normalize())
-        .collect();
-    let triangles: Vec<[u32; 3]> = indices
-        .chunks_exact(3)
-        .map(|c| [c[0], c[1], c[2]])
-        .collect();
-    MaskMesh {
-        positions,
-        normals,
-        triangles,
-    }
 }
 
 fn build_garment_mask_mesh(

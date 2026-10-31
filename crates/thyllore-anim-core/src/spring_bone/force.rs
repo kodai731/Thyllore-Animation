@@ -1,8 +1,7 @@
 use std::sync::LazyLock;
 
+use thyllore_math_core::lerp;
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
-
-pub const EARTH_GRAVITY_M_PER_S2: f32 = 9.80665;
 
 /// The strand lag that defines the hair material: a strand of this length trails its root moving at this speed by this angle.
 pub const STRAND_LAG_REFERENCE_SPEED_M_PER_S: f32 = 0.5;
@@ -148,8 +147,8 @@ impl JointForce {
         let from = self.magnitudes();
         let target = to.magnitudes();
         Some(self.with_magnitudes([
-            from[0] + (target[0] - from[0]) * weight,
-            from[1] + (target[1] - from[1]) * weight,
+            lerp(from[0], target[0], weight),
+            lerp(from[1], target[1], weight),
         ]))
     }
 }

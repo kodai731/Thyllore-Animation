@@ -38,6 +38,8 @@ pub struct ChainGenSettings {
 }
 
 /// Settings of the azimuth placement, which rings the hair around the skin's widest cross-section.
+/// Columns are placed by the spherical azimuth φ about the world up axis (+Y), measured from the
+/// reference axis of `tangent_frame_around(up)` (+X) toward its side axis (−Z).
 #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
 #[params(tag = ChainGenOwner, owner = Setup)]
 pub struct AzimuthStrandSettings {

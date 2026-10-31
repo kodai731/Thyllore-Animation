@@ -1,5 +1,7 @@
 use cgmath::{EuclideanSpace, InnerSpace, Matrix3, Matrix4, Point3, Transform, Vector3};
-use thyllore_math_core::{closest_segment_parameters, mean_axis_scale, project_point_to_segment};
+use thyllore_math_core::{
+    closest_segment_parameters, mean_axis_scale, project_point_to_segment, world_y_axis,
+};
 
 use super::setup::{ColliderShape, SpringColliderDef};
 
@@ -121,7 +123,7 @@ fn resolve_tail_collision(
 
     let penetration = min_distance - distance;
     let push_direction = if distance < 1e-8 {
-        Vector3::new(0.0, 1.0, 0.0)
+        world_y_axis()
     } else {
         diff / distance
     };
@@ -149,7 +151,7 @@ fn resolve_segment_collision(
 
     let penetration = min_distance - distance;
     let push_direction = if distance < 1e-8 {
-        Vector3::new(0.0, 1.0, 0.0)
+        world_y_axis()
     } else {
         diff / distance
     };

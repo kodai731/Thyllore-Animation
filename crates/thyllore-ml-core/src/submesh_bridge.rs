@@ -1,10 +1,10 @@
 use cgmath::Vector3;
 
-use thyllore_avatar_core::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_avatar_core::garment::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     guess_submesh_role as core_guess_submesh_role, SubmeshKey,
 };
-use thyllore_avatar_core::garment::systems::hidden_mask::{
+use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
     find_hidden_triangle_indices, merge_mask_meshes,
 };
 

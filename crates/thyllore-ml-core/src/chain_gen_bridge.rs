@@ -1,14 +1,14 @@
 use cgmath::Vector3;
-use thyllore_avatar_core::garment::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
     CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::garment::components::submesh_role::SubmeshSelector;
-use thyllore_avatar_core::garment::systems::chain_gen::hair_head_capsule;
-use thyllore_avatar_core::garment::systems::chain_gen::{
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains,
 };
-use thyllore_avatar_core::garment::systems::joint_radius::joint_half_thicknesses;
+use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
 
 use crate::param_rows::{param_rows, ParamRow};
 

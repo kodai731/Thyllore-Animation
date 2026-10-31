@@ -8,7 +8,7 @@ use crate::submesh_bridge::{
     guess_submesh_role as bridge_guess_submesh_role,
     hidden_mask_defaults as bridge_hidden_mask_defaults, MaskMeshInput,
 };
-use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
 
 #[pyfunction]
 pub fn guess_submesh_role(mesh: &str, material: &str) -> String {

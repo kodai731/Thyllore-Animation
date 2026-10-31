@@ -18,6 +18,7 @@ thyllore-anim-core = { path = "../thyllore-anim-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-scene-core = { path = "../thyllore-scene-core" }
+schemars = "1"
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -8,6 +8,7 @@ description = "Layer 2 dynamic animation evaluation for ThylloreAnimation (Clip,
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+schemars = "1"
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-scene-core = { path = "../thyllore-scene-core" }

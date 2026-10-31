@@ -96,6 +96,13 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 Rule of thumb: if the code needs neither `World` nor `vk::*`, it belongs in a crate. If it needs `vk::*`
 but not `World`, it belongs in `thyllore-vulkan-core`.
 
+### Crates as the source of the Unity sidecar types
+
+`crates/thyllore-avatar-core/src/vrchat/sidecar_csharp.rs` emits `unity/com.thyllore.avatar/Editor/Sidecar.cs`
+and `sidecar.schema.json` from the `JsonSchema` derive on the sidecar types; `src/bin/sidecar_csharp.rs` writes
+them and a test in the module fails while the checked-in `.cs` is stale. Unity never hand-writes a sidecar
+type; `SidecarLoader.cs` and the appliers consume the generated ones.
+
 ### Crates as Blender addon build units
 
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin

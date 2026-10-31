@@ -1,48 +1,58 @@
 # `paired = true` declares the roles Left<part> and Right<part>; `[[chain]]` lists parts from ancestor to descendant.
+# `collider = true` marks the body parts thick enough to carry a fitted spring collider.
 
 [[role]]
 part = "Hips"
+collider = true
 required = true
 translation = true
 patterns = [["hips"], ["hip"], ["pelvis"]]
 
 [[role]]
 part = "UpperLeg"
+collider = true
 paired = true
 required = true
 patterns = [["upper", "leg"], ["upperleg"], ["thigh"], ["up", "leg"], ["upleg"]]
 
 [[role]]
 part = "LowerLeg"
+collider = true
 paired = true
 required = true
 patterns = [["lower", "leg"], ["lowerleg"], ["knee"], ["calf"], ["shin"], ["leg"]]
 
 [[role]]
 part = "Foot"
+collider = true
 paired = true
 required = true
 patterns = [["foot"], ["ankle"]]
 
 [[role]]
 part = "Spine"
+collider = true
 required = true
 patterns = [["spine"]]
 
 [[role]]
 part = "Chest"
+collider = true
 patterns = [["chest"], ["spine1"], ["spine", "02"]]
 
 [[role]]
 part = "UpperChest"
+collider = true
 patterns = [["upper", "chest"], ["upperchest"]]
 
 [[role]]
 part = "Neck"
+collider = true
 patterns = [["neck"]]
 
 [[role]]
 part = "Head"
+collider = true
 required = true
 patterns = [["head"]]
 
@@ -53,18 +63,21 @@ patterns = [["shoulder"], ["clavicle"]]
 
 [[role]]
 part = "UpperArm"
+collider = true
 paired = true
 required = true
 patterns = [["upper", "arm"], ["upperarm"], ["arm"]]
 
 [[role]]
 part = "LowerArm"
+collider = true
 paired = true
 required = true
 patterns = [["lower", "arm"], ["lowerarm"], ["forearm"], ["fore", "arm"], ["elbow"]]
 
 [[role]]
 part = "Hand"
+collider = true
 paired = true
 required = true
 patterns = [["hand"], ["wrist"]]

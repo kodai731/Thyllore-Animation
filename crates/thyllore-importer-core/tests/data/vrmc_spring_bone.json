@@ -1,0 +1,23 @@
+{
+  "specVersion": "1.0",
+  "colliders": [
+    { "node": 1, "shape": { "sphere": { "offset": [0.0, 0.05, 0.02], "radius": 0.08 } } },
+    { "node": 2, "shape": { "capsule": { "offset": [0.0, 0.0, 0.0], "radius": 0.04, "tail": [0.0, -0.25, 0.0] } } }
+  ],
+  "colliderGroups": [
+    { "name": "head", "colliders": [0] },
+    { "name": "body", "colliders": [1] }
+  ],
+  "springs": [
+    {
+      "name": "hair_front",
+      "center": 0,
+      "colliderGroups": [0, 1],
+      "joints": [
+        { "node": 3, "hitRadius": 0.01, "stiffness": 0.8, "gravityPower": 0.1, "gravityDir": [0.0, -1.0, 0.0], "dragForce": 0.4 },
+        { "node": 4, "hitRadius": 0.015, "stiffness": 0.6, "gravityPower": 0.2, "gravityDir": [0.0, -1.0, 0.0], "dragForce": 0.5 },
+        { "node": 5, "hitRadius": 0.02, "stiffness": 0.4, "gravityPower": 0.3, "gravityDir": [0.0, -1.0, 0.0], "dragForce": 0.6 }
+      ]
+    }
+  ]
+}

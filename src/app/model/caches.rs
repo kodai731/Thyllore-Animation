@@ -6,6 +6,7 @@ pub(super) fn insert_model_caches(
     world: &mut World,
     model_name: &str,
     fbx_model: Option<FbxModel>,
+    graphics_mesh_offset: usize,
 ) {
     if let Some(fbx) = fbx_model {
         let has_skinned_meshes = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
@@ -13,6 +14,7 @@ pub(super) fn insert_model_caches(
             fbx,
             model_name.to_string(),
             has_skinned_meshes,
+            graphics_mesh_offset,
         ));
         world.insert_resource(GltfModelCache::empty());
         return;

@@ -6,6 +6,7 @@ use cgmath::Matrix4;
 use crate::animation::SkeletonId;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{AnimationType, PhaseSubTimings};
+use crate::ecs::systems::skeleton_gizmos_clear;
 use crate::ecs::transform_propagation_system;
 use crate::ecs::FrameContext;
 
@@ -25,8 +26,8 @@ pub fn run_transform_propagate_phase(
     );
 
     let t = Instant::now();
-    if let Some((skel_id, transforms, anim_type)) = bone_transforms {
-        if ctx.world.contains_resource::<BoneGizmoData>() {
+    if ctx.world.contains_resource::<BoneGizmoData>() {
+        if let Some((skel_id, transforms, anim_type)) = bone_transforms {
             let entity_transform = find_skin_entity_transform(ctx.world);
             let final_transforms = apply_entity_transform(&transforms, &entity_transform);
 
@@ -34,6 +35,8 @@ pub fn run_transform_propagate_phase(
             bone_gizmo.cached_skeleton_id = Some(skel_id);
             bone_gizmo.cached_animation_type = anim_type;
             bone_gizmo.cached_global_transforms = final_transforms;
+        } else if skeleton_gizmos_are_stale(ctx.world) {
+            skeleton_gizmos_clear(ctx.world);
         }
     }
     sub.insert(
@@ -45,6 +48,17 @@ pub fn run_transform_propagate_phase(
         .resource_mut::<PhaseSubTimings>()
         .phases
         .insert(TRANSFORM_PROPAGATE_PHASE, sub);
+}
+
+fn skeleton_gizmos_are_stale(world: &crate::ecs::World) -> bool {
+    use crate::ecs::world::Animator;
+
+    let has_cached_skeleton = world
+        .resource::<BoneGizmoData>()
+        .cached_skeleton_id
+        .is_some();
+    let has_animated_entity = world.iter_components::<Animator>().next().is_some();
+    has_cached_skeleton && !has_animated_entity
 }
 
 fn find_skin_entity_transform(world: &crate::ecs::World) -> Matrix4<f32> {
@@ -107,6 +121,43 @@ mod tests {
             .build();
 
         world
+    }
+
+    fn insert_bone_gizmo_with_cached_skeleton(world: &mut crate::ecs::World) {
+        let mut bone_gizmo = BoneGizmoData::default();
+        bone_gizmo.visible = true;
+        bone_gizmo.cached_skeleton_id = Some(1);
+        bone_gizmo.cached_global_transforms = vec![Matrix4::identity()];
+        world.insert_resource(bone_gizmo);
+    }
+
+    #[test]
+    fn skeleton_gizmos_stay_while_animated_entity_exists() {
+        let mut world = create_world_with_animated_entity(Vector3::new(0.0, 0.0, 0.0));
+        insert_bone_gizmo_with_cached_skeleton(&mut world);
+
+        assert!(!skeleton_gizmos_are_stale(&world));
+    }
+
+    #[test]
+    fn skeleton_gizmos_clear_after_animated_entity_is_despawned() {
+        let mut world = create_world_with_animated_entity(Vector3::new(0.0, 0.0, 0.0));
+        insert_bone_gizmo_with_cached_skeleton(&mut world);
+        let animated: Vec<u64> = world
+            .iter_components::<Animator>()
+            .map(|(entity, _)| entity)
+            .collect();
+        for entity in animated {
+            world.despawn(entity);
+        }
+
+        assert!(skeleton_gizmos_are_stale(&world));
+        skeleton_gizmos_clear(&mut world);
+
+        let bone_gizmo = world.resource::<BoneGizmoData>();
+        assert!(!bone_gizmo.visible);
+        assert!(bone_gizmo.cached_skeleton_id.is_none());
+        assert!(bone_gizmo.cached_global_transforms.is_empty());
     }
 
     #[test]

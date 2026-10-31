@@ -5,7 +5,7 @@ use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
-    TransformGizmoData,
+    SpringBoneGizmoData, TransformGizmoData,
 };
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::World;
@@ -39,6 +39,7 @@ impl<'a> OverlayRenderer<'a> {
         self.draw_transform_gizmo(ctx, command_buffer)?;
         self.draw_bone_gizmo(ctx, command_buffer)?;
         self.draw_constraint_gizmo(ctx, command_buffer)?;
+        self.draw_spring_bone_gizmo(ctx, command_buffer)?;
         if !self.reference_comparison_active() {
             self.draw_light_lines(ctx, command_buffer)?;
             self.draw_billboard(ctx, command_buffer)?;
@@ -264,15 +265,37 @@ impl<'a> OverlayRenderer<'a> {
             return Ok(());
         }
 
-        let options = LineMeshDrawOptions::default();
-        record_line_mesh_draw(
+        self.record_alpha_mesh(
             ctx,
             &constraint_gizmo.wire_mesh,
             &constraint_gizmo.wire_render_info,
-            &options,
+            1.0,
+            LineMeshDrawOptions::default(),
             command_buffer,
-        )?;
-        Ok(())
+        )
+    }
+
+    unsafe fn draw_spring_bone_gizmo(
+        &self,
+        ctx: &FrameRenderContext<'_>,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        let Some(spring_gizmo) = self.world.get_resource::<SpringBoneGizmoData>() else {
+            return Ok(());
+        };
+
+        if !spring_gizmo.draws_anything() {
+            return Ok(());
+        }
+
+        self.record_alpha_mesh(
+            ctx,
+            &spring_gizmo.wire_mesh,
+            &spring_gizmo.wire_render_info,
+            1.0,
+            LineMeshDrawOptions::default(),
+            command_buffer,
+        )
     }
 
     unsafe fn draw_billboard(

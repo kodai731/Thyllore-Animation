@@ -66,6 +66,13 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
+- `thyllore-avatar-core/src/cloth_setup/` is the outfit setup domain (submesh roles, the hidden skin mask and
+  spring chain generation for both hair and garment roles); it is named after the setup, not after one role.
+- `thyllore-avatar-core/src/collider/` is the collider domain shared by every chain role: `components/`
+  holds the shapes (`HeadCapsule`), `systems/` their estimators from skin geometry (`estimate_head_capsule`
+  on top of math-core's `widest_cross_section`). `cloth_setup/systems/chain_gen/` only decides which role gets
+  one (`hair_head_capsule`); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
+  screen-space scale) lives in `thyllore-math-core`.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
   `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
   sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and,
@@ -438,6 +445,13 @@ its own file).
 A window that interprets the mouse itself (scrub, drag, pan, wheel) reads it through `src/platform/ui/pointer.rs`
 and starts the drag with `ui_pointer_begin`, which resolves hover, active widgets and the `UiPointerOwner` held by
 another drag; it never reads `ui.io().mouse_*` / `ui.is_mouse_*` (`tests/ui_raw_pointer_reads.rs`).
+
+`src/platform/ui/` groups its windows by feature: `effect/` (the per-effect sections `flame/`, `lightning/`,
+`water.rs`, `wind.rs` with the shared `rows.rs` / `sections.rs`), `inspector/` (the window, its target
+resolution and every inspector section: `sections.rs`, `blend_shape/`, `bone/`, `constraint/`,
+`spring_bone/`), `scene_settings/` (the scene panel's view and row groups), `avatar_setup/`, `curve_editor/`
+and `ui_rows/` (the `UiRow` declarations in `row.rs`, the single renderer in `draw.rs`, the test-only label
+helpers in `labels.rs`). A new window or section goes into the directory of the feature it belongs to.
 
 ## src/vulkanr/
 

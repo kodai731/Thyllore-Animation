@@ -1,7 +1,7 @@
-use crate::animation::BoneId;
+use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Children, Entity, Name, World};
+use crate::ecs::world::{Children, Entity, Name, Parent, World};
 
 #[derive(Clone, Debug)]
 pub struct HierarchyEntry {
@@ -98,6 +98,18 @@ pub fn hierarchy_select(state: &mut HierarchyState, entity: Entity) {
     state.multi_selection.insert(entity);
 }
 
+pub fn hierarchy_reveal_entity(world: &mut World, entity: Entity) {
+    let mut ancestor = world.get_component::<Parent>(entity).map(|parent| parent.0);
+    while let Some(current) = ancestor {
+        expand_entity(world, current);
+        ancestor = world
+            .get_component::<Parent>(current)
+            .map(|parent| parent.0);
+    }
+
+    world.resource_mut::<HierarchyState>().scroll_to_selected = true;
+}
+
 pub fn hierarchy_deselect_all(state: &mut HierarchyState) {
     state.selected_entity = None;
     state.selection_anchor = None;
@@ -127,6 +139,16 @@ pub fn hierarchy_select_bone(state: &mut HierarchyState, bone_id: BoneId) {
     state.selected_bone_id = Some(bone_id);
 }
 
+pub fn hierarchy_reveal_bone(state: &mut HierarchyState, skeleton: &Skeleton, bone_id: BoneId) {
+    let mut ancestor = skeleton.get_bone(bone_id).and_then(|bone| bone.parent_id);
+    while let Some(current) = ancestor {
+        state.expanded_bone_ids.insert(current);
+        ancestor = skeleton.get_bone(current).and_then(|bone| bone.parent_id);
+    }
+
+    state.scroll_to_selected = true;
+}
+
 pub fn hierarchy_deselect_bone(state: &mut HierarchyState) {
     state.selected_bone_id = None;
 }
@@ -141,4 +163,90 @@ pub fn hierarchy_collapse_bone(state: &mut HierarchyState, bone_id: BoneId) {
 
 pub fn hierarchy_is_bone_expanded(state: &HierarchyState, bone_id: BoneId) -> bool {
     state.expanded_bone_ids.contains(&bone_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::Bone;
+
+    fn create_world_with_nested_entities() -> (World, Entity, Entity, Entity) {
+        let mut world = World::new();
+        let root = world
+            .entity()
+            .with_name("root")
+            .with_global_transform()
+            .with_editor_display(EntityIcon::Empty, false)
+            .build();
+        let middle = world
+            .entity()
+            .with_name("middle")
+            .with_parent(root)
+            .with_editor_display(EntityIcon::Empty, false)
+            .build();
+        let leaf = world
+            .entity()
+            .with_name("leaf")
+            .with_parent(middle)
+            .with_editor_display(EntityIcon::Empty, false)
+            .build();
+        world.insert_resource(HierarchyState::default());
+        (world, root, middle, leaf)
+    }
+
+    #[test]
+    fn reveal_entity_expands_every_ancestor_and_requests_scroll() {
+        let (mut world, root, middle, leaf) = create_world_with_nested_entities();
+
+        hierarchy_select(&mut world.resource_mut::<HierarchyState>(), leaf);
+        hierarchy_reveal_entity(&mut world, leaf);
+
+        let state = world.resource::<HierarchyState>();
+        let rows = query_hierarchy_tree(&world, &state);
+        let visible: Vec<Entity> = rows.iter().map(|row| row.entity).collect();
+        assert_eq!(visible, vec![root, middle, leaf]);
+        assert!(rows[2].selected);
+        assert!(state.scroll_to_selected);
+    }
+
+    #[test]
+    fn reveal_entity_leaves_the_selected_entity_itself_collapsed() {
+        let (mut world, _, middle, leaf) = create_world_with_nested_entities();
+
+        hierarchy_reveal_entity(&mut world, middle);
+
+        let state = world.resource::<HierarchyState>();
+        let rows = query_hierarchy_tree(&world, &state);
+        assert!(rows.iter().all(|row| row.entity != leaf));
+    }
+
+    fn create_chain_skeleton() -> Skeleton {
+        let mut skeleton = Skeleton::default();
+        for id in 0..3u32 {
+            let parent_id = id.checked_sub(1);
+            skeleton.bones.push(Bone {
+                id,
+                name: format!("bone_{id}"),
+                parent_id,
+                children: if id < 2 { vec![id + 1] } else { Vec::new() },
+                ..Bone::default()
+            });
+        }
+        skeleton.root_bone_ids = vec![0];
+        skeleton
+    }
+
+    #[test]
+    fn reveal_bone_expands_every_ancestor_and_requests_scroll() {
+        let skeleton = create_chain_skeleton();
+        let mut state = HierarchyState::default();
+
+        hierarchy_select_bone(&mut state, 2);
+        hierarchy_reveal_bone(&mut state, &skeleton, 2);
+
+        assert!(state.expanded_bone_ids.contains(&0));
+        assert!(state.expanded_bone_ids.contains(&1));
+        assert!(!state.expanded_bone_ids.contains(&2));
+        assert!(state.scroll_to_selected);
+    }
 }

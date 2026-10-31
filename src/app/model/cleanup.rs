@@ -7,6 +7,7 @@ use crate::ecs::resource::{
     BakedHumanoidClips, BonePoseOverride, ClipLibrary, MeshAssets, NodeAssets, PoseApplyCache,
     TimelineState,
 };
+use crate::ecs::systems::invalidate_humanoid_rig;
 use crate::ecs::world::World;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -61,6 +62,7 @@ fn reset_model_world_state(world: &mut World) {
     if let Some(mut baked) = world.get_resource_mut::<BakedHumanoidClips>() {
         *baked = BakedHumanoidClips::default();
     }
+    invalidate_humanoid_rig(world);
 }
 
 #[cfg(test)]

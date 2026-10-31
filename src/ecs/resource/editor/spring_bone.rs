@@ -1,17 +1,54 @@
-use crate::ecs::component::{SpringChainId, SpringColliderId};
+use crate::animation::BoneId;
+use crate::ecs::component::{ChainRamp, RampScope, SpringColliderGroupId};
 
-pub struct SpringBoneEditorState {
-    pub selected_chain_id: Option<SpringChainId>,
-    pub selected_collider_id: Option<SpringColliderId>,
-    pub show_collider_gizmos: bool,
+#[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
+pub struct AddChainForm {
+    pub root_bone: Option<BoneId>,
+    #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
+    pub chain_length: u32,
+    /// Shortest run of bones under a root that Add Chains Under This Bone turns into a chain
+    #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
+    pub min_joints: u32,
 }
 
-impl Default for SpringBoneEditorState {
+impl Default for AddChainForm {
     fn default() -> Self {
         Self {
-            selected_chain_id: None,
-            selected_collider_id: None,
-            show_collider_gizmos: true,
+            root_bone: None,
+            chain_length: 3,
+            min_joints: 2,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AddColliderForm {
+    pub bone: Option<BoneId>,
+    pub capsule: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SpringBoneInspectorState {
+    pub add_chain: AddChainForm,
+    pub add_collider: AddColliderForm,
+    pub add_collider_group_name: String,
+    pub ramp: ChainRamp,
+    pub ramp_scope: RampScope,
+    pub chain_collider_groups: Vec<SpringColliderGroupId>,
+    pub chain_collider_scope: RampScope,
+}
+
+impl Default for SpringBoneInspectorState {
+    fn default() -> Self {
+        Self {
+            add_chain: AddChainForm::default(),
+            add_collider: AddColliderForm::default(),
+            add_collider_group_name: "NewGroup".to_string(),
+            ramp: ChainRamp::default(),
+            ramp_scope: RampScope::default(),
+            chain_collider_groups: Vec::new(),
+            chain_collider_scope: RampScope::default(),
         }
     }
 }

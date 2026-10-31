@@ -1,4 +1,10 @@
+use cgmath::Vector3;
+
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
+use crate::animation::spring_bone::{
+    collect_affected_bone_ids, spring_bone_initialize, spring_bone_update,
+    spring_bone_write_back_to_pose, SpringSimulation, SpringSpace, SpringTailSample,
+};
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::math::quaternion_to_euler_degrees;
@@ -7,15 +13,12 @@ use super::constraint_solve_systems::apply_constraints;
 use super::skeleton_pose_systems::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
-use super::spring_bone_systems::{
-    collect_affected_bone_ids, spring_bone_initialize, spring_bone_update,
-    spring_bone_write_back_to_pose,
-};
 
 pub struct BakeConfig {
     pub start_time: f32,
     pub end_time: f32,
     pub sample_rate: f32,
+    pub space: SpringSpace,
 }
 
 impl Default for BakeConfig {
@@ -24,6 +27,7 @@ impl Default for BakeConfig {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         }
     }
 }
@@ -50,7 +54,7 @@ pub fn spring_bone_bake(
     }
 
     let mut pose = create_pose_from_rest(skeleton);
-    let globals = compute_pose_global_transforms(skeleton, &pose);
+    let mut globals = compute_pose_global_transforms(skeleton, &pose);
     let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
 
     let mut editable = EditableAnimationClip::new(0, format!("{}_spring_baked", base_clip.name));
@@ -69,17 +73,20 @@ pub fn spring_bone_bake(
     for frame_index in 0..frame_count {
         let sample_time = config.start_time + frame_index as f32 * dt;
 
-        pose = create_pose_from_rest(skeleton);
-        sample_clip_to_pose(base_clip, sample_time, skeleton, &mut pose, looping);
-
-        if let Some(cs) = constraints {
-            apply_constraints(cs, skeleton, &mut pose);
-        }
-
-        let mut globals = compute_pose_global_transforms(skeleton, &pose);
-
-        spring_bone_update(setup, &mut sb_state, skeleton, &mut globals, &pose, dt);
-        spring_bone_write_back_to_pose(skeleton, &globals, &mut pose, &affected_ids);
+        step_spring_frame(
+            &mut pose,
+            base_clip,
+            sample_time,
+            skeleton,
+            looping,
+            constraints,
+            &mut sb_state,
+            &mut globals,
+            setup,
+            &affected_ids,
+            dt,
+            config.space,
+        );
 
         capture_rotation_keyframes(&pose, sample_time, &affected_ids, &mut editable);
     }
@@ -90,6 +97,166 @@ pub fn spring_bone_bake(
         clip: editable,
         baked_bone_ids: affected_ids,
     }
+}
+
+pub fn simulate_spring_tails(
+    config: &BakeConfig,
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    base_clip: &AnimationClip,
+    constraints: Option<&ConstraintSet>,
+    looping: bool,
+) -> Vec<SpringTailSample> {
+    let mut samples = Vec::new();
+
+    for_each_spring_frame(
+        config,
+        setup,
+        skeleton,
+        base_clip,
+        constraints,
+        looping,
+        |frame_index, sb_state, _| {
+            samples.extend(collect_tail_samples(frame_index, setup, sb_state, skeleton));
+        },
+    );
+
+    samples
+}
+
+pub fn simulate_skinned_positions(
+    config: &BakeConfig,
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    base_clip: &AnimationClip,
+    constraints: Option<&ConstraintSet>,
+    looping: bool,
+    skin: &thyllore_model_core::SkinData,
+) -> Vec<Vec<Vector3<f32>>> {
+    let mut frames = Vec::with_capacity(count_bake_frames(config));
+
+    for_each_spring_frame(
+        config,
+        setup,
+        skeleton,
+        base_clip,
+        constraints,
+        looping,
+        |_, _, globals| {
+            let mut positions = skin.base_positions.clone();
+            let mut normals = skin.base_normals.clone();
+            thyllore_model_core::apply_skinning(
+                skin,
+                globals,
+                skeleton,
+                &mut positions,
+                &mut normals,
+            );
+            frames.push(positions);
+        },
+    );
+
+    frames
+}
+
+fn count_bake_frames(config: &BakeConfig) -> usize {
+    ((config.end_time - config.start_time) * config.sample_rate) as usize + 1
+}
+
+fn for_each_spring_frame(
+    config: &BakeConfig,
+    setup: &SpringBoneSetup,
+    skeleton: &Skeleton,
+    base_clip: &AnimationClip,
+    constraints: Option<&ConstraintSet>,
+    looping: bool,
+    mut visit_frame: impl FnMut(usize, &SpringSimulation, &[cgmath::Matrix4<f32>]),
+) {
+    let mut pose = create_pose_from_rest(skeleton);
+    let mut globals = compute_pose_global_transforms(skeleton, &pose);
+    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
+
+    let dt = 1.0 / config.sample_rate;
+
+    for frame_index in 0..count_bake_frames(config) {
+        let sample_time = config.start_time + frame_index as f32 * dt;
+
+        step_spring_frame(
+            &mut pose,
+            base_clip,
+            sample_time,
+            skeleton,
+            looping,
+            constraints,
+            &mut sb_state,
+            &mut globals,
+            setup,
+            &[],
+            dt,
+            config.space,
+        );
+
+        visit_frame(frame_index, &sb_state, &globals);
+    }
+}
+
+fn collect_tail_samples(
+    frame: usize,
+    setup: &SpringBoneSetup,
+    state: &SpringSimulation,
+    skeleton: &Skeleton,
+) -> Vec<SpringTailSample> {
+    let mut samples = Vec::new();
+    for (chain, chain_state) in setup
+        .chains
+        .iter()
+        .filter(|c| c.enabled)
+        .zip(state.chain_states.iter())
+    {
+        for (j, joint) in chain.joints.iter().enumerate() {
+            let Some(joint_state) = chain_state.joint_states.get(j) else {
+                continue;
+            };
+            let bone_name = skeleton
+                .get_bone(joint.bone_id)
+                .map(|b| b.name.clone())
+                .unwrap_or_else(|| format!("Bone_{}", joint.bone_id));
+            samples.push(SpringTailSample {
+                frame,
+                chain: chain.name.clone(),
+                bone: bone_name,
+                position: joint_state.current_tail,
+            });
+        }
+    }
+    samples
+}
+
+fn step_spring_frame(
+    pose: &mut crate::animation::SkeletonPose,
+    base_clip: &AnimationClip,
+    sample_time: f32,
+    skeleton: &Skeleton,
+    looping: bool,
+    constraints: Option<&ConstraintSet>,
+    sb_state: &mut SpringSimulation,
+    globals: &mut Vec<cgmath::Matrix4<f32>>,
+    setup: &SpringBoneSetup,
+    affected_ids: &[BoneId],
+    dt: f32,
+    space: SpringSpace,
+) {
+    *pose = create_pose_from_rest(skeleton);
+    sample_clip_to_pose(base_clip, sample_time, skeleton, pose, looping);
+
+    if let Some(cs) = constraints {
+        apply_constraints(cs, skeleton, pose);
+    }
+
+    *globals = compute_pose_global_transforms(skeleton, pose);
+
+    spring_bone_update(setup, sb_state, skeleton, globals, pose, dt, space);
+    spring_bone_write_back_to_pose(skeleton, globals, pose, affected_ids);
 }
 
 pub fn merge_bake_into_clip(
@@ -166,9 +333,12 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::spring_bone::{
+        JointForce, SpringCollisionMode, SpringForceModel, VrmJointForce,
+    };
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
-    use cgmath::{Matrix4, Vector3};
+    use cgmath::{InnerSpace, Matrix4, Vector3};
 
     fn create_test_skeleton() -> Skeleton {
         let bones = vec![
@@ -220,21 +390,95 @@ mod tests {
                 name: "TestChain".to_string(),
                 joints: vec![SpringJointParam {
                     bone_id: 1,
-                    stiffness: 1.0,
-                    gravity_power: 0.0,
+                    force: JointForce::Vrm(VrmJointForce {
+                        stiffness: 1.0,
+                        gravity_power: 0.0,
+                    }),
                     gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                     drag_force: 1.0,
                     hit_radius: 0.0,
                 }],
                 collider_group_ids: vec![],
                 center_bone_id: None,
+                tail_bone_id: None,
                 enabled: true,
+                origin: Default::default(),
             }],
             colliders: vec![],
             collider_groups: vec![],
             next_chain_id: 1,
             next_collider_id: 0,
             next_group_id: 0,
+            collision_mode: SpringCollisionMode::VrmCompatible,
+            new_joint_force_model: SpringForceModel::Vrm,
+        }
+    }
+
+    fn scale_skeleton_lengths(skeleton: &Skeleton, factor: f32) -> Skeleton {
+        let mut scaled = skeleton.clone();
+        for bone in &mut scaled.bones {
+            bone.local_transform.w.x *= factor;
+            bone.local_transform.w.y *= factor;
+            bone.local_transform.w.z *= factor;
+        }
+        scaled
+    }
+
+    #[test]
+    fn tails_are_scale_invariant_when_the_space_matches_the_skeleton_units() {
+        let unit_skeleton = create_test_skeleton();
+        let centimetre_skeleton = scale_skeleton_lengths(&unit_skeleton, 100.0);
+        let mut setup = create_test_setup();
+        setup.chains[0].joints[0] = SpringJointParam {
+            bone_id: 1,
+            force: JointForce::Vrm(VrmJointForce {
+                stiffness: 0.5,
+                gravity_power: 1.0,
+            }),
+            drag_force: 0.4,
+            gravity_dir: Vector3::new(1.0, 0.0, 0.0),
+            hit_radius: 0.0,
+        };
+        let clip = AnimationClip::new("test");
+
+        let unit_config = BakeConfig {
+            start_time: 0.0,
+            end_time: 1.0,
+            sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
+        };
+        let centimetre_config = BakeConfig {
+            space: SpringSpace::from_world_scale(0.01).expect("valid scale"),
+            ..unit_config
+        };
+
+        let unit_tails =
+            simulate_spring_tails(&unit_config, &setup, &unit_skeleton, &clip, None, false);
+        let centimetre_tails = simulate_spring_tails(
+            &centimetre_config,
+            &setup,
+            &centimetre_skeleton,
+            &clip,
+            None,
+            false,
+        );
+
+        assert_eq!(unit_tails.len(), centimetre_tails.len());
+        let bent = unit_tails
+            .iter()
+            .any(|sample| sample.position.x.abs() > 0.1);
+        assert!(bent, "gravity must visibly bend the chain in the test");
+        for (unit, centimetre) in unit_tails.iter().zip(&centimetre_tails) {
+            let rescaled = centimetre.position * 0.01;
+            let error = (rescaled - unit.position).magnitude();
+            assert!(
+                error < 1e-4,
+                "frame {} bone {}: unit {:?} vs rescaled {:?}",
+                unit.frame,
+                unit.bone,
+                unit.position,
+                rescaled
+            );
         }
     }
 
@@ -248,6 +492,7 @@ mod tests {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -268,6 +513,8 @@ mod tests {
             next_chain_id: 0,
             next_collider_id: 0,
             next_group_id: 0,
+            collision_mode: SpringCollisionMode::VrmCompatible,
+            new_joint_force_model: SpringForceModel::Vrm,
         };
         let clip = AnimationClip::new("test");
 
@@ -275,6 +522,7 @@ mod tests {
             start_time: 0.0,
             end_time: 1.0,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -293,6 +541,7 @@ mod tests {
             start_time: 0.0,
             end_time: 0.1,
             sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
         };
 
         let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
@@ -311,6 +560,114 @@ mod tests {
                 "rotation_z deviated too much: {}",
                 kf.value
             );
+        }
+    }
+
+    #[test]
+    fn test_simulate_spring_tails_count() {
+        let skeleton = create_test_skeleton();
+        let setup = create_test_setup();
+        let clip = AnimationClip::new("test");
+
+        let config = BakeConfig {
+            start_time: 0.0,
+            end_time: 0.1,
+            sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
+        };
+
+        let samples = simulate_spring_tails(&config, &setup, &skeleton, &clip, None, false);
+
+        let frame_count = ((config.end_time - config.start_time) * config.sample_rate) as usize + 1;
+        let joint_count: usize = setup
+            .chains
+            .iter()
+            .filter(|c| c.enabled)
+            .map(|c| c.joints.len())
+            .sum();
+        assert_eq!(samples.len(), frame_count * joint_count);
+    }
+
+    #[test]
+    fn test_simulate_spring_tails_disabled_chain_at_start() {
+        let skeleton = create_test_skeleton();
+        let setup_with_disabled = SpringBoneSetup {
+            chains: vec![
+                SpringChain {
+                    id: 0,
+                    name: "DisabledChain".to_string(),
+                    joints: vec![SpringJointParam {
+                        bone_id: 1,
+                        force: JointForce::Vrm(VrmJointForce {
+                            stiffness: 1.0,
+                            gravity_power: 0.0,
+                        }),
+                        gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                        drag_force: 1.0,
+                        hit_radius: 0.0,
+                    }],
+                    collider_group_ids: vec![],
+                    center_bone_id: None,
+                    tail_bone_id: None,
+                    enabled: false,
+                    origin: Default::default(),
+                },
+                SpringChain {
+                    id: 1,
+                    name: "EnabledChain".to_string(),
+                    joints: vec![SpringJointParam {
+                        bone_id: 1,
+                        force: JointForce::Vrm(VrmJointForce {
+                            stiffness: 1.0,
+                            gravity_power: 0.0,
+                        }),
+                        gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                        drag_force: 1.0,
+                        hit_radius: 0.0,
+                    }],
+                    collider_group_ids: vec![],
+                    center_bone_id: None,
+                    tail_bone_id: None,
+                    enabled: true,
+                    origin: Default::default(),
+                },
+            ],
+            colliders: vec![],
+            collider_groups: vec![],
+            next_chain_id: 2,
+            next_collider_id: 0,
+            next_group_id: 0,
+            collision_mode: SpringCollisionMode::VrmCompatible,
+            new_joint_force_model: SpringForceModel::Vrm,
+        };
+
+        let setup_enabled_only = create_test_setup();
+        let clip = AnimationClip::new("test");
+
+        let config = BakeConfig {
+            start_time: 0.0,
+            end_time: 0.1,
+            sample_rate: 30.0,
+            space: SpringSpace::IDENTITY,
+        };
+
+        let samples_with_disabled =
+            simulate_spring_tails(&config, &setup_with_disabled, &skeleton, &clip, None, false);
+        let samples_enabled_only =
+            simulate_spring_tails(&config, &setup_enabled_only, &skeleton, &clip, None, false);
+
+        for s in &samples_with_disabled {
+            assert_eq!(s.chain, "EnabledChain");
+        }
+
+        assert_eq!(samples_with_disabled.len(), samples_enabled_only.len());
+        for (a, b) in samples_with_disabled
+            .iter()
+            .zip(samples_enabled_only.iter())
+        {
+            assert!((a.position.x - b.position.x).abs() < 1e-6);
+            assert!((a.position.y - b.position.y).abs() < 1e-6);
+            assert!((a.position.z - b.position.z).abs() < 1e-6);
         }
     }
 }

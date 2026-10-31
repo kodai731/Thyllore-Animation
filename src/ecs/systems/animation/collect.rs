@@ -11,7 +11,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 
-fn resolve_playable_asset(
+pub(crate) fn resolve_playable_asset(
     source_id: SourceClipId,
     entity: Entity,
     clip_library: &ClipLibrary,
@@ -37,7 +37,7 @@ pub(crate) fn collect_animated_entities(
     let should_log = is_baked
         && world
             .get_resource::<SpringBoneState>()
-            .map_or(false, |s| s.frame_count < 3);
+            .map_or(false, |s| s.simulation.frame_count < 3);
 
     let solo_clip_id = world
         .get_resource::<TimelineState>()

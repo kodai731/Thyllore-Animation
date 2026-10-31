@@ -339,21 +339,26 @@ fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, ControlPoin
 }
 
 fn extract_texture_path(mat: &ufbx::Material) -> Option<String> {
-    if let Some(ref tex) = mat.pbr.base_color.texture {
-        let filename = tex.filename.to_string();
-        if !filename.is_empty() {
-            return Some(filename);
-        }
-    }
+    [&mat.pbr.base_color.texture, &mat.fbx.diffuse_color.texture]
+        .into_iter()
+        .flatten()
+        .find_map(|tex| {
+            texture_reference(
+                &tex.relative_filename,
+                &tex.absolute_filename,
+                &tex.filename,
+            )
+        })
+}
 
-    if let Some(ref tex) = mat.fbx.diffuse_color.texture {
-        let filename = tex.filename.to_string();
-        if !filename.is_empty() {
-            return Some(filename);
-        }
-    }
-
-    None
+/// The reference as the file wrote it: `RelativeFilename` (relative to the model, or absolute when
+/// the writer could not make it relative), then `FileName`; ufbx's resolved name only as a last
+/// resort because it joins an absolute `RelativeFilename` onto the model directory.
+fn texture_reference(relative: &str, absolute: &str, resolved: &str) -> Option<String> {
+    [relative, absolute, resolved]
+        .into_iter()
+        .find(|name| !name.is_empty())
+        .map(str::to_string)
 }
 
 fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos: &[MeshSplitInfo]) {
@@ -458,6 +463,10 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
     mesh_to_node
 }
 
+fn key_time(time: f64, time_begin: f64) -> f32 {
+    (time - time_begin) as f32
+}
+
 fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
     for anim_stack in &scene.anim_stacks {
         let raw_name = anim_stack.element.name.to_string();
@@ -482,7 +491,8 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
             }
         };
 
-        let duration = (anim_stack.time_end - anim_stack.time_begin) as f32;
+        let time_begin = anim_stack.time_begin;
+        let duration = (anim_stack.time_end - time_begin) as f32;
 
         let mut bone_animations = HashMap::new();
 
@@ -502,7 +512,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .translation_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
@@ -511,7 +521,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .rotation_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: Quaternion::new(
                         k.value.w as f32,
                         k.value.x as f32,
@@ -525,7 +535,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 .scale_keys
                 .iter()
                 .map(|k| KeyFrame {
-                    time: k.time as f32,
+                    time: key_time(k.time, time_begin),
                     value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
@@ -1001,6 +1011,31 @@ mod tests {
     }
 
     #[test]
+    fn texture_reference_prefers_the_written_relative_name() {
+        assert_eq!(
+            texture_reference(
+                "../source/skin.png",
+                "/abs/skin.png",
+                "/model/../source/skin.png"
+            ),
+            Some("../source/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("/abs/skin.png", "/abs/skin.png", "/model/abs/skin.png"),
+            Some("/abs/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("", "/abs/skin.png", "/model/skin.png"),
+            Some("/abs/skin.png".to_string())
+        );
+        assert_eq!(
+            texture_reference("", "", "skin.png"),
+            Some("skin.png".to_string())
+        );
+        assert_eq!(texture_reference("", "", ""), None);
+    }
+
+    #[test]
     fn test_fbx_data_set_diffuse_texture() {
         let mut data = FbxData::new();
         data.diffuse_texture = Some("texture.png".to_string());
@@ -1074,5 +1109,11 @@ mod tests {
             (axes.coord_axis, axes.coord_axis_sign),
             (default_axes.coord_axis, default_axes.coord_axis_sign)
         );
+    }
+
+    #[test]
+    fn test_key_time() {
+        assert_eq!(key_time(1.0 / 30.0, 1.0 / 30.0), 0.0);
+        assert_eq!(key_time(0.5, 0.25), 0.25);
     }
 }

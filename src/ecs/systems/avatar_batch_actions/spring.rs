@@ -10,7 +10,7 @@ use crate::ecs::systems::phases::event_dispatch::spring_bone::{
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
-use thyllore_avatar_core::garment::components::submesh_role::SubmeshKey;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 #[derive(Debug)]

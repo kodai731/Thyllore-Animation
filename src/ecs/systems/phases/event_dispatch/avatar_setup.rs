@@ -1,6 +1,6 @@
 use crate::ecs::component::CapsuleFitParams;
-use thyllore_avatar_core::garment::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::vrchat::rank::Platform;
 
@@ -16,7 +16,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_avatar_core::garment::components::chain_gen::{ChainGenRequest, ChainGenSettings};
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
 
 #[derive(Clone, Debug)]
 pub enum AvatarSetupEvent {

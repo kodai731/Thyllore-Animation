@@ -2,7 +2,7 @@ use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{fit_principal_axis, world_y_axis};
 
 use super::frame::progress_of;
-use crate::garment::components::chain_gen::{ChainGenInput, StrandMode};
+use crate::cloth_setup::components::chain_gen::{ChainGenInput, StrandMode};
 
 pub const MIN_STRAND_UV_CORRELATION: f32 = 0.8;
 

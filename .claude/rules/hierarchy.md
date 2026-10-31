@@ -66,9 +66,11 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
+- `thyllore-avatar-core/src/cloth_setup/` is the outfit setup domain (submesh roles, the hidden skin mask and
+  spring chain generation for both hair and garment roles); it is named after the setup, not after one role.
 - `thyllore-avatar-core/src/collider/` is the collider domain shared by every chain role: `components/`
   holds the shapes (`HeadCapsule`), `systems/` their estimators from skin geometry (`estimate_head_capsule`
-  on top of math-core's `widest_cross_section`). `garment/systems/chain_gen/` only decides which role gets
+  on top of math-core's `widest_cross_section`). `cloth_setup/systems/chain_gen/` only decides which role gets
   one (`hair_head_capsule`); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
   screen-space scale) lives in `thyllore-math-core`.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from

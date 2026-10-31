@@ -4,7 +4,7 @@ use thyllore_math_core::{resample_polyline, tangent_frame_around, world_y_axis, 
 use super::frame::progress_of;
 use super::strand_merge::{merge_strands, tuft_centerline, StrandMergeStop};
 use super::strand_mode::{uv_strand_correlation, MIN_STRAND_UV_CORRELATION};
-use crate::garment::components::chain_gen::{
+use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint,
     StrandCenterlineRecord,
 };

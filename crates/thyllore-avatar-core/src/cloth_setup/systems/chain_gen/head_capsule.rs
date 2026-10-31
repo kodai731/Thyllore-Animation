@@ -1,6 +1,6 @@
+use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
 use crate::collider::components::capsule::HeadCapsule;
 use crate::collider::systems::head_capsule::estimate_head_capsule;
-use crate::garment::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
 
 use super::frame::{attachment_or_target, collect_target_vertices};
 

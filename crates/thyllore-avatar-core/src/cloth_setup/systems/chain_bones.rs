@@ -1,6 +1,8 @@
 use cgmath::SquareMatrix;
 
-use crate::garment::components::chain_gen::{GeneratedChain, InfluenceTarget, VertexInfluences};
+use crate::cloth_setup::components::chain_gen::{
+    GeneratedChain, InfluenceTarget, VertexInfluences,
+};
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
 pub fn append_chain_bones(

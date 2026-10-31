@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use thyllore_avatar_core::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::garment::systems::hidden_mask::{
+use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
     find_hidden_triangle_indices, mask_mesh_from_skin, merge_mask_meshes,
 };
 use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;

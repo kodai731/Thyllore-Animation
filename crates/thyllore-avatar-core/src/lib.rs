@@ -1,6 +1,6 @@
+pub mod cloth_setup;
 pub mod collider;
 pub mod expression;
-pub mod garment;
 pub mod humanoid;
 pub mod material;
 pub mod motion;

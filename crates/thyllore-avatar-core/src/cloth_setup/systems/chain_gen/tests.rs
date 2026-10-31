@@ -4,11 +4,11 @@ use std::f32::consts::{PI, TAU};
 use cgmath::{InnerSpace, Vector3};
 
 use super::*;
-use crate::garment::components::chain_gen::{
+use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
     InfluenceTarget, VertexInfluences,
 };
-use crate::garment::components::submesh_role::SubmeshSelector;
+use crate::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {

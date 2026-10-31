@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use cgmath::Vector3;
 
-use thyllore_avatar_core::garment::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
 
 use crate::ecs::resource::SkeletonSnapshot;
 use crate::hooks::batch_capture::BatchCapture;

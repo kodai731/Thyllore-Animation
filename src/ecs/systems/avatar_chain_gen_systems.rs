@@ -22,22 +22,22 @@ use thyllore_anim_core::spring_bone::{
     add_generated_chains, ChainOrigin, FittedCapsule, SpringBoneSetup, SpringChain,
     SpringJointParam,
 };
-use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
-use thyllore_avatar_core::garment::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
     ChainGenRequest, ChainGenSettings, ChainRole, ChainWeightRecord, GeneratedBoneRecord,
     GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget, RootBandRecord,
     StrandPlacement, VertexInfluences,
 };
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshSelector};
-use thyllore_avatar_core::garment::systems::chain_bones::{
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
+use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
     append_chain_bones, write_chain_weights,
 };
-use thyllore_avatar_core::garment::systems::chain_gen::hair_head_capsule;
-use thyllore_avatar_core::garment::systems::chain_gen::{
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
 };
-use thyllore_avatar_core::garment::systems::joint_radius::joint_half_thicknesses;
+use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
+use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::{array3_from_vec, world_y_axis};
 

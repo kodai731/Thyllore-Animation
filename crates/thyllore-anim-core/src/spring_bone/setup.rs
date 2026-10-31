@@ -133,11 +133,20 @@ pub struct SpringColliderDef {
     pub shape: ColliderShape,
 }
 
+/// Fitted groups are owned by the body collider fit, which replaces them as a whole; the name is display only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ColliderGroupOrigin {
+    #[default]
+    Authored,
+    Fitted,
+}
+
 #[derive(Clone, Debug)]
 pub struct SpringColliderGroup {
     pub id: SpringColliderGroupId,
     pub name: String,
     pub collider_ids: Vec<SpringColliderId>,
+    pub origin: ColliderGroupOrigin,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -42,33 +42,29 @@ pub fn compute_hidden_triangles(
         )
     };
 
-    if garment_pairs.is_empty() {
-        msg_warn!("No Garment-role submeshes found — hidden triangle computation skipped");
-        return;
-    }
-
-    let garments = build_garment_mask_mesh(&garment_pairs, assets, graphics);
-
-    let hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>> = skin_submeshes
-        .iter()
-        .filter_map(|(key, mesh_index)| {
-            let body = model_space_mask_mesh(key, &graphics.meshes[*mesh_index], assets)?;
-            let hidden = find_hidden_triangle_indices(&body, &garments, params);
-            Some((key.clone(), hidden))
-        })
-        .collect();
+    let hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>> = if garment_pairs.is_empty() {
+        msg_warn!("No Garment-role submeshes found — the hidden mask is cleared");
+        BTreeMap::new()
+    } else {
+        let garments = build_garment_mask_mesh(&garment_pairs, assets, graphics);
+        skin_submeshes
+            .iter()
+            .filter_map(|(key, mesh_index)| {
+                let body = model_space_mask_mesh(key, &graphics.meshes[*mesh_index], assets)?;
+                let hidden = find_hidden_triangle_indices(&body, &garments, params);
+                Some((key.clone(), hidden))
+            })
+            .collect()
+    };
     let total: usize = hidden_triangles.values().map(Vec::len).sum();
 
-    let meshes: Vec<(usize, Vec<u32>)> = skin_submeshes
-        .iter()
-        .map(|(key, mesh_index)| {
-            (
-                *mesh_index,
-                hidden_triangles.get(key).cloned().unwrap_or_default(),
-            )
-        })
+    let previously_hidden: Vec<SubmeshKey> = world
+        .resource::<AvatarSetupState>()
+        .hidden_triangles
+        .keys()
+        .cloned()
         .collect();
-
+    let meshes = mask_targets(&pairs, &previously_hidden, &hidden_triangles);
     world.resource_mut::<AvatarSetupState>().hidden_triangles = hidden_triangles;
 
     msg_info!(
@@ -76,7 +72,32 @@ pub fn compute_hidden_triangles(
         total,
         skin_submeshes.len()
     );
+    push_apply_hidden_triangles(world, meshes);
+}
 
+/// Every submesh the new mask touches or the previous mask touched, with its new mask; a submesh the
+/// new mask leaves out gets an empty one so its triangles come back.
+fn mask_targets(
+    pairs: &[(SubmeshKey, usize)],
+    previously_hidden: &[SubmeshKey],
+    hidden_triangles: &BTreeMap<SubmeshKey, Vec<u32>>,
+) -> Vec<(usize, Vec<u32>)> {
+    pairs
+        .iter()
+        .filter(|(key, _)| previously_hidden.contains(key) || hidden_triangles.contains_key(key))
+        .map(|(key, mesh_index)| {
+            (
+                *mesh_index,
+                hidden_triangles.get(key).cloned().unwrap_or_default(),
+            )
+        })
+        .collect()
+}
+
+fn push_apply_hidden_triangles(world: &mut World, meshes: Vec<(usize, Vec<u32>)>) {
+    if meshes.is_empty() {
+        return;
+    }
     world
         .resource_mut::<crate::ecs::resource::OutputQueue>()
         .push(crate::ecs::resource::OutputCommand::ApplyHiddenTriangles { meshes });
@@ -128,11 +149,7 @@ pub fn restore_hidden_triangles(
     }
 
     world.resource_mut::<AvatarSetupState>().hidden_triangles = hidden_triangles;
-    if !meshes.is_empty() {
-        world
-            .resource_mut::<crate::ecs::resource::OutputQueue>()
-            .push(crate::ecs::resource::OutputCommand::ApplyHiddenTriangles { meshes });
-    }
+    push_apply_hidden_triangles(world, meshes);
 }
 
 /// The submesh in the model space shared by every skin of its skeleton, or none when it is not skinned.
@@ -185,4 +202,37 @@ fn build_garment_mask_mesh(
         })
         .collect();
     merge_mask_meshes(&meshes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(mesh: &str) -> SubmeshKey {
+        SubmeshKey {
+            mesh: mesh.to_string(),
+            material: "mat".to_string(),
+        }
+    }
+
+    #[test]
+    fn mask_targets_clear_submeshes_the_new_mask_leaves_out() {
+        let pairs = vec![(key("body"), 0), (key("arm"), 1), (key("hair"), 2)];
+        let previously_hidden = vec![key("body"), key("arm")];
+        let hidden: BTreeMap<SubmeshKey, Vec<u32>> = [(key("body"), vec![3, 4])].into();
+
+        let targets = mask_targets(&pairs, &previously_hidden, &hidden);
+
+        assert_eq!(targets, vec![(0, vec![3, 4]), (1, Vec::new())]);
+    }
+
+    #[test]
+    fn mask_targets_with_no_garment_clear_every_previous_mask() {
+        let pairs = vec![(key("body"), 0), (key("arm"), 1)];
+        let previously_hidden = vec![key("arm")];
+
+        let targets = mask_targets(&pairs, &previously_hidden, &BTreeMap::new());
+
+        assert_eq!(targets, vec![(1, Vec::new())]);
+    }
 }

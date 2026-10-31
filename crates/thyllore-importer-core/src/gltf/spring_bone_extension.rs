@@ -1,8 +1,9 @@
 use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain, SpringColliderDef,
-    SpringColliderGroup, SpringCollisionMode, SpringForceModel, SpringJointParam, VrmJointForce,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain,
+    SpringColliderDef, SpringColliderGroup, SpringCollisionMode, SpringForceModel,
+    SpringJointParam, VrmJointForce,
 };
 
 #[derive(Deserialize)]
@@ -162,6 +163,7 @@ fn convert_collider_groups(vrmc_groups: &[VrmcColliderGroup]) -> Vec<SpringColli
             id: i as u32,
             name: g.name.clone().unwrap_or_else(|| format!("group_{}", i)),
             collider_ids: g.colliders.clone().unwrap_or_default(),
+            origin: ColliderGroupOrigin::Authored,
         })
         .collect()
 }

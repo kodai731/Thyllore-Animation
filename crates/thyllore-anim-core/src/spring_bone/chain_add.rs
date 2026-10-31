@@ -1,9 +1,9 @@
 use crate::{BoneId, Skeleton};
 
 use super::chain_origin::ChainOrigin;
-use super::collider_fit::{ensure_fitted_collider, FittedCapsule, FITTED_BODY_GROUP_NAME};
+use super::collider_fit::{ensure_fitted_collider, FittedCapsule};
 use super::space::SpringSpace;
-use super::{SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
+use super::{ColliderGroupOrigin, SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 
 fn build_chain_joints(
     root_bone_id: BoneId,
@@ -74,7 +74,7 @@ pub fn add_generated_chains(
         None => setup
             .collider_groups
             .iter()
-            .find(|group| group.name == FITTED_BODY_GROUP_NAME)
+            .find(|group| group.origin == ColliderGroupOrigin::Fitted)
             .map(|group| group.id),
     };
     let template = setup.new_joint_template();
@@ -210,7 +210,7 @@ mod tests {
         let fitted_group = setup
             .collider_groups
             .iter()
-            .find(|g| g.name == FITTED_BODY_GROUP_NAME)
+            .find(|g| g.origin == ColliderGroupOrigin::Fitted)
             .expect("Fitted Body group should exist");
 
         for (i, chain) in setup.chains.iter().enumerate() {

@@ -1,4 +1,4 @@
-use thyllore_anim_core::spring_bone::{SpringColliderGroup, SpringColliderId};
+use thyllore_anim_core::spring_bone::{ColliderGroupOrigin, SpringColliderGroup, SpringColliderId};
 
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
@@ -157,6 +157,7 @@ mod tests {
                 id: 1,
                 name: "Test".to_string(),
                 collider_ids: vec![0],
+                origin: ColliderGroupOrigin::Authored,
             },
             available: vec![1, 2],
         };
@@ -173,6 +174,7 @@ mod tests {
                 id: 1,
                 name: "Test".to_string(),
                 collider_ids: vec![0],
+                origin: ColliderGroupOrigin::Authored,
             },
             available: Vec::new(),
         };
@@ -189,6 +191,7 @@ mod tests {
                 id: 1,
                 name: "Test".to_string(),
                 collider_ids: vec![0],
+                origin: ColliderGroupOrigin::Authored,
             },
             available: vec![1, 2],
         };

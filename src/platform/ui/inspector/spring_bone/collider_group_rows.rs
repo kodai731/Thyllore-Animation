@@ -1,4 +1,6 @@
-use thyllore_anim_core::spring_bone::{SpringColliderGroup, SpringColliderGroupId};
+use thyllore_anim_core::spring_bone::{
+    ColliderGroupOrigin, SpringColliderGroup, SpringColliderGroupId,
+};
 
 use crate::ecs::component::{RampScope, SpringChainId};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
@@ -255,11 +257,13 @@ mod tests {
                 id: 2,
                 name: "Fitted Body".to_string(),
                 collider_ids: Vec::new(),
+                origin: ColliderGroupOrigin::Fitted,
             },
             SpringColliderGroup {
                 id: 1,
                 name: "Hands".to_string(),
                 collider_ids: Vec::new(),
+                origin: ColliderGroupOrigin::Authored,
             },
         ];
         let choices = GroupChoice::from_groups(&groups);

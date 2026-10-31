@@ -12,7 +12,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::resource::{ClipLibrary, FbxModelCache, HumanoidRigState, NodeAssets};
 use crate::ecs::systems::humanoid_bake_systems::request_bake_scan;
-use crate::ecs::systems::{invalidate_humanoid_rig, refresh_after_skeleton_edit};
+use crate::ecs::systems::refresh_after_skeleton_edit;
 use crate::ecs::world::{Entity, MeshRef, Parent, Transform, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -64,7 +64,6 @@ pub fn apply_model_scale(
             .map(|(root, _)| (*root, Vector3::new(1.0, 1.0, 1.0))),
     );
 
-    invalidate_humanoid_rig(world);
     request_bake_scan(world);
     refresh_after_skeleton_edit(world, assets, graphics);
     Ok(previous_root_scales)

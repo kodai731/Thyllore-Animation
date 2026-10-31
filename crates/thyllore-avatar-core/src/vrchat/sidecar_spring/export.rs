@@ -1,6 +1,7 @@
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderId,
-    SpringCollisionMode, SpringJointParam, FITTED_BODY_GROUP_NAME,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringChain,
+    SpringColliderDef, SpringColliderId, SpringCollisionMode, SpringJointParam,
+    FITTED_BODY_GROUP_NAME,
 };
 
 use super::format::{
@@ -52,7 +53,7 @@ fn build_sidecar_colliders(
     let fitted_ids: Vec<SpringColliderId> = setup
         .collider_groups
         .iter()
-        .filter(|group| group.name == FITTED_BODY_GROUP_NAME)
+        .filter(|group| group.origin == ColliderGroupOrigin::Fitted)
         .flat_map(|group| group.collider_ids.iter().copied())
         .collect();
 
@@ -164,6 +165,7 @@ fn build_sidecar_chain(
         collider_groups: collider_group_names(setup, chain),
         joints,
         tail: tail_bone,
+        enabled: chain.enabled,
         origin: sidecar_chain_origin(&chain.origin),
     }
 }

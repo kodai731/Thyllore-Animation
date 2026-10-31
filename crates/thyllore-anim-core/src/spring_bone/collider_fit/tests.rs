@@ -1,5 +1,5 @@
 use super::*;
-use crate::spring_bone::{SpringChain, SpringColliderGroup, SpringJointParam};
+use crate::spring_bone::{ColliderGroupOrigin, SpringChain, SpringColliderGroup, SpringJointParam};
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 
 fn make_cylinder_points(radius: f32, length: f32, samples: usize) -> Vec<Vector3<f32>> {
@@ -318,6 +318,7 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
         id: 0,
         name: "User Group".to_string(),
         collider_ids: vec![0],
+        origin: ColliderGroupOrigin::Authored,
     });
     setup.next_group_id = 1;
     setup.chains[0].collider_group_ids.push(0);
@@ -399,6 +400,7 @@ fn ensure_fitted_collider_keeps_other_groups_and_chain_bindings() {
         id: 7,
         name: "Hand".to_string(),
         collider_ids: vec![],
+        origin: ColliderGroupOrigin::Authored,
     });
     setup.next_group_id = 8;
 
@@ -407,4 +409,31 @@ fn ensure_fitted_collider_keeps_other_groups_and_chain_bindings() {
     assert_eq!(group_id, 8);
     assert_eq!(setup.collider_groups.len(), 2);
     assert_eq!(setup.collider_groups[0].name, "Hand");
+}
+
+#[test]
+fn replace_fitted_body_colliders_keeps_an_authored_group_with_the_fitted_name() {
+    let mut setup = SpringBoneSetup::default();
+    setup.colliders.push(SpringColliderDef {
+        id: 0,
+        bone_id: 2,
+        offset: Vector3::new(1.0, 0.0, 0.0),
+        shape: ColliderShape::Sphere { radius: 0.2 },
+    });
+    setup.next_collider_id = 1;
+    setup.collider_groups.push(SpringColliderGroup {
+        id: 0,
+        name: FITTED_BODY_GROUP_NAME.to_string(),
+        collider_ids: vec![0],
+        origin: ColliderGroupOrigin::Authored,
+    });
+    setup.next_group_id = 1;
+
+    replace_fitted_body_colliders(&mut setup, &[capsule_on(0, 0.1)]);
+    replace_fitted_body_colliders(&mut setup, &[capsule_on(0, 0.2)]);
+
+    assert_eq!(setup.collider_groups.len(), 2);
+    assert_eq!(setup.collider_groups[0].collider_ids, vec![0]);
+    assert_eq!(setup.collider_groups[1].origin, ColliderGroupOrigin::Fitted);
+    assert_eq!(setup.colliders.len(), 2);
 }

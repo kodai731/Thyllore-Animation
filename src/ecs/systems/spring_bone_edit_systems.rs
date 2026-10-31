@@ -1,8 +1,8 @@
 use crate::animation::{spring_bone::set_chain_collider_groups, BoneId, Skeleton};
 use crate::ecs::component::{
-    apply_ramp, ChainRamp, ColliderShape, RampEnd, RampScope, SpringBoneSetup, SpringChain,
-    SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
-    SpringJointParam,
+    apply_ramp, ChainRamp, ColliderGroupOrigin, ColliderShape, RampEnd, RampScope, SpringBoneSetup,
+    SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
+    SpringColliderId, SpringJointParam,
 };
 use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
 use crate::ecs::world::{Entity, World};
@@ -136,6 +136,7 @@ pub fn handle_spring_collider_group_add(world: &mut World, entity: Entity, name:
         id: group_id,
         name,
         collider_ids: Vec::new(),
+        origin: ColliderGroupOrigin::Authored,
     };
     setup.collider_groups.push(group);
 
@@ -430,6 +431,7 @@ mod tests {
             id,
             name: format!("group_{id}"),
             collider_ids: Vec::new(),
+            origin: ColliderGroupOrigin::Authored,
         });
     }
 

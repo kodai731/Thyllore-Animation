@@ -258,3 +258,68 @@ fn skeleton_snapshot_carries_the_humanoid_mapping() {
         Some(&2)
     );
 }
+
+fn humanoid_edit_world(fbx_path: &std::path::Path) -> (World, AssetStorage) {
+    let (mut world, assets) =
+        crate::ecs::systems::humanoid_rig_systems::test_humanoid_world(fbx_path);
+    world.insert_resource(AvatarSetupState::default());
+    world.insert_resource(ClipLibrary::default());
+    world.insert_resource(FbxModelCache::empty());
+    sync_humanoid_rig(&mut world, &assets);
+    (world, assets)
+}
+
+fn rig_hips_height(world: &World) -> f32 {
+    world
+        .resource::<crate::ecs::resource::HumanoidRigState>()
+        .rig
+        .as_ref()
+        .expect("test_humanoid builds a rig")
+        .context
+        .hips_height
+}
+
+#[test]
+fn scaling_the_model_rebuilds_the_rig_context_before_the_next_frame() {
+    let Ok(temp_dir) = tempfile::tempdir() else {
+        return;
+    };
+    let (fbx_path, _) =
+        crate::ecs::systems::humanoid_rig_systems::copy_test_humanoid_fixture(temp_dir.path());
+    let (mut world, mut assets) = humanoid_edit_world(&fbx_path);
+    let mut graphics = GraphicsResources::default();
+    let height_before = rig_hips_height(&world);
+
+    crate::ecs::systems::apply_model_scale(&mut world, &mut assets, &mut graphics, 0.01).unwrap();
+
+    let height_after = rig_hips_height(&world);
+    assert!(
+        (height_after - height_before * 0.01).abs() < 1e-6,
+        "hips height {height_after} should follow the scaled skeleton ({height_before} * 0.01)"
+    );
+}
+
+#[test]
+fn adding_a_bone_registers_it_in_the_rig_track_table() {
+    let Ok(temp_dir) = tempfile::tempdir() else {
+        return;
+    };
+    let (fbx_path, _) =
+        crate::ecs::systems::humanoid_rig_systems::copy_test_humanoid_fixture(temp_dir.path());
+    let (mut world, mut assets) = humanoid_edit_world(&fbx_path);
+    let graphics = GraphicsResources::default();
+
+    let bone_id = add_skeleton_bone(
+        &mut world,
+        &mut assets,
+        &graphics,
+        "Hips",
+        "Extra",
+        Vector3::new(0.0, 0.1, 0.0),
+    )
+    .unwrap();
+
+    let table =
+        crate::ecs::systems::humanoid_rig_systems::engine_bone_name_to_id(&world, &assets).unwrap();
+    assert_eq!(table.get("Extra"), Some(&bone_id));
+}

@@ -4,8 +4,8 @@ use thyllore_anim_core::spring_bone::{JointForce, VrmJointForce};
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
 use crate::ecs::component::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
-    SpringJointParam, WithSpringBone,
+    ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringJointParam, WithSpringBone,
 };
 use crate::ecs::resource::SpringBoneState;
 use crate::ecs::world::{Animator, World};
@@ -294,6 +294,7 @@ fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
         id: group_id,
         name: String::from("test_colliders"),
         collider_ids,
+        origin: ColliderGroupOrigin::Authored,
     });
 
     for chain in &mut setup.chains {

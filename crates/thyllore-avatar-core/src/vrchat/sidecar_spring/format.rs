@@ -60,8 +60,14 @@ pub struct SidecarSpringChain {
     /// The bone of the appended VRM tail joint, which is not a simulated joint of the engine chain
     #[serde(default)]
     pub tail: Option<String>,
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<SidecarChainOrigin>,
+}
+
+fn enabled_by_default() -> bool {
+    true
 }
 
 /// The submesh a generated chain was placed on; absent for hand-authored chains.

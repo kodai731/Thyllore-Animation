@@ -134,18 +134,33 @@ pub struct ListRows<C, I: 'static> {
 }
 
 pub trait DrawField<C> {
+    /// The imgui id scope of the embedded rows; unique among the fields of one row list.
+    fn scope(&self) -> &'static str;
     fn draw(&self, ui: &imgui::Ui, world: &World, value: &mut C, keys: KeyDomain) -> bool;
+    #[cfg(test)]
+    fn widget_ids(&self) -> Vec<String>;
 }
 
 pub struct FieldRows<C, I: 'static> {
+    pub scope: &'static str,
     pub field: fn(&mut C) -> &mut I,
     pub rows: Vec<UiRow<I>>,
 }
 
 impl<C: 'static, I: 'static> DrawField<C> for FieldRows<C, I> {
+    fn scope(&self) -> &'static str {
+        self.scope
+    }
+
     fn draw(&self, ui: &imgui::Ui, world: &World, value: &mut C, keys: KeyDomain) -> bool {
+        let _scope = ui.push_id(self.scope);
         let item = (self.field)(value);
         draw_rows(ui, world, &self.rows, item, keys)
+    }
+
+    #[cfg(test)]
+    fn widget_ids(&self) -> Vec<String> {
+        super::labels::widget_ids(&self.rows)
     }
 }
 

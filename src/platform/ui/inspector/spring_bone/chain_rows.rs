@@ -184,9 +184,11 @@ pub fn joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
 
 /// The force block of the joint's model, then the parameters every model shares.
 pub fn joint_param_rows(view: &JointView) -> Vec<UiRow<JointView>> {
-    let mut rows = vec![force_field_row(&view.force, |view: &mut JointView| {
-        &mut view.force
-    })];
+    let mut rows = vec![force_field_row(
+        "force",
+        &view.force,
+        |view: &mut JointView| &mut view.force,
+    )];
     rows.extend(SPRING_JOINT_UI_PARAMS.iter().map(|param| UiRow::Scalar {
         param,
         scalars: &JOINT_SCALARS,

@@ -1,14 +1,15 @@
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    shared_force_model, ChainOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain,
-    SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
-    SpringCollisionMode, SpringJointParam, SubmeshSelector,
+    shared_force_model, ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce,
+    SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
+    SpringColliderId, SpringCollisionMode, SpringJointParam, SubmeshSelector,
 };
 use thyllore_anim_core::BoneId;
 
 use super::format::{
-    SidecarChainOrigin, SidecarCollider, SidecarColliderGroup, SidecarColliderShape,
-    SidecarCollisionMode, SidecarSpring, SidecarSpringChain, SidecarSpringJoint,
+    SidecarChainOrigin, SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin,
+    SidecarColliderShape, SidecarCollisionMode, SidecarSpring, SidecarSpringChain,
+    SidecarSpringJoint,
 };
 use super::frame::BoneRestFrame;
 use crate::humanoid::components::skeleton_input::BoneInput;
@@ -26,8 +27,12 @@ pub fn spring_setup_from_sidecar(
     };
 
     let collider_ids_by_name = import_colliders(&mut setup, &spring.colliders, bones, frames);
-    let group_ids_by_name =
-        import_collider_groups(&mut setup, &spring.collider_groups, &collider_ids_by_name);
+    let group_ids_by_name = import_collider_groups(
+        &mut setup,
+        &spring.collider_groups,
+        &spring.colliders,
+        &collider_ids_by_name,
+    );
     for chain in &spring.chains {
         import_chain(&mut setup, chain, bones, &group_ids_by_name);
     }
@@ -84,6 +89,24 @@ fn import_colliders(
     ids_by_name
 }
 
+/// The sidecar marks the origin per collider, so a group is fitted when every collider it holds is.
+fn collider_group_origin(
+    group: &SidecarColliderGroup,
+    colliders: &[SidecarCollider],
+) -> ColliderGroupOrigin {
+    let all_fitted = !group.colliders.is_empty()
+        && group.colliders.iter().all(|name| {
+            colliders
+                .iter()
+                .any(|c| c.name == *name && c.origin == SidecarColliderOrigin::Fitted)
+        });
+    if all_fitted {
+        ColliderGroupOrigin::Fitted
+    } else {
+        ColliderGroupOrigin::Authored
+    }
+}
+
 /// A capsule without a tail degrades to a sphere.
 fn collider_shape(collider: &SidecarCollider, frame: &BoneRestFrame) -> ColliderShape {
     let radius = frame.length_to_local(collider.radius);
@@ -101,6 +124,7 @@ fn collider_shape(collider: &SidecarCollider, frame: &BoneRestFrame) -> Collider
 fn import_collider_groups(
     setup: &mut SpringBoneSetup,
     groups: &[SidecarColliderGroup],
+    colliders: &[SidecarCollider],
     collider_ids_by_name: &[(String, SpringColliderId)],
 ) -> Vec<(String, SpringColliderGroupId)> {
     let mut ids_by_name = Vec::new();
@@ -115,6 +139,7 @@ fn import_collider_groups(
                 .iter()
                 .filter_map(|name| id_by_name(collider_ids_by_name, name))
                 .collect(),
+            origin: collider_group_origin(group, colliders),
         });
         ids_by_name.push((group.name.clone(), id));
     }
@@ -162,7 +187,7 @@ fn import_chain(
             .tail
             .as_deref()
             .and_then(|name| bone_id_of(bones, name)),
-        enabled: true,
+        enabled: chain.enabled,
         origin: chain_origin_from_sidecar(&chain.origin),
     });
 }

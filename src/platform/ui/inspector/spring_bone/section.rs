@@ -438,4 +438,10 @@ mod tests {
         assert_eq!(view.chain_root_bone(), Some(2));
         assert_eq!(view.collider_bone(), Some(3));
     }
+
+    #[test]
+    fn section_rows_have_no_duplicate_labels() {
+        use crate::platform::ui::ui_rows::find_duplicate_labels;
+        assert!(find_duplicate_labels(&section_rows()).is_empty());
+    }
 }

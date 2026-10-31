@@ -7,8 +7,8 @@ use thyllore_model_core::{Bone, BoneId, Skeleton, SkinData};
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use super::setup::{
-    ColliderShape, SpringBoneSetup, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
-    SpringColliderId,
+    ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringColliderDef, SpringColliderGroup,
+    SpringColliderGroupId, SpringColliderId,
 };
 
 #[derive(Clone, Debug, PartialEq, SceneFields)]
@@ -74,7 +74,7 @@ fn remove_existing_fitted_group(setup: &mut SpringBoneSetup) {
     if let Some(group_pos) = setup
         .collider_groups
         .iter()
-        .position(|g| g.name == FITTED_BODY_GROUP_NAME)
+        .position(|g| g.origin == ColliderGroupOrigin::Fitted)
     {
         let group = &setup.collider_groups[group_pos];
         let group_id = group.id;
@@ -102,6 +102,7 @@ fn add_new_colliders_and_group(setup: &mut SpringBoneSetup, capsules: &[FittedCa
         id: group_id,
         name: FITTED_BODY_GROUP_NAME.to_string(),
         collider_ids,
+        origin: ColliderGroupOrigin::Fitted,
     });
     group_id
 }
@@ -114,7 +115,7 @@ pub fn ensure_fitted_collider(
     let group_id = match setup
         .collider_groups
         .iter()
-        .position(|g| g.name == FITTED_BODY_GROUP_NAME)
+        .position(|g| g.origin == ColliderGroupOrigin::Fitted)
     {
         Some(group_pos) => {
             remove_group_colliders_on_bone(setup, group_pos, capsule.bone_id);

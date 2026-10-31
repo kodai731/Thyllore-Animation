@@ -187,3 +187,139 @@ fn humanoid_mapping_follows_renumbered_bones_and_drops_removed_roles() {
     assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), None);
     assert_eq!(mapping.by_role.get(&HumanoidRole::Head), Some(&1));
 }
+
+#[test]
+fn spring_chain_tail_follows_renumbered_bones_and_clears_when_removed() {
+    let (_, remap, _) = remove_middle_of_three();
+    let mut setup = SpringBoneSetup::default();
+    let joint = |bone_id| crate::ecs::component::SpringJointParam {
+        bone_id,
+        ..Default::default()
+    };
+    setup.chains.push(crate::ecs::component::SpringChain {
+        joints: vec![joint(0)],
+        tail_bone_id: Some(3),
+        ..Default::default()
+    });
+    setup.chains.push(crate::ecs::component::SpringChain {
+        joints: vec![joint(0)],
+        tail_bone_id: Some(1),
+        ..Default::default()
+    });
+
+    remap_spring_setup(&mut setup, &remap);
+
+    assert_eq!(setup.chains[0].tail_bone_id, Some(1));
+    assert_eq!(setup.chains[1].tail_bone_id, None);
+}
+
+#[test]
+fn renumbered_clip_tracks_mark_their_source_dirty_for_the_playback_asset() {
+    use crate::animation::editable::{EditableAnimationClip, SourceClip};
+
+    let (_, remap, _) = remove_middle_of_three();
+    let mut world = World::new();
+    let mut clips = ClipLibrary::new();
+    let mut clip = EditableAnimationClip::new(7, "walk".to_string());
+    clip.add_track(3, "side".to_string());
+    clips.source_clips.insert(7, SourceClip::new(7, clip));
+    clips.mark_clean(7);
+    world.insert_resource(clips);
+
+    remap_bone_references(&mut world, &remap);
+
+    let clips = world.resource::<ClipLibrary>();
+    assert!(clips.is_dirty(7));
+    assert_eq!(clips.get(7).unwrap().tracks[&1].bone_id, 1);
+}
+
+#[test]
+fn skeleton_snapshot_carries_the_humanoid_mapping() {
+    use crate::asset::SkeletonAsset;
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    let mut state = AvatarSetupState::default();
+    state.mapping.by_role.insert(HumanoidRole::Head, 2);
+    world.insert_resource(state);
+    let mut assets = AssetStorage::new();
+    assets.add_skeleton(SkeletonAsset {
+        id: 0,
+        skeleton_id: 0,
+        skeleton: Skeleton::new("s"),
+    });
+
+    let snapshot =
+        capture_skeleton_snapshot(&world, &assets, &GraphicsResources::default()).unwrap();
+
+    assert_eq!(
+        snapshot.humanoid_mapping.by_role.get(&HumanoidRole::Head),
+        Some(&2)
+    );
+}
+
+fn humanoid_edit_world(fbx_path: &std::path::Path) -> (World, AssetStorage) {
+    let (mut world, assets) =
+        crate::ecs::systems::humanoid_rig_systems::test_humanoid_world(fbx_path);
+    world.insert_resource(AvatarSetupState::default());
+    world.insert_resource(ClipLibrary::default());
+    world.insert_resource(FbxModelCache::empty());
+    sync_humanoid_rig(&mut world, &assets);
+    (world, assets)
+}
+
+fn rig_hips_height(world: &World) -> f32 {
+    world
+        .resource::<crate::ecs::resource::HumanoidRigState>()
+        .rig
+        .as_ref()
+        .expect("test_humanoid builds a rig")
+        .context
+        .hips_height
+}
+
+#[test]
+fn scaling_the_model_rebuilds_the_rig_context_before_the_next_frame() {
+    let Ok(temp_dir) = tempfile::tempdir() else {
+        return;
+    };
+    let (fbx_path, _) =
+        crate::ecs::systems::humanoid_rig_systems::copy_test_humanoid_fixture(temp_dir.path());
+    let (mut world, mut assets) = humanoid_edit_world(&fbx_path);
+    let mut graphics = GraphicsResources::default();
+    let height_before = rig_hips_height(&world);
+
+    crate::ecs::systems::apply_model_scale(&mut world, &mut assets, &mut graphics, 0.01).unwrap();
+
+    let height_after = rig_hips_height(&world);
+    assert!(
+        (height_after - height_before * 0.01).abs() < 1e-6,
+        "hips height {height_after} should follow the scaled skeleton ({height_before} * 0.01)"
+    );
+}
+
+#[test]
+fn adding_a_bone_registers_it_in_the_rig_track_table() {
+    let Ok(temp_dir) = tempfile::tempdir() else {
+        return;
+    };
+    let (fbx_path, _) =
+        crate::ecs::systems::humanoid_rig_systems::copy_test_humanoid_fixture(temp_dir.path());
+    let (mut world, mut assets) = humanoid_edit_world(&fbx_path);
+    let graphics = GraphicsResources::default();
+
+    let bone_id = add_skeleton_bone(
+        &mut world,
+        &mut assets,
+        &graphics,
+        "Hips",
+        "Extra",
+        Vector3::new(0.0, 0.1, 0.0),
+    )
+    .unwrap();
+
+    let table =
+        crate::ecs::systems::humanoid_rig_systems::engine_bone_name_to_id(&world, &assets).unwrap();
+    assert_eq!(table.get("Extra"), Some(&bone_id));
+}

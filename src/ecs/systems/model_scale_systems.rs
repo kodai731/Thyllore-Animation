@@ -12,7 +12,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::resource::{ClipLibrary, FbxModelCache, HumanoidRigState, NodeAssets};
 use crate::ecs::systems::humanoid_bake_systems::request_bake_scan;
-use crate::ecs::systems::{invalidate_humanoid_rig, refresh_after_skeleton_edit};
+use crate::ecs::systems::refresh_after_skeleton_edit;
 use crate::ecs::world::{Entity, MeshRef, Parent, Transform, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
@@ -40,13 +40,14 @@ pub fn validate_scale_factor(factor: f32) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Bake `factor` into every length of the loaded model and reset the model roots' entity scale to 1.
+/// Bake `factor` into every length of the loaded model and reset the model roots' entity scale to 1;
+/// returns the root scales as they were before the reset.
 pub fn apply_model_scale(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
     factor: f32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<(Entity, Vector3<f32>)>> {
     validate_scale_factor(factor)?;
     if assets.meshes.is_empty() && assets.skeletons.is_empty() {
         anyhow::bail!("no model is loaded");
@@ -55,12 +56,17 @@ pub fn apply_model_scale(
     scale_assets(assets, factor);
     scale_graphics_meshes(graphics, factor);
     scale_world_data(world, factor);
-    reset_model_root_scales(world);
+    let previous_root_scales = model_root_scales(world);
+    set_model_root_scales(
+        world,
+        previous_root_scales
+            .iter()
+            .map(|(root, _)| (*root, Vector3::new(1.0, 1.0, 1.0))),
+    );
 
-    invalidate_humanoid_rig(world);
     request_bake_scan(world);
     refresh_after_skeleton_edit(world, assets, graphics);
-    Ok(())
+    Ok(previous_root_scales)
 }
 
 fn scale_assets(assets: &mut AssetStorage, factor: f32) {
@@ -171,10 +177,23 @@ fn is_same_scale(a: f32, b: f32) -> bool {
     (a - b).abs() <= UNIFORM_SCALE_TOLERANCE * a.abs().max(b.abs()).max(1.0)
 }
 
-fn reset_model_root_scales(world: &mut World) {
-    for root in model_root_entities(world) {
+fn model_root_scales(world: &World) -> Vec<(Entity, Vector3<f32>)> {
+    model_root_entities(world)
+        .into_iter()
+        .filter_map(|root| {
+            let scale = world.get_component::<Transform>(root)?.scale;
+            Some((root, scale))
+        })
+        .collect()
+}
+
+pub fn set_model_root_scales(
+    world: &mut World,
+    scales: impl IntoIterator<Item = (Entity, Vector3<f32>)>,
+) {
+    for (root, scale) in scales {
         if let Some(transform) = world.get_component_mut::<Transform>(root) {
-            transform.scale = Vector3::new(1.0, 1.0, 1.0);
+            transform.scale = scale;
         }
     }
 }

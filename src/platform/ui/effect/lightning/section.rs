@@ -69,6 +69,7 @@ fn effect_rows(view: &LightningSectionView) -> UiRow<LightningSectionView> {
         &[]
     };
     UiRow::Field(Box::new(FieldRows {
+        scope: "effect",
         field: |view: &mut LightningSectionView| &mut view.effect,
         rows: rows_from_params(
             &thyllore_effect_core::LIGHTNING_UI_PARAMS,

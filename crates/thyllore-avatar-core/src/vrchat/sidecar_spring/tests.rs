@@ -1,9 +1,9 @@
 use cgmath::{InnerSpace, Vector3};
 use serde_json::json;
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ChainRole, ColliderShape, JointForce, RestRelativeJointForce, SpringBoneSetup,
-    SpringChain, SpringColliderDef, SpringColliderGroup, SpringCollisionMode, SpringJointParam,
-    SubmeshSelector, VrmJointForce, FITTED_BODY_GROUP_NAME,
+    ChainOrigin, ChainRole, ColliderGroupOrigin, ColliderShape, JointForce, RestRelativeJointForce,
+    SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup, SpringCollisionMode,
+    SpringJointParam, SubmeshSelector, VrmJointForce, FITTED_BODY_GROUP_NAME,
 };
 use thyllore_anim_core::BoneId;
 
@@ -50,6 +50,7 @@ fn test_full_mapping() {
         id: 0,
         name: "Body".to_string(),
         collider_ids: vec![0, 1],
+        origin: ColliderGroupOrigin::Authored,
     });
 
     setup.chains.push(SpringChain {
@@ -167,6 +168,7 @@ fn test_fitted_body_origin() {
         id: 0,
         name: FITTED_BODY_GROUP_NAME.to_string(),
         collider_ids: vec![0],
+        origin: ColliderGroupOrigin::Fitted,
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
@@ -195,6 +197,7 @@ fn setup_round_trips_through_the_sidecar() {
         id: 7,
         name: "Body".to_string(),
         collider_ids: vec![4],
+        origin: ColliderGroupOrigin::Authored,
     });
     setup.chains.push(SpringChain {
         id: 2,
@@ -415,6 +418,7 @@ fn test_out_of_range_bone_id_filtered() {
         id: 0,
         name: "Test".to_string(),
         collider_ids: vec![0, 1],
+        origin: ColliderGroupOrigin::Authored,
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
@@ -558,4 +562,93 @@ fn colliders_are_written_in_model_space_and_read_back_through_the_bone_frame() {
         }
         ColliderShape::Sphere { .. } => panic!("capsule expected"),
     }
+}
+
+#[test]
+fn a_disabled_chain_and_a_fitted_group_survive_a_round_trip() {
+    let bones = make_bones(&["Hips", "Spine", "Tail1", "Tail2"]);
+    let mut setup = SpringBoneSetup::default();
+    setup.colliders.push(SpringColliderDef {
+        id: 0,
+        bone_id: 0,
+        offset: Vector3::new(0.0, 0.0, 0.0),
+        shape: ColliderShape::Sphere { radius: 0.1 },
+    });
+    setup.collider_groups.push(SpringColliderGroup {
+        id: 0,
+        name: FITTED_BODY_GROUP_NAME.to_string(),
+        collider_ids: vec![0],
+        origin: ColliderGroupOrigin::Fitted,
+    });
+    setup.chains.push(SpringChain {
+        id: 0,
+        name: "tail".to_string(),
+        joints: vec![
+            SpringJointParam {
+                bone_id: 2,
+                ..Default::default()
+            },
+            SpringJointParam {
+                bone_id: 3,
+                ..Default::default()
+            },
+        ],
+        collider_group_ids: vec![0],
+        center_bone_id: None,
+        tail_bone_id: None,
+        enabled: false,
+        origin: Default::default(),
+    });
+
+    let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
+    assert!(!sidecar.chains[0].enabled);
+
+    let restored =
+        spring_setup_from_sidecar(&sidecar, &bones, &BoneRestFrame::identity_for(bones.len()));
+    assert!(!restored.chains[0].enabled);
+    assert_eq!(
+        restored.collider_groups[0].origin,
+        ColliderGroupOrigin::Fitted
+    );
+}
+
+#[test]
+fn a_sidecar_chain_without_the_enabled_field_is_enabled() {
+    let value = json!({
+        "name": "tail",
+        "center": null,
+        "collider_groups": [],
+        "joints": [],
+        "tail": null
+    });
+    let chain: SidecarSpringChain = serde_json::from_value(value).unwrap();
+    assert!(chain.enabled);
+}
+
+#[test]
+fn an_authored_group_with_the_fitted_name_exports_authored_colliders() {
+    let bones = make_bones(&["Hips"]);
+    let mut setup = SpringBoneSetup::default();
+    setup.colliders.push(SpringColliderDef {
+        id: 0,
+        bone_id: 0,
+        offset: Vector3::new(0.0, 0.0, 0.0),
+        shape: ColliderShape::Sphere { radius: 0.1 },
+    });
+    setup.collider_groups.push(SpringColliderGroup {
+        id: 0,
+        name: FITTED_BODY_GROUP_NAME.to_string(),
+        collider_ids: vec![0],
+        origin: ColliderGroupOrigin::Authored,
+    });
+
+    let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
+    assert_eq!(sidecar.colliders[0].origin, SidecarColliderOrigin::Authored);
+
+    let restored =
+        spring_setup_from_sidecar(&sidecar, &bones, &BoneRestFrame::identity_for(bones.len()));
+    assert_eq!(
+        restored.collider_groups[0].origin,
+        ColliderGroupOrigin::Authored
+    );
 }

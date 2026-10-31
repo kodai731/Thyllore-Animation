@@ -313,7 +313,7 @@ unsafe fn apply_model_scale_command(
         .pool
         .clone();
 
-    crate::ecs::systems::apply_model_scale(
+    let previous_root_scales = crate::ecs::systems::apply_model_scale(
         &mut app.data.ecs_world,
         &mut app.data.ecs_assets,
         &mut app.data.graphics_resources,
@@ -335,11 +335,16 @@ unsafe fn apply_model_scale_command(
         &pool,
     )?;
 
-    if history == ScaleHistory::Record {
-        app.data
+    match history {
+        ScaleHistory::Record => app
+            .data
             .ecs_world
             .resource_mut::<crate::ecs::resource::EditHistory>()
-            .push_model_scale(factor, "Apply model scale");
+            .push_model_scale(factor, previous_root_scales, "Apply model scale"),
+        ScaleHistory::Replay => {}
+        ScaleHistory::Revert { root_scales } => {
+            crate::ecs::systems::set_model_root_scales(&mut app.data.ecs_world, root_scales)
+        }
     }
     msg_info!("Applied model scale {}", factor);
     Ok(())

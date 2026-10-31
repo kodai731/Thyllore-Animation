@@ -150,6 +150,7 @@ fn water_section(world: &World) -> Option<Box<dyn FormSection>> {
     let mut rows = water_head_rows(&view);
     if view.selected.is_some() {
         rows.push(UiRow::Field(Box::new(FieldRows {
+            scope: "effect",
             field: |view: &mut WaterSectionView| &mut view.effect,
             rows: rows_from_params(
                 &thyllore_effect_core::WATER_UI_PARAMS,

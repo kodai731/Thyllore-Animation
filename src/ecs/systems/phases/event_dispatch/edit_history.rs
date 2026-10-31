@@ -151,9 +151,16 @@ fn dispatch_undo(world: &mut World) {
 
         EditCommand::ModelScaled {
             factor,
+            root_scales,
             description,
         } => {
-            queue_model_scale(world, 1.0 / factor);
+            queue_model_scale(
+                world,
+                1.0 / factor,
+                ScaleHistory::Revert {
+                    root_scales: root_scales.clone(),
+                },
+            );
             world
                 .resource_mut::<EditHistory>()
                 .push_to_redo(entry.clone());
@@ -230,10 +237,11 @@ fn dispatch_redo(world: &mut World) {
             EditCommand::ModelScaled {
                 factor,
                 description,
+                ..
             },
             EditCommandAfter::Empty,
         ) => {
-            queue_model_scale(world, *factor);
+            queue_model_scale(world, *factor, ScaleHistory::Replay);
             world
                 .resource_mut::<EditHistory>()
                 .push_to_undo(entry.clone());
@@ -255,13 +263,10 @@ fn queue_skeleton_restore(world: &mut World, target: &SkeletonSnapshot) {
         });
 }
 
-fn queue_model_scale(world: &mut World, factor: f32) {
+fn queue_model_scale(world: &mut World, factor: f32, history: ScaleHistory) {
     world
         .resource_mut::<AssetEditQueue>()
-        .push(AssetEditCommand::ApplyModelScale {
-            factor,
-            history: ScaleHistory::Replay,
-        });
+        .push(AssetEditCommand::ApplyModelScale { factor, history });
 }
 
 fn show_history_toast(world: &World, action: &str, description: &str) {
@@ -375,4 +380,56 @@ fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {
     let mut clip_library = world.resource_mut::<ClipLibrary>();
     clip_library.source_clips.insert(clip_id, source);
     clip_library.mark_dirty(clip_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cgmath::Vector3;
+
+    #[test]
+    fn undo_of_a_model_scale_reverts_the_assets_and_the_root_scales() {
+        let mut world = World::new();
+        world.insert_resource(EditHistory::new(8));
+        world.insert_resource(AssetEditQueue::default());
+        world.insert_resource(UiToast::default());
+        let root = world.spawn();
+        let root_scales = vec![(root, Vector3::new(0.01, 0.01, 0.01))];
+        world.resource_mut::<EditHistory>().push_model_scale(
+            0.01,
+            root_scales.clone(),
+            "Apply model scale",
+        );
+
+        dispatch_undo(&mut world);
+
+        let queued = world.resource_mut::<AssetEditQueue>().take();
+        let [AssetEditCommand::ApplyModelScale { factor, history }] = queued.as_slice() else {
+            panic!("expected one ApplyModelScale, got {queued:?}");
+        };
+        assert!((factor - 100.0).abs() < 1e-3);
+        assert_eq!(*history, ScaleHistory::Revert { root_scales });
+    }
+
+    #[test]
+    fn redo_of_a_model_scale_replays_the_bake() {
+        let mut world = World::new();
+        world.insert_resource(EditHistory::new(8));
+        world.insert_resource(AssetEditQueue::default());
+        world.insert_resource(UiToast::default());
+        world
+            .resource_mut::<EditHistory>()
+            .push_model_scale(0.01, Vec::new(), "Apply model scale");
+        dispatch_undo(&mut world);
+        world.resource_mut::<AssetEditQueue>().take();
+
+        dispatch_redo(&mut world);
+
+        let queued = world.resource_mut::<AssetEditQueue>().take();
+        let [AssetEditCommand::ApplyModelScale { factor, history }] = queued.as_slice() else {
+            panic!("expected one ApplyModelScale, got {queued:?}");
+        };
+        assert!((factor - 0.01).abs() < 1e-6);
+        assert_eq!(*history, ScaleHistory::Replay);
+    }
 }

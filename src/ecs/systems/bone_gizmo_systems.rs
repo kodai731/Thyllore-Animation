@@ -4,18 +4,22 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
 use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
+use crate::ecs::resource::gizmo::{
+    BoneGizmoData, BoneSelectionState, ConstraintGizmoData, SpringBoneGizmoData,
+};
 use crate::ecs::resource::MeshAssets;
+use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::world::World;
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
 use crate::loader::ModelLoadResult;
 use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
 use crate::render::RenderBackend;
+use thyllore_math_core::ScreenSpaceScale;
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
 const JOINT_MARKER_COLOR: [f32; 3] = [1.0, 1.0, 0.0];
-const JOINT_CROSS_SIZE: f32 = 0.02;
+const JOINT_CROSS_HALF_SIZE_PIXELS: f32 = 4.0;
 
 const BONE_SOLID_COLOR: [f32; 3] = [0.2, 0.45, 0.7];
 const BONE_WIRE_COLOR: [f32; 3] = [0.05, 0.15, 0.35];
@@ -43,6 +47,8 @@ pub fn build_bone_line_mesh(
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
+    marker_scale: &ScreenSpaceScale,
     mesh: &mut LineMesh,
 ) {
     mesh.vertices.clear();
@@ -61,7 +67,7 @@ pub fn build_bone_line_mesh(
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
-        if bone_idx >= display_transforms.len() {
+        if bone_idx >= display_transforms.len() || !draw_set.is_drawn(bone_idx) {
             continue;
         }
 
@@ -88,7 +94,8 @@ pub fn build_bone_line_mesh(
             mesh.indices.push(base + 1);
         }
 
-        append_joint_cross_marker(mesh, pos);
+        let half_size = marker_scale.world_size(pos, JOINT_CROSS_HALF_SIZE_PIXELS);
+        append_joint_cross_marker(mesh, pos, half_size);
     }
 }
 
@@ -109,6 +116,7 @@ pub fn build_octahedral_bone_meshes(
         1.0,
         mesh_scale,
         None,
+        &BoneDrawSet::all(skeleton.bones.len()),
         solid_mesh,
         wire_mesh,
     );
@@ -122,6 +130,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
     visual_scale: f32,
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -143,7 +152,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
-        if bone_idx >= display_transforms.len() {
+        if bone_idx >= display_transforms.len() || !draw_set.is_drawn(bone_idx) {
             continue;
         }
 
@@ -357,8 +366,8 @@ pub(crate) fn compute_display_transforms_with_skeleton(
         .collect()
 }
 
-fn append_joint_cross_marker(mesh: &mut LineMesh, pos: [f32; 3]) {
-    let s = JOINT_CROSS_SIZE;
+fn append_joint_cross_marker(mesh: &mut LineMesh, pos: [f32; 3], half_size: f32) {
+    let s = half_size;
     let offsets = [
         ([-s, 0.0, 0.0], [s, 0.0, 0.0]),
         ([0.0, -s, 0.0], [0.0, s, 0.0]),
@@ -399,6 +408,7 @@ pub fn compute_octahedral_vertices_per_bone(
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
 ) -> Vec<(usize, [[f32; 3]; 6])> {
     if global_transforms.is_empty() {
         return Vec::new();
@@ -415,7 +425,7 @@ pub fn compute_octahedral_vertices_per_bone(
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
-        if bone_idx >= display_transforms.len() {
+        if bone_idx >= display_transforms.len() || !draw_set.is_drawn(bone_idx) {
             continue;
         }
 
@@ -482,6 +492,7 @@ pub fn select_bone_by_ray(
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
 ) -> Option<(usize, f32)> {
     let bone_verts = compute_octahedral_vertices_per_bone(
         skeleton,
@@ -489,6 +500,7 @@ pub fn select_bone_by_ray(
         bone_local_offsets,
         mesh_scale,
         skeleton_for_display,
+        draw_set,
     );
 
     let mut closest: Option<(usize, f32)> = None;
@@ -677,6 +689,7 @@ pub fn build_box_bone_meshes_with_selection(
     visual_scale: f32,
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -698,7 +711,7 @@ pub fn build_box_bone_meshes_with_selection(
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
-        if bone_idx >= display_transforms.len() {
+        if bone_idx >= display_transforms.len() || !draw_set.is_drawn(bone_idx) {
             continue;
         }
 
@@ -812,6 +825,7 @@ pub fn build_sphere_bone_meshes_with_selection(
     visual_scale: f32,
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
+    draw_set: &BoneDrawSet,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -833,7 +847,7 @@ pub fn build_sphere_bone_meshes_with_selection(
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
-        if bone_idx >= display_transforms.len() {
+        if bone_idx >= display_transforms.len() || !draw_set.is_drawn(bone_idx) {
             continue;
         }
 
@@ -1859,10 +1873,8 @@ pub fn bone_gizmo_reset_for_loaded_model(
     bone_gizmo.wire_mesh.indices.clear();
 
     let Some(skeleton_asset) = assets.skeletons.values().next() else {
-        bone_gizmo.visible = false;
-        bone_gizmo.cached_skeleton_id = None;
-        bone_gizmo.cached_global_transforms.clear();
-        bone_gizmo.bone_local_offsets.clear();
+        drop(bone_gizmo);
+        skeleton_gizmos_clear(world);
         return;
     };
 
@@ -1873,6 +1885,33 @@ pub fn bone_gizmo_reset_for_loaded_model(
     bone_gizmo.mesh_scale = bone_gizmo_mesh_scale(loaded.load_result);
     bone_gizmo.bone_local_offsets = compute_bone_local_offsets(skeleton, &rest_globals);
     bone_gizmo.cached_global_transforms = rest_globals;
+}
+
+pub fn skeleton_gizmos_clear(world: &mut World) {
+    {
+        let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
+        bone_gizmo.visible = false;
+        bone_gizmo.cached_skeleton_id = None;
+        bone_gizmo.cached_global_transforms.clear();
+        bone_gizmo.bone_local_offsets.clear();
+        bone_gizmo.stick_mesh.vertices.clear();
+        bone_gizmo.stick_mesh.indices.clear();
+        bone_gizmo.solid_mesh.vertices.clear();
+        bone_gizmo.solid_mesh.indices.clear();
+        bone_gizmo.wire_mesh.vertices.clear();
+        bone_gizmo.wire_mesh.indices.clear();
+    }
+
+    if let Some(mut spring_gizmo) = world.get_resource_mut::<SpringBoneGizmoData>() {
+        spring_gizmo.wire_mesh.vertices.clear();
+        spring_gizmo.wire_mesh.indices.clear();
+    }
+
+    if let Some(mut constraint_gizmo) = world.get_resource_mut::<ConstraintGizmoData>() {
+        constraint_gizmo.visible = false;
+        constraint_gizmo.wire_mesh.vertices.clear();
+        constraint_gizmo.wire_mesh.indices.clear();
+    }
 }
 
 fn bone_gizmo_mesh_scale(load_result: &ModelLoadResult) -> f32 {

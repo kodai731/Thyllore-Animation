@@ -2,6 +2,7 @@ mod declare;
 mod fields;
 mod param;
 mod scene_component;
+mod single_owner;
 mod snapshot;
 
 pub use fields::{intern_name, nested_prefix, FieldPath, RootPath, SceneFields, SceneTables, Then};
@@ -10,5 +11,6 @@ pub use param::{
     ScalarParam, UiKind, UiParam, RGB_CHANNEL_SUFFIXES,
 };
 pub use scene_component::SceneComponent;
+pub use single_owner::SingleOwner;
 pub use snapshot::SnapshotValues;
 pub use thyllore_scene_derive::SceneFields;

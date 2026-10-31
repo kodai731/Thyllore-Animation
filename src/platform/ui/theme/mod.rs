@@ -12,7 +12,6 @@ pub use fonts::UiFonts;
 pub use icons::{entity_icon, Icon};
 pub use style::apply_ui_settings;
 pub use widgets::icon_button;
-pub use widgets::property_label;
 pub use widgets::search_field;
 pub use widgets::section_header;
 pub use widgets::toggle_switch;
@@ -23,3 +22,6 @@ pub use widgets::SectionDefault;
 pub use widgets::TreeRowResponse;
 pub use widgets::TreeRowSpec;
 pub use widgets::ICON_BUTTON_SIZE;
+pub use widgets::{
+    label_column_width, property_label, property_label_colored, property_label_in_column,
+};

@@ -1,6 +1,12 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use cgmath::Vector3;
+
+use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
+
+use crate::ecs::resource::SkeletonSnapshot;
+use crate::ecs::world::Entity;
 use crate::hooks::batch_capture::BatchCapture;
 
 /// Commands recorded during event dispatch and applied by `App`, one queue per stage of the apply order.
@@ -58,8 +64,42 @@ pub enum SceneLoadCommand {
 /// Applied after the loads: these edit assets of the model that is loaded.
 #[derive(Clone, Debug)]
 pub enum AssetEditCommand {
-    LoadClipFromFile { path: PathBuf },
-    AssignMaterialTexture { material: String, path: PathBuf },
+    LoadClipFromFile {
+        path: PathBuf,
+    },
+    AssignMaterialTexture {
+        material: String,
+        path: PathBuf,
+    },
+    AddBone {
+        parent: String,
+        name: String,
+        local_offset: Vector3<f32>,
+    },
+    RemoveBone {
+        bone: String,
+    },
+    SetBoneOffset {
+        bone: String,
+        local_offset: Vector3<f32>,
+    },
+    RestoreSkeletonSnapshot {
+        snapshot: Box<SkeletonSnapshot>,
+    },
+    ApplyModelScale {
+        factor: f32,
+        history: ScaleHistory,
+    },
+}
+
+/// Whether a model scale is a new edit, its redo, or its undo that puts the model roots' scale back.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScaleHistory {
+    Record,
+    Replay,
+    Revert {
+        root_scales: Vec<(Entity, Vector3<f32>)>,
+    },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.
@@ -95,5 +135,14 @@ pub enum OutputCommand {
     },
     ExportModelGltf {
         path: PathBuf,
+    },
+    ExportModelFbx {
+        path: PathBuf,
+    },
+    GenerateChainBones {
+        request: ChainGenRequest,
+    },
+    ApplyHiddenTriangles {
+        meshes: Vec<(usize, Vec<u32>)>,
     },
 }

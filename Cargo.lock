@@ -695,6 +695,7 @@ checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
 dependencies = [
  "approx 0.4.0",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -3924,6 +3925,7 @@ dependencies = [
  "serde_json",
  "thyllore-math-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
 ]
 
 [[package]]
@@ -3942,6 +3944,7 @@ dependencies = [
  "gltf",
  "imgui-winit-support",
  "inventory",
+ "libloading 0.8.9",
  "log",
  "once_cell",
  "ort",
@@ -3961,6 +3964,7 @@ dependencies = [
  "thyllore-color-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
+ "thyllore-file-format-core",
  "thyllore-grpc-client",
  "thyllore-importer-core",
  "thyllore-log-core",
@@ -3990,6 +3994,8 @@ dependencies = [
  "thyllore-anim-core",
  "thyllore-importer-core",
  "thyllore-math-core",
+ "thyllore-model-core",
+ "thyllore-scene-core",
  "toml",
 ]
 
@@ -4061,6 +4067,7 @@ version = "0.0.1"
 dependencies = [
  "cgmath",
  "thyllore-anim-core",
+ "thyllore-math-core",
  "thyllore-model-core",
 ]
 
@@ -4188,6 +4195,7 @@ dependencies = [
 name = "thyllore-scene-core"
 version = "0.0.1"
 dependencies = [
+ "cgmath",
  "serde",
  "thyllore-color-core",
  "thyllore-scene-derive",
@@ -4200,6 +4208,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thyllore-scratch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thyllore-animation",
 ]
 
 [[package]]

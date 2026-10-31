@@ -106,6 +106,19 @@ Commands:
         ./run.sh engine                        # once; then, at any time:
         ./run.sh live-dump --tracks --clip "New Clip"
         ./run.sh live-dump --timings 1s        # per-frame CPU ms from now for 1 s
+  scratch <job> [--args JSON] [--timeout SEC]
+      Build the scratch crate (prefer-dynamic), copy its .so to a timestamped
+      path, and send a scratch request to the running engine. The job name is
+      dispatched by the scratch crate's entry function (e.g. "timeline").
+     Drop src/<name>.rs with pub fn make(args: serde_json::Value) -> anyhow::Result<Box<dyn ScratchJob>>
+      to add job <name>; git ignores it. --timeout SEC is passed to tools/live_dump.py --timeout
+      (default 15 s). scratch jobs can only be loaded by an engine
+      built with prefer-dynamic (use ./run.sh scratch-engine to start one):
+        ./run.sh scratch timeline
+        ./run.sh scratch timeline --args '{"foo":"bar"}'
+  scratch-engine [private|degrade|full] [cargo args...]
+      Like engine, but builds with RUSTFLAGS="-C prefer-dynamic" so it can
+      load scratch crates.
   help
       Show this help.
 EOF
@@ -129,7 +142,7 @@ fi
 
 runs_on_terminal() {
     case "$1" in
-        help|-h|--help|live-dump|auto) return 0 ;;
+        help|-h|--help|live-dump|scratch|auto) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -209,6 +222,38 @@ case "$command" in
         ;;
     live-dump)
         exec python3 "$REPO_ROOT/tools/live_dump.py" "$@"
+        ;;
+    scratch)
+        job="${1:-}"
+        shift || true
+        if [[ -z "$job" ]]; then
+            echo "usage: ./run.sh scratch <job> [--args JSON] [--timeout SEC]" >&2
+            exit 1
+        fi
+        args="null"
+        timeout=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --args) shift; args="${1:?missing --args value}"; shift ;;
+                --timeout) shift; timeout="${1:?missing --timeout value}"; shift ;;
+                *) echo "unknown option: $1" >&2; exit 1 ;;
+            esac
+        done
+        RUSTFLAGS="-C prefer-dynamic" CARGO_TARGET_DIR="$REPO_ROOT/target/scratch" cargo build -p thyllore-scratch
+        libs_dir="$REPO_ROOT/target/scratch/libs"
+        mkdir -p "$libs_dir"
+        ts=$(date +%s%3N)
+        dst="$libs_dir/libscratch_${ts}.so"
+        cp "$REPO_ROOT/target/scratch/debug/libthyllore_scratch.so" "$dst"
+        request="{\"kind\":\"scratch\",\"library\":\"$(cd "$(dirname "$dst")" && pwd)/$(basename "$dst")\",\"job\":\"$job\",\"args\":$args}"
+        if [[ -n "$timeout" ]]; then
+            python3 "$REPO_ROOT/tools/live_dump.py" --raw-request "$request" --timeout "$timeout"
+        else
+            python3 "$REPO_ROOT/tools/live_dump.py" --raw-request "$request"
+        fi
+        ;;
+    scratch-engine)
+        RUSTFLAGS="-C prefer-dynamic" CARGO_TARGET_DIR="$REPO_ROOT/target/scratch" exec bash "$REPO_ROOT/scripts/run_engine.sh" "$@"
         ;;
     help|-h|--help)
         usage

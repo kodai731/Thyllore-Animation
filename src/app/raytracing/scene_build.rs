@@ -48,7 +48,7 @@ pub unsafe fn rebuild_acceleration_structures(
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
                 &mesh.index_buffer.buffer,
-                mesh.vertex_data.indices.len() as u32,
+                mesh.index_buffer.indices,
             )
         })
         .collect();
@@ -66,7 +66,7 @@ pub unsafe fn rebuild_acceleration_structures(
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
             &mesh.index_buffer.buffer,
-            mesh.vertex_data.indices.len() as u32,
+            mesh.index_buffer.indices,
         )?;
 
         let model = mesh_transforms

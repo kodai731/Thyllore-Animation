@@ -1,6 +1,10 @@
 """Tests for submesh_mask module: material_triangles, to_loop_triangle_indices, mask_mesh_input."""
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from blender_addon.common.submesh_mask import (
     mask_mesh_input,
     material_loop_indices,

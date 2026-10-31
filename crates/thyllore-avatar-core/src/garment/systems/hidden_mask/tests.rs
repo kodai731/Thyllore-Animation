@@ -53,33 +53,6 @@ fn test_out_of_range() {
 }
 
 #[test]
-fn test_cone_directions_unit_length() {
-    let normal = Vector3::new(0.0, 1.0, 0.0);
-    let dirs = cone_directions(normal, 30.0, 5);
-    assert_eq!(dirs.len(), 5);
-    for dir in &dirs {
-        let len_sq = dir.dot(*dir);
-        assert!(
-            (len_sq - 1.0).abs() < 1e-5,
-            "direction {:?} has length squared {}",
-            dir,
-            len_sq
-        );
-    }
-    for dir in &dirs {
-        let dot = normal.dot(*dir);
-        let cos_30 = 30.0_f32.to_radians().cos();
-        assert!(
-            (dot - 1.0).abs() < 1e-5 || (dot - cos_30).abs() < 1e-4,
-            "direction {:?} dot with normal = {}, expected ~1 or ~{}",
-            dir,
-            dot,
-            cos_30
-        );
-    }
-}
-
-#[test]
 fn test_hidden_triangles_all_three() {
     let triangles: [[u32; 3]; 4] = [[0, 1, 2], [0, 2, 3], [0, 3, 4], [1, 2, 5]];
     let hidden_vertices = [true, true, true, false, true, true];

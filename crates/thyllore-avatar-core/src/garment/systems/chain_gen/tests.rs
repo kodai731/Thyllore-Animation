@@ -3,13 +3,13 @@ use std::f32::consts::{PI, TAU};
 
 use cgmath::{InnerSpace, Vector3};
 
-use super::weights::MAX_INFLUENCES_PER_VERTEX;
 use super::*;
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
     InfluenceTarget, VertexInfluences,
 };
 use crate::garment::components::submesh_role::SubmeshSelector;
+use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
     let positions = (1..=5)
@@ -513,7 +513,7 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
     let own = total_weight_on_chain(entry, 0);
     let other = total_weight_on_chain(entry, 1);
     assert!((own - other).abs() < 1e-4, "own {own} other {other}");
-    assert!(entry.influences.len() <= MAX_INFLUENCES_PER_VERTEX);
+    assert!(entry.influences.len() <= INFLUENCES_PER_VERTEX);
     let sum: f32 = entry.influences.iter().map(|(_, w)| w).sum();
     assert!((sum - 1.0).abs() < 1e-5);
 

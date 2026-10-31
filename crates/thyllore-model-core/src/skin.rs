@@ -2,6 +2,9 @@ use cgmath::{Vector3, Vector4};
 
 use crate::SkeletonId;
 
+/// Bone influences stored per vertex: the four slots of `bone_indices` / `bone_weights`.
+pub const INFLUENCES_PER_VERTEX: usize = 4;
+
 #[derive(Clone, Debug)]
 pub struct SkinData {
     pub skeleton_id: SkeletonId,

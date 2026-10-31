@@ -421,3 +421,30 @@ fn chain_ramp_ui_params_names() {
         ]
     );
 }
+
+#[test]
+fn targets_without_skeleton_are_the_chain_alone() {
+    let (_, setup) = build_full_test_data(6, 3);
+    let targets = RampTargets::in_scope(&setup, None, 1, RampScope::SiblingChains);
+    assert_eq!(targets.chains, vec![1]);
+    assert_eq!(targets.joint_count, 3);
+}
+
+#[test]
+fn targets_in_sibling_scope_reach_every_chain_under_the_head() {
+    let (skeleton, setup) = build_full_test_data(6, 3);
+    let siblings = RampTargets::in_scope(&setup, Some(&skeleton), 1, RampScope::SiblingChains);
+    assert_eq!(siblings.chains.len(), 6);
+    assert_eq!(siblings.joint_count, 18);
+    let own = RampTargets::in_scope(&setup, Some(&skeleton), 1, RampScope::ThisChain);
+    assert_eq!(own.chains, vec![1]);
+}
+
+#[test]
+fn targets_under_a_bone_exist_only_above_chain_roots() {
+    let (skeleton, setup) = build_full_test_data(6, 3);
+    let head = RampTargets::under_bone(&setup, Some(&skeleton), 0).expect("head has chains");
+    assert_eq!(head.chains.len(), 6);
+    assert!(RampTargets::under_bone(&setup, Some(&skeleton), 1).is_none());
+    assert!(RampTargets::under_bone(&setup, None, 0).is_none());
+}

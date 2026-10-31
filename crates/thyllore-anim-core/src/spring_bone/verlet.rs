@@ -1,4 +1,5 @@
 use cgmath::{InnerSpace, Matrix4, Quaternion, Vector3};
+use thyllore_math_core::{tangent_frame_around, world_y_axis};
 
 use super::force::SpringForceModel;
 use crate::{compose_transform, decompose_transform, normalize_quat};
@@ -59,7 +60,7 @@ pub fn integrate_joint(
 fn unit_or_up(v: Vector3<f32>) -> Vector3<f32> {
     let len = v.magnitude();
     if len < 1e-8 {
-        Vector3::new(0.0, 1.0, 0.0)
+        world_y_axis()
     } else {
         v / len
     }
@@ -154,17 +155,7 @@ fn rotation_between(from: Vector3<f32>, to: Vector3<f32>) -> Quaternion<f32> {
     }
 
     if dot < -0.9999 {
-        let perp = if from_n.x.abs() < 0.9 {
-            Vector3::new(1.0, 0.0, 0.0)
-        } else {
-            Vector3::new(0.0, 1.0, 0.0)
-        };
-        let axis = from_n.cross(perp);
-        let axis_len = axis.magnitude();
-        if axis_len < 1e-8 {
-            return Quaternion::new(1.0, 0.0, 0.0, 0.0);
-        }
-        let axis = axis / axis_len;
+        let (axis, _) = tangent_frame_around(from_n);
         return Quaternion::new(0.0, axis.x, axis.y, axis.z);
     }
 

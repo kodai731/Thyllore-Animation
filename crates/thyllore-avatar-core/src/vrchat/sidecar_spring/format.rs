@@ -1,10 +1,9 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thyllore_anim_core::spring_bone::{
     ChainRole, JointForce, RestRelativeJointForce, VrmJointForce,
 };
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SidecarCollisionMode {
     #[default]
@@ -12,14 +11,14 @@ pub enum SidecarCollisionMode {
     SegmentExtended,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SidecarColliderShape {
     Sphere,
     Capsule,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SidecarColliderOrigin {
     Authored,
@@ -27,7 +26,7 @@ pub enum SidecarColliderOrigin {
 }
 
 /// The spring section of the avatar sidecar: bones are referenced by name so the file survives re-export.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SidecarSpring {
     pub collision_mode: SidecarCollisionMode,
     pub colliders: Vec<SidecarCollider>,
@@ -35,7 +34,7 @@ pub struct SidecarSpring {
     pub chains: Vec<SidecarSpringChain>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidecarCollider {
     pub name: String,
     pub bone: String,
@@ -46,13 +45,13 @@ pub struct SidecarCollider {
     pub origin: SidecarColliderOrigin,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidecarColliderGroup {
     pub name: String,
     pub colliders: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidecarSpringChain {
     pub name: String,
     pub center: Option<String>,
@@ -66,7 +65,7 @@ pub struct SidecarSpringChain {
 }
 
 /// The submesh a generated chain was placed on; absent for hand-authored chains.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidecarChainOrigin {
     pub mesh: String,
     #[serde(default)]
@@ -75,7 +74,7 @@ pub struct SidecarChainOrigin {
 }
 
 /// The joint's force model and its two magnitudes in that model's units.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "model", rename_all = "snake_case")]
 pub enum SidecarJointForce {
     /// VRM 1.0: both in metres per second
@@ -123,7 +122,7 @@ impl From<SidecarJointForce> for JointForce {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidecarSpringJoint {
     pub bone: String,
     pub force: SidecarJointForce,

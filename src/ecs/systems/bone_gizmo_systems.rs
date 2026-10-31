@@ -8,13 +8,14 @@ use crate::ecs::resource::gizmo::{
     BoneGizmoData, BoneSelectionState, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::resource::MeshAssets;
-use crate::ecs::systems::{BoneDrawSet, ScreenSpaceScale};
+use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::world::World;
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
 use crate::loader::ModelLoadResult;
 use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
 use crate::render::RenderBackend;
+use thyllore_math_core::ScreenSpaceScale;
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
 const JOINT_MARKER_COLOR: [f32; 3] = [1.0, 1.0, 0.0];

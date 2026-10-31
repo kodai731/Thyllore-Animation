@@ -17,58 +17,70 @@ impl StatsView {
     }
 }
 
+const PLATFORMS: [Platform; 2] = [Platform::Pc, Platform::Quest];
+
+fn platform_label(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Pc => "PC",
+        Platform::Quest => "Quest",
+    }
+}
+
+fn platform_choice_row() -> UiRow<StatsView> {
+    UiRow::Choice {
+        label: "Platform",
+        options: |_world, view| {
+            PLATFORMS
+                .iter()
+                .map(|&platform| ChoiceOption {
+                    label: platform_label(platform).to_string(),
+                    selected: platform == view.platform,
+                })
+                .collect()
+        },
+        pick: |view, index| {
+            if let Some(&platform) = PLATFORMS.get(index) {
+                view.platform = platform;
+            }
+        },
+    }
+}
+
 pub fn rows() -> Vec<UiRow<StatsView>> {
     vec![
-        UiRow::Choice {
-            label: "Platform",
-            options: |_world, view| {
-                let platforms = [Platform::Pc, Platform::Quest];
-                platforms
-                    .iter()
-                    .map(|p| ChoiceOption {
-                        label: match p {
-                            Platform::Pc => "PC".to_string(),
-                            Platform::Quest => "Quest".to_string(),
-                        },
-                        selected: *p == view.platform,
-                    })
-                    .collect()
-            },
-            pick: |view, index| {
-                view.platform = match index {
-                    0 => Platform::Pc,
-                    1 => Platform::Quest,
-                    _ => unreachable!(),
-                };
-            },
-        },
-        UiRow::Canvas(|ui, _world, view| {
-            let Some(rank) = &view.rank else {
-                ui.text("No rank available");
-                return;
-            };
-            if let Some(_table) = ui.begin_table("##avatar_stats", 3) {
-                ui.table_setup_column("Stat", imgui::TableColumnFlags::empty(), None);
-                ui.table_setup_column("Value", imgui::TableColumnFlags::empty(), None);
-                ui.table_setup_column("Rank", imgui::TableColumnFlags::empty(), None);
-                ui.table_headers_row();
-                for item in &rank.items {
-                    ui.table_next_row();
-                    ui.table_next_column();
-                    ui.text(item.stat);
-                    ui.table_next_column();
-                    ui.text(item.value.to_string());
-                    ui.table_next_column();
-                    ui.text_colored(rank_color(item.rank), format!("{:?}", item.rank));
-                }
-            }
-
-            ui.separator();
-            ui.text("Overall:");
-            ui.same_line();
-            ui.text_colored(rank_color(rank.overall), format!("{:?}", rank.overall));
+        platform_choice_row(),
+        UiRow::Canvas(|ui, _world, view| match &view.rank {
+            Some(rank) => draw_rank_report(ui, rank),
+            None => ui.text("No rank available"),
         }),
     ]
+}
+
+fn draw_rank_report(ui: &imgui::Ui, rank: &RankReport) {
+    if let Some(_table) = ui.begin_table("##avatar_stats", 3) {
+        ui.table_setup_column("Stat", imgui::TableColumnFlags::empty(), None);
+        ui.table_setup_column("Value", imgui::TableColumnFlags::empty(), None);
+        ui.table_setup_column("Rank", imgui::TableColumnFlags::empty(), None);
+        ui.table_headers_row();
+        for item in &rank.items {
+            draw_rank_row(ui, item.stat, &item.value.to_string(), item.rank);
+        }
+    }
+
+    ui.separator();
+    ui.text("Overall:");
+    ui.same_line();
+    ui.text_colored(rank_color(rank.overall), format!("{:?}", rank.overall));
+}
+
+fn draw_rank_row(ui: &imgui::Ui, stat: &str, value: &str, rank: PerformanceRank) {
+    ui.table_next_row();
+    ui.table_next_column();
+    ui.text(stat);
+    ui.table_next_column();
+    ui.text(value);
+    ui.table_next_column();
+    ui.text_colored(rank_color(rank), format!("{:?}", rank));
 }
 
 fn rank_color(rank: PerformanceRank) -> [f32; 4] {

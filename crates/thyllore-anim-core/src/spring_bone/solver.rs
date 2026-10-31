@@ -6,9 +6,10 @@ use super::{
     resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
     segment_axis_distance, tail_axis_distance, world_collider, JointForce, JointForces,
     JointRestFrame, SpringBoneSetup, SpringChain, SpringChainId, SpringCollisionMode,
-    SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP, EARTH_GRAVITY_M_PER_S2,
+    SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP,
 };
 use crate::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
+use thyllore_math_core::{world_y_axis, world_y_down, EARTH_GRAVITY_M_PER_S2};
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
 
@@ -31,10 +32,10 @@ impl Default for SpringJointState {
             prev_tail: Vector3::new(0.0, 0.0, 0.0),
             current_tail: Vector3::new(0.0, 0.0, 0.0),
             bone_length: 0.0,
-            bone_axis: Vector3::new(0.0, 1.0, 0.0),
+            bone_axis: world_y_axis(),
             initial_local_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
             rest_axis_distances: Vec::new(),
-            gravity_in_parent_rest: Vector3::new(0.0, -1.0, 0.0),
+            gravity_in_parent_rest: world_y_down(),
         }
     }
 }
@@ -516,7 +517,7 @@ fn leaf_bone_length_and_axis(
     let offset_from_parent = head - parent_head;
     let length = offset_from_parent.magnitude();
     if length <= 1e-6 {
-        return (0.1, Vector3::new(0.0, 1.0, 0.0));
+        return (0.1, world_y_axis());
     }
     let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
     (

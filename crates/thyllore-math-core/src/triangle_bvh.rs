@@ -184,72 +184,85 @@ impl TriangleBvh {
         }
         let inverse_direction =
             Vector3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z);
-        let mut best_t = max_distance;
-        let mut best_triangle: u32 = 0;
-        let mut best_barycentric = Vector3::new(0.0, 0.0, 0.0);
+        let mut nearest: Option<RayHit> = None;
         let mut stack: Vec<u32> = vec![0];
-        while let Some(node_idx) = stack.pop() {
-            let node = &self.nodes[node_idx as usize];
-            if let Some(entry) = ray_aabb_entry(&node.bounds, origin, inverse_direction) {
-                if entry >= best_t {
-                    continue;
-                }
-            } else {
+
+        while let Some(node_index) = stack.pop() {
+            let node = &self.nodes[node_index as usize];
+            let limit = nearest.map_or(max_distance, |hit| hit.distance);
+            let Some(entry) = ray_aabb_entry(&node.bounds, origin, inverse_direction) else {
+                continue;
+            };
+            if entry >= limit {
                 continue;
             }
             if node.count > 0 {
-                for i in 0..node.count {
-                    let tri_idx = self.triangle_order[(node.first + i) as usize];
-                    let tri = self.triangles[tri_idx as usize];
-                    let a = self.positions[tri[0] as usize];
-                    let b = self.positions[tri[1] as usize];
-                    let c = self.positions[tri[2] as usize];
-                    if let Some((t, u, v)) = ray_to_triangle_barycentric(origin, direction, a, b, c)
-                    {
-                        if t < best_t {
-                            best_t = t;
-                            best_triangle = tri_idx;
-                            best_barycentric = Vector3::new(1.0 - u - v, u, v);
-                        }
-                    }
+                if let Some(hit) = self.nearest_leaf_hit(node, origin, direction, limit) {
+                    nearest = Some(hit);
                 }
             } else {
-                let left = node.left_child;
-                let right = left + 1;
-                let left_entry =
-                    ray_aabb_entry(&self.nodes[left as usize].bounds, origin, inverse_direction);
-                let right_entry = ray_aabb_entry(
-                    &self.nodes[right as usize].bounds,
-                    origin,
-                    inverse_direction,
-                );
-                match (left_entry, right_entry) {
-                    (Some(le), Some(re)) if le <= re => {
-                        stack.push(right);
-                        stack.push(left);
-                    }
-                    (Some(_), Some(_)) => {
-                        stack.push(left);
-                        stack.push(right);
-                    }
-                    (Some(_), None) => {
-                        stack.push(left);
-                    }
-                    (None, Some(_)) => {
-                        stack.push(right);
-                    }
-                    (None, None) => {}
-                }
+                self.push_children_nearest_first(node, origin, inverse_direction, &mut stack);
             }
         }
-        if best_t < max_distance {
-            Some(RayHit {
-                triangle: best_triangle,
-                distance: best_t,
-                barycentric: best_barycentric,
-            })
-        } else {
-            None
+        nearest
+    }
+
+    /// The closest triangle of a leaf hit before `limit`, if any.
+    fn nearest_leaf_hit(
+        &self,
+        leaf: &BvhNode,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        limit: f32,
+    ) -> Option<RayHit> {
+        let mut nearest: Option<RayHit> = None;
+        for slot in leaf.first..leaf.first + leaf.count {
+            let triangle = self.triangle_order[slot as usize];
+            let [a, b, c] = self.triangles[triangle as usize].map(|v| self.positions[v as usize]);
+            let Some((distance, u, v)) = ray_to_triangle_barycentric(origin, direction, a, b, c)
+            else {
+                continue;
+            };
+            if distance < nearest.map_or(limit, |hit| hit.distance) {
+                nearest = Some(RayHit {
+                    triangle,
+                    distance,
+                    barycentric: Vector3::new(1.0 - u - v, u, v),
+                });
+            }
+        }
+        nearest
+    }
+
+    /// Pushes the children the ray enters, the nearer one on top so it is visited first.
+    fn push_children_nearest_first(
+        &self,
+        node: &BvhNode,
+        origin: Vector3<f32>,
+        inverse_direction: Vector3<f32>,
+        stack: &mut Vec<u32>,
+    ) {
+        let left = node.left_child;
+        let right = left + 1;
+        let entry_of = |child: u32| {
+            ray_aabb_entry(
+                &self.nodes[child as usize].bounds,
+                origin,
+                inverse_direction,
+            )
+        };
+        match (entry_of(left), entry_of(right)) {
+            (Some(left_entry), Some(right_entry)) if left_entry <= right_entry => {
+                stack.push(right);
+                stack.push(left);
+            }
+            (Some(_), Some(_)) => {
+                stack.push(left);
+                stack.push(right);
+            }
+            (Some(_), None) => stack.push(left),
+            (None, Some(_)) => stack.push(right),
+            (None, None) => {}
         }
     }
 }

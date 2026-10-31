@@ -1,14 +1,15 @@
 use cgmath::Vector3;
 use thyllore_math_core::resample_polyline;
 
+use super::card_strands::place_card_chains;
 use super::columns::{group_into_components, split_garment_columns, split_hair_columns};
 use super::frame::{collect_target_vertices, compute_vertex_frames, VertexFrame};
 use super::root_band::{hair_root_band, RootBand};
+use super::strand_mode::decide_strand_mode;
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainPlacement, GeneratedChain, GeneratedJoint,
     StrandMode, StrandPlacement,
 };
-use crate::garment::systems::card_strands::{decide_strand_mode, place_card_chains};
 
 /// Band centroids from the root down plus the deepest vertex as the tail.
 fn build_centerline(

@@ -277,4 +277,86 @@ mod tests {
         assert_eq!(chains[0].joints[1].bone_id, 1);
         assert_eq!(chains[0].tail_bone_id, Some(2));
     }
+
+    /// The checked-in extension sample must come through with every value intact; a regression here
+    /// changes what every VRM model's spring bones do.
+    #[test]
+    fn checked_in_extension_sample_keeps_every_value() {
+        let json: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/data/vrmc_spring_bone.json"))
+                .expect("sample parses");
+        let resolve = |node: u32| -> Option<u32> { Some(node + 10) };
+
+        let setup = parse_vrmc_spring_bone(&json, &resolve).expect("extension parses");
+
+        assert_eq!(setup.collision_mode, SpringCollisionMode::VrmCompatible);
+        assert_eq!(setup.new_joint_force_model, SpringForceModel::Vrm);
+        assert_eq!(
+            (
+                setup.next_chain_id,
+                setup.next_collider_id,
+                setup.next_group_id
+            ),
+            (1, 2, 2)
+        );
+
+        let sphere = &setup.colliders[0];
+        assert_eq!(sphere.bone_id, 11);
+        assert_eq!(sphere.offset, cgmath::Vector3::new(0.0, 0.05, 0.02));
+        assert_eq!(sphere.shape, ColliderShape::Sphere { radius: 0.08 });
+        let capsule = &setup.colliders[1];
+        assert_eq!(capsule.bone_id, 12);
+        assert_eq!(
+            capsule.shape,
+            ColliderShape::Capsule {
+                radius: 0.04,
+                tail: cgmath::Vector3::new(0.0, -0.25, 0.0),
+            }
+        );
+        let group_names: Vec<&str> = setup
+            .collider_groups
+            .iter()
+            .map(|g| g.name.as_str())
+            .collect();
+        assert_eq!(group_names, ["head", "body"]);
+        assert_eq!(setup.collider_groups[1].collider_ids, [1]);
+
+        let chain = &setup.chains[0];
+        assert_eq!(chain.name, "hair_front");
+        assert_eq!(chain.center_bone_id, Some(10));
+        assert_eq!(chain.collider_group_ids, [0, 1]);
+        assert_eq!(chain.tail_bone_id, Some(15));
+        let joints: Vec<(u32, JointForce, f32, f32)> = chain
+            .joints
+            .iter()
+            .map(|j| (j.bone_id, j.force, j.drag_force, j.hit_radius))
+            .collect();
+        assert_eq!(
+            joints,
+            [
+                (
+                    13,
+                    JointForce::Vrm(VrmJointForce {
+                        stiffness: 0.8,
+                        gravity_power: 0.1
+                    }),
+                    0.4,
+                    0.01
+                ),
+                (
+                    14,
+                    JointForce::Vrm(VrmJointForce {
+                        stiffness: 0.6,
+                        gravity_power: 0.2
+                    }),
+                    0.5,
+                    0.015
+                ),
+            ]
+        );
+        assert!(chain
+            .joints
+            .iter()
+            .all(|j| j.gravity_dir == cgmath::Vector3::new(0.0, -1.0, 0.0)));
+    }
 }

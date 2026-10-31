@@ -1,6 +1,7 @@
 use cgmath::{Vector3, Vector4};
 use thyllore_model_core::{BoneRemap, SkinData, INFLUENCES_PER_VERTEX};
 
+use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{Constrained, ConstraintSet, SpringBoneSetup, WithSpringBone};
@@ -148,10 +149,15 @@ pub fn capture_skeleton_snapshot(
         .iter()
         .map(|(id, source)| (*id, source.editable_clip.tracks.clone()))
         .collect();
+    let humanoid_mapping = world
+        .get_resource::<AvatarSetupState>()
+        .map(|state| state.mapping.clone())
+        .unwrap_or_default();
 
     Some(SkeletonSnapshot {
         skeleton: skeleton_asset.skeleton.clone(),
         skins,
+        humanoid_mapping,
         spring_setups: world
             .iter_components::<SpringBoneSetup>()
             .map(|(entity, setup)| (entity, setup.clone()))
@@ -215,10 +221,13 @@ pub fn restore_skeleton_snapshot(
     {
         let mut clips = world.resource_mut::<ClipLibrary>();
         for (id, tracks) in snapshot.clip_tracks {
-            if let Some(source) = clips.source_clips.get_mut(&id) {
-                source.editable_clip.tracks = tracks;
+            if let Some(clip) = clips.get_mut(id) {
+                clip.tracks = tracks;
             }
         }
+    }
+    if let Some(mut state) = world.get_resource_mut::<AvatarSetupState>() {
+        state.mapping = snapshot.humanoid_mapping;
     }
     drop_bone_state_beyond(world, bone_count as BoneId);
     invalidate_humanoid_rig(world);
@@ -359,9 +368,13 @@ fn remap_bone_references(world: &mut World, remap: &BoneRemap) {
     }
 
     let mut clips = world.resource_mut::<ClipLibrary>();
-    for source in clips.source_clips.values_mut() {
-        let tracks = std::mem::take(&mut source.editable_clip.tracks);
-        source.editable_clip.tracks = tracks
+    let clip_ids: Vec<SourceClipId> = clips.all_clip_ids().copied().collect();
+    for id in clip_ids {
+        let Some(clip) = clips.get_mut(id) else {
+            continue;
+        };
+        let tracks = std::mem::take(&mut clip.tracks);
+        clip.tracks = tracks
             .into_iter()
             .filter_map(|(bone, mut track)| {
                 let new = remap.map(bone)?;
@@ -415,6 +428,7 @@ fn remap_spring_setup(setup: &mut SpringBoneSetup, remap: &BoneRemap) {
                 None => false,
             });
         chain.center_bone_id = chain.center_bone_id.and_then(|bone| remap.map(bone));
+        chain.tail_bone_id = chain.tail_bone_id.and_then(|bone| remap.map(bone));
     }
     setup.chains.retain(|chain| !chain.joints.is_empty());
     setup

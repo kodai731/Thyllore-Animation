@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use cgmath::Vector4;
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 
 use crate::animation::editable::{BoneTrack, SourceClipId};
 use crate::animation::{BoneId, Skeleton};
@@ -23,4 +24,5 @@ pub struct SkeletonSnapshot {
     pub spring_setups: Vec<(Entity, SpringBoneSetup)>,
     pub constraint_sets: Vec<(Entity, ConstraintSet)>,
     pub clip_tracks: Vec<(SourceClipId, HashMap<BoneId, BoneTrack>)>,
+    pub humanoid_mapping: HumanoidMapping,
 }

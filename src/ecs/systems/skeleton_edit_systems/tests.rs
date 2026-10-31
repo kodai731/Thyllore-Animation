@@ -187,3 +187,74 @@ fn humanoid_mapping_follows_renumbered_bones_and_drops_removed_roles() {
     assert_eq!(mapping.by_role.get(&HumanoidRole::Spine), None);
     assert_eq!(mapping.by_role.get(&HumanoidRole::Head), Some(&1));
 }
+
+#[test]
+fn spring_chain_tail_follows_renumbered_bones_and_clears_when_removed() {
+    let (_, remap, _) = remove_middle_of_three();
+    let mut setup = SpringBoneSetup::default();
+    let joint = |bone_id| crate::ecs::component::SpringJointParam {
+        bone_id,
+        ..Default::default()
+    };
+    setup.chains.push(crate::ecs::component::SpringChain {
+        joints: vec![joint(0)],
+        tail_bone_id: Some(3),
+        ..Default::default()
+    });
+    setup.chains.push(crate::ecs::component::SpringChain {
+        joints: vec![joint(0)],
+        tail_bone_id: Some(1),
+        ..Default::default()
+    });
+
+    remap_spring_setup(&mut setup, &remap);
+
+    assert_eq!(setup.chains[0].tail_bone_id, Some(1));
+    assert_eq!(setup.chains[1].tail_bone_id, None);
+}
+
+#[test]
+fn renumbered_clip_tracks_mark_their_source_dirty_for_the_playback_asset() {
+    use crate::animation::editable::{EditableAnimationClip, SourceClip};
+
+    let (_, remap, _) = remove_middle_of_three();
+    let mut world = World::new();
+    let mut clips = ClipLibrary::new();
+    let mut clip = EditableAnimationClip::new(7, "walk".to_string());
+    clip.add_track(3, "side".to_string());
+    clips.source_clips.insert(7, SourceClip::new(7, clip));
+    clips.mark_clean(7);
+    world.insert_resource(clips);
+
+    remap_bone_references(&mut world, &remap);
+
+    let clips = world.resource::<ClipLibrary>();
+    assert!(clips.is_dirty(7));
+    assert_eq!(clips.get(7).unwrap().tracks[&1].bone_id, 1);
+}
+
+#[test]
+fn skeleton_snapshot_carries_the_humanoid_mapping() {
+    use crate::asset::SkeletonAsset;
+    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+
+    let mut world = World::new();
+    world.insert_resource(ClipLibrary::new());
+    let mut state = AvatarSetupState::default();
+    state.mapping.by_role.insert(HumanoidRole::Head, 2);
+    world.insert_resource(state);
+    let mut assets = AssetStorage::new();
+    assets.add_skeleton(SkeletonAsset {
+        id: 0,
+        skeleton_id: 0,
+        skeleton: Skeleton::new("s"),
+    });
+
+    let snapshot =
+        capture_skeleton_snapshot(&world, &assets, &GraphicsResources::default()).unwrap();
+
+    assert_eq!(
+        snapshot.humanoid_mapping.by_role.get(&HumanoidRole::Head),
+        Some(&2)
+    );
+}

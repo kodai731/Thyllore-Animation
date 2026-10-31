@@ -6,6 +6,7 @@ use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
 
 use crate::ecs::resource::SkeletonSnapshot;
+use crate::ecs::world::Entity;
 use crate::hooks::batch_capture::BatchCapture;
 
 /// Commands recorded during event dispatch and applied by `App`, one queue per stage of the apply order.
@@ -91,11 +92,14 @@ pub enum AssetEditCommand {
     },
 }
 
-/// Whether a model scale is a new edit or the replay of one through undo / redo.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Whether a model scale is a new edit, its redo, or its undo that puts the model roots' scale back.
+#[derive(Clone, Debug, PartialEq)]
 pub enum ScaleHistory {
     Record,
     Replay,
+    Revert {
+        root_scales: Vec<(Entity, Vector3<f32>)>,
+    },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.

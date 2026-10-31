@@ -1,3 +1,5 @@
+use cgmath::Vector3;
+
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::SkeletonSnapshot;
@@ -30,6 +32,7 @@ pub enum EditCommand {
     },
     ModelScaled {
         factor: f32,
+        root_scales: Vec<(Entity, Vector3<f32>)>,
         description: &'static str,
     },
 }
@@ -154,10 +157,16 @@ impl EditHistory {
         self.push_entry(entry);
     }
 
-    pub fn push_model_scale(&mut self, factor: f32, description: &'static str) {
+    pub fn push_model_scale(
+        &mut self,
+        factor: f32,
+        root_scales: Vec<(Entity, Vector3<f32>)>,
+        description: &'static str,
+    ) {
         self.push_entry(EditEntry {
             command: EditCommand::ModelScaled {
                 factor,
+                root_scales,
                 description,
             },
             after: EditCommandAfter::Empty,
@@ -350,6 +359,7 @@ mod tests {
                     spring_setups: Vec::new(),
                     constraint_sets: Vec::new(),
                     clip_tracks: Vec::new(),
+                    humanoid_mapping: Default::default(),
                 },
                 description: "Remove bone",
             },

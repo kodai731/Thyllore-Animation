@@ -12,7 +12,7 @@ use crate::ecs::{find_mesh_morph, MeshRef};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use std::collections::BTreeMap;
 use std::path::Path;
-use thyllore_avatar_core::garment::components::submesh_role::SubmeshKey;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar::{
     build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,

@@ -7,8 +7,8 @@ use thyllore_anim_core::spring_bone::{
     SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS, VRM_JOINT_FORCE_SCALAR_PARAMS,
     VRM_JOINT_FORCE_UI_PARAMS,
 };
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
-use thyllore_avatar_core::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;

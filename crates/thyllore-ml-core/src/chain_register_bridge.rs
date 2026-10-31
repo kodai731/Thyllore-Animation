@@ -3,7 +3,7 @@ use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
     SpringChain, SpringJointParam, SpringSpace,
 };
-use thyllore_avatar_core::garment::components::submesh_role::SubmeshSelector;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring,
 };

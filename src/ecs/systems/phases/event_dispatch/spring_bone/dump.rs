@@ -52,7 +52,7 @@ impl UiCommand for DumpSpringTails {
 pub struct DumpSkinnedVertices {
     pub path: PathBuf,
     pub sample_rate: f32,
-    pub submesh: thyllore_avatar_core::garment::components::submesh_role::SubmeshKey,
+    pub submesh: thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey,
 }
 
 impl UiCommand for DumpSkinnedVertices {

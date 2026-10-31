@@ -1,6 +1,6 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::garment::components::chain_gen::GeneratedJoint;
+use crate::cloth_setup::components::chain_gen::GeneratedJoint;
 
 use thyllore_model_core::apply_skinning;
 
@@ -18,9 +18,9 @@ fn make_skeleton() -> Skeleton {
 }
 
 fn make_chain() -> Vec<GeneratedChain> {
-    use crate::garment::components::chain_gen::ChainRole;
-    use crate::garment::components::chain_gen::{joint_name, ChainGenParams, ChainGenSettings};
-    use crate::garment::components::submesh_role::SubmeshSelector;
+    use crate::cloth_setup::components::chain_gen::ChainRole;
+    use crate::cloth_setup::components::chain_gen::{joint_name, ChainGenParams, ChainGenSettings};
+    use crate::cloth_setup::components::submesh_role::SubmeshSelector;
 
     let params = ChainGenParams {
         role: ChainRole::Hair,

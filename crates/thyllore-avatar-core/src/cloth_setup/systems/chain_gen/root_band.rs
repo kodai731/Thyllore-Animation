@@ -2,7 +2,7 @@ use cgmath::Vector3;
 use thyllore_math_core::{centroid, widest_cross_section, world_y_axis, CROSS_SECTION_SLICE_COUNT};
 
 use super::frame::{attachment_or_target, collect_target_vertices};
-use crate::garment::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
+use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
 
 /// The hair root band in root-relative progress (distance down the up axis from the root bone).
 #[derive(Debug, Clone, Copy)]

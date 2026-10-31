@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use crate::expression::components::preset::ExpressionLibrary;
-use crate::garment::components::submesh_role::{SubmeshKey, SubmeshRole};
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::stats::components::stats::AvatarStats;

@@ -1,5 +1,5 @@
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_avatar_core::garment::components::submesh_role::SubmeshKey;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 
 /// One submesh inside the merged vertex range.
 pub(crate) struct SubmeshPart {

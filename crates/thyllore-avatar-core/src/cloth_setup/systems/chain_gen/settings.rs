@@ -1,6 +1,6 @@
 use thyllore_scene_core::find_scalar_param;
 
-use crate::garment::components::chain_gen::{ChainGenSettings, CHAIN_GEN_SCALAR_PARAMS};
+use crate::cloth_setup::components::chain_gen::{ChainGenSettings, CHAIN_GEN_SCALAR_PARAMS};
 
 pub fn setting_names() -> Vec<&'static str> {
     CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect()

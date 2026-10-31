@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{tangent_frame_around, world_y_axis};
 
-use crate::garment::components::chain_gen::ChainGenInput;
+use crate::cloth_setup::components::chain_gen::ChainGenInput;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct VertexFrame {

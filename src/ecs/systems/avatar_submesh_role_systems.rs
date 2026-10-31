@@ -1,4 +1,4 @@
-use thyllore_avatar_core::garment::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 

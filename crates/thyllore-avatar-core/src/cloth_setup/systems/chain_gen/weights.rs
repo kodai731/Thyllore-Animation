@@ -5,7 +5,7 @@ use thyllore_math_core::project_point_to_segment;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 use super::frame::collect_target_vertices;
-use crate::garment::components::chain_gen::{
+use crate::cloth_setup::components::chain_gen::{
     ChainGenInput, ChainGenParams, GeneratedChain, InfluenceTarget, VertexInfluences,
 };
 

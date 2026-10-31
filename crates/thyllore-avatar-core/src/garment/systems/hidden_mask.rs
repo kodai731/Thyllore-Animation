@@ -1,5 +1,6 @@
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Matrix4, Vector3};
 use thyllore_math_core::{cone_directions, TriangleBvh};
+use thyllore_model_core::SkinData;
 
 use crate::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 
@@ -63,6 +64,33 @@ pub fn find_hidden_triangle_indices(
         .filter(|(_, hidden)| **hidden)
         .map(|(index, _)| index as u32)
         .collect()
+}
+
+/// A skin's geometry-space vertices and index buffer carried into model space.
+pub fn mask_mesh_from_skin(
+    skin: &SkinData,
+    indices: &[u32],
+    geometry_to_model: Matrix4<f32>,
+) -> MaskMesh {
+    let positions = skin
+        .base_positions
+        .iter()
+        .map(|p| (geometry_to_model * p.extend(1.0)).truncate())
+        .collect();
+    let normals = skin
+        .base_normals
+        .iter()
+        .map(|n| (geometry_to_model * n.extend(0.0)).truncate().normalize())
+        .collect();
+    let triangles = indices
+        .chunks_exact(3)
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
+    MaskMesh {
+        positions,
+        normals,
+        triangles,
+    }
 }
 
 pub fn merge_mask_meshes(meshes: &[MaskMesh]) -> MaskMesh {

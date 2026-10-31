@@ -27,7 +27,7 @@ impl ScratchJob for DummyErrorJob {
     }
 }
 
-fn make_ctx() -> ScratchContext<'static> {
+fn dummy_context() -> ScratchContext<'static> {
     let world = World::new();
     let assets = AssetStorage::default();
     let graphics = Box::leak(Box::new(GraphicsResources::default()));
@@ -49,7 +49,7 @@ fn done_job_replies_and_removes() {
         reply: tx,
     });
 
-    let mut ctx = make_ctx();
+    let mut ctx = dummy_context();
     host.step_running_jobs(&mut ctx);
 
     assert!(host.running.is_empty());
@@ -67,7 +67,7 @@ fn continue_job_stays() {
         reply: tx,
     });
 
-    let mut ctx = make_ctx();
+    let mut ctx = dummy_context();
     host.step_running_jobs(&mut ctx);
 
     assert_eq!(host.running.len(), 1);
@@ -82,7 +82,7 @@ fn error_job_replies_false_and_removes() {
         reply: tx,
     });
 
-    let mut ctx = make_ctx();
+    let mut ctx = dummy_context();
     host.step_running_jobs(&mut ctx);
 
     assert!(host.running.is_empty());

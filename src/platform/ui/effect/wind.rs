@@ -192,6 +192,7 @@ fn wind_section(world: &World) -> Option<Box<dyn FormSection>> {
     let mut rows = wind_head_rows(&view);
     if view.selected.is_some() {
         rows.push(UiRow::Field(Box::new(FieldRows {
+            scope: "effect",
             field: |view: &mut WindSectionView| &mut view.effect,
             rows: rows_from_params(
                 &thyllore_effect_core::WIND_UI_PARAMS,

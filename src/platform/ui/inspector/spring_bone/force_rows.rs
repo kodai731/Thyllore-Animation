@@ -88,10 +88,12 @@ pub fn force_form_rows(form: &JointForceForm) -> Vec<UiRow<JointForceForm>> {
 
 /// The force form of a view embedded as one field block.
 pub fn force_field_row<C: 'static>(
+    scope: &'static str,
     form: &JointForceForm,
     field: fn(&mut C) -> &mut JointForceForm,
 ) -> UiRow<C> {
     UiRow::Field(Box::new(FieldRows {
+        scope,
         field,
         rows: force_form_rows(form),
     }))

@@ -159,7 +159,10 @@ fn ramp_end_rows(
     force_field: fn(&mut RampFormView) -> &mut JointForceForm,
     hidden: &[&str],
 ) -> Vec<UiRow<RampFormView>> {
-    let mut rows = vec![UiRow::Heading(heading), force_field_row(force, force_field)];
+    let mut rows = vec![
+        UiRow::Heading(heading),
+        force_field_row(heading, force, force_field),
+    ];
     rows.extend(ramp_param_rows(hidden));
     rows
 }

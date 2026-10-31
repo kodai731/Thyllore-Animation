@@ -26,6 +26,7 @@ pub(super) struct FlameBodyView {
 pub(super) fn body_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
     let mut rows = emitter_rows(view);
     rows.push(UiRow::Field(Box::new(FieldRows {
+        scope: "effect",
         field: |view: &mut FlameBodyView| &mut view.effect,
         rows: flame_param_rows(),
     })));

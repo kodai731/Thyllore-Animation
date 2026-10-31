@@ -19,6 +19,7 @@ fn flame_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
     rows.extend(style_rows(view));
     if view.selected.is_some() {
         rows.push(UiRow::Field(Box::new(FieldRows {
+            scope: "body",
             field: |view: &mut FlameSectionView| &mut view.body,
             rows: body_rows(&view.body),
         })));
@@ -50,3 +51,37 @@ crate::effect_section_hook!(crate::platform::ui::effect::sections::EffectSection
     order: 4,
     section: flame_section,
 });
+
+#[cfg(test)]
+mod tests {
+    use super::super::body_rows::FlameBodyView;
+    use super::super::section_view::FlameRequests;
+    use super::*;
+    use crate::ecs::resource::FlameUIState;
+    use crate::platform::ui::ui_rows::find_duplicate_labels;
+    use thyllore_effect_core::FlameRenderSettings;
+
+    #[test]
+    fn selected_flame_rows_have_no_duplicate_labels() {
+        let view = FlameSectionView {
+            instances: vec!["flame".to_string()],
+            instance_index: 0,
+            preset: None,
+            flame_ui: FlameUIState::default(),
+            applied_style: None,
+            selected: Some(0),
+            body: FlameBodyView {
+                effect: FlameEffect::default(),
+                trail_enabled: false,
+                trail_fade: 0.0,
+                render: FlameRenderSettings::default(),
+                jitter: 0.0,
+                jitter_freq: 0.0,
+                viewport_size: [1.0, 1.0],
+                gpu_timings: Vec::new(),
+            },
+            requests: FlameRequests::default(),
+        };
+        assert!(find_duplicate_labels(&flame_rows(&view)).is_empty());
+    }
+}

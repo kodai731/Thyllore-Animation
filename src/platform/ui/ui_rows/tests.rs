@@ -10,6 +10,14 @@ fn toggle(label: &'static str) -> UiRow<()> {
     }
 }
 
+fn field(scope: &'static str, rows: Vec<UiRow<()>>) -> UiRow<()> {
+    UiRow::Field(Box::new(FieldRows::<(), ()> {
+        scope,
+        field: |value| value,
+        rows,
+    }))
+}
+
 fn list(title: &'static str) -> UiRow<()> {
     UiRow::List(Box::new(ListRows::<(), ()> {
         title,
@@ -153,9 +161,34 @@ fn switch_and_color3_duplicate_detection() {
 
 #[test]
 fn field_rows_row_label_is_none() {
-    let rows: Vec<UiRow<()>> = vec![UiRow::Field(Box::new(FieldRows::<(), ()> {
-        field: |_| panic!("should not be called"),
-        rows: vec![],
-    }))];
+    let rows = [field("f", Vec::new())];
     assert_eq!(row_labels(&rows), [None]);
+}
+
+#[test]
+fn fields_with_distinct_scopes_may_repeat_labels() {
+    let rows = [
+        field("root", vec![toggle("a")]),
+        field("tip", vec![toggle("a")]),
+    ];
+    assert!(find_duplicate_labels(&rows).is_empty());
+}
+
+#[test]
+fn fields_with_the_same_scope_collide() {
+    let rows = [
+        field("end", vec![toggle("a")]),
+        field("end", vec![toggle("a")]),
+    ];
+    assert_eq!(find_duplicate_labels(&rows), ["end", "end/a"]);
+}
+
+#[test]
+fn labels_repeated_inside_one_group_collide() {
+    let rows = [UiRow::Group {
+        title: "g".into(),
+        initially_open: true,
+        rows: vec![toggle("a"), toggle("a")],
+    }];
+    assert_eq!(find_duplicate_labels(&rows), ["g/a"]);
 }

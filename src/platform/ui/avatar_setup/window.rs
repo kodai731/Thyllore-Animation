@@ -284,4 +284,29 @@ mod tests {
 
         assert!(!world.resource::<AvatarSetupState>().is_open);
     }
+
+    #[test]
+    fn every_section_has_unique_labels() {
+        use crate::platform::ui::ui_rows::find_duplicate_labels;
+        assert!(
+            find_duplicate_labels(&crate::platform::ui::avatar_setup::humanoid_rows::rows())
+                .is_empty()
+        );
+        assert!(
+            find_duplicate_labels(&crate::platform::ui::avatar_setup::material_rows::rows())
+                .is_empty()
+        );
+        assert!(
+            find_duplicate_labels(&crate::platform::ui::avatar_setup::submesh_rows::rows())
+                .is_empty()
+        );
+        assert!(
+            find_duplicate_labels(&crate::platform::ui::avatar_setup::stats_rows::rows())
+                .is_empty()
+        );
+        assert!(
+            find_duplicate_labels(&crate::platform::ui::avatar_setup::export_rows::rows())
+                .is_empty()
+        );
+    }
 }

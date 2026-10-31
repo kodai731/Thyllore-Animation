@@ -226,13 +226,7 @@ mod tests {
     fn full_view_no_duplicate_labels() {
         let view = full_view();
         let rows = scene_settings_rows(&view);
-        let duplicates: Vec<&str> = rows
-            .iter()
-            .flat_map(|row| match row {
-                UiRow::Group { rows, .. } => find_duplicate_labels(rows),
-                _ => Vec::new(),
-            })
-            .collect();
+        let duplicates = find_duplicate_labels(&rows);
         assert!(
             duplicates.is_empty(),
             "full view has duplicate labels: {:?}",

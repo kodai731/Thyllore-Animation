@@ -26,9 +26,10 @@ use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::form_window::{FormPlacement, FormWindow};
-use super::scene_settings::{read_scene_settings, send_scene_settings_changes};
-use super::scene_settings_rows::scene_settings_rows;
+use super::scene_settings::{
+    read_scene_settings, scene_settings_rows, send_scene_settings_changes,
+};
+use crate::platform::ui::form_window::{FormPlacement, FormWindow};
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
@@ -117,7 +118,7 @@ fn scene_panel_form(world: &World, _: &AssetStorage, _: &GraphicsResources) -> O
             send_scene_settings_changes,
         )];
 
-    for hook in crate::platform::ui::effect_sections::collect_effect_sections() {
+    for hook in crate::platform::ui::effect::sections::collect_effect_sections() {
         if let Some(section) = (hook.section)(world) {
             sections.push(section);
         }

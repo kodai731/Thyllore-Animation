@@ -220,6 +220,50 @@ pub fn joint_count_of(setup: &SpringBoneSetup, chain_ids: &[SpringChainId]) -> u
         .sum()
 }
 
+/// The chains a ramp (or a collider group assignment) reaches and how many joints they hold.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct RampTargets {
+    pub chains: Vec<SpringChainId>,
+    pub joint_count: usize,
+}
+
+impl RampTargets {
+    /// The chains reached from `chain_id` under `scope`; without a skeleton only the chain itself.
+    pub fn in_scope(
+        setup: &SpringBoneSetup,
+        skeleton: Option<&Skeleton>,
+        chain_id: SpringChainId,
+        scope: RampScope,
+    ) -> Self {
+        let chains = match skeleton {
+            Some(skeleton) => chains_in_scope(setup, skeleton, chain_id, scope),
+            None => vec![chain_id],
+        };
+        Self::of_chains(setup, chains)
+    }
+
+    /// The chains rooted directly under `bone_id`, or None when the bone has none.
+    pub fn under_bone(
+        setup: &SpringBoneSetup,
+        skeleton: Option<&Skeleton>,
+        bone_id: BoneId,
+    ) -> Option<Self> {
+        let chains = chains_under_bone(setup, skeleton?, bone_id);
+        if chains.is_empty() {
+            return None;
+        }
+        Some(Self::of_chains(setup, chains))
+    }
+
+    fn of_chains(setup: &SpringBoneSetup, chains: Vec<SpringChainId>) -> Self {
+        let joint_count = joint_count_of(setup, &chains);
+        Self {
+            chains,
+            joint_count,
+        }
+    }
+}
+
 pub static CHAIN_RAMP_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     let mut out: Vec<UiParam> = Vec::new();
     ChainRamp::collect_ui("", "", &mut out);

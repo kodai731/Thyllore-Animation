@@ -4,7 +4,7 @@ use crate::ecs::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 
-use super::ui_rows::{draw_rows, KeyDomain, UiRow};
+use crate::platform::ui::ui_rows::{draw_rows, KeyDomain, UiRow};
 
 pub trait FormSection {
     fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World);

@@ -1,7 +1,7 @@
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 
-use super::ui_rows::ChoiceOption;
+use crate::platform::ui::ui_rows::ChoiceOption;
 
 pub fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
     let skeleton = match assets.skeletons.values().next() {

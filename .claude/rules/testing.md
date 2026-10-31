@@ -134,6 +134,8 @@ see `CLAUDE.md`):
 - `integration_tests.rs`, `model_loading_tests.rs`, `shader_tests.rs` — project structure, model files,
   compiled SPIR-V
 - `compare_fbx_dom.rs`, `compare_fbx_structure.rs`, `inspect_fbx_binary.rs` — FBX inspection helpers
+- `spring_chain_ramp_sidecar.rs` — `#[ignore]`: a chain ramp applied to the woman-1-edit sidecar (local asset),
+  run with `cargo test --test spring_chain_ramp_sidecar --no-default-features -- --ignored`
 
 Do not record test counts in documentation; they change with every PR. The current numbers are the output
 of the commands below.

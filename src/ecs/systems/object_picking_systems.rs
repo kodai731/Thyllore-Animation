@@ -5,7 +5,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::clip_track_systems::resolve_mesh_bone_id;
 use crate::ecs::systems::hierarchy_systems::{
-    hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
+    hierarchy_deselect_all, hierarchy_reveal_entity, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::hooks::object_pick::ObjectPickHooks;
@@ -73,6 +73,7 @@ pub fn apply_mesh_selection(
     }
     state.display_mode = HierarchyDisplayMode::Entities;
     drop(state);
+    hierarchy_reveal_entity(world, entity);
 
     sync_curve_editor_on_mesh_select(world, assets, entity);
 }

@@ -941,13 +941,7 @@ fn new_native_cpp_build(cfg: &BuildConfig) -> cc::Build {
         } else {
             build.flag("/MD");
         }
-        if cfg.is_debug() {
-            build.debug(true);
-            build.opt_level(0);
-        } else {
-            build.debug(false);
-            build.opt_level(2);
-        }
+        build.debug(cfg.is_debug());
         build.flag("/D_ITERATOR_DEBUG_LEVEL=0");
     }
     build

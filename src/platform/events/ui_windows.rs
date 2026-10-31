@@ -12,12 +12,29 @@ pub(super) fn build_ui_windows(ui: &imgui::Ui, app: &mut App) {
 
     let windows = app.data.ecs_world.resource::<UiWindows>().ordered();
     for window in windows {
-        (window.build)(
-            ui,
-            &app.data.ecs_world,
-            &app.data.ecs_assets,
-            &app.data.graphics_resources,
-        );
+        match window.body {
+            crate::hooks::ui_window::UiWindowBody::Canvas(build) => {
+                (build)(
+                    ui,
+                    &app.data.ecs_world,
+                    &app.data.ecs_assets,
+                    &app.data.graphics_resources,
+                );
+            }
+            crate::hooks::ui_window::UiWindowBody::Form(form) => {
+                if let Some(window) = form(
+                    &app.data.ecs_world,
+                    &app.data.ecs_assets,
+                    &app.data.graphics_resources,
+                ) {
+                    crate::platform::ui::form_window::draw_form_window(
+                        ui,
+                        &app.data.ecs_world,
+                        window,
+                    );
+                }
+            }
+        }
     }
     super::injected_input::record_focused_window(ui, &app.data.ecs_world);
 }

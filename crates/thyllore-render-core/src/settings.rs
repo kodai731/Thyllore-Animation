@@ -19,7 +19,7 @@ impl Default for BloomSettings {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DepthOfField {
     pub enabled: bool,
     pub focus_distance: f32,
@@ -61,7 +61,7 @@ impl Default for ToneMapping {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Exposure {
     pub ev100: f32,
     pub exposure_value: f32,
@@ -159,7 +159,7 @@ impl ExposureMetering {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AutoExposure {
     pub enabled: bool,
     pub metering: ExposureMetering,
@@ -213,7 +213,7 @@ impl AutoExposure {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PhysicalCameraParameters {
     pub focal_length_mm: f32,
     pub sensor_height_mm: f32,

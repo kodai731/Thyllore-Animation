@@ -136,9 +136,11 @@ impl std::str::FromStr for WindDebugView {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
+#[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
 pub struct WindRenderSettings {
     pub shading_mode: WindShadingMode,
+    #[persist(ui(min = 16.0, max = 2048.0, format = "%.0f"))]
     pub reference_step_count: u32,
     pub debug_view: WindDebugView,
     pub batch_fixed_time: Option<f32>,

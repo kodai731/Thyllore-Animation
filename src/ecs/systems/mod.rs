@@ -71,7 +71,6 @@ pub mod raytracing_systems;
 pub mod render_data_systems;
 pub mod scalar_clip_systems;
 pub mod scheduled_clip_systems;
-mod screen_space_scale;
 mod selection_bounds;
 mod skeleton_batch_actions;
 pub mod skeleton_edit_systems;
@@ -157,7 +156,6 @@ pub use raytracing_systems::*;
 pub use render_data_systems::*;
 pub use scalar_clip_systems::*;
 pub use scheduled_clip_systems::*;
-pub use screen_space_scale::*;
 pub use selection_bounds::*;
 pub use skeleton_edit_systems::{
     add_skeleton_bone, refresh_after_skeleton_edit, remove_skeleton_bone,

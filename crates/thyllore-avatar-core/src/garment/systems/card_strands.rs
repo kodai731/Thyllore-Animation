@@ -1,9 +1,9 @@
-use std::f32::consts::TAU;
-
 use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::{fit_principal_axis, resample_polyline, world_y_axis};
+use thyllore_math_core::{
+    fit_principal_axis, resample_polyline, tangent_frame_around, world_y_axis, TAU,
+};
 
-use super::chain_gen::{build_phi_basis, progress_of};
+use super::chain_gen::progress_of;
 use crate::garment::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, GeneratedChain, GeneratedJoint,
     StrandCenterlineRecord, StrandMode,
@@ -410,7 +410,7 @@ pub(crate) fn place_card_chains(
     );
     let tufts = merge_strands(&centerlines, stop);
 
-    let (reference, side) = build_phi_basis(world_y_axis());
+    let (reference, side) = tangent_frame_around(world_y_axis());
     let mut tuft_centerlines: Vec<(f32, Vec<usize>, Vec<Vector3<f32>>)> = tufts
         .into_iter()
         .map(|tuft| {

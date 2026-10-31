@@ -23,7 +23,7 @@ use crate::ecs::systems::render_data_systems::{
 };
 use crate::ecs::systems::{
     chains_skinned_to_entity, compute_bone_draw_set, spring_chain_bone_indices, BoneDrawSet,
-    ColliderGizmo, ScreenSpaceScale, SpringGizmoSelection,
+    ColliderGizmo, SpringGizmoSelection,
 };
 use crate::ecs::world::World;
 use crate::ecs::FrameContext;
@@ -37,6 +37,7 @@ use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius, SpringChainId};
+use thyllore_math_core::ScreenSpaceScale;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {

@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use cgmath::Vector3;
+use thyllore_math_core::world_y_down;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
@@ -41,7 +42,7 @@ impl SpringJointParam {
             bone_id: 0,
             force: JointForce::default_for(force_model),
             drag_force,
-            gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+            gravity_dir: world_y_down(),
             hit_radius,
         }
     }

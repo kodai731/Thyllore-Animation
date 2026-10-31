@@ -1,6 +1,7 @@
 use std::fmt;
 use std::sync::LazyLock;
 
+use thyllore_math_core::lerp;
 use thyllore_model_core::{BoneId, Skeleton};
 use thyllore_scene_core::{SceneFields, UiParam};
 
@@ -68,10 +69,6 @@ impl ChainRamp {
         self.root = joints[0].clone();
         self.tip = joints[joints.len() - 1].clone();
     }
-}
-
-fn lerp(from: f32, to: f32, weight: f32) -> f32 {
-    from + (to - from) * weight
 }
 
 /// A ramp interpolates force magnitudes, which only compare within one force model.

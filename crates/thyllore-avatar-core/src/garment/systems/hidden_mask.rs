@@ -1,35 +1,7 @@
-use cgmath::{InnerSpace, Vector3};
+use cgmath::Vector3;
+use thyllore_math_core::{cone_directions, TriangleBvh};
 
 use crate::garment::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_math_core::TriangleBvh;
-
-fn cone_directions(normal: Vector3<f32>, cone_angle_deg: f32, count: usize) -> Vec<Vector3<f32>> {
-    let mut directions = Vec::with_capacity(count);
-    if count == 0 {
-        return directions;
-    }
-    directions.push(normal);
-    if count == 1 {
-        return directions;
-    }
-    let reference_axis = if normal.y.abs() < 0.9 {
-        Vector3::unit_y()
-    } else {
-        Vector3::unit_x()
-    };
-    let tangent = (reference_axis - normal * normal.dot(reference_axis)).normalize();
-    let bitangent = normal.cross(tangent).normalize();
-    let cone_rad = cone_angle_deg.to_radians();
-    for i in 1..count {
-        let azimuth = 2.0 * std::f32::consts::PI * (i as f32) / (count - 1) as f32;
-        let cos_a = azimuth.cos();
-        let sin_a = azimuth.sin();
-        let tangent_cone = tangent * cos_a + bitangent * sin_a;
-        let dir = (normal * cone_rad.cos() + tangent_cone * cone_rad.sin()).normalize();
-        directions.push(dir);
-    }
-    directions
-}
 
 pub fn find_hidden_body_vertices(
     body_positions: &[Vector3<f32>],
@@ -40,7 +12,11 @@ pub fn find_hidden_body_vertices(
     let mut hidden = Vec::with_capacity(body_positions.len());
     for i in 0..body_positions.len() {
         let origin = body_positions[i] + body_normals[i] * 1e-4;
-        let dirs = cone_directions(body_normals[i], params.cone_angle_deg, params.ray_count);
+        let dirs = cone_directions(
+            body_normals[i],
+            params.cone_angle_deg.to_radians(),
+            params.ray_count,
+        );
         let hit_count = dirs
             .iter()
             .filter(|&&dir| {

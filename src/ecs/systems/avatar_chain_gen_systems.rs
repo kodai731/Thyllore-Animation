@@ -19,7 +19,7 @@ use thyllore_avatar_core::garment::systems::chain_gen::{
 use thyllore_avatar_core::garment::systems::head_capsule::{hair_head_capsule, HeadCapsule};
 use thyllore_avatar_core::garment::systems::joint_radius::joint_half_thicknesses;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_math_core::world_y_axis;
+use thyllore_math_core::{array3_from_vec, world_y_axis};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
@@ -446,16 +446,12 @@ struct ReportSource<'a> {
     component_labels: &'a [usize],
 }
 
-fn to_array(p: cgmath::Vector3<f32>) -> [f32; 3] {
-    [p.x, p.y, p.z]
-}
-
 fn root_band_record(band: RootBand, root_position: cgmath::Vector3<f32>) -> RootBandRecord {
     let root_height = root_position.dot(world_y_axis());
     RootBandRecord {
         equator_height: root_height - band.equator_progress,
         height: root_height - band.progress,
-        center: to_array(band.center),
+        center: array3_from_vec(band.center),
     }
 }
 
@@ -478,8 +474,8 @@ fn bone_records(
                 GeneratedBoneRecord {
                     name: joint.name.clone(),
                     parent: skeleton.bones[parent_id as usize].name.clone(),
-                    head: to_array(joint.head),
-                    tail: (ji == last_joint).then(|| to_array(chain.tail)),
+                    head: array3_from_vec(joint.head),
+                    tail: (ji == last_joint).then(|| array3_from_vec(chain.tail)),
                 }
             })
         })
@@ -503,7 +499,7 @@ fn weight_records(
         let part_label = format!("{}:{}", part.key.mesh, part.key.material);
         for influence in influences_of_part(part, source.influences) {
             let merged_vertex = (influence.vertex + part.vertex_offset) as usize;
-            let position = to_array(source.input.positions[merged_vertex]);
+            let position = array3_from_vec(source.input.positions[merged_vertex]);
             let component = source.component_labels[merged_vertex] as u32;
             vertex_weights.extend(influence.influences.iter().map(|(target_bone, weight)| {
                 ChainWeightRecord {
@@ -537,8 +533,8 @@ fn build_report(
             .root_band
             .map(|band| root_band_record(band, source.input.root_position)),
         head_capsule: source.head_capsule.map(|capsule| HeadCapsuleRecord {
-            bottom: to_array(capsule.bottom),
-            top: to_array(capsule.top),
+            bottom: array3_from_vec(capsule.bottom),
+            top: array3_from_vec(capsule.top),
             radius: capsule.radius,
         }),
         attachment_positions: source
@@ -546,7 +542,7 @@ fn build_report(
             .attachment_positions
             .iter()
             .copied()
-            .map(to_array)
+            .map(array3_from_vec)
             .collect(),
         strand_mode,
         strand_centerlines,

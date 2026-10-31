@@ -1,9 +1,7 @@
 use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::world_y_axis;
+use thyllore_math_core::{tangent_frame_around, world_y_axis};
 
-use super::chain_gen::{
-    attachment_or_target, build_phi_basis, collect_target_vertices, widest_slice,
-};
+use super::chain_gen::{attachment_or_target, collect_target_vertices, widest_slice};
 use crate::garment::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
 
 /// A vertical capsule standing on the widest cross-section of the skin the root bone drives.
@@ -20,7 +18,7 @@ pub fn estimate_head_capsule(
 ) -> Option<HeadCapsule> {
     let up = world_y_axis();
     let slice = widest_slice(attachment, root_position)?;
-    let (reference, side) = build_phi_basis(up);
+    let (reference, side) = tangent_frame_around(up);
 
     let extent = |axis: Vector3<f32>| -> (f32, f32) {
         let projected = slice.members.iter().map(|p| p.dot(axis));

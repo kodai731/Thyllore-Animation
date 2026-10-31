@@ -4148,13 +4148,16 @@ dependencies = [
  "ort",
  "pyo3",
  "pythonize",
+ "ron",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
  "thyllore-ml-api",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "ureq 2.12.1",
 ]
 

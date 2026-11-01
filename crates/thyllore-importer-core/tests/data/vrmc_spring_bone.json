@@ -2,7 +2,7 @@
   "specVersion": "1.0",
   "colliders": [
     { "node": 1, "shape": { "sphere": { "offset": [0.0, 0.05, 0.02], "radius": 0.08 } } },
-    { "node": 2, "shape": { "capsule": { "offset": [0.0, 0.0, 0.0], "radius": 0.04, "tail": [0.0, -0.25, 0.0] } } }
+    { "node": 2, "shape": { "capsule": { "offset": [0.0, 0.1, 0.0], "radius": 0.04, "tail": [0.0, -0.25, 0.0] } } }
   ],
   "colliderGroups": [
     { "name": "head", "colliders": [0] },

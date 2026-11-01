@@ -284,9 +284,11 @@ mod tests {
         let collider = &setup.colliders[0];
         assert_eq!(collider.bone_id, 1);
         assert!((collider.offset - Vector3::new(0.0, 0.05, 0.02)).magnitude() < 1e-6);
-        assert!(
-            matches!(collider.shape, ColliderShape::Capsule { radius, .. } if (radius - 0.08).abs() < 1e-6)
-        );
+        assert!(matches!(
+            collider.shape,
+            ColliderShape::Capsule { radius, tail }
+                if (radius - 0.08).abs() < 1e-6 && (tail - Vector3::new(0.0, 0.15, 0.02)).magnitude() < 1e-6
+        ));
         let chain = &setup.chains[0];
         assert_eq!(chain.center_bone_id, Some(1));
         assert_eq!(chain.tail_bone_id, Some(4));

@@ -116,43 +116,40 @@ fn convert_colliders(
             continue;
         };
 
-        let shape = if let Some(ref capsule) = vc.shape.capsule {
-            let offset = capsule.offset.unwrap_or([0.0; 3]);
-            let tail = capsule.tail.unwrap_or([0.0; 3]);
-            let radius = capsule.radius.unwrap_or(0.0);
-            ColliderShape::Capsule {
-                radius,
-                tail: cgmath::Vector3::new(
-                    tail[0] - offset[0],
-                    tail[1] - offset[1],
-                    tail[2] - offset[2],
-                ),
-            }
-        } else if let Some(ref sphere) = vc.shape.sphere {
-            ColliderShape::Sphere {
-                radius: sphere.radius.unwrap_or(0.0),
-            }
-        } else {
-            ColliderShape::Sphere { radius: 0.0 }
-        };
-
-        let offset_arr = vc
-            .shape
-            .capsule
-            .as_ref()
-            .and_then(|c| c.offset)
-            .or_else(|| vc.shape.sphere.as_ref().and_then(|s| s.offset))
-            .unwrap_or([0.0; 3]);
+        let (offset, shape) = convert_shape(&vc.shape);
 
         result.push(SpringColliderDef {
             id: i as u32,
             bone_id,
-            offset: cgmath::Vector3::new(offset_arr[0], offset_arr[1], offset_arr[2]),
+            offset,
             shape,
         });
     }
 
     result
+}
+
+/// Offset and tail are both points in the node's space (VRM 1.0), the same frame the engine places them in.
+fn convert_shape(shape: &VrmcColliderShape) -> (cgmath::Vector3<f32>, ColliderShape) {
+    if let Some(capsule) = &shape.capsule {
+        let offset = capsule.offset.unwrap_or([0.0; 3]);
+        let tail = capsule.tail.unwrap_or(offset);
+        return (
+            cgmath::Vector3::from(offset),
+            ColliderShape::Capsule {
+                radius: capsule.radius.unwrap_or(0.0),
+                tail: cgmath::Vector3::from(tail),
+            },
+        );
+    }
+    let sphere = shape.sphere.as_ref();
+    let offset = sphere.and_then(|s| s.offset).unwrap_or([0.0; 3]);
+    (
+        cgmath::Vector3::from(offset),
+        ColliderShape::Sphere {
+            radius: sphere.and_then(|s| s.radius).unwrap_or(0.0),
+        },
+    )
 }
 
 fn convert_collider_groups(vrmc_groups: &[VrmcColliderGroup]) -> Vec<SpringColliderGroup> {
@@ -308,12 +305,14 @@ mod tests {
         assert_eq!(sphere.shape, ColliderShape::Sphere { radius: 0.08 });
         let capsule = &setup.colliders[1];
         assert_eq!(capsule.bone_id, 12);
+        assert_eq!(capsule.offset, cgmath::Vector3::new(0.0, 0.1, 0.0));
         assert_eq!(
             capsule.shape,
             ColliderShape::Capsule {
                 radius: 0.04,
                 tail: cgmath::Vector3::new(0.0, -0.25, 0.0),
-            }
+            },
+            "the tail stays a point in node space, not an offset from the capsule head"
         );
         let group_names: Vec<&str> = setup
             .collider_groups

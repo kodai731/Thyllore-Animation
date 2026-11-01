@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from blender_addon.common.vrm_export import t_pose_warnings, vrm_meta_to_dict
+from blender_addon.common.vrm_export import default_copyright, t_pose_warnings, vrm_meta_to_dict
 
 
 def _meta(**overrides):
@@ -34,15 +34,42 @@ def test_meta_dict_splits_authors_and_drops_empty_texts():
     assert meta["name"] == "Avatar"
     assert meta["authors"] == ["alice", "bob"]
     assert "version" not in meta
-    assert meta["avatar_permission"] == "onlyAuthor"
-    assert meta["allow_redistribution"] is False
+    assert "contactInformation" not in meta
+    assert meta["avatarPermission"] == "onlyAuthor"
+    assert meta["allowRedistribution"] is False
+
+
+def test_meta_dict_takes_fallbacks_only_when_empty():
+    meta = vrm_meta_to_dict(_meta(name=" ", authors=" , "), fallback_name="Rig", fallback_author="me")
+    assert meta["name"] == "Rig"
+    assert meta["authors"] == ["me"]
+
+    meta = vrm_meta_to_dict(_meta(), fallback_name="Rig", fallback_author="me")
+    assert meta["name"] == "Avatar"
+    assert meta["authors"] == ["alice", "bob"]
+
+
+def test_meta_dict_fills_copyright_from_authors():
+    meta = vrm_meta_to_dict(_meta())
+    assert meta["copyrightInformation"] == default_copyright(["alice", "bob"])
+
+    meta = vrm_meta_to_dict(_meta(copyright_information="mine"))
+    assert meta["copyrightInformation"] == "mine"
 
 
 def test_meta_dict_keeps_filled_texts():
     meta = vrm_meta_to_dict(_meta(version="1.2", contact_information="x@example.com"))
 
     assert meta["version"] == "1.2"
-    assert meta["contact_information"] == "x@example.com"
+    assert meta["contactInformation"] == "x@example.com"
+
+
+def test_meta_dict_uses_the_vrmc_vrm_camel_case_keys():
+    meta = vrm_meta_to_dict(_meta(modification="allowModification", allow_redistribution=True))
+
+    assert meta["modification"] == "allowModification"
+    assert meta["allowRedistribution"] is True
+    assert all("_" not in key for key in meta)
 
 
 HUMANOID = {

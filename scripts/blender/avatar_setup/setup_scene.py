@@ -26,6 +26,8 @@ def import_model():
     for obj in bpy.context.scene.objects:
         obj.select_set(obj == armature)
     bpy.context.view_layer.objects.active = armature
+    armature.data.thyllore_vrm.source_model = Path(MODEL_PATH).stem
+    bpy.ops.thyllore.reset_vrm_meta()
     print(f"[avatar_setup/setup_scene] imported {MODEL_PATH}, active armature {armature.name}", flush=True)
 
 

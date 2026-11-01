@@ -1,6 +1,8 @@
 """Pure helpers for the VRM export: the meta dict the wheel takes and the T-pose check (bpy-independent)."""
 from __future__ import annotations
 
+import datetime
+import getpass
 import math
 
 VRM_META_ENUMS = {
@@ -35,23 +37,70 @@ VRM_META_FLAGS = (
 
 VRM_META_TEXTS = ("version", "copyright_information", "contact_information", "other_license_url")
 
+VRM_META_LABELS = {
+    "version": "Version",
+    "copyright_information": "Copyright",
+    "contact_information": "Contact",
+    "other_license_url": "Other License",
+    "avatar_permission": "Permission",
+    "commercial_usage": "Commercial",
+    "credit_notation": "Credit",
+    "modification": "Modification",
+    "allow_excessively_violent_usage": "Violent Usage",
+    "allow_excessively_sexual_usage": "Sexual Usage",
+    "allow_political_or_religious_usage": "Political Or Religious Usage",
+    "allow_antisocial_or_hate_usage": "Antisocial Or Hate Usage",
+    "allow_redistribution": "Redistribution",
+}
 
-def vrm_meta_to_dict(meta) -> dict:
+VRM_META_DEFAULT_VERSION = "1.0"
+
+
+def default_author() -> str:
+    """The OS login name, the author a VRM gets when none is entered; empty when the OS has none."""
+    try:
+        return getpass.getuser()
+    except (OSError, KeyError):
+        return ""
+
+
+def default_copyright(authors: list) -> str:
+    """The copyright line a VRM gets when none is entered: the current year and the authors."""
+    if not authors:
+        return ""
+    return f"(c) {datetime.date.today().year} {', '.join(authors)}"
+
+
+def _camel_case(field: str) -> str:
+    head, *rest = field.split("_")
+    return head + "".join(word.title() for word in rest)
+
+
+def vrm_meta_to_dict(meta, fallback_name: str = "", fallback_author: str = "") -> dict:
     """The ``VrmMeta`` the wheel deserialises, from a property group (or any object with the same attributes).
 
-    ``authors`` is a comma separated string; empty optional texts are left out so the wheel's defaults apply."""
+    Keys are the camelCase names of ``VRMC_vrm.meta``, which is what the wheel accepts.
+    ``authors`` is a comma separated string; an empty name or author list takes the fallback so the
+    two required fields never block an export, and an empty copyright takes ``default_copyright``.
+    Empty optional texts are left out so the wheel's defaults apply."""
+    authors = [author.strip() for author in meta.authors.split(",") if author.strip()]
+    if not authors and fallback_author.strip():
+        authors = [fallback_author.strip()]
     result = {
-        "name": meta.name.strip(),
-        "authors": [author.strip() for author in meta.authors.split(",") if author.strip()],
+        "name": meta.name.strip() or fallback_name.strip(),
+        "authors": authors,
     }
     for field in VRM_META_TEXTS:
         value = getattr(meta, field).strip()
         if value:
-            result[field] = value
+            result[_camel_case(field)] = value
+    copyright = result.get("copyrightInformation") or default_copyright(authors)
+    if copyright:
+        result["copyrightInformation"] = copyright
     for field in VRM_META_ENUMS:
-        result[field] = getattr(meta, field)
+        result[_camel_case(field)] = getattr(meta, field)
     for field in VRM_META_FLAGS:
-        result[field] = bool(getattr(meta, field))
+        result[_camel_case(field)] = bool(getattr(meta, field))
     return result
 
 

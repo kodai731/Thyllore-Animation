@@ -19,7 +19,13 @@ from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sideca
 from ..common.collider_fit import bone_bind_matrix, bone_rest_frame
 from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
-from ..common.vrm_export import t_pose_warnings, vrm_meta_to_dict
+from ..common.vrm_export import (
+    VRM_META_DEFAULT_VERSION,
+    default_author,
+    default_copyright,
+    t_pose_warnings,
+    vrm_meta_to_dict,
+)
 from ..common.armature import armature_of
 from ..common.logged_report import report
 from .mesh_data import material_loop_indices_of
@@ -67,6 +73,36 @@ def target_armature(context):
     if obj.type == "MESH":
         return armature_of(obj)
     return None
+
+
+def default_avatar_name(arm) -> str:
+    """The VRM name when none is entered: the imported model's file name, or the armature name."""
+    return arm.data.thyllore_vrm.source_model or arm.name
+
+
+def write_vrm_meta_defaults(arm) -> None:
+    """Put the derived defaults into the meta fields so they stay visible and editable in the panel."""
+    meta = arm.data.thyllore_vrm
+    meta.name = default_avatar_name(arm)
+    meta.authors = default_author()
+    meta.version = VRM_META_DEFAULT_VERSION
+    meta.copyright_information = default_copyright([meta.authors] if meta.authors else [])
+
+
+class THYLLORE_OT_ResetVrmMeta(bpy.types.Operator):
+    """Overwrite name, authors, version and copyright with their defaults (model file name, OS user, 1.0, year + authors)."""
+
+    bl_idname = "thyllore.reset_vrm_meta"
+    bl_label = "Reset VRM Meta to Defaults"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return target_armature(context) is not None
+
+    def execute(self, context):
+        write_vrm_meta_defaults(target_armature(context))
+        return {"FINISHED"}
 
 
 def _matrix_rows(matrix):
@@ -181,7 +217,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
     bl_idname = "thyllore.import_avatar_sidecar"
     bl_label = "Import Avatar Sidecar"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
 
     filename_ext = ".avatar.json"
     filter_glob: bpy.props.StringProperty(default="*.avatar.json", options={"HIDDEN"})
@@ -238,7 +274,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
 
     bl_idname = "thyllore.export_for_unity"
     bl_label = "Export for Unity (FBX + sidecar)"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
 
     filename_ext = ".fbx"
 
@@ -346,9 +382,9 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         arm = target_armature(context)
         meshes = bound_meshes(arm)
-        meta = vrm_meta_to_dict(arm.data.thyllore_vrm)
-        if not meta["name"] or not meta["authors"]:
-            report(self, "ERROR", "VRM meta needs a name and at least one author")
+        meta = vrm_meta_to_dict(arm.data.thyllore_vrm, fallback_name=default_avatar_name(arm), fallback_author=default_author())
+        if not meta["authors"]:
+            report(self, "ERROR", "VRM meta needs at least one author")
             return {"CANCELLED"}
 
         sidecar_input = _sidecar_build_input(context, arm, meshes)
@@ -389,6 +425,7 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
 
 OPERATORS = (
+    THYLLORE_OT_ResetVrmMeta,
     THYLLORE_OT_ImportAvatarSidecar,
     THYLLORE_OT_ExportForUnity,
     THYLLORE_OT_ExportVrm,

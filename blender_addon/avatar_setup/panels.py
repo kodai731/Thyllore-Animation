@@ -1,7 +1,7 @@
 """N-Panel UI for avatar setup (spring bones, submesh roles, colliders).
 
 Lives in the View3D > Sidebar (N-Panel) under category "Thyllore Animation".
-Two panels: the parent AvatarSetup panel and the Export sub-panel.
+The parent AvatarSetup panel and its sub-panels (submeshes, chains, colliders, export).
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ..panels.main_panel import _CATEGORY
 from .chain_generation import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
-from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS
+from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS, VRM_META_TEXTS
 from .properties import CHAIN_GEN_UI_PARAMS, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
@@ -152,6 +152,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         if arm is None:
             return
         layout.prop(arm.data.thyllore_spring, "preview_swing")
+        layout.prop(arm.data.thyllore_spring, "collision_mode")
         if _debuglog.is_debug_enabled():
             layout.operator("thyllore.load_engine_clip", icon="IMPORT")
         self._draw_generation(layout, arm)
@@ -182,20 +183,12 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
             _draw_labelled_prop(column, generation, param["name"])
 
 
-def _draw_vrm_meta(layout, meta) -> None:
-    layout.label(text="VRM Meta")
-    layout.prop(meta, "name")
-    layout.prop(meta, "authors")
-    layout.prop(meta, "version")
-    for field in VRM_META_ENUMS:
-        layout.prop(meta, field)
-    column = layout.column(align=True)
-    for field in VRM_META_FLAGS:
-        column.prop(meta, field)
-
-
 class THYLLORE_PT_AvatarSetupExport(Panel):
-    """Export sub-panel: sidecar import/export buttons, collision mode, override count."""
+    """Export sub-panel: the VRM export button, the two required meta fields and the defaults reset.
+
+    Sidecar import and the Unity (FBX + sidecar) export belong to the Unity bridge addon,
+    which attaches its own sub-panel here with ``bl_parent_id = "THYLLORE_PT_avatar_setup_export"``.
+    """
 
     bl_label = "Export"
     bl_idname = "THYLLORE_PT_avatar_setup_export"
@@ -207,16 +200,43 @@ class THYLLORE_PT_AvatarSetupExport(Panel):
         layout = self.layout
         arm = target_armature(context)
 
-        layout.operator("thyllore.import_avatar_sidecar", icon="IMPORT")
         layout.operator("thyllore.export_vrm", icon="EXPORT")
-        if arm is not None:
-            _draw_vrm_meta(layout.box(), arm.data.thyllore_vrm)
-        layout.operator("thyllore.export_for_unity", icon="EXPORT")
+        if arm is None:
+            return
 
-        if arm is not None:
-            layout.prop(arm.data.thyllore_spring, "collision_mode")
-            override_count = len(arm.data.thyllore_spring.humanoid_overrides)
+        meta = arm.data.thyllore_vrm
+        layout.prop(meta, "name")
+        layout.prop(meta, "authors")
+        layout.operator("thyllore.reset_vrm_meta", text="Reset to Defaults", icon="LOOP_BACK")
+        override_count = len(arm.data.thyllore_spring.humanoid_overrides)
+        if override_count:
             layout.label(text=f"Humanoid overrides: {override_count}")
+
+
+class THYLLORE_PT_AvatarSetupVrmLicense(Panel):
+    """Collapsed sub-panel of Export: the optional VRM meta texts, the permission choices and the usage flags."""
+
+    bl_label = "VRM License"
+    bl_idname = "THYLLORE_PT_avatar_setup_vrm_license"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_parent_id = "THYLLORE_PT_avatar_setup_export"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        arm = target_armature(context)
+        if arm is None:
+            return
+
+        meta = arm.data.thyllore_vrm
+        for field in VRM_META_TEXTS:
+            layout.prop(meta, field)
+        for field in VRM_META_ENUMS:
+            layout.prop(meta, field)
+        column = layout.column(align=True)
+        for field in VRM_META_FLAGS:
+            column.prop(meta, field)
 
 
 class THYLLORE_UL_SpringColliders(UIList):
@@ -356,6 +376,7 @@ PANELS = (
     THYLLORE_PT_AvatarSetupChainGeneration,
     THYLLORE_PT_AvatarSetupColliders,
     THYLLORE_PT_AvatarSetupExport,
+    THYLLORE_PT_AvatarSetupVrmLicense,
 )
 
 

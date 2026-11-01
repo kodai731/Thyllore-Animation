@@ -16,7 +16,13 @@ except ImportError:
 
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
-from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS
+from ..common.vrm_export import (
+    VRM_META_DEFAULT_VERSION,
+    VRM_META_ENUMS,
+    VRM_META_FLAGS,
+    VRM_META_LABELS,
+    VRM_META_TEXTS,
+)
 
 
 SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
@@ -192,17 +198,17 @@ def _mark_role_as_user(item, _context) -> None:
 
 def _vrm_meta_annotations() -> dict:
     annotations = {
-        "version": bpy.props.StringProperty(name="Version"),
-        "copyright_information": bpy.props.StringProperty(name="Copyright"),
-        "contact_information": bpy.props.StringProperty(name="Contact"),
-        "other_license_url": bpy.props.StringProperty(name="Other License URL"),
+        field: bpy.props.StringProperty(name=VRM_META_LABELS[field]) for field in VRM_META_TEXTS
     }
+    annotations["version"] = bpy.props.StringProperty(
+        name=VRM_META_LABELS["version"], default=VRM_META_DEFAULT_VERSION
+    )
     for field, items in VRM_META_ENUMS.items():
         annotations[field] = bpy.props.EnumProperty(
-            name=field.replace("_", " ").title(), items=list(items), default=items[0][0]
+            name=VRM_META_LABELS[field], items=list(items), default=items[0][0]
         )
     for field in VRM_META_FLAGS:
-        annotations[field] = bpy.props.BoolProperty(name=field.replace("_", " ").title(), default=False)
+        annotations[field] = bpy.props.BoolProperty(name=VRM_META_LABELS[field], default=False)
     return annotations
 
 
@@ -212,6 +218,11 @@ class THYLLORE_PG_VrmMeta(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="Name", description="Avatar name (VRM meta, required)")
     authors: bpy.props.StringProperty(
         name="Authors", description="Comma separated author names (VRM meta, required)"
+    )
+    source_model: bpy.props.StringProperty(
+        name="Source Model",
+        description="Stem of the imported model file, set by the importing script; the default VRM name",
+        options={"HIDDEN"},
     )
 
     __annotations__.update(_vrm_meta_annotations())

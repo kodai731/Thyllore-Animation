@@ -53,6 +53,9 @@ def step_a_import_fbx():
 
     if arm is None or not meshes:
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_a — no armature or mesh after FBX import")
+    arm.data.thyllore_vrm.source_model = Path(fbx_path).stem
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.thyllore.reset_vrm_meta()
 
     vertex_count = sum(len(mesh.data.vertices) for mesh in meshes)
     print(f"[smoke] step_a: imported {len(meshes)} meshes ({vertex_count} verts) + {arm.name}")
@@ -251,8 +254,7 @@ def step_h_export_vrm(arm):
 
     import bpy
 
-    arm.data.thyllore_vrm.name = "woman1"
-    arm.data.thyllore_vrm.authors = "smoke"
+    arm.data.thyllore_vrm.allow_redistribution = True
     vrm_path = REPO_ROOT / "log" / "blender_avatar_setup_smoke" / "woman1.vrm"
 
     bpy.ops.thyllore.export_vrm(filepath=str(vrm_path))
@@ -270,6 +272,14 @@ def step_h_export_vrm(arm):
     human_bones = root["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
     if not springs or "hips" not in human_bones:
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_h — VRM has no springs or no hips")
+    meta = root["extensions"]["VRMC_vrm"]["meta"]
+    filled = arm.data.thyllore_vrm
+    if not (filled.name and filled.authors and filled.copyright_information):
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_h — reset_vrm_meta left a field empty")
+    if meta["name"] != "woman-1-fix-scale-only" or not meta["authors"] or not meta.get("copyrightInformation"):
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_h — meta defaults not applied: {meta}")
+    if meta.get("allowRedistribution") is not True:
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_h — meta flag did not reach the VRM: {meta}")
     sidecar = root["extensions"]["THYLLORE_avatar"]
     print(
         f"[smoke] step_h: exported {vrm_path} ({len(data)} bytes), {len(springs)} springs, "

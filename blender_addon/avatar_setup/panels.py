@@ -153,8 +153,6 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             return
         layout.prop(arm.data.thyllore_spring, "preview_swing")
         layout.prop(arm.data.thyllore_spring, "collision_mode")
-        if _debuglog.is_debug_enabled():
-            layout.operator("thyllore.load_engine_clip", icon="IMPORT")
         self._draw_generation(layout, arm)
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
@@ -237,6 +235,24 @@ class THYLLORE_PT_AvatarSetupVrmLicense(Panel):
         column = layout.column(align=True)
         for field in VRM_META_FLAGS:
             column.prop(meta, field)
+
+
+class THYLLORE_PT_AvatarSetupDebug(Panel):
+    """Sub-panel of Export shown only in a debug build: every developer-only control lives here."""
+
+    bl_label = "Debug"
+    bl_idname = "THYLLORE_PT_avatar_setup_debug"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_parent_id = "THYLLORE_PT_avatar_setup_export"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return _debuglog.is_debug_enabled()
+
+    def draw(self, context):
+        self.layout.operator("thyllore.load_engine_clip", icon="IMPORT")
 
 
 class THYLLORE_UL_SpringColliders(UIList):
@@ -377,6 +393,7 @@ PANELS = (
     THYLLORE_PT_AvatarSetupColliders,
     THYLLORE_PT_AvatarSetupExport,
     THYLLORE_PT_AvatarSetupVrmLicense,
+    THYLLORE_PT_AvatarSetupDebug,
 )
 
 

@@ -1,9 +1,9 @@
-use std::fs::{create_dir_all, File};
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use ndarray::Array1;
-use ndarray_npy::NpzWriter;
+use ndarray_npy::write_npy;
 
 pub struct V2CurveCopilotInferenceDump<'a> {
     pub context: &'a [f32],
@@ -16,16 +16,22 @@ pub fn dump_v2_curve_copilot_inference(
     dump: &V2CurveCopilotInferenceDump<'_>,
     output_dir: &Path,
 ) -> Result<PathBuf> {
-    create_dir_all(output_dir)?;
-    let path = output_dir.join("v2-curve-copilot-inference.npz");
+    let dump_dir = output_dir.join("v2-curve-copilot-inference");
+    create_dir_all(&dump_dir)?;
 
-    let mut npz = NpzWriter::new(File::create(&path)?);
+    write_npy(
+        dump_dir.join("context.npy"),
+        &Array1::from_vec(dump.context.to_vec()),
+    )?;
+    write_npy(
+        dump_dir.join("mean_curve.npy"),
+        &Array1::from_vec(dump.mean_curve.to_vec()),
+    )?;
+    write_npy(dump_dir.join("fps.npy"), &Array1::from_vec(vec![dump.fps]))?;
+    write_npy(
+        dump_dir.join("anchor_time.npy"),
+        &Array1::from_vec(vec![dump.anchor_time]),
+    )?;
 
-    npz.add_array("context", &Array1::from_vec(dump.context.to_vec()))?;
-    npz.add_array("mean_curve", &Array1::from_vec(dump.mean_curve.to_vec()))?;
-    npz.add_array("fps", &Array1::from_vec(vec![dump.fps]))?;
-    npz.add_array("anchor_time", &Array1::from_vec(vec![dump.anchor_time]))?;
-
-    npz.finish()?;
-    Ok(path)
+    Ok(dump_dir)
 }

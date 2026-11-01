@@ -173,11 +173,7 @@ _TIER_A_PANELS = (
 
 
 def _resolve_main_panels() -> tuple[type[Panel], ...]:
-    """Return the panel classes whose backing operators are present.
-
-    Each panel is only registered when its backing operator was successfully
-    imported. The distribution ZIP ships Curve Copilot only.
-    """
+    """Return the panel classes whose backing operators are present in the installed ZIP."""
     from .. import operators
 
     panels: list[type[Panel]] = []
@@ -185,8 +181,10 @@ def _resolve_main_panels() -> tuple[type[Panel], ...]:
         panels.extend(_TIER_A_PANELS)
     if operators.has_text_to_motion():
         panels.append(THYLLORE_PT_TextToMotion)
-    panels.append(THYLLORE_PT_CurveCopilot)
-    panels.append(THYLLORE_PT_SkinWeightTransfer)
+    if operators.has_curve_copilot():
+        panels.append(THYLLORE_PT_CurveCopilot)
+    if operators.has_skin_weight_transfer():
+        panels.append(THYLLORE_PT_SkinWeightTransfer)
     return tuple(panels)
 
 

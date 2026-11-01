@@ -57,10 +57,11 @@ Commands:
       the NVIDIA GPU and open blender/lightning.blend with a lightning bolt already
       added (scripts/blender/lightning/launch.sh):
         ./run.sh blender --lightning
-  blender --avatar-setup [--mode degrade|full|private] [--skip-build] [--software-gl]
-                         [--headless] [--python PATH.py]... [model.fbx]
-      Build the debug addon ZIP of this checkout, install it into a pristine
-      Docker Blender on the NVIDIA GPU and import the test model
+  blender --avatar-setup [--skip-build] [--software-gl] [--headless]
+                         [--python PATH.py]... [model.fbx]
+      Build the debug Avatar Setup addon ZIP of this checkout (Avatar Setup
+      panels only, scripts/build_blender_addon.sh --product avatar-setup),
+      install it into a pristine Docker Blender on the NVIDIA GPU and import the test model
       (default: assets/models/fuse-woman-1/edited/woman-1-fix-scale-only.fbx)
       for the avatar setup panels (scripts/blender/avatar_setup/launch.sh).
       --headless draws on Xvfb inside the container (no host window), saves

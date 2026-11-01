@@ -2,13 +2,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-MAIN_CHECKOUT_ROOT="$(dirname "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)")"
 DEFAULT_MODEL="$REPO_ROOT/assets/models/fuse-woman-1/edited/woman-1-fix-scale-only.fbx"
-CURVE_COPILOT_MODEL_FILENAME="curve_copilot_20260630_v2_k48opt.onnx"
 PLATFORM="linux_x86_64"
 STAGE_DIR="$REPO_ROOT/build/docker_gui"
 MODEL="$DEFAULT_MODEL"
-MODE="degrade"
 REBUILD_ZIP=1
 HEADLESS=0
 GUI_ARGS=()
@@ -16,10 +13,10 @@ EXTRA_PYTHON_ARGS=()
 
 usage() {
     cat <<USAGE
-Usage: $0 [--mode degrade|full|private] [--skip-build] [--software-gl] [--headless]
-          [--python PATH.py]... [model.fbx]
+Usage: $0 [--skip-build] [--software-gl] [--headless] [--python PATH.py]... [model.fbx]
 
-Builds the debug addon ZIP of this checkout (wheel with debug-log + ONNX model),
+Builds the debug Avatar Setup addon ZIP of this checkout (wheel with debug-log,
+Avatar Setup panels only: no curve copilot, skin weight transfer or ONNX model),
 launches the pristine Blender Docker image on the NVIDIA GPU
 (blender/docker/run_gui.sh) with the ZIP installed into a fresh profile, and
 imports the test model (default: woman-1-fix-scale-only.fbx) and bakes
@@ -36,7 +33,6 @@ switches the sidebar to the avatar setup tab, takes that screenshot and quits;
 the three variables keep any value set by the caller.
 
 Options:
-  --mode MODE          degrade=A, full=B, private=C (default: degrade)
   --skip-build         Reuse dist/.last_built_zip
   --software-gl        Passed through to run_gui.sh (Mesa llvmpipe)
   --headless           Screenshot without a window (see above)
@@ -46,42 +42,10 @@ Options:
 USAGE
 }
 
-build_mode_for() {
-    case "$1" in
-        degrade) printf 'A' ;;
-        full)    printf 'B' ;;
-        private) printf 'C' ;;
-        *) echo "invalid mode: $1 (expected degrade, full or private)" >&2; exit 2 ;;
-    esac
-}
-
-source_feedback_env() {
-    local env_file
-    for env_file in "$REPO_ROOT/.config/curve_copilot_full.env" "$MAIN_CHECKOUT_ROOT/.config/curve_copilot_full.env"; do
-        if [[ -r "$env_file" ]]; then
-            set -a
-            # shellcheck disable=SC1090
-            source "$env_file"
-            set +a
-            return
-        fi
-    done
-    echo "curve_copilot_full.env not found in .config/ of this checkout or the main checkout" >&2
-    exit 2
-}
-
 build_addon_zip() {
-    local onnx_model="${THYLLORE_CURVE_MODEL:-${THYLLORE_SHARED_DATA_DIR:-}/exports/$CURVE_COPILOT_MODEL_FILENAME}"
-    if [[ ! -f "$onnx_model" ]]; then
-        echo "curve_copilot model not found at $onnx_model (set THYLLORE_CURVE_MODEL or THYLLORE_SHARED_DATA_DIR)" >&2
-        exit 1
-    fi
-
-    source_feedback_env
     bash "$REPO_ROOT/scripts/collect_wheels.sh" --debug-log
     bash "$REPO_ROOT/scripts/build_blender_addon.sh" \
-        --platform "$PLATFORM" --debug --build-mode "$(build_mode_for "$MODE")" \
-        --env test --include-onnx-model --onnx-source-path "$onnx_model"
+        --platform "$PLATFORM" --product avatar-setup --debug --build-mode A
 }
 
 stage_model() {
@@ -98,7 +62,6 @@ stage_model() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --mode) MODE="$2"; shift 2 ;;
         --skip-build) REBUILD_ZIP=0; shift ;;
         --software-gl) GUI_ARGS+=(--software-gl); shift ;;
         --headless) HEADLESS=1; GUI_ARGS+=(--headless); shift ;;

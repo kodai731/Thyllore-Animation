@@ -1,11 +1,10 @@
 """Operator registration collation.
 
-- ``curve_copilot`` (PyO3) and ``skin_weight_transfer`` are shipped in the
-  distribution ZIP. They depend only on ``thyllore_ml_core`` / numpy and never
-  import gRPC.
+- ``curve_copilot`` (PyO3) and ``skin_weight_transfer`` ship in the curve
+  copilot product ZIP; the avatar setup product ZIP excludes them
+  (``scripts/build_blender_addon.sh/.ps1 --product``).
 - ``text_to_motion``, ``auto_rig`` and ``text_to_mesh`` are unshipped
-  gRPC-backed operators, excluded from the ZIP by
-  ``scripts/build_blender_addon.sh/.ps1``.
+  gRPC-backed operators, excluded from every ZIP.
 
 Each operator import is guarded independently with ``ImportError``, so a
 build that omits any subset still registers the survivors.
@@ -14,16 +13,29 @@ from __future__ import annotations
 
 import bpy
 
-from .. import _ghost_overlay
-from . import curve_copilot, skin_weight_transfer
-
-_OPERATORS: list[type] = [
-    curve_copilot.THYLLORE_OT_CurveCopilot,
-    curve_copilot.THYLLORE_OT_CurveCopilotClear,
-    skin_weight_transfer.THYLLORE_OT_TransferSkinWeights,
-]
+_OPERATORS: list[type] = []
+_HAS_CURVE_COPILOT = False
+_HAS_SKIN_WEIGHT_TRANSFER = False
 _HAS_TEXT_TO_MOTION = False
 _HAS_TIER_A = False
+
+try:
+    from .. import _ghost_overlay
+    from . import curve_copilot
+
+    _OPERATORS.append(curve_copilot.THYLLORE_OT_CurveCopilot)
+    _OPERATORS.append(curve_copilot.THYLLORE_OT_CurveCopilotClear)
+    _HAS_CURVE_COPILOT = True
+except ImportError:
+    pass
+
+try:
+    from . import skin_weight_transfer
+
+    _OPERATORS.append(skin_weight_transfer.THYLLORE_OT_TransferSkinWeights)
+    _HAS_SKIN_WEIGHT_TRANSFER = True
+except ImportError:
+    pass
 
 try:
     from . import text_to_motion
@@ -41,6 +53,16 @@ try:
     _HAS_TIER_A = True
 except ImportError:
     pass
+
+
+def has_curve_copilot() -> bool:
+    """Whether the curve_copilot operator was bundled."""
+    return _HAS_CURVE_COPILOT
+
+
+def has_skin_weight_transfer() -> bool:
+    """Whether the skin_weight_transfer operator was bundled."""
+    return _HAS_SKIN_WEIGHT_TRANSFER
 
 
 def has_tier_a() -> bool:
@@ -87,13 +109,15 @@ def _unregister_keymaps() -> None:
 def register() -> None:
     for cls in _OPERATORS:
         bpy.utils.register_class(cls)
-    _register_keymaps()
-    _ghost_overlay.register()
+    if _HAS_CURVE_COPILOT:
+        _register_keymaps()
+        _ghost_overlay.register()
 
 
 def unregister() -> None:
-    _ghost_overlay.unregister()
-    _unregister_keymaps()
+    if _HAS_CURVE_COPILOT:
+        _ghost_overlay.unregister()
+        _unregister_keymaps()
     for cls in reversed(_OPERATORS):
         try:
             bpy.utils.unregister_class(cls)

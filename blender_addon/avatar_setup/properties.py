@@ -23,6 +23,7 @@ SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _T
 SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
     tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
 )
+CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
 
 configure_force_params({
     model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
@@ -50,6 +51,25 @@ def _spring_joint_annotations() -> dict[str, object]:
     for param in tml.spring_joint_ui_params():
         annotations.update(build_param_properties(param))
     return annotations
+
+
+def _chain_generation_annotations() -> dict[str, object]:
+    annotations: dict[str, object] = {}
+    for param in CHAIN_GEN_UI_PARAMS:
+        annotations.update(build_param_properties({**param, "kind": "scalar"}))
+    return annotations
+
+
+class THYLLORE_PG_ChainGeneration(bpy.types.PropertyGroup):
+    """Settings every Generate button of the rig uses; saved with the armature so a regeneration repeats them."""
+
+    root_bone: bpy.props.StringProperty(
+        name="Root Bone",
+        description="Humanoid bone the generated chains hang from (a role name such as Head is resolved)",
+        default="Head",
+    )
+
+    __annotations__.update(_chain_generation_annotations())
 
 
 class THYLLORE_PG_NameItem(bpy.types.PropertyGroup):
@@ -136,6 +156,7 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
         items=[("vrm_compatible", "VRM Compatible", ""), ("segment_extended", "Segment Extended", "")],
         default="vrm_compatible",
     )
+    chain_generation: bpy.props.PointerProperty(type=THYLLORE_PG_ChainGeneration)
     chains: bpy.props.CollectionProperty(type=THYLLORE_PG_SpringChain)
     colliders: bpy.props.CollectionProperty(type=THYLLORE_PG_Collider)
     collider_groups: bpy.props.CollectionProperty(type=THYLLORE_PG_ColliderGroup)
@@ -226,6 +247,7 @@ class THYLLORE_PG_RampForm(bpy.types.PropertyGroup):
 
 
 CLASSES = (
+    THYLLORE_PG_ChainGeneration,
     THYLLORE_PG_NameItem,
     THYLLORE_PG_SpringJoint,
     THYLLORE_PG_SpringChain,

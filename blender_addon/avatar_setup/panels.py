@@ -10,9 +10,10 @@ from bpy.types import Panel, UIList
 
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
+from .chain_generation import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
-from .properties import SPRING_JOINT_PARAM_NAMES
+from .properties import CHAIN_GEN_UI_PARAMS, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
 
@@ -82,6 +83,22 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
     bl_parent_id = "THYLLORE_PT_avatar_setup"
 
     @staticmethod
+    def _draw_generation(layout, arm):
+        submeshes = generatable_submeshes(arm)
+        box = layout.box()
+        box.label(text="Generate from Submeshes")
+        if not submeshes:
+            box.label(text="Mark a Hair or Garment role in Submeshes", icon="INFO")
+            return
+        for mesh_obj, role_item in submeshes:
+            row = box.row(align=True)
+            row.label(text=role_item.material, icon="MATERIAL")
+            row.label(text=role_item.role.capitalize())
+            op = row.operator("thyllore.generate_chain_bones", icon="ARMATURE_DATA")
+            op.mesh = mesh_obj.name
+            op.material = role_item.material
+
+    @staticmethod
     def _draw_chain_list(layout, arm):
         layout.operator("thyllore.add_chains_under_bone")
         layout.operator("thyllore.remove_spring_chain")
@@ -136,9 +153,32 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         layout.prop(arm.data.thyllore_spring, "preview_swing")
         if _debuglog.is_debug_enabled():
             layout.operator("thyllore.load_engine_clip", icon="IMPORT")
+        self._draw_generation(layout, arm)
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
         self._draw_ramp(layout, context)
+
+
+class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
+    """Generation settings every Generate button of the rig uses; closed by default."""
+
+    bl_label = "Generation Settings"
+    bl_idname = "THYLLORE_PT_avatar_setup_chain_generation"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_parent_id = "THYLLORE_PT_avatar_setup_chains"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        arm = target_armature(context)
+        if arm is None:
+            return
+        generation = arm.data.thyllore_spring.chain_generation
+        column = layout.column(align=True)
+        _draw_labelled_prop(column, generation, "root_bone")
+        for param in CHAIN_GEN_UI_PARAMS:
+            _draw_labelled_prop(column, generation, param["name"])
 
 
 class THYLLORE_PT_AvatarSetupExport(Panel):
@@ -297,6 +337,7 @@ PANELS = (
     THYLLORE_PT_AvatarSetup,
     THYLLORE_PT_AvatarSetupSubmeshes,
     THYLLORE_PT_AvatarSetupChains,
+    THYLLORE_PT_AvatarSetupChainGeneration,
     THYLLORE_PT_AvatarSetupColliders,
     THYLLORE_PT_AvatarSetupExport,
 )

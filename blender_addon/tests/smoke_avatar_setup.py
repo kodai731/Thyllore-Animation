@@ -100,22 +100,11 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
 
     bone_count_before = len(arm.data.bones)
 
-    hair_slot_index = None
-    for i, slot in enumerate(mesh.material_slots):
-        if slot.material is not None and slot.material.name == hair_material:
-            hair_slot_index = i
-            break
-
-    if hair_slot_index is None:
-        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_c — Hair material slot not found")
-
-    bpy.context.view_layer.objects.active = mesh
-    bpy.ops.thyllore.generate_chain_bones(
-        role="hair",
-        material_index=hair_slot_index,
-        root_bone="mixamorig:Head",
-        joint_count=4,
-    )
+    bpy.context.view_layer.objects.active = arm
+    generation = arm.data.thyllore_spring.chain_generation
+    generation.root_bone = "mixamorig:Head"
+    generation.joint_count = 4
+    bpy.ops.thyllore.generate_chain_bones(mesh=mesh.name, material=hair_material)
 
     bone_count_after = len(arm.data.bones)
     added = bone_count_after - bone_count_before

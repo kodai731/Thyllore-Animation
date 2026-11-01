@@ -1,4 +1,4 @@
-"""Chain bone generation operator."""
+"""Generate chain bones on a hair or garment submesh and register them as spring chains."""
 from __future__ import annotations
 
 from mathutils import Vector
@@ -13,9 +13,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..avatar_setup.operators import armature_fit_bones, bound_meshes
 from ..common import coordinates
-from ..common.armature import armature_of
 from ..common.chain_bone_display import apply_chain_bone_display
 from ..common.chain_bones import (
     bone_specs,
@@ -24,7 +22,6 @@ from ..common.chain_bones import (
     settings_from_properties,
     vertex_tex_coords,
 )
-from ..common.effect_properties import build_param_properties
 from ..common.skin_input import dominant_bone_positions, skin_input, skin_role_meshes
 from ..common.spring_properties import (
     disabled_chain_names,
@@ -34,22 +31,27 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.submesh_mask import material_triangles
+from .operators import armature_fit_bones, bound_meshes, target_armature
+from .properties import CHAIN_GEN_UI_PARAMS
 
-CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
-
-
-def _setting_annotations() -> dict[str, object]:
-    annotations: dict[str, object] = {}
-    for param in CHAIN_GEN_UI_PARAMS:
-        annotations.update(build_param_properties({**param, "kind": "scalar"}))
-    return annotations
+GENERATABLE_ROLES = ("hair", "garment")
 
 
-def _material_name(obj, material_index: int) -> str:
-    slots = obj.material_slots
-    if material_index < len(slots) and slots[material_index].material is not None:
-        return slots[material_index].material.name
-    return str(material_index)
+def generatable_submeshes(arm) -> list[tuple[object, object]]:
+    """(mesh object, role item) pairs whose submesh role can grow chain bones."""
+    return [
+        (mesh_obj, item)
+        for mesh_obj in bound_meshes(arm)
+        for item in mesh_obj.thyllore_submesh.roles
+        if item.role in GENERATABLE_ROLES
+    ]
+
+
+def _material_slot_index(obj, material_name: str) -> int | None:
+    for index, slot in enumerate(obj.material_slots):
+        if slot.material is not None and slot.material.name == material_name:
+            return index
+    return None
 
 
 def _root_engine_position(arm, root_bone: str, scale_length: float) -> list[float]:
@@ -116,32 +118,41 @@ def _write_weights(obj, groups):
 
 
 class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
-    """Generate chain bones from mesh surface."""
+    """Generate chain bones on one submesh of the rig; its role and the generation settings come from the rig"""
 
     bl_idname = "thyllore.generate_chain_bones"
-    bl_label = "Generate Chain Bones"
+    bl_label = "Generate"
     bl_options = {"REGISTER", "UNDO"}
 
-    role: bpy.props.EnumProperty(
-        items=[("hair", "Hair", ""), ("garment", "Garment", "")],
-        default="hair",
-    )
-    material_index: bpy.props.IntProperty(default=0, min=0)
-    root_bone: bpy.props.StringProperty(default="Head")
-
-    __annotations__.update(_setting_annotations())
+    mesh: bpy.props.StringProperty(name="Mesh", options={"HIDDEN"})
+    material: bpy.props.StringProperty(name="Material", options={"HIDDEN"})
 
     @classmethod
     def poll(cls, context):
-        obj = context.active_object
-        if obj is None or obj.type != "MESH":
-            return False
-        return _TML_AVAILABLE and armature_of(obj) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
+
+    def _resolve_submesh(self, arm):
+        obj = bpy.data.objects.get(self.mesh)
+        if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
+            raise ValueError(f"{self.mesh!r} is not a mesh bound to {arm.name!r}")
+        role_item = next((item for item in obj.thyllore_submesh.roles if item.material == self.material), None)
+        if role_item is None or role_item.role not in GENERATABLE_ROLES:
+            raise ValueError(f"{self.material!r} on {obj.name!r} is not a hair or garment submesh")
+        material_index = _material_slot_index(obj, self.material)
+        if material_index is None:
+            raise ValueError(f"{obj.name!r} has no material slot {self.material!r}")
+        return obj, role_item.role, material_index
 
     def execute(self, context):
-        obj = context.active_object
+        arm = target_armature(context)
+        try:
+            obj, role, material_index = self._resolve_submesh(arm)
+        except ValueError as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        generation = arm.data.thyllore_spring.chain_generation
+        previous_active = context.active_object
         mesh = obj.data
-        arm = armature_of(obj)
         scale_length = context.scene.unit_settings.scale_length
 
         positions = [
@@ -154,7 +165,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         for lt in mesh.loop_triangles:
             triangle_vertices.extend(lt.vertices)
             triangle_materials.append(lt.material_index)
-        triangles = material_triangles(triangle_vertices, triangle_materials, self.material_index)[0]
+        triangles = material_triangles(triangle_vertices, triangle_materials, material_index)[0]
 
         tex_coords: list[tuple[float, float]] = []
         if uv_layer := mesh.uv_layers.active:
@@ -165,15 +176,14 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
         fit_bones = armature_fit_bones(context, arm)
         try:
-            root_name = tml.resolve_root_bone(fit_bones, self.root_bone)
+            root_name = tml.resolve_root_bone(fit_bones, generation.root_bone)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         root_index = arm.data.bones.find(root_name)
 
-        material_name = _material_name(obj, self.material_index)
-        target = f"{obj.name}/{material_name}"
-        origin = {"mesh": obj.name, "material": material_name, "role": self.role}
+        target = f"{obj.name}/{self.material}"
+        origin = {"mesh": obj.name, "material": self.material, "role": role}
         settings = arm.data.thyllore_spring
         replaced_bones = remove_chains_generated_on(settings, origin)
         _remove_bones(context, arm, replaced_bones)
@@ -183,9 +193,9 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             positions,
             triangles,
             _root_engine_position(arm, root_name, scale_length),
-            self.role,
+            role,
             target,
-            settings_from_properties(CHAIN_GEN_UI_PARAMS, self),
+            settings_from_properties(CHAIN_GEN_UI_PARAMS, generation),
             dominant_bone_positions(skins, root_index),
             tex_coords,
         )
@@ -202,7 +212,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
-        apply_chain_bone_display(arm, [name for name, _, _, _ in specs], self.role)
+        apply_chain_bone_display(arm, [name for name, _, _, _ in specs], role)
 
         bones = armature_fit_bones(context, arm)
         try:
@@ -212,7 +222,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
                 skins,
                 root_name,
                 target,
-                self.role,
+                role,
                 output["chains"],
                 output.get("head_capsule"),
             )
@@ -223,6 +233,15 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
         restore_disabled_chains(settings, disabled)
 
+        context.view_layer.objects.active = previous_active
         collider_note = " with a head collider" if output.get("head_capsule") else ""
         self.report({"INFO"}, f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}")
         return {"FINISHED"}
+
+
+def register() -> None:
+    bpy.utils.register_class(THYLLORE_OT_GenerateChainBones)
+
+
+def unregister() -> None:
+    bpy.utils.unregister_class(THYLLORE_OT_GenerateChainBones)

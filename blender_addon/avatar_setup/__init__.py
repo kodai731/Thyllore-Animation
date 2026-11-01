@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from . import (
+    chain_generation,
     chain_operators,
     clip_operators,
     collider_operators,
@@ -20,6 +21,7 @@ def register() -> None:
     properties.register()
     operators.register()
     chain_operators.register()
+    chain_generation.register()
     clip_operators.register()
     collider_operators.register()
     ramp_operators.register()
@@ -39,6 +41,7 @@ def unregister() -> None:
     ramp_operators.unregister()
     collider_operators.unregister()
     clip_operators.unregister()
+    chain_generation.unregister()
     chain_operators.unregister()
     operators.unregister()
     properties.unregister()

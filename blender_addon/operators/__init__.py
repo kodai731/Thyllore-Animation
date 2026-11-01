@@ -15,13 +15,12 @@ from __future__ import annotations
 import bpy
 
 from .. import _ghost_overlay
-from . import chain_bones, curve_copilot, skin_weight_transfer
+from . import curve_copilot, skin_weight_transfer
 
 _OPERATORS: list[type] = [
     curve_copilot.THYLLORE_OT_CurveCopilot,
     curve_copilot.THYLLORE_OT_CurveCopilotClear,
     skin_weight_transfer.THYLLORE_OT_TransferSkinWeights,
-    chain_bones.THYLLORE_OT_GenerateChainBones,
 ]
 _HAS_TEXT_TO_MOTION = False
 _HAS_TIER_A = False

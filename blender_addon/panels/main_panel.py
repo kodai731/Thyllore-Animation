@@ -141,29 +141,6 @@ class THYLLORE_PT_SkinWeightTransfer(Panel):
         layout.operator("thyllore.transfer_skin_weights", icon="MOD_VERTEX_WEIGHT")
 
 
-class THYLLORE_PT_ChainBones(Panel):
-    bl_label = "Chain Bones"
-    bl_idname = "THYLLORE_PT_chain_bones"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = _CATEGORY
-
-    def draw(self, context):
-        layout = self.layout
-        obj = context.active_object
-        if obj is None or obj.type != "MESH":
-            layout.label(text="Select a mesh", icon="ERROR")
-            return
-        from ..operators import chain_bones
-
-        op = layout.operator("thyllore.generate_chain_bones", icon="ARMATURE_DATA")
-        layout.prop(op, "role")
-        layout.prop(op, "material_index")
-        layout.prop(op, "root_bone")
-        for param in chain_bones.CHAIN_GEN_UI_PARAMS:
-            layout.prop(op, param["name"])
-
-
 # ---------------------------------------------------------------------------
 # Placeholder sub-panel (shown only when license or ABI verification fails).
 # ---------------------------------------------------------------------------
@@ -210,7 +187,6 @@ def _resolve_main_panels() -> tuple[type[Panel], ...]:
         panels.append(THYLLORE_PT_TextToMotion)
     panels.append(THYLLORE_PT_CurveCopilot)
     panels.append(THYLLORE_PT_SkinWeightTransfer)
-    panels.append(THYLLORE_PT_ChainBones)
     return tuple(panels)
 
 

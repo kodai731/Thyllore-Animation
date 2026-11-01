@@ -73,6 +73,11 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   on top of math-core's `widest_cross_section`). `cloth_setup/systems/chain_gen/` only decides which role gets
   one (`hair_head_capsule`); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
   screen-space scale) lives in `thyllore-math-core`.
+- `thyllore-avatar-core/src/vrm/` projects the avatar sidecar onto VRM 1.0: `vrm_magnitudes` (joint force →
+  stiffness / gravity), `build_vrm_extensions` (`VRMC_vrm`, `VRMC_springBone`, the vendor `THYLLORE_avatar`
+  carrying the whole sidecar) as `serde_json::Value`, with no `gltf` dependency. `thyllore-exporter-core`
+  (`systems/gltf/vrm.rs`, `write_vrm`) only derives the node skeleton from the GLB, merges those extensions
+  into the root and encodes the GLB; the C# `VrmMagnitudes` of the Unity package follows the same projection.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
   `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
   sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and,

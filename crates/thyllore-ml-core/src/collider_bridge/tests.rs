@@ -128,6 +128,7 @@ fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
                 },
             ],
             tail: None,
+            enabled: true,
             origin: Default::default(),
         },
     );
@@ -176,6 +177,7 @@ fn collider_bridge_assign_collider_groups_replaces() {
                 },
             ],
             tail: None,
+            enabled: true,
             origin: Default::default(),
         },
     );
@@ -228,6 +230,7 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
                 },
             ],
             tail: None,
+            enabled: true,
             origin: Default::default(),
         },
     );

@@ -12,6 +12,7 @@ mod spring_edit;
 mod spring_preview;
 mod submesh;
 mod v2_curve_copilot;
+mod vrm;
 
 pub use spring_preview::PySpringPreview;
 pub use v2_curve_copilot::PyV2CurveCopilotSession;
@@ -78,6 +79,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::guess_submesh_role, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::find_hidden_triangles, m)?)?;
+    m.add_function(wrap_pyfunction!(vrm::vrm_write, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;
 
     #[cfg(feature = "debug-log")]

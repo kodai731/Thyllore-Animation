@@ -238,13 +238,13 @@ class THYLLORE_PT_AvatarSetupVrmLicense(Panel):
 
 
 class THYLLORE_PT_AvatarSetupDebug(Panel):
-    """Sub-panel of Export shown only in a debug build: every developer-only control lives here."""
+    """Top-level sub-panel shown only in a debug build: every developer-only control lives here."""
 
     bl_label = "Debug"
     bl_idname = "THYLLORE_PT_avatar_setup_debug"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_parent_id = "THYLLORE_PT_avatar_setup_export"
+    bl_parent_id = "THYLLORE_PT_avatar_setup"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod

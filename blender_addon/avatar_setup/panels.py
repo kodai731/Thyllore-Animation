@@ -8,6 +8,7 @@ from __future__ import annotations
 import bpy
 from bpy.types import Panel, UIList
 
+from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
@@ -64,6 +65,11 @@ class THYLLORE_PT_AvatarSetup(Panel):
             layout.label(text="Select an armature or a skinned mesh", icon="ERROR")
             return
         layout.label(text=f"Armature: {arm.name}", icon="ARMATURE_DATA")
+
+        settings = arm.data.thyllore_spring
+        row = layout.row(heading="Overlays", align=True)
+        row.prop(settings, "show_chain_radii", toggle=True)
+        row.prop(settings, "show_collider_gizmos", toggle=True)
 
 
 class THYLLORE_PT_AvatarSetupChains(Panel):
@@ -127,9 +133,9 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         arm = target_armature(context)
         if arm is None:
             return
-        _draw_labelled_prop(layout, arm.data.thyllore_spring, "gizmo_mode")
         layout.prop(arm.data.thyllore_spring, "preview_swing")
-        layout.operator("thyllore.load_engine_clip", icon="IMPORT")
+        if _debuglog.is_debug_enabled():
+            layout.operator("thyllore.load_engine_clip", icon="IMPORT")
         self._draw_chain_list(layout, arm)
         self._draw_joints(layout, context, arm)
         self._draw_ramp(layout, context)
@@ -227,7 +233,6 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
         layout.template_list(
             "THYLLORE_UL_ColliderGroups", "", settings, "collider_groups", settings, "active_group_index"
         )
-        layout.prop(settings, "show_collider_gizmos")
         layout.operator("thyllore.apply_collider_groups")
 
     def draw(self, context):

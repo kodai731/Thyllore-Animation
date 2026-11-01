@@ -16,6 +16,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from .. import _debuglog
 from ..common.coordinates import engine_to_blender_point
 from ..common.logged_report import report
 from .operators import armature_bone_specs, target_armature
@@ -113,10 +114,15 @@ OPERATORS = (THYLLORE_OT_LoadEngineClip,)
 
 
 def register() -> None:
+    """Debug builds only: addon users have no engine clips to load."""
+    if not _debuglog.is_debug_enabled():
+        return
     for cls in OPERATORS:
         bpy.utils.register_class(cls)
 
 
 def unregister() -> None:
+    if not _debuglog.is_debug_enabled():
+        return
     for cls in reversed(OPERATORS):
         bpy.utils.unregister_class(cls)

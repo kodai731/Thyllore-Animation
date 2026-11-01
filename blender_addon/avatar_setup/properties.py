@@ -14,7 +14,6 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
-from ..common.chain_bone_display import set_chain_bones_visible
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
 
@@ -129,10 +128,6 @@ def _restart_swing_preview(settings, _context) -> None:
             invalidate_preview(obj.name)
 
 
-def _show_chain_bones_for_gizmo_mode(settings, _context) -> None:
-    set_chain_bones_visible(settings.id_data, settings.gizmo_mode != "none")
-
-
 class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     """Spring bone settings stored on the armature (bpy.types.Armature.thyllore_spring)."""
 
@@ -148,14 +143,15 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     active_chain_index: bpy.props.IntProperty(name="Active Chain Index", default=-1)
     active_collider_index: bpy.props.IntProperty(name="Active Collider Index", default=-1)
     active_group_index: bpy.props.IntProperty(name="Active Group Index", default=-1)
-    gizmo_mode: bpy.props.EnumProperty(
-        name="Gizmo Mode",
-        description="Show the chain bones and the hit radii of the active bone's chains, or hide them",
-        items=[("all", "All", ""), ("none", "None", "")],
-        default="all",
-        update=_show_chain_bones_for_gizmo_mode,
+    show_chain_radii: bpy.props.BoolProperty(
+        name="Chain Radii",
+        description="Draw the hit radius of every chain joint; the active bone's chain is highlighted",
+        default=True,
     )
-    show_collider_gizmos: bpy.props.BoolProperty(name="Show Collider Gizmos")
+    show_collider_gizmos: bpy.props.BoolProperty(
+        name="Colliders",
+        description="Draw the collider shapes attached to the bones",
+    )
     preview_swing: bpy.props.BoolProperty(
         name="Preview Swing",
         description="Simulate the chains with the engine's spring solver while the frame changes",

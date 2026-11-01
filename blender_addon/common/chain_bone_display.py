@@ -31,10 +31,3 @@ def apply_chain_display(arm) -> None:
     """Apply the chain bone display to every joint of every chain on the armature."""
     for chain in arm.data.thyllore_spring.chains:
         apply_chain_bone_display(arm, [joint.bone for joint in chain.joints], chain.origin_role)
-
-
-def set_chain_bones_visible(armature_data, visible: bool) -> None:
-    """Show or hide the chain bone collection; no-op when no chain was ever added."""
-    collection = armature_data.collections.get(CHAIN_COLLECTION_NAME)
-    if collection is not None:
-        collection.is_visible = visible

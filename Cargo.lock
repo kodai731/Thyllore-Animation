@@ -140,9 +140,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "approx"
@@ -3178,9 +3178,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
 ]
@@ -3721,7 +3721,7 @@ dependencies = [
  "wayland-cursor 0.31.12",
  "wayland-protocols 0.31.2",
  "wayland-protocols-wlr",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
  "xkeysym",
 ]
 
@@ -4678,7 +4678,7 @@ dependencies = [
  "ureq-proto",
  "utf8-zero",
  "webpki-root-certs",
- "webpki-roots 1.0.8",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -4957,7 +4957,7 @@ dependencies = [
  "bitflags 2.11.0",
  "rustix 1.1.4",
  "wayland-backend",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5026,7 +5026,7 @@ dependencies = [
  "bitflags 2.11.0",
  "wayland-backend",
  "wayland-client 0.31.12",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5038,7 +5038,7 @@ dependencies = [
  "bitflags 2.11.0",
  "wayland-backend",
  "wayland-client 0.31.12",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5051,7 +5051,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client 0.31.12",
  "wayland-protocols 0.31.2",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5064,7 +5064,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client 0.31.12",
  "wayland-protocols 0.31.2",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5080,9 +5080,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.31.8"
+version = "0.31.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5423e94b6a63e68e439803a3e153a9252d5ead12fd853334e2ad33997e3889e3"
+checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
 dependencies = [
  "proc-macro2",
  "quick-xml",
@@ -5134,9 +5134,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-root-certs"
-version = "1.0.6"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804f18a4ac2676ffb4e8b5b5fa9ae38af06df08162314f96a68d2a363e21a8ca"
+checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -5147,14 +5147,14 @@ version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
 dependencies = [
- "webpki-roots 1.0.8",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.8"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]

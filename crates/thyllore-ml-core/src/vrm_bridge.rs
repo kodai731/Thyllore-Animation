@@ -3,10 +3,16 @@ use thyllore_exporter_core::systems::gltf::write_vrm;
 
 use crate::avatar_setup_bridge::sidecar_read;
 
-/// The `.vrm` bytes for a GLB the standard glTF exporter wrote and the sidecar JSON of the same armature.
-pub fn vrm_write(glb_bytes: &[u8], sidecar_json: &str, meta: &VrmMeta) -> anyhow::Result<Vec<u8>> {
+/// The `.vrm` bytes for a GLB the standard glTF exporter wrote and the sidecar JSON of the same
+/// armature; `metres_per_gltf_unit` is the scene's unit scale (the sidecar is in metres).
+pub fn vrm_write(
+    glb_bytes: &[u8],
+    sidecar_json: &str,
+    meta: &VrmMeta,
+    metres_per_gltf_unit: f32,
+) -> anyhow::Result<Vec<u8>> {
     let sidecar = sidecar_read(sidecar_json)?;
-    write_vrm(glb_bytes, &sidecar, meta)
+    write_vrm(glb_bytes, &sidecar, meta, metres_per_gltf_unit)
 }
 
 #[cfg(test)]
@@ -23,7 +29,7 @@ mod tests {
 
     fn glb_with_json(json: &str) -> Vec<u8> {
         let mut json_bytes = json.as_bytes().to_vec();
-        while json_bytes.len() % 4 != 0 {
+        while !json_bytes.len().is_multiple_of(4) {
             json_bytes.push(b' ');
         }
         let total = 12 + 8 + json_bytes.len();
@@ -72,7 +78,7 @@ mod tests {
     fn writes_a_vrm_with_the_three_extensions() {
         let meta = VrmMeta::new("avatar", "tester");
 
-        let vrm = vrm_write(&two_bone_glb(), &sidecar_json(), &meta).expect("vrm");
+        let vrm = vrm_write(&two_bone_glb(), &sidecar_json(), &meta, 1.0).expect("vrm");
 
         let json_length = u32::from_le_bytes(vrm[12..16].try_into().unwrap()) as usize;
         let json: serde_json::Value = serde_json::from_slice(&vrm[20..20 + json_length]).unwrap();
@@ -90,6 +96,6 @@ mod tests {
     #[test]
     fn invalid_sidecar_json_is_an_error() {
         let meta = VrmMeta::new("avatar", "tester");
-        assert!(vrm_write(&two_bone_glb(), "{", &meta).is_err());
+        assert!(vrm_write(&two_bone_glb(), "{", &meta, 1.0).is_err());
     }
 }

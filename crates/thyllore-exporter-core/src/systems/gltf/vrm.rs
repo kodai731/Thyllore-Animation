@@ -13,19 +13,23 @@ use thyllore_avatar_core::vrm::{build_vrm_extensions, VrmInput, VrmMeta};
 use crate::systems::gltf::extensions::merge_extension;
 use crate::systems::gltf::glb::glb_bytes;
 
-const METRES_PER_GLTF_UNIT: f32 = 1.0;
-
 /// A `.vrm` from a GLB whose nodes carry the sidecar's bone names: the standard VRM layer and the
 /// `THYLLORE_avatar` layer are merged into the root extensions. Writing twice gives the same bytes.
-pub fn write_vrm(glb_bytes_in: &[u8], sidecar: &AvatarSidecar, meta: &VrmMeta) -> Result<Vec<u8>> {
+/// `metres_per_gltf_unit` relates the GLB's units to the sidecar's metres (1.0 for a metre GLB).
+pub fn write_vrm(
+    glb_bytes_in: &[u8],
+    sidecar: &AvatarSidecar,
+    meta: &VrmMeta,
+    metres_per_gltf_unit: f32,
+) -> Result<Vec<u8>> {
     let glb = Glb::from_slice(glb_bytes_in).map_err(|e| anyhow!("Failed to parse GLB: {:?}", e))?;
     let mut root: json::Root = json::Root::from_slice(&glb.json)
         .map_err(|e| anyhow!("Failed to parse glTF JSON: {:?}", e))?;
     let bin = glb.bin.map(|b| b.into_owned()).unwrap_or_default();
 
-    let skeleton = NodeSkeleton::from_nodes(&root.nodes)?;
+    let skeleton = NodeSkeleton::from_nodes(&root.nodes, metres_per_gltf_unit)?;
     let frames =
-        rest_frames_from_globals(&skeleton.globals, &skeleton.bones, METRES_PER_GLTF_UNIT)?;
+        rest_frames_from_globals(&skeleton.globals, &skeleton.bones, metres_per_gltf_unit)?;
     let extensions = build_vrm_extensions(VrmInput {
         sidecar,
         bones: &skeleton.bones,
@@ -40,7 +44,7 @@ pub fn write_vrm(glb_bytes_in: &[u8], sidecar: &AvatarSidecar, meta: &VrmMeta) -
     glb_bytes(&root, bin)
 }
 
-/// Every glTF node as a bone in node order, with its rest global transform in glTF units.
+/// Every glTF node as a bone in node order: rest positions in metres, rest globals in glTF units.
 struct NodeSkeleton {
     bones: Vec<BoneInput>,
     globals: Vec<Matrix4<f32>>,
@@ -48,7 +52,7 @@ struct NodeSkeleton {
 }
 
 impl NodeSkeleton {
-    fn from_nodes(nodes: &[json::scene::Node]) -> Result<Self> {
+    fn from_nodes(nodes: &[json::scene::Node], metres_per_gltf_unit: f32) -> Result<Self> {
         let parents = parent_of_each_node(nodes);
         let globals = global_transforms(nodes, &parents);
 
@@ -66,7 +70,7 @@ impl NodeSkeleton {
             .map(|(index, node)| BoneInput {
                 name: node.name.clone().unwrap_or_default(),
                 parent: parents[index],
-                rest_position: (globals[index].w.truncate() * METRES_PER_GLTF_UNIT).into(),
+                rest_position: (globals[index].w.truncate() * metres_per_gltf_unit).into(),
             })
             .collect();
 
@@ -247,7 +251,7 @@ mod tests {
     #[test]
     fn vrm_carries_the_three_extensions_and_lists_them() {
         let meta = VrmMeta::new("test avatar", "tester");
-        let vrm_bytes = write_vrm(&source_glb(), &sidecar(), &meta).expect("vrm");
+        let vrm_bytes = write_vrm(&source_glb(), &sidecar(), &meta, 1.0).expect("vrm");
         let (root, extensions) = root_extensions(&vrm_bytes);
 
         assert_eq!(
@@ -272,7 +276,7 @@ mod tests {
     #[test]
     fn importer_reads_the_spring_bone_from_the_vrm() {
         let meta = VrmMeta::new("test avatar", "tester");
-        let vrm_bytes = write_vrm(&source_glb(), &sidecar(), &meta).expect("vrm");
+        let vrm_bytes = write_vrm(&source_glb(), &sidecar(), &meta, 1.0).expect("vrm");
         let (_, extensions) = root_extensions(&vrm_bytes);
 
         let setup = parse_vrmc_spring_bone(&extensions[VRMC_SPRING_BONE], &Some).expect("parses");
@@ -298,8 +302,8 @@ mod tests {
     #[test]
     fn writing_twice_is_idempotent() {
         let meta = VrmMeta::new("test avatar", "tester");
-        let once = write_vrm(&source_glb(), &sidecar(), &meta).expect("vrm");
-        let twice = write_vrm(&once, &sidecar(), &meta).expect("vrm again");
+        let once = write_vrm(&source_glb(), &sidecar(), &meta, 1.0).expect("vrm");
+        let twice = write_vrm(&once, &sidecar(), &meta, 1.0).expect("vrm again");
 
         assert_eq!(once, twice);
     }
@@ -310,8 +314,29 @@ mod tests {
         let mut sidecar = sidecar();
         sidecar.spring.chains[0].joints[0].bone = "Ghost".to_string();
 
-        let error = write_vrm(&source_glb(), &sidecar, &meta).expect_err("missing node");
+        let error = write_vrm(&source_glb(), &sidecar, &meta, 1.0).expect_err("missing node");
 
         assert!(error.to_string().contains("Ghost"));
+    }
+
+    #[test]
+    fn centimetre_glb_keeps_sidecar_metres_in_node_units() {
+        let meta = VrmMeta::new("test avatar", "tester");
+        let vrm_bytes = write_vrm(&source_glb(), &sidecar(), &meta, 0.01).expect("vrm");
+        let (_, extensions) = root_extensions(&vrm_bytes);
+
+        let setup = parse_vrmc_spring_bone(&extensions[VRMC_SPRING_BONE], &Some).expect("parses");
+
+        let collider = &setup.colliders[0];
+        assert!((collider.offset - Vector3::new(0.0, 5.0, 2.0)).magnitude() < 1e-4);
+        assert!(
+            matches!(collider.shape, ColliderShape::Capsule { radius, .. } if (radius - 8.0).abs() < 1e-4)
+        );
+        let strand_length_m = 0.2 * 0.01;
+        assert!(matches!(
+            setup.chains[0].joints[0].force,
+            JointForce::Vrm(VrmJointForce { stiffness, .. })
+                if (stiffness - 0.06 / strand_length_m).abs() < 1e-2
+        ));
     }
 }

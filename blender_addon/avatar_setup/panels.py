@@ -13,6 +13,7 @@ from ..panels.main_panel import _CATEGORY
 from .chain_generation import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
+from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS
 from .properties import CHAIN_GEN_UI_PARAMS, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
@@ -181,6 +182,18 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
             _draw_labelled_prop(column, generation, param["name"])
 
 
+def _draw_vrm_meta(layout, meta) -> None:
+    layout.label(text="VRM Meta")
+    layout.prop(meta, "name")
+    layout.prop(meta, "authors")
+    layout.prop(meta, "version")
+    for field in VRM_META_ENUMS:
+        layout.prop(meta, field)
+    column = layout.column(align=True)
+    for field in VRM_META_FLAGS:
+        column.prop(meta, field)
+
+
 class THYLLORE_PT_AvatarSetupExport(Panel):
     """Export sub-panel: sidecar import/export buttons, collision mode, override count."""
 
@@ -195,6 +208,9 @@ class THYLLORE_PT_AvatarSetupExport(Panel):
         arm = target_armature(context)
 
         layout.operator("thyllore.import_avatar_sidecar", icon="IMPORT")
+        layout.operator("thyllore.export_vrm", icon="EXPORT")
+        if arm is not None:
+            _draw_vrm_meta(layout.box(), arm.data.thyllore_vrm)
         layout.operator("thyllore.export_for_unity", icon="EXPORT")
 
         if arm is not None:

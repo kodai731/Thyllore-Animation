@@ -1,4 +1,4 @@
-"""Avatar sidecar import / export operators (thyllore.import_avatar_sidecar, thyllore.export_for_unity)."""
+"""Avatar sidecar import / export operators (thyllore.import_avatar_sidecar, thyllore.export_for_unity, thyllore.export_vrm)."""
 from __future__ import annotations
 
 import json
@@ -19,6 +19,7 @@ from ..common.avatar_sidecar import bone_specs, sidecar_stats, submesh_to_sideca
 from ..common.collider_fit import bone_bind_matrix, bone_rest_frame
 from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
+from ..common.vrm_export import t_pose_warnings, vrm_meta_to_dict
 from ..common.armature import armature_of
 from ..common.logged_report import report
 from .mesh_data import material_loop_indices_of
@@ -299,9 +300,98 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
+def _export_selection_glb(context, arm, meshes) -> bytes:
+    """The GLB the standard glTF exporter writes for the armature and its meshes, in the rest pose."""
+    selected_before = frozenset(context.selected_objects)
+    active_before = context.view_layer.objects.active
+    glb_path = Path(bpy.app.tempdir) / f"thyllore_{arm.name}.glb"
+
+    _select_only(context, [arm] + meshes)
+    context.view_layer.objects.active = arm
+    try:
+        bpy.ops.export_scene.gltf(
+            filepath=str(glb_path),
+            export_format="GLB",
+            use_selection=True,
+            export_apply=True,
+            export_yup=True,
+            export_animations=False,
+            export_skins=True,
+            export_morph=True,
+        )
+        return glb_path.read_bytes()
+    finally:
+        _restore_selection(context, selected_before, active_before)
+        glb_path.unlink(missing_ok=True)
+
+
+def _rest_heads(bones) -> dict:
+    return {bone["name"]: tuple(bone["rest_position"]) for bone in bones}
+
+
+class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
+    """Export a VRM 1.0 file carrying the spring bones and the whole sidecar (THYLLORE_avatar extension)."""
+
+    bl_idname = "thyllore.export_vrm"
+    bl_label = "Export VRM"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".vrm"
+    filter_glob: bpy.props.StringProperty(default="*.vrm", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        return _TML_AVAILABLE and hasattr(tml, "vrm_write") and target_armature(context) is not None
+
+    def execute(self, context):
+        arm = target_armature(context)
+        meshes = bound_meshes(arm)
+        meta = vrm_meta_to_dict(arm.data.thyllore_vrm)
+        if not meta["name"] or not meta["authors"]:
+            report(self, "ERROR", "VRM meta needs a name and at least one author")
+            return {"CANCELLED"}
+
+        sidecar_input = _sidecar_build_input(context, arm, meshes)
+        try:
+            json_text = tml.sidecar_build(sidecar_input)
+        except ValueError as e:
+            report(self, "ERROR", f"Sidecar build failed: {e}")
+            return {"CANCELLED"}
+
+        humanoid = tml.infer_humanoid_mapping(sidecar_input["bones"])
+        humanoid_map = dict(humanoid.get("mapping", {}))
+        humanoid_map.update(sidecar_input["humanoid_overrides"])
+        for warning in t_pose_warnings(humanoid_map, _rest_heads(sidecar_input["bones"])):
+            report(self, "WARNING", warning)
+        unresolved = humanoid.get("unresolved", [])
+        if unresolved:
+            report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
+
+        scale_length = context.scene.unit_settings.scale_length
+        if abs(scale_length - 1.0) > 1e-6:
+            report(self, "WARNING", f"Unit scale {scale_length:g}: the VRM keeps Blender units, VRM expects metres")
+
+        glb = _export_selection_glb(context, arm, meshes)
+        try:
+            vrm = tml.vrm_write(glb, json_text, meta, scale_length)
+        except (RuntimeError, ValueError) as e:
+            report(self, "ERROR", f"VRM write failed: {e}")
+            return {"CANCELLED"}
+
+        try:
+            Path(self.filepath).write_bytes(vrm)
+        except OSError as e:
+            report(self, "ERROR", f"Cannot write VRM file: {e}")
+            return {"CANCELLED"}
+
+        report(self, "INFO", f"Exported VRM to {self.filepath}")
+        return {"FINISHED"}
+
+
 OPERATORS = (
     THYLLORE_OT_ImportAvatarSidecar,
     THYLLORE_OT_ExportForUnity,
+    THYLLORE_OT_ExportVrm,
 )
 
 

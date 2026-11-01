@@ -37,61 +37,54 @@ def _bootstrap() -> None:
 
 
 def step_a_import_fbx():
-    """(a) Import assets/models/fuse-woman-1/source/woman 1.fbx."""
+    """(a) Import assets/models/fuse-woman-1/edited/woman-1-fix-scale-only.fbx (metre scale, one mesh per material)."""
     import bpy
 
-    fbx_path = str(REPO_ROOT / "assets" / "models" / "fuse-woman-1" / "source" / "woman 1.fbx")
+    fbx_path = str(REPO_ROOT / "assets" / "models" / "fuse-woman-1" / "edited" / "woman-1-fix-scale-only.fbx")
     bpy.ops.import_scene.fbx(filepath=fbx_path)
 
     arm = None
-    mesh = None
+    meshes = []
     for obj in bpy.data.objects:
         if obj.type == "ARMATURE":
             arm = obj
-        elif obj.type == "MESH" and mesh is None:
-            mesh = obj
+        elif obj.type == "MESH":
+            meshes.append(obj)
 
-    if arm is None or mesh is None:
+    if arm is None or not meshes:
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_a — no armature or mesh after FBX import")
 
-    print(f"[smoke] step_a: imported {mesh.name} ({len(mesh.data.vertices)} verts) + {arm.name}")
-    return arm, mesh
+    vertex_count = sum(len(mesh.data.vertices) for mesh in meshes)
+    print(f"[smoke] step_a: imported {len(meshes)} meshes ({vertex_count} verts) + {arm.name}")
+    return arm, meshes
 
 
-def step_b_guess_submesh_roles(arm, mesh):
-    """(b) Armature active -> thyllore.guess_submesh_roles -> Body=skin / Hair=hair."""
+def step_b_guess_submesh_roles(arm, meshes):
+    """(b) Armature active -> thyllore.guess_submesh_roles -> Body=skin / Hair=hair; returns the hair mesh and material."""
     import bpy
 
     bpy.context.view_layer.objects.active = arm
     bpy.ops.thyllore.guess_submesh_roles()
 
-    submesh = mesh.thyllore_submesh
-    roles = {item.material: item.role for item in submesh.roles}
+    roles = {}
+    for mesh in meshes:
+        for item in mesh.thyllore_submesh.roles:
+            roles[item.material] = (mesh, item.role)
 
-    body_material = None
-    hair_material = None
-    for mat_name, role in roles.items():
-        if "Body" in mat_name:
-            body_material = mat_name
-        if "Hair" in mat_name:
-            hair_material = mat_name
+    body = next((name for name in roles if "Body" in name), None)
+    hair = next((name for name in roles if "Hair" in name), None)
+    if body is None or hair is None:
+        found = {name: role for name, (_, role) in roles.items()}
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_b — Body or Hair material missing (roles {found})")
 
-    if body_material is None:
-        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_b — no Body material found")
-    if hair_material is None:
-        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_b — no Hair material found")
+    if roles[body][1] != "skin":
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_b — Body role is {roles[body][1]!r}, expected 'skin'")
+    if roles[hair][1] != "hair":
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_b — Hair role is {roles[hair][1]!r}, expected 'hair'")
 
-    if roles[body_material] != "skin":
-        raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_b — Body role is {roles[body_material]!r}, expected 'skin'"
-        )
-    if roles[hair_material] != "hair":
-        raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_b — Hair role is {roles[hair_material]!r}, expected 'hair'"
-        )
-
-    print(f"[smoke] step_b: {body_material}={roles[body_material]}, {hair_material}={roles[hair_material]}")
-    return hair_material
+    hair_mesh = roles[hair][0]
+    print(f"[smoke] step_b: {body}=skin, {hair}=hair on {hair_mesh.name}")
+    return hair_mesh, hair
 
 
 def step_c_generate_chain_bones(arm, mesh, hair_material):
@@ -251,15 +244,49 @@ def step_g_export_for_unity(arm, mesh):
     print(f"[smoke] step_g: exported {fbx_file} ({fbx_file.stat().st_size} bytes) + sidecar ({bone_count} bones)")
 
 
+def step_h_export_vrm(arm):
+    """(h) thyllore.export_vrm -> woman1.vrm carries VRMC_vrm, VRMC_springBone and THYLLORE_avatar."""
+    import json
+    import struct
+
+    import bpy
+
+    arm.data.thyllore_vrm.name = "woman1"
+    arm.data.thyllore_vrm.authors = "smoke"
+    vrm_path = REPO_ROOT / "log" / "blender_avatar_setup_smoke" / "woman1.vrm"
+
+    bpy.ops.thyllore.export_vrm(filepath=str(vrm_path))
+
+    if not vrm_path.exists():
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_h — VRM file not created")
+    data = vrm_path.read_bytes()
+    json_length = struct.unpack_from("<I", data, 12)[0]
+    root = json.loads(data[20 : 20 + json_length])
+    used = root.get("extensionsUsed", [])
+    missing = [name for name in ("VRMC_vrm", "VRMC_springBone", "THYLLORE_avatar") if name not in used]
+    if missing or root.get("extensionsRequired"):
+        raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_h — extensionsUsed {used}, missing {missing}")
+    springs = root["extensions"]["VRMC_springBone"]["springs"]
+    human_bones = root["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
+    if not springs or "hips" not in human_bones:
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_h — VRM has no springs or no hips")
+    sidecar = root["extensions"]["THYLLORE_avatar"]
+    print(
+        f"[smoke] step_h: exported {vrm_path} ({len(data)} bytes), {len(springs)} springs, "
+        f"{len(human_bones)} humanoid bones, sidecar schema {sidecar.get('schema')}"
+    )
+
+
 def main() -> None:
     _bootstrap()
-    arm, mesh = step_a_import_fbx()
-    hair_material = step_b_guess_submesh_roles(arm, mesh)
-    added = step_c_generate_chain_bones(arm, mesh, hair_material)
+    arm, meshes = step_a_import_fbx()
+    hair_mesh, hair_material = step_b_guess_submesh_roles(arm, meshes)
+    added = step_c_generate_chain_bones(arm, hair_mesh, hair_material)
     step_d_generated_chains_are_registered(arm, added)
     step_e_fit_body_colliders(arm)
     step_f_apply_ramp(arm)
-    step_g_export_for_unity(arm, mesh)
+    step_g_export_for_unity(arm, hair_mesh)
+    step_h_export_vrm(arm)
     print("AVATAR_SETUP_SMOKE ok")
 
 

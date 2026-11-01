@@ -16,6 +16,7 @@ except ImportError:
 
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
+from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS
 
 
 SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
@@ -189,6 +190,33 @@ def _mark_role_as_user(item, _context) -> None:
     item.source = "user"
 
 
+def _vrm_meta_annotations() -> dict:
+    annotations = {
+        "version": bpy.props.StringProperty(name="Version"),
+        "copyright_information": bpy.props.StringProperty(name="Copyright"),
+        "contact_information": bpy.props.StringProperty(name="Contact"),
+        "other_license_url": bpy.props.StringProperty(name="Other License URL"),
+    }
+    for field, items in VRM_META_ENUMS.items():
+        annotations[field] = bpy.props.EnumProperty(
+            name=field.replace("_", " ").title(), items=list(items), default=items[0][0]
+        )
+    for field in VRM_META_FLAGS:
+        annotations[field] = bpy.props.BoolProperty(name=field.replace("_", " ").title(), default=False)
+    return annotations
+
+
+class THYLLORE_PG_VrmMeta(bpy.types.PropertyGroup):
+    """VRM 1.0 meta stored on the armature (bpy.types.Armature.thyllore_vrm); the wheel fills the defaults."""
+
+    name: bpy.props.StringProperty(name="Name", description="Avatar name (VRM meta, required)")
+    authors: bpy.props.StringProperty(
+        name="Authors", description="Comma separated author names (VRM meta, required)"
+    )
+
+    __annotations__.update(_vrm_meta_annotations())
+
+
 class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
     """One submesh role assignment: material -> role; a role set by hand marks the row as user."""
 
@@ -259,6 +287,7 @@ CLASSES = (
     THYLLORE_PG_HiddenTriangles,
     THYLLORE_PG_SubmeshSettings,
     THYLLORE_PG_RampForm,
+    THYLLORE_PG_VrmMeta,
 )
 
 
@@ -272,6 +301,7 @@ def register() -> None:
     bpy.types.Object.thyllore_submesh = bpy.props.PointerProperty(
         type=THYLLORE_PG_SubmeshSettings
     )
+    bpy.types.Armature.thyllore_vrm = bpy.props.PointerProperty(type=THYLLORE_PG_VrmMeta)
     bpy.types.WindowManager.thyllore_ramp = bpy.props.PointerProperty(
         type=THYLLORE_PG_RampForm
     )
@@ -279,6 +309,7 @@ def register() -> None:
 
 def unregister() -> None:
     del bpy.types.WindowManager.thyllore_ramp
+    del bpy.types.Armature.thyllore_vrm
     del bpy.types.Object.thyllore_submesh
     del bpy.types.Armature.thyllore_spring
 

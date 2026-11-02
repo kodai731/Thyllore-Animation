@@ -2,7 +2,10 @@
 
 Blender's parent-relative bone transforms are handed to the wheel as-is; only root bones carry the
 armature's world transform converted to engine axes and metres, so the solver works in engine space
-and the parent-relative rotations it returns go straight back into ``matrix_basis``."""
+and the parent-relative rotations it returns go straight back into ``matrix_basis``. Chain joints are
+handed their rest-relative transform instead: the swing the previous step wrote into their
+``matrix_basis`` is solver output, not animation, and feeding it back would move the rest direction
+the spring returns to."""
 from __future__ import annotations
 
 import bpy
@@ -60,14 +63,21 @@ def _rest_locals(arm, root_frame: Matrix) -> list[list[list[float]]]:
     return locals_
 
 
-def _animated_local(pose_bone, root_frame: Matrix) -> Matrix:
+def _animated_local(pose_bone, root_frame: Matrix, chain_bones: set[str]) -> Matrix:
     if pose_bone.parent is None:
         return root_frame @ pose_bone.matrix
+    if pose_bone.name in chain_bones:
+        return rest_relative_to_parent(pose_bone.bone)
     return pose_bone.parent.matrix.inverted() @ pose_bone.matrix
 
 
+def _chain_bone_names(settings) -> set[str]:
+    return {joint.bone for chain in settings.chains for joint in chain.joints}
+
+
 def _animated_locals(arm, root_frame: Matrix) -> list[Matrix]:
-    return [_animated_local(arm.pose.bones[bone.name], root_frame) for bone in arm.data.bones]
+    chain_bones = _chain_bone_names(arm.data.thyllore_spring)
+    return [_animated_local(arm.pose.bones[bone.name], root_frame, chain_bones) for bone in arm.data.bones]
 
 
 def rest_relative_to_parent(bone) -> Matrix:

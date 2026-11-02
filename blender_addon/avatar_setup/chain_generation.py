@@ -235,6 +235,24 @@ def _write_covered_group(obj, covered: list[int], marked: list[int]) -> None:
         group.add([int(v) for v in covered], 1.0, "REPLACE")
 
 
+def _update_hit_radii(settings, chains: list[dict], read_back: set[str]) -> int:
+    """Give the joints of the read-back chains the hit radius this generation measured; the count changed."""
+    radii = {
+        (chain["name"], joint["name"]): float(joint["hit_radius"])
+        for chain in chains
+        if chain["name"] in read_back
+        for joint in chain["joints"]
+    }
+    changed = 0
+    for chain in settings.chains:
+        for joint in chain.joints:
+            measured = radii.get((chain.name, joint.bone))
+            if measured is not None and joint.hit_radius != measured:
+                joint.hit_radius = measured
+                changed += 1
+    return changed
+
+
 class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     """Generate chain bones on one submesh of the rig; its role and the generation settings come from the rig"""
 
@@ -356,6 +374,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         context.view_layer.objects.active = obj
         _write_weights(obj, groups, rewritten)
         _write_membership_groups(obj, output["chains"], given)
+        rethickened = _update_hit_radii(settings, output["chains"], read_back)
         if role == "garment":
             _write_covered_group(obj, output["covered"], marked)
         for chain in output["chains"]:
@@ -386,9 +405,10 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         covered_note = f", {len(output['covered'])} covered vertices" if output["covered"] else ""
         support_note = f", hanging from {root_name} at height {support['boundary_height']:.3f}" if support else ""
         kept_note = f", kept the bones and spring values of {len(read_back)} chains" if read_back else ""
+        radius_note = f", re-measured the hit radius of {rethickened} joints" if rethickened else ""
         self.report(
             {"INFO"},
-            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains, weighted {len(rewritten)} vertices{kept_note}{collider_note}{covered_note}{support_note}{fitted_note}",
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains, weighted {len(rewritten)} vertices{kept_note}{radius_note}{collider_note}{covered_note}{support_note}{fitted_note}",
         )
         return {"FINISHED"}
 

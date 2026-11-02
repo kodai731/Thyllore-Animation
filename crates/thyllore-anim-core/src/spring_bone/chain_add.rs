@@ -1,7 +1,7 @@
 use crate::{BoneId, Skeleton};
 
 use super::chain_origin::ChainOrigin;
-use super::collider_fit::{ensure_fitted_collider, FittedCapsule};
+use super::collider_fit::{ensure_fitted_collider, fitted_collider_exists_on, FittedCapsule};
 use super::space::SpringSpace;
 use super::{ColliderGroupOrigin, SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
 
@@ -63,6 +63,8 @@ pub fn add_chain(
     chain_id
 }
 
+/// Registers the chains on the Fitted Body group; `root_collider` is the generation's own estimate
+/// of the root bone's collider and is used only where the skin fit has not placed one.
 pub fn add_generated_chains(
     setup: &mut SpringBoneSetup,
     chains: Vec<SpringChain>,
@@ -70,8 +72,10 @@ pub fn add_generated_chains(
     space: SpringSpace,
 ) {
     let fitted_body_group = match root_collider {
-        Some(capsule) => Some(ensure_fitted_collider(setup, &capsule)),
-        None => setup
+        Some(capsule) if !fitted_collider_exists_on(setup, capsule.bone_id) => {
+            Some(ensure_fitted_collider(setup, &capsule))
+        }
+        Some(_) | None => setup
             .collider_groups
             .iter()
             .find(|group| group.origin == ColliderGroupOrigin::Fitted)
@@ -96,7 +100,9 @@ pub fn add_generated_chains(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spring_bone::{ChainOrigin, ChainRole, SpringForceModel, SubmeshSelector};
+    use crate::spring_bone::{
+        ChainOrigin, ChainRole, ColliderShape, SpringForceModel, SubmeshSelector,
+    };
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -152,6 +158,42 @@ mod tests {
             .joints
             .iter()
             .all(|joint| joint.force.model() == SpringForceModel::Vrm));
+    }
+
+    #[test]
+    fn a_fitted_collider_on_the_root_bone_is_kept_over_the_generation_estimate() {
+        let mut setup = SpringBoneSetup::default();
+        let skin_fit = FittedCapsule {
+            bone_id: 0,
+            head: cgmath::Vector3::new(0.0, -0.05, 0.0),
+            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            radius: 0.09,
+        };
+        ensure_fitted_collider(&mut setup, &skin_fit);
+        let estimate = FittedCapsule {
+            bone_id: 0,
+            head: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            radius: 0.1,
+        };
+
+        add_generated_chains(
+            &mut setup,
+            Vec::new(),
+            Some(estimate),
+            SpringSpace::IDENTITY,
+        );
+
+        let on_root: Vec<_> = setup.colliders.iter().filter(|c| c.bone_id == 0).collect();
+        assert_eq!(on_root.len(), 1);
+        assert_eq!(on_root[0].offset, skin_fit.head);
+        assert_eq!(
+            on_root[0].shape,
+            ColliderShape::Capsule {
+                radius: skin_fit.radius,
+                tail: skin_fit.tail
+            }
+        );
     }
 
     #[test]

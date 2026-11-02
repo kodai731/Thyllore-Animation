@@ -8,6 +8,17 @@ from __future__ import annotations
 
 from .coordinates import engine_to_blender_point
 
+COVERED_GROUP = "thyllore_covered"
+
+
+def covered_group_vertices(vertex_groups: list[tuple[int, list[tuple[int, float]]]], group_index: int) -> list[int]:
+    """The vertices weighted into the covered group: ``vertex_groups`` is ``[(vertex_index, [(group, weight), ...]), ...]``."""
+    return [
+        vertex
+        for vertex, groups in vertex_groups
+        if any(group == group_index and weight > 0.0 for group, weight in groups)
+    ]
+
 
 def vertex_tex_coords(
     loop_vertices: list[int],

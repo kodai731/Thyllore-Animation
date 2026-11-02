@@ -10,6 +10,7 @@ import pytest
 
 from blender_addon.common.chain_bones import (
     bone_specs,
+    covered_group_vertices,
     group_weights,
     output_to_blender,
     vertex_tex_coords,
@@ -288,3 +289,33 @@ def test_group_weights_resolves_root_and_skin_bone_targets():
         "Chest": [(1, 0.75)],
         "hair_strip_hair_00_00": [(1, 0.25)],
     }
+
+
+def test_covered_group_vertices_reads_only_weighted_members():
+    pairs = [(0, [(2, 1.0)]), (1, [(2, 0.0)]), (2, [(1, 1.0)]), (3, [(1, 0.5), (2, 0.25)])]
+
+    assert covered_group_vertices(pairs, 2) == [0, 3]
+
+
+def test_generate_chains_marked_covered_vertices_leave_the_chain(tml):
+    positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
+    marked = [v for v, p in enumerate(positions) if p[1] > -0.25]
+
+    output = tml.generate_chains(
+        positions,
+        triangles,
+        (0.0, 0.0, 0.0),
+        "garment",
+        "strip/skirt",
+        {"joint_count": 2, "column_count": 1},
+        None,
+        0,
+        [],
+        marked,
+    )
+
+    assert sorted(output["covered"]) == marked
+    assert not set(output["chains"][0]["vertices"]) & set(marked)
+    for entry in output["weights"]:
+        if entry["vertex"] in marked:
+            assert entry["influences"] == [({"bone": 0}, 1.0)]

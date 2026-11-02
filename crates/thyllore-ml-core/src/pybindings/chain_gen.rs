@@ -34,9 +34,10 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 /// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the
 /// FitSkin dicts (positions, influences, triangles) and `root_bone` the index of the bone the chains hang
 /// from; `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
-/// `tex_coords` is per-vertex UV, empty uses the φ-around-up method.
+/// `tex_coords` is per-vertex UV, empty uses the φ-around-up method; `covered_vertices` are the garment
+/// vertices the user marked as covered by the skin, empty measures the coverage by distance.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new()))]
+#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new()))]
 #[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
@@ -49,6 +50,7 @@ pub fn generate_chains<'py>(
     skins: Option<&Bound<'py, PyAny>>,
     root_bone: usize,
     tex_coords: Vec<[f32; 2]>,
+    covered_vertices: Vec<u32>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
@@ -69,6 +71,7 @@ pub fn generate_chains<'py>(
                 SkinAttachment {
                     skins: &skins,
                     root_bone,
+                    covered_vertices: &covered_vertices,
                 },
                 &tex_coords,
             )

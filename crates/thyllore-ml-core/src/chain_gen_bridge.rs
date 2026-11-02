@@ -20,6 +20,8 @@ pub struct ChainGenOutput {
     pub weights: Vec<WeightOut>,
     /// The capsule a hair role fits around the head, in the same space as the positions
     pub head_capsule: Option<CapsuleOut>,
+    /// The garment vertices the skin covers, marked or measured
+    pub covered: Vec<u32>,
 }
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -109,10 +111,12 @@ fn skin_surface_from_fit_skin(skin: &FitSkin) -> SkinSurface {
     }
 }
 
-/// The skin meshes the chains attach to and the bone the chains hang from, as bone-list indices.
+/// The skin meshes the chains attach to, the bone the chains hang from (a bone-list index) and the
+/// garment vertices the user marked as covered.
 pub struct SkinAttachment<'a> {
     pub skins: &'a [FitSkin],
     pub root_bone: usize,
+    pub covered_vertices: &'a [u32],
 }
 
 pub fn run_chain_gen(
@@ -141,6 +145,7 @@ pub fn run_chain_gen(
         root_bone: attachment.root_bone as BoneId,
         skins: &skins,
         tex_coords,
+        covered_vertices: attachment.covered_vertices,
     };
     let params = ChainGenParams {
         role,
@@ -204,6 +209,7 @@ pub fn run_chain_gen(
         chains: chains_out,
         weights: weights_out,
         head_capsule,
+        covered: placement.covered.iter().map(|c| c.vertex).collect(),
     })
 }
 
@@ -246,6 +252,7 @@ mod tests {
             SkinAttachment {
                 skins: std::slice::from_ref(&head),
                 root_bone: 0,
+                covered_vertices: &[],
             },
             &[],
         )

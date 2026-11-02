@@ -182,6 +182,8 @@ pub struct ChainGenInput<'a> {
     pub skins: &'a [SkinSurface],
     /// Per-vertex texture coordinates; empty means no strand parameter is available
     pub tex_coords: &'a [[f32; 2]],
+    /// Garment vertices the user marked as covered by the skin; empty measures the coverage by distance
+    pub covered_vertices: &'a [u32],
 }
 
 #[derive(Debug, Clone)]

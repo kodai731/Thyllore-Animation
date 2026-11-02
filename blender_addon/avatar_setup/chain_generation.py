@@ -16,7 +16,9 @@ except ImportError:
 from ..common import coordinates
 from ..common.chain_bone_display import apply_chain_bone_display
 from ..common.chain_bones import (
+    COVERED_GROUP,
     bone_specs,
+    covered_group_vertices,
     group_weights,
     output_to_blender,
     settings_from_properties,
@@ -102,12 +104,14 @@ def _remove_vertex_groups(obj, bone_names):
 
 
 def _write_weights(obj, groups):
-    """Write vertex group weights: clear affected vertices from ALL groups, then REPLACE."""
+    """Write vertex group weights: clear affected vertices from every bone group, then REPLACE."""
     affected_vertices: set[int] = set()
     for influences in groups.values():
         for v_idx, _ in influences:
             affected_vertices.add(v_idx)
     for vg in obj.vertex_groups:
+        if vg.name == COVERED_GROUP:
+            continue
         vg.remove(list(affected_vertices))
     for bone_name, influences in groups.items():
         vg = obj.vertex_groups.get(bone_name)
@@ -115,6 +119,24 @@ def _write_weights(obj, groups):
             vg = obj.vertex_groups.new(name=bone_name)
         for v_idx, weight in influences:
             vg.add([v_idx], weight, "REPLACE")
+
+
+def _marked_covered_vertices(obj) -> list[int]:
+    """The vertices of the covered group, or none when the group does not exist (the coverage is then measured)."""
+    group = obj.vertex_groups.get(COVERED_GROUP)
+    if group is None:
+        return []
+    pairs = [(v.index, [(g.group, g.weight) for g in v.groups]) for v in obj.data.vertices]
+    return covered_group_vertices(pairs, group.index)
+
+
+def _write_covered_group(obj, covered: list[int]) -> None:
+    """Record the measured coverage so the user can repaint it; an existing group is left as it is."""
+    if obj.vertex_groups.get(COVERED_GROUP) is not None:
+        return
+    group = obj.vertex_groups.new(name=COVERED_GROUP)
+    if covered:
+        group.add([int(v) for v in covered], 1.0, "REPLACE")
 
 
 class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
@@ -188,6 +210,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         replaced_bones = remove_chains_generated_on(settings, origin)
         _remove_bones(context, arm, replaced_bones)
         _remove_vertex_groups(obj, replaced_bones)
+        marked = _marked_covered_vertices(obj)
 
         try:
             output = tml.generate_chains(
@@ -200,6 +223,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
                 skins,
                 root_index,
                 tex_coords,
+                marked,
             )
         except ValueError as e:
             self.report({"ERROR"}, f"generate_chains failed: {e}")
@@ -217,6 +241,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
+        if role == "garment":
+            _write_covered_group(obj, output["covered"])
         apply_chain_bone_display(arm, [name for name, _, _, _ in specs], role)
 
         bones = armature_fit_bones(context, arm)
@@ -240,7 +266,11 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = previous_active
         collider_note = " with a head collider" if output.get("head_capsule") else ""
-        self.report({"INFO"}, f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}")
+        covered_note = f", {len(output['covered'])} covered vertices" if output["covered"] else ""
+        self.report(
+            {"INFO"},
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}",
+        )
         return {"FINISHED"}
 
 

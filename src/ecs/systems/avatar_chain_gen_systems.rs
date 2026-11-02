@@ -84,6 +84,7 @@ fn generate_chain_bones(
         root_bone: root,
         skins: &skins,
         tex_coords: &geometry.tex_coords,
+        covered_vertices: &[],
     };
     let params = ChainGenParams {
         role,

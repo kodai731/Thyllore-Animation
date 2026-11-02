@@ -337,6 +337,7 @@ fn decide_mode_for(strip_set: &StripSet, tex_coords: &[[f32; 2]]) -> StrandMode 
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords,
+        covered_vertices: &[],
     };
     decide_strand_mode(&input, &strip_set.components, KEEP_ALL_BAND)
 }
@@ -470,6 +471,7 @@ fn card_input<'a>(mesh: &'a CardMesh, tex_coords: &'a [[f32; 2]]) -> ChainGenInp
         root_bone: ROOT_BONE,
         skins: &mesh.skins,
         tex_coords,
+        covered_vertices: &[],
     }
 }
 

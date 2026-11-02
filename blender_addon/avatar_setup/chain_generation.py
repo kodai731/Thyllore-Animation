@@ -24,6 +24,7 @@ from ..common.chain_bones import (
     group_weights,
     joints_from_bones,
     membership_group_name,
+    mismatched_vertices,
     output_of_new_chains,
     output_to_blender,
     settings_from_properties,
@@ -34,6 +35,7 @@ from ..common.spring_properties import (
     disabled_chain_names,
     generated_chain_bones,
     humanoid_overrides_to_dict,
+    remove_chains_named,
     restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
@@ -146,22 +148,20 @@ def remove_vertex_groups(obj, bone_names):
             obj.vertex_groups.remove(group)
 
 
-def _write_weights(obj, groups):
-    """Write vertex group weights: clear affected vertices from every bone group, then REPLACE."""
-    affected_vertices: set[int] = set()
-    for influences in groups.values():
-        for v_idx, _ in influences:
-            affected_vertices.add(v_idx)
+def _write_weights(obj, groups, vertices: set[int]):
+    """Write the bone weights of ``vertices``: clear them from every bone group, then REPLACE; the other vertices keep
+    their weights."""
     for vg in obj.vertex_groups:
         if vg.name == COVERED_GROUP or chain_of_membership_group(vg.name) is not None:
             continue
-        vg.remove(list(affected_vertices))
+        vg.remove(list(vertices))
     for bone_name, influences in groups.items():
         vg = obj.vertex_groups.get(bone_name)
         if vg is None:
             vg = obj.vertex_groups.new(name=bone_name)
         for v_idx, weight in influences:
-            vg.add([v_idx], weight, "REPLACE")
+            if v_idx in vertices:
+                vg.add([v_idx], weight, "REPLACE")
 
 
 def _vertex_group_weights(obj):
@@ -335,7 +335,13 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         specs = bone_specs(output_of_new_chains(blender_output, read_back), root_name)
         groups = group_weights(blender_output, root_name, [bone.name for bone in arm.data.bones])
         generated_names = {chain["name"] for chain in output["chains"]}
-        stale_bones = [bone for name, bones in registered.items() if name not in generated_names for bone in bones]
+        stale_names = {name for name in registered if name not in generated_names}
+        stale_bones = [bone for name in stale_names for bone in registered[name]]
+        new_chains = [chain for chain in output["chains"] if chain["name"] not in read_back]
+        group_names = {vg.index: vg.name for vg in obj.vertex_groups}
+        rewritten = mismatched_vertices(
+            output["chains"], _vertex_group_weights(obj), group_names, {chain["name"] for chain in new_chains}
+        )
 
         try:
             _add_bones(context, arm, specs)
@@ -344,42 +350,44 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             return {"CANCELLED"}
         remove_bones(context, arm, stale_bones)
         remove_vertex_groups(obj, stale_bones)
+        remove_chains_named(settings, stale_names)
 
         context.view_layer.objects.active = obj
-        _write_weights(obj, groups)
+        _write_weights(obj, groups, rewritten)
         _write_membership_groups(obj, output["chains"], given)
         if role == "garment":
             _write_covered_group(obj, output["covered"], marked)
         joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
         apply_chain_bone_display(arm, joint_names, role)
 
-        bones = armature_fit_bones(context, arm)
-        try:
-            spring = tml.register_generated_chains(
-                tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
-                bones,
-                skins,
-                root_name,
-                target,
-                role,
-                output["chains"],
-                output.get("head_capsule"),
-            )
-        except ValueError as e:
-            self.report({"ERROR"}, f"register_generated_chains failed: {e}")
-            return {"CANCELLED"}
-        disabled = disabled_chain_names(settings)
-        write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
-        restore_disabled_chains(settings, disabled)
+        if new_chains:
+            bones = armature_fit_bones(context, arm)
+            try:
+                spring = tml.register_generated_chains(
+                    tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+                    bones,
+                    skins,
+                    root_name,
+                    target,
+                    role,
+                    new_chains,
+                    output.get("head_capsule"),
+                )
+            except ValueError as e:
+                self.report({"ERROR"}, f"register_generated_chains failed: {e}")
+                return {"CANCELLED"}
+            disabled = disabled_chain_names(settings)
+            write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
+            restore_disabled_chains(settings, disabled)
 
         context.view_layer.objects.active = previous_active
         collider_note = " with a head collider" if output.get("head_capsule") else ""
         covered_note = f", {len(output['covered'])} covered vertices" if output["covered"] else ""
         support_note = f", hanging from {root_name} at height {support['boundary_height']:.3f}" if support else ""
-        kept_note = f", kept the bones of {len(read_back)} chains" if read_back else ""
+        kept_note = f", kept the bones and spring values of {len(read_back)} chains" if read_back else ""
         self.report(
             {"INFO"},
-            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{kept_note}{collider_note}{covered_note}{support_note}{fitted_note}",
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains, weighted {len(rewritten)} vertices{kept_note}{collider_note}{covered_note}{support_note}{fitted_note}",
         )
         return {"FINISHED"}
 

@@ -123,6 +123,35 @@ fn regenerating_the_same_target_replaces_its_chains_and_root_collider() {
 }
 
 #[test]
+fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
+    let chains = generated();
+    let mut first = register_generated_chains(
+        &SidecarSpring::default(),
+        &bones(),
+        &[],
+        &request(&chains, Some(capsule())),
+    )
+    .unwrap();
+    first.chains[0].joints[1].hit_radius = 0.05;
+    let newer = vec![GeneratedChainIn {
+        name: "hair_hair_back_01".to_string(),
+        joints: vec![GeneratedJointIn {
+            name: "hair_hair_back_00_00".to_string(),
+            hit_radius: 0.02,
+        }],
+    }];
+
+    let second =
+        register_generated_chains(&first, &bones(), &[], &request(&newer, Some(capsule())))
+            .unwrap();
+
+    let names: Vec<&str> = second.chains.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["hair_hair_back_00", "hair_hair_back_01"]);
+    assert!((second.chains[0].joints[1].hit_radius - 0.05).abs() < 1e-6);
+    assert_eq!(second.colliders.len(), 1);
+}
+
+#[test]
 fn without_a_capsule_or_skin_the_chains_join_an_existing_fitted_group_only() {
     let chains = generated();
     let spring = register_generated_chains(

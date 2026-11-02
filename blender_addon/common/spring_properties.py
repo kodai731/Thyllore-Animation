@@ -293,6 +293,12 @@ def generated_chain_bones(settings, origin: dict) -> dict[str, list[str]]:
     }
 
 
+def remove_chains_named(settings, names: set[str]) -> None:
+    for index in reversed(range(len(settings.chains))):
+        if settings.chains[index].name in names:
+            settings.chains.remove(index)
+
+
 def remove_chains_generated_on(settings, origin: dict) -> list[str]:
     """Drop the chains generated on ``origin`` from the settings; returns their joint bone names."""
     bone_names: list[str] = []

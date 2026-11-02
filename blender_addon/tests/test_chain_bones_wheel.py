@@ -16,6 +16,7 @@ from blender_addon.common.chain_bones import (
     group_weights,
     joints_from_bones,
     membership_group_name,
+    mismatched_vertices,
     output_of_new_chains,
     output_to_blender,
     vertex_tex_coords,
@@ -460,3 +461,24 @@ def test_generate_chains_with_given_joints_places_the_bones_there(tml):
     placed = [tuple(joint["head"]) for joint in chain["joints"]] + [tuple(chain["tail"])]
     assert len(placed) == len(heads_then_tail)
     assert all(abs(a - b) < 1e-6 for point, expected in zip(placed, heads_then_tail) for a, b in zip(point, expected))
+
+
+def test_mismatched_vertices_follow_the_membership_rules():
+    chains = [
+        {"name": "a", "vertices": [0, 1, 2, 3, 7], "joints": [{"name": "a_00"}, {"name": "a_01"}]},
+        {"name": "b", "vertices": [4], "joints": [{"name": "b_00"}]},
+    ]
+    group_names = {0: "a_00", 1: "a_01", 2: "b_00", 3: "Head", 4: "Spine"}
+    weights = [
+        (0, [(0, 0.5), (1, 0.5)]),
+        (1, [(3, 1.0)]),
+        (2, [(0, 0.5), (2, 0.5)]),
+        (3, [(0, 0.3), (3, 0.7)]),
+        (4, [(2, 1.0)]),
+        (5, [(2, 0.2), (4, 0.8)]),
+        (6, [(4, 1.0)]),
+        (7, [(2, 0.2), (4, 0.8)]),
+    ]
+
+    assert mismatched_vertices(chains, weights, group_names, set()) == {1, 2, 5, 7}
+    assert mismatched_vertices(chains, weights, group_names, {"b"}) == {1, 2, 4, 5, 7}

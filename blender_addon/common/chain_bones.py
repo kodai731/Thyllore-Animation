@@ -74,6 +74,26 @@ def output_of_new_chains(output: dict, read_back: set[str]) -> dict:
     return {**output, "chains": [chain for chain in output["chains"] if chain["name"] not in read_back]}
 
 
+def mismatched_vertices(
+    chains: list[dict], weights: VertexGroupWeights, group_names: dict[int, str], new_chains: set[str]
+) -> set[int]:
+    """The vertices whose bone weights disagree with their chain membership: a member of a chain that has no
+    weight on that chain's joints, that has weight on another chain's joints, or whose chain was placed now;
+    and a vertex of no chain that is still weighted to a chain joint. Root and body bone weights do not count."""
+    chain_of_joint = {joint["name"]: chain["name"] for chain in chains for joint in chain["joints"]}
+    chain_of_vertex = {int(vertex): chain["name"] for chain in chains for vertex in chain["vertices"]}
+    mismatched = set()
+    for vertex, groups in weights:
+        weighted = {chain_of_joint[group_names[g]] for g, w in groups if w > 0.0 and group_names.get(g) in chain_of_joint}
+        own = chain_of_vertex.get(vertex)
+        if own is None:
+            if weighted:
+                mismatched.add(vertex)
+        elif own in new_chains or weighted != {own}:
+            mismatched.add(vertex)
+    return mismatched
+
+
 def output_to_blender(output: dict, scale_length: float = 1.0) -> dict:
     """The same output with every joint head and chain tail in Blender space and Blender units."""
 

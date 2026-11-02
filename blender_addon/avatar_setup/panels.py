@@ -179,6 +179,7 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
         if arm is None:
             return
         generation = arm.data.thyllore_spring.chain_generation
+        layout.label(text="Defaults for what no chain group or bone decides yet", icon="INFO")
         column = layout.column(align=True)
         _draw_labelled_prop(column, generation, "root_bone")
         for param in CHAIN_GEN_UI_PARAMS:

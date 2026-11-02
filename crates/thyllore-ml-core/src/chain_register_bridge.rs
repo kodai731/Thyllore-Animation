@@ -34,9 +34,10 @@ pub struct RegisterRequest<'a> {
     pub head_capsule: Option<CapsuleOut>,
 }
 
-/// Registers generated chains the way the engine does: the chains previously generated on the
-/// target are dropped, the root collider (the head capsule, or a capsule fitted to the skin on
-/// the root bone) joins the fitted body group, and every chain is bound to that group.
+/// Registers generated chains the way the engine does: the chains of the request replace the chains of
+/// the same names previously generated on the target (the other chains of the target keep their
+/// values), the root collider (the head capsule, or a capsule fitted to the skin on the root bone)
+/// joins the fitted body group, and every registered chain is bound to that group.
 pub fn register_generated_chains(
     spring: &SidecarSpring,
     bones: &[FitBone],
@@ -51,9 +52,14 @@ pub fn register_generated_chains(
 
     let frames = rest_frames(bones)?;
     let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
-    setup
+    let replaced: Vec<&str> = request
         .chains
-        .retain(|chain| !chain.origin.is_generated_on(&target));
+        .iter()
+        .map(|chain| chain.name.as_str())
+        .collect();
+    setup.chains.retain(|chain| {
+        !(chain.origin.is_generated_on(&target) && replaced.contains(&chain.name.as_str()))
+    });
 
     let root_collider = match request.head_capsule {
         Some(capsule) => Some(head_capsule_collider(&capsule, root, bones)?),

@@ -14,7 +14,7 @@ from .chain_generation import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
 from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS, VRM_META_TEXTS
-from .properties import CHAIN_GEN_UI_PARAMS, SPRING_JOINT_PARAM_NAMES
+from .properties import CHAIN_GEN_UI_PARAMS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
 
@@ -30,13 +30,13 @@ def _draw_labelled_prop(layout, owner, name) -> None:
     split.column(align=True).prop(owner, name, text="")
 
 
-def _draw_joint_params(layout, joint) -> None:
-    """The force model, the magnitudes of that model, then the parameters every model shares."""
+def _draw_joint_params(layout, joint, shared_names=SPRING_JOINT_PARAM_NAMES) -> None:
+    """The force model, the magnitudes of that model, then the shared parameters listed."""
     column = layout.column(align=True)
     _draw_labelled_prop(column, joint, "force_model")
     for name in FORCE_PARAM_NAMES.get(joint.force_model, ()):
         _draw_labelled_prop(column, joint, name)
-    for name in SPRING_JOINT_PARAM_NAMES:
+    for name in shared_names:
         _draw_labelled_prop(column, joint, name)
 
 
@@ -135,7 +135,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         box = layout.box()
         for end_name in ("root", "tip"):
             box.label(text=end_name.capitalize())
-            _draw_joint_params(box, getattr(form, end_name))
+            _draw_joint_params(box, getattr(form, end_name), RAMP_END_PARAM_NAMES)
             box.separator()
 
         _draw_labelled_prop(box, form, "rigid_fraction")

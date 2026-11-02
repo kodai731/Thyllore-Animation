@@ -30,6 +30,7 @@ SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _T
 SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
     tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
 )
+RAMP_END_PARAM_NAMES: tuple[str, ...] = tuple(name for name in SPRING_JOINT_PARAM_NAMES if name != "hit_radius")
 CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
 
 configure_force_params({

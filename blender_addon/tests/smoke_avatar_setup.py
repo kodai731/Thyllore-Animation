@@ -204,12 +204,17 @@ def step_f_apply_ramp(arm):
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_f — 'mixamorig:Head' bone not found")
 
     arm.data.bones.active = head_bone
+    settings = arm.data.thyllore_spring
+    radii_before = [joint.hit_radius for chain in settings.chains for joint in chain.joints]
     result = bpy.ops.thyllore.apply_ramp()
 
     if "FINISHED" not in result:
         raise SystemExit(
             f"AVATAR_SETUP_SMOKE failed: step_f — apply_ramp returned {result}, expected FINISHED"
         )
+    radii_after = [joint.hit_radius for chain in settings.chains for joint in chain.joints]
+    if radii_after != radii_before:
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_f — apply_ramp changed a joint hit_radius")
 
     print("[smoke] step_f: apply_ramp returned FINISHED")
 

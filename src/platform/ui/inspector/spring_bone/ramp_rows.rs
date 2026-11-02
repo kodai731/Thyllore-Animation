@@ -247,6 +247,7 @@ pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
         &form.root_force,
         |view| &mut view.root_force,
         &[
+            "root_hit_radius",
             "tip_drag_force",
             "tip_gravity_dir",
             "tip_hit_radius",
@@ -262,6 +263,7 @@ pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
             "root_gravity_dir",
             "root_hit_radius",
             "tip_gravity_dir",
+            "tip_hit_radius",
             "rigid_fraction",
         ],
     ));
@@ -311,9 +313,7 @@ mod tests {
             [
                 "root_drag_force",
                 "root_gravity_dir",
-                "root_hit_radius",
                 "tip_drag_force",
-                "tip_hit_radius",
                 "rigid_fraction",
                 "Shape",
                 "Scope",
@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn ramp_root_block_shows_every_joint_param_and_tip_block_all_but_gravity_dir() {
+    fn ramp_root_block_shows_swing_params_and_tip_block_all_but_gravity_dir() {
         let rows = ramp_form_rows(&form(RampOrigin::Joint, Vec::new()));
         let heading_at = |label: &str| {
             rows.iter()
@@ -368,8 +368,9 @@ mod tests {
         let root_block = &rows[heading_at("Root") + 1..heading_at("Tip")];
         let tip_block = &rows[heading_at("Tip") + 1..rigid_at];
 
-        assert_eq!(scalar_count(root_block), SPRING_JOINT_UI_PARAMS.len());
-        assert_eq!(scalar_count(tip_block), SPRING_JOINT_UI_PARAMS.len() - 1);
+        let swing_param_count = SPRING_JOINT_UI_PARAMS.len() - 1;
+        assert_eq!(scalar_count(root_block), swing_param_count);
+        assert_eq!(scalar_count(tip_block), swing_param_count - 1);
         assert_eq!(rigid_at + 1, shape_at);
     }
 

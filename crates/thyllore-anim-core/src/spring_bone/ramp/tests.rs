@@ -128,6 +128,15 @@ fn four_joints_ease_in_second_joint_closer_to_root() {
 }
 
 #[test]
+fn hit_radius_is_kept_from_the_chain() {
+    let chain = make_chain(&[0, 1, 2]);
+    let ramp = ramp(0.8, 0.2, RampShape::Linear);
+    let result = apply_ramp(&chain, &ramp).expect("one force model");
+
+    assert!(result.joints.iter().all(|joint| joint.hit_radius == 0.1));
+}
+
+#[test]
 fn gravity_dir_is_root_for_all_joints() {
     let chain = make_chain(&[0, 1, 2]);
     let ramp = ChainRamp {

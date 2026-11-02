@@ -136,7 +136,6 @@ pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> Result<SpringChain, 
             .lerp(&ramp.tip.force, w)
             .ok_or(ends_differ)?;
         joint.drag_force = lerp(ramp.root.drag_force, ramp.tip.drag_force, w);
-        joint.hit_radius = lerp(ramp.root.hit_radius, ramp.tip.hit_radius, w);
         joint.gravity_dir = ramp.root.gravity_dir;
     }
     Ok(out)

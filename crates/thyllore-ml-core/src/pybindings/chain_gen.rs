@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use crate::avatar_setup_bridge::BoneSpec;
 use crate::chain_gen_bridge::{
     body_colliders as body_colliders_from_inputs, chain_gen_params, role_bones, run_chain_gen,
-    settings_from_pairs, BodyColliderIn, SkinAttachment,
+    settings_from_pairs, BodyColliderIn, GivenChainIn, SkinAttachment,
 };
 use crate::collider_bridge::FitSkin;
 
@@ -42,9 +42,11 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 /// vertices the user marked as covered by the body, empty finds the rings the body supports instead;
 /// `body_colliders` are the sidecar colliders in model axes relative to their bones' rest heads (bone
 /// index, head, tail, radius), `humanoid_bones` maps Unity role names to bone indices and `bones` are
-/// the bone specs; together they give the torso volume the garment can rest on.
+/// the bone specs; together they give the torso volume the garment can rest on. `given_chains` are the
+/// chains the user assigned as `{name, vertices, joints?}` dicts (`joints` are the joint heads followed by the
+/// chain tail); the chains named for this submesh replace the split.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None))]
+#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None, given_chains = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
@@ -61,6 +63,7 @@ pub fn generate_chains<'py>(
     body_colliders: Option<&Bound<'py, PyAny>>,
     humanoid_bones: BTreeMap<String, usize>,
     bones: Option<&Bound<'py, PyAny>>,
+    given_chains: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
@@ -74,6 +77,10 @@ pub fn generate_chains<'py>(
     };
     let bone_specs: Vec<BoneSpec> = match bones {
         Some(bones) => depythonize(bones).map_err(depythonize_error_to_pyerr)?,
+        None => Vec::new(),
+    };
+    let given: Vec<GivenChainIn> = match given_chains {
+        Some(given) => depythonize(given).map_err(depythonize_error_to_pyerr)?,
         None => Vec::new(),
     };
     let roles = role_bones(&humanoid_bones, &bone_specs);
@@ -96,6 +103,7 @@ pub fn generate_chains<'py>(
                     covered_vertices: &covered_vertices,
                 },
                 &tex_coords,
+                &given,
             )
         })
         .map_err(anyhow_to_pyerr)?;

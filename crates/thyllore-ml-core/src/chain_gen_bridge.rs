@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole,
-    InfluenceTarget, SkinSurface, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
+    ChainRole, GivenChain, InfluenceTarget, SkinSurface, CHAIN_GEN_SCALAR_PARAMS,
+    CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
@@ -195,6 +196,31 @@ pub struct SkinAttachment<'a> {
     pub covered_vertices: &'a [u32],
 }
 
+/// A chain the user assigned on the target, named with its chain name; `joints` are its joint heads followed
+/// by the chain tail when the user placed its bones.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+pub struct GivenChainIn {
+    pub name: String,
+    pub vertices: Vec<u32>,
+    #[serde(default)]
+    pub joints: Option<Vec<[f32; 3]>>,
+}
+
+/// The given chains that belong to this submesh, by column; a chain named for another submesh of the
+/// same mesh is left out.
+pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<GivenChain> {
+    given
+        .iter()
+        .filter_map(|chain| {
+            Some(GivenChain {
+                column: chain_column(params, &chain.name)?,
+                vertices: chain.vertices.clone(),
+                joints: chain.joints.as_deref().map(to_vectors),
+            })
+        })
+        .collect()
+}
+
 pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
@@ -204,9 +230,16 @@ pub fn run_chain_gen(
     settings: ChainGenSettings,
     attachment: SkinAttachment,
     tex_coords: &[[f32; 2]],
+    given: &[GivenChainIn],
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
     let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
+    let params = ChainGenParams {
+        role,
+        target,
+        settings,
+    };
+    let given_chains = given_chains(given, &params);
 
     let positions_vec = to_vectors(positions);
     let mut skins: Vec<SkinSurface> = attachment
@@ -224,11 +257,7 @@ pub fn run_chain_gen(
         skins: &skins,
         tex_coords,
         covered_vertices: attachment.covered_vertices,
-    };
-    let params = ChainGenParams {
-        role,
-        target,
-        settings,
+        given_chains: &given_chains,
     };
 
     let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
@@ -338,6 +367,7 @@ mod tests {
                 root_bone: 0,
                 covered_vertices: &[],
             },
+            &[],
             &[],
         )
         .expect("chain generation should succeed");

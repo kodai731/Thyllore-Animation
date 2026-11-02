@@ -18,8 +18,11 @@ from ..common.chain_bone_display import apply_chain_bone_display
 from ..common.chain_bones import (
     COVERED_GROUP,
     bone_specs,
-    covered_group_vertices,
+    chain_of_membership_group,
+    given_chains_from_groups,
+    group_vertices,
     group_weights,
+    membership_group_name,
     output_to_blender,
     settings_from_properties,
     vertex_tex_coords,
@@ -131,7 +134,7 @@ def _write_weights(obj, groups):
         for v_idx, _ in influences:
             affected_vertices.add(v_idx)
     for vg in obj.vertex_groups:
-        if vg.name == COVERED_GROUP:
+        if vg.name == COVERED_GROUP or chain_of_membership_group(vg.name) is not None:
             continue
         vg.remove(list(affected_vertices))
     for bone_name, influences in groups.items():
@@ -142,13 +145,36 @@ def _write_weights(obj, groups):
             vg.add([v_idx], weight, "REPLACE")
 
 
+def _vertex_group_weights(obj):
+    return [(v.index, [(g.group, g.weight) for g in v.groups]) for v in obj.data.vertices]
+
+
 def _marked_covered_vertices(obj) -> list[int]:
     """The vertices of the covered group, or none when the group does not exist (the coverage is then measured)."""
     group = obj.vertex_groups.get(COVERED_GROUP)
     if group is None:
         return []
-    pairs = [(v.index, [(g.group, g.weight) for g in v.groups]) for v in obj.data.vertices]
-    return covered_group_vertices(pairs, group.index)
+    return group_vertices(_vertex_group_weights(obj), group.index)
+
+
+def _given_chains(obj) -> list[dict]:
+    """The chains whose vertices the user assigned in membership groups; none when the split is computed."""
+    groups = [(vg.name, vg.index) for vg in obj.vertex_groups]
+    return given_chains_from_groups(_vertex_group_weights(obj), groups)
+
+
+def _write_membership_groups(obj, chains: list[dict], given: list[dict]) -> None:
+    """Record the computed membership so the user can reassign it; assigned groups are the input and stay as they are."""
+    given_names = {chain["name"] for chain in given}
+    for chain in chains:
+        if chain["name"] in given_names:
+            continue
+        name = membership_group_name(chain["name"])
+        group = obj.vertex_groups.get(name)
+        if group is None:
+            group = obj.vertex_groups.new(name=name)
+        group.remove([v.index for v in obj.data.vertices])
+        group.add([int(v) for v in chain["vertices"]], 1.0, "REPLACE")
 
 
 def _write_covered_group(obj, covered: list[int], marked: list[int]) -> None:
@@ -243,6 +269,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         root_index = arm.data.bones.find(root_name)
         skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
         marked = _marked_covered_vertices(obj)
+        given = _given_chains(obj)
         body_bones = armature_fit_bones(context, arm)
 
         try:
@@ -260,6 +287,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
                 _body_collider_inputs(arm, settings, body_bones),
                 _humanoid_bone_indices(arm, settings, body_bones),
                 body_bones,
+                given,
             )
         except ValueError as e:
             self.report({"ERROR"}, f"generate_chains failed: {e}")
@@ -280,6 +308,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
+        _write_membership_groups(obj, output["chains"], given)
         if role == "garment":
             _write_covered_group(obj, output["covered"], marked)
         apply_chain_bone_display(arm, [name for name, _, _, _ in specs], role)

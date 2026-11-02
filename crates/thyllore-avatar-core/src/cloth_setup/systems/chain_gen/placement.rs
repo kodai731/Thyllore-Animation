@@ -1,15 +1,17 @@
+use std::collections::BTreeSet;
+
 use cgmath::Vector3;
 use thyllore_math_core::resample_polyline;
 
 use super::card_strands::place_card_chains;
 use super::columns::{group_into_components, split_garment_columns, split_hair_columns};
-use super::coverage::{chain_frames, garment_coverage, GarmentCoverage};
+use super::coverage::{chain_frames, garment_coverage, marked_garment_coverage, GarmentCoverage};
 use super::frame::{collect_target_vertices, compute_vertex_frames, BandPartition, VertexFrame};
 use super::root_band::{hair_root_band, RootBand};
 use super::strand_mode::decide_strand_mode;
 use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainPlacement, GeneratedChain, GeneratedJoint,
-    StrandMode, StrandPlacement,
+    GivenChain, StrandMode, StrandPlacement,
 };
 
 /// Band centroids from the root down plus the deepest vertex as the tail.
@@ -70,6 +72,90 @@ fn build_chain(
     }
 }
 
+fn build_chain_at_given_joints(
+    column: usize,
+    heads_then_tail: &[Vector3<f32>],
+    vertices: Vec<u32>,
+    params: &ChainGenParams,
+) -> anyhow::Result<GeneratedChain> {
+    let Some((&tail, heads)) = heads_then_tail
+        .split_last()
+        .filter(|(_, heads)| !heads.is_empty())
+    else {
+        anyhow::bail!("given chain {column} needs at least one joint head and a tail");
+    };
+    let joints = heads
+        .iter()
+        .enumerate()
+        .map(|(joint, &head)| GeneratedJoint {
+            name: joint_name(params, column, joint),
+            head,
+        })
+        .collect();
+    Ok(GeneratedChain {
+        column,
+        joints,
+        tail,
+        vertices,
+    })
+}
+
+/// The chain of a user-assigned membership: placed at the given joints, or along its vertices' centerline.
+fn build_given_chain(
+    given: &GivenChain,
+    frames: &[VertexFrame],
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+) -> anyhow::Result<GeneratedChain> {
+    let members: BTreeSet<u32> = given.vertices.iter().copied().collect();
+    let chain_frames: Vec<&VertexFrame> = frames
+        .iter()
+        .filter(|frame| members.contains(&frame.vertex))
+        .collect();
+    if chain_frames.is_empty() {
+        anyhow::bail!(
+            "given chain {} has no uncovered vertex on the target",
+            given.column
+        );
+    }
+
+    match &given.joints {
+        Some(heads_then_tail) => {
+            let mut vertices: Vec<u32> = chain_frames.iter().map(|frame| frame.vertex).collect();
+            vertices.sort_unstable();
+            build_chain_at_given_joints(given.column, heads_then_tail, vertices, params)
+        }
+        None => Ok(build_chain(given.column, &chain_frames, input, params)),
+    }
+}
+
+/// Chains from the memberships the user assigned: no split, no root band and no support ring; only a
+/// marked coverage still removes vertices from the chains.
+fn place_given_chains(
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+    vertices: &[u32],
+) -> anyhow::Result<ChainPlacement> {
+    let all_frames = compute_vertex_frames(input, vertices, input.root_position);
+    let coverage = marked_garment_coverage(input, params, vertices);
+    let frames = match coverage.as_ref() {
+        Some(coverage) => chain_frames(all_frames, coverage)?,
+        None => all_frames,
+    };
+
+    let chains = input
+        .given_chains
+        .iter()
+        .map(|given| build_given_chain(given, &frames, input, params))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(ChainPlacement {
+        chains,
+        strands: None,
+        covered: coverage.map_or_else(Vec::new, GarmentCoverage::into_covered_vertices),
+        support: None,
+    })
+}
+
 fn place_hair_card_chains(
     input: &ChainGenInput,
     vertices: &[u32],
@@ -114,6 +200,9 @@ pub fn place_chains_with_strands(
     let vertices = collect_target_vertices(input);
     if vertices.is_empty() {
         anyhow::bail!("chain generation found no target vertices");
+    }
+    if !input.given_chains.is_empty() {
+        return place_given_chains(input, params, &vertices);
     }
 
     let root_band = hair_root_band(input, params);

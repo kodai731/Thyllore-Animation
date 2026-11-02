@@ -193,6 +193,16 @@ pub struct ChainGenInput<'a> {
     pub tex_coords: &'a [[f32; 2]],
     /// Garment vertices the user marked as covered by the body; empty finds the supported rings instead
     pub covered_vertices: &'a [u32],
+    /// Chains whose membership the user assigned; empty splits the target into chains instead
+    pub given_chains: &'a [GivenChain],
+}
+
+/// A chain the user assigned: its vertices, and its joint heads followed by the chain tail when the user placed them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GivenChain {
+    pub column: usize,
+    pub vertices: Vec<u32>,
+    pub joints: Option<Vec<Vector3<f32>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -209,13 +219,21 @@ pub struct GeneratedChain {
     pub vertices: Vec<u32>,
 }
 
-pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
+fn chain_name_prefix(params: &ChainGenParams) -> String {
     format!(
-        "{}_{}_{:02}",
+        "{}_{}_",
         params.role.bone_prefix(),
-        submesh_label(&params.target),
-        column
+        submesh_label(&params.target)
     )
+}
+
+pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
+    format!("{}{:02}", chain_name_prefix(params), column)
+}
+
+/// The column of a chain name of this submesh; `None` for a name of another submesh.
+pub fn chain_column(params: &ChainGenParams, name: &str) -> Option<usize> {
+    name.strip_prefix(&chain_name_prefix(params))?.parse().ok()
 }
 
 pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
@@ -368,6 +386,18 @@ mod tests {
             "hair_hair_side_03_01"
         );
         assert_eq!(chain_name(&params("Hair_side"), 3), "hair_hair_side_03");
+    }
+
+    #[test]
+    fn chain_column_inverts_chain_name_for_this_submesh_only() {
+        let params = ChainGenParams {
+            role: ChainRole::Hair,
+            target: "Hair_side".parse().unwrap(),
+            settings: ChainGenSettings::default(),
+        };
+        assert_eq!(chain_column(&params, &chain_name(&params, 3)), Some(3));
+        assert_eq!(chain_column(&params, "hair_hair_back_03"), None);
+        assert_eq!(chain_column(&params, "hair_hair_side_"), None);
     }
 
     #[test]

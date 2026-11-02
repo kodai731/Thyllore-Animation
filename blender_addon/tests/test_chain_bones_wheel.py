@@ -10,8 +10,11 @@ import pytest
 
 from blender_addon.common.chain_bones import (
     bone_specs,
-    covered_group_vertices,
+    chain_of_membership_group,
+    given_chains_from_groups,
+    group_vertices,
     group_weights,
+    membership_group_name,
     output_to_blender,
     vertex_tex_coords,
 )
@@ -291,10 +294,10 @@ def test_group_weights_resolves_root_and_skin_bone_targets():
     }
 
 
-def test_covered_group_vertices_reads_only_weighted_members():
+def test_group_vertices_reads_only_weighted_members():
     pairs = [(0, [(2, 1.0)]), (1, [(2, 0.0)]), (2, [(1, 1.0)]), (3, [(1, 0.5), (2, 0.25)])]
 
-    assert covered_group_vertices(pairs, 2) == [0, 3]
+    assert group_vertices(pairs, 2) == [0, 3]
 
 
 def test_generate_chains_marked_covered_vertices_leave_the_chain(tml):
@@ -376,3 +379,49 @@ def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(tml):
     for entry in output["weights"]:
         if entry["vertex"] in covered:
             assert entry["influences"] == [({"bone": 3}, 1.0)]
+
+
+def test_membership_group_name_round_trips_and_rejects_other_groups():
+    assert chain_of_membership_group(membership_group_name("hair_strip_hair_03")) == "hair_strip_hair_03"
+    assert chain_of_membership_group("hair_strip_hair_03_00") is None
+    assert chain_of_membership_group("thyllore_covered") is None
+
+
+def test_membership_group_prefix_is_built_and_parsed_in_chain_bones_only():
+    addon_root = Path(__file__).resolve().parents[1]
+    offenders = [
+        path.relative_to(addon_root)
+        for path in addon_root.rglob("*.py")
+        if "tests" not in path.parts and "thyllore_chain_" in path.read_text() and path.name != "chain_bones.py"
+    ]
+    assert offenders == []
+
+
+def test_given_chains_from_groups_lists_weighted_membership_groups_only():
+    pairs = [(0, [(0, 1.0)]), (1, [(0, 1.0), (2, 0.0)]), (2, [(1, 1.0)]), (3, [(2, 1.0)])]
+    groups = [("thyllore_chain_hair_strip_hair_00", 0), ("Head", 1), ("thyllore_chain_hair_strip_hair_01", 2), ("thyllore_chain_hair_strip_hair_02", 3)]
+
+    assert given_chains_from_groups(pairs, groups) == [
+        {"name": "hair_strip_hair_00", "vertices": [0, 1]},
+        {"name": "hair_strip_hair_01", "vertices": [3]},
+    ]
+
+
+def test_generate_chains_with_given_memberships_skips_the_split(tml):
+    positions, triangles = _strand_mesh((0.5, 3.5), 9, -0.05, -0.45, 0.01)
+    automatic = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joint_count": 4}, HEAD)
+    assert len(automatic["chains"]) == 2
+    members = [chain["vertices"] for chain in automatic["chains"]]
+    given = [
+        {"name": "hair_strip_hair_07", "vertices": members[0] + members[1]},
+        {"name": "hair_other_mesh_00", "vertices": members[1]},
+    ]
+
+    output = tml.generate_chains(
+        positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joint_count": 4}, HEAD, given_chains=given
+    )
+
+    assert [chain["name"] for chain in output["chains"]] == ["hair_strip_hair_07"]
+    assert output["chains"][0]["vertices"] == sorted(members[0] + members[1])
+    assert [joint["name"] for joint in output["chains"][0]["joints"]][0] == "hair_strip_hair_07_00"
+    assert len(output["chains"][0]["joints"]) == 4

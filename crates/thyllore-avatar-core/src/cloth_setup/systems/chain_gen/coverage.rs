@@ -51,11 +51,11 @@ pub(super) fn garment_coverage(
     params: &ChainGenParams,
     vertices: &[u32],
 ) -> anyhow::Result<Option<GarmentCoverage>> {
+    if let Some(marked) = marked_garment_coverage(input, params, vertices) {
+        return Ok(Some(marked));
+    }
     if params.role != ChainRole::Garment {
         return Ok(None);
-    }
-    if !input.covered_vertices.is_empty() {
-        return Ok(Some(marked_coverage(input, vertices)));
     }
     let Some(support) = garment_support(input, params, vertices)? else {
         return Ok(None);
@@ -77,18 +77,26 @@ fn body_influences(input: &ChainGenInput, vertex: u32) -> Vec<(BoneId, f32)> {
         .unwrap_or_else(|| vec![(input.root_bone, 1.0)])
 }
 
-/// The marked vertices with the influences of their nearest body point, or the root bone without a body.
-fn marked_coverage(input: &ChainGenInput, vertices: &[u32]) -> GarmentCoverage {
+/// The vertices the user marked as covered, with the influences of their nearest body point, or the root
+/// bone without a body; none for hair or when nothing is marked.
+pub(super) fn marked_garment_coverage(
+    input: &ChainGenInput,
+    params: &ChainGenParams,
+    vertices: &[u32],
+) -> Option<GarmentCoverage> {
+    if params.role != ChainRole::Garment || input.covered_vertices.is_empty() {
+        return None;
+    }
     let marked: BTreeSet<u32> = input.covered_vertices.iter().copied().collect();
     let covered = vertices
         .iter()
         .filter(|vertex| marked.contains(vertex))
         .map(|&vertex| (vertex, body_influences(input, vertex)))
         .collect();
-    GarmentCoverage {
+    Some(GarmentCoverage {
         covered,
         source: CoverageSource::Marked,
-    }
+    })
 }
 
 /// The frames the chain is built from: every uncovered frame. Fails when nothing is left for the chain.

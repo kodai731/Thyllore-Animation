@@ -9,15 +9,43 @@ from __future__ import annotations
 from .coordinates import engine_to_blender_point
 
 COVERED_GROUP = "thyllore_covered"
+MEMBERSHIP_GROUP_PREFIX = "thyllore_chain_"
+
+VertexGroupWeights = list[tuple[int, list[tuple[int, float]]]]
 
 
-def covered_group_vertices(vertex_groups: list[tuple[int, list[tuple[int, float]]]], group_index: int) -> list[int]:
-    """The vertices weighted into the covered group: ``vertex_groups`` is ``[(vertex_index, [(group, weight), ...]), ...]``."""
+def membership_group_name(chain_name: str) -> str:
+    """The vertex group that holds the vertices the user assigned to the chain."""
+    return MEMBERSHIP_GROUP_PREFIX + chain_name
+
+
+def chain_of_membership_group(group_name: str) -> str | None:
+    """The chain a membership group belongs to, or ``None`` for any other vertex group."""
+    if not group_name.startswith(MEMBERSHIP_GROUP_PREFIX):
+        return None
+    return group_name[len(MEMBERSHIP_GROUP_PREFIX) :]
+
+
+def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[int]:
+    """The vertices weighted into a group: ``vertex_groups`` is ``[(vertex_index, [(group, weight), ...]), ...]``."""
     return [
         vertex
         for vertex, groups in vertex_groups
         if any(group == group_index and weight > 0.0 for group, weight in groups)
     ]
+
+
+def given_chains_from_groups(vertex_groups: VertexGroupWeights, groups: list[tuple[str, int]]) -> list[dict]:
+    """The ``{name, vertices}`` of every membership group with a weighted vertex; ``groups`` is ``[(name, index), ...]``."""
+    given = []
+    for group_name, group_index in groups:
+        chain = chain_of_membership_group(group_name)
+        if chain is None:
+            continue
+        vertices = group_vertices(vertex_groups, group_index)
+        if vertices:
+            given.append({"name": chain, "vertices": vertices})
+    return given
 
 
 def vertex_tex_coords(

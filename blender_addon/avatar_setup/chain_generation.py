@@ -195,14 +195,12 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             loop_uvs = [tuple(d.uv) for d in uv_layer.data]
             tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
-        skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
         fit_bones = armature_fit_bones(context, arm)
         try:
             root_name = tml.resolve_root_bone(fit_bones, generation.root_bone)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
-        root_index = arm.data.bones.find(root_name)
 
         target = f"{obj.name}/{self.material}"
         origin = {"mesh": obj.name, "material": self.material, "role": role}
@@ -210,6 +208,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         replaced_bones = remove_chains_generated_on(settings, origin)
         _remove_bones(context, arm, replaced_bones)
         _remove_vertex_groups(obj, replaced_bones)
+        root_index = arm.data.bones.find(root_name)
+        skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
         marked = _marked_covered_vertices(obj)
 
         try:

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::project_point_to_segment;
@@ -6,7 +6,7 @@ use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 use super::frame::collect_target_vertices;
 use crate::cloth_setup::components::chain_gen::{
-    ChainGenInput, ChainGenParams, GeneratedChain, InfluenceTarget, VertexInfluences,
+    ChainGenInput, ChainGenParams, CoveredVertex, GeneratedChain, InfluenceTarget, VertexInfluences,
 };
 
 /// Arc length at every joint head of a chain and its total length to the tail.
@@ -204,12 +204,31 @@ fn vertex_influences(
     VertexInfluences { vertex, influences }
 }
 
+fn skin_influences(covered: &CoveredVertex) -> VertexInfluences {
+    let mut influences: Vec<(InfluenceTarget, f32)> = covered
+        .influences
+        .iter()
+        .map(|&(bone, weight)| (InfluenceTarget::Bone(bone), weight))
+        .collect();
+    normalize_influences(&mut influences);
+    VertexInfluences {
+        vertex: covered.vertex,
+        influences,
+    }
+}
+
+/// Every target vertex: chain joints along its chain, the skin bones where the skin covers it, the root elsewhere.
 pub fn compute_chain_weights(
     input: &ChainGenInput,
     params: &ChainGenParams,
     chains: &[GeneratedChain],
+    covered: &[CoveredVertex],
 ) -> Vec<VertexInfluences> {
     let arcs: Vec<ChainArc> = chains.iter().map(ChainArc::new).collect();
+    let covered_by_vertex: BTreeMap<u32, &CoveredVertex> = covered
+        .iter()
+        .map(|covered| (covered.vertex, covered))
+        .collect();
 
     let mut result: Vec<VertexInfluences> = chains
         .iter()
@@ -220,9 +239,12 @@ pub fn compute_chain_weights(
                 .iter()
                 .map(move |&vertex| (chain_index, vertex))
         })
-        .map(|(chain_index, vertex)| {
-            vertex_influences(vertex, chain_index, input, params, chains, &arcs)
-        })
+        .map(
+            |(chain_index, vertex)| match covered_by_vertex.get(&vertex) {
+                Some(covered) => skin_influences(covered),
+                None => vertex_influences(vertex, chain_index, input, params, chains, &arcs),
+            },
+        )
         .collect();
 
     let chained: BTreeSet<u32> = chains
@@ -233,9 +255,12 @@ pub fn compute_chain_weights(
         collect_target_vertices(input)
             .into_iter()
             .filter(|vertex| !chained.contains(vertex))
-            .map(|vertex| VertexInfluences {
-                vertex,
-                influences: vec![(InfluenceTarget::Root, 1.0)],
+            .map(|vertex| match covered_by_vertex.get(&vertex) {
+                Some(covered) => skin_influences(covered),
+                None => VertexInfluences {
+                    vertex,
+                    influences: vec![(InfluenceTarget::Root, 1.0)],
+                },
             }),
     );
 

@@ -22,7 +22,7 @@ from ..common.chain_bones import (
     settings_from_properties,
     vertex_tex_coords,
 )
-from ..common.skin_input import dominant_bone_positions, skin_input, skin_role_meshes
+from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.spring_properties import (
     disabled_chain_names,
     remove_chains_generated_on,
@@ -189,20 +189,25 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         _remove_bones(context, arm, replaced_bones)
         _remove_vertex_groups(obj, replaced_bones)
 
-        output = tml.generate_chains(
-            positions,
-            triangles,
-            _root_engine_position(arm, root_name, scale_length),
-            role,
-            target,
-            settings_from_properties(CHAIN_GEN_UI_PARAMS, generation),
-            dominant_bone_positions(skins, root_index),
-            tex_coords,
-        )
+        try:
+            output = tml.generate_chains(
+                positions,
+                triangles,
+                _root_engine_position(arm, root_name, scale_length),
+                role,
+                target,
+                settings_from_properties(CHAIN_GEN_UI_PARAMS, generation),
+                skins,
+                root_index,
+                tex_coords,
+            )
+        except ValueError as e:
+            self.report({"ERROR"}, f"generate_chains failed: {e}")
+            return {"CANCELLED"}
 
         blender_output = output_to_blender(output, scale_length)
         specs = bone_specs(blender_output, root_name)
-        groups = group_weights(blender_output, root_name)
+        groups = group_weights(blender_output, root_name, [bone.name for bone in arm.data.bones])
 
         try:
             _add_bones(context, arm, specs)

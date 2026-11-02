@@ -1,5 +1,7 @@
 use super::*;
-use crate::cloth_setup::components::chain_gen::{ChainGenSettings, ChainRole, StrandMode};
+use crate::cloth_setup::components::chain_gen::{
+    ChainGenSettings, ChainRole, SkinSurface, StrandMode,
+};
 use crate::cloth_setup::components::submesh_role::SubmeshSelector;
 use crate::cloth_setup::systems::chain_gen::strand_merge::{
     merge_strands, tuft_centerline, StrandMergeStop,
@@ -10,8 +12,10 @@ use crate::cloth_setup::systems::chain_gen::strand_mode::{
 use crate::cloth_setup::systems::chain_gen::{
     hair_root_band, place_chains, place_chains_with_strands,
 };
+use thyllore_model_core::BoneId;
 
 const KEEP_ALL_BAND: f32 = -1.0;
+const ROOT_BONE: BoneId = 0;
 
 struct Strip {
     positions: Vec<Vector3<f32>>,
@@ -330,7 +334,8 @@ fn decide_mode_for(strip_set: &StripSet, tex_coords: &[[f32; 2]]) -> StrandMode 
         positions: &strip_set.positions,
         triangles: &[],
         root_position: Vector3::new(0.0, 9.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords,
     };
     decide_strand_mode(&input, &strip_set.components, KEEP_ALL_BAND)
@@ -382,7 +387,7 @@ struct CardMesh {
     positions: Vec<Vector3<f32>>,
     triangles: Vec<[u32; 3]>,
     tex_coords: Vec<[f32; 2]>,
-    attachment_positions: Vec<Vector3<f32>>,
+    skins: Vec<SkinSurface>,
     strip_axes: Vec<(Vector3<f32>, Vector3<f32>)>,
     strip_vertices: Vec<Vec<u32>>,
 }
@@ -391,13 +396,14 @@ fn card_root() -> Vector3<f32> {
     Vector3::new(0.0, 10.0, 0.0)
 }
 
-fn build_head_ring(height: f32) -> Vec<Vector3<f32>> {
-    (0..16)
+fn build_head_ring(height: f32) -> Vec<SkinSurface> {
+    let ring = (0..16)
         .map(|index| {
             let angle = index as f32 / 16.0 * TAU;
             Vector3::new(angle.cos(), height, angle.sin())
         })
-        .collect()
+        .collect();
+    vec![SkinSurface::points_driven_by(ROOT_BONE, ring)]
 }
 
 fn add_card_strip(mesh: &mut CardMesh, placement: &CardPlacement, length: f32) {
@@ -439,7 +445,7 @@ fn build_card_mesh(placements: &[CardPlacement]) -> CardMesh {
         positions: Vec::new(),
         triangles: Vec::new(),
         tex_coords: Vec::new(),
-        attachment_positions: build_head_ring(9.0),
+        skins: build_head_ring(9.0),
         strip_axes: Vec::new(),
         strip_vertices: Vec::new(),
     };
@@ -461,7 +467,8 @@ fn card_input<'a>(mesh: &'a CardMesh, tex_coords: &'a [[f32; 2]]) -> ChainGenInp
         positions: &mesh.positions,
         triangles: &mesh.triangles,
         root_position: card_root(),
-        attachment_positions: &mesh.attachment_positions,
+        root_bone: ROOT_BONE,
+        skins: &mesh.skins,
         tex_coords,
     }
 }
@@ -601,7 +608,7 @@ fn merged_tuft_tail_reaches_longest_strand_tip() {
         positions: Vec::new(),
         triangles: Vec::new(),
         tex_coords: Vec::new(),
-        attachment_positions: build_head_ring(9.0),
+        skins: build_head_ring(9.0),
         strip_axes: Vec::new(),
         strip_vertices: Vec::new(),
     };
@@ -649,7 +656,7 @@ fn merged_tuft_tail_reaches_longest_strand_tip() {
 #[test]
 fn cards_above_the_equator_start_at_their_root() {
     let mut mesh = build_three_tilted_cards();
-    mesh.attachment_positions = build_head_ring(4.5);
+    mesh.skins = build_head_ring(4.5);
 
     let placement =
         place_chains_with_strands(&card_input(&mesh, &mesh.tex_coords), &hair_params(0, 0.0))

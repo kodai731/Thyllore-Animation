@@ -1,9 +1,13 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pythonize::pythonize;
+use pythonize::{depythonize, pythonize};
 
+use super::avatar_setup::depythonize_error_to_pyerr;
 use super::error::anyhow_to_pyerr;
-use crate::chain_gen_bridge::{chain_gen_params, run_chain_gen, settings_from_pairs};
+use crate::chain_gen_bridge::{
+    chain_gen_params, run_chain_gen, settings_from_pairs, SkinAttachment,
+};
+use crate::collider_bridge::FitSkin;
 
 pub(super) fn pythonize_value<'py, T: serde::Serialize>(
     py: Python<'py>,
@@ -27,11 +31,13 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
         .collect::<PyResult<_>>()
 }
 
-/// Positions, the root position and the attachment (skin) positions are engine coordinates (Y-up, metres);
-/// `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
+/// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the
+/// FitSkin dicts (positions, influences, triangles) and `root_bone` the index of the bone the chains hang
+/// from; `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
 /// `tex_coords` is per-vertex UV, empty uses the φ-around-up method.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, target, settings, attachment_positions = Vec::new(), tex_coords = Vec::new()))]
+#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new()))]
+#[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
     positions: Vec<[f32; 3]>,
@@ -40,11 +46,16 @@ pub fn generate_chains<'py>(
     role: &str,
     target: &str,
     settings: &Bound<'py, PyDict>,
-    attachment_positions: Vec<[f32; 3]>,
+    skins: Option<&Bound<'py, PyAny>>,
+    root_bone: usize,
     tex_coords: Vec<[f32; 2]>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
+    let skins: Vec<FitSkin> = match skins {
+        Some(skins) => depythonize(skins).map_err(depythonize_error_to_pyerr)?,
+        None => Vec::new(),
+    };
 
     let output = py
         .detach(|| {
@@ -55,7 +66,10 @@ pub fn generate_chains<'py>(
                 role,
                 target,
                 settings,
-                &attachment_positions,
+                SkinAttachment {
+                    skins: &skins,
+                    root_bone,
+                },
                 &tex_coords,
             )
         })

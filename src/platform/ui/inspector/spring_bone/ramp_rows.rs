@@ -352,7 +352,9 @@ mod tests {
         };
         let rigid_at = rows
             .iter()
-            .position(|row| matches!(row, UiRow::Scalar { param, .. } if param.name == "rigid_fraction"))
+            .position(
+                |row| matches!(row, UiRow::Scalar { param, .. } if param.name == "rigid_fraction"),
+            )
             .expect("ramp rows have the rigid fraction scalar");
         let shape_at = rows
             .iter()

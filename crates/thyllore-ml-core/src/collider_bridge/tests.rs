@@ -84,6 +84,7 @@ fn make_cylinder_skin(bones: &[FitBone]) -> Vec<FitSkin> {
         }
     }
     vec![FitSkin {
+        triangles: Vec::new(),
         positions,
         influences,
     }]
@@ -273,6 +274,7 @@ fn collider_bridge_fit_high_bone_index_head() {
         }
     }
     let skins = vec![FitSkin {
+        triangles: Vec::new(),
         positions,
         influences,
     }];

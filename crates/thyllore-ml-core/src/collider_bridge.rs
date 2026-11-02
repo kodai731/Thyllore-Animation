@@ -27,6 +27,9 @@ pub struct FitBone {
 pub struct FitSkin {
     pub positions: Vec<[f32; 3]>,
     pub influences: Vec<Vec<(usize, f32)>>,
+    /// The skin surface; only the garment coverage of the chain generation reads it
+    #[serde(default)]
+    pub triangles: Vec<[u32; 3]>,
 }
 
 /// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.

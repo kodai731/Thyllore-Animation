@@ -1,15 +1,17 @@
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
-    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    SkinSurface, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    apply_setting_assignments, compute_chain_weights, place_chains,
+    apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
 };
 use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
+use thyllore_model_core::BoneId;
 
+use crate::collider_bridge::FitSkin;
 use crate::param_rows::{param_rows, ParamRow};
 
 #[derive(serde::Serialize)]
@@ -46,7 +48,15 @@ pub struct JointOut {
 #[derive(serde::Serialize)]
 pub struct WeightOut {
     pub vertex: u32,
-    pub influences: Vec<(String, f32)>,
+    pub influences: Vec<(WeightTarget, f32)>,
+}
+
+/// `"root"`, a generated joint name, or a skin bone by index for a vertex the skin covers.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(untagged)]
+pub enum WeightTarget {
+    Name(String),
+    Bone { bone: BoneId },
 }
 
 pub fn chain_gen_params() -> Vec<ParamRow> {
@@ -82,6 +92,29 @@ fn to_vectors(points: &[[f32; 3]]) -> Vec<Vector3<f32>> {
         .collect()
 }
 
+fn skin_surface_from_fit_skin(skin: &FitSkin) -> SkinSurface {
+    SkinSurface {
+        positions: to_vectors(&skin.positions),
+        triangles: skin.triangles.clone(),
+        influences: skin
+            .influences
+            .iter()
+            .map(|influences| {
+                influences
+                    .iter()
+                    .map(|&(bone, weight)| (bone as BoneId, weight))
+                    .collect()
+            })
+            .collect(),
+    }
+}
+
+/// The skin meshes the chains attach to and the bone the chains hang from, as bone-list indices.
+pub struct SkinAttachment<'a> {
+    pub skins: &'a [FitSkin],
+    pub root_bone: usize,
+}
+
 pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
@@ -89,19 +122,24 @@ pub fn run_chain_gen(
     role: &str,
     target: &str,
     settings: ChainGenSettings,
-    attachment_positions: &[[f32; 3]],
+    attachment: SkinAttachment,
     tex_coords: &[[f32; 2]],
 ) -> anyhow::Result<ChainGenOutput> {
     let role = role_from_str(role)?;
     let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
 
     let positions_vec = to_vectors(positions);
-    let attachment_vec = to_vectors(attachment_positions);
+    let skins: Vec<SkinSurface> = attachment
+        .skins
+        .iter()
+        .map(skin_surface_from_fit_skin)
+        .collect();
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
         root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
-        attachment_positions: &attachment_vec,
+        root_bone: attachment.root_bone as BoneId,
+        skins: &skins,
         tex_coords,
     };
     let params = ChainGenParams {
@@ -115,8 +153,9 @@ pub fn run_chain_gen(
         top: vector3_to_array(capsule.top),
         radius: capsule.radius,
     });
-    let chains = place_chains(&input, &params)?;
-    let weights = compute_chain_weights(&input, &params, &chains);
+    let placement = place_chains_with_strands(&input, &params)?;
+    let chains = placement.chains;
+    let weights = compute_chain_weights(&input, &params, &chains, &placement.covered);
     let half_thicknesses = joint_half_thicknesses(&positions_vec, &chains, &weights);
 
     let chains_out: Vec<ChainOut> = chains
@@ -148,13 +187,14 @@ pub fn run_chain_gen(
                 .influences
                 .into_iter()
                 .map(|(target, weight)| {
-                    let name = match target {
-                        InfluenceTarget::Root => "root".to_string(),
+                    let target = match target {
+                        InfluenceTarget::Root => WeightTarget::Name("root".to_string()),
                         InfluenceTarget::Joint { chain, joint } => {
-                            chains_out[chain].joints[joint].name.clone()
+                            WeightTarget::Name(chains_out[chain].joints[joint].name.clone())
                         }
+                        InfluenceTarget::Bone(bone) => WeightTarget::Bone { bone },
                     };
-                    (name, weight)
+                    (target, weight)
                 })
                 .collect(),
         })
@@ -185,12 +225,16 @@ mod tests {
             settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
                 .unwrap();
 
-        let head: [[f32; 3]; 4] = [
-            [0.2, 0.1, 0.0],
-            [-0.2, 0.1, 0.0],
-            [0.0, 0.1, 0.2],
-            [0.0, 0.1, -0.2],
-        ];
+        let head = FitSkin {
+            positions: vec![
+                [0.2, 0.1, 0.0],
+                [-0.2, 0.1, 0.0],
+                [0.0, 0.1, 0.2],
+                [0.0, 0.1, -0.2],
+            ],
+            influences: vec![vec![(0, 1.0)]; 4],
+            triangles: Vec::new(),
+        };
 
         let output = run_chain_gen(
             &positions,
@@ -199,7 +243,10 @@ mod tests {
             "hair",
             "strip/hair",
             settings,
-            &head,
+            SkinAttachment {
+                skins: std::slice::from_ref(&head),
+                root_bone: 0,
+            },
             &[],
         )
         .expect("chain generation should succeed");

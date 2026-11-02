@@ -38,7 +38,15 @@ def tml(tmp_path_factory):
         sys.path.remove(str(extract_dir))
 
 
-HEAD = [(0.2, 0.1, 0.0), (-0.2, 0.1, 0.0), (0.0, 0.1, 0.2), (0.0, 0.1, -0.2)]
+HEAD_POSITIONS = [(0.2, 0.1, 0.0), (-0.2, 0.1, 0.0), (0.0, 0.1, 0.2), (0.0, 0.1, -0.2)]
+ROOT_BONE = 0
+
+
+def _head_skins(positions=HEAD_POSITIONS) -> list[dict]:
+    return [{"positions": list(positions), "influences": [[(ROOT_BONE, 1.0)]] * len(positions)}]
+
+
+HEAD = _head_skins()
 
 
 def _strand_mesh(azimuths, levels, top, bottom, flare):
@@ -70,6 +78,8 @@ def test_settings_table_lists_defaults(tml):
         "column_blend_width",
         "azimuth_root_band_offset",
         "card_root_rigid_length",
+        "garment_cover_distance",
+        "garment_covered_band_ratio",
     ]
     assert params[0]["default"] == 4
     assert params[0]["label"] == "Joint Count"
@@ -133,7 +143,7 @@ def test_blender_space_input_converted_at_the_boundary_matches_engine_input(tml)
         "hair",
         "strip/hair",
         settings,
-        [blender_to_engine_point(engine_to_blender_point(p)) for p in HEAD],
+        _head_skins([blender_to_engine_point(engine_to_blender_point(p)) for p in HEAD_POSITIONS]),
     )
 
     assert len(engine["chains"]) == len(converted["chains"]) == 2
@@ -204,6 +214,7 @@ def test_generate_chains_with_tex_coords(tml):
         "strip/hair",
         {"joint_count": 4},
         HEAD,
+        ROOT_BONE,
         tex_coords,
     )
 
@@ -260,3 +271,20 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(tml):
     )
     assert len(again["chains"]) == len(spring["chains"])
     assert len(again["colliders"]) == 1
+
+
+def test_group_weights_resolves_root_and_skin_bone_targets():
+    output = {
+        "weights": [
+            {"vertex": 0, "influences": [("root", 1.0)]},
+            {"vertex": 1, "influences": [({"bone": 2}, 0.75), ("hair_strip_hair_00_00", 0.25)]},
+        ]
+    }
+
+    groups = group_weights(output, "Head", ["Hips", "Spine", "Chest", "Head"])
+
+    assert groups == {
+        "Head": [(0, 1.0)],
+        "Chest": [(1, 0.75)],
+        "hair_strip_hair_00_00": [(1, 0.25)],
+    }

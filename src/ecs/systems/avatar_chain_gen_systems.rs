@@ -1,13 +1,11 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
-use crate::ecs::systems::avatar_collider_systems::{
-    collect_skin_vertices_of_bone, fit_body_collider, head_capsule_collider,
-};
+use crate::ecs::systems::avatar_collider_systems::{fit_body_collider, head_capsule_collider};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
 use crate::ecs::systems::avatar_submesh_geometry_systems::{merge_submesh_geometry, SubmeshPart};
 use crate::ecs::systems::avatar_submesh_role_systems::{
-    collect_submesh_meshes, skin_geometry_to_model,
+    collect_submesh_meshes, skin_geometry_to_model, skin_role_surfaces,
 };
 use crate::ecs::systems::skeleton_edit_systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
@@ -24,9 +22,9 @@ use thyllore_anim_core::spring_bone::{
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
-    ChainGenRequest, ChainGenSettings, ChainRole, ChainWeightRecord, GeneratedBoneRecord,
-    GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget, RootBandRecord,
-    StrandPlacement, VertexInfluences,
+    ChainGenRequest, ChainGenSettings, ChainPlacement, ChainRole, ChainWeightRecord,
+    GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
+    RootBandRecord, StrandPlacement, VertexInfluences,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
 use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
@@ -34,7 +32,8 @@ use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
 };
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands, RootBand,
+    component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands,
+    root_attachment_positions, RootBand,
 };
 use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
@@ -57,12 +56,20 @@ fn generate_chain_bones(
     let geometry = merge_submesh_geometry(graphics, submeshes)?;
 
     let root = find_root_bone(world, request.root)?;
-    let attachment_geometry =
-        collect_skin_vertices_of_bone(world, assets, graphics, geometry.skeleton_id, root);
     let body_collider = fit_body_collider(world, assets, graphics, geometry.skeleton_id, root);
+    let geometry_to_model = {
+        let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
+        skin_geometry_to_model(skeleton, root as usize)
+    };
+    let skins = skin_role_surfaces(
+        world,
+        assets,
+        graphics,
+        geometry.skeleton_id,
+        geometry_to_model,
+    );
     let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
     let root_global = compute_bone_global_transform(skeleton, root as usize);
-    let geometry_to_model = skin_geometry_to_model(skeleton, root as usize);
     let model_to_geometry = geometry_to_model
         .invert()
         .ok_or_else(|| anyhow::anyhow!("geometry transform of the skin is singular"))?;
@@ -70,13 +77,12 @@ fn generate_chain_bones(
     let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
     let model_positions: Vec<cgmath::Vector3<f32>> =
         geometry.positions.iter().map(to_model).collect();
-    let attachment_positions: Vec<cgmath::Vector3<f32>> =
-        attachment_geometry.iter().map(to_model).collect();
     let input = ChainGenInput {
         positions: &model_positions,
         triangles: &geometry.triangles,
         root_position: root_global.w.truncate(),
-        attachment_positions: &attachment_positions,
+        root_bone: root,
+        skins: &skins,
         tex_coords: &geometry.tex_coords,
     };
     let params = ChainGenParams {
@@ -92,9 +98,12 @@ fn generate_chain_bones(
         Some(capsule) => Some(head_capsule_collider(&capsule, root, model_to_root_local)),
         None => body_collider,
     };
-    let placement = place_chains_with_strands(&input, &params)?;
-    let chains = placement.chains;
-    let influences = compute_chain_weights(&input, &params, &chains);
+    let ChainPlacement {
+        chains,
+        strands,
+        covered,
+    } = place_chains_with_strands(&input, &params)?;
+    let influences = compute_chain_weights(&input, &params, &chains, &covered);
 
     let geometry_chains: Vec<GeneratedChain> = chains
         .iter()
@@ -123,7 +132,7 @@ fn generate_chain_bones(
             root,
             influences: &influences,
             input: &input,
-            strands: placement.strands,
+            strands,
             root_band: hair_root_band(&input, &params),
             head_capsule,
             component_labels: &component_labels(&input),
@@ -325,6 +334,7 @@ fn weight_records(
             let bid = source.bone_ids[*chain][*joint];
             skeleton.bones[bid as usize].name.clone()
         }
+        InfluenceTarget::Bone(bone) => skeleton.bones[*bone as usize].name.clone(),
     };
 
     let mut vertex_weights = Vec::new();
@@ -370,11 +380,8 @@ fn build_report(
             top: array3_from_vec(capsule.top),
             radius: capsule.radius,
         }),
-        attachment_positions: source
-            .input
-            .attachment_positions
-            .iter()
-            .copied()
+        attachment_positions: root_attachment_positions(source.input.skins, source.input.root_bone)
+            .into_iter()
             .map(array3_from_vec)
             .collect(),
         strand_mode,

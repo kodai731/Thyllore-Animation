@@ -43,7 +43,7 @@ fn dominant_joint(vertex_influences: &VertexInfluences) -> Option<(usize, usize)
         .iter()
         .max_by(|a, b| a.1.total_cmp(&b.1))?;
     match target {
-        InfluenceTarget::Root => None,
+        InfluenceTarget::Root | InfluenceTarget::Bone(_) => None,
         InfluenceTarget::Joint { chain, joint } => Some((*chain, *joint)),
     }
 }

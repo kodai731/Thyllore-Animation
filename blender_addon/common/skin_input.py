@@ -1,4 +1,4 @@
-"""Skin mesh input for the collider fit and the chain generation (engine metres, top influences)."""
+"""Skin mesh input for the collider fit and the chain generation (engine metres, top influences, triangles)."""
 from __future__ import annotations
 
 from . import coordinates
@@ -15,7 +15,7 @@ def skin_role_meshes(meshes) -> list:
 
 
 def skin_input(mesh_obj, arm, scale_length: float) -> dict:
-    """Positions (engine metres) and top bone influences of one skin mesh, as the wheel's FitSkin."""
+    """Positions (engine metres), top bone influences and triangles of one skin mesh, as the wheel's FitSkin."""
     group_to_bone_local = {
         i: arm.data.bones.find(vg.name)
         for i, vg in enumerate(mesh_obj.vertex_groups)
@@ -32,14 +32,7 @@ def skin_input(mesh_obj, arm, scale_length: float) -> dict:
         vertex_groups = [(g.group, g.weight) for g in v.groups]
         influences.append(top_influences(vertex_groups, group_to_bone_local))
 
-    return {"positions": positions, "influences": influences}
+    mesh_obj.data.calc_loop_triangles()
+    triangles = [list(lt.vertices) for lt in mesh_obj.data.loop_triangles]
 
-
-def dominant_bone_positions(skins: list[dict], bone_index: int) -> list[list[float]]:
-    """The skin positions whose heaviest influence is ``bone_index``."""
-    return [
-        position
-        for skin in skins
-        for position, influences in zip(skin["positions"], skin["influences"])
-        if influences and influences[0][0] == bone_index
-    ]
+    return {"positions": positions, "influences": influences, "triangles": triangles}

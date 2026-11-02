@@ -69,18 +69,28 @@ def bone_specs(
     return specs
 
 
+def _target_bone_name(target, root_bone: str, bone_names: list[str]) -> str:
+    """``"root"`` is the root bone, ``{"bone": index}`` a skin bone of the armature, anything else a joint name."""
+    if isinstance(target, dict):
+        return bone_names[int(target["bone"])]
+    if target == "root":
+        return root_bone
+    return target
+
+
 def group_weights(
-    output: dict, root_bone: str
+    output: dict, root_bone: str, bone_names: list[str] = ()
 ) -> dict[str, list[tuple[int, float]]]:
     """Group vertex influences by bone name.
 
-    Returns ``{bone_name: [(vertex_index, weight), ...]}``.  The special target
-    ``"root"`` is renamed to ``root_bone``.
+    Returns ``{bone_name: [(vertex_index, weight), ...]}``.  ``bone_names`` lists
+    the armature bones so a ``{"bone": index}`` target of a covered garment vertex
+    resolves to its name.
     """
     groups: dict[str, list[tuple[int, float]]] = {}
     for entry in output["weights"]:
         vertex = int(entry["vertex"])
         for target, weight in entry["influences"]:
-            bone_name = root_bone if target == "root" else target
+            bone_name = _target_bone_name(target, root_bone, list(bone_names))
             groups.setdefault(bone_name, []).append((vertex, weight))
     return groups

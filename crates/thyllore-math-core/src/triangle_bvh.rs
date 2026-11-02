@@ -1,6 +1,7 @@
 use crate::bounds::Aabb;
 use crate::coordinate_system::ray_to_triangle_barycentric;
-use cgmath::Vector3;
+use crate::triangle::closest_point_on_triangle;
+use cgmath::{InnerSpace, Vector3};
 
 #[derive(Clone, Debug)]
 pub struct TriangleBvh {
@@ -23,6 +24,13 @@ pub struct RayHit {
     pub triangle: u32,
     pub distance: f32,
     pub barycentric: Vector3<f32>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SurfacePoint {
+    pub triangle: u32,
+    pub distance: f32,
+    pub point: Vector3<f32>,
 }
 
 impl BvhNode {
@@ -267,6 +275,96 @@ impl TriangleBvh {
     }
 }
 
+impl TriangleBvh {
+    /// The surface point nearest to `point` within `max_distance`, if any.
+    pub fn closest_point(&self, point: Vector3<f32>, max_distance: f32) -> Option<SurfacePoint> {
+        if self.triangles.is_empty() {
+            return None;
+        }
+        let mut nearest: Option<SurfacePoint> = None;
+        let mut stack: Vec<u32> = vec![0];
+
+        while let Some(node_index) = stack.pop() {
+            let node = &self.nodes[node_index as usize];
+            let limit = nearest.map_or(max_distance, |hit| hit.distance);
+            if aabb_distance(&node.bounds, point) >= limit {
+                continue;
+            }
+            if node.count > 0 {
+                if let Some(hit) = self.nearest_leaf_point(node, point, limit) {
+                    nearest = Some(hit);
+                }
+            } else {
+                self.push_children_closest_first(node, point, &mut stack);
+            }
+        }
+        nearest
+    }
+
+    fn nearest_leaf_point(
+        &self,
+        leaf: &BvhNode,
+        point: Vector3<f32>,
+        limit: f32,
+    ) -> Option<SurfacePoint> {
+        let mut nearest: Option<SurfacePoint> = None;
+        for slot in leaf.first..leaf.first + leaf.count {
+            let triangle = self.triangle_order[slot as usize];
+            let [a, b, c] = self.triangles[triangle as usize].map(|v| self.positions[v as usize]);
+            let closest = closest_point_on_triangle(point, a, b, c);
+            let distance = (closest - point).magnitude();
+            if distance < nearest.map_or(limit, |hit| hit.distance) {
+                nearest = Some(SurfacePoint {
+                    triangle,
+                    distance,
+                    point: closest,
+                });
+            }
+        }
+        nearest
+    }
+
+    fn push_children_closest_first(
+        &self,
+        node: &BvhNode,
+        point: Vector3<f32>,
+        stack: &mut Vec<u32>,
+    ) {
+        let left = node.left_child;
+        let right = left + 1;
+        let left_distance = aabb_distance(&self.nodes[left as usize].bounds, point);
+        let right_distance = aabb_distance(&self.nodes[right as usize].bounds, point);
+        if left_distance <= right_distance {
+            stack.push(right);
+            stack.push(left);
+        } else {
+            stack.push(left);
+            stack.push(right);
+        }
+    }
+
+    /// The corner of `triangle` nearest to `point`, as a vertex index.
+    pub fn nearest_corner(&self, triangle: u32, point: Vector3<f32>) -> u32 {
+        self.triangles[triangle as usize]
+            .into_iter()
+            .min_by(|&a, &b| {
+                let da = (self.positions[a as usize] - point).magnitude2();
+                let db = (self.positions[b as usize] - point).magnitude2();
+                da.total_cmp(&db)
+            })
+            .expect("a triangle has three corners")
+    }
+}
+
+fn aabb_distance(bounds: &Aabb, point: Vector3<f32>) -> f32 {
+    let clamped = Vector3::new(
+        point.x.clamp(bounds.min.x, bounds.max.x),
+        point.y.clamp(bounds.min.y, bounds.max.y),
+        point.z.clamp(bounds.min.z, bounds.max.z),
+    );
+    (clamped - point).magnitude()
+}
+
 fn ray_aabb_entry(
     bounds: &Aabb,
     origin: Vector3<f32>,
@@ -386,6 +484,48 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_closest_point_random_matches_brute_force() {
+        let mut rng = Rng::with_seed(7);
+        let vertices: Vec<Vector3<f32>> = (0..300)
+            .map(|_| {
+                Vector3::new(
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                    rng.f32() * 2.0 - 1.0,
+                )
+            })
+            .collect();
+        let triangles: Vec<[u32; 3]> = (0..200)
+            .map(|_| [rng.u32(..300), rng.u32(..300), rng.u32(..300)])
+            .collect();
+        let bvh = TriangleBvh::build(&vertices, &triangles);
+
+        for _ in 0..100 {
+            let point = Vector3::new(
+                rng.f32() * 4.0 - 2.0,
+                rng.f32() * 4.0 - 2.0,
+                rng.f32() * 4.0 - 2.0,
+            );
+            let brute = triangles
+                .iter()
+                .map(|tri| {
+                    let [a, b, c] = tri.map(|v| vertices[v as usize]);
+                    (closest_point_on_triangle(point, a, b, c) - point).magnitude()
+                })
+                .fold(f32::INFINITY, f32::min);
+            let hit = bvh
+                .closest_point(point, f32::MAX)
+                .expect("the mesh has triangles");
+            assert!(
+                (hit.distance - brute).abs() < 1e-5,
+                "{point:?}: {} vs {brute}",
+                hit.distance
+            );
+            assert!(bvh.closest_point(point, brute * 0.5).is_none() || brute == 0.0);
         }
     }
 

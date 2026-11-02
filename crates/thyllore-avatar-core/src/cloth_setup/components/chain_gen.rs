@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use cgmath::Vector3;
+use thyllore_model_core::BoneId;
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use super::submesh_role::{SubmeshRole, SubmeshSelector};
@@ -35,6 +36,8 @@ pub struct ChainGenSettings {
     pub azimuth: AzimuthStrandSettings,
     #[nested]
     pub card: CardStrandSettings,
+    #[nested]
+    pub garment: GarmentCoverageSettings,
 }
 
 /// Settings of the azimuth placement, which rings the hair around the skin's widest cross-section.
@@ -57,6 +60,27 @@ pub struct CardStrandSettings {
     pub root_rigid_length: f32,
 }
 
+/// Settings of the garment placement, which starts the chain below the bands the skin covers.
+#[derive(Clone, Debug, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct GarmentCoverageSettings {
+    /// Distance to the skin surface in model units under which a garment vertex counts as covered; 0 disables the coverage test
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub cover_distance: f32,
+    /// Share of covered vertices from which a band is left to the skin bones instead of the chain
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
+    pub covered_band_ratio: f32,
+}
+
+impl Default for GarmentCoverageSettings {
+    fn default() -> Self {
+        Self {
+            cover_distance: 0.0,
+            covered_band_ratio: 0.5,
+        }
+    }
+}
+
 impl Default for ChainGenSettings {
     fn default() -> Self {
         Self {
@@ -67,6 +91,7 @@ impl Default for ChainGenSettings {
             column_blend_width: 0.0,
             azimuth: AzimuthStrandSettings::default(),
             card: CardStrandSettings::default(),
+            garment: GarmentCoverageSettings::default(),
         }
     }
 }
@@ -126,13 +151,35 @@ pub fn submesh_label(target: &SubmeshSelector) -> String {
     label.trim_end_matches('_').to_string()
 }
 
+/// A skin mesh in the same space as the target: its surface and the bones that drive each vertex.
+#[derive(Debug, Clone, Default)]
+pub struct SkinSurface {
+    pub positions: Vec<Vector3<f32>>,
+    pub triangles: Vec<[u32; 3]>,
+    /// Per-vertex bone influences, heaviest first
+    pub influences: Vec<Vec<(BoneId, f32)>>,
+}
+
+impl SkinSurface {
+    /// A point set every vertex of which `bone` drives alone, without a surface.
+    pub fn points_driven_by(bone: BoneId, positions: Vec<Vector3<f32>>) -> Self {
+        let influences = vec![vec![(bone, 1.0)]; positions.len()];
+        Self {
+            positions,
+            triangles: Vec::new(),
+            influences,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChainGenInput<'a> {
     pub positions: &'a [Vector3<f32>],
     pub triangles: &'a [[u32; 3]],
     pub root_position: Vector3<f32>,
-    /// Skin vertices the root bone drives, in the same space as `positions`; empty falls back to `positions`
-    pub attachment_positions: &'a [Vector3<f32>],
+    pub root_bone: BoneId,
+    /// The skin meshes in the same space as `positions`; empty falls back to `positions` as the attachment surface
+    pub skins: &'a [SkinSurface],
     /// Per-vertex texture coordinates; empty means no strand parameter is available
     pub tex_coords: &'a [[f32; 2]],
 }
@@ -167,7 +214,19 @@ pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> Strin
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InfluenceTarget {
     Root,
-    Joint { chain: usize, joint: usize },
+    Joint {
+        chain: usize,
+        joint: usize,
+    },
+    /// A skin bone, carried over to a garment vertex the skin covers
+    Bone(BoneId),
+}
+
+/// A target vertex the skin covers, with the influences of its nearest skin vertex.
+#[derive(Debug, Clone)]
+pub struct CoveredVertex {
+    pub vertex: u32,
+    pub influences: Vec<(BoneId, f32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -235,6 +294,8 @@ pub struct StrandPlacement {
 pub struct ChainPlacement {
     pub chains: Vec<GeneratedChain>,
     pub strands: Option<StrandPlacement>,
+    /// Garment vertices the skin covers; they keep skin bones instead of chain joints
+    pub covered: Vec<CoveredVertex>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -298,7 +359,9 @@ mod tests {
                 "root_blend_width",
                 "column_blend_width",
                 "azimuth_root_band_offset",
-                "card_root_rigid_length"
+                "card_root_rigid_length",
+                "garment_cover_distance",
+                "garment_covered_band_ratio"
             ]
         );
         let scalar_names: Vec<&str> = CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect();

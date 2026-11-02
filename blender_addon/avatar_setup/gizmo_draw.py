@@ -66,11 +66,11 @@ def _draw_chain_radii(context, shader, arm, settings):
     _draw_segments(shader, color + (ACTIVE_ALPHA,), _radius_segments(active, arm, scale_length))
 
 
-def _collider_segments(settings, arm):
-    """Wire shapes of every collider attached to a bone."""
+def _collider_segments(colliders, arm):
+    """Wire shapes of the given colliders attached to a bone."""
     segments = []
     circle_segments = _STYLE["circle_segments"]
-    for collider in settings.colliders:
+    for collider in colliders:
         pb = arm.pose.bones.get(collider.bone)
         if pb is None:
             continue
@@ -86,6 +86,17 @@ def _collider_segments(settings, arm):
         else:
             segments.extend(wire_sphere_segments(head, radius, circle_segments))
     return segments
+
+
+def _draw_colliders(shader, arm, settings):
+    """Every collider dimmed, the one selected in the Colliders list at full strength."""
+    color = tuple(_STYLE["collider_color"])
+    selected_index = settings.active_collider_index
+
+    inactive = [c for i, c in enumerate(settings.colliders) if i != selected_index]
+    selected = [c for i, c in enumerate(settings.colliders) if i == selected_index]
+    _draw_segments(shader, color + (INACTIVE_ALPHA,), _collider_segments(inactive, arm))
+    _draw_segments(shader, color + (ACTIVE_ALPHA,), _collider_segments(selected, arm))
 
 
 def _draw_segments(shader, color_rgba, segments):
@@ -124,8 +135,7 @@ def _draw():
     if settings.show_chain_radii:
         _draw_chain_radii(context, shader, arm, settings)
     if settings.show_collider_gizmos:
-        collider_color = tuple(_STYLE["collider_color"]) + (ACTIVE_ALPHA,)
-        _draw_segments(shader, collider_color, _collider_segments(settings, arm))
+        _draw_colliders(shader, arm, settings)
 
     gpu.state.blend_set("NONE")
 

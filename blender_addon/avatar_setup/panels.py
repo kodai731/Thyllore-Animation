@@ -269,13 +269,13 @@ class THYLLORE_PT_AvatarSetupDebug(Panel):
 
 
 class THYLLORE_UL_SpringColliders(UIList):
-    """UIList for spring colliders: name, bone, shape, radius."""
+    """UIList for spring colliders: name (which carries the bone), shape, radius."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, prop_name):
         collider = item
-        row = layout.row(align=True)
-        row.prop(collider, "name", text="", emboss=False)
-        row.label(text=collider.bone or "(empty)")
+        split = layout.split(factor=0.7, align=True)
+        split.prop(collider, "name", text="", emboss=False)
+        row = split.row(align=True)
         row.label(text=collider.shape)
         row.label(text=f"{collider.radius:.3f}")
 

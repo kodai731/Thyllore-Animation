@@ -71,7 +71,9 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `thyllore-avatar-core/src/collider/` is the collider domain shared by every chain role: `components/`
   holds the shapes (`HeadCapsule`), `systems/` their estimators from skin geometry (`estimate_head_capsule`
   on top of math-core's `widest_cross_section`) and from the skeleton (`torso_volume`: pelvis and spine capsules
-  for torso bones whose skin was removed, appended by `fit_body_colliders`). `cloth_setup/systems/chain_gen/` only decides which role gets
+  for torso bones whose skin was removed). `body_fit::fit_body_capsules` is the one sequence that turns skins
+  into a rig's body colliders (skin fit, body roles, torso fallback); the ml-core bridge and the engine's
+  `fit_body_colliders` only call it and write the result, so the addon and the engine cannot diverge. `cloth_setup/systems/chain_gen/` only decides which role gets
   one (`hair_head_capsule`); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
   screen-space scale) lives in `thyllore-math-core`.
 - `thyllore-avatar-core/src/vrm/` projects the avatar sidecar onto VRM 1.0: `vrm_magnitudes` (joint force →

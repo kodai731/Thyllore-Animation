@@ -34,7 +34,7 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.submesh_mask import material_triangles
-from .collider_operators import default_fit_settings, fit_body_colliders, has_fitted_body_colliders
+from .collider_operators import default_fit_settings, fit_body_colliders
 from .operators import armature_fit_bones, bound_meshes, target_armature
 from .properties import CHAIN_GEN_UI_PARAMS
 
@@ -231,7 +231,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         origin = {"mesh": obj.name, "material": self.material, "role": role}
         settings = arm.data.thyllore_spring
         fitted_note = ""
-        if not has_fitted_body_colliders(settings):
+        if not tml.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
             try:
                 fitted_note = f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
             except ValueError as e:

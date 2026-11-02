@@ -20,8 +20,8 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_anim_core::spring_bone::{
-    add_generated_chains, ChainOrigin, ColliderGroupOrigin, ColliderShape, FittedCapsule,
-    SpringBoneSetup, SpringChain, SpringJointParam,
+    add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
+    SpringJointParam,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, chain_role_of_submesh, BodyCollider, ChainGenInput, ChainGenParams, ChainGenReport,
@@ -471,7 +471,10 @@ pub fn generate_and_apply_chain_bones(
     request: &ChainGenRequest,
 ) -> anyhow::Result<()> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
-    if !has_fitted_body_colliders(world) {
+    let has_fitted = world
+        .iter_components::<SpringBoneSetup>()
+        .any(|(_, setup)| setup.has_fitted_body_colliders());
+    if !has_fitted {
         fit_body_colliders(world, assets, graphics, &CapsuleFitParams::default());
     }
     match replace_generated_chains(world, assets, graphics, request) {
@@ -487,17 +490,6 @@ pub fn generate_and_apply_chain_bones(
             Err(e)
         }
     }
-}
-
-fn has_fitted_body_colliders(world: &World) -> bool {
-    world
-        .iter_components::<SpringBoneSetup>()
-        .any(|(_, setup)| {
-            setup
-                .collider_groups
-                .iter()
-                .any(|group| group.origin == ColliderGroupOrigin::Fitted)
-        })
 }
 
 fn remove_generated_chains(

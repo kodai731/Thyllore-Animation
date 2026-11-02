@@ -38,10 +38,6 @@ def default_fit_settings() -> dict[str, float]:
     return {param["name"]: float(param["default"]) for param in CAPSULE_FIT_UI_PARAMS}
 
 
-def has_fitted_body_colliders(settings) -> bool:
-    return any(collider.origin == "fitted" for collider in settings.colliders)
-
-
 def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
     """Replace the rig's fitted body colliders from its skin meshes; returns the collider count."""
     settings = arm.data.thyllore_spring

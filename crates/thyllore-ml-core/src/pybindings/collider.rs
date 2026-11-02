@@ -6,7 +6,8 @@ use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
 use super::chain_gen::{pythonize_value, settings_pairs};
 use crate::collider_bridge::{
     assign_collider_groups as bridge_assign_collider_groups, capsule_fit_params,
-    fit_body_colliders as bridge_fit_body_colliders, FitBone, FitSkin,
+    fit_body_colliders as bridge_fit_body_colliders,
+    has_fitted_body_colliders as bridge_has_fitted_body_colliders, FitBone, FitSkin,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
@@ -34,6 +35,16 @@ pub fn fit_body_colliders<'py>(
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
 
     pythonize_value(py, &output)
+}
+
+#[pyfunction]
+#[pyo3(signature = (spring, bones))]
+pub fn has_fitted_body_colliders(spring: &Bound<PyAny>, bones: &Bound<PyAny>) -> PyResult<bool> {
+    let spring: SidecarSpring = depythonize(spring).map_err(depythonize_error_to_pyerr)?;
+    let bones: Vec<FitBone> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
+
+    bridge_has_fitted_body_colliders(&spring, &bones)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]

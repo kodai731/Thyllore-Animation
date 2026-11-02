@@ -1,10 +1,9 @@
 use cgmath::{Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
 use thyllore_anim_core::spring_bone::{
-    fit_bone_capsules, replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams,
-    SpringChainId, SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
+    replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams, SpringChainId,
+    SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
 };
-use thyllore_avatar_core::collider::systems::torso_volume::fitted_torso_fallback;
-use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
+use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
@@ -113,16 +112,8 @@ pub fn fit_body_colliders(
     let owned: Vec<SkinData> = skins.iter().map(skin_data_from_fit_skin).collect();
     let skin_data: Vec<&SkinData> = owned.iter().collect();
 
-    let fitted = fit_bone_capsules(&skin_data, &skeleton, &params);
-
     let (mapping, _) = infer_mapping(&bone_inputs);
-    let allowed = body_collider_bone_indices(&mapping);
-    let mut fitted: Vec<_> = fitted
-        .into_iter()
-        .filter(|c| allowed.contains(&(c.bone_id as usize)))
-        .collect();
-    fitted.extend(fitted_torso_fallback(&skeleton, &mapping, &fitted));
-
+    let fitted = fit_body_capsules(&skin_data, &skeleton, &mapping, &params);
     anyhow::ensure!(!fitted.is_empty(), "fit produced no body colliders");
 
     let frames = rest_frames(bones)?;
@@ -130,6 +121,15 @@ pub fn fit_body_colliders(
     replace_fitted_body_colliders(&mut setup, &fitted);
 
     Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
+}
+
+pub fn has_fitted_body_colliders(
+    spring: &SidecarSpring,
+    bones: &[FitBone],
+) -> anyhow::Result<bool> {
+    let bone_inputs = to_bone_inputs(bones);
+    let frames = rest_frames(bones)?;
+    Ok(spring_setup_from_sidecar(spring, &bone_inputs, &frames).has_fitted_body_colliders())
 }
 
 pub fn assign_collider_groups(

@@ -14,6 +14,7 @@ from blender_addon.common.spring_properties import (
     disabled_chain_names,
     humanoid_overrides_to_dict,
     joint_values,
+    ramp_values,
     restore_disabled_chains,
     spring_settings_to_edit,
     spring_settings_to_sidecar,
@@ -389,6 +390,22 @@ def test_joint_values_rest_relative_reads_its_own_magnitudes():
         "bending_relaxation": pytest.approx(0.3),
         "gravity_scale": pytest.approx(2.0),
     }
+
+
+def test_ramp_values_reads_both_ends_and_the_rigid_fraction():
+    form = SimpleNamespace(
+        root=_joint_item("vrm", 1.0, 1.0, 0.3, 2.0, 0.5, (0.0, -1.0, 0.0), 0.05),
+        tip=_joint_item("vrm", 0.2, 1.0, 0.3, 2.0, 0.9, (0.0, -1.0, 0.0), 0.02),
+        shape="ease_in",
+        rigid_fraction=0.5,
+    )
+
+    values = ramp_values(form)
+
+    assert values["root"] == joint_values(form.root)
+    assert values["tip"] == joint_values(form.tip)
+    assert values["shape"] == "ease_in"
+    assert values["rigid_fraction"] == pytest.approx(0.5)
 
 
 def test_copy_joint_values():

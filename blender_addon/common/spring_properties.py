@@ -213,6 +213,16 @@ def joint_values(joint) -> dict:
     }
 
 
+def ramp_values(form) -> dict:
+    """Read the ramp form (root / tip joints, rigid fraction, shape) as the apply_ramp input."""
+    return {
+        "root": joint_values(form.root),
+        "tip": joint_values(form.tip),
+        "shape": form.shape,
+        "rigid_fraction": float(form.rigid_fraction),
+    }
+
+
 def copy_joint_values(source, target) -> None:
     """Copy joint param values from source to target Blender spring joint item: the force model
     with every model's magnitudes, drag_force, gravity_dir, hit_radius."""

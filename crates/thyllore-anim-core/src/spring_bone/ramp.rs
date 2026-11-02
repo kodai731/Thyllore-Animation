@@ -45,6 +45,9 @@ pub struct ChainRamp {
     #[nested]
     pub tip: SpringJointParam,
     pub shape: RampShape,
+    /// The root-side share of the joints that keep the root value before the shape starts.
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
+    pub rigid_fraction: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,12 +128,7 @@ pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> Result<SpringChain, 
     let n = chain.joints.len();
     let mut out = chain.clone();
     for (i, joint) in out.joints.iter_mut().enumerate() {
-        let t = if n <= 1 {
-            0.0
-        } else {
-            i as f32 / (n - 1) as f32
-        };
-        let w = ramp.shape.weight(t);
+        let w = ramp.shape.weight(ramp_position(i, n, ramp.rigid_fraction));
 
         joint.force = ramp
             .root
@@ -142,6 +140,19 @@ pub fn apply_ramp(chain: &SpringChain, ramp: &ChainRamp) -> Result<SpringChain, 
         joint.gravity_dir = ramp.root.gravity_dir;
     }
     Ok(out)
+}
+
+/// Joint i of n mapped to 0..1, with the root-side `rigid_fraction` of the chain held at 0.
+fn ramp_position(i: usize, n: usize, rigid_fraction: f32) -> f32 {
+    if n <= 1 {
+        return 0.0;
+    }
+    let t = i as f32 / (n - 1) as f32;
+    let rigid = rigid_fraction.clamp(0.0, 1.0);
+    if rigid >= 1.0 {
+        return 0.0;
+    }
+    ((t - rigid) / (1.0 - rigid)).clamp(0.0, 1.0)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

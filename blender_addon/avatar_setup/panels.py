@@ -138,6 +138,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             _draw_joint_params(box, getattr(form, end_name))
             box.separator()
 
+        _draw_labelled_prop(box, form, "rigid_fraction")
         _draw_labelled_prop(box, form, "shape")
         _draw_labelled_prop(box, form, "scope")
         box.operator("thyllore.load_ramp_from_chain")

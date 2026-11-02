@@ -70,6 +70,7 @@ impl RampFormView {
                 ..self.ramp.tip.clone()
             },
             shape: self.ramp.shape,
+            rigid_fraction: self.ramp.rigid_fraction,
         }
     }
 }
@@ -245,7 +246,12 @@ pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
         "Root",
         &form.root_force,
         |view| &mut view.root_force,
-        &["tip_drag_force", "tip_gravity_dir", "tip_hit_radius"],
+        &[
+            "tip_drag_force",
+            "tip_gravity_dir",
+            "tip_hit_radius",
+            "rigid_fraction",
+        ],
     );
     rows.extend(ramp_end_rows(
         "Tip",
@@ -256,8 +262,17 @@ pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
             "root_gravity_dir",
             "root_hit_radius",
             "tip_gravity_dir",
+            "rigid_fraction",
         ],
     ));
+    rows.extend(ramp_param_rows(&[
+        "root_drag_force",
+        "root_gravity_dir",
+        "root_hit_radius",
+        "tip_drag_force",
+        "tip_gravity_dir",
+        "tip_hit_radius",
+    ]));
     rows.push(shape_choice_row());
     if form.origin == RampOrigin::Joint {
         rows.push(scope_choice_row());
@@ -299,6 +314,7 @@ mod tests {
                 "root_hit_radius",
                 "tip_drag_force",
                 "tip_hit_radius",
+                "rigid_fraction",
                 "Shape",
                 "Scope",
                 "Load Ramp From This Chain",
@@ -334,6 +350,10 @@ mod tests {
                 .position(|row| matches!(row, UiRow::Heading(heading) if *heading == label))
                 .unwrap_or_else(|| panic!("ramp rows have a {label} heading"))
         };
+        let rigid_at = rows
+            .iter()
+            .position(|row| matches!(row, UiRow::Scalar { param, .. } if param.name == "rigid_fraction"))
+            .expect("ramp rows have the rigid fraction scalar");
         let shape_at = rows
             .iter()
             .position(|row| matches!(row, UiRow::Choice { label, .. } if *label == "Shape"))
@@ -344,10 +364,11 @@ mod tests {
                 .count()
         };
         let root_block = &rows[heading_at("Root") + 1..heading_at("Tip")];
-        let tip_block = &rows[heading_at("Tip") + 1..shape_at];
+        let tip_block = &rows[heading_at("Tip") + 1..rigid_at];
 
         assert_eq!(scalar_count(root_block), SPRING_JOINT_UI_PARAMS.len());
         assert_eq!(scalar_count(tip_block), SPRING_JOINT_UI_PARAMS.len() - 1);
+        assert_eq!(rigid_at + 1, shape_at);
     }
 
     #[test]

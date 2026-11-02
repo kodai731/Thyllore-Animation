@@ -97,6 +97,8 @@ pub struct RampInput {
     pub root: JointValues,
     pub tip: JointValues,
     pub shape: String,
+    #[serde(default)]
+    pub rigid_fraction: f32,
 }
 
 /// The joint values the addon sends, in the sidecar joint's shape without the bone.
@@ -133,7 +135,12 @@ fn to_chain_ramp(ramp: &RampInput) -> anyhow::Result<ChainRamp> {
     let root = ramp.root.to_joint_param();
     let tip = ramp.tip.to_joint_param();
     let shape = parse_ramp_shape(&ramp.shape)?;
-    Ok(ChainRamp { root, tip, shape })
+    Ok(ChainRamp {
+        root,
+        tip,
+        shape,
+        rigid_fraction: ramp.rigid_fraction,
+    })
 }
 
 pub fn apply_ramp_to_chains(

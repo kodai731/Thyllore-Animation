@@ -42,6 +42,14 @@ fn ramp_input(shape: &str) -> RampInput {
             hit_radius: 0.0,
         },
         shape: shape.to_string(),
+        rigid_fraction: 0.0,
+    }
+}
+
+fn vrm_stiffness_of(joint: &SidecarSpringJoint) -> f32 {
+    match joint.force {
+        SidecarJointForce::Vrm { stiffness, .. } => stiffness,
+        SidecarJointForce::RestRelative { .. } => panic!("the chain stays on the VRM model"),
     }
 }
 
@@ -111,6 +119,23 @@ fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
 }
 
 #[test]
+fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
+    let bones = test_bones();
+    let spring = with_vrm_joints(
+        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+    );
+    let mut ramp = ramp_input("linear");
+    ramp.rigid_fraction = 0.5;
+
+    let result = apply_ramp_to_chains(&spring, &bones, &["Chain_0".to_string()], &ramp).unwrap();
+
+    let chain = &result.chains[0];
+    assert!((vrm_stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
+    assert!((vrm_stiffness_of(&chain.joints[1]) - 1.0).abs() < 1e-6);
+    assert!((vrm_stiffness_of(&chain.joints[2]) - 0.0).abs() < 1e-6);
+}
+
+#[test]
 fn spring_edit_bridge_ramp_linear_interpolation() {
     let bones = test_bones();
     let spring = with_vrm_joints(
@@ -123,13 +148,9 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
     assert_eq!(result.chains.len(), 1);
     let chain = &result.chains[0];
     assert_eq!(chain.joints.len(), 3);
-    let stiffness_of = |joint: &SidecarSpringJoint| match joint.force {
-        SidecarJointForce::Vrm { stiffness, .. } => stiffness,
-        SidecarJointForce::RestRelative { .. } => panic!("the chain stays on the VRM model"),
-    };
-    assert!((stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
-    assert!((stiffness_of(&chain.joints[1]) - 0.5).abs() < 1e-6);
-    assert!((stiffness_of(&chain.joints[2]) - 0.0).abs() < 1e-6);
+    assert!((vrm_stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
+    assert!((vrm_stiffness_of(&chain.joints[1]) - 0.5).abs() < 1e-6);
+    assert!((vrm_stiffness_of(&chain.joints[2]) - 0.0).abs() < 1e-6);
 }
 
 #[test]

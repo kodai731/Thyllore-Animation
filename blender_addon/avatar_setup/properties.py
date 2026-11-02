@@ -265,10 +265,17 @@ class THYLLORE_PG_SubmeshSettings(bpy.types.PropertyGroup):
 
 
 class THYLLORE_PG_RampForm(bpy.types.PropertyGroup):
-    """Ramp form: root/tip joint params + shape + scope."""
+    """Ramp form: root/tip joint params + rigid fraction + shape + scope."""
 
     root: bpy.props.PointerProperty(type=THYLLORE_PG_SpringJoint)
     tip: bpy.props.PointerProperty(type=THYLLORE_PG_SpringJoint)
+    rigid_fraction: bpy.props.FloatProperty(
+        name="Rigid Fraction",
+        description="Root-side share of the joints that keep the root value before the shape starts",
+        default=0.0,
+        min=0.0,
+        max=1.0,
+    )
     shape: bpy.props.EnumProperty(
         name="Shape",
         items=[("linear", "Linear", ""), ("ease_in", "Ease In", ""), ("ease_out", "Ease Out", "")],

@@ -19,7 +19,7 @@ from ..common.spring_properties import (
     copy_joint_values,
     disabled_chain_names,
     joint_for_bone,
-    joint_values,
+    ramp_values,
     restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
@@ -107,11 +107,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
                 spring,
                 bones,
                 names,
-                {
-                    "root": joint_values(form.root),
-                    "tip": joint_values(form.tip),
-                    "shape": form.shape,
-                },
+                ramp_values(form),
             )
         except ValueError as e:
             report(self, "ERROR", f"apply_ramp failed: {e}")

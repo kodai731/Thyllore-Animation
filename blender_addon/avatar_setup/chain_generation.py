@@ -130,11 +130,14 @@ def _marked_covered_vertices(obj) -> list[int]:
     return covered_group_vertices(pairs, group.index)
 
 
-def _write_covered_group(obj, covered: list[int]) -> None:
-    """Record the measured coverage so the user can repaint it; an existing group is left as it is."""
-    if obj.vertex_groups.get(COVERED_GROUP) is not None:
+def _write_covered_group(obj, covered: list[int], marked: list[int]) -> None:
+    """Record the measured coverage so the user can repaint it; a painted group is the input and stays as it is."""
+    if marked:
         return
-    group = obj.vertex_groups.new(name=COVERED_GROUP)
+    group = obj.vertex_groups.get(COVERED_GROUP)
+    if group is None:
+        group = obj.vertex_groups.new(name=COVERED_GROUP)
+    group.remove([v.index for v in obj.data.vertices])
     if covered:
         group.add([int(v) for v in covered], 1.0, "REPLACE")
 
@@ -242,7 +245,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
         if role == "garment":
-            _write_covered_group(obj, output["covered"])
+            _write_covered_group(obj, output["covered"], marked)
         apply_chain_bone_display(arm, [name for name, _, _, _ in specs], role)
 
         bones = armature_fit_bones(context, arm)

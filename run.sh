@@ -69,6 +69,11 @@ Commands:
       open and quits; --python runs extra setup scripts before the shot:
         ./run.sh blender --avatar-setup
         ./run.sh blender --avatar-setup --skip-build --headless
+  blender-rpc ping | eval EXPR | exec CODE | exec -f FILE.py [--port N]
+      Run Python inside the Blender opened by blender --avatar-setup through its
+      debug RPC socket (scripts/blender/rpc.py; port THYLLORE_DEBUG_RPC_PORT, 8799):
+        ./run.sh blender-rpc eval "len(bpy.data.objects)"
+        ./run.sh blender-rpc exec -f log/regen_check/check.py
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
@@ -213,6 +218,9 @@ case "$command" in
         ;;
     blender-verify)
         exec bash "$REPO_ROOT/blender/docker/run_gui.sh" --no-install "$@"
+        ;;
+    blender-rpc)
+        exec python3 "$REPO_ROOT/scripts/blender/rpc.py" "$@"
         ;;
     auto)
         exec bash "$REPO_ROOT/scripts/run_auto_mode.sh" "$@"

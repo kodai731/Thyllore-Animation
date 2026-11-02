@@ -48,6 +48,7 @@ except ImportError:
 if _BPY_AVAILABLE:
     import os  # noqa: E402
 
+    from . import _debuglog  # noqa: E402
     from . import avatar_setup  # noqa: E402
     from . import operators  # noqa: E402
     from . import panels  # noqa: E402
@@ -139,6 +140,10 @@ if _BPY_AVAILABLE:
             feedback_message.register()
         if _TELEMETRY_AVAILABLE:
             telemetry.register()
+        if _debuglog.is_debug_enabled():
+            from . import debug_rpc  # noqa: E402
+
+            debug_rpc.register()
         _apply_mock_server_pin_if_requested()
         _REGISTERED_ABI_FAILURE = False
         print("[Thyllore] Addon registered successfully")
@@ -150,6 +155,10 @@ if _BPY_AVAILABLE:
             telemetry.unregister()
         if _FEEDBACK_MESSAGE_AVAILABLE and not _REGISTERED_ABI_FAILURE:
             feedback_message.unregister()
+        if _debuglog.is_debug_enabled() and not _REGISTERED_ABI_FAILURE:
+            from . import debug_rpc  # noqa: E402
+
+            debug_rpc.unregister()
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:
             operators.unregister()

@@ -43,6 +43,8 @@ first-draw pipeline build from ~70s to well under a second.
                          given) is still mounted at /zips for manual install
                          via Edit > Preferences > Add-ons > Install from Disk.
                          Without --zip nothing is mounted (plain Blender)
+  THYLLORE_DEBUG_RPC_PORT=N (env) publishes the addon's debug RPC socket on
+                         127.0.0.1:N of the host (scripts/blender/rpc.py)
   --python PATH          Python script (inside the repo) run by Blender after
                          the scene is loaded; repeatable, run in the given order
 EOF
@@ -112,6 +114,12 @@ if [[ "$SOFTWARE_GL" -eq 1 ]]; then
     BACKEND_ARG="--gpu-backend opengl"
 fi
 
+RPC_ARGS=()
+if [[ -n "${THYLLORE_DEBUG_RPC_PORT:-}" ]]; then
+    RPC_ARGS=(-p "127.0.0.1:${THYLLORE_DEBUG_RPC_PORT}:${THYLLORE_DEBUG_RPC_PORT}"
+              -e THYLLORE_DEBUG_RPC_PORT -e THYLLORE_DEBUG_RPC_HOST=0.0.0.0)
+fi
+
 SCREENSHOT_DIR_HOST="/tmp/thyllore_screenshots"
 mkdir -p "$SCREENSHOT_DIR_HOST" "$REPO_ROOT/log"
 
@@ -150,6 +158,7 @@ docker run --rm --init \
     ${GPU_FLAGS[@]+"${GPU_FLAGS[@]}"} \
     ${GL_ENV[@]+"${GL_ENV[@]}"} \
     ${DISPLAY_ARGS[@]+"${DISPLAY_ARGS[@]}"} \
+    ${RPC_ARGS[@]+"${RPC_ARGS[@]}"} \
     -v "$REPO_ROOT:/workspace:ro" \
     -v "$REPO_ROOT/log:/workspace/log" \
     ${ZIP_MOUNT[@]+"${ZIP_MOUNT[@]}"} \

@@ -183,6 +183,7 @@ class THYLLORE_PG_SpringSettings(bpy.types.PropertyGroup):
     preview_swing: bpy.props.BoolProperty(
         name="Preview Swing",
         description="Simulate the chains with the engine's spring solver while the frame changes",
+        default=True,
         update=_restart_swing_preview,
     )
     sidecar_json: bpy.props.StringProperty(

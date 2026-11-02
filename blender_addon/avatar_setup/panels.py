@@ -253,7 +253,15 @@ class THYLLORE_PT_AvatarSetupDebug(Panel):
         return _debuglog.is_debug_enabled()
 
     def draw(self, context):
-        self.layout.operator("thyllore.load_engine_clip", icon="IMPORT")
+        from .. import debug_rpc
+
+        layout = self.layout
+        layout.operator("thyllore.load_engine_clip", icon="IMPORT")
+        address = debug_rpc.listening_address()
+        layout.label(text=f"RPC: {address}" if address else "RPC: stopped", icon="CONSOLE")
+        row = layout.row(align=True)
+        row.operator("thyllore.start_debug_rpc", text="Start")
+        row.operator("thyllore.stop_debug_rpc", text="Stop")
 
 
 class THYLLORE_UL_SpringColliders(UIList):

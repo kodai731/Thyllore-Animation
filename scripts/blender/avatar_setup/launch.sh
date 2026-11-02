@@ -24,6 +24,8 @@ assets/templates/hips_sway.anim.ron onto it, so the avatar setup panels and the
 swing preview can be used at once. The model's .avatar.json sidecar, when present, is
 staged beside it under /scenes for Import Avatar Sidecar. Blender's console
 output is mirrored to <repo>/log/log_blender_avatar_setup.log.
+The debug RPC socket is published on 127.0.0.1:${THYLLORE_DEBUG_RPC_PORT:-8799}
+(./run.sh blender-rpc ping | eval EXPR | exec CODE | exec -f FILE).
 
 Screenshots: with THYLLORE_SCREENSHOT_DIR=/screenshots the whole window is saved
 as /tmp/thyllore_screenshots/avatar_setup.png THYLLORE_SCREENSHOT_DELAY seconds
@@ -83,6 +85,7 @@ ZIP="$(cat "$REPO_ROOT/dist/.last_built_zip")"
 
 stage_model
 export THYLLORE_AVATAR_MODEL="/scenes/$(basename "$MODEL")"
+export THYLLORE_DEBUG_RPC_PORT="${THYLLORE_DEBUG_RPC_PORT:-8799}"
 if [[ "$HEADLESS" -eq 1 ]]; then
     export THYLLORE_SCREENSHOT_DIR="${THYLLORE_SCREENSHOT_DIR:-/screenshots}"
     export THYLLORE_SCREENSHOT_QUIT="${THYLLORE_SCREENSHOT_QUIT:-1}"

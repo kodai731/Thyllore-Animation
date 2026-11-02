@@ -1,23 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use thyllore_math_core::TriangleBvh;
+use thyllore_math_core::world_y_axis;
 use thyllore_model_core::BoneId;
 
-use super::frame::{BandPartition, VertexFrame};
+use super::frame::VertexFrame;
+use super::support::{garment_support, nearest_body_influences};
 use crate::cloth_setup::components::chain_gen::{
-    ChainGenInput, ChainGenParams, ChainRole, CoveredVertex, SkinSurface,
+    ChainGenInput, ChainGenParams, ChainRole, CoveredVertex, GarmentSupport,
 };
+use cgmath::InnerSpace;
 
-/// The target vertices the skin covers, each with the influences of its nearest skin vertex.
+/// The target vertices the body covers, each with the influences of its nearest body point.
 pub(super) struct GarmentCoverage {
     covered: BTreeMap<u32, Vec<(BoneId, f32)>>,
     source: CoverageSource,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum CoverageSource {
-    /// Measured by distance to the skin; the chain starts at the first band under the covered share
-    Measured,
+    /// The body supports the garment down to a ring; the chain is every vertex below it
+    Supported(GarmentSupport),
     /// Marked by the user; the chain is every vertex outside the set
     Marked,
 }
@@ -25,6 +27,13 @@ enum CoverageSource {
 impl GarmentCoverage {
     pub(super) fn is_covered(&self, vertex: u32) -> bool {
         self.covered.contains_key(&vertex)
+    }
+
+    pub(super) fn support(&self) -> Option<GarmentSupport> {
+        match self.source {
+            CoverageSource::Supported(support) => Some(support),
+            CoverageSource::Marked => None,
+        }
     }
 
     pub(super) fn into_covered_vertices(self) -> Vec<CoveredVertex> {
@@ -35,95 +44,46 @@ impl GarmentCoverage {
     }
 }
 
-struct SkinSurfaces<'a> {
-    surfaces: Vec<(&'a SkinSurface, TriangleBvh)>,
-}
-
-impl<'a> SkinSurfaces<'a> {
-    fn build(skins: &'a [SkinSurface]) -> Self {
-        let surfaces = skins
-            .iter()
-            .filter(|skin| !skin.triangles.is_empty())
-            .map(|skin| (skin, TriangleBvh::build(&skin.positions, &skin.triangles)))
-            .collect();
-        Self { surfaces }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.surfaces.is_empty()
-    }
-
-    /// The influences of the skin vertex nearest to `point` within `max_distance`.
-    fn nearest_influences(
-        &self,
-        point: cgmath::Vector3<f32>,
-        max_distance: f32,
-    ) -> Option<Vec<(BoneId, f32)>> {
-        let (_, corner, skin) = self
-            .surfaces
-            .iter()
-            .filter_map(|(skin, bvh)| {
-                let hit = bvh.closest_point(point, max_distance)?;
-                Some((
-                    hit.distance,
-                    bvh.nearest_corner(hit.triangle, hit.point),
-                    *skin,
-                ))
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))?;
-        Some(skin.influences[corner as usize].clone())
-    }
-}
-
-/// The coverage of a garment: the vertices the user marked, else the vertices within `cover_distance`
-/// of a skin surface; none for hair or when neither applies.
+/// The coverage of a garment: the vertices the user marked, else the vertices at or above the ring
+/// the body supports; none for hair, without a body, or when the body supports nothing.
 pub(super) fn garment_coverage(
     input: &ChainGenInput,
     params: &ChainGenParams,
     vertices: &[u32],
-) -> Option<GarmentCoverage> {
+) -> anyhow::Result<Option<GarmentCoverage>> {
     if params.role != ChainRole::Garment {
-        return None;
+        return Ok(None);
     }
-    let surfaces = SkinSurfaces::build(input.skins);
     if !input.covered_vertices.is_empty() {
-        return Some(marked_coverage(input, &surfaces, vertices));
+        return Ok(Some(marked_coverage(input, vertices)));
     }
-
-    let cover_distance = params.settings.garment.cover_distance;
-    if cover_distance <= 0.0 || surfaces.is_empty() {
-        return None;
-    }
+    let Some(support) = garment_support(input, params, vertices)? else {
+        return Ok(None);
+    };
+    let up = world_y_axis();
     let covered = vertices
         .iter()
-        .filter_map(|&vertex| {
-            let influences =
-                surfaces.nearest_influences(input.positions[vertex as usize], cover_distance)?;
-            Some((vertex, influences))
-        })
+        .filter(|&&vertex| input.positions[vertex as usize].dot(up) >= support.boundary_height)
+        .map(|&vertex| (vertex, body_influences(input, vertex)))
         .collect();
-    Some(GarmentCoverage {
+    Ok(Some(GarmentCoverage {
         covered,
-        source: CoverageSource::Measured,
-    })
+        source: CoverageSource::Supported(support),
+    }))
 }
 
-/// The marked vertices with the influences of their nearest skin vertex, or the root bone without a surface.
-fn marked_coverage(
-    input: &ChainGenInput,
-    surfaces: &SkinSurfaces,
-    vertices: &[u32],
-) -> GarmentCoverage {
+fn body_influences(input: &ChainGenInput, vertex: u32) -> Vec<(BoneId, f32)> {
+    nearest_body_influences(input.skins, input.positions[vertex as usize])
+        .unwrap_or_else(|| vec![(input.root_bone, 1.0)])
+}
+
+/// The marked vertices with the influences of their nearest body point, or the root bone without a body.
+fn marked_coverage(input: &ChainGenInput, vertices: &[u32]) -> GarmentCoverage {
     let marked: BTreeSet<u32> = input.covered_vertices.iter().copied().collect();
     let covered = vertices
         .iter()
         .filter(|vertex| marked.contains(vertex))
-        .map(|&vertex| {
-            let influences = surfaces
-                .nearest_influences(input.positions[vertex as usize], f32::MAX)
-                .unwrap_or_else(|| vec![(input.root_bone, 1.0)]);
-            (vertex, influences)
-        })
+        .map(|&vertex| (vertex, body_influences(input, vertex)))
         .collect();
     GarmentCoverage {
         covered,
@@ -131,64 +91,17 @@ fn marked_coverage(
     }
 }
 
-/// The frames the chain is built from: every uncovered frame for a marked coverage, the uncovered
-/// frames below the covered bands for a measured one. Every frame left out joins the coverage (the root
-/// bone drives the ones the skin does not reach), so marking the coverage again reproduces the
-/// chain. Fails when nothing is left for the chain.
+/// The frames the chain is built from: every uncovered frame. Fails when nothing is left for the chain.
 pub(super) fn chain_frames(
     frames: Vec<VertexFrame>,
-    coverage: &mut GarmentCoverage,
-    input: &ChainGenInput,
-    params: &ChainGenParams,
+    coverage: &GarmentCoverage,
 ) -> anyhow::Result<Vec<VertexFrame>> {
-    let remaining = match coverage.source {
-        CoverageSource::Marked => frames
-            .iter()
-            .filter(|frame| !coverage.is_covered(frame.vertex))
-            .copied()
-            .collect(),
-        CoverageSource::Measured => frames_below_coverage(&frames, coverage, params)?,
-    };
+    let remaining: Vec<VertexFrame> = frames
+        .into_iter()
+        .filter(|frame| !coverage.is_covered(frame.vertex))
+        .collect();
     if remaining.is_empty() {
-        anyhow::bail!("the skin covers every vertex of the garment; no chain is needed");
-    }
-
-    let chained: BTreeSet<u32> = remaining.iter().map(|frame| frame.vertex).collect();
-    for frame in frames {
-        if !chained.contains(&frame.vertex) {
-            coverage
-                .covered
-                .entry(frame.vertex)
-                .or_insert_with(|| vec![(input.root_bone, 1.0)]);
-        }
+        anyhow::bail!("the body covers every vertex of the garment; no chain is needed");
     }
     Ok(remaining)
-}
-
-fn frames_below_coverage(
-    frames: &[VertexFrame],
-    coverage: &GarmentCoverage,
-    params: &ChainGenParams,
-) -> anyhow::Result<Vec<VertexFrame>> {
-    let bands = BandPartition::of_frames(frames, params.settings.joint_count as usize);
-    let mut counts = vec![(0usize, 0usize); bands.count];
-    for frame in frames {
-        let band = bands.band_of(frame.progress);
-        counts[band].0 += usize::from(coverage.is_covered(frame.vertex));
-        counts[band].1 += 1;
-    }
-
-    let ratio = params.settings.garment.covered_band_ratio;
-    let start = counts
-        .iter()
-        .position(|&(covered, total)| total == 0 || (covered as f32) < ratio * total as f32)
-        .ok_or_else(|| {
-            anyhow::anyhow!("the skin covers every band of the garment; no chain is needed")
-        })?;
-    let start_progress = bands.start_of(start);
-    Ok(frames
-        .iter()
-        .filter(|frame| frame.progress >= start_progress && !coverage.is_covered(frame.vertex))
-        .copied()
-        .collect())
 }

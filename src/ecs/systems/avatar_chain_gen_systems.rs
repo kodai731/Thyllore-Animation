@@ -17,11 +17,11 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_anim_core::spring_bone::{
-    add_generated_chains, ChainOrigin, FittedCapsule, SpringBoneSetup, SpringChain,
+    add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
     SpringJointParam,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_name, chain_role_of_submesh, ChainGenInput, ChainGenParams, ChainGenReport,
+    chain_name, chain_role_of_submesh, BodyCollider, ChainGenInput, ChainGenParams, ChainGenReport,
     ChainGenRequest, ChainGenSettings, ChainPlacement, ChainRole, ChainWeightRecord,
     GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
     RootBandRecord, StrandPlacement, VertexInfluences,
@@ -35,8 +35,12 @@ use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands,
     root_attachment_positions, RootBand,
 };
+use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
+    collider_surfaces, retain_torso_skin, supports_garments,
+};
 use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
+use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::{array3_from_vec, world_y_axis};
 
@@ -61,7 +65,7 @@ fn generate_chain_bones(
         let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
         skin_geometry_to_model(skeleton, root as usize)
     };
-    let skins = skin_role_surfaces(
+    let mut skins = skin_role_surfaces(
         world,
         assets,
         graphics,
@@ -69,6 +73,9 @@ fn generate_chain_bones(
         geometry_to_model,
     );
     let skeleton = find_skeleton_mut(assets, geometry.skeleton_id)?;
+    let body = body_volume(world, skeleton);
+    retain_torso_skin(&mut skins, |bone| body.role_of(bone));
+    skins.extend(collider_surfaces(&body.colliders));
     let root_global = compute_bone_global_transform(skeleton, root as usize);
     let model_to_geometry = geometry_to_model
         .invert()
@@ -103,8 +110,10 @@ fn generate_chain_bones(
         chains,
         strands,
         covered,
+        support,
     } = place_chains_with_strands(&input, &params)?;
     let influences = compute_chain_weights(&input, &params, &chains, &covered);
+    let hang_bone = support.map_or(root, |support| support.bone);
 
     let geometry_chains: Vec<GeneratedChain> = chains
         .iter()
@@ -121,7 +130,7 @@ fn generate_chain_bones(
             ..chain.clone()
         })
         .collect();
-    let bone_ids = append_chain_bones(skeleton, root, &geometry_chains)?;
+    let bone_ids = append_chain_bones(skeleton, hang_bone, &geometry_chains)?;
 
     let report = build_report(
         skeleton,
@@ -130,7 +139,7 @@ fn generate_chain_bones(
             parts: &geometry.parts,
             chains: &chains,
             bone_ids: &bone_ids,
-            root,
+            root: hang_bone,
             influences: &influences,
             input: &input,
             strands,
@@ -143,7 +152,7 @@ fn generate_chain_bones(
     for part in &geometry.parts {
         let part_influences = influences_of_part(part, &influences);
         if let Some(skin) = graphics.meshes[part.mesh_index].skin_data.as_mut() {
-            write_chain_weights(skin, root, &bone_ids, &part_influences);
+            write_chain_weights(skin, hang_bone, &bone_ids, &part_influences);
         }
     }
 
@@ -248,6 +257,66 @@ fn influences_of_part(
             influences: influence.influences.clone(),
         })
         .collect()
+}
+
+struct BodyVolume {
+    roles: Vec<RoleBone>,
+    colliders: Vec<BodyCollider>,
+}
+
+impl BodyVolume {
+    fn role_of(&self, bone: thyllore_model_core::BoneId) -> Option<HumanoidRole> {
+        self.roles
+            .iter()
+            .find(|role_bone| role_bone.bone == bone)
+            .map(|role_bone| role_bone.role)
+    }
+}
+
+/// The volume a garment can rest on: the rig's colliders on torso bones in model space.
+fn body_volume(world: &World, skeleton: &thyllore_model_core::Skeleton) -> BodyVolume {
+    let mapping = &world.resource::<AvatarSetupState>().mapping;
+    let roles: Vec<RoleBone> = mapping
+        .by_role
+        .iter()
+        .filter(|(_, &bone)| bone < skeleton.bones.len())
+        .map(|(&role, &bone)| RoleBone {
+            role,
+            bone: bone as thyllore_model_core::BoneId,
+            head: compute_bone_global_transform(skeleton, bone).w.truncate(),
+        })
+        .collect();
+    let placed: Vec<BodyCollider> = world
+        .iter_components::<SpringBoneSetup>()
+        .flat_map(|(_, setup)| setup.colliders.iter())
+        .filter(|def| (def.bone_id as usize) < skeleton.bones.len())
+        .map(|def| {
+            let bone_global = compute_bone_global_transform(skeleton, def.bone_id as usize);
+            let place = |local: cgmath::Vector3<f32>| (bone_global * local.extend(1.0)).truncate();
+            let (radius, tail) = match def.shape {
+                ColliderShape::Sphere { radius } => (radius, def.offset),
+                ColliderShape::Capsule { radius, tail } => (radius, tail),
+            };
+            BodyCollider {
+                bone: def.bone_id,
+                head: place(def.offset),
+                tail: place(tail),
+                radius,
+            }
+        })
+        .collect();
+    let volume = BodyVolume {
+        roles,
+        colliders: Vec::new(),
+    };
+    let colliders: Vec<BodyCollider> = placed
+        .into_iter()
+        .filter(|collider| volume.role_of(collider.bone).is_none_or(supports_garments))
+        .collect();
+    BodyVolume {
+        colliders,
+        ..volume
+    }
 }
 
 fn find_root_bone(

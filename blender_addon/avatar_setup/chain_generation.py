@@ -24,9 +24,10 @@ from ..common.chain_bones import (
     settings_from_properties,
     vertex_tex_coords,
 )
-from ..common.skin_input import skin_input, skin_role_meshes
+from ..common.skin_input import collider_inputs, skin_input, skin_role_meshes
 from ..common.spring_properties import (
     disabled_chain_names,
+    humanoid_overrides_to_dict,
     remove_chains_generated_on,
     restore_disabled_chains,
     spring_settings_to_edit,
@@ -37,6 +38,7 @@ from .operators import armature_fit_bones, bound_meshes, target_armature
 from .properties import CHAIN_GEN_UI_PARAMS
 
 GENERATABLE_ROLES = ("hair", "garment")
+DEFAULT_ROOT_BY_ROLE = {"hair": "Head", "garment": "Hips"}
 
 
 def generatable_submeshes(arm) -> list[tuple[object, object]]:
@@ -54,6 +56,24 @@ def _material_slot_index(obj, material_name: str) -> int | None:
         if slot.material is not None and slot.material.name == material_name:
             return index
     return None
+
+
+def _humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
+    """Unity role name to armature bone index, the inferred mapping with the user's overrides on top."""
+    roles = dict(tml.infer_humanoid_mapping(fit_bones).get("mapping", {}))
+    roles.update(humanoid_overrides_to_dict(settings))
+    indices = {}
+    for role, bone_name in roles.items():
+        index = arm.data.bones.find(bone_name)
+        if index >= 0:
+            indices[role] = index
+    return indices
+
+
+def _body_collider_inputs(arm, settings, fit_bones) -> list[dict]:
+    model_spring = tml.spring_colliders_to_model(spring_settings_to_edit(settings), fit_bones)
+    bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
+    return collider_inputs(model_spring["colliders"], bone_index)
 
 
 def _root_engine_position(arm, root_bone: str, scale_length: float) -> list[float]:
@@ -199,8 +219,9 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             tex_coords = vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
         fit_bones = armature_fit_bones(context, arm)
+        root_setting = generation.root_bone.strip() or DEFAULT_ROOT_BY_ROLE[role]
         try:
-            root_name = tml.resolve_root_bone(fit_bones, generation.root_bone)
+            root_name = tml.resolve_root_bone(fit_bones, root_setting)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
@@ -214,6 +235,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         root_index = arm.data.bones.find(root_name)
         skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
         marked = _marked_covered_vertices(obj)
+        body_bones = armature_fit_bones(context, arm)
 
         try:
             output = tml.generate_chains(
@@ -227,11 +249,17 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
                 root_index,
                 tex_coords,
                 marked,
+                _body_collider_inputs(arm, settings, body_bones),
+                _humanoid_bone_indices(arm, settings, body_bones),
+                body_bones,
             )
         except ValueError as e:
             self.report({"ERROR"}, f"generate_chains failed: {e}")
             return {"CANCELLED"}
 
+        support = output.get("support")
+        if support is not None and not generation.root_bone.strip():
+            root_name = arm.data.bones[support["bone"]].name
         blender_output = output_to_blender(output, scale_length)
         specs = bone_specs(blender_output, root_name)
         groups = group_weights(blender_output, root_name, [bone.name for bone in arm.data.bones])
@@ -270,9 +298,10 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         context.view_layer.objects.active = previous_active
         collider_note = " with a head collider" if output.get("head_capsule") else ""
         covered_note = f", {len(output['covered'])} covered vertices" if output["covered"] else ""
+        support_note = f", hanging from {root_name} at height {support['boundary_height']:.3f}" if support else ""
         self.report(
             {"INFO"},
-            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}",
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}{support_note}",
         )
         return {"FINISHED"}
 

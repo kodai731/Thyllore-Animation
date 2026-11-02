@@ -5,10 +5,11 @@ use cgmath::{InnerSpace, Vector3};
 
 use super::*;
 use crate::cloth_setup::components::chain_gen::{
-    joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
-    InfluenceTarget, SkinSurface, VertexInfluences,
+    joint_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings, ChainPlacement,
+    ChainRole, GeneratedChain, InfluenceTarget, SkinSurface, VertexInfluences,
 };
 use crate::cloth_setup::components::submesh_role::SubmeshSelector;
+use crate::cloth_setup::systems::collider_surface::collider_surfaces;
 use thyllore_model_core::BoneId;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
@@ -694,10 +695,10 @@ fn hair_root_band_reports_the_equator_and_the_offset_band() {
 }
 
 const BODY_BONE: BoneId = 5;
+const PELVIS_BONE: BoneId = 3;
 
-/// A closed-side tube of `rows` rings of 8 vertices, from `top_y` down to `bottom_y`.
-fn build_tube(
-    radius: f32,
+fn build_tube_with_radius(
+    radius_at: impl Fn(f32) -> f32,
     top_y: f32,
     bottom_y: f32,
     rows: usize,
@@ -705,6 +706,7 @@ fn build_tube(
     let mut positions = Vec::new();
     for row in 0..rows {
         let y = top_y + (bottom_y - top_y) * row as f32 / (rows - 1) as f32;
+        let radius = radius_at(y);
         for i in 0..8 {
             let angle = TAU * i as f32 / 8.0;
             positions.push(Vector3::new(radius * angle.cos(), y, radius * angle.sin()));
@@ -722,9 +724,18 @@ fn build_tube(
     (positions, triangles)
 }
 
-fn body_skin(bottom_y: f32) -> SkinSurface {
-    let (positions, triangles) = build_tube(0.10, 0.0, bottom_y, 11);
-    let influences = vec![vec![(BODY_BONE, 1.0)]; positions.len()];
+fn build_tube(
+    radius: f32,
+    top_y: f32,
+    bottom_y: f32,
+    rows: usize,
+) -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+    build_tube_with_radius(|_| radius, top_y, bottom_y, rows)
+}
+
+fn body_tube(bone: BoneId, radius: f32, top_y: f32, bottom_y: f32) -> SkinSurface {
+    let (positions, triangles) = build_tube(radius, top_y, bottom_y, 11);
+    let influences = vec![vec![(bone, 1.0)]; positions.len()];
     SkinSurface {
         positions,
         triangles,
@@ -732,111 +743,164 @@ fn body_skin(bottom_y: f32) -> SkinSurface {
     }
 }
 
-fn garment_coverage_params() -> ChainGenParams {
+/// A dress: fitted (radius 0.11) over the body down to the waist, flared (radius 0.2) below it.
+fn flared_dress() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+    build_tube_with_radius(|y| if y > -0.4 { 0.11 } else { 0.2 }, -0.1, -0.9, 11)
+}
+
+fn garment_support_params() -> ChainGenParams {
     let mut params = build_params(ChainRole::Garment, 4, 1);
-    params.settings.garment.cover_distance = 0.05;
-    params.settings.garment.covered_band_ratio = 0.5;
+    params.settings.garment.fit_gap = 0.015;
+    params.settings.garment.support_ratio = 0.5;
     params
 }
 
-#[test]
-fn garment_chain_starts_below_the_covered_bands_and_covered_vertices_keep_the_skin_bone() {
-    let skins = vec![body_skin(-0.45)];
-    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
+fn garment_input<'a>(
+    positions: &'a [Vector3<f32>],
+    triangles: &'a [[u32; 3]],
+    skins: &'a [SkinSurface],
+    covered_vertices: &'a [u32],
+) -> ChainGenInput<'a> {
+    ChainGenInput {
+        positions,
+        triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
-        skins: &skins,
+        skins,
         tex_coords: &[],
-        covered_vertices: &[],
-    };
-    let params = garment_coverage_params();
+        covered_vertices,
+    }
+}
+
+fn assert_split_at_boundary(
+    placement: &ChainPlacement,
+    positions: &[Vector3<f32>],
+    boundary_height: f32,
+) {
+    let chain: BTreeSet<u32> = placement.chains[0].vertices.iter().copied().collect();
+    let covered: BTreeSet<u32> = placement.covered.iter().map(|c| c.vertex).collect();
+    assert!(chain.is_disjoint(&covered));
+    assert_eq!(chain.len() + covered.len(), positions.len());
+    assert!(chain
+        .iter()
+        .all(|&v| positions[v as usize].y < boundary_height));
+    assert!(covered
+        .iter()
+        .all(|&v| positions[v as usize].y >= boundary_height));
+}
+
+#[test]
+fn fitted_rings_stay_on_the_body_and_the_flare_below_becomes_the_chain() {
+    let skins = vec![body_tube(BODY_BONE, 0.10, 0.0, -0.9)];
+    let (positions, triangles) = flared_dress();
+    let input = garment_input(&positions, &triangles, &skins, &[]);
+    let params = garment_support_params();
 
     let placement = place_chains_with_strands(&input, &params).unwrap();
-    let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
+    let support = placement
+        .support
+        .expect("the body supports the fitted rings");
 
-    assert_eq!(placement.chains.len(), 1);
-    let chain = &placement.chains[0];
+    assert_eq!(support.bone, BODY_BONE);
     assert!(
-        chain.joints[0].head.y < -0.45,
-        "joint 0 at {:?}",
-        chain.joints[0].head
+        support.boundary_height > -0.42 && support.boundary_height < -0.33,
+        "boundary {}",
+        support.boundary_height
     );
-    assert!(chain
-        .vertices
+    assert_eq!(placement.chains.len(), 1);
+    assert_split_at_boundary(&placement, &positions, support.boundary_height);
+    assert!(placement
+        .covered
         .iter()
-        .all(|&v| positions[v as usize].y <= -0.5 + 1e-5));
+        .all(|covered| covered.influences == vec![(BODY_BONE, 1.0)]));
+
+    let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
     for entry in &weights {
-        let y = positions[entry.vertex as usize].y;
-        if y >= -0.45 {
-            assert_eq!(
-                entry.influences,
-                vec![(InfluenceTarget::Bone(BODY_BONE), 1.0)]
-            );
-        } else {
-            assert!(
-                entry
-                    .influences
-                    .iter()
-                    .all(|(target, _)| *target != InfluenceTarget::Bone(BODY_BONE)),
-                "vertex at y={y}: {:?}",
-                entry.influences
-            );
-        }
+        let is_covered = positions[entry.vertex as usize].y >= support.boundary_height;
+        let on_body = entry.influences == vec![(InfluenceTarget::Bone(BODY_BONE), 1.0)];
+        assert_eq!(is_covered, on_body, "vertex {}", entry.vertex);
     }
 }
 
 #[test]
-fn garment_without_a_skin_surface_or_cover_distance_keeps_the_whole_tube() {
-    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
-    let points_only = vec![SkinSurface::points_driven_by(
-        ROOT_BONE,
-        body_skin(-0.45).positions,
-    )];
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &points_only,
-        tex_coords: &[],
-        covered_vertices: &[],
-    };
+fn a_ring_narrower_than_the_body_below_it_is_caught() {
+    let skins = vec![body_tube(PELVIS_BONE, 0.15, -0.5, -0.7)];
+    let (positions, triangles) =
+        build_tube_with_radius(|y| if y > -0.5 { 0.08 } else { 0.3 }, -0.1, -0.9, 9);
+    let input = garment_input(&positions, &triangles, &skins, &[]);
 
-    let placement = place_chains_with_strands(&input, &garment_coverage_params()).unwrap();
-    assert!(placement.covered.is_empty());
-    assert_eq!(placement.chains[0].vertices.len(), positions.len());
+    let placement = place_chains_with_strands(&input, &garment_support_params()).unwrap();
+    let support = placement
+        .support
+        .expect("the pelvis catches the narrow waist");
 
-    let skins = vec![body_skin(-0.45)];
-    let mut disabled = garment_coverage_params();
-    disabled.settings.garment.cover_distance = 0.0;
-    let with_surface = ChainGenInput {
-        skins: &skins,
-        ..input
+    assert_eq!(support.bone, PELVIS_BONE);
+    assert!(
+        support.boundary_height > -0.52 && support.boundary_height < -0.39,
+        "boundary {}",
+        support.boundary_height
+    );
+    assert_split_at_boundary(&placement, &positions, support.boundary_height);
+}
+
+#[test]
+fn collider_samples_count_as_body() {
+    let capsule = BodyCollider {
+        bone: PELVIS_BONE,
+        head: Vector3::new(0.0, -0.1, 0.0),
+        tail: Vector3::new(0.0, -0.8, 0.0),
+        radius: 0.10,
     };
-    let placement = place_chains_with_strands(&with_surface, &disabled).unwrap();
+    let skins = collider_surfaces(&[capsule]);
+    let (positions, triangles) = flared_dress();
+    let input = garment_input(&positions, &triangles, &skins, &[]);
+
+    let placement = place_chains_with_strands(&input, &garment_support_params()).unwrap();
+    let support = placement
+        .support
+        .expect("the capsule supports the fitted rings");
+
+    assert_eq!(support.bone, PELVIS_BONE);
+    assert_split_at_boundary(&placement, &positions, support.boundary_height);
+    assert!(placement
+        .covered
+        .iter()
+        .all(|covered| covered.influences == vec![(PELVIS_BONE, 1.0)]));
+}
+
+#[test]
+fn garment_without_a_body_keeps_the_whole_tube() {
+    let (positions, triangles) = flared_dress();
+    let input = garment_input(&positions, &triangles, &[], &[]);
+
+    let placement = place_chains_with_strands(&input, &garment_support_params()).unwrap();
+
+    assert!(placement.support.is_none());
     assert!(placement.covered.is_empty());
     assert_eq!(placement.chains[0].vertices.len(), positions.len());
 }
 
 #[test]
-fn fully_covered_garment_is_rejected() {
-    let skins = vec![body_skin(-1.0)];
+fn garment_the_body_supports_nowhere_keeps_the_whole_tube() {
+    let skins = vec![body_tube(BODY_BONE, 0.05, 0.0, -0.9)];
     let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &skins,
-        tex_coords: &[],
-        covered_vertices: &[],
-    };
+    let input = garment_input(&positions, &triangles, &skins, &[]);
 
-    let error = place_chains_with_strands(&input, &garment_coverage_params()).unwrap_err();
-    assert!(error.to_string().contains("covers every band"), "{error}");
+    let placement = place_chains_with_strands(&input, &garment_support_params()).unwrap();
+
+    assert!(placement.support.is_none());
+    assert!(placement.covered.is_empty());
+    assert_eq!(placement.chains[0].vertices.len(), positions.len());
+}
+
+#[test]
+fn fully_supported_garment_is_rejected() {
+    let skins = vec![body_tube(BODY_BONE, 0.10, 0.0, -1.0)];
+    let (positions, triangles) = build_tube(0.11, -0.1, -0.9, 9);
+    let input = garment_input(&positions, &triangles, &skins, &[]);
+
+    let error = place_chains_with_strands(&input, &garment_support_params()).unwrap_err();
+    assert!(error.to_string().contains("supports every ring"), "{error}");
 }
 
 #[test]
@@ -861,27 +925,19 @@ fn root_attachment_positions_are_the_skin_vertices_the_root_drives_most() {
 }
 
 #[test]
-fn marked_covered_vertices_override_the_distance_test_and_take_the_nearest_skin_bone() {
-    let skins = vec![body_skin(-1.0)];
+fn marked_covered_vertices_override_the_support_test_and_take_the_nearest_body_bone() {
+    let skins = vec![body_tube(BODY_BONE, 0.10, 0.0, -1.0)];
     let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
     let marked: Vec<u32> = (0..positions.len() as u32)
         .filter(|&v| positions[v as usize].y > -0.65)
         .collect();
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &skins,
-        tex_coords: &[],
-        covered_vertices: &marked,
-    };
-    let mut params = garment_coverage_params();
-    params.settings.garment.cover_distance = 0.0;
+    let input = garment_input(&positions, &triangles, &skins, &marked);
+    let params = garment_support_params();
 
     let placement = place_chains_with_strands(&input, &params).unwrap();
     let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
 
+    assert!(placement.support.is_none());
     let chain_vertices: BTreeSet<u32> = placement.chains[0].vertices.iter().copied().collect();
     let expected_chain: BTreeSet<u32> = (0..positions.len() as u32)
         .filter(|v| !marked.contains(v))
@@ -899,18 +955,10 @@ fn marked_covered_vertices_override_the_distance_test_and_take_the_nearest_skin_
 }
 
 #[test]
-fn marked_covered_vertices_without_a_skin_surface_keep_the_root_bone() {
+fn marked_covered_vertices_without_a_body_keep_the_root_bone() {
     let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
     let marked = [0u32, 1, 2];
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &[],
-        tex_coords: &[],
-        covered_vertices: &marked,
-    };
+    let input = garment_input(&positions, &triangles, &[], &marked);
 
     let placement =
         place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap();
@@ -926,15 +974,7 @@ fn marked_covered_vertices_without_a_skin_surface_keep_the_root_bone() {
 fn marking_every_vertex_is_rejected() {
     let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
     let marked: Vec<u32> = (0..positions.len() as u32).collect();
-    let input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &[],
-        tex_coords: &[],
-        covered_vertices: &marked,
-    };
+    let input = garment_input(&positions, &triangles, &[], &marked);
 
     let error =
         place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap_err();
@@ -942,40 +982,18 @@ fn marking_every_vertex_is_rejected() {
 }
 
 #[test]
-fn marking_the_measured_coverage_reproduces_the_chain_vertices() {
-    let skins = vec![body_skin(-0.52)];
-    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
-    let measured_input = ChainGenInput {
-        positions: &positions,
-        triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
-        root_bone: ROOT_BONE,
-        skins: &skins,
-        tex_coords: &[],
-        covered_vertices: &[],
-    };
-    let mut params = garment_coverage_params();
-    params.settings.garment.covered_band_ratio = 0.6;
-    let measured = place_chains_with_strands(&measured_input, &params).unwrap();
+fn marking_the_supported_coverage_reproduces_the_chain_vertices() {
+    let skins = vec![body_tube(BODY_BONE, 0.10, 0.0, -0.9)];
+    let (positions, triangles) = flared_dress();
+    let supported_input = garment_input(&positions, &triangles, &skins, &[]);
+    let params = garment_support_params();
+    let supported = place_chains_with_strands(&supported_input, &params).unwrap();
 
-    let covered: BTreeSet<u32> = measured.covered.iter().map(|c| c.vertex).collect();
-    let covered_below_start = covered
-        .iter()
-        .filter(|&&v| positions[v as usize].y <= -0.5 + 1e-5)
-        .count();
-    assert!(
-        covered_below_start > 0,
-        "the fixture needs a covered row inside a chain band"
-    );
-    let chained: BTreeSet<u32> = measured.chains[0].vertices.iter().copied().collect();
-    assert!(covered.is_disjoint(&chained));
-    assert_eq!(covered.len() + chained.len(), positions.len());
-
-    let marked: Vec<u32> = covered.iter().copied().collect();
+    let marked: Vec<u32> = supported.covered.iter().map(|c| c.vertex).collect();
     let marked_input = ChainGenInput {
         covered_vertices: &marked,
-        ..measured_input
+        ..supported_input
     };
     let remarked = place_chains_with_strands(&marked_input, &params).unwrap();
-    assert_eq!(remarked.chains[0].vertices, measured.chains[0].vertices);
+    assert_eq!(remarked.chains[0].vertices, supported.chains[0].vertices);
 }

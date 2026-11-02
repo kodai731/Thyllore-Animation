@@ -3,7 +3,7 @@ use thyllore_math_core::resample_polyline;
 
 use super::card_strands::place_card_chains;
 use super::columns::{group_into_components, split_garment_columns, split_hair_columns};
-use super::coverage::{chain_frames, garment_coverage};
+use super::coverage::{chain_frames, garment_coverage, GarmentCoverage};
 use super::frame::{collect_target_vertices, compute_vertex_frames, BandPartition, VertexFrame};
 use super::root_band::{hair_root_band, RootBand};
 use super::strand_mode::decide_strand_mode;
@@ -90,6 +90,7 @@ fn place_hair_card_chains(
                     centerlines,
                 }),
                 covered: Vec::new(),
+                support: None,
             })
         }
         StrandMode::Azimuth => None,
@@ -118,9 +119,9 @@ pub fn place_chains_with_strands(
     let root_band = hair_root_band(input, params);
     let phi_center = root_band.map_or(input.root_position, |band| band.center);
     let all_frames = compute_vertex_frames(input, &vertices, phi_center);
-    let mut coverage = garment_coverage(input, params, &vertices);
-    let frames = match coverage.as_mut() {
-        Some(coverage) => chain_frames(all_frames, coverage, input, params)?,
+    let coverage = garment_coverage(input, params, &vertices)?;
+    let frames = match coverage.as_ref() {
+        Some(coverage) => chain_frames(all_frames, coverage)?,
         None => all_frames,
     };
     let (columns, strands) = match root_band {
@@ -154,9 +155,11 @@ pub fn place_chains_with_strands(
             build_chain(column, &column_frames, input, params)
         })
         .collect();
+    let support = coverage.as_ref().and_then(GarmentCoverage::support);
     Ok(ChainPlacement {
         chains,
         strands,
-        covered: coverage.map_or_else(Vec::new, |coverage| coverage.into_covered_vertices()),
+        covered: coverage.map_or_else(Vec::new, GarmentCoverage::into_covered_vertices),
+        support,
     })
 }

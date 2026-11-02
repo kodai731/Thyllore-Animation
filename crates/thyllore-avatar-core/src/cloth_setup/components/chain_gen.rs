@@ -37,7 +37,7 @@ pub struct ChainGenSettings {
     #[nested]
     pub card: CardStrandSettings,
     #[nested]
-    pub garment: GarmentCoverageSettings,
+    pub garment: GarmentSupportSettings,
 }
 
 /// Settings of the azimuth placement, which rings the hair around the skin's widest cross-section.
@@ -60,23 +60,23 @@ pub struct CardStrandSettings {
     pub root_rigid_length: f32,
 }
 
-/// Settings of the garment placement, which starts the chain below the bands the skin covers.
+/// Settings of the garment placement, which starts the chain below the lowest ring the body supports.
 #[derive(Clone, Debug, PartialEq, SceneFields)]
 #[params(tag = ChainGenOwner, owner = Setup)]
-pub struct GarmentCoverageSettings {
-    /// Distance to the skin surface in model units under which a garment vertex counts as covered; 0 disables the coverage test
+pub struct GarmentSupportSettings {
+    /// Gap in model units between a garment ring and the body under which the ring counts as fitted or caught
     #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
-    pub cover_distance: f32,
-    /// Share of covered vertices from which a band is left to the skin bones instead of the chain
+    pub fit_gap: f32,
+    /// Share of a ring's sectors the body must support for the ring to count as supported
     #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
-    pub covered_band_ratio: f32,
+    pub support_ratio: f32,
 }
 
-impl Default for GarmentCoverageSettings {
+impl Default for GarmentSupportSettings {
     fn default() -> Self {
         Self {
-            cover_distance: 0.0,
-            covered_band_ratio: 0.5,
+            fit_gap: 0.02,
+            support_ratio: 0.25,
         }
     }
 }
@@ -91,7 +91,7 @@ impl Default for ChainGenSettings {
             column_blend_width: 0.0,
             azimuth: AzimuthStrandSettings::default(),
             card: CardStrandSettings::default(),
-            garment: GarmentCoverageSettings::default(),
+            garment: GarmentSupportSettings::default(),
         }
     }
 }
@@ -151,7 +151,16 @@ pub fn submesh_label(target: &SubmeshSelector) -> String {
     label.trim_end_matches('_').to_string()
 }
 
-/// A skin mesh in the same space as the target: its surface and the bones that drive each vertex.
+/// A body collider in the same space as the target; a sphere has `tail == head`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BodyCollider {
+    pub bone: BoneId,
+    pub head: Vector3<f32>,
+    pub tail: Vector3<f32>,
+    pub radius: f32,
+}
+
+/// A body surface in the same space as the target: skin vertices or collider samples with the bones that drive them.
 #[derive(Debug, Clone, Default)]
 pub struct SkinSurface {
     pub positions: Vec<Vector3<f32>>,
@@ -178,11 +187,11 @@ pub struct ChainGenInput<'a> {
     pub triangles: &'a [[u32; 3]],
     pub root_position: Vector3<f32>,
     pub root_bone: BoneId,
-    /// The skin meshes in the same space as `positions`; empty falls back to `positions` as the attachment surface
+    /// The body surfaces (skin meshes and collider samples) in the same space as `positions`; empty falls back to `positions` as the attachment surface
     pub skins: &'a [SkinSurface],
     /// Per-vertex texture coordinates; empty means no strand parameter is available
     pub tex_coords: &'a [[f32; 2]],
-    /// Garment vertices the user marked as covered by the skin; empty measures the coverage by distance
+    /// Garment vertices the user marked as covered by the body; empty finds the supported rings instead
     pub covered_vertices: &'a [u32],
 }
 
@@ -224,7 +233,17 @@ pub enum InfluenceTarget {
     Bone(BoneId),
 }
 
-/// A target vertex the skin covers, with the influences of its nearest skin vertex.
+/// Height of the rings the garment support is judged in, and the spacing of body samples, in model units.
+pub const SUPPORT_RING_HEIGHT: f32 = 0.02;
+
+/// The lowest ring of a garment the body supports: the chain hangs from `bone` below `boundary_height`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GarmentSupport {
+    pub boundary_height: f32,
+    pub bone: BoneId,
+}
+
+/// A target vertex the body covers, with the influences of its nearest body point.
 #[derive(Debug, Clone)]
 pub struct CoveredVertex {
     pub vertex: u32,
@@ -296,8 +315,10 @@ pub struct StrandPlacement {
 pub struct ChainPlacement {
     pub chains: Vec<GeneratedChain>,
     pub strands: Option<StrandPlacement>,
-    /// Garment vertices the skin covers; they keep skin bones instead of chain joints
+    /// Garment vertices the body covers; they keep body bones instead of chain joints
     pub covered: Vec<CoveredVertex>,
+    /// The ring the garment hangs from, when the body supports one
+    pub support: Option<GarmentSupport>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -362,8 +383,8 @@ mod tests {
                 "column_blend_width",
                 "azimuth_root_band_offset",
                 "card_root_rigid_length",
-                "garment_cover_distance",
-                "garment_covered_band_ratio"
+                "garment_fit_gap",
+                "garment_support_ratio"
             ]
         );
         let scalar_names: Vec<&str> = CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect();

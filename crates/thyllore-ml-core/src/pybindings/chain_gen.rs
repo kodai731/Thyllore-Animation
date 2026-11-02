@@ -4,8 +4,12 @@ use pythonize::{depythonize, pythonize};
 
 use super::avatar_setup::depythonize_error_to_pyerr;
 use super::error::anyhow_to_pyerr;
+use std::collections::BTreeMap;
+
+use crate::avatar_setup_bridge::BoneSpec;
 use crate::chain_gen_bridge::{
-    chain_gen_params, run_chain_gen, settings_from_pairs, SkinAttachment,
+    body_colliders as body_colliders_from_inputs, chain_gen_params, role_bones, run_chain_gen,
+    settings_from_pairs, BodyColliderIn, SkinAttachment,
 };
 use crate::collider_bridge::FitSkin;
 
@@ -35,9 +39,12 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 /// FitSkin dicts (positions, influences, triangles) and `root_bone` the index of the bone the chains hang
 /// from; `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
 /// `tex_coords` is per-vertex UV, empty uses the φ-around-up method; `covered_vertices` are the garment
-/// vertices the user marked as covered by the skin, empty measures the coverage by distance.
+/// vertices the user marked as covered by the body, empty finds the rings the body supports instead;
+/// `body_colliders` are the sidecar colliders in model axes relative to their bones' rest heads (bone
+/// index, head, tail, radius), `humanoid_bones` maps Unity role names to bone indices and `bones` are
+/// the bone specs; together they give the torso volume the garment can rest on.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new()))]
+#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
@@ -51,6 +58,9 @@ pub fn generate_chains<'py>(
     root_bone: usize,
     tex_coords: Vec<[f32; 2]>,
     covered_vertices: Vec<u32>,
+    body_colliders: Option<&Bound<'py, PyAny>>,
+    humanoid_bones: BTreeMap<String, usize>,
+    bones: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
@@ -58,6 +68,16 @@ pub fn generate_chains<'py>(
         Some(skins) => depythonize(skins).map_err(depythonize_error_to_pyerr)?,
         None => Vec::new(),
     };
+    let collider_inputs: Vec<BodyColliderIn> = match body_colliders {
+        Some(colliders) => depythonize(colliders).map_err(depythonize_error_to_pyerr)?,
+        None => Vec::new(),
+    };
+    let bone_specs: Vec<BoneSpec> = match bones {
+        Some(bones) => depythonize(bones).map_err(depythonize_error_to_pyerr)?,
+        None => Vec::new(),
+    };
+    let roles = role_bones(&humanoid_bones, &bone_specs);
+    let colliders = body_colliders_from_inputs(&collider_inputs, &roles, &bone_specs);
 
     let output = py
         .detach(|| {
@@ -70,6 +90,8 @@ pub fn generate_chains<'py>(
                 settings,
                 SkinAttachment {
                     skins: &skins,
+                    body_colliders: &colliders,
+                    roles: &roles,
                     root_bone,
                     covered_vertices: &covered_vertices,
                 },

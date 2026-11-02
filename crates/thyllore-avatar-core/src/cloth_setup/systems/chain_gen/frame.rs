@@ -83,8 +83,4 @@ impl BandPartition {
         }
         (((progress - self.min_progress) / self.band_width) as usize).min(self.count - 1)
     }
-
-    pub(super) fn start_of(&self, band: usize) -> f32 {
-        self.min_progress + self.band_width * band as f32
-    }
 }

@@ -9,6 +9,7 @@ mod root_band;
 mod settings;
 mod strand_merge;
 mod strand_mode;
+mod support;
 mod weights;
 
 #[cfg(test)]

@@ -1,16 +1,24 @@
+use std::collections::BTreeMap;
+
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, InfluenceTarget,
-    SkinSurface, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole,
+    InfluenceTarget, SkinSurface, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
 };
+use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
+    collider_surfaces, retain_torso_skin, supports_garments,
+};
 use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
+use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_model_core::BoneId;
 
+use crate::avatar_setup_bridge::BoneSpec;
 use crate::collider_bridge::FitSkin;
 use crate::param_rows::{param_rows, ParamRow};
 
@@ -20,8 +28,73 @@ pub struct ChainGenOutput {
     pub weights: Vec<WeightOut>,
     /// The capsule a hair role fits around the head, in the same space as the positions
     pub head_capsule: Option<CapsuleOut>,
-    /// The garment vertices the skin covers, marked or measured
+    /// The garment vertices the body covers, marked or found from the supported rings
     pub covered: Vec<u32>,
+    /// The ring a garment hangs from and the bone that supports it, when the body supports one
+    pub support: Option<SupportOut>,
+}
+
+/// A sidecar collider in model axes relative to its bone's rest head; `tail` is absent for a sphere.
+#[derive(Clone, serde::Deserialize)]
+pub struct BodyColliderIn {
+    pub bone: usize,
+    pub head: [f32; 3],
+    pub tail: Option<[f32; 3]>,
+    pub radius: f32,
+}
+
+fn role_of_bone(roles: &[RoleBone], bone: BoneId) -> Option<HumanoidRole> {
+    roles
+        .iter()
+        .find(|role_bone| role_bone.bone == bone)
+        .map(|role_bone| role_bone.role)
+}
+
+/// The humanoid roles of the bone list, by Unity role name.
+pub fn role_bones(humanoid_bones: &BTreeMap<String, usize>, bones: &[BoneSpec]) -> Vec<RoleBone> {
+    humanoid_bones
+        .iter()
+        .filter_map(|(role, &bone)| {
+            Some(RoleBone {
+                role: HumanoidRole::from_unity_name(role)?,
+                bone: bone as BoneId,
+                head: Vector3::from(bones.get(bone)?.rest_position),
+            })
+        })
+        .collect()
+}
+
+/// The colliders a garment can rest on, placed at their bones' rest heads: those on torso bones and
+/// on bones without a role, never the limbs.
+pub fn body_colliders(
+    colliders: &[BodyColliderIn],
+    roles: &[RoleBone],
+    bones: &[BoneSpec],
+) -> Vec<BodyCollider> {
+    colliders
+        .iter()
+        .filter(|collider| {
+            role_of_bone(roles, collider.bone as BoneId).is_none_or(supports_garments)
+        })
+        .filter_map(|collider| {
+            let rest_head = Vector3::from(bones.get(collider.bone)?.rest_position);
+            let head = rest_head + Vector3::from(collider.head);
+            Some(BodyCollider {
+                bone: collider.bone as BoneId,
+                head,
+                tail: collider
+                    .tail
+                    .map_or(head, |tail| rest_head + Vector3::from(tail)),
+                radius: collider.radius,
+            })
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct SupportOut {
+    pub boundary_height: f32,
+    pub bone: BoneId,
 }
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -111,10 +184,13 @@ fn skin_surface_from_fit_skin(skin: &FitSkin) -> SkinSurface {
     }
 }
 
-/// The skin meshes the chains attach to, the bone the chains hang from (a bone-list index) and the
-/// garment vertices the user marked as covered.
+/// The skin meshes and body colliders the chains attach to, the humanoid roles that tell limb skin
+/// from torso skin, the bone the chains hang from (a bone-list index) and the garment vertices the
+/// user marked as covered.
 pub struct SkinAttachment<'a> {
     pub skins: &'a [FitSkin],
+    pub body_colliders: &'a [BodyCollider],
+    pub roles: &'a [RoleBone],
     pub root_bone: usize,
     pub covered_vertices: &'a [u32],
 }
@@ -133,11 +209,13 @@ pub fn run_chain_gen(
     let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
 
     let positions_vec = to_vectors(positions);
-    let skins: Vec<SkinSurface> = attachment
+    let mut skins: Vec<SkinSurface> = attachment
         .skins
         .iter()
         .map(skin_surface_from_fit_skin)
         .collect();
+    retain_torso_skin(&mut skins, |bone| role_of_bone(attachment.roles, bone));
+    skins.extend(collider_surfaces(attachment.body_colliders));
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
@@ -210,6 +288,10 @@ pub fn run_chain_gen(
         weights: weights_out,
         head_capsule,
         covered: placement.covered.iter().map(|c| c.vertex).collect(),
+        support: placement.support.map(|support| SupportOut {
+            boundary_height: support.boundary_height,
+            bone: support.bone,
+        }),
     })
 }
 
@@ -251,6 +333,8 @@ mod tests {
             settings,
             SkinAttachment {
                 skins: std::slice::from_ref(&head),
+                body_colliders: &[],
+                roles: &[],
                 root_bone: 0,
                 covered_vertices: &[],
             },

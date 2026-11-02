@@ -56,3 +56,19 @@ def skin_input(mesh_obj, arm, scale_length: float) -> dict:
         influences.append(top_influences(vertex_groups, group_to_bone_local))
 
     return {"positions": positions, "influences": influences, "triangles": triangles}
+
+
+def collider_inputs(colliders: list[dict], bone_index: dict[str, int]) -> list[dict]:
+    """Model-space sidecar colliders as the wheel's body collider dicts; a collider on an unknown bone is dropped."""
+    inputs = []
+    for collider in colliders:
+        index = bone_index.get(collider["bone"])
+        if index is None:
+            continue
+        inputs.append({
+            "bone": index,
+            "head": list(collider["offset"]),
+            "tail": None if collider.get("tail") is None else list(collider["tail"]),
+            "radius": collider["radius"],
+        })
+    return inputs

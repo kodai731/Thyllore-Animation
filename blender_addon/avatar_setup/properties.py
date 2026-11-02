@@ -72,8 +72,8 @@ class THYLLORE_PG_ChainGeneration(bpy.types.PropertyGroup):
 
     root_bone: bpy.props.StringProperty(
         name="Root Bone",
-        description="Humanoid bone the generated chains hang from (a role name such as Head is resolved)",
-        default="Head",
+        description="Bone the generated chains hang from (a role name such as Head is resolved); empty hangs hair from the head and a garment from the bone that supports it",
+        default="",
     )
 
     __annotations__.update(_chain_generation_annotations())

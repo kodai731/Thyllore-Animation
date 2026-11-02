@@ -3,6 +3,7 @@ use thyllore_anim_core::spring_bone::{
     fit_bone_capsules, replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams,
     SpringChainId, SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
 };
+use thyllore_avatar_core::collider::systems::torso_volume::fitted_torso_fallback;
 use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
@@ -116,10 +117,11 @@ pub fn fit_body_colliders(
 
     let (mapping, _) = infer_mapping(&bone_inputs);
     let allowed = body_collider_bone_indices(&mapping);
-    let fitted: Vec<_> = fitted
+    let mut fitted: Vec<_> = fitted
         .into_iter()
         .filter(|c| allowed.contains(&(c.bone_id as usize)))
         .collect();
+    fitted.extend(fitted_torso_fallback(&skeleton, &mapping, &fitted));
 
     anyhow::ensure!(!fitted.is_empty(), "fit produced no body colliders");
 

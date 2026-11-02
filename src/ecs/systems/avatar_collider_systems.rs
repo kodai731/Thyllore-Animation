@@ -11,6 +11,7 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
+use thyllore_avatar_core::collider::systems::torso_volume::fitted_torso_fallback;
 use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
 
 pub fn fit_body_colliders(
@@ -34,11 +35,13 @@ pub fn fit_body_colliders(
 
     let fitted = fit_bone_capsules(&skin_data, skeleton, params);
 
-    let allowed = body_collider_bone_indices(&world.resource::<AvatarSetupState>().mapping);
-    let fitted: Vec<_> = fitted
+    let mapping = world.resource::<AvatarSetupState>().mapping.clone();
+    let allowed = body_collider_bone_indices(&mapping);
+    let mut fitted: Vec<_> = fitted
         .into_iter()
         .filter(|c| allowed.contains(&(c.bone_id as usize)))
         .collect();
+    fitted.extend(fitted_torso_fallback(skeleton, &mapping, &fitted));
 
     if fitted.is_empty() {
         msg_error!("Cannot fit body colliders: no humanoid body bones are mapped");

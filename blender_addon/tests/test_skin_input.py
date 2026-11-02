@@ -60,3 +60,18 @@ def test_only_skin_material_triangles_form_the_surface():
     assert skin["influences"][2] == [(0, 0.5), (1, 0.5)]
     assert skin["influences"][3] == []
     assert skin["influences"][4] == []
+
+
+def test_collider_inputs_map_bone_names_and_keep_spheres_tailless():
+    from blender_addon.common.skin_input import collider_inputs
+
+    colliders = [
+        {"bone": "Hips", "offset": [0.0, 1.0, 0.0], "tail": [0.0, 1.2, 0.0], "radius": 0.1},
+        {"bone": "Head", "offset": [0.0, 1.6, 0.0], "tail": None, "radius": 0.09},
+        {"bone": "missing", "offset": [0.0, 0.0, 0.0], "tail": None, "radius": 0.1},
+    ]
+
+    assert collider_inputs(colliders, {"Hips": 0, "Head": 5}) == [
+        {"bone": 0, "head": [0.0, 1.0, 0.0], "tail": [0.0, 1.2, 0.0], "radius": 0.1},
+        {"bone": 5, "head": [0.0, 1.6, 0.0], "tail": None, "radius": 0.09},
+    ]

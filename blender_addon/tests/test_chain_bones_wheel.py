@@ -79,8 +79,8 @@ def test_settings_table_lists_defaults(tml):
         "column_blend_width",
         "azimuth_root_band_offset",
         "card_root_rigid_length",
-        "garment_cover_distance",
-        "garment_covered_band_ratio",
+        "garment_fit_gap",
+        "garment_support_ratio",
     ]
     assert params[0]["default"] == 4
     assert params[0]["label"] == "Joint Count"
@@ -319,3 +319,60 @@ def test_generate_chains_marked_covered_vertices_leave_the_chain(tml):
     for entry in output["weights"]:
         if entry["vertex"] in marked:
             assert entry["influences"] == [({"bone": 0}, 1.0)]
+
+
+def _ring_mesh(radius_at, top, bottom, levels, around=8):
+    positions = []
+    triangles = []
+    for level in range(levels):
+        y = top + (bottom - top) * level / (levels - 1)
+        radius = radius_at(y)
+        for i in range(around):
+            angle = 2 * math.pi * i / around
+            positions.append((radius * math.cos(angle), y, radius * math.sin(angle)))
+    for level in range(levels - 1):
+        base = level * around
+        for i in range(around):
+            nxt = (i + 1) % around
+            triangles.append([base + i, base + nxt, base + around + i])
+            triangles.append([base + nxt, base + around + nxt, base + around + i])
+    return positions, triangles
+
+
+def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(tml):
+    positions, triangles = _ring_mesh(lambda y: 0.11 if y > -0.4 else 0.2, -0.1, -0.9, 11)
+    pelvis = {"bone": 3, "head": [0.0, 0.0, 0.0], "tail": [0.0, -0.7, 0.0], "radius": 0.1}
+    arm = {"bone": 4, "head": [0.0, 0.0, 0.0], "tail": [0.9, 0.0, 0.0], "radius": 0.3}
+    bones = [
+        {"name": "Root", "parent": None, "rest_position": [0.0, 0.0, 0.0]},
+        {"name": "A", "parent": 0, "rest_position": [0.0, 0.0, 0.0]},
+        {"name": "B", "parent": 0, "rest_position": [0.0, 0.0, 0.0]},
+        {"name": "Hips", "parent": 0, "rest_position": [0.0, -0.1, 0.0]},
+        {"name": "LeftArm", "parent": 0, "rest_position": [0.0, -0.2, 0.0]},
+    ]
+
+    output = tml.generate_chains(
+        positions,
+        triangles,
+        (0.0, 0.0, 0.0),
+        "garment",
+        "dress/top",
+        {"joint_count": 3, "column_count": 1, "garment_fit_gap": 0.015},
+        None,
+        0,
+        [],
+        [],
+        [pelvis, arm],
+        {"Hips": 3, "LeftUpperArm": 4},
+        bones,
+    )
+
+    support = output["support"]
+    assert support["bone"] == 3
+    assert -0.42 < support["boundary_height"] < -0.33
+    covered = set(output["covered"])
+    assert covered == {v for v, p in enumerate(positions) if p[1] >= support["boundary_height"]}
+    assert not covered & set(output["chains"][0]["vertices"])
+    for entry in output["weights"]:
+        if entry["vertex"] in covered:
+            assert entry["influences"] == [({"bone": 3}, 1.0)]

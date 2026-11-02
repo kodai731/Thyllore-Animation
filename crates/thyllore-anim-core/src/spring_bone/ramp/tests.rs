@@ -30,6 +30,10 @@ fn stiffness_of(joint: &SpringJointParam) -> f32 {
     joint.force.magnitudes()[0]
 }
 
+fn stiffnesses_of(chain: &SpringChain) -> Vec<f32> {
+    chain.joints.iter().map(stiffness_of).collect()
+}
+
 fn ramp(root_stiffness: f32, tip_stiffness: f32, shape: RampShape) -> ChainRamp {
     ChainRamp {
         root: SpringJointParam {
@@ -41,6 +45,7 @@ fn ramp(root_stiffness: f32, tip_stiffness: f32, shape: RampShape) -> ChainRamp 
             ..Default::default()
         },
         shape,
+        rigid_fraction: 0.0,
     }
 }
 
@@ -137,11 +142,66 @@ fn gravity_dir_is_root_for_all_joints() {
             ..Default::default()
         },
         shape: RampShape::Linear,
+        rigid_fraction: 0.0,
     };
     let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     for joint in &result.joints {
         assert_eq!(joint.gravity_dir, Vector3::new(1.0, 0.0, 0.0));
+    }
+}
+
+#[test]
+fn rigid_fraction_zero_matches_plain_shape() {
+    let chain = make_chain(&[0, 1, 2, 3]);
+    let plain = ramp(0.8, 0.2, RampShape::EaseIn);
+    let mut rigid = plain.clone();
+    rigid.rigid_fraction = 0.0;
+
+    let plain_result = apply_ramp(&chain, &plain).expect("one force model");
+    let rigid_result = apply_ramp(&chain, &rigid).expect("one force model");
+    assert_eq!(stiffnesses_of(&plain_result), stiffnesses_of(&rigid_result));
+}
+
+#[test]
+fn rigid_fraction_half_holds_root_half_at_root_value() {
+    let chain = make_chain(&[0, 1, 2, 3]);
+    let mut hem = ramp(0.8, 0.2, RampShape::Linear);
+    hem.rigid_fraction = 0.5;
+    let result = apply_ramp(&chain, &hem).expect("one force model");
+
+    assert!((stiffness_of(&result.joints[0]) - 0.8).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[1]) - 0.8).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[2]) - 0.6).abs() < 1e-6);
+    assert!((stiffness_of(&result.joints[3]) - 0.2).abs() < 1e-6);
+}
+
+#[test]
+fn rigid_fraction_one_gives_every_joint_the_root_value() {
+    let chain = make_chain(&[0, 1, 2, 3]);
+    let mut hem = ramp(0.8, 0.2, RampShape::EaseOut);
+    hem.rigid_fraction = 1.0;
+    let result = apply_ramp(&chain, &hem).expect("one force model");
+
+    for joint in &result.joints {
+        assert!((stiffness_of(joint) - 0.8).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn rigid_fraction_outside_the_unit_range_is_clamped() {
+    let chain = make_chain(&[0, 1, 2, 3]);
+    let mut below = ramp(0.8, 0.2, RampShape::Linear);
+    below.rigid_fraction = -0.5;
+    let mut above = ramp(0.8, 0.2, RampShape::Linear);
+    above.rigid_fraction = 1.5;
+
+    let plain = apply_ramp(&chain, &ramp(0.8, 0.2, RampShape::Linear)).expect("one force model");
+    let below_result = apply_ramp(&chain, &below).expect("one force model");
+    assert_eq!(stiffnesses_of(&below_result), stiffnesses_of(&plain));
+    let all_root = apply_ramp(&chain, &above).expect("one force model");
+    for joint in &all_root.joints {
+        assert!((stiffness_of(joint) - 0.8).abs() < 1e-6);
     }
 }
 
@@ -417,7 +477,8 @@ fn chain_ramp_ui_params_names() {
             "root_hit_radius",
             "tip_drag_force",
             "tip_gravity_dir",
-            "tip_hit_radius"
+            "tip_hit_radius",
+            "rigid_fraction"
         ]
     );
 }

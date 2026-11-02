@@ -2,7 +2,8 @@ use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, C
 use crate::collider::components::capsule::HeadCapsule;
 use crate::collider::systems::head_capsule::estimate_head_capsule;
 
-use super::frame::{attachment_or_target, collect_target_vertices};
+use super::attachment::attachment_or_target;
+use super::frame::collect_target_vertices;
 
 /// The head collider a hair generation stands its chains on; a garment has none.
 pub fn hair_head_capsule(input: &ChainGenInput, params: &ChainGenParams) -> Option<HeadCapsule> {

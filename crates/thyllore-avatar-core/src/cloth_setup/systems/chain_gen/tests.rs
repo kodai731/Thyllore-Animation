@@ -6,10 +6,13 @@ use cgmath::{InnerSpace, Vector3};
 use super::*;
 use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainGenSettings, ChainRole, GeneratedChain,
-    InfluenceTarget, VertexInfluences,
+    InfluenceTarget, SkinSurface, VertexInfluences,
 };
 use crate::cloth_setup::components::submesh_role::SubmeshSelector;
+use thyllore_model_core::BoneId;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
+
+const ROOT_BONE: BoneId = 0;
 
 fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
     let positions = (1..=5)
@@ -34,13 +37,14 @@ fn build_hair_params(joint_count: u32) -> ChainGenParams {
     build_params(ChainRole::Hair, joint_count, 1)
 }
 
-fn head_attachment() -> Vec<Vector3<f32>> {
-    (0..8)
+fn head_attachment() -> Vec<SkinSurface> {
+    let ring = (0..8)
         .map(|i| {
             let angle = TAU * i as f32 / 8.0;
             Vector3::new(0.2 * angle.cos(), 0.1, 0.2 * angle.sin())
         })
-        .collect()
+        .collect();
+    vec![SkinSurface::points_driven_by(ROOT_BONE, ring)]
 }
 
 fn build_cap_with_two_cards() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
@@ -98,8 +102,10 @@ fn straight_strand_places_heads_at_equal_spacing() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let params = build_hair_params(4);
@@ -128,8 +134,10 @@ fn zero_joint_count_is_rejected() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     assert!(place_chains(&input, &build_hair_params(0)).is_err());
@@ -169,8 +177,10 @@ fn garment_column_split_by_azimuth() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let params = build_params(ChainRole::Garment, 2, 8);
 
@@ -225,8 +235,10 @@ fn hair_azimuth_mode_detection() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let params = build_params(ChainRole::Hair, 2, 0);
 
@@ -242,12 +254,14 @@ fn weights_sum_to_one() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let chains = place_chains(&input, &build_hair_params(4)).unwrap();
-    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains, &[]);
 
     for entry in &weights {
         let sum: f32 = entry.influences.iter().map(|(_, w)| w).sum();
@@ -269,8 +283,10 @@ fn midpoint_vertex_has_equal_joint_weights() {
             positions: &positions,
             triangles: &triangles,
             root_position: Vector3::new(0.0, 0.0, 0.0),
-            attachment_positions: &head,
+            root_bone: ROOT_BONE,
+            skins: &head,
             tex_coords: &[],
+            covered_vertices: &[],
         },
         &build_hair_params(4),
     )
@@ -283,10 +299,12 @@ fn midpoint_vertex_has_equal_joint_weights() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
-    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains, &[]);
 
     let midpoint_entry = weights
         .iter()
@@ -301,7 +319,7 @@ fn midpoint_vertex_has_equal_joint_weights() {
                 2 => joint2_weight = *w,
                 _ => {}
             },
-            InfluenceTarget::Root => {}
+            InfluenceTarget::Root | InfluenceTarget::Bone(_) => {}
         }
     }
     assert!(
@@ -324,12 +342,14 @@ fn first_vertex_has_full_root_weight() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let chains = place_chains(&input, &build_hair_params(4)).unwrap();
-    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains);
+    let weights = compute_chain_weights(&input, &build_hair_params(4), &chains, &[]);
 
     let first_entry = weights
         .iter()
@@ -359,8 +379,10 @@ fn hair_joints_y_monotonically_decreasing() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let chains = place_chains(&input, &build_hair_params(3)).unwrap();
@@ -390,8 +412,10 @@ fn reversed_vertex_order_same_joints() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let chains = place_chains(&input, &build_hair_params(2)).unwrap();
@@ -403,8 +427,10 @@ fn reversed_vertex_order_same_joints() {
         positions: &reversed_positions,
         triangles: &reversed_triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let reversed_chains = place_chains(&reversed_input, &build_hair_params(2)).unwrap();
@@ -462,13 +488,15 @@ fn zero_column_blend_keeps_every_vertex_on_its_own_column() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let params = build_params(ChainRole::Garment, 3, 2);
 
     let chains = place_chains(&input, &params).unwrap();
-    let weights = compute_chain_weights(&input, &params, &chains);
+    let weights = compute_chain_weights(&input, &params, &chains, &[]);
 
     assert_eq!(chains.len(), 2);
     for entry in &weights {
@@ -486,8 +514,10 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let mut params = build_params(ChainRole::Garment, 3, 2);
     let mut chains = place_chains(&input_for_chains, &params).unwrap();
@@ -500,11 +530,13 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
-    let weights = compute_chain_weights(&input, &params, &chains);
+    let weights = compute_chain_weights(&input, &params, &chains, &[]);
 
     let entry = weights
         .iter()
@@ -529,13 +561,15 @@ fn cap_stays_on_root_and_each_card_is_one_column() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let params = build_params(ChainRole::Hair, 3, 0);
 
     let chains = place_chains(&input, &params).unwrap();
-    let weights = compute_chain_weights(&input, &params, &chains);
+    let weights = compute_chain_weights(&input, &params, &chains, &[]);
 
     assert_eq!(chains.len(), 2, "one column per card");
     let card_start = 48u32;
@@ -574,8 +608,10 @@ fn root_band_offset_moves_the_band_down() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let mut params = build_params(ChainRole::Hair, 3, 2);
     let baseline = place_chains(&input, &params).unwrap();
@@ -596,8 +632,10 @@ fn root_band_without_attachment_uses_the_widest_slice_of_the_target() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let chains = place_chains(&input, &build_params(ChainRole::Hair, 3, 2)).unwrap();
@@ -613,8 +651,10 @@ fn component_labels_separate_the_cap_from_each_card() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &[],
+        root_bone: ROOT_BONE,
+        skins: &[],
         tex_coords: &[],
+        covered_vertices: &[],
     };
 
     let labels = component_labels(&input);
@@ -634,8 +674,10 @@ fn hair_root_band_reports_the_equator_and_the_offset_band() {
         positions: &positions,
         triangles: &triangles,
         root_position: Vector3::new(0.0, 0.0, 0.0),
-        attachment_positions: &head,
+        root_bone: ROOT_BONE,
+        skins: &head,
         tex_coords: &[],
+        covered_vertices: &[],
     };
     let mut params = build_params(ChainRole::Hair, 3, 2);
     params.settings.azimuth.root_band_offset = 0.05;
@@ -649,4 +691,291 @@ fn hair_root_band_reports_the_equator_and_the_offset_band() {
         band.center
     );
     assert!(hair_root_band(&input, &build_params(ChainRole::Garment, 3, 2)).is_none());
+}
+
+const BODY_BONE: BoneId = 5;
+
+/// A closed-side tube of `rows` rings of 8 vertices, from `top_y` down to `bottom_y`.
+fn build_tube(
+    radius: f32,
+    top_y: f32,
+    bottom_y: f32,
+    rows: usize,
+) -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+    let mut positions = Vec::new();
+    for row in 0..rows {
+        let y = top_y + (bottom_y - top_y) * row as f32 / (rows - 1) as f32;
+        for i in 0..8 {
+            let angle = TAU * i as f32 / 8.0;
+            positions.push(Vector3::new(radius * angle.cos(), y, radius * angle.sin()));
+        }
+    }
+    let mut triangles = Vec::new();
+    for row in 0..rows - 1 {
+        let base = (row * 8) as u32;
+        for i in 0..8u32 {
+            let next = (i + 1) % 8;
+            triangles.push([base + i, base + next, base + 8 + i]);
+            triangles.push([base + next, base + 8 + next, base + 8 + i]);
+        }
+    }
+    (positions, triangles)
+}
+
+fn body_skin(bottom_y: f32) -> SkinSurface {
+    let (positions, triangles) = build_tube(0.10, 0.0, bottom_y, 11);
+    let influences = vec![vec![(BODY_BONE, 1.0)]; positions.len()];
+    SkinSurface {
+        positions,
+        triangles,
+        influences,
+    }
+}
+
+fn garment_coverage_params() -> ChainGenParams {
+    let mut params = build_params(ChainRole::Garment, 4, 1);
+    params.settings.garment.cover_distance = 0.05;
+    params.settings.garment.covered_band_ratio = 0.5;
+    params
+}
+
+#[test]
+fn garment_chain_starts_below_the_covered_bands_and_covered_vertices_keep_the_skin_bone() {
+    let skins = vec![body_skin(-0.45)];
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &skins,
+        tex_coords: &[],
+        covered_vertices: &[],
+    };
+    let params = garment_coverage_params();
+
+    let placement = place_chains_with_strands(&input, &params).unwrap();
+    let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
+
+    assert_eq!(placement.chains.len(), 1);
+    let chain = &placement.chains[0];
+    assert!(
+        chain.joints[0].head.y < -0.45,
+        "joint 0 at {:?}",
+        chain.joints[0].head
+    );
+    assert!(chain
+        .vertices
+        .iter()
+        .all(|&v| positions[v as usize].y <= -0.5 + 1e-5));
+    for entry in &weights {
+        let y = positions[entry.vertex as usize].y;
+        if y >= -0.45 {
+            assert_eq!(
+                entry.influences,
+                vec![(InfluenceTarget::Bone(BODY_BONE), 1.0)]
+            );
+        } else {
+            assert!(
+                entry
+                    .influences
+                    .iter()
+                    .all(|(target, _)| *target != InfluenceTarget::Bone(BODY_BONE)),
+                "vertex at y={y}: {:?}",
+                entry.influences
+            );
+        }
+    }
+}
+
+#[test]
+fn garment_without_a_skin_surface_or_cover_distance_keeps_the_whole_tube() {
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let points_only = vec![SkinSurface::points_driven_by(
+        ROOT_BONE,
+        body_skin(-0.45).positions,
+    )];
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &points_only,
+        tex_coords: &[],
+        covered_vertices: &[],
+    };
+
+    let placement = place_chains_with_strands(&input, &garment_coverage_params()).unwrap();
+    assert!(placement.covered.is_empty());
+    assert_eq!(placement.chains[0].vertices.len(), positions.len());
+
+    let skins = vec![body_skin(-0.45)];
+    let mut disabled = garment_coverage_params();
+    disabled.settings.garment.cover_distance = 0.0;
+    let with_surface = ChainGenInput {
+        skins: &skins,
+        ..input
+    };
+    let placement = place_chains_with_strands(&with_surface, &disabled).unwrap();
+    assert!(placement.covered.is_empty());
+    assert_eq!(placement.chains[0].vertices.len(), positions.len());
+}
+
+#[test]
+fn fully_covered_garment_is_rejected() {
+    let skins = vec![body_skin(-1.0)];
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &skins,
+        tex_coords: &[],
+        covered_vertices: &[],
+    };
+
+    let error = place_chains_with_strands(&input, &garment_coverage_params()).unwrap_err();
+    assert!(error.to_string().contains("covers every band"), "{error}");
+}
+
+#[test]
+fn root_attachment_positions_are_the_skin_vertices_the_root_drives_most() {
+    let positions = vec![
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(1.0, 0.0, 0.0),
+        Vector3::new(2.0, 0.0, 0.0),
+    ];
+    let skin = SkinSurface {
+        positions,
+        triangles: Vec::new(),
+        influences: vec![
+            vec![(ROOT_BONE, 0.7), (BODY_BONE, 0.3)],
+            vec![(BODY_BONE, 0.6), (ROOT_BONE, 0.4)],
+            vec![(ROOT_BONE, 0.0)],
+        ],
+    };
+
+    let attachment = root_attachment_positions(&[skin], ROOT_BONE);
+    assert_eq!(attachment, vec![Vector3::new(0.0, 0.0, 0.0)]);
+}
+
+#[test]
+fn marked_covered_vertices_override_the_distance_test_and_take_the_nearest_skin_bone() {
+    let skins = vec![body_skin(-1.0)];
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let marked: Vec<u32> = (0..positions.len() as u32)
+        .filter(|&v| positions[v as usize].y > -0.65)
+        .collect();
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &skins,
+        tex_coords: &[],
+        covered_vertices: &marked,
+    };
+    let mut params = garment_coverage_params();
+    params.settings.garment.cover_distance = 0.0;
+
+    let placement = place_chains_with_strands(&input, &params).unwrap();
+    let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
+
+    let chain_vertices: BTreeSet<u32> = placement.chains[0].vertices.iter().copied().collect();
+    let expected_chain: BTreeSet<u32> = (0..positions.len() as u32)
+        .filter(|v| !marked.contains(v))
+        .collect();
+    assert_eq!(chain_vertices, expected_chain);
+    for entry in weights
+        .iter()
+        .filter(|entry| marked.contains(&entry.vertex))
+    {
+        assert_eq!(
+            entry.influences,
+            vec![(InfluenceTarget::Bone(BODY_BONE), 1.0)]
+        );
+    }
+}
+
+#[test]
+fn marked_covered_vertices_without_a_skin_surface_keep_the_root_bone() {
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let marked = [0u32, 1, 2];
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &[],
+        tex_coords: &[],
+        covered_vertices: &marked,
+    };
+
+    let placement =
+        place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap();
+    assert_eq!(placement.covered.len(), 3);
+    assert!(placement
+        .covered
+        .iter()
+        .all(|covered| covered.influences == vec![(ROOT_BONE, 1.0)]));
+    assert!(!placement.chains[0].vertices.contains(&0));
+}
+
+#[test]
+fn marking_every_vertex_is_rejected() {
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let marked: Vec<u32> = (0..positions.len() as u32).collect();
+    let input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &[],
+        tex_coords: &[],
+        covered_vertices: &marked,
+    };
+
+    let error =
+        place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap_err();
+    assert!(error.to_string().contains("covers every vertex"), "{error}");
+}
+
+#[test]
+fn marking_the_measured_coverage_reproduces_the_chain_vertices() {
+    let skins = vec![body_skin(-0.52)];
+    let (positions, triangles) = build_tube(0.12, -0.1, -0.9, 9);
+    let measured_input = ChainGenInput {
+        positions: &positions,
+        triangles: &triangles,
+        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_bone: ROOT_BONE,
+        skins: &skins,
+        tex_coords: &[],
+        covered_vertices: &[],
+    };
+    let mut params = garment_coverage_params();
+    params.settings.garment.covered_band_ratio = 0.6;
+    let measured = place_chains_with_strands(&measured_input, &params).unwrap();
+
+    let covered: BTreeSet<u32> = measured.covered.iter().map(|c| c.vertex).collect();
+    let covered_below_start = covered
+        .iter()
+        .filter(|&&v| positions[v as usize].y <= -0.5 + 1e-5)
+        .count();
+    assert!(
+        covered_below_start > 0,
+        "the fixture needs a covered row inside a chain band"
+    );
+    let chained: BTreeSet<u32> = measured.chains[0].vertices.iter().copied().collect();
+    assert!(covered.is_disjoint(&chained));
+    assert_eq!(covered.len() + chained.len(), positions.len());
+
+    let marked: Vec<u32> = covered.iter().copied().collect();
+    let marked_input = ChainGenInput {
+        covered_vertices: &marked,
+        ..measured_input
+    };
+    let remarked = place_chains_with_strands(&marked_input, &params).unwrap();
+    assert_eq!(remarked.chains[0].vertices, measured.chains[0].vertices);
 }

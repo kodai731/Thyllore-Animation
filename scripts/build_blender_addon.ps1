@@ -9,6 +9,9 @@ param(
     [ValidateSet("A", "B", "C")]
     [string]$BuildMode = "A",
 
+    [ValidateSet("curve-copilot", "avatar-setup")]
+    [string]$Product = "curve-copilot",
+
     # Feedback endpoint to bake: reads THYLLORE_FEEDBACK_PROD_ENDPOINT or
     # THYLLORE_FEEDBACK_TEST_ENDPOINT. Empty keeps the CI-compatible
     # THYLLORE_FEEDBACK_ENDPOINT behaviour.
@@ -103,11 +106,11 @@ $PlatformConfig = @{
     }
 }[$Platform]
 
-Write-Host "[build_blender_addon] Platform: $Platform -> Blender: $($PlatformConfig.BlenderName), wheel: $($PlatformConfig.WheelSuffix), build mode: $BuildMode" -ForegroundColor Cyan
+Write-Host "[build_blender_addon] Platform: $Platform -> Blender: $($PlatformConfig.BlenderName), wheel: $($PlatformConfig.WheelSuffix), product: $Product, build mode: $BuildMode" -ForegroundColor Cyan
 
 # Stage directory (mirror blender_addon/ minus excluded paths)
 
-$StageDir = Join-Path $RepoRoot "build/blender_addon_stage_${Platform}_${BuildMode}"
+$StageDir = Join-Path $RepoRoot "build/blender_addon_stage_${Product}_${Platform}_${BuildMode}"
 if (Test-Path $StageDir) { Remove-Item -Recurse -Force $StageDir }
 New-Item -ItemType Directory -Path $StageDir -Force | Out-Null
 
@@ -121,6 +124,17 @@ $UnshippedRelPaths = @(
     "operators/text_to_motion.py",
     "grpc_client"
 )
+$CurveCopilotOnlyRelPaths = @(
+    "operators/curve_copilot.py",
+    "operators/skin_weight_transfer.py",
+    "common/skin_weight_transfer.py",
+    "_ghost_overlay.py",
+    "modal"
+)
+if ($Product -eq "avatar-setup") {
+    $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
+    $IncludeOnnxModel = $false
+}
 
 # robocopy on Windows, rsync/cp fallback on POSIX pwsh
 if ($IsWindows -or $env:OS -like "*Windows*") {
@@ -244,6 +258,13 @@ if ($null -eq $NetworkPermission) {
     $ManifestContent = $ManifestContent.Replace("NETWORK_PERMISSION", $NetworkPermission)
 }
 
+if ($Product -eq "avatar-setup") {
+    $ManifestContent = $ManifestContent -replace '(?m)^id = ".*"$', 'id = "thyllore_avatar_setup"'
+    $ManifestContent = $ManifestContent -replace '(?m)^name = ".*"$', 'name = "Thyllore Avatar Setup"'
+    $ManifestContent = $ManifestContent -replace '(?m)^tagline = ".*"$', 'tagline = "Spring chains, colliders and Unity export for avatars"'
+    $ManifestContent = $ManifestContent -replace '(?m)^files = ".*"$', 'files = "Read models and write bones, weights and avatar sidecars"'
+}
+
 # UTF-8 without BOM: Blender's TOML parser rejects a BOM
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($ManifestPath, $ManifestContent, $Utf8NoBom)
@@ -346,11 +367,15 @@ if (-not $SkipBlenderValidate) {
 $AbsOutDir = Join-Path $RepoRoot $OutputDir
 New-Item -ItemType Directory -Path $AbsOutDir -Force | Out-Null
 
-$ZipBaseName = "thyllore_animation_curve_copilot"
-$ZipBaseName = switch ($BuildMode) {
-    "A" { "${ZipBaseName}_degraded" }
-    "B" { "${ZipBaseName}_full" }
-    "C" { "${ZipBaseName}_private" }
+if ($Product -eq "avatar-setup") {
+    $ZipBaseName = "thyllore_avatar_setup"
+} else {
+    $ZipBaseName = "thyllore_animation_curve_copilot"
+    $ZipBaseName = switch ($BuildMode) {
+        "A" { "${ZipBaseName}_degraded" }
+        "B" { "${ZipBaseName}_full" }
+        "C" { "${ZipBaseName}_private" }
+    }
 }
 if ($EndpointEnv -eq "test") {
     $ZipBaseName = "${ZipBaseName}_test"

@@ -9,12 +9,13 @@ ZIP=""
 SCENE=""
 SOFTWARE_GL=0
 NO_INSTALL=0
-PYTHON_SCRIPT=""
+HEADLESS=0
+PYTHON_SCRIPTS=()
 
 usage() {
     cat <<EOF
 Usage: $0 [--mode degrade|full|private] [--zip PATH] [--scene PATH.blend]
-          [--blender-version X.Y.Z] [--software-gl] [--python PATH.py]
+          [--blender-version X.Y.Z] [--software-gl] [--headless] [--python PATH.py]
 
 Launches Blender GUI on the host display from the pristine-Blender Docker
 image, with the production extension ZIP installed into a fresh user
@@ -33,12 +34,17 @@ first-draw pipeline build from ~70s to well under a second.
   --blender-version VER  Blender to install in the image (default: $BLENDER_VERSION)
   --software-gl          force Mesa llvmpipe (OpenGL) instead of the NVIDIA GPU
                          (Vulkan backend, the default)
+  --headless             run on a virtual display (Xvfb) inside the container
+                         instead of the host display: no window appears and
+                         the NVIDIA GPU still draws. Input is replaced by
+                         simulated events (--enable-event-simulate), so the
+                         --python script drives the session
   --no-install           skip the automatic extension install; the ZIP (if
                          given) is still mounted at /zips for manual install
                          via Edit > Preferences > Add-ons > Install from Disk.
                          Without --zip nothing is mounted (plain Blender)
   --python PATH          Python script (inside the repo) run by Blender after
-                         the scene is loaded
+                         the scene is loaded; repeatable, run in the given order
 EOF
 }
 
@@ -50,7 +56,8 @@ while [[ $# -gt 0 ]]; do
         --blender-version) BLENDER_VERSION="$2"; shift 2 ;;
         --software-gl) SOFTWARE_GL=1; shift ;;
         --no-install) NO_INSTALL=1; shift ;;
-        --python) PYTHON_SCRIPT="$2"; shift 2 ;;
+        --headless) HEADLESS=1; shift ;;
+        --python) PYTHON_SCRIPTS+=("$2"); shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage; exit 2 ;;
     esac
@@ -67,15 +74,24 @@ if [[ -n "$ZIP" && ! -f "$ZIP" ]]; then
     echo "extension ZIP not found: $ZIP (build it with scripts/build_blender_addon.sh)" >&2
     exit 1
 fi
-if [[ -z "${DISPLAY:-}" ]]; then
-    echo "DISPLAY is not set - run from a graphical session" >&2
+if [[ "$HEADLESS" -eq 0 && -z "${DISPLAY:-}" ]]; then
+    echo "DISPLAY is not set - run from a graphical session or pass --headless" >&2
     exit 1
 fi
 
 docker build --build-arg "BLENDER_VERSION=$BLENDER_VERSION" -t "$IMAGE_TAG" \
     "$REPO_ROOT/blender/docker"
 
-xhost +si:localuser:root >/dev/null
+if [[ "$HEADLESS" -eq 1 ]]; then
+    IMAGE_TAG="thyllore-blender-xvfb:local"
+    docker build -f "$REPO_ROOT/blender/docker/Dockerfile.xvfb" -t "$IMAGE_TAG" "$REPO_ROOT/blender/docker"
+    DISPLAY_ARGS=()
+    BLENDER_LAUNCH="xvfb-run -a -s '-screen 0 1920x1080x24' blender --enable-event-simulate"
+else
+    xhost +si:localuser:root >/dev/null
+    DISPLAY_ARGS=(-e DISPLAY="$DISPLAY" -v /tmp/.X11-unix:/tmp/.X11-unix:ro)
+    BLENDER_LAUNCH="blender"
+fi
 
 ZIP_MOUNT=()
 ZIP_NAME=""
@@ -122,26 +138,26 @@ if [[ -n "$SCENE" ]]; then
 fi
 
 PYTHON_ARG=""
-if [[ -n "$PYTHON_SCRIPT" ]]; then
-    if ! PYTHON_ABS="$(realpath -e "$PYTHON_SCRIPT" 2>/dev/null)" || [[ "$PYTHON_ABS" != "$REPO_ROOT"/* ]]; then
-        echo "python script must exist inside the repo: $PYTHON_SCRIPT" >&2
+for python_script in ${PYTHON_SCRIPTS[@]+"${PYTHON_SCRIPTS[@]}"}; do
+    if ! PYTHON_ABS="$(realpath -e "$python_script" 2>/dev/null)" || [[ "$PYTHON_ABS" != "$REPO_ROOT"/* ]]; then
+        echo "python script must exist inside the repo: $python_script" >&2
         exit 1
     fi
-    PYTHON_ARG="--python /workspace${PYTHON_ABS#"$REPO_ROOT"}"
-fi
+    PYTHON_ARG+=" --python /workspace${PYTHON_ABS#"$REPO_ROOT"}"
+done
 
-docker run --rm \
+docker run --rm --init \
     ${GPU_FLAGS[@]+"${GPU_FLAGS[@]}"} \
     ${GL_ENV[@]+"${GL_ENV[@]}"} \
-    -e DISPLAY="$DISPLAY" \
-    -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+    ${DISPLAY_ARGS[@]+"${DISPLAY_ARGS[@]}"} \
     -v "$REPO_ROOT:/workspace:ro" \
     -v "$REPO_ROOT/log:/workspace/log" \
     ${ZIP_MOUNT[@]+"${ZIP_MOUNT[@]}"} \
     -v "$WORK_DIR:/scenes" \
     -v "$SCREENSHOT_DIR_HOST:/screenshots" \
     -v "$GPU_CACHE_DIR:/tmp/blender_home/.cache" \
-    -e THYLLORE_SCREENSHOT_DIR -e THYLLORE_SCREENSHOT_DELAY -e THYLLORE_SCREENSHOT_QUIT -e THYLLORE_FLAME_PRESET \
+    -e THYLLORE_SCREENSHOT_DIR -e THYLLORE_SCREENSHOT_DELAY -e THYLLORE_SCREENSHOT_QUIT -e THYLLORE_FLAME_PRESET -e THYLLORE_AVATAR_MODEL \
+    -e THYLLORE_BLENDER_LOG=/workspace/log/log_blender.log \
     "$IMAGE_TAG" \
     bash -c "
         export HOME=/tmp/blender_home && mkdir -p \"\$HOME\" &&
@@ -149,5 +165,5 @@ docker run --rm \
             blender --command extension install-file -r user_default --enable /zips/$ZIP_NAME
         fi &&
         $SCENE_PREP
-        exec blender $BACKEND_ARG $SCENE_ARG $PYTHON_ARG
+        exec $BLENDER_LAUNCH $BACKEND_ARG $SCENE_ARG $PYTHON_ARG
     "

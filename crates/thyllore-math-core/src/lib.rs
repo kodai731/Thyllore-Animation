@@ -36,6 +36,7 @@ mod torus_intersect;
 mod torus_projection;
 #[cfg(test)]
 mod torus_tests;
+mod triangle;
 mod triangle_bvh;
 mod vector;
 mod winding;
@@ -76,6 +77,7 @@ pub use statistics::*;
 pub use tangent_frame::*;
 pub use torus_intersect::*;
 pub use torus_projection::*;
+pub use triangle::*;
 pub use triangle_bvh::*;
 pub use vector::*;
 pub use winding::*;

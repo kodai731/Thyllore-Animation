@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use cgmath::{InnerSpace, Vector3};
@@ -58,19 +57,34 @@ pub(super) fn compute_vertex_frames(
         .collect()
 }
 
-/// The attachment surface when the input has one, otherwise the target vertices themselves.
-pub(crate) fn attachment_or_target<'a>(
-    input: &ChainGenInput<'a>,
-    vertices: &[u32],
-) -> Cow<'a, [Vector3<f32>]> {
-    if input.attachment_positions.is_empty() {
-        Cow::Owned(
-            vertices
-                .iter()
-                .map(|&vertex| input.positions[vertex as usize])
-                .collect(),
-        )
-    } else {
-        Cow::Borrowed(input.attachment_positions)
+/// Equal progress slices from the shallowest to the deepest frame, one per joint.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct BandPartition {
+    pub min_progress: f32,
+    pub band_width: f32,
+    pub count: usize,
+}
+
+impl BandPartition {
+    pub(super) fn of_frames(frames: &[VertexFrame], count: usize) -> Self {
+        let progresses = frames.iter().map(|frame| frame.progress);
+        let min_progress = progresses.clone().reduce(f32::min).unwrap_or_default();
+        let max_progress = progresses.reduce(f32::max).unwrap_or_default();
+        Self {
+            min_progress,
+            band_width: (max_progress - min_progress) / count as f32,
+            count,
+        }
+    }
+
+    pub(super) fn band_of(&self, progress: f32) -> usize {
+        if self.band_width <= 0.0 {
+            return 0;
+        }
+        (((progress - self.min_progress) / self.band_width) as usize).min(self.count - 1)
+    }
+
+    pub(super) fn start_of(&self, band: usize) -> f32 {
+        self.min_progress + self.band_width * band as f32
     }
 }

@@ -74,7 +74,7 @@ class THYLLORE_OT_SendFeedback(Operator):
         return {"FINISHED"}
 
     def _cancel(self, reason: str) -> set:
-        _debuglog.log_error(f"send_feedback: {reason}")
+        _debuglog.log_report("ERROR", "send_feedback", reason)
         self.report({"ERROR"}, reason)
         return {"CANCELLED"}
 

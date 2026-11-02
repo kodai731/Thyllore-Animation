@@ -11,6 +11,8 @@ use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_avatar_core::cloth_setup::components::chain_gen::SkinSurface;
+use thyllore_model_core::BoneId;
 
 /// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
 pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Matrix4<f32> {
@@ -239,12 +241,11 @@ mod tests {
 }
 
 /// The skin data of every mesh whose submesh role is skin: the body surface colliders and chains fit to.
-pub(crate) fn skin_role_skins<'a>(
+fn skin_role_mesh_indices(
     world: &World,
     assets: &AssetStorage,
-    graphics: &'a GraphicsResources,
-    skeleton_id: SkeletonId,
-) -> Vec<&'a SkinData> {
+    graphics: &GraphicsResources,
+) -> Vec<usize> {
     let node_assets = world.resource::<NodeAssets>();
     let state = world.resource::<AvatarSetupState>();
     let mut skin_meshes: Vec<usize> = collect_submesh_meshes(assets, graphics, &node_assets.nodes)
@@ -259,10 +260,67 @@ pub(crate) fn skin_role_skins<'a>(
         .collect();
     skin_meshes.sort_unstable();
     skin_meshes.dedup();
-
     skin_meshes
+}
+
+pub(crate) fn skin_role_skins<'a>(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &'a GraphicsResources,
+    skeleton_id: SkeletonId,
+) -> Vec<&'a SkinData> {
+    skin_role_mesh_indices(world, assets, graphics)
         .into_iter()
         .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data.as_ref())
         .filter(|skin| skin.skeleton_id == skeleton_id)
+        .collect()
+}
+
+fn influences_heaviest_first(
+    indices: cgmath::Vector4<u32>,
+    weights: cgmath::Vector4<f32>,
+) -> Vec<(BoneId, f32)> {
+    let mut influences: Vec<(BoneId, f32)> = [
+        (indices.x, weights.x),
+        (indices.y, weights.y),
+        (indices.z, weights.z),
+        (indices.w, weights.w),
+    ]
+    .into_iter()
+    .filter(|(_, weight)| *weight > 0.0)
+    .collect();
+    influences.sort_by(|a, b| b.1.total_cmp(&a.1));
+    influences
+}
+
+/// The skin role meshes of the skeleton as surfaces in model space, with their bone influences.
+pub(crate) fn skin_role_surfaces(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    skeleton_id: SkeletonId,
+    geometry_to_model: Matrix4<f32>,
+) -> Vec<SkinSurface> {
+    let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
+    skin_role_mesh_indices(world, assets, graphics)
+        .into_iter()
+        .map(|mesh_index| &graphics.meshes[mesh_index])
+        .filter_map(|mesh| Some((mesh, mesh.skin_data.as_ref()?)))
+        .filter(|(_, skin)| skin.skeleton_id == skeleton_id)
+        .map(|(mesh, skin)| SkinSurface {
+            positions: skin.base_positions.iter().map(to_model).collect(),
+            triangles: mesh
+                .vertex_data
+                .indices
+                .chunks_exact(3)
+                .map(|tri| [tri[0], tri[1], tri[2]])
+                .collect(),
+            influences: skin
+                .bone_indices
+                .iter()
+                .zip(&skin.bone_weights)
+                .map(|(indices, weights)| influences_heaviest_first(*indices, *weights))
+                .collect(),
+        })
         .collect()
 }

@@ -36,49 +36,59 @@ fn mean_radius(colliders: &[BodyCollider], bones: &[BoneId]) -> Option<f32> {
     Some(radii.iter().sum::<f32>() / radii.len() as f32)
 }
 
+/// The radius a torso bone's own skin gives its fallback capsule around the axis `head` → `tail`,
+/// None when the bone drives too little skin.
+pub type OwnRadius<'a> = &'a dyn Fn(BoneId, Vector3<f32>, Vector3<f32>) -> Option<f32>;
+
 /// Capsules for the torso bones without a collider, so a rig whose torso skin was removed still has a
-/// body there: the pelvis spans the upper legs' heads and the spine bones reach the next torso bone,
-/// all with the mean radius of the upper leg colliders.
+/// body there: the pelvis spans the upper legs' heads (when both legs are mapped) and the spine bones
+/// reach the next torso bone. The radius comes from the bone's own skin, else the mean of its torso
+/// neighbours' colliders, else the mean of the upper leg colliders.
 pub fn torso_fallback_colliders(
     bones: &[RoleBone],
     existing: &[BodyCollider],
+    own_radius: OwnRadius,
 ) -> Vec<BodyCollider> {
     let find = |role: HumanoidRole| bones.iter().find(|bone| bone.role == role).copied();
-    let Some(hips) = find(HumanoidRole::Hips) else {
-        return Vec::new();
-    };
-    let (Some(left_leg), Some(right_leg)) = (
-        find(HumanoidRole::LeftUpperLeg),
-        find(HumanoidRole::RightUpperLeg),
-    ) else {
-        return Vec::new();
-    };
-    let Some(radius) = mean_radius(existing, &[left_leg.bone, right_leg.bone]) else {
-        return Vec::new();
-    };
-    let has_collider = |bone: BoneId| existing.iter().any(|collider| collider.bone == bone);
-
-    let mut fallback = Vec::new();
-    if !has_collider(hips.bone) {
-        fallback.push(BodyCollider {
-            bone: hips.bone,
-            head: left_leg.head,
-            tail: right_leg.head,
-            radius,
-        });
-    }
+    let legs = find(HumanoidRole::LeftUpperLeg).zip(find(HumanoidRole::RightUpperLeg));
+    let legs_radius =
+        legs.and_then(|(left, right)| mean_radius(existing, &[left.bone, right.bone]));
     let torso: Vec<RoleBone> = torso_roles()
         .iter()
         .filter_map(|&role| find(role))
         .collect();
-    for (bone, next) in torso.iter().zip(torso.iter().skip(1)) {
-        if bone.role == HumanoidRole::Hips || has_collider(bone.bone) {
+    let has_collider = |bone: BoneId| existing.iter().any(|collider| collider.bone == bone);
+    let neighbour_radius = |index: usize| {
+        let neighbours: Vec<BoneId> = [index.checked_sub(1), Some(index + 1)]
+            .into_iter()
+            .flatten()
+            .filter_map(|neighbour| torso.get(neighbour))
+            .map(|neighbour| neighbour.bone)
+            .collect();
+        mean_radius(existing, &neighbours)
+    };
+
+    let mut fallback = Vec::new();
+    for (index, bone) in torso.iter().enumerate() {
+        if has_collider(bone.bone) {
             continue;
         }
+        let (head, tail) = match (bone.role, legs, torso.get(index + 1)) {
+            (HumanoidRole::Hips, Some((left, right)), _) => (left.head, right.head),
+            (HumanoidRole::Hips, None, _) => continue,
+            (_, _, Some(next)) => (bone.head, next.head),
+            (_, _, None) => continue,
+        };
+        let radius = own_radius(bone.bone, head, tail)
+            .or_else(|| neighbour_radius(index))
+            .or(legs_radius);
+        let Some(radius) = radius else {
+            continue;
+        };
         fallback.push(BodyCollider {
             bone: bone.bone,
-            head: bone.head,
-            tail: next.head,
+            head,
+            tail,
             radius,
         });
     }
@@ -116,6 +126,7 @@ pub fn fitted_torso_fallback(
     skeleton: &Skeleton,
     mapping: &HumanoidMapping,
     fitted: &[FittedCapsule],
+    own_radius: OwnRadius,
 ) -> Vec<FittedCapsule> {
     let roles: Vec<RoleBone> = mapping
         .by_role
@@ -142,7 +153,7 @@ pub fn fitted_torso_fallback(
         })
         .collect();
 
-    torso_fallback_colliders(&roles, &existing)
+    torso_fallback_colliders(&roles, &existing, own_radius)
         .into_iter()
         .filter_map(|collider| {
             let frame = bind_frame(skeleton, collider.bone)?;
@@ -192,7 +203,7 @@ mod tests {
     fn pelvis_spans_the_leg_heads_and_spine_bones_reach_the_next_torso_bone() {
         let (bones, existing) = legs_with_colliders();
 
-        let fallback = torso_fallback_colliders(&bones, &existing);
+        let fallback = torso_fallback_colliders(&bones, &existing, &|_, _, _| None);
 
         assert_eq!(fallback.len(), 3);
         let pelvis = &fallback[0];
@@ -214,16 +225,47 @@ mod tests {
             radius: 0.2,
         });
 
-        let fallback = torso_fallback_colliders(&bones, &existing);
+        let fallback = torso_fallback_colliders(&bones, &existing, &|_, _, _| None);
 
         assert!(fallback.iter().all(|collider| collider.bone != 0));
         assert_eq!(fallback.len(), 2);
     }
 
     #[test]
-    fn without_leg_colliders_there_is_no_radius_and_no_fallback() {
+    fn own_skin_radius_wins_over_the_neighbours_and_the_legs() {
+        let (bones, existing) = legs_with_colliders();
+
+        let fallback =
+            torso_fallback_colliders(&bones, &existing, &|bone, _, _| (bone == 2).then_some(0.03));
+
+        let chest = fallback.iter().find(|collider| collider.bone == 2).unwrap();
+        assert!((chest.radius - 0.03).abs() < 1e-6);
+        let spine = fallback.iter().find(|collider| collider.bone == 1).unwrap();
+        assert!((spine.radius - 0.09).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_bone_without_skin_takes_the_mean_radius_of_its_torso_neighbours() {
+        let (bones, mut existing) = legs_with_colliders();
+        existing.push(BodyCollider {
+            bone: 1,
+            head: Vector3::new(0.0, 1.1, 0.0),
+            tail: Vector3::new(0.0, 1.3, 0.0),
+            radius: 0.2,
+        });
+
+        let fallback = torso_fallback_colliders(&bones, &existing, &|_, _, _| None);
+
+        let chest = fallback.iter().find(|collider| collider.bone == 2).unwrap();
+        assert!((chest.radius - 0.2).abs() < 1e-6);
+        let pelvis = fallback.iter().find(|collider| collider.bone == 0).unwrap();
+        assert!((pelvis.radius - 0.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn without_leg_colliders_and_skin_there_is_no_radius_and_no_fallback() {
         let (bones, _) = legs_with_colliders();
-        assert!(torso_fallback_colliders(&bones, &[]).is_empty());
+        assert!(torso_fallback_colliders(&bones, &[], &|_, _, _| None).is_empty());
     }
 
     #[test]
@@ -267,7 +309,7 @@ mod tests {
             })
             .collect();
 
-        let fallback = fitted_torso_fallback(&skeleton, &mapping, &fitted);
+        let fallback = fitted_torso_fallback(&skeleton, &mapping, &fitted, &|_, _, _| None);
 
         let pelvis = fallback.iter().find(|c| c.bone_id == 0).expect("pelvis");
         assert!((pelvis.radius - 0.045).abs() < 1e-5);

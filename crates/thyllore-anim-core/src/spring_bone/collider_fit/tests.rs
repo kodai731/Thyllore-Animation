@@ -91,6 +91,23 @@ fn test_cylinder_fit() {
 }
 
 #[test]
+fn a_skin_patch_beside_the_bone_is_not_a_capsule() {
+    let patch: Vec<Vector3<f32>> = (0..16)
+        .map(|i| Vector3::new(0.9 + 0.01 * (i % 4) as f32, 0.05 * (i / 4) as f32, 0.0))
+        .collect();
+    let (skin, skeleton) = make_test_skin(&patch, Matrix4::identity());
+    let params = CapsuleFitParams {
+        min_weight: 0.1,
+        radius_percentile: 0.9,
+        radius_scale: 1.0,
+        min_vertex_count: 4,
+    };
+
+    assert!(fit_bone_capsule(&[&skin], &skeleton.bones[0], &params).is_some());
+    assert!(fit_bone_capsules(&[&skin], &skeleton, &params).is_empty());
+}
+
+#[test]
 fn test_unassigned_bone_not_output() {
     let local_points = make_cylinder_points(0.5, 2.0, 8);
     let identity = Matrix4::identity();

@@ -1,5 +1,8 @@
-use thyllore_anim_core::spring_bone::{fit_bone_capsules, CapsuleFitParams, FittedCapsule};
-use thyllore_model_core::{Skeleton, SkinData};
+use cgmath::{InnerSpace, Vector3};
+use thyllore_anim_core::spring_bone::{
+    fit_bone_capsules, radius_around_axis, weighted_positions, CapsuleFitParams, FittedCapsule,
+};
+use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
 use crate::collider::systems::torso_volume::fitted_torso_fallback;
 use crate::humanoid::components::body_collider_roles::body_collider_bone_indices;
@@ -19,7 +22,23 @@ pub fn fit_body_capsules(
         .filter(|capsule| allowed.contains(&(capsule.bone_id as usize)))
         .collect();
 
-    fitted.extend(fitted_torso_fallback(skeleton, mapping, &fitted));
+    let own_radius = |bone: BoneId, head: Vector3<f32>, tail: Vector3<f32>| {
+        let points = weighted_positions(skins, bone, params.min_weight);
+        if points.len() < params.min_vertex_count as usize {
+            return None;
+        }
+        let axis = tail - head;
+        if axis.magnitude2() <= f32::EPSILON {
+            return None;
+        }
+        radius_around_axis(&points, head, axis.normalize(), params)
+    };
+    fitted.extend(fitted_torso_fallback(
+        skeleton,
+        mapping,
+        &fitted,
+        &own_radius,
+    ));
     fitted
 }
 
@@ -27,7 +46,7 @@ pub fn fit_body_capsules(
 mod tests {
     use super::*;
     use crate::humanoid::components::role::HumanoidRole;
-    use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+    use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
     use thyllore_model_core::Bone;
 
     fn bone_at(id: u32, head: Vector3<f32>) -> Bone {
@@ -48,6 +67,40 @@ mod tests {
             skin.bone_indices.push(Vector4::new(bone, 0, 0, 0));
             skin.bone_weights.push(Vector4::new(1.0, 0.0, 0.0, 0.0));
         }
+    }
+
+    #[test]
+    fn a_neck_known_only_by_a_throat_patch_becomes_a_capsule_on_its_axis() {
+        let chest = Vector3::new(0.0, 1.3, 0.0);
+        let neck = Vector3::new(0.0, 1.5, 0.0);
+        let head = Vector3::new(0.0, 1.6, 0.0);
+        let mut skeleton = Skeleton::default();
+        for (id, position) in [(0, chest), (1, neck), (2, head)] {
+            skeleton.bones.push(bone_at(id, position));
+        }
+        skeleton.bones[1].children = vec![2];
+        let mut mapping = HumanoidMapping::default();
+        mapping.by_role.insert(HumanoidRole::Chest, 0);
+        mapping.by_role.insert(HumanoidRole::Neck, 1);
+        mapping.by_role.insert(HumanoidRole::Head, 2);
+        let mut skin = SkinData::default();
+        for step in 0..16 {
+            let patch = Vector3::new(
+                -0.03 + 0.01 * (step % 4) as f32,
+                1.5 + 0.02 * (step / 4) as f32,
+                0.07,
+            );
+            skin.base_positions.push(patch);
+            skin.bone_indices.push(Vector4::new(1, 0, 0, 0));
+            skin.bone_weights.push(Vector4::new(1.0, 0.0, 0.0, 0.0));
+        }
+
+        let fitted = fit_body_capsules(&[&skin], &skeleton, &mapping, &CapsuleFitParams::default());
+
+        let neck_capsule = fitted.iter().find(|capsule| capsule.bone_id == 1).unwrap();
+        assert!(neck_capsule.head.magnitude() < 1e-5);
+        assert!((neck_capsule.tail - Vector3::new(0.0, 0.1, 0.0)).magnitude() < 1e-5);
+        assert!(neck_capsule.radius > 0.05 && neck_capsule.radius < 0.08);
     }
 
     #[test]

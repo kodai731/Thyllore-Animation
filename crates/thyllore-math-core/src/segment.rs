@@ -22,6 +22,42 @@ pub fn distance_to_segment(point: Vector3<f32>, a: Vector3<f32>, b: Vector3<f32>
     (point - projected).magnitude()
 }
 
+/// The shortest distance between the segments `a0`-`a1` and `b0`-`b1` (Ericson, Real-Time Collision Detection 5.1.9).
+pub fn distance_between_segments(
+    a0: Vector3<f32>,
+    a1: Vector3<f32>,
+    b0: Vector3<f32>,
+    b1: Vector3<f32>,
+) -> f32 {
+    let d1 = a1 - a0;
+    let d2 = b1 - b0;
+    let r = a0 - b0;
+    let a = d1.magnitude2();
+    let e = d2.magnitude2();
+    let f = d2.dot(r);
+    if a < DEGENERATE_SEGMENT_LENGTH_SQUARED {
+        return distance_to_segment(a0, b0, b1);
+    }
+    if e < DEGENERATE_SEGMENT_LENGTH_SQUARED {
+        return distance_to_segment(b0, a0, a1);
+    }
+
+    let c = d1.dot(r);
+    let b = d1.dot(d2);
+    let denom = a * e - b * b;
+    let mut s = if denom > 0.0 {
+        ((b * f - c * e) / denom).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let t_unclamped = (b * s + f) / e;
+    let t = t_unclamped.clamp(0.0, 1.0);
+    if t != t_unclamped {
+        s = ((t * b - c) / a).clamp(0.0, 1.0);
+    }
+    ((a0 + d1 * s) - (b0 + d2 * t)).magnitude()
+}
+
 /// `count` points spaced evenly along the polyline's arc length, starting at its first point.
 pub fn resample_polyline(points: &[Vector3<f32>], count: usize) -> Vec<Vector3<f32>> {
     let segment_lengths: Vec<f32> = points
@@ -172,5 +208,43 @@ mod tests {
 
         assert!(s.abs() < 1e-6);
         assert!(t.abs() < 1e-6);
+    }
+
+    #[test]
+    fn distance_between_segments_covers_crossing_parallel_and_offset_cases() {
+        let x = |a: f32, b: f32| (Vector3::new(a, 0.0, 0.0), Vector3::new(b, 0.0, 0.0));
+        let (a0, a1) = x(-1.0, 1.0);
+
+        let crossing = distance_between_segments(
+            a0,
+            a1,
+            Vector3::new(0.0, -1.0, 0.5),
+            Vector3::new(0.0, 1.0, 0.5),
+        );
+        assert!((crossing - 0.5).abs() < 1e-6);
+
+        let parallel = distance_between_segments(
+            a0,
+            a1,
+            Vector3::new(-2.0, 0.3, 0.0),
+            Vector3::new(2.0, 0.3, 0.0),
+        );
+        assert!((parallel - 0.3).abs() < 1e-6);
+
+        let beyond_end = distance_between_segments(
+            a0,
+            a1,
+            Vector3::new(2.0, 0.0, 0.0),
+            Vector3::new(3.0, 1.0, 0.0),
+        );
+        assert!((beyond_end - 1.0).abs() < 1e-6);
+
+        let point = distance_between_segments(
+            a0,
+            a1,
+            Vector3::new(0.0, 2.0, 0.0),
+            Vector3::new(0.0, 2.0, 0.0),
+        );
+        assert!((point - 2.0).abs() < 1e-6);
     }
 }

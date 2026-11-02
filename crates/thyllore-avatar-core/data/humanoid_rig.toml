@@ -43,7 +43,7 @@ patterns = [["chest"], ["spine1"], ["spine", "02"]]
 [[role]]
 part = "UpperChest"
 collider = true
-patterns = [["upper", "chest"], ["upperchest"]]
+patterns = [["upper", "chest"], ["upperchest"], ["spine2"], ["spine", "03"]]
 
 [[role]]
 part = "Neck"

@@ -34,6 +34,7 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.submesh_mask import material_triangles
+from .collider_operators import default_fit_settings, fit_body_colliders, has_fitted_body_colliders
 from .operators import armature_fit_bones, bound_meshes, target_armature
 from .properties import CHAIN_GEN_UI_PARAMS
 
@@ -229,6 +230,13 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         target = f"{obj.name}/{self.material}"
         origin = {"mesh": obj.name, "material": self.material, "role": role}
         settings = arm.data.thyllore_spring
+        fitted_note = ""
+        if not has_fitted_body_colliders(settings):
+            try:
+                fitted_note = f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
+            except ValueError as e:
+                self.report({"ERROR"}, f"fit_body_colliders failed: {e}")
+                return {"CANCELLED"}
         replaced_bones = remove_chains_generated_on(settings, origin)
         _remove_bones(context, arm, replaced_bones)
         _remove_vertex_groups(obj, replaced_bones)
@@ -301,7 +309,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         support_note = f", hanging from {root_name} at height {support['boundary_height']:.3f}" if support else ""
         self.report(
             {"INFO"},
-            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}{support_note}",
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}{support_note}{fitted_note}",
         )
         return {"FINISHED"}
 

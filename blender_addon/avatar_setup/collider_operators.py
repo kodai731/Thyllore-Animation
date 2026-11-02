@@ -34,6 +34,33 @@ def _setting_annotations() -> dict[str, object]:
     return annotations
 
 
+def default_fit_settings() -> dict[str, float]:
+    return {param["name"]: float(param["default"]) for param in CAPSULE_FIT_UI_PARAMS}
+
+
+def has_fitted_body_colliders(settings) -> bool:
+    return any(collider.origin == "fitted" for collider in settings.colliders)
+
+
+def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
+    """Replace the rig's fitted body colliders from its skin meshes; returns the collider count."""
+    settings = arm.data.thyllore_spring
+    skin_meshes = skin_role_meshes(bound_meshes(arm))
+    if not skin_meshes:
+        raise ValueError("No skin mesh found (no bound mesh has role 'skin')")
+
+    bones = armature_fit_bones(context, arm)
+    sidecar = tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
+    disabled = disabled_chain_names(settings)
+    scale_length = context.scene.unit_settings.scale_length
+    skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
+    output = tml.fit_body_colliders(sidecar, bones, skins, fit_settings)
+
+    write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
+    restore_disabled_chains(settings, disabled)
+    return len(output.get("colliders", []))
+
+
 class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
     """Fit body colliders from skin mesh vertices."""
 
@@ -49,35 +76,14 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
 
     def execute(self, context):
         arm = target_armature(context)
-        settings = arm.data.thyllore_spring
-
-        skin_meshes = skin_role_meshes(bound_meshes(arm))
-        if not skin_meshes:
-            report(self, "ERROR", "No skin mesh found (no bound mesh has role 'skin')")
-            return {"CANCELLED"}
-
-        bones = armature_fit_bones(context, arm)
-        sidecar = tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
-        disabled = disabled_chain_names(settings)
-
-        scale_length = context.scene.unit_settings.scale_length
-        skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
-
         try:
-            output = tml.fit_body_colliders(
-                sidecar,
-                bones,
-                skins,
-                settings_from_properties(CAPSULE_FIT_UI_PARAMS, self),
+            collider_count = fit_body_colliders(
+                context, arm, settings_from_properties(CAPSULE_FIT_UI_PARAMS, self)
             )
         except ValueError as e:
             report(self, "ERROR", f"fit_body_colliders failed: {e}")
             return {"CANCELLED"}
 
-        write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
-        restore_disabled_chains(settings, disabled)
-
-        collider_count = len(output.get("colliders", []))
         report(self, "INFO", f"Fitted {collider_count} body colliders")
         return {"FINISHED"}
 

@@ -122,7 +122,11 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
             f"AVATAR_SETUP_SMOKE failed: step_c — 'Thyllore Chains' has {len(collection.bones)} bones, expected {added}"
         )
 
-    print(f"[smoke] step_c: {added} chain bones added, all in 'Thyllore Chains' collection")
+    fitted = [c for c in arm.data.thyllore_spring.colliders if c.origin == "fitted"]
+    if not fitted:
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_c — generating without colliders did not fit body colliders")
+
+    print(f"[smoke] step_c: {added} chain bones added, all in 'Thyllore Chains' collection, {len(fitted)} body colliders fitted first")
     return added
 
 

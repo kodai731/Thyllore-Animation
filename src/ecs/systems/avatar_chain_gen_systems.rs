@@ -1,6 +1,9 @@
 use crate::asset::AssetStorage;
+use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
-use crate::ecs::systems::avatar_collider_systems::{fit_body_collider, head_capsule_collider};
+use crate::ecs::systems::avatar_collider_systems::{
+    fit_body_collider, fit_body_colliders, head_capsule_collider,
+};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::avatar_setup_systems::find_or_create_spring_bone_setup_entity;
 use crate::ecs::systems::avatar_submesh_geometry_systems::{merge_submesh_geometry, SubmeshPart};
@@ -17,8 +20,8 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use cgmath::{InnerSpace, SquareMatrix};
 use thyllore_anim_core::spring_bone::{
-    add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
-    SpringJointParam,
+    add_generated_chains, ChainOrigin, ColliderGroupOrigin, ColliderShape, FittedCapsule,
+    SpringBoneSetup, SpringChain, SpringJointParam,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_name, chain_role_of_submesh, BodyCollider, ChainGenInput, ChainGenParams, ChainGenReport,
@@ -468,6 +471,9 @@ pub fn generate_and_apply_chain_bones(
     request: &ChainGenRequest,
 ) -> anyhow::Result<()> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
+    if !has_fitted_body_colliders(world) {
+        fit_body_colliders(world, assets, graphics, &CapsuleFitParams::default());
+    }
     match replace_generated_chains(world, assets, graphics, request) {
         Ok((replaced, generated)) => {
             apply_chain_generation(world, assets, graphics, generated, replaced);
@@ -481,6 +487,17 @@ pub fn generate_and_apply_chain_bones(
             Err(e)
         }
     }
+}
+
+fn has_fitted_body_colliders(world: &World) -> bool {
+    world
+        .iter_components::<SpringBoneSetup>()
+        .any(|(_, setup)| {
+            setup
+                .collider_groups
+                .iter()
+                .any(|group| group.origin == ColliderGroupOrigin::Fitted)
+        })
 }
 
 fn remove_generated_chains(

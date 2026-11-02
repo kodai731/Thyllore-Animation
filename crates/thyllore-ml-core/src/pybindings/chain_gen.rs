@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use crate::avatar_setup_bridge::BoneSpec;
 use crate::chain_gen_bridge::{
     body_colliders as body_colliders_from_inputs, chain_gen_params, role_bones, run_chain_gen,
-    settings_from_pairs, BodyColliderIn, GivenChainIn, SkinAttachment,
+    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, BodyColliderIn,
+    GivenChainIn, SkinAttachment,
 };
 use crate::collider_bridge::FitSkin;
 
@@ -33,6 +34,17 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
         .iter()
         .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
         .collect::<PyResult<_>>()
+}
+
+/// The names among `candidates` that belong to a chain generated on the submesh `target`
+/// (`<mesh>/<material>`) in `role`; the others name chains of other submeshes.
+#[pyfunction]
+pub fn submesh_chain_names(
+    role: &str,
+    target: &str,
+    candidates: Vec<String>,
+) -> PyResult<Vec<String>> {
+    submesh_chain_names_of(role, target, &candidates).map_err(anyhow_to_pyerr)
 }
 
 /// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the

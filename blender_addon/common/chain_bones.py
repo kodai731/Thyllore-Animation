@@ -61,6 +61,19 @@ def vertex_tex_coords(
     return [uv if uv is not None else (0.0, 0.0) for uv in first_uvs]
 
 
+Point = tuple[float, float, float]
+
+
+def joints_from_bones(bones: list[tuple[Point, Point]]) -> list[Point]:
+    """The joint heads followed by the chain tail, from the ``(head, tail)`` of each chain bone root to tip."""
+    return [head for head, _ in bones] + [bones[-1][1]]
+
+
+def output_of_new_chains(output: dict, read_back: set[str]) -> dict:
+    """The same output without the chains whose bones were read back from the armature."""
+    return {**output, "chains": [chain for chain in output["chains"] if chain["name"] not in read_back]}
+
+
 def output_to_blender(output: dict, scale_length: float = 1.0) -> dict:
     """The same output with every joint head and chain tail in Blender space and Blender units."""
 

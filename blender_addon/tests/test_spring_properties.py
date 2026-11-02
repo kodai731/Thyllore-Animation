@@ -9,6 +9,7 @@ from blender_addon.common.spring_properties import (
     chains_generated_on,
     configure_force_params,
     chain_with_joint,
+    generated_chain_bones,
     remove_chains_generated_on,
     copy_joint_values,
     disabled_chain_names,
@@ -510,6 +511,10 @@ def test_generated_chains_are_replaced_per_submesh():
     assert [c.name for c in settings.chains] == ["chain_0", "hair_hair_back_00", "hair_hair_back_01", "hair_hair_side_00"]
     assert settings.chains[1].origin_mesh == "Hair_back"
 
+    assert generated_chain_bones(settings, back) == {
+        "hair_hair_back_00": ["hair_hair_back_00_00", "hair_hair_back_00_01"],
+        "hair_hair_back_01": ["hair_hair_back_01_00"],
+    }
     removed = remove_chains_generated_on(settings, back)
     assert sorted(removed) == ["hair_hair_back_00_00", "hair_hair_back_00_01", "hair_hair_back_01_00"]
     assert [c.name for c in settings.chains] == ["chain_0", "hair_hair_side_00"]

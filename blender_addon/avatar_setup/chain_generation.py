@@ -22,7 +22,9 @@ from ..common.chain_bones import (
     given_chains_from_groups,
     group_vertices,
     group_weights,
+    joints_from_bones,
     membership_group_name,
+    output_of_new_chains,
     output_to_blender,
     settings_from_properties,
     vertex_tex_coords,
@@ -30,8 +32,8 @@ from ..common.chain_bones import (
 from ..common.skin_input import collider_inputs, skin_input, skin_role_meshes
 from ..common.spring_properties import (
     disabled_chain_names,
+    generated_chain_bones,
     humanoid_overrides_to_dict,
-    remove_chains_generated_on,
     restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
@@ -80,16 +82,33 @@ def _body_collider_inputs(arm, settings, fit_bones) -> list[dict]:
     return collider_inputs(model_spring["colliders"], bone_index)
 
 
+def _engine_point(arm, local_point, scale_length: float) -> list[float]:
+    return [c * scale_length for c in coordinates.blender_to_engine_point(tuple(arm.matrix_world @ local_point))]
+
+
 def _root_engine_position(arm, root_bone: str, scale_length: float) -> list[float]:
-    head = arm.data.bones[root_bone].head_local
-    return [c * scale_length for c in coordinates.blender_to_engine_point(tuple(arm.matrix_world @ head))]
+    return _engine_point(arm, arm.data.bones[root_bone].head_local, scale_length)
+
+
+def resolve_submesh(arm, mesh_name: str, material: str):
+    """The mesh object, its chain role and its material slot for a hair or garment submesh of the rig."""
+    obj = bpy.data.objects.get(mesh_name)
+    if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
+        raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
+    role_item = next((item for item in obj.thyllore_submesh.roles if item.material == material), None)
+    if role_item is None or role_item.role not in GENERATABLE_ROLES:
+        raise ValueError(f"{material!r} on {obj.name!r} is not a hair or garment submesh")
+    material_index = _material_slot_index(obj, material)
+    if material_index is None:
+        raise ValueError(f"{obj.name!r} has no material slot {material!r}")
+    return obj, role_item.role, material_index
 
 
 def _add_bones(context, arm, specs):
     """Add bones in edit mode from (name, parent, head, tail) specs in Blender world space."""
     for name, *_ in specs:
         if name in arm.data.bones:
-            raise ValueError(f"Bone {name!r} already exists")
+            raise ValueError(f"Bone {name!r} already exists; reset the chain generation to replace it")
     to_armature = arm.matrix_world.inverted()
     context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="EDIT")
@@ -104,7 +123,7 @@ def _add_bones(context, arm, specs):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def _remove_bones(context, arm, bone_names):
+def remove_bones(context, arm, bone_names):
     """Remove bones by name in edit mode; descendants of a removed bone are removed by Blender."""
     if not bone_names:
         return
@@ -120,7 +139,7 @@ def _remove_bones(context, arm, bone_names):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def _remove_vertex_groups(obj, bone_names):
+def remove_vertex_groups(obj, bone_names):
     for name in bone_names:
         group = obj.vertex_groups.get(name)
         if group is not None:
@@ -157,10 +176,37 @@ def _marked_covered_vertices(obj) -> list[int]:
     return group_vertices(_vertex_group_weights(obj), group.index)
 
 
-def _given_chains(obj) -> list[dict]:
-    """The chains whose vertices the user assigned in membership groups; none when the split is computed."""
+def _chain_bones(arm, registered: dict[str, list[str]], chain_name: str) -> list:
+    """The armature bones of a registered chain, root to tip; none when any of them is missing."""
+    bones = [arm.data.bones.get(name) for name in registered.get(chain_name, [])]
+    if not bones or any(bone is None for bone in bones):
+        return []
+    return bones
+
+
+def _given_chains(obj, arm, registered: dict[str, list[str]], scale_length: float) -> list[dict]:
+    """The chains whose vertices the user assigned in membership groups, with the joints of the chains whose
+    bones exist on the armature; none when the split is computed."""
     groups = [(vg.name, vg.index) for vg in obj.vertex_groups]
-    return given_chains_from_groups(_vertex_group_weights(obj), groups)
+    given = given_chains_from_groups(_vertex_group_weights(obj), groups)
+    for chain in given:
+        bones = _chain_bones(arm, registered, chain["name"])
+        if bones:
+            chain["joints"] = joints_from_bones(
+                [(_engine_point(arm, b.head_local, scale_length), _engine_point(arm, b.tail_local, scale_length)) for b in bones]
+            )
+    return given
+
+
+def _read_back_root(arm, registered: dict[str, list[str]], given: list[dict]) -> str | None:
+    """The bone the read-back chains hang from, so a regenerate keeps the root the first generate chose."""
+    for chain in given:
+        if "joints" not in chain:
+            continue
+        parent = arm.data.bones[registered[chain["name"]][0]].parent
+        if parent is not None:
+            return parent.name
+    return None
 
 
 def _write_membership_groups(obj, chains: list[dict], given: list[dict]) -> None:
@@ -203,22 +249,10 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
     def poll(cls, context):
         return _TML_AVAILABLE and target_armature(context) is not None
 
-    def _resolve_submesh(self, arm):
-        obj = bpy.data.objects.get(self.mesh)
-        if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
-            raise ValueError(f"{self.mesh!r} is not a mesh bound to {arm.name!r}")
-        role_item = next((item for item in obj.thyllore_submesh.roles if item.material == self.material), None)
-        if role_item is None or role_item.role not in GENERATABLE_ROLES:
-            raise ValueError(f"{self.material!r} on {obj.name!r} is not a hair or garment submesh")
-        material_index = _material_slot_index(obj, self.material)
-        if material_index is None:
-            raise ValueError(f"{obj.name!r} has no material slot {self.material!r}")
-        return obj, role_item.role, material_index
-
     def execute(self, context):
         arm = target_armature(context)
         try:
-            obj, role, material_index = self._resolve_submesh(arm)
+            obj, role, material_index = resolve_submesh(arm, self.mesh, self.material)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
@@ -263,13 +297,14 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
             except ValueError as e:
                 self.report({"ERROR"}, f"fit_body_colliders failed: {e}")
                 return {"CANCELLED"}
-        replaced_bones = remove_chains_generated_on(settings, origin)
-        _remove_bones(context, arm, replaced_bones)
-        _remove_vertex_groups(obj, replaced_bones)
+        registered = generated_chain_bones(settings, origin)
+        marked = _marked_covered_vertices(obj)
+        given = _given_chains(obj, arm, registered, scale_length)
+        read_back = {chain["name"] for chain in given if "joints" in chain}
+        if not generation.root_bone.strip():
+            root_name = _read_back_root(arm, registered, given) or root_name
         root_index = arm.data.bones.find(root_name)
         skins = [skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))]
-        marked = _marked_covered_vertices(obj)
-        given = _given_chains(obj)
         body_bones = armature_fit_bones(context, arm)
 
         try:
@@ -297,21 +332,26 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         if support is not None and not generation.root_bone.strip():
             root_name = arm.data.bones[support["bone"]].name
         blender_output = output_to_blender(output, scale_length)
-        specs = bone_specs(blender_output, root_name)
+        specs = bone_specs(output_of_new_chains(blender_output, read_back), root_name)
         groups = group_weights(blender_output, root_name, [bone.name for bone in arm.data.bones])
+        generated_names = {chain["name"] for chain in output["chains"]}
+        stale_bones = [bone for name, bones in registered.items() if name not in generated_names for bone in bones]
 
         try:
             _add_bones(context, arm, specs)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
+        remove_bones(context, arm, stale_bones)
+        remove_vertex_groups(obj, stale_bones)
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups)
         _write_membership_groups(obj, output["chains"], given)
         if role == "garment":
             _write_covered_group(obj, output["covered"], marked)
-        apply_chain_bone_display(arm, [name for name, _, _, _ in specs], role)
+        joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
+        apply_chain_bone_display(arm, joint_names, role)
 
         bones = armature_fit_bones(context, arm)
         try:
@@ -336,9 +376,10 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         collider_note = " with a head collider" if output.get("head_capsule") else ""
         covered_note = f", {len(output['covered'])} covered vertices" if output["covered"] else ""
         support_note = f", hanging from {root_name} at height {support['boundary_height']:.3f}" if support else ""
+        kept_note = f", kept the bones of {len(read_back)} chains" if read_back else ""
         self.report(
             {"INFO"},
-            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{collider_note}{covered_note}{support_note}{fitted_note}",
+            f"Generated {len(specs)} chain bones in {len(output['chains'])} chains{kept_note}{collider_note}{covered_note}{support_note}{fitted_note}",
         )
         return {"FINISHED"}
 

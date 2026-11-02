@@ -98,6 +98,9 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
             op = row.operator("thyllore.generate_chain_bones", icon="ARMATURE_DATA")
             op.mesh = mesh_obj.name
             op.material = role_item.material
+            reset = row.operator_menu_enum("thyllore.reset_chain_generation", "stage", text="", icon="LOOP_BACK")
+            reset.mesh = mesh_obj.name
+            reset.material = role_item.material
 
     @staticmethod
     def _draw_chain_list(layout, arm):

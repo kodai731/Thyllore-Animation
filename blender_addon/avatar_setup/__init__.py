@@ -4,6 +4,7 @@ from __future__ import annotations
 from . import (
     chain_generation,
     chain_operators,
+    chain_reset,
     clip_operators,
     collider_operators,
     gizmo_draw,
@@ -22,6 +23,7 @@ def register() -> None:
     operators.register()
     chain_operators.register()
     chain_generation.register()
+    chain_reset.register()
     clip_operators.register()
     collider_operators.register()
     ramp_operators.register()
@@ -41,6 +43,7 @@ def unregister() -> None:
     ramp_operators.unregister()
     collider_operators.unregister()
     clip_operators.unregister()
+    chain_reset.unregister()
     chain_generation.unregister()
     chain_operators.unregister()
     operators.unregister()

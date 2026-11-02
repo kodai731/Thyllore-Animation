@@ -284,6 +284,15 @@ def active_chain(settings):
     return None
 
 
+def generated_chain_bones(settings, origin: dict) -> dict[str, list[str]]:
+    """The joint bone names, root to tip, of every chain generated on ``origin``, by chain name."""
+    return {
+        chain.name: [joint.bone for joint in chain.joints]
+        for chain in settings.chains
+        if same_origin(chain, origin)
+    }
+
+
 def remove_chains_generated_on(settings, origin: dict) -> list[str]:
     """Drop the chains generated on ``origin`` from the settings; returns their joint bone names."""
     bone_names: list[str] = []

@@ -14,7 +14,9 @@ from blender_addon.common.chain_bones import (
     given_chains_from_groups,
     group_vertices,
     group_weights,
+    joints_from_bones,
     membership_group_name,
+    output_of_new_chains,
     output_to_blender,
     vertex_tex_coords,
 )
@@ -425,3 +427,36 @@ def test_generate_chains_with_given_memberships_skips_the_split(tml):
     assert output["chains"][0]["vertices"] == sorted(members[0] + members[1])
     assert [joint["name"] for joint in output["chains"][0]["joints"]][0] == "hair_strip_hair_07_00"
     assert len(output["chains"][0]["joints"]) == 4
+
+
+def test_joints_from_bones_are_the_heads_then_the_last_tail():
+    bones = [((0.0, 1.0, 0.0), (0.0, 0.8, 0.0)), ((0.0, 0.8, 0.0), (0.0, 0.5, 0.1))]
+
+    assert joints_from_bones(bones) == [(0.0, 1.0, 0.0), (0.0, 0.8, 0.0), (0.0, 0.5, 0.1)]
+
+
+def test_output_of_new_chains_drops_the_read_back_chains():
+    output = {"chains": [{"name": "a"}, {"name": "b"}, {"name": "c"}], "weights": []}
+
+    assert output_of_new_chains(output, {"b"}) == {"chains": [{"name": "a"}, {"name": "c"}], "weights": []}
+
+
+def test_submesh_chain_names_keeps_this_submesh_only(tml):
+    names = ["hair_strip_hair_00", "hair_strip_hair_12", "hair_other_hair_00", "garment_strip_hair_00", "hair_strip_hair_00_01"]
+
+    assert tml.submesh_chain_names("hair", "strip/hair", names) == ["hair_strip_hair_00", "hair_strip_hair_12"]
+
+
+def test_generate_chains_with_given_joints_places_the_bones_there(tml):
+    positions, triangles = _strand_mesh((0.5,), 9, -0.05, -0.45, 0.01)
+    heads_then_tail = [(0.1, -0.05, 0.0), (0.1, -0.2, 0.0), (0.1, -0.45, 0.0)]
+    given = [{"name": "hair_strip_hair_00", "vertices": list(range(len(positions))), "joints": heads_then_tail}]
+
+    output = tml.generate_chains(
+        positions, triangles, (0.0, 0.0, 0.0), "hair", "strip/hair", {"joint_count": 4}, HEAD, given_chains=given
+    )
+
+    chain = output["chains"][0]
+    placed = [tuple(joint["head"]) for joint in chain["joints"]] + [tuple(chain["tail"])]
+    assert len(placed) == len(heads_then_tail)
+    assert all(abs(a - b) < 1e-6 for point, expected in zip(placed, heads_then_tail) for a, b in zip(point, expected))

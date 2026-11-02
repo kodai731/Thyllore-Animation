@@ -46,6 +46,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_gen_ui_params, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::submesh_chain_names, m)?)?;
     m.add_function(wrap_pyfunction!(clip_bake::bake_clip_file, m)?)?;
     m.add_function(wrap_pyfunction!(avatar_setup::spring_joint_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(

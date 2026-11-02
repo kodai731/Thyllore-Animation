@@ -221,6 +221,24 @@ pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<Give
         .collect()
 }
 
+/// The names among `candidates` that `generate_chains` would give a chain of the submesh `(role, target)`.
+pub fn submesh_chain_names(
+    role: &str,
+    target: &str,
+    candidates: &[String],
+) -> anyhow::Result<Vec<String>> {
+    let params = ChainGenParams {
+        role: role_from_str(role)?,
+        target: target.parse().map_err(anyhow::Error::msg)?,
+        settings: ChainGenSettings::default(),
+    };
+    Ok(candidates
+        .iter()
+        .filter(|name| chain_column(&params, name).is_some())
+        .cloned()
+        .collect())
+}
+
 pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],

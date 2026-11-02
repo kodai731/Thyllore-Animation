@@ -11,6 +11,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.chain_bone_display import remove_chain_collections
 from ..common.chain_bones import chain_of_membership_group
 from ..common.spring_properties import generated_chain_bones, remove_chains_generated_on
 from .chain_generation import remove_bones, remove_vertex_groups, resolve_submesh
@@ -61,7 +62,8 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
             return {"CANCELLED"}
         settings = arm.data.thyllore_spring
         origin = {"mesh": obj.name, "material": self.material, "role": role}
-        joint_bones = [bone for bones in generated_chain_bones(settings, origin).values() for bone in bones]
+        chain_bones = generated_chain_bones(settings, origin)
+        joint_bones = [bone for bones in chain_bones.values() for bone in bones]
 
         if self.stage == "weight":
             _clear_vertex_groups(obj, joint_bones)
@@ -71,6 +73,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
         remove_chains_generated_on(settings, origin)
         remove_bones(context, arm, joint_bones)
         remove_vertex_groups(obj, joint_bones)
+        remove_chain_collections(arm, sorted(chain_bones))
         note = f"Removed {len(joint_bones)} chain bones"
         if self.stage == "assign":
             groups = _membership_groups_of_submesh(obj, role, f"{obj.name}/{self.material}")

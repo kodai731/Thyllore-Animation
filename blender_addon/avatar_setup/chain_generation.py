@@ -14,7 +14,7 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from ..common import coordinates
-from ..common.chain_bone_display import apply_chain_bone_display
+from ..common.chain_bone_display import apply_chain_bone_display, remove_chain_collections
 from ..common.chain_bones import (
     COVERED_GROUP,
     bone_specs,
@@ -351,14 +351,15 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         remove_bones(context, arm, stale_bones)
         remove_vertex_groups(obj, stale_bones)
         remove_chains_named(settings, stale_names)
+        remove_chain_collections(arm, sorted(stale_names))
 
         context.view_layer.objects.active = obj
         _write_weights(obj, groups, rewritten)
         _write_membership_groups(obj, output["chains"], given)
         if role == "garment":
             _write_covered_group(obj, output["covered"], marked)
-        joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
-        apply_chain_bone_display(arm, joint_names, role)
+        for chain in output["chains"]:
+            apply_chain_bone_display(arm, chain["name"], [joint["name"] for joint in chain["joints"]], role)
 
         if new_chains:
             bones = armature_fit_bones(context, arm)

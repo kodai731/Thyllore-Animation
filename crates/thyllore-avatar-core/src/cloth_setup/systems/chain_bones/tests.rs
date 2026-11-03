@@ -24,7 +24,7 @@ fn make_chain() -> Vec<GeneratedChain> {
     use crate::humanoid::components::role::HumanoidRole;
 
     let params = ChainGenParams {
-        root: HumanoidRole::Head,
+        root: Some(HumanoidRole::Head),
         attachment: RootAttachment::Cap,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings::default(),

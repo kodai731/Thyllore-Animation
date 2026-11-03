@@ -8,7 +8,7 @@ use super::frame::collect_target_vertices;
 
 /// The head collider a generation rooted on the head stands its chains on; other roots have none.
 pub fn root_head_capsule(input: &ChainGenInput, params: &ChainGenParams) -> Option<HeadCapsule> {
-    if params.root != HumanoidRole::Head {
+    if params.root != Some(HumanoidRole::Head) {
         return None;
     }
     let vertices = collect_target_vertices(input);

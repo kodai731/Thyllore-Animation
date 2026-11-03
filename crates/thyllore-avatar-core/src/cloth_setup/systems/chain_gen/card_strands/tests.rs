@@ -480,7 +480,7 @@ fn card_input<'a>(mesh: &'a CardMesh, tex_coords: &'a [[f32; 2]]) -> ChainGenInp
 
 fn hair_params(column_count: u32, strand_merge_distance: f32) -> ChainGenParams {
     ChainGenParams {
-        root: HumanoidRole::Head,
+        root: Some(HumanoidRole::Head),
         attachment: RootAttachment::Cap,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings {
@@ -598,7 +598,7 @@ fn cards_without_tex_coords_use_the_azimuth_path() {
 fn garment_role_has_no_strand_placement() {
     let mesh = build_three_tilted_cards();
     let params = ChainGenParams {
-        root: HumanoidRole::Hips,
+        root: Some(HumanoidRole::Hips),
         attachment: RootAttachment::Ring,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings::default(),

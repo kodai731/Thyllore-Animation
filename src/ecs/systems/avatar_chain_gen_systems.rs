@@ -98,7 +98,7 @@ fn generate_chain_bones(
         given_chains: &[],
     };
     let params = ChainGenParams {
-        root: request.root,
+        root: Some(request.root),
         attachment: request.attachment,
         target: request.target.clone(),
         settings: request.settings.clone(),

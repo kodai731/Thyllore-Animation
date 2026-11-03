@@ -36,21 +36,8 @@ pub fn apply_skinning(
         let mut has_valid_weight = false;
 
         for j in 0..INFLUENCES_PER_VERTEX {
-            let bone_idx = match j {
-                0 => indices.x,
-                1 => indices.y,
-                2 => indices.z,
-                3 => indices.w,
-                _ => 0,
-            } as usize;
-
-            let weight = match j {
-                0 => weights.x,
-                1 => weights.y,
-                2 => weights.z,
-                3 => weights.w,
-                _ => 0.0,
-            };
+            let bone_idx = indices[j] as usize;
+            let weight = weights[j];
 
             if weight > 0.0 && bone_idx < skin_matrices.len() {
                 has_valid_weight = true;

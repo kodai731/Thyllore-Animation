@@ -488,6 +488,12 @@ where
         .map(|iter| iter.into_f32().collect())
         .unwrap_or_default();
 
+    if reader.read_joints(1).is_some() {
+        log_warn!(
+            "gltf: primitive has JOINTS_1/WEIGHTS_1 (extra skin influences beyond 4), not read"
+        );
+    }
+
     let colors: Vec<[f32; 4]> = reader
         .read_colors(0)
         .map(|iter| iter.into_rgba_f32().collect())

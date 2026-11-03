@@ -25,3 +25,30 @@ impl Default for SkinData {
         }
     }
 }
+
+impl SkinData {
+    pub fn influences(&self, vertex: usize) -> impl Iterator<Item = (u32, f32)> + '_ {
+        let indices = &self.bone_indices[vertex];
+        let weights = &self.bone_weights[vertex];
+        (0..INFLUENCES_PER_VERTEX)
+            .map(move |j| (indices[j], weights[j]))
+            .filter(|&(_, weight)| weight > 0.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn influences_skip_zero_weight_slots() {
+        let skin = SkinData {
+            bone_indices: vec![Vector4::new(1, 2, 3, 4)],
+            bone_weights: vec![Vector4::new(0.0, 0.3, 0.0, 0.7)],
+            ..Default::default()
+        };
+
+        let influences: Vec<_> = skin.influences(0).collect();
+        assert_eq!(influences, [(2u32, 0.3), (4u32, 0.7)]);
+    }
+}

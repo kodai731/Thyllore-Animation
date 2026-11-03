@@ -299,19 +299,9 @@ pub fn weighted_positions(
 
     for skin in skins {
         for (i, pos) in skin.base_positions.iter().enumerate() {
-            let indices = &skin.bone_indices[i];
-            let weights = &skin.bone_weights[i];
-
-            let comps: [(u32, f32); 4] = [
-                (indices.x, weights.x),
-                (indices.y, weights.y),
-                (indices.z, weights.z),
-                (indices.w, weights.w),
-            ];
-
-            if comps
-                .iter()
-                .any(|(idx, weight)| *idx == bone_id && *weight >= min_weight)
+            if skin
+                .influences(i)
+                .any(|(idx, weight)| idx == bone_id && weight >= min_weight)
             {
                 points.push(*pos);
             }

@@ -6,6 +6,7 @@ use thyllore_anim_core::{
 };
 use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
 
@@ -347,7 +348,12 @@ fn convert_fbx_data_to_mesh(
     let skin_data = if !fbx_data.clusters.is_empty() && skeleton_id.is_some() {
         let sid = skeleton_id.expect("skeleton_id verified as Some by is_some() check above");
         let skeleton = animation_system.get_skeleton(sid);
-        Some(convert_clusters_to_skin_data(fbx_data, sid, skeleton))
+        Some(convert_clusters_to_skin_data(
+            fbx_data,
+            sid,
+            skeleton,
+            fbx_data.mesh_node_name.as_deref().unwrap_or(""),
+        ))
     } else {
         None
     };
@@ -378,6 +384,7 @@ fn convert_clusters_to_skin_data(
     fbx_data: &super::fbx::FbxData,
     skeleton_id: u32,
     skeleton: Option<&Skeleton>,
+    skin_name: &str,
 ) -> SkinData {
     let vertex_count = fbx_data.positions.len();
 
@@ -406,15 +413,19 @@ fn convert_clusters_to_skin_data(
         }
     }
 
+    let (truncated_count, max_influence_count) =
+        count_vertices_over_influence_limit(&vertex_bone_data);
+
     for (vert_idx, bones) in vertex_bone_data.iter().enumerate() {
         let mut sorted_bones = bones.clone();
         sorted_bones.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        let mut indices = [0u32; 4];
-        let mut weights = [0.0f32; 4];
+        let mut indices = [0u32; INFLUENCES_PER_VERTEX];
+        let mut weights = [0.0f32; INFLUENCES_PER_VERTEX];
         let mut total_weight = 0.0;
 
-        for (i, &(bone_idx, weight)) in sorted_bones.iter().take(4).enumerate() {
+        for (i, &(bone_idx, weight)) in sorted_bones.iter().take(INFLUENCES_PER_VERTEX).enumerate()
+        {
             indices[i] = bone_idx;
             weights[i] = weight;
             total_weight += weight;
@@ -428,6 +439,13 @@ fn convert_clusters_to_skin_data(
 
         bone_indices[vert_idx] = Vector4::new(indices[0], indices[1], indices[2], indices[3]);
         bone_weights[vert_idx] = Vector4::new(weights[0], weights[1], weights[2], weights[3]);
+    }
+
+    if truncated_count > 0 {
+        log_warn!(
+            "fbx: skin \"{}\" had {} vertices with more than {} influences (max={}), dropped to {} per vertex",
+            skin_name, truncated_count, INFLUENCES_PER_VERTEX, max_influence_count, INFLUENCES_PER_VERTEX
+        );
     }
 
     let base_positions: Vec<Vector3<f32>> = if !fbx_data.local_positions.is_empty() {
@@ -448,5 +466,76 @@ fn convert_clusters_to_skin_data(
         bone_weights,
         base_positions,
         base_normals,
+    }
+}
+
+fn count_vertices_over_influence_limit(vertex_bone_data: &[Vec<(u32, f32)>]) -> (usize, usize) {
+    let mut truncated_count = 0usize;
+    let mut max_influence_count = 0usize;
+    for bones in vertex_bone_data {
+        let count = bones.len();
+        if count > max_influence_count {
+            max_influence_count = count;
+        }
+        if count > INFLUENCES_PER_VERTEX {
+            truncated_count += 1;
+        }
+    }
+    (truncated_count, max_influence_count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counts_vertices_over_influence_limit() {
+        let empty: Vec<Vec<(u32, f32)>> = vec![];
+        let (truncated, max_count) = count_vertices_over_influence_limit(&empty);
+        assert_eq!(truncated, 0);
+        assert_eq!(max_count, 0);
+
+        let within_limit: Vec<Vec<(u32, f32)>> = vec![
+            vec![(0, 1.0)],
+            vec![(0, 0.5), (1, 0.5)],
+            vec![(0, 0.25), (1, 0.25), (2, 0.25), (3, 0.25)],
+        ];
+        let (truncated, max_count) = count_vertices_over_influence_limit(&within_limit);
+        assert_eq!(truncated, 0);
+        assert_eq!(max_count, INFLUENCES_PER_VERTEX);
+
+        let one_over: Vec<Vec<(u32, f32)>> = vec![
+            vec![(0, 1.0)],
+            vec![(0, 0.2), (1, 0.2), (2, 0.2), (3, 0.2), (4, 0.2)],
+        ];
+        let (truncated, max_count) = count_vertices_over_influence_limit(&one_over);
+        assert_eq!(truncated, 1);
+        assert_eq!(max_count, 5);
+
+        let multiple_over: Vec<Vec<(u32, f32)>> = vec![
+            vec![(0, 1.0)],
+            vec![(0, 0.2), (1, 0.2), (2, 0.2), (3, 0.2), (4, 0.2)],
+            vec![(0, 0.5), (1, 0.5)],
+            vec![
+                (0, 0.1),
+                (1, 0.1),
+                (2, 0.1),
+                (3, 0.1),
+                (4, 0.1),
+                (5, 0.1),
+                (6, 0.1),
+            ],
+        ];
+        let (truncated, max_count) = count_vertices_over_influence_limit(&multiple_over);
+        assert_eq!(truncated, 2);
+        assert_eq!(max_count, 7);
+
+        let all_over: Vec<Vec<(u32, f32)>> = vec![
+            vec![(0, 0.2), (1, 0.2), (2, 0.2), (3, 0.2), (4, 0.2)],
+            vec![(0, 0.2), (1, 0.2), (2, 0.2), (3, 0.2), (4, 0.2)],
+        ];
+        let (truncated, max_count) = count_vertices_over_influence_limit(&all_over);
+        assert_eq!(truncated, 2);
+        assert_eq!(max_count, 5);
     }
 }

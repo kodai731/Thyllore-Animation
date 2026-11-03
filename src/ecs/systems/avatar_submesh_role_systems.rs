@@ -276,19 +276,8 @@ pub(crate) fn skin_role_skins<'a>(
         .collect()
 }
 
-fn influences_heaviest_first(
-    indices: cgmath::Vector4<u32>,
-    weights: cgmath::Vector4<f32>,
-) -> Vec<(BoneId, f32)> {
-    let mut influences: Vec<(BoneId, f32)> = [
-        (indices.x, weights.x),
-        (indices.y, weights.y),
-        (indices.z, weights.z),
-        (indices.w, weights.w),
-    ]
-    .into_iter()
-    .filter(|(_, weight)| *weight > 0.0)
-    .collect();
+fn influences_heaviest_first(skin: &SkinData, vertex: usize) -> Vec<(BoneId, f32)> {
+    let mut influences: Vec<(BoneId, f32)> = skin.influences(vertex).collect();
     influences.sort_by(|a, b| b.1.total_cmp(&a.1));
     influences
 }
@@ -315,11 +304,8 @@ pub(crate) fn skin_role_surfaces(
                 .chunks_exact(3)
                 .map(|tri| [tri[0], tri[1], tri[2]])
                 .collect(),
-            influences: skin
-                .bone_indices
-                .iter()
-                .zip(&skin.bone_weights)
-                .map(|(indices, weights)| influences_heaviest_first(*indices, *weights))
+            influences: (0..skin.bone_indices.len())
+                .map(|v| influences_heaviest_first(skin, v))
                 .collect(),
         })
         .collect()

@@ -10,7 +10,7 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
     SidecarSpring,
 };
-use thyllore_model_core::{Skeleton, SkinData};
+use thyllore_model_core::{Skeleton, SkinData, INFLUENCES_PER_VERTEX};
 
 use crate::avatar_setup_bridge::BoneSpec;
 use crate::param_rows::{apply_scalar_pairs, param_rows, ParamRow};
@@ -63,9 +63,11 @@ pub(crate) fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
     let mut bone_weights = Vec::with_capacity(count);
 
     for influences in &fit_skin.influences {
-        let mut indices = [0u32; 4];
-        let mut weights = [0.0f32; 4];
-        for (slot, (bone_index, weight)) in influences.iter().take(4).enumerate() {
+        let mut indices = [0u32; INFLUENCES_PER_VERTEX];
+        let mut weights = [0.0f32; INFLUENCES_PER_VERTEX];
+        for (slot, (bone_index, weight)) in
+            influences.iter().take(INFLUENCES_PER_VERTEX).enumerate()
+        {
             indices[slot] = *bone_index as u32;
             weights[slot] = *weight;
         }

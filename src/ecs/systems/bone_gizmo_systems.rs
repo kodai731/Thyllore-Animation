@@ -657,20 +657,8 @@ fn pick_dominant_bone_from_triangle(
             continue;
         }
         let bary_weight = hit.barycentric[slot];
-        let indices = &skin.bone_indices[vertex_index];
-        let weights = &skin.bone_weights[vertex_index];
 
-        let influences = [
-            (indices.x, weights.x),
-            (indices.y, weights.y),
-            (indices.z, weights.z),
-            (indices.w, weights.w),
-        ];
-
-        for (bone_id, weight) in influences {
-            if weight <= 0.0 {
-                continue;
-            }
+        for (bone_id, weight) in skin.influences(vertex_index) {
             *accumulated.entry(bone_id).or_insert(0.0) += bary_weight * weight;
         }
     }

@@ -88,6 +88,13 @@ fn update_mesh_colors(mesh: &mut MeshBuffer, desired: &HeatmapApplication) -> Me
     MeshUpdateOutcome::Updated
 }
 
+fn extract_weight_for_bone(skin: &SkinData, vertex: usize, bone_id: BoneId) -> f32 {
+    skin.influences(vertex)
+        .filter(|(bone, _)| *bone == bone_id)
+        .map(|(_, w)| w)
+        .sum()
+}
+
 fn apply_heatmap_to_vertices(
     vertices: &mut [Vertex],
     skin: &SkinData,
@@ -99,7 +106,7 @@ fn apply_heatmap_to_vertices(
     debug_assert_eq!(vertices.len(), base_colors.len());
 
     for i in 0..vertices.len() {
-        let weight = extract_weight_for_bone(&skin.bone_indices[i], &skin.bone_weights[i], bone_id);
+        let weight = extract_weight_for_bone(skin, i, bone_id);
         let rgb = weight_to_heatmap_rgb(weight);
         let base_alpha = base_colors[i].w;
         vertices[i].color = Vec4::new(rgb.x, rgb.y, rgb.z, base_alpha);
@@ -111,20 +118,6 @@ fn restore_base_colors(vertices: &mut [Vertex], base_colors: &[Vector4<f32>]) {
     for (i, base) in base_colors.iter().enumerate() {
         vertices[i].color = Vec4::new(base.x, base.y, base.z, base.w);
     }
-}
-
-fn extract_weight_for_bone(indices: &Vector4<u32>, weights: &Vector4<f32>, bone_id: BoneId) -> f32 {
-    let slots = [
-        (indices.x, weights.x),
-        (indices.y, weights.y),
-        (indices.z, weights.z),
-        (indices.w, weights.w),
-    ];
-    slots
-        .iter()
-        .filter(|(bone, _)| *bone == bone_id)
-        .map(|(_, weight)| *weight)
-        .sum()
 }
 
 fn weight_to_heatmap_rgb(w: f32) -> Vector3<f32> {
@@ -187,27 +180,43 @@ mod tests {
 
     #[test]
     fn extract_weight_for_bone_returns_matching_slot() {
-        let indices = Vector4::new(0, 3, 5, 7);
-        let weights = Vector4::new(0.1, 0.4, 0.3, 0.2);
+        let skin = SkinData {
+            bone_indices: vec![Vector4::new(0, 3, 5, 7)],
+            bone_weights: vec![Vector4::new(0.1, 0.4, 0.3, 0.2)],
+            base_positions: vec![Vector3::new(0.0, 0.0, 0.0)],
+            ..Default::default()
+        };
 
-        assert!((extract_weight_for_bone(&indices, &weights, 3) - 0.4).abs() < 1e-6);
-        assert!((extract_weight_for_bone(&indices, &weights, 5) - 0.3).abs() < 1e-6);
+        let weight = extract_weight_for_bone(&skin, 0, 3);
+        assert!((weight - 0.4).abs() < 1e-6);
+        let weight = extract_weight_for_bone(&skin, 0, 5);
+        assert!((weight - 0.3).abs() < 1e-6);
     }
 
     #[test]
     fn extract_weight_for_bone_returns_zero_when_not_present() {
-        let indices = Vector4::new(0, 1, 2, 3);
-        let weights = Vector4::new(0.25, 0.25, 0.25, 0.25);
+        let skin = SkinData {
+            bone_indices: vec![Vector4::new(0, 1, 2, 3)],
+            bone_weights: vec![Vector4::new(0.25, 0.25, 0.25, 0.25)],
+            base_positions: vec![Vector3::new(0.0, 0.0, 0.0)],
+            ..Default::default()
+        };
 
-        assert!(extract_weight_for_bone(&indices, &weights, 99).abs() < 1e-6);
+        let weight = extract_weight_for_bone(&skin, 0, 99);
+        assert!(weight.abs() < 1e-6);
     }
 
     #[test]
     fn extract_weight_for_bone_sums_duplicate_slots() {
-        let indices = Vector4::new(5, 5, 3, 1);
-        let weights = Vector4::new(0.2, 0.3, 0.4, 0.1);
+        let skin = SkinData {
+            bone_indices: vec![Vector4::new(5, 5, 3, 1)],
+            bone_weights: vec![Vector4::new(0.2, 0.3, 0.4, 0.1)],
+            base_positions: vec![Vector3::new(0.0, 0.0, 0.0)],
+            ..Default::default()
+        };
 
-        assert!((extract_weight_for_bone(&indices, &weights, 5) - 0.5).abs() < 1e-6);
+        let weight = extract_weight_for_bone(&skin, 0, 5);
+        assert!((weight - 0.5).abs() < 1e-6);
     }
 
     fn make_skin_single_bone(vertex_count: usize, bone_id: BoneId) -> SkinData {

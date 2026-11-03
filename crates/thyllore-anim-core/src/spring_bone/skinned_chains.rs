@@ -6,13 +6,8 @@ use super::{SpringBoneSetup, SpringChainId};
 
 /// Chains with a joint that moves at least one vertex of the skin.
 pub fn chains_skinned_to(setup: &SpringBoneSetup, skin: &SkinData) -> Vec<SpringChainId> {
-    let influencing: HashSet<usize> = skin
-        .bone_indices
-        .iter()
-        .zip(&skin.bone_weights)
-        .flat_map(|(indices, weights)| {
-            (0..4).filter_map(move |slot| (weights[slot] > 0.0).then(|| indices[slot] as usize))
-        })
+    let influencing: HashSet<usize> = (0..skin.bone_indices.len())
+        .flat_map(|v| skin.influences(v).map(|(bone, _)| bone as usize))
         .collect();
 
     setup

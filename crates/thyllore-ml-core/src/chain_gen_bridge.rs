@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
-    ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
+    GeneratedChain, GivenChain, InfluenceTarget, RootAttachment, SkinSurface, VertexInfluences,
     CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
 };
@@ -148,10 +148,12 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
     Ok(settings)
 }
 
-pub(crate) fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
+pub(crate) fn root_and_attachment_from_str(
+    role: &str,
+) -> anyhow::Result<(HumanoidRole, RootAttachment)> {
     match role {
-        "hair" => Ok(ChainRole::Hair),
-        "garment" | "skirt" => Ok(ChainRole::Garment),
+        "hair" => Ok((HumanoidRole::Head, RootAttachment::Cap)),
+        "garment" | "skirt" => Ok((HumanoidRole::Hips, RootAttachment::Ring)),
         _ => anyhow::bail!("chain generation role must be \"hair\" or \"skirt\", got \"{role}\""),
     }
 }
@@ -226,8 +228,10 @@ pub fn submesh_chain_names(
     target: &str,
     candidates: &[String],
 ) -> anyhow::Result<Vec<String>> {
+    let (root, attachment) = root_and_attachment_from_str(role)?;
     let params = ChainGenParams {
-        role: role_from_str(role)?,
+        root,
+        attachment,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings: ChainGenSettings::default(),
     };
@@ -312,8 +316,10 @@ pub fn run_chain_gen(
     tex_coords: &[[f32; 2]],
     given: &[GivenChainIn],
 ) -> anyhow::Result<ChainGenOutput> {
+    let (root, root_attachment) = root_and_attachment_from_str(role)?;
     let params = ChainGenParams {
-        role: role_from_str(role)?,
+        root,
+        attachment: root_attachment,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings,
     };
@@ -331,7 +337,7 @@ pub fn run_chain_gen(
         given_chains: &given_chains,
     };
 
-    let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
+    let head_capsule = root_head_capsule(&input, &params).map(|capsule| CapsuleOut {
         bottom: vector3_to_array(capsule.bottom),
         top: vector3_to_array(capsule.top),
         radius: capsule.radius,

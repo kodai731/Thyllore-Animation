@@ -87,6 +87,22 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
     - When animation channels are missing, maintain current bone transform
     - Use values decomposed from original local_transform (`decompose_transform`), NOT default values (0,0,0)
 
+## Spring bones and collider fit run on the CPU
+
+- Spring integration and collision (`crates/thyllore-anim-core/src/spring_bone/solver.rs`, `collision.rs`) stay on
+  the CPU. A chain is solved joint by joint (integrate → length constraint → collision → parent rotation), so it
+  parallelises only per chain; a model has about 10^2 chains, too few threads for a GPU dispatch to pay off alone.
+- Move spring to a compute shader only together with GPU skinning (#265): once skin vertices and bone matrices live on
+  the GPU, one dispatch (one chain per thread, joints in order, colliders in shared memory) removes the CPU spring
+  loop and the vertex write-back in the same command buffer. Without GPU skinning the result has to be read back,
+  which costs more than the solve.
+- Collider fit (`spring_bone/collider_fit.rs` `fit_bone_capsule`, avatar-core `collider/systems/head_capsule.rs`
+  `estimate_head_capsule`) runs once per user action and stays on
+  the CPU. If a model makes it slow, first keep each fitted bone's vertex set from load time instead of scanning every
+  vertex per fit.
+- Before switching any of these to the GPU, compare tail trajectories of both implementations on the same model
+  (`compare_tail_trajectories` in `spring_bone/trajectory.rs`, driven like `tools/spring_parity.py`).
+
 ## Bones are not entities
 
 Bones are `Skeleton.bones: Vec<Bone>` identified by `BoneId`; see `ecs-architecture.md`. The editable

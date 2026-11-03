@@ -1,7 +1,7 @@
-"""Tests for blender_addon.common.collider_fit."""
+"""Tests for blender_addon.common.bone_frames."""
 from __future__ import annotations
 
-from blender_addon.common.collider_fit import bone_bind_matrix, scaled_bind_matrix, top_influences
+from blender_addon.common.bone_frames import bone_bind_matrix, scaled_bind_matrix, top_influences
 
 
 def test_top_influences_basic():

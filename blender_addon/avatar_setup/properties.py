@@ -4,6 +4,8 @@ Registered on ``bpy.types.Armature`` (spring) and ``bpy.types.Object`` (submesh)
 """
 from __future__ import annotations
 
+import re
+
 import bpy
 
 try:
@@ -16,13 +18,7 @@ except ImportError:
 
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
-from ..common.vrm_export import (
-    VRM_META_DEFAULT_VERSION,
-    VRM_META_ENUMS,
-    VRM_META_FLAGS,
-    VRM_META_LABELS,
-    VRM_META_TEXTS,
-)
+from ..common.vrm_export import VRM_META_DEFAULT_VERSION, VRM_META_FIELDS
 
 
 SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
@@ -198,20 +194,23 @@ def _mark_role_as_user(item, _context) -> None:
     item.source = "user"
 
 
+def _vrm_meta_property(field: dict):
+    if field["kind"] == "text":
+        default = VRM_META_DEFAULT_VERSION if field["name"] == "version" else ""
+        return bpy.props.StringProperty(name=field["label"], default=default)
+    if field["kind"] == "flag":
+        return bpy.props.BoolProperty(name=field["label"], default=False)
+    items = [(choice, _choice_label(choice), "") for choice in field["choices"]]
+    return bpy.props.EnumProperty(name=field["label"], items=items, default=items[0][0])
+
+
+def _choice_label(choice: str) -> str:
+    words = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])", choice)
+    return " ".join(word.capitalize() for word in words)
+
+
 def _vrm_meta_annotations() -> dict:
-    annotations = {
-        field: bpy.props.StringProperty(name=VRM_META_LABELS[field]) for field in VRM_META_TEXTS
-    }
-    annotations["version"] = bpy.props.StringProperty(
-        name=VRM_META_LABELS["version"], default=VRM_META_DEFAULT_VERSION
-    )
-    for field, items in VRM_META_ENUMS.items():
-        annotations[field] = bpy.props.EnumProperty(
-            name=VRM_META_LABELS[field], items=list(items), default=items[0][0]
-        )
-    for field in VRM_META_FLAGS:
-        annotations[field] = bpy.props.BoolProperty(name=VRM_META_LABELS[field], default=False)
-    return annotations
+    return {field["name"]: _vrm_meta_property(field) for field in VRM_META_FIELDS}
 
 
 def _avatar_name_or_default(meta) -> str:

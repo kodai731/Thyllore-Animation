@@ -127,7 +127,6 @@ $UnshippedRelPaths = @(
 $CurveCopilotOnlyRelPaths = @(
     "operators/curve_copilot.py",
     "operators/skin_weight_transfer.py",
-    "common/skin_weight_transfer.py",
     "_ghost_overlay.py",
     "modal"
 )

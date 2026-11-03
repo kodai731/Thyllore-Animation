@@ -19,7 +19,6 @@ except ImportError:
     _STYLE = None
     _TML_AVAILABLE = False
 
-from ..common.spring_gizmo import capsule_segments, wire_sphere_segments
 from ..common.spring_properties import spring_settings_to_edit
 from .operators import armature_bone_specs, target_armature
 
@@ -44,7 +43,7 @@ def _radius_segments(chains, arm, scale_length):
             if pb is not None:
                 head = tuple(arm.matrix_world @ pb.head)
                 radius = joint.hit_radius / scale_length
-                segments.extend(wire_sphere_segments(head, radius, circle_segments))
+                segments.extend(tml.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 
@@ -82,9 +81,9 @@ def _collider_segments(colliders, arm):
         if collider.shape == "capsule" and collider.has_tail:
             tail = Vector(collider.tail)
             tail_world = tuple(world_matrix @ tail)
-            segments.extend(capsule_segments(head, tail_world, radius, circle_segments))
+            segments.extend(tml.wire_capsule_segments(head, tail_world, radius, circle_segments))
         else:
-            segments.extend(wire_sphere_segments(head, radius, circle_segments))
+            segments.extend(tml.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 

@@ -156,13 +156,22 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
 #[test]
 fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring = with_vrm_joints(
+        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+    );
+    let mut rest_relative_ramp = ramp_input("linear");
+    for end in [&mut rest_relative_ramp.root, &mut rest_relative_ramp.tip] {
+        end.force = SidecarJointForce::RestRelative {
+            bending_relaxation: 0.5,
+            gravity_scale: 1.0,
+        };
+    }
 
     let result = apply_ramp_to_chains(
         &spring,
         &bones,
         &["Chain_0".to_string()],
-        &ramp_input("linear"),
+        &rest_relative_ramp,
     );
 
     assert!(result.is_err());

@@ -192,7 +192,6 @@ UNSHIPPED_REL_PATHS=(
 CURVE_COPILOT_ONLY_REL_PATHS=(
     "operators/curve_copilot.py"
     "operators/skin_weight_transfer.py"
-    "common/skin_weight_transfer.py"
     "_ghost_overlay.py"
     "modal"
 )

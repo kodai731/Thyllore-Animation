@@ -6,7 +6,7 @@ addon's bpy operator, which converts to Blender space with ``coordinates``.
 """
 from __future__ import annotations
 
-from .coordinates import engine_to_blender_point
+from .coordinates import engine_metres_to_blender
 
 COVERED_GROUP = "thyllore_covered"
 MEMBERSHIP_GROUP_PREFIX = "thyllore_chain_"
@@ -98,7 +98,7 @@ def output_to_blender(output: dict, scale_length: float = 1.0) -> dict:
     """The same output with every joint head and chain tail in Blender space and Blender units."""
 
     def to_blender(point):
-        return tuple(c / scale_length for c in engine_to_blender_point(point))
+        return engine_metres_to_blender(point, scale_length)
 
     chains = [
         {

@@ -1,7 +1,38 @@
-use thyllore_avatar_core::vrm::VrmMeta;
+use std::collections::BTreeMap;
+
+use cgmath::Vector3;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
+use thyllore_avatar_core::vrm::{t_pose_warnings, VrmMeta, T_POSE_TOLERANCE_DEG};
 use thyllore_exporter_core::systems::gltf::write_vrm;
 
 use crate::avatar_setup_bridge::sidecar_read;
+
+/// The T-pose warnings of the rig the VRM would carry: the inferred humanoid mapping with the
+/// user's role overrides (Unity role name to bone name) on top.
+pub fn vrm_t_pose_warnings(
+    bones: &[BoneInput],
+    humanoid_overrides: &BTreeMap<String, String>,
+) -> anyhow::Result<Vec<String>> {
+    let (mut mapping, _) = infer_mapping(bones);
+    for (role_name, bone_name) in humanoid_overrides {
+        let role = HumanoidRole::from_unity_name(role_name)
+            .ok_or_else(|| anyhow::anyhow!("unknown humanoid role {role_name:?}"))?;
+        let bone = bones
+            .iter()
+            .position(|bone| bone.name == *bone_name)
+            .ok_or_else(|| {
+                anyhow::anyhow!("humanoid override {role_name:?} names unknown bone {bone_name:?}")
+            })?;
+        mapping.by_role.insert(role, bone);
+    }
+    let heads: Vec<Vector3<f32>> = bones
+        .iter()
+        .map(|bone| Vector3::from(bone.rest_position))
+        .collect();
+    Ok(t_pose_warnings(&mapping, &heads, T_POSE_TOLERANCE_DEG))
+}
 
 /// The `.vrm` bytes for a GLB the standard glTF exporter wrote and the sidecar JSON of the same
 /// armature; `metres_per_gltf_unit` is the scene's unit scale (the sidecar is in metres).

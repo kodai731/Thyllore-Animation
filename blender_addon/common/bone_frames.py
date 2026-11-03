@@ -1,4 +1,4 @@
-"""Pure Python helpers for body collider fit (bpy-independent)."""
+"""Pure Python helpers for the bone frames the wheel reads: top skin influences and the rest frame conversions (bpy-independent)."""
 from __future__ import annotations
 
 from .coordinates import _mat4_mul, blender_frame_to_engine_matrix

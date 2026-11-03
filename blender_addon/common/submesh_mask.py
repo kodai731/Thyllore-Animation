@@ -6,7 +6,7 @@ mask_mesh_input builds the MaskMeshInput dict for one material's submesh from ra
 """
 from __future__ import annotations
 
-from .coordinates import blender_to_engine_point
+from .coordinates import blender_to_engine_metres, blender_to_engine_point
 
 
 def material_triangles(
@@ -56,10 +56,7 @@ def mask_mesh_input(
     """Build the MaskMeshInput dict for one material's submesh from raw mesh arrays."""
     triangles, loop_indices = material_triangles(triangle_vertices, triangle_materials, material_index)
 
-    positions = []
-    for p in vertex_positions:
-        engine_p = blender_to_engine_point(p)
-        positions.append((engine_p[0] * scale_length, engine_p[1] * scale_length, engine_p[2] * scale_length))
+    positions = [blender_to_engine_metres(p, scale_length) for p in vertex_positions]
 
     normals = []
     for n in vertex_normals:

@@ -131,7 +131,36 @@ pub struct SidecarBuildInput {
     pub submesh_roles: Vec<SidecarSubmeshRole>,
     pub hidden_triangles: Vec<SidecarHiddenTriangles>,
     pub materials: BTreeMap<String, String>,
-    pub stats: AvatarStats,
+    pub stats: MeshStats,
+}
+
+/// The counts only Blender knows; the bone and spring counts come from the build input itself.
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+pub struct MeshStats {
+    pub triangles: u32,
+    pub materials: u32,
+    pub meshes: u32,
+    pub skinned_meshes: u32,
+    pub morph_meshes: u32,
+}
+
+fn avatar_stats(mesh: &MeshStats, bone_count: usize, spring: &SidecarSpring) -> AvatarStats {
+    AvatarStats {
+        triangles: mesh.triangles,
+        bones: bone_count as u32,
+        materials: mesh.materials,
+        skinned_meshes: mesh.skinned_meshes,
+        meshes: mesh.meshes,
+        morph_meshes: mesh.morph_meshes,
+        spring_chains: spring.chains.len() as u32,
+        spring_transforms: spring
+            .chains
+            .iter()
+            .map(|chain| chain.joints.len() as u32)
+            .sum(),
+        spring_colliders: spring.colliders.len() as u32,
+        texture_bytes: 0,
+    }
 }
 
 pub fn validate_sidecar_spring(spring: &SidecarSpring, bones: &[BoneInput]) -> anyhow::Result<()> {
@@ -233,6 +262,7 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
     let normalized_spring = build_sidecar_spring(&setup, &bones, &frames);
 
     let (mapping, _) = infer_mapping(&bones);
+    let stats = avatar_stats(&input.stats, bones.len(), &normalized_spring);
     let fresh = build_sidecar(SidecarInput {
         mapping: &mapping,
         bones: &bones,
@@ -243,7 +273,7 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
         materials: &input.materials,
         submesh_roles: &submesh_role_map(&input.submesh_roles),
         hidden_triangles: &hidden_triangle_map(&input.hidden_triangles),
-        stats: &input.stats,
+        stats: &stats,
     });
     let mut sidecar = match &input.base {
         Some(base) => AvatarSidecar {
@@ -470,7 +500,7 @@ mod tests {
             submesh_roles: Vec::new(),
             hidden_triangles: Vec::new(),
             materials: BTreeMap::new(),
-            stats: AvatarStats::default(),
+            stats: MeshStats::default(),
         }
     }
 
@@ -524,7 +554,7 @@ mod tests {
             submesh_roles: Vec::new(),
             hidden_triangles: Vec::new(),
             materials: BTreeMap::new(),
-            stats: AvatarStats::default(),
+            stats: MeshStats::default(),
         };
 
         let err = sidecar_build(&input).unwrap_err();
@@ -573,7 +603,7 @@ mod tests {
             submesh_roles: Vec::new(),
             hidden_triangles: Vec::new(),
             materials: BTreeMap::new(),
-            stats: AvatarStats::default(),
+            stats: MeshStats::default(),
         };
 
         let err = sidecar_build(&input).unwrap_err();

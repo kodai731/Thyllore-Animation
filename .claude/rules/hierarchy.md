@@ -79,7 +79,9 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   screen-space scale) lives in `thyllore-math-core`.
 - `thyllore-avatar-core/src/vrm/` projects the avatar sidecar onto VRM 1.0: `vrm_magnitudes` (joint force →
   stiffness / gravity), `build_vrm_extensions` (`VRMC_vrm`, `VRMC_springBone`, the vendor `THYLLORE_avatar`
-  carrying the whole sidecar) as `serde_json::Value`, with no `gltf` dependency. `thyllore-exporter-core`
+  carrying the whole sidecar) as `serde_json::Value`, with no `gltf` dependency; `vrm_meta_fields` is the
+  one table of the editable `VRMC_vrm.meta` fields (keys, labels, choices) the addon builds its properties
+  from, and `t_pose_warnings` the one T-pose check. `thyllore-exporter-core`
   (`systems/gltf/vrm.rs`, `write_vrm`) only derives the node skeleton from the GLB, merges those extensions
   into the root and encodes the GLB; the C# `VrmMagnitudes` of the Unity package follows the same projection.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
@@ -128,6 +130,14 @@ Consequences for placement:
   building.
 - The `python` feature only adds the PyO3 facade; the same code compiles as an `rlib` for the engine, so
   the Rust API is the single source of truth for both.
+- `blender_addon/` is a thin wrapper: it reads `bpy` data into the wheel's inputs, calls one wheel
+  function, and writes the result back. Geometry (wire shapes, weight transfer, barycentric
+  coordinates), solvers, tables (UI params, VRM meta fields, gizmo style) and constants live in a crate
+  and reach Python through `pybindings/`; a Python module that recomputes any of them is a second
+  definition and is replaced by a wheel call. The only computation Python keeps is the axis and unit
+  conversion in `blender_addon/common/coordinates.py` (mirrored by `thyllore-math-core`
+  `coordinate_system`, checked by `tests/test_coordinates_wheel_parity.py`), and every other Python
+  file converts through that module (`tests/test_coordinates_single_source.py`).
 - The Blender addon is the only consumer of `crate-type = "cdylib"`; do not add it to other crates.
 - `thyllore-grpc-client` is exercised against Blender in CI (`blender_grpc_parity.yml`) but is not a
   wheel; it stays a plain library crate.

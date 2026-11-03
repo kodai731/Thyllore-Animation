@@ -1,12 +1,12 @@
-use cgmath::{Matrix, Matrix4, Quaternion, Vector3};
+use cgmath::{Matrix, Matrix4, Quaternion, SquareMatrix, Vector3};
 use thyllore_anim_core::spring_bone::{
     collect_affected_bone_ids, spring_bone_initialize, spring_bone_reseat_tails,
     spring_bone_update, spring_bone_write_back_to_pose, SpringBoneSetup, SpringSimulation,
     SpringSpace,
 };
 use thyllore_anim_core::{
-    compute_pose_global_transforms, create_pose_from_rest, decompose_transform, BoneId,
-    BoneLocalPose, Skeleton, SkeletonPose,
+    compose_transform, compute_pose_global_transforms, create_pose_from_rest, decompose_transform,
+    BoneId, BoneLocalPose, Skeleton, SkeletonPose,
 };
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
@@ -19,10 +19,12 @@ use crate::spring_edit_bridge::skeleton_from_bones;
 pub type MatrixRows = [[f32; 4]; 4];
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
-pub struct JointRotation {
+pub struct JointPose {
     pub bone: String,
     /// Parent-relative rotation as (w, x, y, z).
     pub rotation: [f32; 4],
+    /// The swung local relative to the rest local, row-major: Blender's `matrix_basis`.
+    pub basis: MatrixRows,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -36,6 +38,8 @@ pub struct JointTail {
 ///
 /// Every matrix is a bone's parent-relative transform; root bones carry the armature's world
 /// transform converted to engine axes and metres, so the propagated globals are in engine space.
+/// The chain joints' own matrices are ignored: the swing written back into them is solver output,
+/// not animation, so they always start from their rest locals.
 pub struct SpringPreview {
     setup: SpringBoneSetup,
     skeleton: Skeleton,
@@ -73,21 +77,27 @@ impl SpringPreview {
     /// Puts every tail where the bones point now, so the next step starts without a jump.
     pub fn reset(&mut self, animated_locals: &[MatrixRows]) -> anyhow::Result<()> {
         check_bone_count(&self.skeleton, animated_locals.len())?;
-        let pose = pose_from_locals(&self.skeleton, animated_locals);
+        let pose = pose_from_locals(
+            &self.skeleton,
+            &self.locals_with_rest_joints(animated_locals),
+        );
         let globals = compute_pose_global_transforms(&self.skeleton, &pose);
         spring_bone_reseat_tails(&self.setup, &mut self.simulation, &self.skeleton, &globals);
         self.simulation.frame_count = 0;
         Ok(())
     }
 
-    /// Advances the simulation by `dt` seconds and returns the swung joints' parent-relative rotations.
+    /// Advances the simulation by `dt` seconds and returns the swung joints' poses.
     pub fn step(
         &mut self,
         animated_locals: &[MatrixRows],
         dt: f32,
-    ) -> anyhow::Result<Vec<JointRotation>> {
+    ) -> anyhow::Result<Vec<JointPose>> {
         check_bone_count(&self.skeleton, animated_locals.len())?;
-        let mut pose = pose_from_locals(&self.skeleton, animated_locals);
+        let mut pose = pose_from_locals(
+            &self.skeleton,
+            &self.locals_with_rest_joints(animated_locals),
+        );
         let mut globals = compute_pose_global_transforms(&self.skeleton, &pose);
 
         spring_bone_update(
@@ -106,14 +116,32 @@ impl SpringPreview {
             &self.affected_bone_ids,
         );
 
-        Ok(self
-            .affected_bone_ids
+        self.affected_bone_ids
             .iter()
-            .map(|&bone_id| JointRotation {
-                bone: self.skeleton.bones[bone_id as usize].name.clone(),
-                rotation: wxyz(pose.bone_poses[bone_id as usize].rotation),
-            })
-            .collect())
+            .map(|&bone_id| self.joint_pose(&pose, bone_id))
+            .collect()
+    }
+
+    fn locals_with_rest_joints(&self, animated_locals: &[MatrixRows]) -> Vec<MatrixRows> {
+        let mut locals = animated_locals.to_vec();
+        for &bone_id in &self.affected_bone_ids {
+            locals[bone_id as usize] = rows(self.skeleton.bones[bone_id as usize].local_transform);
+        }
+        locals
+    }
+
+    fn joint_pose(&self, pose: &SkeletonPose, bone_id: BoneId) -> anyhow::Result<JointPose> {
+        let bone = &self.skeleton.bones[bone_id as usize];
+        let local = &pose.bone_poses[bone_id as usize];
+        let rest_inverse = bone.local_transform.invert().ok_or_else(|| {
+            anyhow::anyhow!("rest local of bone \"{}\" is not invertible", bone.name)
+        })?;
+        let swung = compose_transform(local.translation, local.rotation, local.scale);
+        Ok(JointPose {
+            bone: bone.name.clone(),
+            rotation: wxyz(local.rotation),
+            basis: rows(rest_inverse * swung),
+        })
     }
 
     /// The current tail of every joint in engine space, the same samples the engine's tail dump writes.
@@ -149,6 +177,10 @@ fn check_bone_count(skeleton: &Skeleton, matrix_count: usize) -> anyhow::Result<
 
 fn column_major(rows: &MatrixRows) -> Matrix4<f32> {
     Matrix4::from(*rows).transpose()
+}
+
+fn rows(matrix: Matrix4<f32>) -> MatrixRows {
+    matrix.transpose().into()
 }
 
 fn pose_from_locals(skeleton: &Skeleton, locals: &[MatrixRows]) -> SkeletonPose {

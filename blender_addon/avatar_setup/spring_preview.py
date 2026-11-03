@@ -1,16 +1,12 @@
 """Live swing preview: the engine's spring solver drives the chain bones on every frame change.
 
-Blender's parent-relative bone transforms are handed to the wheel as-is; only root bones carry the
-armature's world transform converted to engine axes and metres, so the solver works in engine space
-and the parent-relative rotations it returns go straight back into ``matrix_basis``. Chain joints are
-handed their rest-relative transform instead: the swing the previous step wrote into their
-``matrix_basis`` is solver output, not animation, and feeding it back would move the rest direction
-the spring returns to."""
+This file only reads Blender's bone matrices and writes the solver's ``matrix_basis`` back; the
+rest-relative handling of the chain joints and the basis itself are the wheel's."""
 from __future__ import annotations
 
 import bpy
 from bpy.app.handlers import persistent
-from mathutils import Matrix, Quaternion
+from mathutils import Matrix
 
 try:
     import thyllore_ml_core as tml  # type: ignore
@@ -21,11 +17,9 @@ except ImportError:
     _TML_AVAILABLE = False
 
 from .. import _debuglog
-from ..common.coordinates import C
+from ..common.coordinates import blender_frame_to_engine_metres
 from ..common.spring_properties import spring_settings_to_edit
 from .operators import armature_bone_specs
-
-ENGINE_AXES = Matrix(C)
 
 _previews: dict[str, "_ArmaturePreview"] = {}
 
@@ -45,39 +39,12 @@ def invalidate_preview(armature_name: str) -> None:
     _previews.pop(armature_name, None)
 
 
-def _root_frame(arm, scale_length: float) -> Matrix:
-    return Matrix.Scale(scale_length, 4) @ ENGINE_AXES @ arm.matrix_world
-
-
-def _matrix_rows(matrix: Matrix) -> list[list[float]]:
+def matrix_rows(matrix: Matrix) -> list[list[float]]:
     return [list(row) for row in matrix]
 
 
-def _rest_locals(arm, root_frame: Matrix) -> list[list[list[float]]]:
-    locals_ = []
-    for bone in arm.data.bones:
-        if bone.parent is None:
-            locals_.append(_matrix_rows(root_frame @ bone.matrix_local))
-        else:
-            locals_.append(_matrix_rows(bone.parent.matrix_local.inverted() @ bone.matrix_local))
-    return locals_
-
-
-def _animated_local(pose_bone, root_frame: Matrix, chain_bones: set[str]) -> Matrix:
-    if pose_bone.parent is None:
-        return root_frame @ pose_bone.matrix
-    if pose_bone.name in chain_bones:
-        return rest_relative_to_parent(pose_bone.bone)
-    return pose_bone.parent.matrix.inverted() @ pose_bone.matrix
-
-
-def _chain_bone_names(settings) -> set[str]:
-    return {joint.bone for chain in settings.chains for joint in chain.joints}
-
-
-def _animated_locals(arm, root_frame: Matrix) -> list[Matrix]:
-    chain_bones = _chain_bone_names(arm.data.thyllore_spring)
-    return [_animated_local(arm.pose.bones[bone.name], root_frame, chain_bones) for bone in arm.data.bones]
+def _root_frame(arm, scale_length: float) -> Matrix:
+    return Matrix(blender_frame_to_engine_metres(matrix_rows(arm.matrix_world), scale_length))
 
 
 def rest_relative_to_parent(bone) -> Matrix:
@@ -86,12 +53,21 @@ def rest_relative_to_parent(bone) -> Matrix:
     return bone.parent.matrix_local.inverted() @ bone.matrix_local
 
 
-def write_joint_rotation(arm, animated_local: Matrix, bone_name: str, rotation) -> None:
-    pose_bone = arm.pose.bones[bone_name]
-    translation = Matrix.Translation(animated_local.to_translation())
-    scale = Matrix.Diagonal(animated_local.to_scale()).to_4x4()
-    swung_local = translation @ Quaternion(rotation).to_matrix().to_4x4() @ scale
-    pose_bone.matrix_basis = rest_relative_to_parent(pose_bone.bone).inverted() @ swung_local
+def _rest_locals(arm, root_frame: Matrix) -> list[list[list[float]]]:
+    return [
+        matrix_rows(root_frame @ bone.matrix_local if bone.parent is None else rest_relative_to_parent(bone))
+        for bone in arm.data.bones
+    ]
+
+
+def _animated_local(pose_bone, root_frame: Matrix) -> Matrix:
+    if pose_bone.parent is None:
+        return root_frame @ pose_bone.matrix
+    return pose_bone.parent.matrix.inverted() @ pose_bone.matrix
+
+
+def _animated_locals(arm, root_frame: Matrix) -> list[list[list[float]]]:
+    return [matrix_rows(_animated_local(arm.pose.bones[bone.name], root_frame)) for bone in arm.data.bones]
 
 
 def _preview_for(arm, context) -> _ArmaturePreview | None:
@@ -116,19 +92,16 @@ def _step_armature(arm, context) -> None:
     if cached is None:
         return
     scene = context.scene
-    root_frame = _root_frame(arm, scene.unit_settings.scale_length)
-    animated = _animated_locals(arm, root_frame)
-    rows = [_matrix_rows(local) for local in animated]
+    animated = _animated_locals(arm, _root_frame(arm, scene.unit_settings.scale_length))
 
     frame = scene.frame_current
     if cached.last_frame is None or frame != cached.last_frame + 1:
-        cached.preview.reset(rows)
+        cached.preview.reset(animated)
     cached.last_frame = frame
 
     dt = scene.render.fps_base / scene.render.fps
-    bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
-    for joint in cached.preview.step(rows, dt):
-        write_joint_rotation(arm, animated[bone_index[joint["bone"]]], joint["bone"], joint["rotation"])
+    for joint in cached.preview.step(animated, dt):
+        arm.pose.bones[joint["bone"]].matrix_basis = Matrix(joint["basis"])
 
 
 def _previewed_armatures(scene):

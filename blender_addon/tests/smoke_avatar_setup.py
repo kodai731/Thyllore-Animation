@@ -117,9 +117,9 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
     collection = arm.data.collections.get("Thyllore Chains")
     if collection is None:
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_c — 'Thyllore Chains' bone collection missing")
-    if len(collection.bones) != added:
+    if len(collection.bones_recursive) != added:
         raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_c — 'Thyllore Chains' has {len(collection.bones)} bones, expected {added}"
+            f"AVATAR_SETUP_SMOKE failed: step_c — 'Thyllore Chains' has {len(collection.bones_recursive)} bones, expected {added}"
         )
 
     fitted = [c for c in arm.data.thyllore_spring.colliders if c.origin == "fitted"]

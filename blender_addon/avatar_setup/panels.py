@@ -10,10 +10,10 @@ from bpy.types import Panel, UIList
 
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
-from .chain_generation import generatable_submeshes
+from .chain_inputs import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES
-from ..common.vrm_export import VRM_META_ENUMS, VRM_META_FLAGS, VRM_META_TEXTS
+from ..common.vrm_export import meta_fields_of_kind
 from .properties import CHAIN_GEN_UI_PARAMS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
@@ -233,13 +233,11 @@ class THYLLORE_PT_AvatarSetupVrmLicense(Panel):
             return
 
         meta = arm.data.thyllore_vrm
-        for field in VRM_META_TEXTS:
-            layout.prop(meta, field)
-        for field in VRM_META_ENUMS:
-            layout.prop(meta, field)
+        for field in meta_fields_of_kind("text") + meta_fields_of_kind("choice"):
+            layout.prop(meta, field["name"])
         column = layout.column(align=True)
-        for field in VRM_META_FLAGS:
-            column.prop(meta, field)
+        for field in meta_fields_of_kind("flag"):
+            column.prop(meta, field["name"])
 
 
 class THYLLORE_PT_AvatarSetupDebug(Panel):

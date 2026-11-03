@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from . import coordinates
-from .collider_fit import top_influences
+from .bone_frames import top_influences
 
 
 def skin_role_meshes(meshes) -> list:
@@ -45,9 +45,7 @@ def skin_input(mesh_obj, arm, scale_length: float) -> dict:
     positions = []
     influences = []
     for v in mesh_obj.data.vertices:
-        world_pos = tuple(mesh_obj.matrix_world @ v.co)
-        engine_pos = coordinates.blender_to_engine_point(world_pos)
-        positions.append([c * scale_length for c in engine_pos])
+        positions.append(list(coordinates.blender_to_engine_metres(tuple(mesh_obj.matrix_world @ v.co), scale_length)))
 
         if v.index not in surface_vertices:
             influences.append([])

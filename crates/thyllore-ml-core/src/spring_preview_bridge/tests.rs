@@ -1,4 +1,4 @@
-use cgmath::{Deg, InnerSpace, Quaternion, Rotation3, Vector3};
+use cgmath::{AbsDiffEq, Deg, InnerSpace, Matrix, Quaternion, Rotation3, SquareMatrix, Vector3};
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
@@ -35,7 +35,7 @@ fn step_frames(
     preview: &mut SpringPreview,
     locals: &[MatrixRows],
     frames: usize,
-) -> Vec<JointRotation> {
+) -> Vec<JointPose> {
     let mut last = Vec::new();
     for _ in 0..frames {
         last = preview.step(locals, 1.0 / 30.0).unwrap();
@@ -57,6 +57,11 @@ fn spring_preview_strand_at_rest_under_gravity_stays_still() {
     assert_eq!(rotations.len(), 3);
     for rotation in &rotations {
         assert!(angle_degrees(rotation.rotation) < 1e-2, "{rotation:?}");
+        let basis = cgmath::Matrix4::from(rotation.basis).transpose();
+        assert!(
+            basis.abs_diff_eq(&cgmath::Matrix4::identity(), 1e-4),
+            "a joint at rest has the identity basis: {basis:?}"
+        );
     }
 }
 

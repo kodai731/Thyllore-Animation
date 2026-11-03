@@ -1,4 +1,4 @@
-"""Tests for avatar_sidecar module: bone_specs, submesh_to_sidecar, write_submesh_sidecar, sidecar_stats."""
+"""Tests for avatar_sidecar module: bone_specs, submesh_to_sidecar, write_submesh_sidecar."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -7,7 +7,6 @@ import pytest
 
 from blender_addon.common.avatar_sidecar import (
     bone_specs,
-    sidecar_stats,
     submesh_to_sidecar,
     write_submesh_sidecar,
 )
@@ -184,44 +183,3 @@ def test_write_submesh_sidecar_restores_loop_triangle_indices():
     write_submesh_sidecar(submesh, "Body", [], hidden_in, {"Skin": [1, 3]})
 
     assert [item.get("triangles") for item in submesh.hidden_triangles] == [[1, 3]]
-
-
-def test_sidecar_stats():
-    """sidecar_stats returns all 10 keys matching Rust AvatarStats."""
-    spring = {
-        "chains": [
-            {"joints": [{"bone": "a"}, {"bone": "b"}]},
-            {"joints": [{"bone": "c"}]},
-        ],
-        "colliders": [{"name": "c1"}, {"name": "c2"}, {"name": "c3"}],
-    }
-
-    stats = sidecar_stats(
-        triangle_count=100,
-        bone_count=50,
-        material_count=4,
-        mesh_count=5,
-        skinned_mesh_count=2,
-        morph_mesh_count=1,
-        spring=spring,
-    )
-
-    assert stats["triangles"] == 100
-    assert stats["bones"] == 50
-    assert stats["materials"] == 4
-    assert stats["meshes"] == 5
-    assert stats["skinned_meshes"] == 2
-    assert stats["morph_meshes"] == 1
-    assert stats["spring_chains"] == 2
-    assert stats["spring_transforms"] == 3  # 2 + 1 joints
-    assert stats["spring_colliders"] == 3
-    assert stats["texture_bytes"] == 0
-
-
-def test_sidecar_stats_empty_spring():
-    """sidecar_stats with empty spring has zero spring values."""
-    stats = sidecar_stats(10, 5, 1, 1, 1, 0, {})
-
-    assert stats["spring_chains"] == 0
-    assert stats["spring_transforms"] == 0
-    assert stats["spring_colliders"] == 0

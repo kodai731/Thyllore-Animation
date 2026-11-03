@@ -2,9 +2,46 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pythonize::depythonize;
 
+use std::collections::BTreeMap;
+
+use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
+use super::chain_gen::pythonize_value;
 use super::error::anyhow_to_pyerr;
-use crate::vrm_bridge::vrm_write as bridge_vrm_write;
-use thyllore_avatar_core::vrm::VrmMeta;
+use crate::vrm_bridge::{
+    vrm_t_pose_warnings as bridge_t_pose_warnings, vrm_write as bridge_vrm_write,
+};
+use thyllore_avatar_core::vrm::{
+    vrm_meta_fields as avatar_vrm_meta_fields, VrmMeta, VRM_META_DEFAULT_VERSION,
+};
+
+#[derive(serde::Serialize)]
+struct VrmMetaFieldsOut {
+    default_version: &'static str,
+    fields: Vec<thyllore_avatar_core::vrm::VrmMetaField>,
+}
+
+/// The editable `VRMC_vrm.meta` fields with their keys, labels, kinds and choices.
+#[pyfunction]
+pub fn vrm_meta_fields(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    pythonize_value(
+        py,
+        &VrmMetaFieldsOut {
+            default_version: VRM_META_DEFAULT_VERSION,
+            fields: avatar_vrm_meta_fields(),
+        },
+    )
+}
+
+#[pyfunction]
+pub fn vrm_t_pose_warnings(
+    bones: &Bound<PyAny>,
+    humanoid_overrides: &Bound<PyAny>,
+) -> PyResult<Vec<String>> {
+    let bone_inputs = bones_from_py(bones)?;
+    let overrides: BTreeMap<String, String> =
+        depythonize(humanoid_overrides).map_err(depythonize_error_to_pyerr)?;
+    bridge_t_pose_warnings(&bone_inputs, &overrides).map_err(anyhow_to_pyerr)
+}
 
 #[pyfunction]
 #[pyo3(signature = (glb, sidecar_json, meta, metres_per_gltf_unit = 1.0))]

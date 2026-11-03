@@ -14,7 +14,8 @@ except ImportError:
 from ..common.chain_bone_display import remove_chain_collections
 from ..common.chain_bones import chain_of_membership_group
 from ..common.spring_properties import generated_chain_bones, remove_chains_generated_on
-from .chain_generation import remove_bones, remove_vertex_groups, resolve_submesh
+from .chain_bone_edit import remove_bones, remove_vertex_groups
+from .chain_inputs import resolve_submesh
 from .operators import target_armature
 
 RESET_STAGES = (

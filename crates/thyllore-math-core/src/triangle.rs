@@ -51,6 +51,26 @@ pub fn closest_point_on_triangle(
     a + ab * v + ac * w
 }
 
+/// The barycentric coordinates of `p` in triangle `abc` as `(u, v, w)` with `p = u a + v b + w c`; a
+/// degenerate triangle gives `(1, 0, 0)`.
+pub fn barycentric_coordinates(
+    p: Vector3<f32>,
+    a: Vector3<f32>,
+    b: Vector3<f32>,
+    c: Vector3<f32>,
+) -> Vector3<f32> {
+    let ab = b - a;
+    let ac = c - a;
+    let normal = ab.cross(ac);
+    let denominator = normal.dot(normal);
+    if denominator <= 1e-12 {
+        return Vector3::new(1.0, 0.0, 0.0);
+    }
+    let v = (p - a).cross(ac).dot(normal) / denominator;
+    let w = ab.cross(p - a).dot(normal) / denominator;
+    Vector3::new(1.0 - v - w, v, w)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,5 +99,20 @@ mod tests {
         assert!((edge - Vector3::new(0.5, 0.0, 0.0)).magnitude() < 1e-6);
         let hypotenuse = closest_point_on_triangle(Vector3::new(1.0, 1.0, 0.0), a, b, c);
         assert!((hypotenuse - Vector3::new(0.5, 0.5, 0.0)).magnitude() < 1e-6);
+    }
+
+    #[test]
+    fn barycentric_coordinates_of_a_corner_an_edge_midpoint_and_the_centroid() {
+        let (a, b, c) = (
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(2.0, 0.0, 0.0),
+            Vector3::new(0.0, 2.0, 0.0),
+        );
+        let near = |p: Vector3<f32>, expected: [f32; 3]| {
+            (barycentric_coordinates(p, a, b, c) - Vector3::from(expected)).magnitude() < 1e-6
+        };
+        assert!(near(a, [1.0, 0.0, 0.0]));
+        assert!(near((a + b) / 2.0, [0.5, 0.5, 0.0]));
+        assert!(near((a + b + c) / 3.0, [1.0 / 3.0; 3]));
     }
 }

@@ -3,10 +3,9 @@ use std::collections::BTreeMap;
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
-    ChainRole, GivenChain, InfluenceTarget, SkinSurface, CHAIN_GEN_SCALAR_PARAMS,
-    CHAIN_GEN_UI_PARAMS,
+    ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
+    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
@@ -239,27 +238,8 @@ pub fn submesh_chain_names(
         .collect())
 }
 
-pub fn run_chain_gen(
-    positions: &[[f32; 3]],
-    triangles: &[[u32; 3]],
-    root_position: [f32; 3],
-    role: &str,
-    target: &str,
-    settings: ChainGenSettings,
-    attachment: SkinAttachment,
-    tex_coords: &[[f32; 2]],
-    given: &[GivenChainIn],
-) -> anyhow::Result<ChainGenOutput> {
-    let role = role_from_str(role)?;
-    let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
-    let params = ChainGenParams {
-        role,
-        target,
-        settings,
-    };
-    let given_chains = given_chains(given, &params);
-
-    let positions_vec = to_vectors(positions);
+/// The surfaces the chains attach to: the torso part of the skins, then the body colliders.
+fn attachment_surfaces(attachment: &SkinAttachment) -> Vec<SkinSurface> {
     let mut skins: Vec<SkinSurface> = attachment
         .skins
         .iter()
@@ -267,33 +247,20 @@ pub fn run_chain_gen(
         .collect();
     retain_torso_skin(&mut skins, |bone| role_of_bone(attachment.roles, bone));
     skins.extend(collider_surfaces(attachment.body_colliders));
-    let input = ChainGenInput {
-        positions: &positions_vec,
-        triangles,
-        root_position: Vector3::new(root_position[0], root_position[1], root_position[2]),
-        root_bone: attachment.root_bone as BoneId,
-        skins: &skins,
-        tex_coords,
-        covered_vertices: attachment.covered_vertices,
-        given_chains: &given_chains,
-    };
+    skins
+}
 
-    let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
-        bottom: vector3_to_array(capsule.bottom),
-        top: vector3_to_array(capsule.top),
-        radius: capsule.radius,
-    });
-    let placement = place_chains_with_strands(&input, &params)?;
-    let chains = placement.chains;
-    let weights = compute_chain_weights(&input, &params, &chains, &placement.covered);
-    let half_thicknesses = joint_half_thicknesses(&positions_vec, &chains, &weights);
-
-    let chains_out: Vec<ChainOut> = chains
+fn chains_to_output(
+    params: &ChainGenParams,
+    chains: &[GeneratedChain],
+    half_thicknesses: &[Vec<f32>],
+) -> Vec<ChainOut> {
+    chains
         .iter()
-        .zip(&half_thicknesses)
+        .zip(half_thicknesses)
         .map(|(chain, radii)| ChainOut {
             column: chain.column,
-            name: chain_name(&params, chain.column),
+            name: chain_name(params, chain.column),
             joints: chain
                 .joints
                 .iter()
@@ -307,32 +274,77 @@ pub fn run_chain_gen(
             tail: vector3_to_array(chain.tail),
             vertices: chain.vertices.clone(),
         })
-        .collect();
+        .collect()
+}
 
-    let weights_out: Vec<WeightOut> = weights
+fn weight_target(target: InfluenceTarget, chains: &[ChainOut]) -> WeightTarget {
+    match target {
+        InfluenceTarget::Root => WeightTarget::Name("root".to_string()),
+        InfluenceTarget::Joint { chain, joint } => {
+            WeightTarget::Name(chains[chain].joints[joint].name.clone())
+        }
+        InfluenceTarget::Bone(bone) => WeightTarget::Bone { bone },
+    }
+}
+
+fn weights_to_output(weights: Vec<VertexInfluences>, chains: &[ChainOut]) -> Vec<WeightOut> {
+    weights
         .into_iter()
-        .map(|vi| WeightOut {
-            vertex: vi.vertex,
-            influences: vi
+        .map(|vertex| WeightOut {
+            vertex: vertex.vertex,
+            influences: vertex
                 .influences
                 .into_iter()
-                .map(|(target, weight)| {
-                    let target = match target {
-                        InfluenceTarget::Root => WeightTarget::Name("root".to_string()),
-                        InfluenceTarget::Joint { chain, joint } => {
-                            WeightTarget::Name(chains_out[chain].joints[joint].name.clone())
-                        }
-                        InfluenceTarget::Bone(bone) => WeightTarget::Bone { bone },
-                    };
-                    (target, weight)
-                })
+                .map(|(target, weight)| (weight_target(target, chains), weight))
                 .collect(),
         })
-        .collect();
+        .collect()
+}
+
+pub fn run_chain_gen(
+    positions: &[[f32; 3]],
+    triangles: &[[u32; 3]],
+    root_position: [f32; 3],
+    role: &str,
+    target: &str,
+    settings: ChainGenSettings,
+    attachment: SkinAttachment,
+    tex_coords: &[[f32; 2]],
+    given: &[GivenChainIn],
+) -> anyhow::Result<ChainGenOutput> {
+    let params = ChainGenParams {
+        role: role_from_str(role)?,
+        target: target.parse().map_err(anyhow::Error::msg)?,
+        settings,
+    };
+    let given_chains = given_chains(given, &params);
+    let positions_vec = to_vectors(positions);
+    let skins = attachment_surfaces(&attachment);
+    let input = ChainGenInput {
+        positions: &positions_vec,
+        triangles,
+        root_position: Vector3::from(root_position),
+        root_bone: attachment.root_bone as BoneId,
+        skins: &skins,
+        tex_coords,
+        covered_vertices: attachment.covered_vertices,
+        given_chains: &given_chains,
+    };
+
+    let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
+        bottom: vector3_to_array(capsule.bottom),
+        top: vector3_to_array(capsule.top),
+        radius: capsule.radius,
+    });
+    let placement = place_chains_with_strands(&input, &params)?;
+    let weights = compute_chain_weights(&input, &params, &placement.chains, &placement.covered);
+    let half_thicknesses = joint_half_thicknesses(&positions_vec, &placement.chains, &weights);
+    let chains = chains_to_output(&params, &placement.chains, &half_thicknesses);
+    let weights = weights_to_output(weights, &chains);
 
     Ok(ChainGenOutput {
-        chains: chains_out,
-        weights: weights_out,
+        chains,
+        weights,
         head_capsule,
         covered: placement.covered.iter().map(|c| c.vertex).collect(),
         support: placement.support.map(|support| SupportOut {

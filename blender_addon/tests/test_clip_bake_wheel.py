@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from blender_addon.common.avatar_sidecar import bone_specs
-from blender_addon.common.collider_fit import bone_rest_frame
+from blender_addon.common.bone_frames import bone_rest_frame
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WHEELS_DIR = REPO_ROOT / "blender_addon" / "wheels"

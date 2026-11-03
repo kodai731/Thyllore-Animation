@@ -1,23 +1,22 @@
 """Pure Python helpers for sidecar export/import (bpy-independent)."""
 from __future__ import annotations
 
-from .coordinates import blender_to_engine_point
+from .coordinates import blender_to_engine_metres
 
 
 def bone_specs(names, parent_indices, world_heads, scale_length, rest_frames=None):
     """Build bone spec list from names, parent indices, world-space head positions and, when
-    given, the per-bone rest frames (``collider_fit.bone_rest_frame``).
+    given, the per-bone rest frames (``bone_frames.bone_rest_frame``).
 
     Root bones have parent_index None (passed through as None); children have their
     parent's index in the bone list."""
     specs = []
     frames = rest_frames if rest_frames is not None else [None] * len(names)
     for name, parent_index, world_head, rest_frame in zip(names, parent_indices, world_heads, frames):
-        rest_position = [component * scale_length for component in blender_to_engine_point(world_head)]
         spec = {
             "name": name,
             "parent": parent_index,
-            "rest_position": list(rest_position),
+            "rest_position": list(blender_to_engine_metres(world_head, scale_length)),
         }
         if rest_frame is not None:
             spec["rest_frame"] = rest_frame
@@ -71,23 +70,3 @@ def write_submesh_sidecar(submesh, mesh_name, roles, hidden, material_loop_indic
         item = submesh.hidden_triangles.add()
         item.material = entry["material"]
         item["triangles"] = triangles
-
-
-def sidecar_stats(triangle_count, bone_count, material_count, mesh_count, skinned_mesh_count, morph_mesh_count, spring):
-    """Build stats dict matching Rust AvatarStats fields."""
-    chains = spring.get("chains", [])
-    chain_count = len(chains)
-    transform_count = sum(len(chain["joints"]) for chain in chains)
-    collider_count = len(spring.get("colliders", []))
-    return {
-        "triangles": triangle_count,
-        "bones": bone_count,
-        "materials": material_count,
-        "meshes": mesh_count,
-        "skinned_meshes": skinned_mesh_count,
-        "morph_meshes": morph_mesh_count,
-        "spring_chains": chain_count,
-        "spring_transforms": transform_count,
-        "spring_colliders": collider_count,
-        "texture_bytes": 0,
-    }

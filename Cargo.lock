@@ -4156,6 +4156,7 @@ dependencies = [
  "thyllore-anim-core",
  "thyllore-avatar-core",
  "thyllore-exporter-core",
+ "thyllore-math-core",
  "thyllore-ml-api",
  "thyllore-model-core",
  "thyllore-scene-core",

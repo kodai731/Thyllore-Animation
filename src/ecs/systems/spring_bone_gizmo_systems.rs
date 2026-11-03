@@ -5,6 +5,7 @@ use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 use thyllore_anim_core::spring_bone::{
     world_collider, CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
 };
+use thyllore_math_core::{wire_capsule_segments, wire_sphere_segments};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColliderGizmo {
@@ -118,9 +119,9 @@ fn append_wire_sphere(
     color: [f32; 3],
     segments: u32,
 ) {
-    append_wire_circle(mesh, center, radius, color, segments, Plane::XY);
-    append_wire_circle(mesh, center, radius, color, segments, Plane::XZ);
-    append_wire_circle(mesh, center, radius, color, segments, Plane::YZ);
+    for (from, to) in wire_sphere_segments(center, radius, segments) {
+        append_solid_line(mesh, from, to, color);
+    }
 }
 
 fn append_wire_capsule(
@@ -131,83 +132,8 @@ fn append_wire_capsule(
     color: [f32; 3],
     segments: u32,
 ) {
-    append_wire_sphere(mesh, center, radius, color, segments);
-    append_wire_sphere(mesh, tail, radius, color, segments);
-
-    let dx = tail[0] - center[0];
-    let dy = tail[1] - center[1];
-    let dz = tail[2] - center[2];
-    let len = (dx * dx + dy * dy + dz * dz).sqrt();
-
-    if len < 1e-6 {
-        return;
-    }
-
-    let dir = [dx / len, dy / len, dz / len];
-    let (right, up) = compute_perpendicular_axes(dir);
-
-    let offsets = [
-        [right[0] * radius, right[1] * radius, right[2] * radius],
-        [-right[0] * radius, -right[1] * radius, -right[2] * radius],
-        [up[0] * radius, up[1] * radius, up[2] * radius],
-        [-up[0] * radius, -up[1] * radius, -up[2] * radius],
-    ];
-
-    for offset in &offsets {
-        let from = [
-            center[0] + offset[0],
-            center[1] + offset[1],
-            center[2] + offset[2],
-        ];
-        let to = [
-            tail[0] + offset[0],
-            tail[1] + offset[1],
-            tail[2] + offset[2],
-        ];
+    for (from, to) in wire_capsule_segments(center, tail, radius, segments) {
         append_solid_line(mesh, from, to, color);
-    }
-}
-
-#[derive(Clone, Copy)]
-enum Plane {
-    XY,
-    XZ,
-    YZ,
-}
-
-fn append_wire_circle(
-    mesh: &mut LineMesh,
-    center: [f32; 3],
-    radius: f32,
-    color: [f32; 3],
-    segments: u32,
-    plane: Plane,
-) {
-    let seg = segments.max(4);
-
-    for i in 0..seg {
-        let angle0 = (i as f32 / seg as f32) * std::f32::consts::TAU;
-        let angle1 = ((i + 1) as f32 / seg as f32) * std::f32::consts::TAU;
-
-        let (c0, s0) = (angle0.cos(), angle0.sin());
-        let (c1, s1) = (angle1.cos(), angle1.sin());
-
-        let (p0, p1) = match plane {
-            Plane::XY => (
-                [center[0] + c0 * radius, center[1] + s0 * radius, center[2]],
-                [center[0] + c1 * radius, center[1] + s1 * radius, center[2]],
-            ),
-            Plane::XZ => (
-                [center[0] + c0 * radius, center[1], center[2] + s0 * radius],
-                [center[0] + c1 * radius, center[1], center[2] + s1 * radius],
-            ),
-            Plane::YZ => (
-                [center[0], center[1] + c0 * radius, center[2] + s0 * radius],
-                [center[0], center[1] + c1 * radius, center[2] + s1 * radius],
-            ),
-        };
-
-        append_solid_line(mesh, p0, p1, color);
     }
 }
 
@@ -217,33 +143,4 @@ fn append_solid_line(mesh: &mut LineMesh, from: [f32; 3], to: [f32; 3], color: [
     mesh.vertices.push(ColorVertex { pos: to, color });
     mesh.indices.push(base);
     mesh.indices.push(base + 1);
-}
-
-fn compute_perpendicular_axes(dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
-    let up_hint = if dir[1].abs() < 0.99 {
-        [0.0, 1.0, 0.0]
-    } else {
-        [1.0, 0.0, 0.0]
-    };
-
-    let right = normalize(cross(dir, up_hint));
-    let up = normalize(cross(dir, right));
-    (right, up)
-}
-
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn normalize(v: [f32; 3]) -> [f32; 3] {
-    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if len < 1e-10 {
-        return [0.0, 0.0, 0.0];
-    }
-    let inv = 1.0 / len;
-    [v[0] * inv, v[1] * inv, v[2] * inv]
 }

@@ -13,7 +13,7 @@ except ImportError:
 
 from ..common.submesh_mask import mask_mesh_input, material_triangles, to_loop_triangle_indices
 from ..common.logged_report import report
-from .mesh_data import mesh_arrays
+from ..common.mesh_data import mesh_arrays
 from .operators import bound_meshes, target_armature
 from .submesh_roles import refresh_submesh_roles
 

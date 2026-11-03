@@ -101,7 +101,7 @@ pub fn add_generated_chains(
 mod tests {
     use super::*;
     use crate::spring_bone::{
-        ChainOrigin, ChainRole, ColliderShape, SpringForceModel, SubmeshSelector,
+        ChainOrigin, ColliderShape, RootAttachment, SpringForceModel, SubmeshSelector,
     };
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
@@ -223,7 +223,7 @@ mod tests {
                 enabled: true,
                 origin: ChainOrigin::Generated {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
-                    role: ChainRole::Hair,
+                    attachment: RootAttachment::Cap,
                 },
             },
             SpringChain {
@@ -240,7 +240,7 @@ mod tests {
                 enabled: true,
                 origin: ChainOrigin::Generated {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
-                    role: ChainRole::Hair,
+                    attachment: RootAttachment::Cap,
                 },
             },
         ];

@@ -31,9 +31,8 @@ def _draw_labelled_prop(layout, owner, name) -> None:
 
 
 def _draw_joint_params(layout, joint, shared_names=SPRING_JOINT_PARAM_NAMES) -> None:
-    """The force model, the magnitudes of that model, then the shared parameters listed."""
+    """The magnitudes of the joint's force model, then the shared parameters listed."""
     column = layout.column(align=True)
-    _draw_labelled_prop(column, joint, "force_model")
     for name in FORCE_PARAM_NAMES.get(joint.force_model, ()):
         _draw_labelled_prop(column, joint, name)
     for name in shared_names:

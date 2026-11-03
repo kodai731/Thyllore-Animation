@@ -54,15 +54,6 @@ impl Default for SpringJointParam {
     }
 }
 
-/// The force model every joint shares; None when there are no joints or they mix models.
-pub fn shared_force_model<'a>(
-    joints: impl IntoIterator<Item = &'a SpringJointParam>,
-) -> Option<SpringForceModel> {
-    let mut models = joints.into_iter().map(|joint| joint.force.model());
-    let first = models.next()?;
-    models.all(|model| model == first).then_some(first)
-}
-
 pub static SPRING_JOINT_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<SpringJointParam>>> =
     LazyLock::new(|| {
         let mut out: Vec<ScalarParam<SpringJointParam>> = Vec::new();

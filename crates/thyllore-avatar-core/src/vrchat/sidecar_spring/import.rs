@@ -1,8 +1,8 @@
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    shared_force_model, ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce,
-    SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
-    SpringColliderId, SpringCollisionMode, SpringJointParam, SubmeshSelector,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain,
+    SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
+    SpringCollisionMode, SpringJointParam, SubmeshSelector,
 };
 use thyllore_anim_core::BoneId;
 
@@ -45,8 +45,6 @@ pub fn spring_setup_with_collider_ids(
     for chain in &spring.chains {
         import_chain(&mut setup, chain, bones, &group_ids_by_name);
     }
-    setup.new_joint_force_model =
-        shared_force_model(setup.chains.iter().flat_map(|chain| &chain.joints)).unwrap_or_default();
     (setup, collider_ids_by_name)
 }
 

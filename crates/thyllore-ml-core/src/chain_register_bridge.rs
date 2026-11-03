@@ -18,6 +18,8 @@ use crate::collider_bridge::{
 pub struct GeneratedChainIn {
     pub name: String,
     pub joints: Vec<GeneratedJointIn>,
+    /// The bone at the chain's end point, the last joint's tail
+    pub end_bone: String,
 }
 
 #[derive(Clone, serde::Deserialize)]
@@ -83,6 +85,7 @@ pub fn register_generated_chains(
             Ok(SpringChain {
                 name: generated.name.clone(),
                 joints,
+                tail_bone_id: Some(bone_id(&skeleton, &generated.end_bone)?),
                 origin: ChainOrigin::Generated {
                     target: target.clone(),
                     role,

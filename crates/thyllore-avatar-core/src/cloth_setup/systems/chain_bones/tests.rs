@@ -66,12 +66,15 @@ fn test_bone_count_and_parent_chain() {
 
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
-    assert_eq!(skeleton.bone_count(), 3);
+    assert_eq!(skeleton.bone_count(), 4);
     assert_eq!(bone_ids.len(), 1);
-    assert_eq!(bone_ids[0].len(), 2);
+    assert_eq!(bone_ids[0].joints.len(), 2);
+    let end = skeleton.get_bone(bone_ids[0].end).unwrap();
+    assert_eq!(end.name, "hair_test_00_01_end");
+    assert_eq!(end.parent_id, Some(bone_ids[0].joints[1]));
 
-    let joint0_id = bone_ids[0][0];
-    let joint1_id = bone_ids[0][1];
+    let joint0_id = bone_ids[0].joints[0];
+    let joint1_id = bone_ids[0].joints[1];
 
     let bone0 = skeleton.get_bone(joint0_id).unwrap();
     assert_eq!(bone0.parent_id, Some(root));
@@ -159,8 +162,8 @@ fn test_weights_left_padded_and_sum_to_one() {
     let indices = skin.bone_indices[0];
     let weights = skin.bone_weights[0];
 
-    assert_eq!(indices.x, bone_ids[0][0]);
-    assert_eq!(indices.y, bone_ids[0][1]);
+    assert_eq!(indices.x, bone_ids[0].joints[0]);
+    assert_eq!(indices.y, bone_ids[0].joints[1]);
     assert_eq!(indices.z, 0);
     assert_eq!(indices.w, 0);
 
@@ -179,7 +182,7 @@ fn test_inverse_bind_pose_translation_matches_joint_head() {
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
     for (k, joint) in chains[0].joints.iter().enumerate() {
-        let bone = skeleton.get_bone(bone_ids[0][k]).unwrap();
+        let bone = skeleton.get_bone(bone_ids[0].joints[k]).unwrap();
         let b_j = bone.inverse_bind_pose.invert().unwrap();
         let translation = Vector3::new(b_j.w.x, b_j.w.y, b_j.w.z);
         let diff = (joint.head - translation).magnitude();
@@ -205,7 +208,7 @@ fn test_joint1_local_transform_translation_is_head1_minus_head0() {
     let joint1 = chains[0].joints[1].head;
     let expected_diff = joint1 - joint0;
 
-    let bone1 = skeleton.get_bone(bone_ids[0][1]).unwrap();
+    let bone1 = skeleton.get_bone(bone_ids[0].joints[1]).unwrap();
     let actual_translation = Vector3::new(
         bone1.local_transform.w.x,
         bone1.local_transform.w.y,

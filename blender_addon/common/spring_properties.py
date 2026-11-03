@@ -274,10 +274,27 @@ def active_chain(settings):
     return None
 
 
+def simulated_joints(chain) -> list:
+    """The joints the engine simulates: the VRM tail joint listed last (the chain's ``tail`` bone) is not one."""
+    joints = list(chain.joints)
+    if joints and chain.tail and joints[-1].bone == chain.tail:
+        return joints[:-1]
+    return joints
+
+
 def generated_chain_bones(settings, origin: dict) -> dict[str, list[str]]:
-    """The joint bone names, root to tip, of every chain generated on ``origin``, by chain name."""
+    """Every bone of every chain generated on ``origin``, root to tip then the tail bone, by chain name."""
     return {
         chain.name: [joint.bone for joint in chain.joints]
+        for chain in settings.chains
+        if same_origin(chain, origin)
+    }
+
+
+def generated_chain_joints(settings, origin: dict) -> dict[str, list[str]]:
+    """The simulated joint bones, root to tip, of every chain generated on ``origin``, by chain name."""
+    return {
+        chain.name: [joint.bone for joint in simulated_joints(chain)]
         for chain in settings.chains
         if same_origin(chain, origin)
     }

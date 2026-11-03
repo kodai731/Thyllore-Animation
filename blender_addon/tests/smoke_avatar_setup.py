@@ -90,8 +90,12 @@ def step_b_guess_submesh_roles(arm, meshes):
     return hair_mesh, hair
 
 
+BONES_PER_CHAIN = 4 + 1
+
+
 def step_c_generate_chain_bones(arm, mesh, hair_material):
-    """(c) Generate chain bones on hair submesh -> added > 0, multiple of joint_count (4), all in Thyllore Chains."""
+    """(c) Generate chain bones on hair submesh -> added > 0, joint_count (4) joints plus an end bone per chain,
+    all in Thyllore Chains."""
     import bpy
 
     bone_count_before = len(arm.data.bones)
@@ -109,9 +113,9 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
         raise SystemExit(
             f"AVATAR_SETUP_SMOKE failed: step_c — expected > 0 chain bones, got {added}"
         )
-    if added % 4 != 0:
+    if added % BONES_PER_CHAIN != 0:
         raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_c — added {added} bones is not a multiple of joint_count (4)"
+            f"AVATAR_SETUP_SMOKE failed: step_c — added {added} bones is not a multiple of joint_count + end ({BONES_PER_CHAIN})"
         )
 
     collection = arm.data.collections.get("Thyllore Chains")
@@ -131,16 +135,27 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
 
 
 def step_d_generated_chains_are_registered(arm, added):
-    """(d) Generate Chain Bones registered one spring chain per 4 bones; Add Chains Under Bone adds none more."""
+    """(d) Generate Chain Bones registered one spring chain per 5 bones, each ending on its `_end` bone;
+    Add Chains Under Bone adds none more."""
     import bpy
 
     settings = arm.data.thyllore_spring
-    expected = added // 4
+    expected = added // BONES_PER_CHAIN
     chain_count = len(settings.chains)
     if chain_count != expected:
         raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_d — expected {expected} spring chains from generation (added={added} / 4), got {chain_count}"
+            f"AVATAR_SETUP_SMOKE failed: step_d — expected {expected} spring chains from generation (added={added} / {BONES_PER_CHAIN}), got {chain_count}"
         )
+    from blender_addon.common.spring_properties import simulated_joints
+
+    for chain in settings.chains:
+        last_joint = simulated_joints(chain)[-1].bone
+        if chain.tail != f"{last_joint}_end" or chain.tail not in arm.data.bones:
+            raise SystemExit(
+                f"AVATAR_SETUP_SMOKE failed: step_d — chain {chain.name} tail {chain.tail!r} is not the end bone under {last_joint}"
+            )
+        if arm.data.bones[chain.tail].parent.name != last_joint:
+            raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_d — end bone {chain.tail} is not under {last_joint}")
     if any(not chain.origin_mesh for chain in settings.chains):
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d — a generated chain has no origin")
     radii = [joint.hit_radius for chain in settings.chains for joint in chain.joints]

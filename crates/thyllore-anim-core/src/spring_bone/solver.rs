@@ -623,11 +623,12 @@ fn compute_bone_length_and_axis(
         }
     }
 
-    leaf_bone_length_and_axis(skeleton, bone_id, global_transforms)
+    extrapolated_leaf_bone_length_and_axis(skeleton, bone_id, global_transforms)
 }
 
-/// A leaf joint extends its own bone: the world offset from the parent head, expressed in the bone frame.
-fn leaf_bone_length_and_axis(
+/// VRM 0.x compatibility for a leaf joint without a declared tail bone: the last segment extended past
+/// the leaf, like UniVRM's 7 cm end; generated chains declare an end bone instead.
+fn extrapolated_leaf_bone_length_and_axis(
     skeleton: &Skeleton,
     bone_id: BoneId,
     global_transforms: &[Matrix4<f32>],
@@ -766,7 +767,7 @@ mod tests {
         let parent = skeleton.add_bone("parent", None);
         let leaf = skeleton.add_bone("leaf", Some(parent));
 
-        let (length, axis) = leaf_bone_length_and_axis(&skeleton, leaf, &globals);
+        let (length, axis) = extrapolated_leaf_bone_length_and_axis(&skeleton, leaf, &globals);
         let (_, leaf_local_rotation, _) = decompose_transform(&leaf_local);
         compute_tail_position(
             extract_world_position(&globals[1]),

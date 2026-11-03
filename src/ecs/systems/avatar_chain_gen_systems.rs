@@ -31,7 +31,7 @@ use thyllore_avatar_core::cloth_setup::components::chain_gen::{
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
 use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
-    append_chain_bones, write_chain_weights,
+    append_chain_bones, write_chain_weights, ChainBoneIds,
 };
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
@@ -165,9 +165,11 @@ fn generate_chain_bones(
         .iter()
         .zip(&bone_ids)
         .zip(&half_thicknesses)
-        .map(|((chain, joint_bones), radii)| SpringChain {
+        .map(|((chain, chain_bones), radii)| SpringChain {
             name: chain_name(&params, chain.column),
-            joints: joint_bones
+            tail_bone_id: Some(chain_bones.end),
+            joints: chain_bones
+                .joints
                 .iter()
                 .zip(radii)
                 .map(|(&bone_id, &hit_radius)| SpringJointParam {
@@ -352,7 +354,7 @@ fn find_skeleton_mut(
 struct ReportSource<'a> {
     parts: &'a [SubmeshPart],
     chains: &'a [GeneratedChain],
-    bone_ids: &'a [Vec<thyllore_model_core::BoneId>],
+    bone_ids: &'a [ChainBoneIds],
     root: thyllore_model_core::BoneId,
     influences: &'a [VertexInfluences],
     input: &'a ChainGenInput<'a>,
@@ -380,20 +382,33 @@ fn bone_records(
         .iter()
         .enumerate()
         .flat_map(|(ci, chain)| {
+            let bone_name = |bone_id: thyllore_model_core::BoneId| {
+                skeleton.bones[bone_id as usize].name.clone()
+            };
             let last_joint = chain.joints.len().saturating_sub(1);
-            chain.joints.iter().enumerate().map(move |(ji, joint)| {
+            let joints = chain.joints.iter().enumerate().map(move |(ji, joint)| {
                 let parent_id = if ji == 0 {
                     source.root
                 } else {
-                    source.bone_ids[ci][ji - 1]
+                    source.bone_ids[ci].joints[ji - 1]
                 };
                 GeneratedBoneRecord {
                     name: joint.name.clone(),
-                    parent: skeleton.bones[parent_id as usize].name.clone(),
+                    parent: bone_name(parent_id),
                     head: array3_from_vec(joint.head),
                     tail: (ji == last_joint).then(|| array3_from_vec(chain.tail)),
                 }
-            })
+            });
+            let end = source.bone_ids[ci]
+                .joints
+                .last()
+                .map(|&last| GeneratedBoneRecord {
+                    name: bone_name(source.bone_ids[ci].end),
+                    parent: bone_name(last),
+                    head: array3_from_vec(chain.tail),
+                    tail: None,
+                });
+            joints.chain(end)
         })
         .collect()
 }
@@ -405,7 +420,7 @@ fn weight_records(
     let bone_name_of = |target_bone: &InfluenceTarget| match target_bone {
         InfluenceTarget::Root => skeleton.bones[source.root as usize].name.clone(),
         InfluenceTarget::Joint { chain, joint } => {
-            let bid = source.bone_ids[*chain][*joint];
+            let bid = source.bone_ids[*chain].joints[*joint];
             skeleton.bones[bid as usize].name.clone()
         }
         InfluenceTarget::Bone(bone) => skeleton.bones[*bone as usize].name.clone(),

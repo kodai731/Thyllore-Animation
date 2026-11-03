@@ -49,4 +49,5 @@ def remove_chain_collections(arm, chain_names: list[str]) -> None:
 def apply_chain_display(arm) -> None:
     """Apply the chain bone display to every joint of every chain on the armature."""
     for chain in arm.data.thyllore_spring.chains:
-        apply_chain_bone_display(arm, chain.name, [joint.bone for joint in chain.joints], chain.origin_role)
+        chain_bones = [joint.bone for joint in chain.joints] + ([chain.tail] if chain.tail else [])
+        apply_chain_bone_display(arm, chain.name, chain_bones, chain.origin_role)

@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
-    ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
-    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    chain_column, chain_name, end_bone_name, BodyCollider, ChainGenInput, ChainGenParams,
+    ChainGenSettings, ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface,
+    VertexInfluences, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
@@ -110,6 +110,8 @@ pub struct ChainOut {
     pub name: String,
     pub joints: Vec<JointOut>,
     pub tail: [f32; 3],
+    /// The bone to place at `tail` under the last joint
+    pub end_bone: String,
     pub vertices: Vec<u32>,
 }
 
@@ -272,6 +274,11 @@ fn chains_to_output(
                 })
                 .collect(),
             tail: vector3_to_array(chain.tail),
+            end_bone: chain
+                .joints
+                .last()
+                .map(|joint| end_bone_name(&joint.name))
+                .unwrap_or_default(),
             vertices: chain.vertices.clone(),
         })
         .collect()

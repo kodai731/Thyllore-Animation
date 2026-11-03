@@ -26,6 +26,7 @@ fn bones() -> Vec<FitBone> {
         fit_bone("Head", Some(0), [0.0, 1.5, 0.0]),
         fit_bone("hair_hair_back_00_00", Some(1), [0.0, 1.6, -0.1]),
         fit_bone("hair_hair_back_00_01", Some(2), [0.0, 1.4, -0.1]),
+        fit_bone("hair_hair_back_00_01_end", Some(3), [0.0, 1.2, -0.1]),
     ]
 }
 
@@ -55,6 +56,7 @@ fn generated() -> Vec<GeneratedChainIn> {
                 hit_radius: 0.008,
             },
         ],
+        end_bone: "hair_hair_back_00_01_end".to_string(),
     }]
 }
 
@@ -139,6 +141,7 @@ fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
             name: "hair_hair_back_00_00".to_string(),
             hit_radius: 0.02,
         }],
+        end_bone: "hair_hair_back_00_01".to_string(),
     }];
 
     let second =
@@ -175,6 +178,7 @@ fn unknown_joint_bone_is_an_error() {
             name: "missing".to_string(),
             hit_radius: 0.0,
         }],
+        end_bone: "hair_hair_back_00_01_end".to_string(),
     }];
     assert!(register_generated_chains(
         &SidecarSpring::default(),

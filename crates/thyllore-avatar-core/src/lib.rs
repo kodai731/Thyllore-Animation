@@ -6,3 +6,4 @@ pub mod material;
 pub mod motion;
 pub mod stats;
 pub mod vrchat;
+pub mod vrm;

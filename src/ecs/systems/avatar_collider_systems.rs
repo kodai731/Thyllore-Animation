@@ -1,4 +1,4 @@
-use crate::animation::spring_bone::{fit_bone_capsules, replace_fitted_body_colliders};
+use crate::animation::spring_bone::replace_fitted_body_colliders;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup};
 use crate::ecs::resource::AvatarSetupState;
@@ -11,7 +11,7 @@ use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
-use thyllore_avatar_core::humanoid::components::body_collider_roles::body_collider_bone_indices;
+use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
 
 pub fn fit_body_colliders(
     world: &mut World,
@@ -32,14 +32,8 @@ pub fn fit_body_colliders(
         return;
     }
 
-    let fitted = fit_bone_capsules(&skin_data, skeleton, params);
-
-    let allowed = body_collider_bone_indices(&world.resource::<AvatarSetupState>().mapping);
-    let fitted: Vec<_> = fitted
-        .into_iter()
-        .filter(|c| allowed.contains(&(c.bone_id as usize)))
-        .collect();
-
+    let mapping = world.resource::<AvatarSetupState>().mapping.clone();
+    let fitted = fit_body_capsules(&skin_data, skeleton, &mapping, params);
     if fitted.is_empty() {
         msg_error!("Cannot fit body colliders: no humanoid body bones are mapped");
         return;
@@ -59,23 +53,6 @@ pub fn fit_body_colliders(
     reset_spring_bone_state(world);
 
     msg_info!("Fitted {} body colliders", fitted.len());
-}
-
-pub(crate) fn dominant_bone(
-    indices: cgmath::Vector4<u32>,
-    weights: cgmath::Vector4<f32>,
-) -> Option<u32> {
-    let candidates = [
-        (indices.x, weights.x),
-        (indices.y, weights.y),
-        (indices.z, weights.z),
-        (indices.w, weights.w),
-    ];
-    candidates
-        .into_iter()
-        .filter(|(_, weight)| *weight > 0.0)
-        .max_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(bone, _)| bone)
 }
 
 /// Collider offsets are in the bone's frame: the spring solver places them at `global[bone] * offset`.
@@ -107,25 +84,4 @@ pub(crate) fn fit_body_collider(
         .find(|sa| sa.skeleton_id == skeleton_id)?;
     let params = &world.resource::<AvatarSetupState>().body_collider_fit;
     fit_bone_capsule(&skins, skeleton.skeleton.get_bone(root)?, params)
-}
-
-pub(crate) fn collect_skin_vertices_of_bone(
-    world: &World,
-    assets: &AssetStorage,
-    graphics: &GraphicsResources,
-    skeleton_id: crate::animation::SkeletonId,
-    bone: thyllore_model_core::BoneId,
-) -> Vec<cgmath::Vector3<f32>> {
-    let mut positions = Vec::new();
-    for skin in skin_role_skins(world, assets, graphics, skeleton_id) {
-        positions.extend(
-            skin.base_positions
-                .iter()
-                .zip(&skin.bone_indices)
-                .zip(&skin.bone_weights)
-                .filter(|((_, indices), weights)| dominant_bone(**indices, **weights) == Some(bone))
-                .map(|((position, _), _)| *position),
-        );
-    }
-    positions
 }

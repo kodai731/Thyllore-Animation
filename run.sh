@@ -57,6 +57,23 @@ Commands:
       the NVIDIA GPU and open blender/lightning.blend with a lightning bolt already
       added (scripts/blender/lightning/launch.sh):
         ./run.sh blender --lightning
+  blender --avatar-setup [--skip-build] [--software-gl] [--headless]
+                         [--python PATH.py]... [model.fbx]
+      Build the debug Avatar Setup addon ZIP of this checkout (Avatar Setup
+      panels only, scripts/build_blender_addon.sh --product avatar-setup),
+      install it into a pristine Docker Blender on the NVIDIA GPU and import the test model
+      (default: assets/models/fuse-woman-1/edited/woman-1-fix-scale-only.fbx)
+      for the avatar setup panels (scripts/blender/avatar_setup/launch.sh).
+      --headless draws on Xvfb inside the container (no host window), saves
+      /tmp/thyllore_screenshots/avatar_setup.png with the avatar setup tab
+      open and quits; --python runs extra setup scripts before the shot:
+        ./run.sh blender --avatar-setup
+        ./run.sh blender --avatar-setup --skip-build --headless
+  blender-rpc ping | eval EXPR | exec CODE | exec -f FILE.py [--port N]
+      Run Python inside the Blender opened by blender --avatar-setup through its
+      debug RPC socket (scripts/blender/rpc.py; port THYLLORE_DEBUG_RPC_PORT, 8799):
+        ./run.sh blender-rpc eval "len(bpy.data.objects)"
+        ./run.sh blender-rpc exec -f log/regen_check/check.py
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
@@ -187,6 +204,10 @@ case "$command" in
             shift
             exec bash "$REPO_ROOT/scripts/blender/lightning/launch.sh" "$@"
         fi
+        if [[ "${1:-}" == "--avatar-setup" ]]; then
+            shift
+            exec bash "$REPO_ROOT/scripts/blender/avatar_setup/launch.sh" "$@"
+        fi
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;
     blend)
@@ -197,6 +218,9 @@ case "$command" in
         ;;
     blender-verify)
         exec bash "$REPO_ROOT/blender/docker/run_gui.sh" --no-install "$@"
+        ;;
+    blender-rpc)
+        exec python3 "$REPO_ROOT/scripts/blender/rpc.py" "$@"
         ;;
     auto)
         exec bash "$REPO_ROOT/scripts/run_auto_mode.sh" "$@"

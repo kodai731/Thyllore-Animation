@@ -173,6 +173,12 @@ impl SpringBoneSetup {
     pub fn new_joint_template(&self) -> SpringJointParam {
         SpringJointParam::for_force_model(self.new_joint_force_model)
     }
+
+    pub fn has_fitted_body_colliders(&self) -> bool {
+        self.collider_groups
+            .iter()
+            .any(|group| group.origin == ColliderGroupOrigin::Fitted)
+    }
 }
 
 pub fn set_chain_collider_groups(

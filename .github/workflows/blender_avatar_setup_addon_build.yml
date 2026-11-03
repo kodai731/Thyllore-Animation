@@ -1,0 +1,296 @@
+name: Blender Avatar Setup Addon Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Target platform to build"
+        type: choice
+        options:
+          - all
+          - win_amd64
+          - linux_x86_64
+          - macosx_arm64
+        default: all
+      version:
+        description: "Extension version (release tag becomes avatar-setup-v<version>)"
+        type: string
+        default: "0.0.1"
+      publish_release:
+        description: "Attach the ZIPs to the GitHub Release avatar-setup-v<version> (created when missing)"
+        type: boolean
+        default: false
+      deploy_pages:
+        description: "Publish to the GitHub Pages extension repository (keeps the other extensions already served)"
+        type: boolean
+        default: false
+  push:
+    branches: [main, develop]
+    paths:
+      - 'blender_addon/**'
+      - '!blender_addon/effects/**'
+      - 'crates/thyllore-ml-api/**'
+      - 'crates/thyllore-ml-core/**'
+      - 'crates/thyllore-avatar-core/**'
+      - 'crates/thyllore-exporter-core/**'
+      - 'crates/thyllore-model-core/**'
+      - 'crates/thyllore-anim-core/**'
+      - 'crates/thyllore-scene-core/**'
+      - 'crates/thyllore-math-core/**'
+      - 'scripts/build_blender_addon.ps1'
+      - 'scripts/build_blender_addon.sh'
+      - 'scripts/collect_wheels.ps1'
+      - 'scripts/collect_wheels.sh'
+      - '.github/workflows/blender_avatar_setup_addon_build.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'blender_addon/**'
+      - '!blender_addon/effects/**'
+      - 'crates/thyllore-ml-api/**'
+      - 'crates/thyllore-ml-core/**'
+      - 'crates/thyllore-avatar-core/**'
+      - 'crates/thyllore-exporter-core/**'
+      - 'crates/thyllore-model-core/**'
+      - 'crates/thyllore-anim-core/**'
+      - 'crates/thyllore-scene-core/**'
+      - 'crates/thyllore-math-core/**'
+      - 'scripts/build_blender_addon.ps1'
+      - 'scripts/build_blender_addon.sh'
+      - 'scripts/collect_wheels.ps1'
+      - 'scripts/collect_wheels.sh'
+      - '.github/workflows/blender_avatar_setup_addon_build.yml'
+
+env:
+  PAGES_URL: https://kodai731.github.io/Thyllore-Animation
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Resolve platform matrix
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Resolve platform matrix from input
+        id: resolve
+        shell: bash
+        env:
+          SELECTED_PLATFORM: ${{ github.event_name == 'workflow_dispatch' && inputs.platform || 'all' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          platforms = [
+              {"platform": "win_amd64", "os": "windows-latest"},
+              {"platform": "linux_x86_64", "os": "ubuntu-latest"},
+              {"platform": "macosx_arm64", "os": "macos-latest"},
+          ]
+          selected = os.environ["SELECTED_PLATFORM"]
+          if selected != "all":
+              platforms = [e for e in platforms if e["platform"] == selected]
+          print("matrix=" + json.dumps({"include": platforms}))
+          PY
+
+  addon-tests:
+    name: Avatar Setup addon tests (wheel-backed, Blender-free)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install build + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "maturin>=1.5" "pytest>=8.0"
+
+      - name: Collect vendored wheels
+        run: bash scripts/collect_wheels.sh
+
+      - name: Run addon tests (gRPC parity and build-mode boundary have their own workflows)
+        working-directory: blender_addon
+        run: |
+          python -m pytest tests -v \
+              --ignore=tests/test_client_retry.py \
+              --ignore=tests/test_grpc_parity.py \
+              --ignore=tests/test_build_mode_boundary.py
+
+  build:
+    name: Build Avatar Setup ZIP (${{ matrix.platform }})
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Python build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "maturin>=1.5"
+
+      - name: Collect vendored wheels
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1
+
+      - name: Build Avatar Setup ZIP
+        id: build
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build_blender_addon.ps1 `
+              -Product avatar-setup `
+              -Platform ${{ matrix.platform }} `
+              -Version '${{ inputs.version || '0.0.1' }}' `
+              -OutputDir dist/avatar_setup `
+              -SkipBlenderValidate
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: thyllore_avatar_setup-${{ matrix.platform }}
+          path: ${{ steps.build.outputs.zip_path }}
+          retention-days: 7
+          if-no-files-found: error
+
+  validate:
+    name: Validate ZIPs + headless install smoke (Blender 4.2 LTS)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all ZIPs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: thyllore_avatar_setup-*
+          path: dist/avatar_setup
+          merge-multiple: true
+
+      - name: Install Blender 4.2 LTS
+        run: |
+          wget -q -O blender.tar.xz https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
+          mkdir -p /opt/blender
+          tar -xJf blender.tar.xz -C /opt/blender --strip-components=1
+          /opt/blender/blender --version
+
+      - name: Validate ZIPs
+        run: |
+          set -euo pipefail
+          for zip in dist/avatar_setup/*.zip; do
+              echo "::group::validate $(basename "$zip")"
+              /opt/blender/blender --command extension validate "$zip"
+              unzip -p "$zip" blender_manifest.toml | grep -qx 'id = "thyllore_avatar_setup"'
+              echo "::endgroup::"
+          done
+
+      - name: Install the Linux ZIP and enable it headless
+        run: |
+          set -euo pipefail
+          zip="$(ls dist/avatar_setup/*-linux_x86_64.zip)"
+          export HOME="$RUNNER_TEMP/blender_home"
+          mkdir -p "$HOME"
+          /opt/blender/blender --command extension install-file -r user_default --enable "$zip"
+          /opt/blender/blender --background -noaudio --python-exit-code 1 \
+              --python blender_addon/tests/avatar_setup_install_smoke.py
+
+  release:
+    name: Attach ZIPs to GitHub Release
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all ZIPs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: thyllore_avatar_setup-*
+          path: dist/avatar_setup
+          merge-multiple: true
+
+      - name: Attach ZIPs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: avatar-setup-v${{ inputs.version }}
+          name: Thyllore Avatar Setup ${{ inputs.version }}
+          prerelease: true
+          files: dist/avatar_setup/*.zip
+
+  pages:
+    name: Extension repository (GitHub Pages)
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all ZIPs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: thyllore_avatar_setup-*
+          path: site
+          merge-multiple: true
+
+      - name: Keep the other extensions already served
+        run: python3 scripts/blender/merge_live_extensions.py --site site --url "$PAGES_URL" --exclude-id thyllore_avatar_setup
+
+      - name: Install Blender 4.2 LTS
+        run: |
+          wget -q -O blender.tar.xz https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
+          mkdir -p /opt/blender
+          tar -xJf blender.tar.xz -C /opt/blender --strip-components=1
+
+      - name: Generate index.json
+        run: |
+          /opt/blender/blender --command extension server-generate --repo-dir=site --html
+          cat site/index.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

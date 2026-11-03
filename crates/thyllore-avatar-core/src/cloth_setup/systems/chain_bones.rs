@@ -76,6 +76,7 @@ pub fn write_chain_weights(
             let bone_idx = match target {
                 InfluenceTarget::Root => root,
                 InfluenceTarget::Joint { chain, joint } => bone_ids[*chain][*joint],
+                InfluenceTarget::Bone(bone) => *bone,
             };
             mapped.push((bone_idx, *weight));
         }

@@ -29,6 +29,7 @@ mod quaternion;
 mod random;
 mod screen_space_scale;
 mod segment;
+mod skin_weight_transfer;
 mod smooth_step;
 mod statistics;
 mod tangent_frame;
@@ -36,9 +37,11 @@ mod torus_intersect;
 mod torus_projection;
 #[cfg(test)]
 mod torus_tests;
+mod triangle;
 mod triangle_bvh;
 mod vector;
 mod winding;
+mod wire_shape;
 
 pub use billboard::*;
 pub use bounds::*;
@@ -71,14 +74,17 @@ pub use quaternion::*;
 pub use random::*;
 pub use screen_space_scale::*;
 pub use segment::*;
+pub use skin_weight_transfer::*;
 pub use smooth_step::*;
 pub use statistics::*;
 pub use tangent_frame::*;
 pub use torus_intersect::*;
 pub use torus_projection::*;
+pub use triangle::*;
 pub use triangle_bvh::*;
 pub use vector::*;
 pub use winding::*;
+pub use wire_shape::*;
 
 pub use cgmath::Quaternion;
 pub use cgmath::Rad;

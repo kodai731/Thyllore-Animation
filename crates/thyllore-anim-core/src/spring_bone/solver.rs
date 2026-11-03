@@ -5,13 +5,15 @@ use super::{
     extract_world_position, integrate_joint, recompute_global_transform,
     resolve_all_segment_collisions, resolve_all_tail_collisions, rotate_vector,
     segment_axis_distance, tail_axis_distance, world_collider, JointForce, JointForces,
-    JointRestFrame, SpringBoneSetup, SpringChain, SpringChainId, SpringCollisionMode,
-    SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP,
+    JointRestFrame, RestTolerance, SpringBoneSetup, SpringChain, SpringChainId,
+    SpringCollisionMode, SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP,
 };
 use crate::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use thyllore_math_core::{world_y_axis, world_y_down, EARTH_GRAVITY_M_PER_S2};
 
 const REST_VELOCITY_WORLD_UNITS: f32 = 1e-4;
+/// Push-out and length constraint passes per step; the length re-projection can re-enter a collider.
+const COLLISION_PASSES: usize = 4;
 
 #[derive(Clone, Debug)]
 pub struct SpringJointState {
@@ -22,6 +24,8 @@ pub struct SpringJointState {
     pub initial_local_rotation: Quaternion<f32>,
     /// Distance from the rest tail to each collider axis of the chain, in collider order.
     pub rest_axis_distances: Vec<f32>,
+    /// How much of the rest penetration the joint keeps: 1 at the strand root, 0 at its tip.
+    pub rest_tolerance_weight: f32,
     /// The joint's gravity direction in the parent's frame at initialization.
     pub gravity_in_parent_rest: Vector3<f32>,
 }
@@ -35,6 +39,7 @@ impl Default for SpringJointState {
             bone_axis: world_y_axis(),
             initial_local_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
             rest_axis_distances: Vec::new(),
+            rest_tolerance_weight: 0.0,
             gravity_in_parent_rest: world_y_down(),
         }
     }
@@ -92,7 +97,7 @@ fn initialize_chain(
 ) -> SpringChainState {
     let world_colliders =
         collect_world_colliders(setup, &chain.collider_group_ids, global_transforms);
-    let joint_states: Vec<SpringJointState> = chain
+    let mut joint_states: Vec<SpringJointState> = chain
         .joints
         .iter()
         .enumerate()
@@ -114,10 +119,23 @@ fn initialize_chain(
         .collect();
 
     let strand_length = joint_states.iter().map(|joint| joint.bone_length).sum();
+    weight_rest_tolerance_along_strand(&mut joint_states, strand_length);
     SpringChainState {
         chain_id: chain.id,
         joint_states,
         strand_length,
+    }
+}
+
+/// Fades the tolerated rest penetration from the strand root to its tip, by arc length at each tail.
+fn weight_rest_tolerance_along_strand(joint_states: &mut [SpringJointState], strand_length: f32) {
+    if strand_length <= 0.0 {
+        return;
+    }
+    let mut arc_length = 0.0;
+    for joint_state in joint_states {
+        arc_length += joint_state.bone_length;
+        joint_state.rest_tolerance_weight = 1.0 - arc_length / strand_length;
     }
 }
 
@@ -165,6 +183,7 @@ fn initialize_joint(
         bone_axis,
         initial_local_rotation,
         rest_axis_distances,
+        rest_tolerance_weight: 0.0,
         gravity_in_parent_rest,
     }
 }
@@ -262,30 +281,26 @@ fn update_single_joint(
         dt,
     );
     let constrained_tail = apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
-    let collision_resolved = match collision_mode {
-        SpringCollisionMode::VrmCompatible => resolve_all_tail_collisions(
-            constrained_tail,
-            hit_radius,
-            world_colliders,
-            &joint_state.rest_axis_distances,
-        ),
-        SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
-            head_pos,
-            constrained_tail,
-            hit_radius,
-            world_colliders,
-            &joint_state.rest_axis_distances,
-        ),
+    let collision = JointCollision {
+        head: head_pos,
+        hit_radius,
+        bone_length: joint_state.bone_length,
+        world_colliders,
+        rest_tolerance: RestTolerance {
+            axis_distances: &joint_state.rest_axis_distances,
+            weight: joint_state.rest_tolerance_weight,
+        },
+        collision_mode,
     };
-    let resolved_tail =
-        apply_length_constraint(head_pos, collision_resolved, joint_state.bone_length);
+    let resolved_tail = resolve_collisions_at_bone_length(constrained_tail, &collision);
 
-    let velocity = resolved_tail - joint_state.current_tail;
+    let collision_displacement = resolved_tail - constrained_tail;
+    let velocity = constrained_tail - joint_state.current_tail;
     let rest_velocity = space.skeleton_length(REST_VELOCITY_WORLD_UNITS);
     if velocity.magnitude2() < rest_velocity * rest_velocity {
         joint_state.prev_tail = resolved_tail;
     } else {
-        joint_state.prev_tail = joint_state.current_tail;
+        joint_state.prev_tail = joint_state.current_tail + collision_displacement;
     }
     joint_state.current_tail = resolved_tail;
 
@@ -303,6 +318,46 @@ fn update_single_joint(
         global_transforms,
         pose,
     );
+}
+
+/// What one joint's tail is resolved against in a step.
+struct JointCollision<'a> {
+    head: Vector3<f32>,
+    hit_radius: f32,
+    bone_length: f32,
+    world_colliders: &'a [WorldCollider],
+    rest_tolerance: RestTolerance<'a>,
+    collision_mode: SpringCollisionMode,
+}
+
+/// Alternates collider push-out and the length constraint until the tail sits outside at bone length.
+fn resolve_collisions_at_bone_length(
+    tail: Vector3<f32>,
+    collision: &JointCollision,
+) -> Vector3<f32> {
+    let mut resolved_tail = tail;
+    for _ in 0..COLLISION_PASSES {
+        let pushed_tail = match collision.collision_mode {
+            SpringCollisionMode::VrmCompatible => resolve_all_tail_collisions(
+                resolved_tail,
+                collision.hit_radius,
+                collision.world_colliders,
+                collision.rest_tolerance,
+            ),
+            SpringCollisionMode::SegmentExtended => resolve_all_segment_collisions(
+                collision.head,
+                resolved_tail,
+                collision.hit_radius,
+                collision.world_colliders,
+                collision.rest_tolerance,
+            ),
+        };
+        if pushed_tail == resolved_tail {
+            return resolved_tail;
+        }
+        resolved_tail = apply_length_constraint(collision.head, pushed_tail, collision.bone_length);
+    }
+    resolved_tail
 }
 
 pub fn spring_bone_write_back_to_pose(
@@ -617,6 +672,11 @@ mod tests {
     use cgmath::{Deg, Rotation3};
 
     use super::*;
+    use crate::spring_bone::{
+        ColliderGroupOrigin, ColliderShape, RestRelativeJointForce, SpringColliderDef,
+        SpringColliderGroup,
+    };
+    use crate::{compute_pose_global_transforms, create_pose_from_rest};
 
     fn leaf_tail_for_local_rotation(leaf_rotation: Quaternion<f32>) -> Vector3<f32> {
         let parent_rotation = Quaternion::from_angle_z(Deg(30.0));
@@ -667,5 +727,136 @@ mod tests {
         let head = Vector3::new(0.0, 1.0, 0.0) + offset;
 
         assert!((tail - (head + offset)).magnitude() < 1e-5, "{tail:?}");
+    }
+
+    fn straight_strand(bone_count: usize) -> Skeleton {
+        let mut skeleton = Skeleton::new("strand");
+        let mut parent = None;
+        for index in 0..bone_count {
+            let bone_id = skeleton.add_bone(&format!("bone_{index}"), parent);
+            skeleton.bones[bone_id as usize].local_transform =
+                Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            parent = Some(bone_id);
+        }
+        skeleton
+    }
+
+    fn chain_of(bone_ids: &[BoneId]) -> SpringChain {
+        SpringChain {
+            joints: bone_ids
+                .iter()
+                .map(|&bone_id| SpringJointParam {
+                    bone_id,
+                    force: JointForce::RestRelative(RestRelativeJointForce {
+                        bending_relaxation: 0.0,
+                        gravity_scale: 1.0,
+                    }),
+                    drag_force: 0.0,
+                    gravity_dir: Vector3::new(1.0, 0.0, 0.0),
+                    hit_radius: 0.1,
+                })
+                .collect(),
+            collider_group_ids: vec![0],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn rest_tolerance_fades_from_the_strand_root_to_its_tip() {
+        let skeleton = straight_strand(4);
+        let setup = SpringBoneSetup {
+            chains: vec![chain_of(&[1, 2])],
+            ..Default::default()
+        };
+        let globals = compute_pose_global_transforms(&skeleton, &create_pose_from_rest(&skeleton));
+
+        let simulation = spring_bone_initialize(&setup, &skeleton, &globals);
+
+        let weights: Vec<f32> = simulation.chain_states[0]
+            .joint_states
+            .iter()
+            .map(|joint| joint.rest_tolerance_weight)
+            .collect();
+        assert!((weights[0] - 0.5).abs() < 1e-6, "{weights:?}");
+        assert!(weights[1].abs() < 1e-6, "{weights:?}");
+    }
+
+    #[test]
+    fn a_collider_push_out_adds_no_velocity() {
+        let skeleton = straight_strand(3);
+        let setup = SpringBoneSetup {
+            chains: vec![chain_of(&[1])],
+            colliders: vec![SpringColliderDef {
+                id: 0,
+                bone_id: 0,
+                offset: Vector3::new(0.0, 2.0, 0.0),
+                shape: ColliderShape::Sphere { radius: 0.5 },
+            }],
+            collider_groups: vec![SpringColliderGroup {
+                id: 0,
+                name: "head".to_string(),
+                collider_ids: vec![0],
+                origin: ColliderGroupOrigin::Authored,
+            }],
+            ..Default::default()
+        };
+        let pose = create_pose_from_rest(&skeleton);
+        let mut globals = compute_pose_global_transforms(&skeleton, &pose);
+        let mut simulation = spring_bone_initialize(&setup, &skeleton, &globals);
+
+        let dt = DEFAULT_SIMULATION_STEP;
+        spring_bone_update(
+            &setup,
+            &mut simulation,
+            &skeleton,
+            &mut globals,
+            &pose,
+            dt,
+            SpringSpace::IDENTITY,
+        );
+
+        let joint = &simulation.chain_states[0].joint_states[0];
+        let collider_center = Vector3::new(0.0, 2.0, 0.0);
+        let clearance = (joint.current_tail - collider_center).magnitude();
+        assert!(
+            clearance >= 0.6 - 1e-4,
+            "tip tail still inside: {clearance}"
+        );
+        let gravity_step = EARTH_GRAVITY_M_PER_S2 * dt * dt;
+        let velocity = (joint.current_tail - joint.prev_tail).magnitude();
+        assert!(
+            velocity <= gravity_step + 1e-4,
+            "push-out leaked into velocity: {velocity}"
+        );
+    }
+
+    #[test]
+    fn push_out_survives_the_length_re_projection() {
+        let colliders = [WorldCollider {
+            center: Vector3::new(0.0, 0.0, 0.0),
+            radius: 1.0,
+            tail: None,
+        }];
+        let head = Vector3::new(1.1, 0.0, 0.0);
+        let tail = Vector3::new(0.2, -0.5, 0.0);
+        let collision = JointCollision {
+            head,
+            hit_radius: 0.0,
+            bone_length: (tail - head).magnitude(),
+            world_colliders: &colliders,
+            rest_tolerance: RestTolerance::NONE,
+            collision_mode: SpringCollisionMode::VrmCompatible,
+        };
+
+        let single_pass = apply_length_constraint(
+            head,
+            resolve_all_tail_collisions(tail, 0.0, &colliders, RestTolerance::NONE),
+            collision.bone_length,
+        );
+        let resolved = resolve_collisions_at_bone_length(tail, &collision);
+
+        assert!(single_pass.magnitude() < 1.0 - 1e-3, "{single_pass:?}");
+        assert!(resolved.magnitude() >= 1.0 - 1e-3, "{resolved:?}");
+        assert!(((resolved - head).magnitude() - collision.bone_length).abs() < 1e-5);
     }
 }

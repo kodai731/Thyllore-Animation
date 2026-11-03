@@ -93,8 +93,13 @@ def blender_to_engine_matrix(m):
     return _mat4_mul(C, _mat4_mul(m, C_INV))
 
 
-def blender_camera_to_engine_matrix(m):
+def blender_frame_to_engine_matrix(m):
+    """A world-space frame (camera, bone): its axes become engine vectors, its own local axes stay."""
     return _mat4_mul(C, m)
+
+
+def blender_camera_to_engine_matrix(m):
+    return blender_frame_to_engine_matrix(m)
 
 
 def blender_to_engine_quaternion(q):
@@ -108,6 +113,22 @@ def blender_to_engine_point(p):
 
 def engine_to_blender_point(p):
     return (p[0], -p[2], p[1])
+
+
+def blender_to_engine_metres(p, scale_length):
+    """A Blender world point (scene units) as an engine point in metres."""
+    return tuple(c * scale_length for c in blender_to_engine_point(p))
+
+
+def engine_metres_to_blender(p, scale_length):
+    """An engine point in metres as a Blender world point (scene units)."""
+    return tuple(c / scale_length for c in engine_to_blender_point(p))
+
+
+def blender_frame_to_engine_metres(m, scale_length):
+    """A world-space frame whose axes and origin become engine vectors in metres (an armature's root frame)."""
+    engine = blender_frame_to_engine_matrix(m)
+    return [[value * scale_length for value in engine[i]] for i in range(3)] + [list(engine[3])]
 
 
 def engine_projection(fovy_rad, aspect, near):

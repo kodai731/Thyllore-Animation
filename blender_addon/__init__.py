@@ -30,7 +30,7 @@ _bootstrap.insert_wheels_to_sys_path()
 
 # Expected ABI marker -- must match crates/thyllore-ml-api/src/lib.rs::ABI_MARKER.
 # Bump in lockstep with that constant when the L2 trait has breaking changes.
-EXPECTED_ABI_MARKER: int = 4
+EXPECTED_ABI_MARKER: int = 5
 
 
 # Skip importing bpy-dependent modules during pure-package consumption (e.g.,
@@ -48,9 +48,18 @@ except ImportError:
 if _BPY_AVAILABLE:
     import os  # noqa: E402
 
+    from . import _debuglog  # noqa: E402
     from . import operators  # noqa: E402
     from . import panels  # noqa: E402
     from . import preferences  # noqa: E402
+
+    # The avatar setup panels ship only in the avatar-setup product; the curve copilot ZIP excludes them.
+    try:
+        from . import avatar_setup  # noqa: E402
+
+        _AVATAR_SETUP_AVAILABLE = True
+    except ImportError:
+        _AVATAR_SETUP_AVAILABLE = False
 
     # The message channel ships only in mode B builds; A/C ZIPs exclude it.
     try:
@@ -131,12 +140,18 @@ if _BPY_AVAILABLE:
             return
 
         preferences.register()
+        if _AVATAR_SETUP_AVAILABLE:
+            avatar_setup.register()
         operators.register()
         panels.register()
         if _FEEDBACK_MESSAGE_AVAILABLE:
             feedback_message.register()
         if _TELEMETRY_AVAILABLE:
             telemetry.register()
+        if _debuglog.is_debug_enabled():
+            from . import debug_rpc  # noqa: E402
+
+            debug_rpc.register()
         _apply_mock_server_pin_if_requested()
         _REGISTERED_ABI_FAILURE = False
         print("[Thyllore] Addon registered successfully")
@@ -148,8 +163,14 @@ if _BPY_AVAILABLE:
             telemetry.unregister()
         if _FEEDBACK_MESSAGE_AVAILABLE and not _REGISTERED_ABI_FAILURE:
             feedback_message.unregister()
+        if _debuglog.is_debug_enabled() and not _REGISTERED_ABI_FAILURE:
+            from . import debug_rpc  # noqa: E402
+
+            debug_rpc.unregister()
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:
             operators.unregister()
+            if _AVATAR_SETUP_AVAILABLE:
+                avatar_setup.unregister()
         preferences.unregister()
         _REGISTERED_ABI_FAILURE = False

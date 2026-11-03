@@ -25,7 +25,7 @@ fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
 
 fn build_params(root: HumanoidRole, joint_count: u32, column_count: u32) -> ChainGenParams {
     ChainGenParams {
-        root,
+        root: Some(root),
         attachment: default_attachment(root),
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings {

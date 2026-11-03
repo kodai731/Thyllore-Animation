@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
-    GeneratedChain, GivenChain, InfluenceTarget, RootAttachment, SkinSurface, VertexInfluences,
-    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    attachment_or_default, chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams,
+    ChainGenSettings, GeneratedChain, GivenChain, InfluenceTarget, RootAttachment, SkinSurface,
+    VertexInfluences, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
@@ -32,6 +32,7 @@ pub struct ChainGenOutput {
     pub covered: Vec<u32>,
     /// The ring a garment hangs from and the bone that supports it, when the body supports one
     pub support: Option<SupportOut>,
+    pub attachment: RootAttachment,
 }
 
 /// A sidecar collider in model axes relative to its bone's rest head; `tail` is absent for a sphere.
@@ -148,13 +149,11 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
     Ok(settings)
 }
 
-pub(crate) fn root_and_attachment_from_str(
-    role: &str,
-) -> anyhow::Result<(HumanoidRole, RootAttachment)> {
-    match role {
-        "hair" => Ok((HumanoidRole::Head, RootAttachment::Cap)),
-        "garment" | "skirt" => Ok((HumanoidRole::Hips, RootAttachment::Ring)),
-        _ => anyhow::bail!("chain generation role must be \"hair\" or \"skirt\", got \"{role}\""),
+pub fn parse_attachment(s: &str) -> anyhow::Result<RootAttachment> {
+    match s {
+        "cap" => Ok(RootAttachment::Cap),
+        "ring" => Ok(RootAttachment::Ring),
+        _ => anyhow::bail!("attachment must be \"cap\" or \"ring\", got \"{s}\""),
     }
 }
 
@@ -222,16 +221,11 @@ pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<Give
         .collect()
 }
 
-/// The names among `candidates` that `generate_chains` would give a chain of the submesh `(role, target)`.
-pub fn submesh_chain_names(
-    role: &str,
-    target: &str,
-    candidates: &[String],
-) -> anyhow::Result<Vec<String>> {
-    let (root, attachment) = root_and_attachment_from_str(role)?;
+/// The names among `candidates` that `generate_chains` would give a chain of the submesh `target`.
+pub fn submesh_chain_names(target: &str, candidates: &[String]) -> anyhow::Result<Vec<String>> {
     let params = ChainGenParams {
-        root,
-        attachment,
+        root: None,
+        attachment: RootAttachment::Ring,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings: ChainGenSettings::default(),
     };
@@ -309,31 +303,32 @@ pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
     root_position: [f32; 3],
-    role: &str,
     target: &str,
     settings: ChainGenSettings,
-    attachment: SkinAttachment,
+    skin_attachment: SkinAttachment,
+    attachment: Option<RootAttachment>,
     tex_coords: &[[f32; 2]],
     given: &[GivenChainIn],
 ) -> anyhow::Result<ChainGenOutput> {
-    let (root, root_attachment) = root_and_attachment_from_str(role)?;
+    let root = role_of_bone(skin_attachment.roles, skin_attachment.root_bone as BoneId);
+    let resolved_attachment = attachment_or_default(root, attachment);
     let params = ChainGenParams {
         root,
-        attachment: root_attachment,
+        attachment: resolved_attachment,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings,
     };
     let given_chains = given_chains(given, &params);
     let positions_vec = to_vectors(positions);
-    let skins = attachment_surfaces(&attachment);
+    let skins = attachment_surfaces(&skin_attachment);
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
         root_position: Vector3::from(root_position),
-        root_bone: attachment.root_bone as BoneId,
+        root_bone: skin_attachment.root_bone as BoneId,
         skins: &skins,
         tex_coords,
-        covered_vertices: attachment.covered_vertices,
+        covered_vertices: skin_attachment.covered_vertices,
         given_chains: &given_chains,
     };
 
@@ -357,6 +352,7 @@ pub fn run_chain_gen(
             boundary_height: support.boundary_height,
             bone: support.bone,
         }),
+        attachment: resolved_attachment,
     })
 }
 
@@ -393,16 +389,20 @@ mod tests {
             &positions,
             &triangles,
             [0.0, 0.0, 0.0],
-            "hair",
             "strip/hair",
             settings,
             SkinAttachment {
                 skins: std::slice::from_ref(&head),
                 body_colliders: &[],
-                roles: &[],
+                roles: &[RoleBone {
+                    role: HumanoidRole::Head,
+                    bone: 0,
+                    head: [0.0, 0.0, 0.0].into(),
+                }],
                 root_bone: 0,
                 covered_vertices: &[],
             },
+            Some(RootAttachment::Cap),
             &[],
             &[],
         )
@@ -443,5 +443,20 @@ mod tests {
         let joint_count = params.iter().find(|p| p.name == "joint_count").unwrap();
         assert_eq!(joint_count.default, ParamDefault::Scalar(4.0));
         assert_eq!(joint_count.label, "Joint Count");
+    }
+
+    #[test]
+    fn attachment_defaults_from_the_root_role() {
+        let resolved = attachment_or_default(Some(HumanoidRole::Head), None);
+        assert_eq!(resolved, RootAttachment::Cap);
+
+        let resolved = attachment_or_default(None, None);
+        assert_eq!(resolved, RootAttachment::Ring);
+
+        let resolved = attachment_or_default(Some(HumanoidRole::Head), Some(RootAttachment::Ring));
+        assert_eq!(resolved, RootAttachment::Ring);
+
+        let resolved = attachment_or_default(Some(HumanoidRole::Hips), None);
+        assert_eq!(resolved, RootAttachment::Ring);
     }
 }

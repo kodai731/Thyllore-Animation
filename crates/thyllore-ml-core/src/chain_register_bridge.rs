@@ -1,7 +1,7 @@
 use cgmath::{Matrix, Matrix4, SquareMatrix, Vector3};
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
-    SpringChain, SpringJointParam, SpringSpace,
+    RootAttachment, SpringChain, SpringJointParam, SpringSpace,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
@@ -9,7 +9,7 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
-use crate::chain_gen_bridge::{root_and_attachment_from_str, CapsuleOut};
+use crate::chain_gen_bridge::CapsuleOut;
 use crate::collider_bridge::{
     rest_frames, skeleton_from_fit_bones, skin_data_from_fit_skin, to_bone_inputs, FitBone, FitSkin,
 };
@@ -29,7 +29,7 @@ pub struct GeneratedJointIn {
 pub struct RegisterRequest<'a> {
     pub root_name: &'a str,
     pub target: &'a str,
-    pub role: &'a str,
+    pub attachment: RootAttachment,
     pub chains: &'a [GeneratedChainIn],
     pub head_capsule: Option<CapsuleOut>,
 }
@@ -45,7 +45,7 @@ pub fn register_generated_chains(
     request: &RegisterRequest<'_>,
 ) -> anyhow::Result<SidecarSpring> {
     let target: SubmeshSelector = request.target.parse().map_err(anyhow::Error::msg)?;
-    let (_, attachment) = root_and_attachment_from_str(request.role)?;
+    let attachment = request.attachment;
     let skeleton = skeleton_from_fit_bones(bones)?;
     let bone_inputs = to_bone_inputs(bones);
     let root = bone_id(&skeleton, request.root_name)?;

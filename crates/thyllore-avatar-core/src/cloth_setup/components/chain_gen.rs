@@ -113,7 +113,7 @@ pub static CHAIN_GEN_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
 
 #[derive(Debug, Clone)]
 pub struct ChainGenParams {
-    pub root: HumanoidRole,
+    pub root: Option<HumanoidRole>,
     pub attachment: RootAttachment,
     pub target: SubmeshSelector,
     pub settings: ChainGenSettings,
@@ -130,6 +130,19 @@ pub fn default_root_of_submesh(role: SubmeshRole) -> Option<HumanoidRole> {
 pub fn default_attachment(root: HumanoidRole) -> RootAttachment {
     if root == HumanoidRole::Head {
         RootAttachment::Cap
+    } else {
+        RootAttachment::Ring
+    }
+}
+
+pub fn attachment_or_default(
+    root: Option<HumanoidRole>,
+    attachment: Option<RootAttachment>,
+) -> RootAttachment {
+    if let Some(a) = attachment {
+        a
+    } else if let Some(root) = root {
+        default_attachment(root)
     } else {
         RootAttachment::Ring
     }
@@ -372,7 +385,7 @@ mod tests {
     #[test]
     fn joint_names_differ_between_submeshes_and_follow_the_chain_name() {
         let params = |target: &str| ChainGenParams {
-            root: HumanoidRole::Head,
+            root: Some(HumanoidRole::Head),
             attachment: RootAttachment::Cap,
             target: target.parse().unwrap(),
             settings: ChainGenSettings::default(),
@@ -385,7 +398,7 @@ mod tests {
     #[test]
     fn chain_column_inverts_chain_name_for_this_submesh_only() {
         let params = ChainGenParams {
-            root: HumanoidRole::Head,
+            root: Some(HumanoidRole::Head),
             attachment: RootAttachment::Cap,
             target: "Hair_side".parse().unwrap(),
             settings: ChainGenSettings::default(),

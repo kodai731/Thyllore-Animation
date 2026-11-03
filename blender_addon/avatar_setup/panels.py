@@ -12,7 +12,7 @@ from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
 from .chain_inputs import generatable_submeshes
 from .operators import bound_meshes, target_armature
-from ..common.spring_properties import FORCE_PARAM_NAMES
+from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain
 from ..common.vrm_export import meta_fields_of_kind
 from .properties import CHAIN_GEN_UI_PARAMS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
@@ -114,11 +114,9 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
     @staticmethod
     def _draw_joints(layout, context, arm):
         settings = arm.data.thyllore_spring
-        index = settings.active_chain_index
-        chains = settings.chains
-        if index < 0 or index >= len(chains):
+        chain = active_chain(settings)
+        if chain is None:
             return
-        chain = chains[index]
         if not SPRING_JOINT_PARAM_NAMES:
             return
 

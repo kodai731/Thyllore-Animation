@@ -170,6 +170,44 @@ def step_d_generated_chains_are_registered(arm, added):
     print(f"[smoke] step_d: {chain_count} spring chains registered by generation, idempotent under Head")
 
 
+def step_d2_remove_spring_chain(arm, mesh, hair_material, added):
+    """(d2) Remove Spring Chain is unavailable with nothing selected, drops every generated chain with its bones
+    when the submesh is active, a regeneration restores them, and drops only the listed chain's settings when
+    the armature is active."""
+    import bpy
+
+    settings = arm.data.thyllore_spring
+    chain_count = len(settings.chains)
+    bone_count = len(arm.data.bones)
+
+    bpy.context.view_layer.objects.active = arm
+    settings.active_chain_index = -1
+    if bpy.ops.thyllore.remove_spring_chain.poll():
+        raise SystemExit("AVATAR_SETUP_SMOKE failed: step_d2 — remove_spring_chain is available with nothing selected")
+
+    bpy.context.view_layer.objects.active = mesh
+    bpy.ops.thyllore.remove_spring_chain()
+    if len(settings.chains) != 0 or len(arm.data.bones) != bone_count - added:
+        raise SystemExit(
+            f"AVATAR_SETUP_SMOKE failed: step_d2 — submesh removal left {len(settings.chains)} chains / {len(arm.data.bones)} bones, expected 0 / {bone_count - added}"
+        )
+
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.thyllore.generate_chain_bones(mesh=mesh.name, material=hair_material)
+    if len(settings.chains) != chain_count or len(arm.data.bones) != bone_count:
+        raise SystemExit(
+            f"AVATAR_SETUP_SMOKE failed: step_d2 — regeneration gave {len(settings.chains)} chains / {len(arm.data.bones)} bones, expected {chain_count} / {bone_count}"
+        )
+
+    settings.active_chain_index = 0
+    bpy.ops.thyllore.remove_spring_chain()
+    if len(settings.chains) != chain_count - 1 or len(arm.data.bones) != bone_count:
+        raise SystemExit(
+            f"AVATAR_SETUP_SMOKE failed: step_d2 — listed removal left {len(settings.chains)} chains / {len(arm.data.bones)} bones, expected {chain_count - 1} / {bone_count}"
+        )
+    print(f"[smoke] step_d2: submesh removal -> 0 chains, regenerated {chain_count}, listed removal -> {chain_count - 1}")
+
+
 def step_e_fit_body_colliders(arm):
     """(e) thyllore.fit_body_colliders() -> 'Fitted Body' group on all chains."""
     import bpy
@@ -302,6 +340,7 @@ def main() -> None:
     hair_mesh, hair_material = step_b_guess_submesh_roles(arm, meshes)
     added = step_c_generate_chain_bones(arm, hair_mesh, hair_material)
     step_d_generated_chains_are_registered(arm, added)
+    step_d2_remove_spring_chain(arm, hair_mesh, hair_material, added)
     step_e_fit_body_colliders(arm)
     step_f_apply_ramp(arm)
     step_g_export_for_unity(arm, hair_mesh)

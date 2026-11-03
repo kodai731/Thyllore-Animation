@@ -130,14 +130,10 @@ class THYLLORE_OT_LoadRampFromChain(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         settings = arm.data.thyllore_spring
-        chains = settings.chains
-        index = settings.active_chain_index
-
-        if index < 0 or index >= len(chains):
-            report(self, "ERROR", "Active chain index out of range")
+        chain = active_chain(settings)
+        if chain is None:
+            report(self, "ERROR", "Select a chain in the Chains list")
             return {"CANCELLED"}
-
-        chain = chains[index]
         if len(chain.joints) == 0:
             report(self, "ERROR", "Chain has no joints")
             return {"CANCELLED"}

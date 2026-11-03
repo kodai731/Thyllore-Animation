@@ -7,7 +7,7 @@ use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 use super::submesh_role::{SubmeshRole, SubmeshSelector};
 use crate::humanoid::components::role::HumanoidRole;
 
-pub use thyllore_anim_core::spring_bone::{ChainRole, RootAttachment};
+pub use thyllore_anim_core::spring_bone::RootAttachment;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChainGenOwner {
@@ -132,13 +132,6 @@ pub fn default_attachment(root: HumanoidRole) -> RootAttachment {
         RootAttachment::Cap
     } else {
         RootAttachment::Ring
-    }
-}
-
-pub fn chain_role_of_attachment(attachment: RootAttachment) -> ChainRole {
-    match attachment {
-        RootAttachment::Cap => ChainRole::Hair,
-        RootAttachment::Ring => ChainRole::Garment,
     }
 }
 
@@ -360,6 +353,7 @@ pub struct ChainGenReport {
 pub struct ChainGenRequest {
     pub target: SubmeshSelector,
     pub root: HumanoidRole,
+    pub attachment: RootAttachment,
     pub settings: ChainGenSettings,
 }
 

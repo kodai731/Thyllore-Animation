@@ -2,23 +2,6 @@ use super::SubmeshSelector;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ChainRole {
-    Hair,
-    #[serde(alias = "skirt")]
-    Garment,
-}
-
-impl ChainRole {
-    pub fn bone_prefix(self) -> &'static str {
-        match self {
-            ChainRole::Hair => "hair",
-            ChainRole::Garment => "garment",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RootAttachment {
     /// The root sits on the top of a closed surface, such as the head.
     Cap,
@@ -33,7 +16,7 @@ pub enum ChainOrigin {
     Authored,
     Generated {
         target: SubmeshSelector,
-        role: ChainRole,
+        attachment: RootAttachment,
     },
 }
 

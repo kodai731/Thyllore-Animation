@@ -24,10 +24,10 @@ use thyllore_anim_core::spring_bone::{
     SpringJointParam,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_name, chain_role_of_attachment, default_attachment, default_root_of_submesh,
-    BodyCollider, ChainGenInput, ChainGenParams, ChainGenReport, ChainGenRequest, ChainGenSettings,
-    ChainPlacement, ChainWeightRecord, GeneratedBoneRecord, GeneratedChain, GeneratedJoint,
-    HeadCapsuleRecord, InfluenceTarget, RootBandRecord, StrandPlacement, VertexInfluences,
+    chain_name, default_root_of_submesh, BodyCollider, ChainGenInput, ChainGenParams,
+    ChainGenReport, ChainGenRequest, ChainGenSettings, ChainPlacement, ChainWeightRecord,
+    GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
+    RootBandRecord, StrandPlacement, VertexInfluences,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
 use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
@@ -59,7 +59,7 @@ fn generate_chain_bones(
     graphics: &mut GraphicsResources,
     request: &ChainGenRequest,
 ) -> anyhow::Result<GeneratedChainBones> {
-    let (submeshes, chain_root) = resolve_target(world, assets, graphics, &request.target)?;
+    let submeshes = resolve_target(world, assets, graphics, &request.target)?;
     let geometry = merge_submesh_geometry(graphics, submeshes)?;
 
     let root = find_root_bone(world, request.root)?;
@@ -98,8 +98,8 @@ fn generate_chain_bones(
         given_chains: &[],
     };
     let params = ChainGenParams {
-        root: chain_root,
-        attachment: default_attachment(chain_root),
+        root: request.root,
+        attachment: request.attachment,
         target: request.target.clone(),
         settings: request.settings.clone(),
     };
@@ -179,7 +179,7 @@ fn generate_chain_bones(
                 .collect(),
             origin: ChainOrigin::Generated {
                 target: request.target.clone(),
-                role: chain_role_of_attachment(params.attachment),
+                attachment: params.attachment,
             },
             ..SpringChain::default()
         })
@@ -197,7 +197,7 @@ fn resolve_target(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     target: &SubmeshSelector,
-) -> anyhow::Result<(Vec<(SubmeshKey, usize)>, HumanoidRole)> {
+) -> anyhow::Result<Vec<(SubmeshKey, usize)>> {
     let node_assets = world.resource::<NodeAssets>();
     let pairs = collect_submesh_meshes(assets, graphics, &node_assets.nodes);
     let matching: Vec<(SubmeshKey, usize)> = pairs
@@ -219,13 +219,12 @@ fn resolve_target(
 
     let state = world.resource::<AvatarSetupState>();
     let mut selected = Vec::new();
-    let mut chain_root: Option<HumanoidRole> = None;
     for (key, mesh_index) in matching {
         let submesh_role = *state.submesh_roles.get(&key).ok_or_else(|| {
             anyhow::anyhow!("submesh role not set: {}/{}", key.mesh, key.material)
         })?;
-        let part_root = match (default_root_of_submesh(submesh_role), target) {
-            (Some(root), _) => root,
+        match (default_root_of_submesh(submesh_role), target) {
+            (Some(_), _) => selected.push((key, mesh_index)),
             (None, SubmeshSelector::Mesh(_)) => continue,
             (None, SubmeshSelector::Submesh(_)) => anyhow::bail!(
                 "submesh role {:?} is not Hair or Garment: {}/{}",
@@ -233,21 +232,13 @@ fn resolve_target(
                 key.mesh,
                 key.material
             ),
-        };
-        match chain_root {
-            Some(previous) if previous != part_root => anyhow::bail!(
-                "submeshes of {} mix hair and garment roles; select one submesh",
-                target
-            ),
-            _ => chain_root = Some(part_root),
         }
-        selected.push((key, mesh_index));
     }
 
-    let Some(chain_root) = chain_root else {
+    if selected.is_empty() {
         anyhow::bail!("no hair or garment submesh in {}", target);
-    };
-    Ok((selected, chain_root))
+    }
+    Ok(selected)
 }
 
 fn influences_of_part(

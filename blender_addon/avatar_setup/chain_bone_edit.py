@@ -50,13 +50,12 @@ def remove_vertex_groups(obj, bone_names):
             obj.vertex_groups.remove(group)
 
 
-def write_weights(obj, groups, vertices: set[int]):
+def write_weights(obj, groups, vertices: set[int], bone_names: set[str]):
     """Write the bone weights of ``vertices``: clear them from every bone group, then REPLACE; the other vertices keep
-    their weights."""
+    their weights and the non-bone groups (modifier masks, membership, coverage) are untouched."""
     for vg in obj.vertex_groups:
-        if vg.name == COVERED_GROUP or chain_of_membership_group(vg.name) is not None:
-            continue
-        vg.remove(list(vertices))
+        if vg.name in bone_names:
+            vg.remove(list(vertices))
     for bone_name, influences in groups.items():
         vg = obj.vertex_groups.get(bone_name)
         if vg is None:

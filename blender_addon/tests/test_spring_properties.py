@@ -12,11 +12,9 @@ from blender_addon.common.spring_properties import (
     generated_chain_bones,
     remove_chains_generated_on,
     copy_joint_values,
-    disabled_chain_names,
     humanoid_overrides_to_dict,
     joint_values,
     ramp_values,
-    restore_disabled_chains,
     spring_settings_to_edit,
     spring_settings_to_sidecar,
     write_sidecar_spring,
@@ -210,6 +208,7 @@ def _expected_sidecar():
                     {"bone": "Spine", "force": _vrm_force(0.8, 0.5), "drag_force": 0.3, "gravity_dir": (0.0, 0.0, 1.0), "hit_radius": 0.03},
                 ],
                 "tail": "Spine3",
+                "enabled": True,
                 "origin": None,
             }
         ],
@@ -327,25 +326,22 @@ def test_humanoid_overrides_to_dict():
     assert result == {"hips": "Hips_Bone", "spine": "Spine_Bone"}
 
 
-def test_edit_write_restore_keeps_disabled():
-    """disabled chain settings -> edit dict -> write -> restore -> disabled stays.
+def test_edit_write_keeps_disabled():
+    """disabled chain settings -> edit dict -> write -> disabled stays.
 
-    spring_settings_to_sidecar (export) drops disabled chains, so an operator that
-    reads via spring_settings_to_edit and writes back must restore them."""
+    spring_settings_to_sidecar (export) drops disabled chains; the edit dict carries
+    the enabled state so an operator that writes it back keeps them disabled."""
     chains = [
         {"name": "visible", "enabled": True, "joints": [{"bone": "Hips", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
         {"name": "hidden", "enabled": False, "joints": [{"bone": "Spine", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}]},
     ]
     settings = _make_settings(chains, [], [])
 
-    disabled = disabled_chain_names(settings)
-    assert disabled == {"hidden"}
-
     sidecar = spring_settings_to_edit(settings)
     assert len(sidecar["chains"]) == 2
+    assert [c["enabled"] for c in sidecar["chains"]] == [True, False]
 
     write_sidecar_spring(settings, sidecar)
-    restore_disabled_chains(settings, disabled)
 
     assert len(settings.chains) == 2
     names = [c.name for c in settings.chains]

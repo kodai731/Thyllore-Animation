@@ -28,6 +28,7 @@ Required:
 Options:
   --product curve-copilot|avatar-setup
                                  Which addon to ship (default: curve-copilot).
+                                 curve-copilot excludes the Avatar Setup panels;
                                  avatar-setup keeps only the Avatar Setup panels:
                                  no curve copilot, skin weight transfer or
                                  ONNX model, and its own extension id.
@@ -195,10 +196,18 @@ CURVE_COPILOT_ONLY_REL_PATHS=(
     "_ghost_overlay.py"
     "modal"
 )
-if [[ "$PRODUCT" == "avatar-setup" ]]; then
-    UNSHIPPED_REL_PATHS+=("${CURVE_COPILOT_ONLY_REL_PATHS[@]}")
-    INCLUDE_ONNX_MODEL=0
-fi
+AVATAR_SETUP_ONLY_REL_PATHS=(
+    "avatar_setup"
+)
+case "$PRODUCT" in
+    avatar-setup)
+        UNSHIPPED_REL_PATHS+=("${CURVE_COPILOT_ONLY_REL_PATHS[@]}")
+        INCLUDE_ONNX_MODEL=0
+        ;;
+    curve-copilot)
+        UNSHIPPED_REL_PATHS+=("${AVATAR_SETUP_ONLY_REL_PATHS[@]}")
+        ;;
+esac
 
 for rel in "${UNSHIPPED_REL_PATHS[@]}"; do
     abs="$STAGE_DIR/$rel"

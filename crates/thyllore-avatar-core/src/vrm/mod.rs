@@ -1,3 +1,4 @@
+mod end_node;
 mod extensions;
 mod force;
 mod humanoid;
@@ -8,6 +9,7 @@ mod t_pose;
 #[cfg(test)]
 mod tests;
 
+pub use end_node::{spring_end_nodes, SpringEndNode};
 pub use extensions::{build_vrm_extensions, VrmExtensions, VrmInput, THYLLORE_AVATAR};
 pub use force::{vrm_magnitudes, VrmJointMagnitudes};
 pub use humanoid::{build_vrmc_vrm, build_vrmc_vrm_humanoid, VRMC_VRM};

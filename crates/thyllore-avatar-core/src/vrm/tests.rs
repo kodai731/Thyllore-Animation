@@ -304,3 +304,83 @@ fn meta_without_author_is_rejected() {
     meta.authors = vec!["tester".to_string()];
     assert!(meta.validate().is_ok());
 }
+
+fn leaf_ending_spring() -> SidecarSpring {
+    let mut spring = spring();
+    spring.chains.truncate(1);
+    spring.chains[0].tail = None;
+    spring
+}
+
+#[test]
+fn leaf_ending_chain_needs_one_end_node_continuing_the_last_segment() {
+    let end_nodes =
+        spring_end_nodes(&leaf_ending_spring(), &bones(), &centimetre_frames()).expect("end nodes");
+
+    assert_eq!(end_nodes.len(), 1);
+    let end_node = &end_nodes[0];
+    assert_eq!(end_node.chain, "hair");
+    assert_eq!(end_node.parent_bone, "Hair3");
+    assert_eq!(end_node.name, "Hair3_end");
+    let expected_local = [0.0, -0.1 / METRES_PER_BONE_UNIT, 0.0];
+    for (actual, expected) in end_node.translation.iter().zip(expected_local) {
+        assert!(
+            (actual - expected).abs() < 1e-3,
+            "{:?}",
+            end_node.translation
+        );
+    }
+}
+
+#[test]
+fn chain_with_a_tail_or_a_child_needs_no_end_node() {
+    let with_tail = spring_end_nodes(&spring(), &bones(), &centimetre_frames()).expect("end nodes");
+    assert!(with_tail.is_empty());
+
+    let mut ends_on_hair2 = leaf_ending_spring();
+    ends_on_hair2.chains[0].joints.truncate(2);
+    let with_child =
+        spring_end_nodes(&ends_on_hair2, &bones(), &centimetre_frames()).expect("end nodes");
+    assert!(with_child.is_empty());
+}
+
+#[test]
+fn leaf_ending_chain_without_its_end_node_is_an_error() {
+    let spring = leaf_ending_spring();
+    let bones = bones();
+    let frames = centimetre_frames();
+    let node_of_bone = node_of_bone();
+
+    let error = build_vrmc_spring_bone(SpringBoneInput {
+        spring: &spring,
+        bones: &bones,
+        frames: &frames,
+        node_of_bone: &node_of_bone,
+    })
+    .expect_err("leaf without end node");
+
+    assert!(error.to_string().contains("end node"), "{error}");
+}
+
+#[test]
+fn chain_ending_on_a_bone_with_a_child_ends_the_spring_on_that_child() {
+    let mut spring = leaf_ending_spring();
+    spring.chains[0].joints.truncate(2);
+    let bones = bones();
+    let frames = centimetre_frames();
+    let node_of_bone = node_of_bone();
+
+    let spring_bone = build_vrmc_spring_bone(SpringBoneInput {
+        spring: &spring,
+        bones: &bones,
+        frames: &frames,
+        node_of_bone: &node_of_bone,
+    })
+    .expect("spring bone");
+
+    let joints = spring_bone["springs"][0]["joints"]
+        .as_array()
+        .expect("joints");
+    assert_eq!(joints.len(), 3);
+    assert_eq!(joints[2]["node"], 14);
+}

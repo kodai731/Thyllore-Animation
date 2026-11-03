@@ -49,10 +49,17 @@ if _BPY_AVAILABLE:
     import os  # noqa: E402
 
     from . import _debuglog  # noqa: E402
-    from . import avatar_setup  # noqa: E402
     from . import operators  # noqa: E402
     from . import panels  # noqa: E402
     from . import preferences  # noqa: E402
+
+    # The avatar setup panels ship only in the avatar-setup product; the curve copilot ZIP excludes them.
+    try:
+        from . import avatar_setup  # noqa: E402
+
+        _AVATAR_SETUP_AVAILABLE = True
+    except ImportError:
+        _AVATAR_SETUP_AVAILABLE = False
 
     # The message channel ships only in mode B builds; A/C ZIPs exclude it.
     try:
@@ -133,7 +140,8 @@ if _BPY_AVAILABLE:
             return
 
         preferences.register()
-        avatar_setup.register()
+        if _AVATAR_SETUP_AVAILABLE:
+            avatar_setup.register()
         operators.register()
         panels.register()
         if _FEEDBACK_MESSAGE_AVAILABLE:
@@ -162,6 +170,7 @@ if _BPY_AVAILABLE:
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:
             operators.unregister()
-            avatar_setup.unregister()
+            if _AVATAR_SETUP_AVAILABLE:
+                avatar_setup.unregister()
         preferences.unregister()
         _REGISTERED_ABI_FAILURE = False

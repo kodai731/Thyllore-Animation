@@ -27,8 +27,8 @@ def spring_settings_to_sidecar(settings) -> dict:
 def spring_settings_to_edit(settings) -> dict:
     """Build the sidecar spring dict from Blender spring settings (edit view).
 
-    Includes ALL chains regardless of enabled state — used for edit operators that
-    round-trip through write_sidecar_spring."""
+    Includes ALL chains with their enabled state, so an edit operator that writes the result back
+    through write_sidecar_spring keeps disabled chains disabled."""
     return _build_sidecar_from_chains(
         list(settings.chains),
         list(settings.colliders),
@@ -36,17 +36,6 @@ def spring_settings_to_edit(settings) -> dict:
         settings.collision_mode,
     )
 
-
-def disabled_chain_names(settings) -> set[str]:
-    """Return the names of chains that are currently disabled."""
-    return {c.name for c in settings.chains if not c.enabled}
-
-
-def restore_disabled_chains(settings, names: set[str]) -> None:
-    """Restore disabled state: set enabled=False for chains whose names are in *names*."""
-    for chain in settings.chains:
-        if chain.name in names:
-            chain.enabled = False
 
 def _build_sidecar_from_chains(chains, colliders, groups, collision_mode) -> dict:
     """Build the sidecar spring dict from explicit lists of chains/colliders/groups.
@@ -68,6 +57,7 @@ def _chain_to_sidecar(chain) -> dict:
         "collider_groups": [entry.name for entry in chain.collider_groups],
         "joints": [_joint_to_sidecar(joint) for joint in chain.joints],
         "tail": chain.tail or None,
+        "enabled": bool(chain.enabled),
         "origin": _chain_origin_to_sidecar(chain),
     }
 
@@ -129,7 +119,7 @@ def _write_chains(chains, spring_chains: list[dict]) -> None:
         item = chains.add()
         item.name = chain["name"]
         item.center = chain.get("center") or ""
-        item.enabled = True
+        item.enabled = bool(chain.get("enabled", True))
         item.tail = chain.get("tail") or ""
         origin = chain.get("origin") or {}
         item.origin_mesh = origin.get("mesh", "")

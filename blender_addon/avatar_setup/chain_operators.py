@@ -13,8 +13,6 @@ except ImportError:
 
 from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import (
-    disabled_chain_names,
-    restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
@@ -63,10 +61,7 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
             report(self, "ERROR", f"add_chains_under_bone failed: {e}")
             return {"CANCELLED"}
 
-        disabled = disabled_chain_names(settings)
-
         write_sidecar_spring(settings, output)
-        restore_disabled_chains(settings, disabled)
 
         apply_chain_display(arm)
 

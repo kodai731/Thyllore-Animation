@@ -130,9 +130,17 @@ $CurveCopilotOnlyRelPaths = @(
     "_ghost_overlay.py",
     "modal"
 )
-if ($Product -eq "avatar-setup") {
-    $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
-    $IncludeOnnxModel = $false
+$AvatarSetupOnlyRelPaths = @(
+    "avatar_setup"
+)
+switch ($Product) {
+    "avatar-setup" {
+        $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
+        $IncludeOnnxModel = $false
+    }
+    "curve-copilot" {
+        $UnshippedRelPaths += $AvatarSetupOnlyRelPaths
+    }
 }
 
 # robocopy on Windows, rsync/cp fallback on POSIX pwsh
@@ -240,6 +248,7 @@ if (-not (Test-Path $ManifestPath)) {
     throw "blender_manifest.toml missing from stage; expected at $ManifestPath"
 }
 $ManifestContent = [System.IO.File]::ReadAllText($ManifestPath, [System.Text.Encoding]::UTF8)
+$ManifestContent = $ManifestContent -replace "`r`n", "`n"
 $ManifestContent = $ManifestContent -replace 'PLATFORM_BLENDER_NAME', $PlatformConfig.BlenderName
 
 $WheelLines = ($KeptWheels | ForEach-Object { "    `"./wheels/$_`"," }) -join "`n"

@@ -23,7 +23,8 @@ pub struct SpringBoneInput<'a> {
 }
 
 /// The `VRMC_springBone` extension: colliders in node space, every enabled chain as a spring whose
-/// joints carry the VRM magnitudes of their force.
+/// joints carry the VRM magnitudes of their force and end on a terminal joint (the sidecar tail, or
+/// the child of the last bone added by `spring_end_nodes`).
 pub fn build_vrmc_spring_bone(input: SpringBoneInput<'_>) -> anyhow::Result<Value> {
     let local = map_sidecar_colliders(
         input.spring,
@@ -112,9 +113,10 @@ fn build_spring(
     group_index: &BTreeMap<&str, usize>,
     input: &SpringBoneInput<'_>,
 ) -> anyhow::Result<Value> {
-    let strand_length = strand_length_m(&chain.joints, input.bones);
-    let joints = chain
-        .joints
+    let mut joints = chain.joints.clone();
+    joints.extend(terminal_joint(chain, input.bones)?);
+    let strand_length = strand_length_m(&joints, input.bones);
+    let joints = joints
         .iter()
         .map(|joint| build_joint(joint, strand_length, input))
         .collect::<anyhow::Result<Vec<Value>>>()?;
@@ -140,6 +142,38 @@ fn build_spring(
         spring["center"] = json!(node_of(input.node_of_bone, center)?);
     }
     Ok(spring)
+}
+
+/// VRM reads the last joint as the strand's end, so a chain without a sidecar tail ends on the child
+/// of its last bone, which carries that bone's parameters.
+fn terminal_joint(
+    chain: &SidecarSpringChain,
+    bones: &[BoneInput],
+) -> anyhow::Result<Option<SidecarSpringJoint>> {
+    if chain.tail.is_some() {
+        return Ok(None);
+    }
+    let last = chain
+        .joints
+        .last()
+        .with_context(|| format!("chain {:?} has no joints", chain.name))?;
+    let leaf_index = bones
+        .iter()
+        .position(|bone| bone.name == last.bone)
+        .with_context(|| format!("bone {:?} has no glTF node", last.bone))?;
+    let child = bones
+        .iter()
+        .find(|bone| bone.parent == Some(leaf_index))
+        .with_context(|| {
+            format!(
+                "chain {:?} ends on leaf bone {:?}; add its end node (spring_end_nodes) before building the spring",
+                chain.name, last.bone
+            )
+        })?;
+    Ok(Some(SidecarSpringJoint {
+        bone: child.name.clone(),
+        ..last.clone()
+    }))
 }
 
 fn build_joint(

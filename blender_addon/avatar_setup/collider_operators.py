@@ -15,8 +15,6 @@ from ..common.chain_bones import settings_from_properties
 from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import (
-    disabled_chain_names,
-    restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
@@ -47,13 +45,11 @@ def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
 
     bones = armature_fit_bones(context, arm)
     sidecar = tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
-    disabled = disabled_chain_names(settings)
     scale_length = context.scene.unit_settings.scale_length
     skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
     output = tml.fit_body_colliders(sidecar, bones, skins, fit_settings)
 
     write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
-    restore_disabled_chains(settings, disabled)
     return len(output.get("colliders", []))
 
 
@@ -219,8 +215,6 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             report(self, "WARNING", "No collider groups are assigned")
             return {"CANCELLED"}
 
-        disabled = disabled_chain_names(settings)
-
         try:
             output = tml.assign_collider_groups(spring, bones, chains, groups)
         except ValueError as e:
@@ -228,7 +222,6 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, output)
-        restore_disabled_chains(settings, disabled)
 
         assigned_names = set(groups)
         for g in settings.collider_groups:

@@ -81,9 +81,11 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   stiffness / gravity), `build_vrm_extensions` (`VRMC_vrm`, `VRMC_springBone`, the vendor `THYLLORE_avatar`
   carrying the whole sidecar) as `serde_json::Value`, with no `gltf` dependency; `vrm_meta_fields` is the
   one table of the editable `VRMC_vrm.meta` fields (keys, labels, choices) the addon builds its properties
-  from, and `t_pose_warnings` the one T-pose check. `thyllore-exporter-core`
-  (`systems/gltf/vrm.rs`, `write_vrm`) only derives the node skeleton from the GLB, merges those extensions
-  into the root and encodes the GLB; the C# `VrmMagnitudes` of the Unity package follows the same projection.
+  from, `t_pose_warnings` the one T-pose check, and `spring_end_nodes` the one rule for the terminal joint
+  VRM needs when a chain ends on a leaf bone (a `<bone>_end` node continuing the last segment).
+  `thyllore-exporter-core` (`systems/gltf/vrm.rs`, `write_vrm`) only derives the node skeleton from the GLB,
+  appends those end nodes, merges the extensions into the root and encodes the GLB; the C# `VrmMagnitudes`
+  of the Unity package follows the same projection.
 - `thyllore-avatar-core/src/motion/seed/` is the text-to-motion seed layer: `PoseTable` (parsed from
   `data/pose_table.toml`, the motion vocabulary with the labels helm matches), `MotionSpec` (the slots a
   sentence resolves to) and `compose_motion` (slots → sparse role keys). The engine's batch `compose=` and,
@@ -114,8 +116,12 @@ but not `World`, it belongs in `thyllore-vulkan-core`.
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin
 (`crate-type = ["cdylib", "rlib"]`, `python` feature, abi3-py310):
 
-- `thyllore-ml-core` → the curve copilot addon (`blender_addon/`, wheels collected by
-  `scripts/collect_wheels.{sh,ps1}`, packaged by `scripts/build_blender_addon.{sh,ps1}`).
+- `thyllore-ml-core` → the curve copilot and avatar setup addons (`blender_addon/`, wheels collected by
+  `scripts/collect_wheels.{sh,ps1}`, packaged by `scripts/build_blender_addon.{sh,ps1}` with
+  `--product curve-copilot | avatar-setup`). The two products are disjoint ZIPs with their own extension
+  ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`, the avatar setup ZIP excludes the
+  copilot operators, so one Blender never registers the shared property groups twice
+  (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
   `thyllore-ml-api` is the ABI marker shared between that wheel and the addon; changing it requires a
   coordinated wheel rebuild and end-user reinstall.
 - `thyllore-effect-core` → the flame and water addons (`blender_addon/effects/<effect>/`, release workflows

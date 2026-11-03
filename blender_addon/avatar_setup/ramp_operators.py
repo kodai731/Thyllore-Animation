@@ -17,10 +17,8 @@ from ..common.spring_properties import (
     chain_with_joint,
     chains_generated_on,
     copy_joint_values,
-    disabled_chain_names,
     joint_for_bone,
     ramp_values,
-    restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
@@ -100,8 +98,6 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             report(self, "WARNING", "No chains for the current selection")
             return {"CANCELLED"}
 
-        disabled = disabled_chain_names(settings)
-
         try:
             output = tml.apply_ramp(
                 spring,
@@ -114,7 +110,6 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, output)
-        restore_disabled_chains(settings, disabled)
 
         joint_count = sum(len(c.joints) for c in settings.chains if c.name in names)
         report(self, "INFO", f"Applied ramp to {len(names)} chains ({joint_count} joints)")

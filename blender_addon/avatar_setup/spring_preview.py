@@ -25,14 +25,14 @@ _previews: dict[str, "_ArmaturePreview"] = {}
 
 
 class _ArmaturePreview:
-    def __init__(self, preview, spring_key: str, bone_count: int):
+    def __init__(self, preview, spring_key: str, rest_key: str):
         self.preview = preview
         self.spring_key = spring_key
-        self.bone_count = bone_count
+        self.rest_key = rest_key
         self.last_frame: int | None = None
 
-    def matches(self, spring_key: str, bone_count: int) -> bool:
-        return self.spring_key == spring_key and self.bone_count == bone_count
+    def matches(self, spring_key: str, rest_key: str) -> bool:
+        return self.spring_key == spring_key and self.rest_key == rest_key
 
 
 def invalidate_preview(armature_name: str) -> None:
@@ -74,15 +74,15 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     settings = arm.data.thyllore_spring
     spring = spring_settings_to_edit(settings)
     spring_key = repr(spring)
-    bone_count = len(arm.data.bones)
+    rest_locals = _rest_locals(arm, _root_frame(arm, context.scene.unit_settings.scale_length))
+    rest_key = repr([bone.name for bone in arm.data.bones]) + repr(rest_locals)
 
     cached = _previews.get(arm.name)
-    if cached is not None and cached.matches(spring_key, bone_count):
+    if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
-    scale_length = context.scene.unit_settings.scale_length
-    preview = tml.SpringPreview(spring, armature_bone_specs(context, arm), _rest_locals(arm, _root_frame(arm, scale_length)))
-    cached = _ArmaturePreview(preview, spring_key, bone_count)
+    preview = tml.SpringPreview(spring, armature_bone_specs(context, arm), rest_locals)
+    cached = _ArmaturePreview(preview, spring_key, rest_key)
     _previews[arm.name] = cached
     return cached
 

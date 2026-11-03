@@ -211,6 +211,7 @@ jobs:
           for zip in dist/avatar_setup/*.zip; do
               echo "::group::validate $(basename "$zip")"
               /opt/blender/blender --command extension validate "$zip"
+              unzip -p "$zip" blender_manifest.toml | grep -qx 'id = "thyllore_avatar_setup"'
               echo "::endgroup::"
           done
 

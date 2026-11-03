@@ -24,10 +24,8 @@ from ..common.chain_bones import (
 )
 from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.spring_properties import (
-    disabled_chain_names,
     generated_chain_bones,
     remove_chains_named,
-    restore_disabled_chains,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
@@ -147,9 +145,7 @@ def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict
         new_chains,
         head_capsule,
     )
-    disabled = disabled_chain_names(settings)
     write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
-    restore_disabled_chains(settings, disabled)
 
 
 def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
@@ -175,7 +171,7 @@ def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
     remove_chain_collections(arm, sorted(stale_names))
 
     context.view_layer.objects.active = obj
-    write_weights(obj, groups, rewritten)
+    write_weights(obj, groups, rewritten, {bone.name for bone in arm.data.bones})
     write_membership_groups(obj, output["chains"], run.given)
     rethickened = update_hit_radii(settings, output["chains"], run.read_back)
     if run.role == "garment":

@@ -30,6 +30,13 @@ def _draw_labelled_prop(layout, owner, name) -> None:
     split.column(align=True).prop(owner, name, text="")
 
 
+def _draw_list_when_filled(layout, list_type, owner, collection_name, index_name) -> None:
+    """A UIList only when it has rows; an empty list is a blank box that says nothing."""
+    if len(getattr(owner, collection_name)) == 0:
+        return
+    layout.template_list(list_type, "", owner, collection_name, owner, index_name)
+
+
 def _draw_joint_params(layout, joint, shared_names=SPRING_JOINT_PARAM_NAMES) -> None:
     """The magnitudes of the joint's force model, then the shared parameters listed."""
     column = layout.column(align=True)
@@ -106,8 +113,8 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
         layout.operator("thyllore.add_chains_under_bone")
         layout.operator("thyllore.remove_spring_chain")
         settings = arm.data.thyllore_spring
-        layout.template_list(
-            "THYLLORE_UL_SpringChains", "", settings, "chains", settings, "active_chain_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_SpringChains", settings, "chains", "active_chain_index"
         )
 
     @staticmethod
@@ -299,8 +306,8 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
     def _draw_colliders(layout, context, arm):
         settings = arm.data.thyllore_spring
         layout.operator("thyllore.fit_body_colliders")
-        layout.template_list(
-            "THYLLORE_UL_SpringColliders", "", settings, "colliders", settings, "active_collider_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_SpringColliders", settings, "colliders", "active_collider_index"
         )
         row = layout.row(align=True)
         op = row.operator("thyllore.add_collider")
@@ -330,8 +337,8 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
     @staticmethod
     def _draw_groups(layout, context, arm):
         settings = arm.data.thyllore_spring
-        layout.template_list(
-            "THYLLORE_UL_ColliderGroups", "", settings, "collider_groups", settings, "active_group_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_ColliderGroups", settings, "collider_groups", "active_group_index"
         )
         layout.operator("thyllore.apply_collider_groups")
 

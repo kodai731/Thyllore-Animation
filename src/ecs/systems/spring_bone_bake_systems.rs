@@ -55,7 +55,7 @@ pub fn spring_bone_bake(
 
     let mut pose = create_pose_from_rest(skeleton);
     let mut globals = compute_pose_global_transforms(skeleton, &pose);
-    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
+    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals, config.space);
 
     let mut editable = EditableAnimationClip::new(0, format!("{}_spring_baked", base_clip.name));
 
@@ -174,7 +174,7 @@ fn for_each_spring_frame(
 ) {
     let mut pose = create_pose_from_rest(skeleton);
     let mut globals = compute_pose_global_transforms(skeleton, &pose);
-    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
+    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals, config.space);
 
     let dt = 1.0 / config.sample_rate;
 

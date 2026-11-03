@@ -5,6 +5,7 @@ use cgmath::{InnerSpace, Vector3};
 use serde_json::{json, Value};
 
 use super::force::vrm_magnitudes;
+use super::rest_clearance::{vrm_rest_clearance, VrmRestClearance};
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::vrchat::sidecar_spring::{
     map_sidecar_colliders, BoneRestFrame, ColliderSpace, SidecarCollider, SidecarColliderShape,
@@ -24,8 +25,10 @@ pub struct SpringBoneInput<'a> {
 
 /// The `VRMC_springBone` extension: colliders in node space, every enabled chain as a spring whose
 /// joints carry the VRM magnitudes of their force and end on a terminal joint (the sidecar tail, or
-/// the child of the last bone added by `spring_end_nodes`).
+/// the child of the last bone added by `spring_end_nodes`). Radii carry the rest clearance a VRM
+/// runtime cannot tolerate itself.
 pub fn build_vrmc_spring_bone(input: SpringBoneInput<'_>) -> anyhow::Result<Value> {
+    let clearance = vrm_rest_clearance(input.spring, input.bones);
     let local = map_sidecar_colliders(
         input.spring,
         input.bones,
@@ -35,7 +38,15 @@ pub fn build_vrmc_spring_bone(input: SpringBoneInput<'_>) -> anyhow::Result<Valu
     let colliders = local
         .colliders
         .iter()
-        .map(|collider| build_collider(collider, input.node_of_bone))
+        .map(|collider| {
+            let radius = clearance
+                .collider_radius(&collider.name)
+                .and_then(|metres| {
+                    Some(bone_frame(&input, &collider.bone)?.length_to_local(metres))
+                })
+                .unwrap_or(collider.radius);
+            build_collider(collider, radius, input.node_of_bone)
+        })
         .collect::<anyhow::Result<Vec<Value>>>()?;
 
     let collider_index: BTreeMap<&str, usize> = local
@@ -74,7 +85,7 @@ pub fn build_vrmc_spring_bone(input: SpringBoneInput<'_>) -> anyhow::Result<Valu
         .chains
         .iter()
         .filter(|chain| chain.enabled)
-        .map(|chain| build_spring(chain, &group_index, &input))
+        .map(|chain| build_spring(chain, &group_index, &clearance, &input))
         .collect::<anyhow::Result<Vec<Value>>>()?;
 
     Ok(json!({
@@ -94,15 +105,16 @@ fn node_of(node_of_bone: &BTreeMap<String, u32>, bone: &str) -> anyhow::Result<u
 
 fn build_collider(
     collider: &SidecarCollider,
+    radius: f32,
     node_of_bone: &BTreeMap<String, u32>,
 ) -> anyhow::Result<Value> {
     let node = node_of(node_of_bone, &collider.bone)?;
     let shape = match (&collider.shape, collider.tail) {
         (SidecarColliderShape::Capsule, Some(tail)) => json!({
-            "capsule": { "offset": collider.offset, "radius": collider.radius, "tail": tail }
+            "capsule": { "offset": collider.offset, "radius": radius, "tail": tail }
         }),
         (SidecarColliderShape::Capsule, None) | (SidecarColliderShape::Sphere, _) => json!({
-            "sphere": { "offset": collider.offset, "radius": collider.radius }
+            "sphere": { "offset": collider.offset, "radius": radius }
         }),
     };
     Ok(json!({ "node": node, "shape": shape }))
@@ -111,14 +123,27 @@ fn build_collider(
 fn build_spring(
     chain: &SidecarSpringChain,
     group_index: &BTreeMap<&str, usize>,
+    clearance: &VrmRestClearance,
     input: &SpringBoneInput<'_>,
 ) -> anyhow::Result<Value> {
     let mut joints = chain.joints.clone();
     joints.extend(terminal_joint(chain, input.bones)?);
     let strand_length = strand_length_m(&joints, input.bones);
+    let last_bone = chain.joints.last().map(|joint| joint.bone.as_str());
     let joints = joints
         .iter()
-        .map(|joint| build_joint(joint, strand_length, input))
+        .enumerate()
+        .map(|(index, joint)| {
+            let cleared_bone = if index < chain.joints.len() {
+                joint.bone.as_str()
+            } else {
+                last_bone.unwrap_or(joint.bone.as_str())
+            };
+            let hit_radius_m = clearance
+                .hit_radius(&chain.name, cleared_bone)
+                .unwrap_or(joint.hit_radius);
+            build_joint(joint, hit_radius_m, strand_length, input)
+        })
         .collect::<anyhow::Result<Vec<Value>>>()?;
     let collider_groups = chain
         .collider_groups
@@ -178,14 +203,15 @@ fn terminal_joint(
 
 fn build_joint(
     joint: &SidecarSpringJoint,
+    hit_radius_m: f32,
     strand_length_m: f32,
     input: &SpringBoneInput<'_>,
 ) -> anyhow::Result<Value> {
     let node = node_of(input.node_of_bone, &joint.bone)?;
     let magnitudes = vrm_magnitudes(joint.force, strand_length_m);
     let hit_radius = bone_frame(input, &joint.bone)
-        .map(|frame| frame.length_to_local(joint.hit_radius))
-        .unwrap_or(joint.hit_radius);
+        .map(|frame| frame.length_to_local(hit_radius_m))
+        .unwrap_or(hit_radius_m);
     Ok(json!({
         "node": node,
         "hitRadius": hit_radius,

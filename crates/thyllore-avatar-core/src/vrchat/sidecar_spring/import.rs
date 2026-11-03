@@ -21,6 +21,15 @@ pub fn spring_setup_from_sidecar(
     bones: &[BoneInput],
     frames: &[BoneRestFrame],
 ) -> SpringBoneSetup {
+    spring_setup_with_collider_ids(spring, bones, frames).0
+}
+
+/// The setup with the engine id each sidecar collider received, by sidecar name.
+pub fn spring_setup_with_collider_ids(
+    spring: &SidecarSpring,
+    bones: &[BoneInput],
+    frames: &[BoneRestFrame],
+) -> (SpringBoneSetup, Vec<(String, SpringColliderId)>) {
     let mut setup = SpringBoneSetup {
         collision_mode: from_sidecar_collision_mode(&spring.collision_mode),
         ..Default::default()
@@ -38,7 +47,7 @@ pub fn spring_setup_from_sidecar(
     }
     setup.new_joint_force_model =
         shared_force_model(setup.chains.iter().flat_map(|chain| &chain.joints)).unwrap_or_default();
-    setup
+    (setup, collider_ids_by_name)
 }
 
 fn from_sidecar_collision_mode(mode: &SidecarCollisionMode) -> SpringCollisionMode {

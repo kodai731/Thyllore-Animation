@@ -89,6 +89,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vrm::vrm_write, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_meta_fields, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_t_pose_warnings, m)?)?;
+    m.add_function(wrap_pyfunction!(vrm::vrm_rest_clearance_warnings, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;
 
     #[cfg(feature = "debug-log")]

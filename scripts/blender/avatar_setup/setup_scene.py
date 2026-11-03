@@ -4,6 +4,7 @@ from pathlib import Path
 import bpy
 
 MODEL_PATH = os.environ["THYLLORE_AVATAR_MODEL"]
+MODEL_ORIGIN = os.environ.get("THYLLORE_AVATAR_MODEL_ORIGIN", "")
 CLIP_PATH = Path(__file__).resolve().parents[3] / "assets" / "templates" / "hips_sway.anim.ron"
 SCREENSHOT_DIR = os.environ.get("THYLLORE_SCREENSHOT_DIR", "")
 SCREENSHOT_DELAY_SECONDS = float(os.environ.get("THYLLORE_SCREENSHOT_DELAY", "3"))
@@ -31,6 +32,35 @@ def import_model():
     print(f"[avatar_setup/setup_scene] imported {MODEL_PATH}, active armature {armature.name}", flush=True)
 
 
+def relink_textures_to_origin():
+    """The staged model copy sits alone; resolve its texture references against the model's own directory."""
+    if not MODEL_ORIGIN:
+        return
+    staged_dir = Path(MODEL_PATH).parent
+    origin_dir = Path(MODEL_ORIGIN).parent
+    for image in bpy.data.images:
+        if image.packed_file is not None or not image.filepath:
+            continue
+        referenced = Path(bpy.path.abspath(image.filepath))
+        if referenced.is_file():
+            continue
+        relative = os.path.relpath(referenced, staged_dir)
+        candidate = (origin_dir / relative).resolve()
+        if not candidate.is_file():
+            candidate = next(origin_dir.parent.rglob(referenced.name), None)
+        if candidate is None:
+            print(f"[avatar_setup/setup_scene] texture not found: {image.filepath}", flush=True)
+            continue
+        image.filepath = str(candidate)
+        image.reload()
+    loaded = sum(1 for image in bpy.data.images if image.size[0] > 0)
+    print(f"[avatar_setup/setup_scene] textures loaded: {loaded}/{len(bpy.data.images)}", flush=True)
+
+
+def show_textures_in_solid_shading(area):
+    area.spaces.active.shading.color_type = "TEXTURE"
+
+
 def load_default_clip():
     if bpy.context.view_layer.objects.active is None:
         return
@@ -55,6 +85,7 @@ def frame_model_and_open_sidebar():
     with bpy.context.temp_override(window=window, area=area, region=region_of(area, "WINDOW")):
         bpy.ops.view3d.view_all()
     area.spaces.active.show_region_ui = True
+    show_textures_in_solid_shading(area)
     return None
 
 
@@ -86,6 +117,7 @@ def take_screenshot():
 bpy.context.preferences.view.show_splash = False
 remove_startup_objects()
 import_model()
+relink_textures_to_origin()
 load_default_clip()
 bpy.app.timers.register(frame_model_and_open_sidebar, first_interval=0.5)
 if bpy.app.use_event_simulate:

@@ -75,15 +75,10 @@ def target_armature(context):
     return None
 
 
-def default_avatar_name(arm) -> str:
-    """The VRM name when none is entered: the imported model's file name, or the armature name."""
-    return arm.data.thyllore_vrm.source_model or arm.name
-
-
 def write_vrm_meta_defaults(arm) -> None:
-    """Put the derived defaults into the meta fields so they stay visible and editable in the panel."""
+    """Put the derived defaults into the meta fields; an empty name follows the model file name."""
     meta = arm.data.thyllore_vrm
-    meta.name = default_avatar_name(arm)
+    meta.name = ""
     meta.authors = default_author()
     meta.version = VRM_META_DEFAULT_VERSION
     meta.copyright_information = default_copyright([meta.authors] if meta.authors else [])
@@ -379,10 +374,15 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
     def poll(cls, context):
         return _TML_AVAILABLE and hasattr(tml, "vrm_write") and target_armature(context) is not None
 
+    def invoke(self, context, event):
+        if not self.filepath:
+            self.filepath = f"{target_armature(context).data.thyllore_vrm.name}{self.filename_ext}"
+        return ExportHelper.invoke(self, context, event)
+
     def execute(self, context):
         arm = target_armature(context)
         meshes = bound_meshes(arm)
-        meta = vrm_meta_to_dict(arm.data.thyllore_vrm, fallback_name=default_avatar_name(arm), fallback_author=default_author())
+        meta = vrm_meta_to_dict(arm.data.thyllore_vrm, fallback_author=default_author())
         if not meta["authors"]:
             report(self, "ERROR", "VRM meta needs at least one author")
             return {"CANCELLED"}

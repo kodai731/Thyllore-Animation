@@ -214,10 +214,23 @@ def _vrm_meta_annotations() -> dict:
     return annotations
 
 
+def _avatar_name_or_default(meta) -> str:
+    return meta.get("name", "") or meta.source_model or meta.id_data.name
+
+
+def _store_avatar_name(meta, value: str) -> None:
+    meta["name"] = value
+
+
 class THYLLORE_PG_VrmMeta(bpy.types.PropertyGroup):
     """VRM 1.0 meta stored on the armature (bpy.types.Armature.thyllore_vrm); the wheel fills the defaults."""
 
-    name: bpy.props.StringProperty(name="Name", description="Avatar name (VRM meta, required)")
+    name: bpy.props.StringProperty(
+        name="Name",
+        description="Avatar name (VRM meta, required); empty shows the model file name",
+        get=_avatar_name_or_default,
+        set=_store_avatar_name,
+    )
     authors: bpy.props.StringProperty(
         name="Authors", description="Comma separated author names (VRM meta, required)"
     )

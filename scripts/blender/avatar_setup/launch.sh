@@ -85,6 +85,9 @@ ZIP="$(cat "$REPO_ROOT/dist/.last_built_zip")"
 
 stage_model
 export THYLLORE_AVATAR_MODEL="/scenes/$(basename "$MODEL")"
+MODEL_REAL="$(realpath "$MODEL")"
+MODEL_FOLDER="$(dirname "$(dirname "$MODEL_REAL")")"
+export THYLLORE_AVATAR_MODEL_ORIGIN="/model_origin/$(basename "$(dirname "$MODEL_REAL")")/$(basename "$MODEL_REAL")"
 export THYLLORE_DEBUG_RPC_PORT="${THYLLORE_DEBUG_RPC_PORT:-8799}"
 if [[ "$HEADLESS" -eq 1 ]]; then
     export THYLLORE_SCREENSHOT_DIR="${THYLLORE_SCREENSHOT_DIR:-/screenshots}"
@@ -97,6 +100,7 @@ echo "[avatar_setup/launch] launching Blender (docker, NVIDIA) with $(basename "
 echo "[avatar_setup/launch] Blender stdout/stderr -> $LOG"
 bash "$REPO_ROOT/blender/docker/run_gui.sh" \
     --zip "$ZIP" \
+    --mount-ro "$MODEL_FOLDER:/model_origin" \
     --python "$REPO_ROOT/scripts/blender/avatar_setup/setup_scene.py" \
     ${EXTRA_PYTHON_ARGS[@]+"${EXTRA_PYTHON_ARGS[@]}"} \
     ${GUI_ARGS[@]+"${GUI_ARGS[@]}"} 2>&1 | tee "$LOG"

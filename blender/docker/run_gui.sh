@@ -18,8 +18,9 @@ Usage: $0 [--mode degrade|full|private] [--zip PATH] [--scene PATH.blend]
           [--blender-version X.Y.Z] [--software-gl] [--headless] [--python PATH.py]
 
 Launches Blender GUI on the host display from the pristine-Blender Docker
-image, with the production extension ZIP installed into a fresh user
-profile. Nothing persists between runs except the GPU shader cache
+image, with the production extension ZIP and the VRM Add-on for Blender
+(baked into the image, File > Import/Export > VRM) installed into a fresh
+user profile. Nothing persists between runs except the GPU shader cache
 (build/docker_gui_cache -> \$HOME/.cache), which cuts the flame shader's
 first-draw pipeline build from ~70s to well under a second.
 
@@ -47,9 +48,13 @@ first-draw pipeline build from ~70s to well under a second.
                          127.0.0.1:N of the host (scripts/blender/rpc.py)
   --python PATH          Python script (inside the repo) run by Blender after
                          the scene is loaded; repeatable, run in the given order
+  --mount-ro HOST:DIR    extra read-only bind mount (a model's texture
+                         directory the staged copy no longer sits next to);
+                         repeatable
 EOF
 }
 
+EXTRA_MOUNTS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mode) MODE="$2"; shift 2 ;;
@@ -60,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --no-install) NO_INSTALL=1; shift ;;
         --headless) HEADLESS=1; shift ;;
         --python) PYTHON_SCRIPTS+=("$2"); shift 2 ;;
+        --mount-ro) EXTRA_MOUNTS+=(-v "$2:ro"); shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage; exit 2 ;;
     esac
@@ -162,14 +168,16 @@ docker run --rm --init \
     -v "$REPO_ROOT:/workspace:ro" \
     -v "$REPO_ROOT/log:/workspace/log" \
     ${ZIP_MOUNT[@]+"${ZIP_MOUNT[@]}"} \
+    ${EXTRA_MOUNTS[@]+"${EXTRA_MOUNTS[@]}"} \
     -v "$WORK_DIR:/scenes" \
     -v "$SCREENSHOT_DIR_HOST:/screenshots" \
     -v "$GPU_CACHE_DIR:/tmp/blender_home/.cache" \
-    -e THYLLORE_SCREENSHOT_DIR -e THYLLORE_SCREENSHOT_DELAY -e THYLLORE_SCREENSHOT_QUIT -e THYLLORE_FLAME_PRESET -e THYLLORE_AVATAR_MODEL \
+    -e THYLLORE_SCREENSHOT_DIR -e THYLLORE_SCREENSHOT_DELAY -e THYLLORE_SCREENSHOT_QUIT -e THYLLORE_FLAME_PRESET -e THYLLORE_AVATAR_MODEL -e THYLLORE_AVATAR_MODEL_ORIGIN \
     -e THYLLORE_BLENDER_LOG=/workspace/log/log_blender.log \
     "$IMAGE_TAG" \
     bash -c "
         export HOME=/tmp/blender_home && mkdir -p \"\$HOME\" &&
+        blender --command extension install-file -r user_default --enable /opt/blender-extensions/vrm.zip &&
         if [[ $NO_INSTALL -eq 0 ]]; then
             blender --command extension install-file -r user_default --enable /zips/$ZIP_NAME
         fi &&

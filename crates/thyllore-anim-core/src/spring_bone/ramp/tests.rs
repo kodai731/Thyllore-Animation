@@ -243,9 +243,13 @@ fn ramp_with_ends_of_different_models_is_rejected() {
 #[test]
 fn ramp_of_another_model_than_the_chain_is_rejected() {
     let chain = make_chain(&[0, 1]);
+    let rest_relative_force = JointForce::default_for(SpringForceModel::RestRelative);
+    let mut rest_relative = ChainRamp::default();
+    rest_relative.root.force = rest_relative_force;
+    rest_relative.tip.force = rest_relative_force;
 
     assert_eq!(
-        apply_ramp(&chain, &ChainRamp::default()).err(),
+        apply_ramp(&chain, &rest_relative).err(),
         Some(RampForceMismatch::JointDiffers {
             ramp: SpringForceModel::RestRelative,
             joint: SpringForceModel::Vrm,

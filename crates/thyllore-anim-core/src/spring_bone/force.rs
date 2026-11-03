@@ -20,8 +20,8 @@ const VRM_DEFAULT_GRAVITY_M_PER_S: f32 = 0.0;
 /// How the joint forces are evaluated: the VRM 1.0 formula, or forces that vanish in the rest pose.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SpringForceModel {
-    Vrm,
     #[default]
+    Vrm,
     RestRelative,
 }
 

@@ -23,7 +23,6 @@ pub struct EngineCliOverrides {
     pub batch_run: Option<BatchRun>,
     pub camera_pose: Option<BatchCameraPose>,
     pub gpu_timings_path: Option<String>,
-    pub exposure_dump_path: Option<String>,
     pub batch_play: bool,
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
@@ -40,7 +39,6 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         batch_run: batch_run_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         gpu_timings_path: gpu_timings_path_resolve_from_args(args)?,
-        exposure_dump_path: exposure_dump_path_resolve_from_args(args)?,
         batch_play: args.iter().any(|a| a == BATCH_PLAY_FLAG),
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
@@ -188,16 +186,6 @@ pub fn gpu_timings_path_resolve_from_args(args: &[String]) -> Result<Option<Stri
     };
     let Some(value) = args.get(position + 1) else {
         bail!("{GPU_TIMINGS_FLAG} requires a path");
-    };
-    Ok(Some(value.clone()))
-}
-
-pub fn exposure_dump_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == EXPOSURE_DUMP_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{EXPOSURE_DUMP_FLAG} requires a path");
     };
     Ok(Some(value.clone()))
 }

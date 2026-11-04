@@ -15,6 +15,7 @@ mod avatar_submesh_role_systems;
 mod batch_run_systems;
 mod billboard_systems;
 mod bone_draw_set;
+mod bone_entity_systems;
 mod bone_gizmo_systems;
 mod bone_pose_override_systems;
 pub mod camera_systems;

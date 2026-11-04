@@ -87,9 +87,11 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
     - When animation channels are missing, maintain current bone transform
     - Use values decomposed from original local_transform (`decompose_transform`), NOT default values (0,0,0)
 
-## Bones are not entities
+## Bones are entities
 
-Bones are `Skeleton.bones: Vec<Bone>` identified by `BoneId`; see `ecs-architecture.md`. The editable
+The skeleton asset holds the bone structure (`Skeleton.bones`, identified by `BoneId`); each loaded bone is an
+entity reached through `SkeletonBones`; see `ecs-architecture.md` for the asset / entity split and the
+migration state. The editable
 (keyframe) domain is `crates/thyllore-anim-core/src/editable/` with the `components/` + `systems/` split.
 
 ## Reference Links

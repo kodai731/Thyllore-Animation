@@ -177,12 +177,13 @@ impl GpuAssets {
     }
 }
 
+use crate::ecs::component::{light, light_position, Light, DEFAULT_LIGHT_POSITION};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::DebugViewState;
-use crate::ecs::resource::LightState;
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
 };
+use crate::ecs::world::World;
 use crate::platform::ImguiData;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 
@@ -231,20 +232,26 @@ impl Default for RayTracingState {
 }
 
 pub struct DebugState {
-    pub light: LightState,
+    pub light: Light,
+    pub light_position: cgmath::Vector3<f32>,
     pub view: DebugViewState,
 }
 
 impl DebugState {
-    pub fn new(light: LightState, view: DebugViewState) -> Self {
-        Self { light, view }
+    pub fn new(world: &World, view: DebugViewState) -> Self {
+        Self {
+            light: light(world).unwrap_or_default(),
+            light_position: light_position(world).unwrap_or(DEFAULT_LIGHT_POSITION),
+            view,
+        }
     }
 }
 
 impl Default for DebugState {
     fn default() -> Self {
         Self {
-            light: LightState::default(),
+            light: Light::default(),
+            light_position: DEFAULT_LIGHT_POSITION,
             view: DebugViewState::default(),
         }
     }

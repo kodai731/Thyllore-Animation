@@ -1,14 +1,13 @@
 use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::{LineMesh, MeshScale};
+use crate::ecs::component::{Light, LineMesh, MeshScale, DEFAULT_LIGHT_POSITION};
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::resource::LightState;
 use crate::ecs::resource::ObjectIdReadback;
 use crate::ecs::resource::PointerCapture;
 use crate::ecs::resource::PointerState;
@@ -34,12 +33,24 @@ impl<'a> EcsContext<'a> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn light_state(&self) -> ResRef<LightState> {
-        self.world.resource::<LightState>()
+    pub fn light_position(&self) -> Vector3<f32> {
+        crate::ecs::component::light_position(self.world).unwrap_or(DEFAULT_LIGHT_POSITION)
     }
 
-    pub fn light_state_mut(&self) -> ResMut<LightState> {
-        self.world.resource_mut::<LightState>()
+    pub fn set_light_position(&mut self, position: Vector3<f32>) {
+        crate::ecs::component::set_light_position(self.world, position);
+    }
+
+    pub fn light(&self) -> Light {
+        crate::ecs::component::light(self.world).unwrap_or_default()
+    }
+
+    pub fn light_mut<F: FnOnce(&mut Light)>(&mut self, f: F) {
+        if let Some(entity) = crate::ecs::component::light_entity(self.world) {
+            if let Some(light) = self.world.get_component_mut::<Light>(entity) {
+                f(light);
+            }
+        }
     }
 
     pub fn camera_position(&self) -> Vector3<f32> {
@@ -55,10 +66,6 @@ impl<'a> EcsContext<'a> {
     pub fn camera_up(&self) -> Vector3<f32> {
         use crate::ecs::systems::camera_systems::compute_camera_up;
         compute_camera_up(&self.camera())
-    }
-
-    pub fn light_position(&self) -> Vector3<f32> {
-        self.light_state().light_position
     }
 
     pub fn grid_mesh(&self) -> ResRef<LineMesh> {

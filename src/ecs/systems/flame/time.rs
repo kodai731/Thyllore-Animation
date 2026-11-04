@@ -1,7 +1,6 @@
 use crate::ecs::component::{
     find_scalar_param_for_property, FlameBaked, FlameEffect, FlameScalarSource, FlameTemporalAccum,
 };
-use crate::ecs::resource::LightState;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
@@ -20,9 +19,7 @@ impl TimedEffect for FlameEffect {
     }
 
     fn collect_world_inputs(world: &World) -> Option<Vector3<f32>> {
-        world
-            .get_resource::<LightState>()
-            .map(|light| light.light_position)
+        crate::ecs::component::light_position(world)
     }
 
     fn time(&self) -> f32 {

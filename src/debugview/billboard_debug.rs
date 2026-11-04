@@ -1,5 +1,6 @@
+use crate::ecs::component::{light_position, DEFAULT_LIGHT_POSITION};
 use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::{Camera, LightState};
+use crate::ecs::resource::Camera;
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
 };
@@ -13,10 +14,10 @@ use vulkanalia::prelude::v1_0::*;
 
 pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
     let camera = world.resource::<Camera>();
-    let light = world.resource::<LightState>();
+    let light_position = light_position(world).unwrap_or(DEFAULT_LIGHT_POSITION);
 
     let info = BillboardDebugInfo {
-        light_position: light.light_position,
+        light_position,
         camera_position: compute_camera_position(&camera),
         camera_direction: compute_camera_direction(&camera),
         camera_up: compute_camera_up(&camera),

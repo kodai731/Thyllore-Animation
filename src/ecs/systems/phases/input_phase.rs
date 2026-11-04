@@ -268,7 +268,7 @@ fn update_light_gizmo_position(
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
-    let light_pos = ctx.light_state().light_position;
+    let light_pos = ctx.light_position();
     let plane_point = light_pos;
     let plane_normal = -camera_dir;
 
@@ -292,7 +292,8 @@ fn update_light_gizmo_position(
                 );
             }
 
-            ctx.light_state_mut().light_position = ctx.light_gizmo().position.position;
+            let target = ctx.light_gizmo().position.position;
+            ctx.set_light_position(target);
         }
     }
 

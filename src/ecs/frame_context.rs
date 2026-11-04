@@ -4,12 +4,13 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
 use crate::asset::AssetStorage;
+use crate::ecs::component::{Light, DEFAULT_LIGHT_POSITION};
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
 use crate::ecs::resource::DebugViewState;
-use crate::ecs::resource::{Camera, GridMeshData, LightState};
+use crate::ecs::resource::{Camera, GridMeshData};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::{BillboardBackend, RenderBackend};
 use crate::vulkanr::command::RRCommandPool;
@@ -64,12 +65,24 @@ impl<'a> FrameContext<'a> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn light_state(&self) -> ResRef<LightState> {
-        self.world.resource::<LightState>()
+    pub fn light_position(&self) -> Vector3<f32> {
+        crate::ecs::component::light_position(self.world).unwrap_or(DEFAULT_LIGHT_POSITION)
     }
 
-    pub fn light_state_mut(&self) -> ResMut<LightState> {
-        self.world.resource_mut::<LightState>()
+    pub fn set_light_position(&mut self, position: Vector3<f32>) {
+        crate::ecs::component::set_light_position(self.world, position);
+    }
+
+    pub fn light(&self) -> Light {
+        crate::ecs::component::light(self.world).unwrap_or_default()
+    }
+
+    pub fn light_mut<F: FnOnce(&mut Light)>(&mut self, f: F) {
+        if let Some(entity) = crate::ecs::component::light_entity(self.world) {
+            if let Some(light) = self.world.get_component_mut::<Light>(entity) {
+                f(light);
+            }
+        }
     }
 
     pub fn debug_view_state(&self) -> ResRef<DebugViewState> {
@@ -89,10 +102,6 @@ impl<'a> FrameContext<'a> {
     pub fn camera_up(&self) -> Vector3<f32> {
         use crate::ecs::systems::camera_systems::compute_camera_up;
         compute_camera_up(&self.camera())
-    }
-
-    pub fn light_position(&self) -> Vector3<f32> {
-        self.light_state().light_position
     }
 
     pub fn grid_mesh(&self) -> ResRef<GridMeshData> {

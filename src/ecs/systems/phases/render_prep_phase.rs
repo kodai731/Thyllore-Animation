@@ -211,7 +211,8 @@ unsafe fn update_frame_and_scene_uniforms(
     aspect: f32,
     camera_position: Vector3<f32>,
 ) -> Result<()> {
-    let light_position = ctx.light_state().light_position;
+    let light_position =
+        crate::ecs::component::light_position(&ctx.world).unwrap_or(Vector3::new(1.0, 1.0, 2.0));
 
     {
         let proj_data = ProjectionData {
@@ -233,11 +234,11 @@ unsafe fn update_frame_and_scene_uniforms(
 
     update_mesh_entity_transforms(ctx)?;
 
-    let light = ctx.light_state();
-    let light_pos = light.light_position;
-    let shadow_strength = light.shadow_strength;
-    let distance_attenuation = light.distance_attenuation;
-    drop(light);
+    let light_pos =
+        crate::ecs::component::light_position(&ctx.world).unwrap_or(Vector3::new(1.0, 1.0, 2.0));
+    let light_component = crate::ecs::component::light(&ctx.world).unwrap_or_default();
+    let shadow_strength = light_component.shadow_strength;
+    let distance_attenuation = light_component.distance_attenuation;
 
     let debug_mode = ctx.debug_view_state().debug_view_mode.as_int();
 

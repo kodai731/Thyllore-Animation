@@ -2,7 +2,7 @@ use cgmath::Matrix4;
 use serde_json::{json, Value};
 
 use crate::ecs::resource::{
-    Camera, DebugViewState, LightState, ModelState, ProjectionData, SceneState, TimelineState,
+    Camera, DebugViewState, ModelState, ProjectionData, SceneState, TimelineState,
 };
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
@@ -104,11 +104,13 @@ pub fn build_projection_json(world: &World) -> Value {
 }
 
 pub fn build_light_json(world: &World) -> Value {
-    let Some(light) = world.get_resource::<LightState>() else {
+    let Some(light) = crate::ecs::component::light(world) else {
         return Value::Null;
     };
+    let position = crate::ecs::component::light_position(world)
+        .unwrap_or(crate::ecs::component::DEFAULT_LIGHT_POSITION);
     json!({
-        "position": [light.light_position.x, light.light_position.y, light.light_position.z],
+        "position": [position.x, position.y, position.z],
         "shadow_strength": light.shadow_strength,
         "shadow_normal_offset": light.shadow_normal_offset,
     })

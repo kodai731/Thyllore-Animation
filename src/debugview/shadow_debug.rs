@@ -1,6 +1,7 @@
+use crate::ecs::component::{light, light_position, DEFAULT_LIGHT_POSITION};
 use crate::ecs::resource::gizmo::LightGizmoData;
+use crate::ecs::resource::Camera;
 use crate::ecs::resource::DebugViewState;
-use crate::ecs::resource::{Camera, LightState};
 use crate::ecs::systems::camera_systems::compute_camera_position;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -11,16 +12,17 @@ pub fn log_shadow_debug_info(
     raytracing: &RayTracingData,
     graphics: &GraphicsResources,
 ) {
-    let light = world.resource::<LightState>();
+    let light_position = light_position(world).unwrap_or(DEFAULT_LIGHT_POSITION);
+    let light = light(world).unwrap_or_default();
     let camera = world.resource::<Camera>();
     let cam_pos = compute_camera_position(&camera);
 
     log!("=== Shadow Debug Info ===");
     log!(
         "Light position: ({:.2}, {:.2}, {:.2})",
-        light.light_position.x,
-        light.light_position.y,
-        light.light_position.z
+        light_position.x,
+        light_position.y,
+        light_position.z
     );
 
     let light_gizmo = world.resource::<LightGizmoData>();

@@ -7,7 +7,7 @@ use super::{
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::{Camera, LightState, ProjectionData};
+use crate::ecs::resource::{Camera, ProjectionData};
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;
 
@@ -72,20 +72,20 @@ pub fn update_billboard_transform(
 }
 
 pub fn update_light_auto_target(
-    light_state: &mut LightState,
+    current_position: Vector3<f32>,
     all_positions: &[Vector3<f32>],
     _camera_position: Vector3<f32>,
     move_light_to: LightMoveTarget,
-) {
+) -> Option<(Vector3<f32>, f32)> {
     if matches!(move_light_to, LightMoveTarget::None) {
-        return;
+        return None;
     }
 
     log!("LIGHT MOVE BUTTON PRESSED: {:?}", move_light_to);
 
     if all_positions.is_empty() {
         log_warn!("No model positions found!");
-        return;
+        return None;
     }
 
     let (min, max) = compute_model_bounds(all_positions);
@@ -93,18 +93,29 @@ pub fn update_light_auto_target(
     let model_size = ((max.x - min.x).abs() + (max.y - min.y).abs() + (max.z - min.z).abs()) / 3.0;
 
     let offset = 2.0;
-    let current = light_state.light_position;
     let new_pos = match move_light_to {
-        LightMoveTarget::XMin => Vector3::new(min.x - offset, current.y, current.z),
-        LightMoveTarget::XMax => Vector3::new(max.x + offset, current.y, current.z),
-        LightMoveTarget::YMin => Vector3::new(current.x, min.y - offset, current.z),
-        LightMoveTarget::YMax => Vector3::new(current.x, max.y + offset, current.z),
-        LightMoveTarget::ZMin => Vector3::new(current.x, current.y, min.z - offset),
-        LightMoveTarget::ZMax => Vector3::new(current.x, current.y, max.z + offset),
-        LightMoveTarget::None => current,
+        LightMoveTarget::XMin => {
+            Vector3::new(min.x - offset, current_position.y, current_position.z)
+        }
+        LightMoveTarget::XMax => {
+            Vector3::new(max.x + offset, current_position.y, current_position.z)
+        }
+        LightMoveTarget::YMin => {
+            Vector3::new(current_position.x, min.y - offset, current_position.z)
+        }
+        LightMoveTarget::YMax => {
+            Vector3::new(current_position.x, max.y + offset, current_position.z)
+        }
+        LightMoveTarget::ZMin => {
+            Vector3::new(current_position.x, current_position.y, min.z - offset)
+        }
+        LightMoveTarget::ZMax => {
+            Vector3::new(current_position.x, current_position.y, max.z + offset)
+        }
+        LightMoveTarget::None => current_position,
     };
 
-    light_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
+    let shadow_normal_offset = (model_size * 0.005).max(0.5);
 
     log!(
         "Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
@@ -117,15 +128,15 @@ pub fn update_light_auto_target(
     );
     log!(
         "Light position: ({:.2}, {:.2}, {:.2}) -> ({:.2}, {:.2}, {:.2})",
-        current.x,
-        current.y,
-        current.z,
+        current_position.x,
+        current_position.y,
+        current_position.z,
         new_pos.x,
         new_pos.y,
         new_pos.z,
     );
 
-    light_state.light_position = new_pos;
+    Some((new_pos, shadow_normal_offset))
 }
 
 fn compute_model_bounds(positions: &[Vector3<f32>]) -> (Vector3<f32>, Vector3<f32>) {

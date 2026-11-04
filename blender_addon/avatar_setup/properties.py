@@ -9,25 +9,25 @@ import re
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
 from ..common.vrm_export import VRM_META_DEFAULT_VERSION, VRM_META_FIELDS
 
 
-SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
+SPRING_JOINT_FORCE_MODELS: list[dict] = avatar_api.spring_joint_force_ui_params() if _AVATAR_API_AVAILABLE else []
 
 SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
-    tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
+    tuple(p["name"] for p in avatar_api.spring_joint_ui_params()) if _AVATAR_API_AVAILABLE else ()
 )
 RAMP_END_PARAM_NAMES: tuple[str, ...] = tuple(name for name in SPRING_JOINT_PARAM_NAMES if name != "hit_radius")
-CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
+CHAIN_GEN_UI_PARAMS: list[dict] = avatar_api.chain_gen_ui_params() if _AVATAR_API_AVAILABLE else []
 
 configure_force_params({
     model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
@@ -46,13 +46,13 @@ def _force_model_property():
 def _spring_joint_annotations() -> dict[str, object]:
     """Property annotations for one spring joint item: the force model with every model's
     magnitudes, then the parameters all models share, from the engine's UI params."""
-    if not _TML_AVAILABLE:
+    if not _AVATAR_API_AVAILABLE:
         return {}
     annotations: dict[str, object] = {"force_model": _force_model_property()}
     for model in SPRING_JOINT_FORCE_MODELS:
         for param in model["params"]:
             annotations.update(build_param_properties(param))
-    for param in tml.spring_joint_ui_params():
+    for param in avatar_api.spring_joint_ui_params():
         annotations.update(build_param_properties(param))
     return annotations
 

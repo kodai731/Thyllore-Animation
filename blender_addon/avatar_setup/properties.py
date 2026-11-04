@@ -72,6 +72,16 @@ class THYLLORE_PG_ChainGeneration(bpy.types.PropertyGroup):
         description="Bone the generated chains hang from (a role name such as Head is resolved); empty hangs hair from the head and a garment from the bone that supports it",
         default="",
     )
+    attachment: bpy.props.EnumProperty(
+        name="Attachment",
+        description="How the root attaches to the mesh",
+        items=[
+            ("AUTO", "Auto", "Cap for a Head root, Ring otherwise"),
+            ("CAP", "Cap", "Root on the top of a closed surface, such as the head"),
+            ("RING", "Ring", "Root ring at the mesh top edge, such as a skirt or sleeve"),
+        ],
+        default="AUTO",
+    )
 
     __annotations__.update(_chain_generation_annotations())
 
@@ -101,7 +111,7 @@ class THYLLORE_PG_SpringChain(bpy.types.PropertyGroup):
     collider_groups: bpy.props.CollectionProperty(type=THYLLORE_PG_NameItem)
     origin_mesh: bpy.props.StringProperty(name="Origin Mesh")
     origin_material: bpy.props.StringProperty(name="Origin Material")
-    origin_role: bpy.props.StringProperty(name="Origin Role")
+    origin_attachment: bpy.props.StringProperty(name="Origin Attachment")
 
 
 class THYLLORE_PG_Collider(bpy.types.PropertyGroup):

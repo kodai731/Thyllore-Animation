@@ -4,15 +4,14 @@ use pythonize::depythonize;
 
 use std::collections::BTreeMap;
 
-use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
-use super::chain_gen::pythonize_value;
-use super::error::anyhow_to_pyerr;
+use super::avatar_setup::bones_from_py;
 use crate::vrm_bridge::{
     vrm_t_pose_warnings as bridge_t_pose_warnings, vrm_write as bridge_vrm_write,
 };
 use thyllore_avatar_core::vrm::{
     vrm_meta_fields as avatar_vrm_meta_fields, VrmMeta, VRM_META_DEFAULT_VERSION,
 };
+use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 #[derive(serde::Serialize)]
 struct VrmMetaFieldsOut {

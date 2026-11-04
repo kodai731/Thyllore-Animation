@@ -2,10 +2,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pythonize::{depythonize, pythonize};
 
-use super::error::anyhow_to_pyerr;
 use crate::degrade::now_unix;
 use crate::feedback;
 use crate::feedback::{FeedbackEndpoint, FeedbackRecordInputs};
+use thyllore_ml_api::python::anyhow_to_pyerr;
 
 fn pythonize_to_pyerr(err: pythonize::PythonizeError) -> PyErr {
     PyValueError::new_err(err.to_string())

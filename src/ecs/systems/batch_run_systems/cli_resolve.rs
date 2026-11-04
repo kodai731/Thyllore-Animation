@@ -23,8 +23,6 @@ pub struct EngineCliOverrides {
     pub batch_run: Option<BatchRun>,
     pub camera_pose: Option<BatchCameraPose>,
     pub gpu_timings_path: Option<String>,
-    pub exposure_dump_path: Option<String>,
-    pub pick_pixel: Option<(u32, u32)>,
     pub batch_play: bool,
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
@@ -32,7 +30,6 @@ pub struct EngineCliOverrides {
     pub anim_dump_tracks: bool,
     pub debug_actions: Vec<Box<dyn BatchAction>>,
     pub scheduled_actions: Vec<ScheduledBatchAction>,
-    pub preview: Option<crate::ecs::resource::ClipPreview>,
     pub anim_debug_dump: Option<AnimDebugDumpRequest>,
     pub export_fbx_path: Option<String>,
 }
@@ -42,8 +39,6 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         batch_run: batch_run_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         gpu_timings_path: gpu_timings_path_resolve_from_args(args)?,
-        exposure_dump_path: exposure_dump_path_resolve_from_args(args)?,
-        pick_pixel: pick_pixel_resolve_from_args(args)?,
         batch_play: args.iter().any(|a| a == BATCH_PLAY_FLAG),
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
@@ -51,7 +46,6 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         anim_dump_tracks: args.iter().any(|a| a == BATCH_ANIM_DUMP_TRACKS_FLAG),
         debug_actions: debug_actions_resolve_from_args(args)?,
         scheduled_actions: scheduled_actions_resolve_from_args(args)?,
-        preview: preview_resolve_from_args(args)?,
         anim_debug_dump: anim_debug_dump_resolve_from_args(args)?,
         export_fbx_path: flag_value_resolve_from_args(args, BATCH_EXPORT_FBX_FLAG)?,
     })
@@ -196,16 +190,6 @@ pub fn gpu_timings_path_resolve_from_args(args: &[String]) -> Result<Option<Stri
     Ok(Some(value.clone()))
 }
 
-pub fn exposure_dump_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == EXPOSURE_DUMP_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{EXPOSURE_DUMP_FLAG} requires a path");
-    };
-    Ok(Some(value.clone()))
-}
-
 pub fn scene_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
     let Some(position) = args.iter().position(|arg| arg == BATCH_SCENE_FLAG) else {
         return Ok(None);
@@ -214,46 +198,6 @@ pub fn scene_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
         bail!("{BATCH_SCENE_FLAG} requires <path>");
     };
     Ok(Some(value.clone()))
-}
-
-/// Drives one viewport click from the command line so the picking readback path can be exercised
-/// headlessly, where there is no mouse to press.
-pub fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_PICK_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_PICK_FLAG} requires <x>,<y>");
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    if parts.len() != 2 {
-        bail!("{BATCH_PICK_FLAG} expects 2 comma-separated values, got '{value}'");
-    }
-    let x: u32 = parts[0]
-        .trim()
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} x in '{value}'"))?;
-    let y: u32 = parts[1]
-        .trim()
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} y in '{value}'"))?;
-    Ok(Some((x, y)))
-}
-
-pub fn preview_resolve_from_args(
-    args: &[String],
-) -> Result<Option<crate::ecs::resource::ClipPreview>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_PREVIEW_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_PREVIEW_FLAG} requires <solo|mix>");
-    };
-    match value.as_str() {
-        "solo" => Ok(Some(crate::ecs::resource::ClipPreview::Solo)),
-        "mix" => Ok(Some(crate::ecs::resource::ClipPreview::Mix)),
-        _ => bail!("{BATCH_PREVIEW_FLAG} expects 'solo' or 'mix', got '{value}'"),
-    }
 }
 
 pub fn anim_debug_dump_resolve_from_args(args: &[String]) -> Result<Option<AnimDebugDumpRequest>> {
@@ -288,27 +232,6 @@ pub fn anim_debug_dump_resolve_from_args(args: &[String]) -> Result<Option<AnimD
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn batch_preview_parses_mix() {
-        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("mix")];
-        let result = preview_resolve_from_args(&args).unwrap();
-        assert_eq!(result, Some(crate::ecs::resource::ClipPreview::Mix));
-    }
-
-    #[test]
-    fn batch_preview_rejects_unknown() {
-        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("foo")];
-        let result = preview_resolve_from_args(&args);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn batch_preview_absent_is_none() {
-        let args: Vec<String> = vec![];
-        let result = preview_resolve_from_args(&args).unwrap();
-        assert_eq!(result, None);
-    }
 
     #[test]
     fn anim_debug_dump_parses_path_and_times() {

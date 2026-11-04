@@ -64,9 +64,6 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
             request_mesh_selection(ctx);
         }
     }
-
-    request_batch_pick(ctx);
-
     sync_transform_gizmo(ctx);
 
     let capture_active = ctx.pointer_capture().active;
@@ -531,32 +528,6 @@ fn request_pixel_pick(ctx: &mut EcsContext, purpose: PickPurpose) {
     readback.pick_ray = Some(pick_ray);
     readback.is_shift = is_shift;
     readback.is_ctrl = is_ctrl;
-}
-
-fn request_batch_pick(ctx: &mut EcsContext) {
-    use crate::ecs::resource::BatchPickRequest;
-
-    let Some(request) = ctx.world.get_resource::<BatchPickRequest>().map(|r| *r) else {
-        return;
-    };
-    if request.fired {
-        return;
-    }
-
-    let (px, py) = request.pixel;
-    let pick_ray = build_pick_ray(ctx, px, py, ctx.swapchain_extent.0, ctx.swapchain_extent.1);
-
-    let mut readback = ctx.object_id_readback_mut();
-    readback.pending_pixel = Some((
-        px.min(ctx.swapchain_extent.0.saturating_sub(1)),
-        py.min(ctx.swapchain_extent.1.saturating_sub(1)),
-    ));
-    readback.pick_ray = Some(pick_ray);
-    drop(readback);
-
-    ctx.world
-        .get_resource_mut::<BatchPickRequest>()
-        .map(|mut r| r.fired = true);
 }
 
 fn build_pick_ray(

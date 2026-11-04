@@ -315,20 +315,17 @@ impl App {
             .map(|ae| ae.enabled)
             .unwrap_or(false);
 
-        let clock = self.resource::<crate::ecs::resource::FrameClock>();
-        let frame = clock.frame;
-        let is_fixed_step = clock.is_fixed();
-        drop(clock);
+        let is_fixed_step = self
+            .resource::<crate::ecs::resource::FrameClock>()
+            .is_fixed();
 
         if !ae_enabled {
-            self.record_exposure_dump(frame, None);
             self.restore_manual_exposure_if_needed();
             return;
         }
 
         self.save_manual_exposure_if_needed();
         if let Some(light_referenced) = self.light_referenced_exposure() {
-            let exposure_value = light_referenced.exposure_value;
             if let Some(mut exposure) = self
                 .data
                 .ecs_world
@@ -336,7 +333,6 @@ impl App {
             {
                 *exposure = light_referenced;
             }
-            self.record_exposure_dump(frame, Some(exposure_value));
             return;
         }
         if is_fixed_step {
@@ -367,8 +363,6 @@ impl App {
                 exposure.metered_luminance = readback.average_luminance;
             }
         }
-
-        self.record_exposure_dump(frame, Some(readback.adapted_exposure));
     }
 
     fn light_referenced_exposure(&self) -> Option<crate::ecs::resource::Exposure> {

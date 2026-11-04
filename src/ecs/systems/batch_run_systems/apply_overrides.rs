@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
-    GpuTimingsSink, ModelState, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
+    BatchPlayback, BatchRun, Camera, FrameClock, GpuTimingsSink, ModelState, PendingBatchAnimEdits,
+    ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
@@ -27,14 +27,8 @@ pub fn apply_engine_overrides(
     if let Some(path) = overrides.gpu_timings_path.clone() {
         world.insert_resource(GpuTimingsSink::new(path));
     }
-    if let Some(path) = overrides.exposure_dump_path.clone() {
-        world.insert_resource(ExposureDumpSink::new(path));
-    }
     if overrides.scene_path.is_some() {
         request_scene_model_load(world);
-    }
-    if let Some(pixel) = overrides.pick_pixel {
-        world.insert_resource(BatchPickRequest::new(pixel));
     }
     if !overrides.anim_edits.is_empty() {
         if overrides.scene_path.is_some() {
@@ -52,10 +46,6 @@ pub fn apply_engine_overrides(
         world.insert_resource(ScheduledBatchActions {
             pending: overrides.scheduled_actions.clone(),
         });
-    }
-
-    if let Some(preview) = overrides.preview {
-        world.resource_mut::<TimelineState>().preview = preview;
     }
 
     if overrides.batch_play {

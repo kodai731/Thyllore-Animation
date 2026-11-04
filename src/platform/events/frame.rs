@@ -104,27 +104,6 @@ unsafe fn render_frame(
                 log_error!("Failed to recreate swapchain: {:?}", e);
                 return;
             }
-            // Write swapchain_recreate marker event to exposure dump sink if it exists
-            if let Some(sink) = app
-                .data
-                .ecs_world
-                .get_resource::<crate::ecs::resource::ExposureDumpSink>()
-            {
-                let frame = app.resource::<crate::ecs::resource::FrameClock>().frame;
-                use std::fs::OpenOptions;
-                use std::io::Write;
-                if let Ok(mut file) = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&sink.path)
-                {
-                    let _ = writeln!(
-                        file,
-                        "{{\"event\":\"swapchain_recreate\",\"frame\":{}}}",
-                        frame
-                    );
-                }
-            }
         } else {
             log_error!("Frame error: {:?}", e);
         }

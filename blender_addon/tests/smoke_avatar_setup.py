@@ -241,11 +241,11 @@ def step_g_export_for_unity(arm, mesh):
     if not sidecar_file.exists():
         raise SystemExit("AVATAR_SETUP_SMOKE failed: step_g — sidecar JSON not created")
 
-    import thyllore_avatar_api as avatar_api
+    import thyllore_ml_core as tml
 
     text = sidecar_file.read_text(encoding="utf-8")
     try:
-        sidecar = avatar_api.sidecar_read(text)
+        sidecar = tml.sidecar_read(text)
     except (RuntimeError, ValueError) as e:
         raise SystemExit(f"AVATAR_SETUP_SMOKE failed: step_g — sidecar_read failed: {e}")
 

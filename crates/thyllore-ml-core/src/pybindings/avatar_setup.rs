@@ -1,7 +1,9 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pythonize::depythonize;
+use pythonize::{depythonize, PythonizeError};
 
+use super::chain_gen::pythonize_value;
+use super::error::anyhow_to_pyerr;
 use crate::avatar_setup_bridge::{
     infer_humanoid_mapping as bridge_infer_humanoid_mapping, sidecar_build as bridge_sidecar_build,
     sidecar_read as bridge_sidecar_read, spring_colliders_to_local as bridge_colliders_to_local,
@@ -10,7 +12,6 @@ use crate::avatar_setup_bridge::{
 };
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
-use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
 pub fn spring_joint_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
@@ -71,4 +72,8 @@ pub fn infer_humanoid_mapping<'py>(
 pub(super) fn bones_from_py(bones: &Bound<PyAny>) -> PyResult<Vec<BoneInput>> {
     let specs: Vec<BoneSpec> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
     Ok(specs.into_iter().map(Into::into).collect())
+}
+
+pub(super) fn depythonize_error_to_pyerr(error: PythonizeError) -> PyErr {
+    PyValueError::new_err(error.to_string())
 }

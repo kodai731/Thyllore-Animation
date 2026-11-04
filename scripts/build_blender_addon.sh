@@ -232,10 +232,7 @@ if [[ ! -d "$WHEELS_DIR" ]]; then
     exit 1
 fi
 
-case "$PRODUCT" in
-    curve-copilot)  ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core") ;;
-    avatar-setup)   ALLOWED_WHEEL_PREFIXES=("thyllore_avatar_api") ;;
-esac
+ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core")
 
 wheel_matches_platform() {
     local name="$1"

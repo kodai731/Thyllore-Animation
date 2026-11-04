@@ -5,14 +5,14 @@ import datetime
 import getpass
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
-_META_TABLE: dict = avatar_api.vrm_meta_fields() if _AVATAR_API_AVAILABLE else {"default_version": "", "fields": []}
+_META_TABLE: dict = tml.vrm_meta_fields() if _TML_AVAILABLE else {"default_version": "", "fields": []}
 
 VRM_META_FIELDS: list[dict] = _META_TABLE["fields"]
 VRM_META_DEFAULT_VERSION: str = _META_TABLE["default_version"]

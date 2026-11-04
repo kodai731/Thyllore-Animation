@@ -70,7 +70,7 @@ def _chain_origin_to_sidecar(chain) -> dict | None:
     return {
         "mesh": mesh,
         "material": chain.origin_material,
-        "attachment": chain.origin_attachment,
+        "role": chain.origin_role,
     }
 
 
@@ -124,7 +124,7 @@ def _write_chains(chains, spring_chains: list[dict]) -> None:
         origin = chain.get("origin") or {}
         item.origin_mesh = origin.get("mesh", "")
         item.origin_material = origin.get("material", "")
-        item.origin_attachment = origin.get("attachment", "")
+        item.origin_role = origin.get("role", "")
         for joint in chain["joints"]:
             _write_joint(item.joints, joint)
         for group_name in chain.get("collider_groups", []):

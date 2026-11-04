@@ -196,10 +196,7 @@ if (-not (Test-Path $WheelsDir)) {
     throw "Stage directory has no wheels/. Run scripts/collect_wheels.ps1 first."
 }
 
-$AllowedWheelPrefixes = switch ($Product) {
-    "curve-copilot"  { @("thyllore_ml_core") }
-    "avatar-setup"   { @("thyllore_avatar_api") }
-}
+$AllowedWheelPrefixes = @("thyllore_ml_core")
 
 $AllWheels = Get-ChildItem -Path $WheelsDir -Filter "*.whl"
 $KeptWheels = New-Object System.Collections.Generic.List[string]

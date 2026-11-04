@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
 from ..common.chain_bone_display import remove_chain_collections
 from ..common.chain_bones import chain_of_membership_group
@@ -36,7 +36,7 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
 def _membership_groups_of_submesh(obj, role: str, target: str) -> list[str]:
     chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
-    return [chains[name] for name in avatar_api.submesh_chain_names(target, list(chains))]
+    return [chains[name] for name in tml.submesh_chain_names(role, target, list(chains))]
 
 
 class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
@@ -52,7 +52,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -62,7 +62,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         settings = arm.data.thyllore_spring
-        origin = {"mesh": obj.name, "material": self.material}
+        origin = {"mesh": obj.name, "material": self.material, "role": role}
         chain_bones = generated_chain_bones(settings, origin)
         joint_bones = [bone for bones in chain_bones.values() for bone in bones]
 

@@ -46,7 +46,6 @@ except ImportError:
 
 
 if _BPY_AVAILABLE:
-    import importlib  # noqa: E402
     import os  # noqa: E402
 
     from . import _debuglog  # noqa: E402
@@ -109,24 +108,24 @@ if _BPY_AVAILABLE:
         )
 
     def _check_wheel_abi() -> tuple[bool, str]:
-        """Verify the ABI marker of both ``thyllore_ml_core`` and ``thyllore_avatar_api`` wheels.
+        """Verify the thyllore_ml_core wheel's ``__abi_marker__``.
 
-        Wheel absence is NOT treated as ABI failure -- an absent wheel simply means its features
-        are unavailable (curve_copilot grays out via tml.capabilities(), avatar setup is skipped).
+        Wheel absence is NOT treated as ABI failure -- the curve_copilot
+        operator will simply gray-out via tml.capabilities().
         """
-        for module_name in ("thyllore_ml_core", "thyllore_avatar_api"):
-            try:
-                mod = importlib.import_module(module_name)
-            except ImportError:
-                continue
-            actual = getattr(mod, "__abi_marker__", 0)
-            if actual != EXPECTED_ABI_MARKER:
-                return (
-                    False,
-                    f"{module_name} ABI mismatch: addon expects "
-                    f"{EXPECTED_ABI_MARKER}, wheel provides {actual}. "
-                    f"Please update the addon.",
-                )
+        try:
+            import thyllore_ml_core as tml  # type: ignore
+        except ImportError:
+            return True, ""
+
+        actual = getattr(tml, "__abi_marker__", 0)
+        if actual != EXPECTED_ABI_MARKER:
+            return (
+                False,
+                f"thyllore_ml_core ABI mismatch: addon expects "
+                f"{EXPECTED_ABI_MARKER}, wheel provides {actual}. "
+                f"Please update the addon.",
+            )
         return True, ""
 
     def register() -> None:

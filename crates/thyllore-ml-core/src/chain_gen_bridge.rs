@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 
 use cgmath::Vector3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    attachment_or_default, chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams,
-    ChainGenSettings, GeneratedChain, GivenChain, InfluenceTarget, RootAttachment, SkinSurface,
-    VertexInfluences, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
+    chain_column, chain_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
+    ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
+    CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
 };
@@ -22,34 +22,6 @@ use crate::avatar_setup_bridge::BoneSpec;
 use crate::collider_bridge::FitSkin;
 use crate::param_rows::{param_rows, ParamRow};
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GenerateChainsRequest {
-    pub positions: Vec<[f32; 3]>,
-    pub triangles: Vec<[u32; 3]>,
-    pub root_position: [f32; 3],
-    pub target: String,
-    pub settings: BTreeMap<String, f32>,
-    #[serde(default)]
-    pub skins: Vec<FitSkin>,
-    #[serde(default)]
-    pub root_bone: usize,
-    #[serde(default)]
-    pub tex_coords: Vec<[f32; 2]>,
-    #[serde(default)]
-    pub covered_vertices: Vec<u32>,
-    #[serde(default)]
-    pub body_colliders: Vec<BodyColliderIn>,
-    #[serde(default)]
-    pub humanoid_bones: BTreeMap<String, usize>,
-    #[serde(default)]
-    pub bones: Vec<BoneSpec>,
-    #[serde(default)]
-    pub given_chains: Vec<GivenChainIn>,
-    #[serde(default)]
-    pub attachment: Option<RootAttachment>,
-}
-
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
     pub chains: Vec<ChainOut>,
@@ -60,7 +32,6 @@ pub struct ChainGenOutput {
     pub covered: Vec<u32>,
     /// The ring a garment hangs from and the bone that supports it, when the body supports one
     pub support: Option<SupportOut>,
-    pub attachment: RootAttachment,
 }
 
 /// A sidecar collider in model axes relative to its bone's rest head; `tail` is absent for a sphere.
@@ -177,9 +148,12 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
     Ok(settings)
 }
 
-pub fn parse_attachment(s: &str) -> anyhow::Result<RootAttachment> {
-    serde_json::from_value::<RootAttachment>(serde_json::Value::String(s.to_owned()))
-        .map_err(|_| anyhow::anyhow!("attachment must be \"cap\" or \"ring\", got \"{s}\""))
+pub(crate) fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
+    match role {
+        "hair" => Ok(ChainRole::Hair),
+        "garment" | "skirt" => Ok(ChainRole::Garment),
+        _ => anyhow::bail!("chain generation role must be \"hair\" or \"skirt\", got \"{role}\""),
+    }
 }
 
 fn vector3_to_array(v: Vector3<f32>) -> [f32; 3] {
@@ -246,11 +220,14 @@ pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<Give
         .collect()
 }
 
-/// The names among `candidates` that `generate_chains` would give a chain of the submesh `target`.
-pub fn submesh_chain_names(target: &str, candidates: &[String]) -> anyhow::Result<Vec<String>> {
+/// The names among `candidates` that `generate_chains` would give a chain of the submesh `(role, target)`.
+pub fn submesh_chain_names(
+    role: &str,
+    target: &str,
+    candidates: &[String],
+) -> anyhow::Result<Vec<String>> {
     let params = ChainGenParams {
-        root: None,
-        attachment: RootAttachment::Ring,
+        role: role_from_str(role)?,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings: ChainGenSettings::default(),
     };
@@ -328,36 +305,33 @@ pub fn run_chain_gen(
     positions: &[[f32; 3]],
     triangles: &[[u32; 3]],
     root_position: [f32; 3],
+    role: &str,
     target: &str,
     settings: ChainGenSettings,
-    skin_attachment: SkinAttachment,
-    attachment: Option<RootAttachment>,
+    attachment: SkinAttachment,
     tex_coords: &[[f32; 2]],
     given: &[GivenChainIn],
 ) -> anyhow::Result<ChainGenOutput> {
-    let root = role_of_bone(skin_attachment.roles, skin_attachment.root_bone as BoneId);
-    let resolved_attachment = attachment_or_default(root, attachment);
     let params = ChainGenParams {
-        root,
-        attachment: resolved_attachment,
+        role: role_from_str(role)?,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings,
     };
     let given_chains = given_chains(given, &params);
     let positions_vec = to_vectors(positions);
-    let skins = attachment_surfaces(&skin_attachment);
+    let skins = attachment_surfaces(&attachment);
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
         root_position: Vector3::from(root_position),
-        root_bone: skin_attachment.root_bone as BoneId,
+        root_bone: attachment.root_bone as BoneId,
         skins: &skins,
         tex_coords,
-        covered_vertices: skin_attachment.covered_vertices,
+        covered_vertices: attachment.covered_vertices,
         given_chains: &given_chains,
     };
 
-    let head_capsule = root_head_capsule(&input, &params).map(|capsule| CapsuleOut {
+    let head_capsule = hair_head_capsule(&input, &params).map(|capsule| CapsuleOut {
         bottom: vector3_to_array(capsule.bottom),
         top: vector3_to_array(capsule.top),
         radius: capsule.radius,
@@ -377,7 +351,6 @@ pub fn run_chain_gen(
             boundary_height: support.boundary_height,
             bone: support.bone,
         }),
-        attachment: resolved_attachment,
     })
 }
 
@@ -414,20 +387,16 @@ mod tests {
             &positions,
             &triangles,
             [0.0, 0.0, 0.0],
+            "hair",
             "strip/hair",
             settings,
             SkinAttachment {
                 skins: std::slice::from_ref(&head),
                 body_colliders: &[],
-                roles: &[RoleBone {
-                    role: HumanoidRole::Head,
-                    bone: 0,
-                    head: [0.0, 0.0, 0.0].into(),
-                }],
+                roles: &[],
                 root_bone: 0,
                 covered_vertices: &[],
             },
-            Some(RootAttachment::Cap),
             &[],
             &[],
         )
@@ -468,20 +437,5 @@ mod tests {
         let joint_count = params.iter().find(|p| p.name == "joint_count").unwrap();
         assert_eq!(joint_count.default, ParamDefault::Scalar(4.0));
         assert_eq!(joint_count.label, "Joint Count");
-    }
-
-    #[test]
-    fn attachment_defaults_from_the_root_role() {
-        let resolved = attachment_or_default(Some(HumanoidRole::Head), None);
-        assert_eq!(resolved, RootAttachment::Cap);
-
-        let resolved = attachment_or_default(None, None);
-        assert_eq!(resolved, RootAttachment::Ring);
-
-        let resolved = attachment_or_default(Some(HumanoidRole::Head), Some(RootAttachment::Ring));
-        assert_eq!(resolved, RootAttachment::Ring);
-
-        let resolved = attachment_or_default(Some(HumanoidRole::Hips), None);
-        assert_eq!(resolved, RootAttachment::Ring);
     }
 }

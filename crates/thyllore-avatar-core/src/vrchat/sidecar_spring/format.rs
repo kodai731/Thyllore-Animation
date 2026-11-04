@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use thyllore_anim_core::spring_bone::{
-    JointForce, RestRelativeJointForce, RootAttachment, VrmJointForce,
+    ChainRole, JointForce, RestRelativeJointForce, VrmJointForce,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -72,54 +72,11 @@ fn enabled_by_default() -> bool {
 
 /// The submesh a generated chain was placed on; absent for hand-authored chains.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(try_from = "RawSidecarChainOrigin")]
 pub struct SidecarChainOrigin {
     pub mesh: String,
     #[serde(default)]
     pub material: Option<String>,
-    pub attachment: RootAttachment,
-}
-
-#[derive(Deserialize)]
-struct RawSidecarChainOrigin {
-    mesh: String,
-    #[serde(default)]
-    material: Option<String>,
-    attachment: Option<RootAttachment>,
-    role: Option<LegacyRole>,
-}
-
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum LegacyRole {
-    Hair,
-    Skirt,
-    Garment,
-}
-
-impl LegacyRole {
-    fn attachment(self) -> RootAttachment {
-        match self {
-            LegacyRole::Hair => RootAttachment::Cap,
-            LegacyRole::Skirt | LegacyRole::Garment => RootAttachment::Ring,
-        }
-    }
-}
-
-impl TryFrom<RawSidecarChainOrigin> for SidecarChainOrigin {
-    type Error = String;
-
-    fn try_from(raw: RawSidecarChainOrigin) -> Result<Self, Self::Error> {
-        let attachment = raw
-            .attachment
-            .or_else(|| raw.role.map(LegacyRole::attachment))
-            .ok_or_else(|| format!("chain origin on {} has no attachment", raw.mesh))?;
-        Ok(SidecarChainOrigin {
-            mesh: raw.mesh,
-            material: raw.material,
-            attachment,
-        })
-    }
+    pub role: ChainRole,
 }
 
 /// The joint's force model and its two magnitudes in that model's units.

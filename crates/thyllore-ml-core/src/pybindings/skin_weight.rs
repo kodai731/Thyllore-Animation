@@ -6,7 +6,8 @@ use thyllore_math_core::{
     WeightedSurface,
 };
 
-use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr};
+use super::avatar_setup::depythonize_error_to_pyerr;
+use super::error::anyhow_to_pyerr;
 
 #[derive(serde::Deserialize)]
 struct SurfaceIn {

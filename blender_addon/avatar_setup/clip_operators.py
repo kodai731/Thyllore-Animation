@@ -9,12 +9,12 @@ from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Quaternion, Vector
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
 from .. import _debuglog
 from ..common.coordinates import blender_frame_to_engine_matrix, engine_metres_to_blender
@@ -68,7 +68,7 @@ def bake_clip_onto_armature(context, arm, clip_text: str) -> dict:
     """Bake clip_text onto arm as an action named after the clip; returns the wheel's baked clip."""
     scene = context.scene
     scale_length = scene.unit_settings.scale_length
-    baked = avatar_api.bake_clip_file(armature_bone_specs(context, arm), clip_text, scene_fps(scene))
+    baked = tml.bake_clip_file(armature_bone_specs(context, arm), clip_text, scene_fps(scene))
 
     _replace_action(arm, baked["name"])
     for track in baked["bone_rotations"]:
@@ -98,7 +98,7 @@ class THYLLORE_OT_LoadEngineClip(bpy.types.Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)

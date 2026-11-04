@@ -1,10 +1,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pythonize::{depythonize, pythonize};
-
-use super::avatar_setup::depythonize_error_to_pyerr;
-use super::error::anyhow_to_pyerr;
+use pythonize::depythonize;
 use std::collections::BTreeMap;
+use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 use crate::avatar_setup_bridge::BoneSpec;
 use crate::chain_gen_bridge::{
@@ -13,15 +11,6 @@ use crate::chain_gen_bridge::{
     GivenChainIn, SkinAttachment,
 };
 use crate::collider_bridge::FitSkin;
-
-pub(super) fn pythonize_value<'py, T: serde::Serialize>(
-    py: Python<'py>,
-    value: &T,
-) -> PyResult<Bound<'py, PyAny>> {
-    pythonize(py, value).map_err(|e: pythonize::PythonizeError| {
-        pyo3::exceptions::PyValueError::new_err(e.to_string())
-    })
-}
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.
 #[pyfunction]

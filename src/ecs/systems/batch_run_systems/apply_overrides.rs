@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
-    GpuTimingsSink, ModelState, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
+    BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock, GpuTimingsSink, ModelState,
+    PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
@@ -32,9 +32,6 @@ pub fn apply_engine_overrides(
     }
     if overrides.scene_path.is_some() {
         request_scene_model_load(world);
-    }
-    if let Some(pixel) = overrides.pick_pixel {
-        world.insert_resource(BatchPickRequest::new(pixel));
     }
     if !overrides.anim_edits.is_empty() {
         if overrides.scene_path.is_some() {

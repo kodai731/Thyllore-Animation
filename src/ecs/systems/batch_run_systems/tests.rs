@@ -20,25 +20,6 @@ use crate::hooks::effect_spawn::EffectSpawnHooks;
 use crate::scene::test_support::ProbeOwner;
 
 #[test]
-fn pick_pixel_is_absent_without_the_flag() {
-    assert_eq!(pick_pixel_resolve_from_args(&args(&["bin"])).unwrap(), None);
-}
-
-#[test]
-fn pick_pixel_parses_a_pixel_pair() {
-    assert_eq!(
-        pick_pixel_resolve_from_args(&args(&["bin", "--batch-pick", "947,150"])).unwrap(),
-        Some((947, 150))
-    );
-}
-
-#[test]
-fn pick_pixel_rejects_a_malformed_pair() {
-    assert!(pick_pixel_resolve_from_args(&args(&["bin", "--batch-pick", "947"])).is_err());
-    assert!(pick_pixel_resolve_from_args(&args(&["bin", "--batch-pick", "a,b"])).is_err());
-}
-
-#[test]
 fn resolve_returns_none_without_flag() {
     let resolved = batch_run_resolve_from_args(&args(&["thyllore-animation"])).unwrap();
     assert!(resolved.is_none());

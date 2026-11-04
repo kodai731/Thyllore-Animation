@@ -36,7 +36,7 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
 def _membership_groups_of_submesh(obj, role: str, target: str) -> list[str]:
     chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
-    return [chains[name] for name in tml.submesh_chain_names(role, target, list(chains))]
+    return [chains[name] for name in tml.submesh_chain_names(target, list(chains))]
 
 
 class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
@@ -62,7 +62,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         settings = arm.data.thyllore_spring
-        origin = {"mesh": obj.name, "material": self.material, "role": role}
+        origin = {"mesh": obj.name, "material": self.material}
         chain_bones = generated_chain_bones(settings, origin)
         joint_bones = [bone for bones in chain_bones.values() for bone in bones]
 

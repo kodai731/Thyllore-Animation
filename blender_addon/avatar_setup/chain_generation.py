@@ -39,7 +39,7 @@ from .chain_bone_edit import (
     write_weights,
 )
 from .chain_inputs import (
-    DEFAULT_ROOT_BY_ROLE,
+    _chain_roles,
     body_collider_inputs,
     engine_point,
     given_chains,
@@ -86,7 +86,7 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     generation = settings.chain_generation
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
-    root_name = avatar_api.resolve_root_bone(fit_bones, generation.root_bone.strip() or DEFAULT_ROOT_BY_ROLE[role])
+    root_name = avatar_api.resolve_root_bone(fit_bones, generation.root_bone.strip() or _chain_roles()[role])
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
     registered = generated_chain_bones(settings, {"mesh": obj.name, "material": material})

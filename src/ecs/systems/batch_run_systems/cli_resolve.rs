@@ -32,7 +32,6 @@ pub struct EngineCliOverrides {
     pub anim_dump_tracks: bool,
     pub debug_actions: Vec<Box<dyn BatchAction>>,
     pub scheduled_actions: Vec<ScheduledBatchAction>,
-    pub preview: Option<crate::ecs::resource::ClipPreview>,
     pub anim_debug_dump: Option<AnimDebugDumpRequest>,
     pub export_fbx_path: Option<String>,
 }
@@ -51,7 +50,6 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         anim_dump_tracks: args.iter().any(|a| a == BATCH_ANIM_DUMP_TRACKS_FLAG),
         debug_actions: debug_actions_resolve_from_args(args)?,
         scheduled_actions: scheduled_actions_resolve_from_args(args)?,
-        preview: preview_resolve_from_args(args)?,
         anim_debug_dump: anim_debug_dump_resolve_from_args(args)?,
         export_fbx_path: flag_value_resolve_from_args(args, BATCH_EXPORT_FBX_FLAG)?,
     })
@@ -240,22 +238,6 @@ pub fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)
     Ok(Some((x, y)))
 }
 
-pub fn preview_resolve_from_args(
-    args: &[String],
-) -> Result<Option<crate::ecs::resource::ClipPreview>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_PREVIEW_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_PREVIEW_FLAG} requires <solo|mix>");
-    };
-    match value.as_str() {
-        "solo" => Ok(Some(crate::ecs::resource::ClipPreview::Solo)),
-        "mix" => Ok(Some(crate::ecs::resource::ClipPreview::Mix)),
-        _ => bail!("{BATCH_PREVIEW_FLAG} expects 'solo' or 'mix', got '{value}'"),
-    }
-}
-
 pub fn anim_debug_dump_resolve_from_args(args: &[String]) -> Result<Option<AnimDebugDumpRequest>> {
     let Some(position) = args
         .iter()
@@ -288,27 +270,6 @@ pub fn anim_debug_dump_resolve_from_args(args: &[String]) -> Result<Option<AnimD
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn batch_preview_parses_mix() {
-        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("mix")];
-        let result = preview_resolve_from_args(&args).unwrap();
-        assert_eq!(result, Some(crate::ecs::resource::ClipPreview::Mix));
-    }
-
-    #[test]
-    fn batch_preview_rejects_unknown() {
-        let args: Vec<String> = vec![String::from("--batch-preview"), String::from("foo")];
-        let result = preview_resolve_from_args(&args);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn batch_preview_absent_is_none() {
-        let args: Vec<String> = vec![];
-        let result = preview_resolve_from_args(&args).unwrap();
-        assert_eq!(result, None);
-    }
 
     #[test]
     fn anim_debug_dump_parses_path_and_times() {

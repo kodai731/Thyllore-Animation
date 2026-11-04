@@ -14,7 +14,6 @@ pub(super) const BATCH_SCENE_FLAG: &str = "--batch-scene";
 pub(super) const BATCH_PLAY_FLAG: &str = "--batch-play";
 pub(super) const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
 pub(super) const BATCH_ANIM_DUMP_TRACKS_FLAG: &str = "--batch-anim-dump-tracks";
-pub(super) const BATCH_PREVIEW_FLAG: &str = "--batch-preview";
 pub(super) const BATCH_ANIM_DEBUG_DUMP_FLAG: &str = "--batch-anim-debug-dump";
 pub(super) const BATCH_EXPORT_FBX_FLAG: &str = "--batch-export-fbx";
 

@@ -14,7 +14,7 @@ from .chain_inputs import generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain, simulated_joints
 from ..common.vrm_export import meta_fields_of_kind
-from .properties import CHAIN_GEN_UI_PARAMS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
+from .properties import CHAIN_GEN_UI_PARAMS, HIDDEN_MASK_DEFAULTS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
 
@@ -362,7 +362,7 @@ class THYLLORE_UL_SubmeshRoles(UIList):
 
 
 class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
-    """Submeshes sub-panel: one role list per bound mesh, guess/hide buttons, hidden triangle counts."""
+    """Submeshes sub-panel: one role list per bound mesh, the guess button, the hidden skin toggle and its parameters."""
 
     bl_label = "Submeshes"
     bl_idname = "THYLLORE_PT_avatar_setup_submeshes"
@@ -383,7 +383,12 @@ class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
         for mesh_obj in meshes:
             self._draw_mesh_roles(layout, mesh_obj)
         layout.operator("thyllore.guess_submesh_roles")
-        layout.operator("thyllore.hide_covered_skin")
+
+        mask = arm.data.thyllore_hidden_mask
+        layout.prop(mask, "enabled", toggle=True)
+        column = layout.column(align=True)
+        for name in HIDDEN_MASK_DEFAULTS:
+            column.prop(mask, name)
 
     @staticmethod
     def _draw_mesh_roles(layout, mesh_obj) -> None:

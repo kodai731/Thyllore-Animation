@@ -294,10 +294,8 @@ impl RenderPassNode for WaterTraceNode {
             .view
             .invert()
             .unwrap_or_else(cgmath::Matrix4::identity);
-        let light_position = ctx
-            .world
-            .resource::<crate::ecs::resource::LightState>()
-            .light_position;
+        let light_position = crate::ecs::component::light_position(ctx.world)
+            .unwrap_or(crate::ecs::component::DEFAULT_LIGHT_POSITION);
         let trace_push = TracePush {
             inv_view_proj,
             camera_pos: [

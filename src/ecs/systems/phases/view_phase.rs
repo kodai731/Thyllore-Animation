@@ -1,4 +1,4 @@
-use cgmath::Vector2;
+use cgmath::{Vector2, Vector3};
 
 use crate::ecs::context::EcsContext;
 use crate::ecs::systems::camera_systems::{
@@ -22,7 +22,8 @@ pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 
-    let light_position = ctx.light_state().light_position;
+    let light_position =
+        crate::ecs::component::light_position(&ctx.world).unwrap_or(Vector3::new(1.0, 1.0, 2.0));
     gizmo_sync_position(&mut ctx.light_gizmo_mut().position, light_position);
 
     {

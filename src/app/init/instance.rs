@@ -10,8 +10,9 @@ use crate::ecs::systems::{
     gizmo_create_static_buffers,
 };
 use crate::ecs::{
-    ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
-    ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
+    light_position, ClipLibrary, EntityIcon, GpuDescriptors, HierarchyState, Light,
+    MaterialRegistry, MeshAssets, ModelState, NodeAssets, PipelineManager, SceneState,
+    TimelineState, Transform, DEFAULT_LIGHT_POSITION,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -323,7 +324,20 @@ impl App {
 
     fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
         data.ecs_world.insert_resource(Camera::default());
-        data.ecs_world.insert_resource(LightState::default());
+        let light_translation = DEFAULT_LIGHT_POSITION;
+        let light_entity = data
+            .ecs_world
+            .entity()
+            .with_name("Light")
+            .with_transform(Transform {
+                translation: light_translation,
+                ..Default::default()
+            })
+            .with_visible(true)
+            .with_editor_display(EntityIcon::Light, false)
+            .build();
+        data.ecs_world
+            .insert_component(light_entity, Light::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());
         data.ecs_world
@@ -691,7 +705,7 @@ impl App {
             .expect("Failed to create gizmo buffers");
         }
 
-        let light_position = data.ecs_world.resource::<LightState>().light_position;
+        let light_position = light_position(&data.ecs_world).unwrap_or(DEFAULT_LIGHT_POSITION);
         let mut light_gizmo_data = create_light_gizmo(light_position);
         light_gizmo_data.render_info.pipeline_id = Some(pipeline_ids.gizmo);
         light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();

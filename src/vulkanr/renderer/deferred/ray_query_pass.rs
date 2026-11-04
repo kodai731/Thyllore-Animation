@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::asset::AssetStorage;
+use crate::ecs::component::light;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
@@ -27,8 +28,8 @@ pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Ray Query descriptor set not initialized"))?;
 
-    let normal_offset = app
-        .resource::<crate::ecs::resource::LightState>()
+    let normal_offset = light(&app.data.ecs_world)
+        .unwrap_or_default()
         .shadow_normal_offset;
 
     let ctx = crate::app::build_frame_render_context(app, 0);

@@ -92,6 +92,14 @@ def test_settings_table_lists_defaults(avatar_api):
     assert params[0]["label"] == "Joint Count"
 
 
+def test_chain_roles_lists_generatable_roles_with_their_default_root(avatar_api):
+    roles = avatar_api.chain_roles()
+
+    assert len(roles) == 2
+    assert roles[0] == {"role": "garment", "default_root": "Hips"}
+    assert roles[1] == {"role": "hair", "default_root": "Head"}
+
+
 def test_unknown_setting_is_rejected(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
 

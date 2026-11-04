@@ -11,6 +11,29 @@ use crate::chain_gen_bridge::{
     GivenChainIn, SkinAttachment,
 };
 use crate::collider_bridge::FitSkin;
+use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
+
+#[derive(serde::Serialize)]
+struct ChainRoleEntry {
+    role: SubmeshRole,
+    default_root: &'static str,
+}
+
+#[pyfunction]
+pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let entries: Vec<ChainRoleEntry> = SubmeshRole::ALL
+        .into_iter()
+        .filter_map(|role| {
+            let root = default_root_of_submesh(role)?;
+            Some(ChainRoleEntry {
+                role,
+                default_root: root.unity_name(),
+            })
+        })
+        .collect();
+    pythonize_value(py, &entries)
+}
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.
 #[pyfunction]

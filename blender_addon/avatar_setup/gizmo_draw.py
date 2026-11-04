@@ -23,7 +23,6 @@ from ..common.spring_properties import spring_settings_to_edit
 from .operators import armature_bone_specs, target_armature
 
 _handle: int | None = None
-INACTIVE_ALPHA = 0.35
 ACTIVE_ALPHA = 1.0
 
 
@@ -61,7 +60,7 @@ def _draw_chain_radii(context, shader, arm, settings):
 
     inactive = [chain for chain in settings.chains if chain.name not in highlighted]
     active = [chain for chain in settings.chains if chain.name in highlighted]
-    _draw_segments(shader, color + (INACTIVE_ALPHA,), _radius_segments(inactive, arm, scale_length))
+    _draw_segments(shader, color + (_STYLE["inactive_alpha"],), _radius_segments(inactive, arm, scale_length))
     _draw_segments(shader, color + (ACTIVE_ALPHA,), _radius_segments(active, arm, scale_length))
 
 
@@ -94,7 +93,7 @@ def _draw_colliders(shader, arm, settings):
 
     inactive = [c for i, c in enumerate(settings.colliders) if i != selected_index]
     selected = [c for i, c in enumerate(settings.colliders) if i == selected_index]
-    _draw_segments(shader, color + (INACTIVE_ALPHA,), _collider_segments(inactive, arm))
+    _draw_segments(shader, color + (_STYLE["inactive_alpha"],), _collider_segments(inactive, arm))
     _draw_segments(shader, color + (ACTIVE_ALPHA,), _collider_segments(selected, arm))
 
 

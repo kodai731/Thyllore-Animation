@@ -133,13 +133,14 @@ pub fn chains_with_radius(
 #[pyfunction]
 pub fn spring_gizmo_style<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     use thyllore_anim_core::spring_bone::{
-        CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER,
+        CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER, COLOR_INACTIVE_ALPHA,
     };
     let style = SpringGizmoStyle {
         chain_color: COLOR_CHAIN,
         collider_color: COLOR_COLLIDER,
         circle_segments: CIRCLE_SEGMENTS,
         chain_radius_segments: CHAIN_RADIUS_SEGMENTS,
+        inactive_alpha: COLOR_INACTIVE_ALPHA,
     };
     pythonize_value(py, &style)
 }
@@ -150,6 +151,7 @@ struct SpringGizmoStyle {
     collider_color: [f32; 3],
     circle_segments: u32,
     chain_radius_segments: u32,
+    inactive_alpha: f32,
 }
 
 #[pyfunction]

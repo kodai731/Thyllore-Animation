@@ -16,17 +16,19 @@ from ..common.spring_properties import humanoid_overrides_to_dict, spring_settin
 from ..common.submesh_mask import material_triangles
 from .operators import bound_meshes
 
-GENERATABLE_ROLES = ("hair", "garment")
-DEFAULT_ROOT_BY_ROLE = {"hair": "Head", "garment": "Hips"}
+def _chain_roles() -> dict[str, str]:
+    """{role: default_root} from the wheel's chain_roles()."""
+    return {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()}
 
 
 def generatable_submeshes(arm) -> list[tuple[object, object]]:
     """(mesh object, role item) pairs whose submesh role can grow chain bones."""
+    roles = set(_chain_roles().keys())
     return [
         (mesh_obj, item)
         for mesh_obj in bound_meshes(arm)
         for item in mesh_obj.thyllore_submesh.roles
-        if item.role in GENERATABLE_ROLES
+        if item.role in roles
     ]
 
 
@@ -43,7 +45,7 @@ def resolve_submesh(arm, mesh_name: str, material: str):
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
     role_item = next((item for item in obj.thyllore_submesh.roles if item.material == material), None)
-    if role_item is None or role_item.role not in GENERATABLE_ROLES:
+    if role_item is None or role_item.role not in set(_chain_roles().keys()):
         raise ValueError(f"{material!r} on {obj.name!r} is not a hair or garment submesh")
     material_index = _material_slot_index(obj, material)
     if material_index is None:

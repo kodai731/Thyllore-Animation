@@ -310,10 +310,10 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
             layout, "THYLLORE_UL_SpringColliders", settings, "colliders", "active_collider_index"
         )
         row = layout.row(align=True)
-        op = row.operator("thyllore.add_collider")
+        op = row.operator("thyllore.add_collider", text="Add Sphere", icon="SPHERE")
         op.shape = "sphere"
         op.radius = 0.05
-        op = row.operator("thyllore.add_collider")
+        op = row.operator("thyllore.add_collider", text="Add Capsule", icon="META_CAPSULE")
         op.shape = "capsule"
         op.radius = 0.05
         layout.operator("thyllore.remove_collider")

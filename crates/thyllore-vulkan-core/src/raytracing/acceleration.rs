@@ -125,21 +125,10 @@ unsafe fn execute_as_build(
     build_info: &vk::AccelerationStructureBuildGeometryInfoKHRBuilder,
     primitive_count: u32,
 ) -> Result<()> {
-    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-
-    record_as_build(
-        &rrdevice.device,
-        command_buffer,
-        build_info,
-        primitive_count,
-    );
-
-    end_single_time_commands(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        command_buffer,
-    )
+    with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+        record_as_build(&rrdevice.device, cmd, build_info, primitive_count);
+        Ok(())
+    })
 }
 
 unsafe fn create_acceleration_structure_with_buffer(
@@ -611,26 +600,19 @@ impl RRAccelerationStructure {
         index_buffer: &vk::Buffer,
         index_count: u32,
     ) -> Result<()> {
-        let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-
-        Self::record_blas_update(
-            instance,
-            rrdevice,
-            blas,
-            vertex_buffer,
-            vertex_count,
-            vertex_stride,
-            index_buffer,
-            index_count,
-            command_buffer,
-        )?;
-
-        end_single_time_commands(
-            rrdevice,
-            rrdevice.graphics_queue,
-            rrcommand_pool.command_pool,
-            command_buffer,
-        )
+        with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+            Self::record_blas_update(
+                instance,
+                rrdevice,
+                blas,
+                vertex_buffer,
+                vertex_count,
+                vertex_stride,
+                index_buffer,
+                index_count,
+                cmd,
+            )
+        })
     }
 
     pub unsafe fn record_blas_update(
@@ -731,23 +713,9 @@ impl RRAccelerationStructure {
             return Ok(());
         }
 
-        let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-
-        Self::record_tlas_update(
-            instance,
-            rrdevice,
-            tlas,
-            blas_list,
-            procedural_blas,
-            command_buffer,
-        )?;
-
-        end_single_time_commands(
-            rrdevice,
-            rrdevice.graphics_queue,
-            rrcommand_pool.command_pool,
-            command_buffer,
-        )
+        with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+            Self::record_tlas_update(instance, rrdevice, tlas, blas_list, procedural_blas, cmd)
+        })
     }
 
     pub unsafe fn record_tlas_update(

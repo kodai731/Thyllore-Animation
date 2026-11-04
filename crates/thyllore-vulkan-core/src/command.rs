@@ -44,6 +44,32 @@ pub unsafe fn end_single_time_commands(
     Ok(())
 }
 
+pub unsafe fn with_single_time_commands<T>(
+    rrdevice: &RRDevice,
+    command_pool: vk::CommandPool,
+    record: impl FnOnce(vk::CommandBuffer) -> Result<T>,
+) -> Result<T> {
+    let command_buffer = begin_single_time_commands(rrdevice, command_pool)?;
+    match record(command_buffer) {
+        Ok(value) => {
+            end_single_time_commands(
+                rrdevice,
+                rrdevice.graphics_queue,
+                command_pool,
+                command_buffer,
+            )?;
+            Ok(value)
+        }
+        Err(e) => {
+            rrdevice.device.end_command_buffer(command_buffer)?;
+            rrdevice
+                .device
+                .free_command_buffers(command_pool, &[command_buffer]);
+            Err(e)
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RRCommandPool {
     pub command_pool: vk::CommandPool, // Command pools manage the memory that is used to store the buffers

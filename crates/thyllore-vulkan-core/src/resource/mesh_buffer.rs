@@ -5,7 +5,7 @@ use anyhow::Result;
 use cgmath::Vector4;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::command::RRCommandPool;
+use crate::command::{with_single_time_commands, RRCommandPool};
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
@@ -56,21 +56,43 @@ impl Default for MeshBuffer {
 }
 
 impl MeshBuffer {
+    pub unsafe fn stage_vertices(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+    ) -> Result<vk::DeviceSize> {
+        let vertices = &self.vertex_data.vertices;
+        let size = (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize;
+        self.vertex_buffer.stage(
+            instance,
+            rrdevice,
+            size,
+            vertices.as_ptr() as *const c_void,
+            vertices.len(),
+        )?;
+        Ok(size)
+    }
+
+    pub unsafe fn record_vertex_copy(
+        &self,
+        device: &vulkanalia::Device,
+        command_buffer: vk::CommandBuffer,
+        size: vk::DeviceSize,
+    ) {
+        self.vertex_buffer.record_copy(device, command_buffer, size);
+    }
+
     pub unsafe fn upload_vertices(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
         command_pool: &RRCommandPool,
     ) -> Result<()> {
-        let vertices = &self.vertex_data.vertices;
-        self.vertex_buffer.update(
-            instance,
-            rrdevice,
-            command_pool,
-            (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
-            vertices.as_ptr() as *const c_void,
-            vertices.len(),
-        )
+        let size = self.stage_vertices(instance, rrdevice)?;
+        with_single_time_commands(rrdevice, command_pool.command_pool, |cmd| {
+            self.record_vertex_copy(&rrdevice.device, cmd, size);
+            Ok(())
+        })
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {

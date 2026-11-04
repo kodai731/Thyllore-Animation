@@ -295,17 +295,16 @@ impl Drop for RRVertexBuffer {
 }
 
 impl RRVertexBuffer {
-    pub unsafe fn update(
+    pub unsafe fn stage(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        rr_command_pool: &RRCommandPool,
         size: u64,
         data: *const c_void,
         length: usize,
     ) -> Result<()> {
         // Allocate or grow staging buffer if needed
-        let (staging_buffer, staging_memory) =
+        let staging_memory =
             if self.staging_buffer == vk::Buffer::null() || size > self.staging_capacity {
                 // Free old staging buffer if it exists
                 if self.staging_buffer != vk::Buffer::null() {
@@ -325,9 +324,9 @@ impl RRVertexBuffer {
                 self.staging_buffer = buf;
                 self.staging_memory = mem;
                 self.staging_capacity = new_capacity;
-                (buf, mem)
+                mem
             } else {
-                (self.staging_buffer, self.staging_memory)
+                self.staging_memory
             };
 
         let map_memory =
@@ -338,11 +337,35 @@ impl RRVertexBuffer {
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_memory);
 
-        copy_buffer(rrdevice, rr_command_pool, staging_buffer, self.buffer, size)?;
-
         self.vertices = length as u32;
 
         Ok(())
+    }
+
+    pub unsafe fn record_copy(
+        &self,
+        device: &vulkanalia::Device,
+        command_buffer: vk::CommandBuffer,
+        size: vk::DeviceSize,
+    ) {
+        let regions = vk::BufferCopy::builder().size(size);
+        device.cmd_copy_buffer(command_buffer, self.staging_buffer, self.buffer, &[regions]);
+    }
+
+    pub unsafe fn update(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rr_command_pool: &RRCommandPool,
+        size: u64,
+        data: *const c_void,
+        length: usize,
+    ) -> Result<()> {
+        self.stage(instance, rrdevice, size, data, length)?;
+        with_single_time_commands(rrdevice, rr_command_pool.command_pool, |cmd| {
+            self.record_copy(&rrdevice.device, cmd, size);
+            Ok(())
+        })
     }
 }
 
@@ -462,19 +485,13 @@ pub unsafe fn copy_buffer(
     destination: vk::Buffer,
     size: vk::DeviceSize,
 ) -> Result<()> {
-    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-    let regions = vk::BufferCopy::builder().size(size);
-    rrdevice
-        .device
-        .cmd_copy_buffer(command_buffer, source, destination, &[regions]);
-    end_single_time_commands(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        command_buffer,
-    )?;
-
-    Ok(())
+    with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+        let regions = vk::BufferCopy::builder().size(size);
+        rrdevice
+            .device
+            .cmd_copy_buffer(cmd, source, destination, &[regions]);
+        Ok(())
+    })
 }
 
 pub unsafe fn copy_buffer_to_image(

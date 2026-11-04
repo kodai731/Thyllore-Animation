@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
 from ..common.armature import armature_of
 from ..common.spring_properties import (
@@ -60,12 +60,12 @@ def target_chain_names(context, arm, settings, spring, bones, scope):
     if bone_name is not None:
         chain = chain_with_joint(settings, bone_name)
         if chain is not None:
-            return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
-        return avatar_api.chains_under_bone(spring, bones, bone_name)
+            return tml.chains_in_scope(spring, bones, chain.name, scope)
+        return tml.chains_under_bone(spring, bones, bone_name)
 
     chain = active_chain(settings)
     if chain is not None:
-        return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
+        return tml.chains_in_scope(spring, bones, chain.name, scope)
     raise ValueError("Select the submesh the chains were generated on, a bone, or a chain in the list")
 
 
@@ -78,7 +78,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -99,7 +99,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = avatar_api.apply_ramp(
+            output = tml.apply_ramp(
                 spring,
                 bones,
                 names,

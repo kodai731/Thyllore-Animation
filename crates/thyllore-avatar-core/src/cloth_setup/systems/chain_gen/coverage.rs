@@ -6,7 +6,7 @@ use thyllore_model_core::BoneId;
 use super::frame::VertexFrame;
 use super::support::{garment_support, nearest_body_influences};
 use crate::cloth_setup::components::chain_gen::{
-    ChainGenInput, ChainGenParams, CoveredVertex, GarmentSupport, RootAttachment,
+    ChainGenInput, ChainGenParams, ChainRole, CoveredVertex, GarmentSupport,
 };
 use cgmath::InnerSpace;
 
@@ -54,7 +54,7 @@ pub(super) fn garment_coverage(
     if let Some(marked) = marked_garment_coverage(input, params, vertices) {
         return Ok(Some(marked));
     }
-    if params.attachment != RootAttachment::Ring {
+    if params.role != ChainRole::Garment {
         return Ok(None);
     }
     let Some(support) = garment_support(input, params, vertices)? else {
@@ -84,7 +84,7 @@ pub(super) fn marked_garment_coverage(
     params: &ChainGenParams,
     vertices: &[u32],
 ) -> Option<GarmentCoverage> {
-    if params.attachment != RootAttachment::Ring || input.covered_vertices.is_empty() {
+    if params.role != ChainRole::Garment || input.covered_vertices.is_empty() {
         return None;
     }
     let marked: BTreeSet<u32> = input.covered_vertices.iter().copied().collect();

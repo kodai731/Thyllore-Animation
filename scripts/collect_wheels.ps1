@@ -11,35 +11,30 @@ $AbsWheels = Join-Path $RepoRoot $WheelsDir
 New-Item -ItemType Directory -Path $AbsWheels -Force | Out-Null
 
 if (-not $SkipMaturin) {
-    $Crates = @("crates/thyllore-ml-core", "crates/thyllore-avatar-api")
+    Write-Host "[collect_wheels] Building thyllore_ml_core wheel via maturin..." -ForegroundColor Cyan
+    $PrevErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & python -m pip install --quiet maturin *>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "maturin install failed"
+        }
 
-    foreach ($cratePath in $Crates) {
-        $crateName = Split-Path $cratePath -Leaf
-        Write-Host "[collect_wheels] Building $crateName wheel via maturin..." -ForegroundColor Cyan
-        $PrevErrorAction = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
+        Push-Location (Join-Path $RepoRoot "crates/thyllore-ml-core")
+        $PrevRustFlags = $env:RUSTFLAGS
         try {
-            & python -m pip install --quiet maturin *>&1 | Out-Null
+            $RemapFlag = "--remap-path-prefix=$HOME=."
+            $env:RUSTFLAGS = if ($PrevRustFlags) { "$PrevRustFlags $RemapFlag" } else { $RemapFlag }
+            & maturin build --release --features python --out $AbsWheels *>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
-                throw "maturin install failed"
-            }
-
-            Push-Location (Join-Path $RepoRoot $cratePath)
-            $PrevRustFlags = $env:RUSTFLAGS
-            try {
-                $RemapFlag = "--remap-path-prefix=$HOME=."
-                $env:RUSTFLAGS = if ($PrevRustFlags) { "$PrevRustFlags $RemapFlag" } else { $RemapFlag }
-                & maturin build --release --features python --out $AbsWheels *>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0) {
-                    throw "maturin build failed"
-                }
-            } finally {
-                $env:RUSTFLAGS = $PrevRustFlags
-                Pop-Location
+                throw "maturin build failed"
             }
         } finally {
-            $ErrorActionPreference = $PrevErrorAction
+            $env:RUSTFLAGS = $PrevRustFlags
+            Pop-Location
         }
+    } finally {
+        $ErrorActionPreference = $PrevErrorAction
     }
 }
 

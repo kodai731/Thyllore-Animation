@@ -17,20 +17,20 @@ IDENTITY_ROWS = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0
 
 
 @pytest.fixture(scope="module")
-def avatar_api(tmp_path_factory):
-    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
+def tml(tmp_path_factory):
+    wheels = sorted(WHEELS_DIR.glob("thyllore_ml_core-*.whl"))
     if not wheels:
-        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
+        pytest.skip("thyllore_ml_core wheel not built (run scripts/collect_wheels.sh)")
 
-    extract_dir = tmp_path_factory.mktemp("avatar_api_wheel")
+    extract_dir = tmp_path_factory.mktemp("tml_wheel")
     with zipfile.ZipFile(wheels[-1]) as archive:
         archive.extractall(extract_dir)
 
     sys.path.insert(0, str(extract_dir))
     try:
-        import thyllore_avatar_api
+        import thyllore_ml_core
 
-        yield thyllore_avatar_api
+        yield thyllore_ml_core
     finally:
         sys.path.remove(str(extract_dir))
 
@@ -58,8 +58,8 @@ def tpose_specs(prefix: str, scale_length: float):
     return bone_specs(names, parents, heads, scale_length, rest_frames)
 
 
-def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
-    baked = avatar_api.bake_clip_file(tpose_specs("mixamorig:", 1.0), HIPS_SWAY.read_text(encoding="utf-8"), 2)
+def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(tml):
+    baked = tml.bake_clip_file(tpose_specs("mixamorig:", 1.0), HIPS_SWAY.read_text(encoding="utf-8"), 2)
 
     assert baked["name"] == "hips_sway"
     assert baked["hips_bone"] == "mixamorig:Hips"
@@ -70,14 +70,14 @@ def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
     assert {track["bone"] for track in baked["bone_rotations"]} >= {"mixamorig:Hips", "mixamorig:Head"}
 
 
-def test_bake_clip_file_scales_the_sway_with_the_scene_unit(avatar_api):
-    baked = avatar_api.bake_clip_file(tpose_specs("", 0.01), HIPS_SWAY.read_text(encoding="utf-8"), 2)
+def test_bake_clip_file_scales_the_sway_with_the_scene_unit(tml):
+    baked = tml.bake_clip_file(tpose_specs("", 0.01), HIPS_SWAY.read_text(encoding="utf-8"), 2)
 
     assert abs(baked["hips_offsets"][1][0]) == pytest.approx(0.0015, abs=1e-6)
 
 
-def test_bake_clip_file_reports_a_rig_without_feet(avatar_api):
+def test_bake_clip_file_reports_a_rig_without_feet(tml):
     specs = tpose_specs("", 1.0)[:7]
 
     with pytest.raises(RuntimeError, match="feet"):
-        avatar_api.bake_clip_file(specs, HIPS_SWAY.read_text(encoding="utf-8"), 2)
+        tml.bake_clip_file(specs, HIPS_SWAY.read_text(encoding="utf-8"), 2)

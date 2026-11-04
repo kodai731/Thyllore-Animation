@@ -2,21 +2,14 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pythonize::depythonize;
 
-use super::avatar_setup::bones_from_py;
+use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
+use super::chain_gen::{pythonize_value, settings_pairs};
 use crate::collider_bridge::{
     assign_collider_groups as bridge_assign_collider_groups, capsule_fit_params,
     fit_body_colliders as bridge_fit_body_colliders,
     has_fitted_body_colliders as bridge_has_fitted_body_colliders, FitBone, FitSkin,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
-use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
-
-fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, f32)>> {
-    settings
-        .iter()
-        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
-        .collect::<PyResult<_>>()
-}
 
 #[pyfunction]
 pub fn capsule_fit_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {

@@ -3981,26 +3981,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thyllore-avatar-api"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "cgmath",
- "pyo3",
- "pythonize",
- "ron",
- "serde",
- "serde_json",
- "thyllore-anim-core",
- "thyllore-avatar-core",
- "thyllore-exporter-core",
- "thyllore-math-core",
- "thyllore-ml-api",
- "thyllore-model-core",
- "thyllore-scene-core",
-]
-
-[[package]]
 name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
@@ -4150,12 +4130,6 @@ dependencies = [
 [[package]]
 name = "thyllore-ml-api"
 version = "0.0.1"
-dependencies = [
- "anyhow",
- "pyo3",
- "pythonize",
- "serde",
-]
 
 [[package]]
 name = "thyllore-ml-core"
@@ -4174,14 +4148,18 @@ dependencies = [
  "ort",
  "pyo3",
  "pythonize",
+ "ron",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
+ "thyllore-exporter-core",
  "thyllore-math-core",
  "thyllore-ml-api",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "ureq 2.12.1",
 ]
 

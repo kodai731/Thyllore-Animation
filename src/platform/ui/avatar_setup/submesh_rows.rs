@@ -5,8 +5,7 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    default_attachment, default_root_of_submesh, ChainGenRequest, ChainGenSettings,
-    CHAIN_GEN_UI_PARAMS,
+    chain_role_of_submesh, chain_root_role, ChainGenRequest, ChainGenSettings, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -89,13 +88,12 @@ fn resolve_chain_request(
     key: &SubmeshKey,
     settings: &ChainGenSettings,
 ) -> Option<ChainGenRequest> {
-    let root = default_root_of_submesh(role)?;
+    let root = chain_root_role(chain_role_of_submesh(role)?);
     let bone_index = *mapping.get(&root)?;
     bones.get(bone_index)?;
     Some(ChainGenRequest {
         target: SubmeshSelector::Submesh(key.clone()),
         root,
-        attachment: default_attachment(root),
         settings: settings.clone(),
     })
 }
@@ -147,7 +145,7 @@ fn list_items(_world: &World, view: &SubmeshesView) -> Vec<(String, SubmeshItem)
 }
 
 fn item_rows(item: &SubmeshItem) -> Vec<UiRow<SubmeshItem>> {
-    let chain_root = default_root_of_submesh(item.role);
+    let chain_role = chain_role_of_submesh(item.role);
     let mut rows: Vec<UiRow<SubmeshItem>> = vec![
         UiRow::Action {
             label: "Select in Hierarchy",
@@ -161,7 +159,7 @@ fn item_rows(item: &SubmeshItem) -> Vec<UiRow<SubmeshItem>> {
         },
     ];
 
-    if chain_root.is_some() {
+    if chain_role.is_some() {
         rows.push(UiRow::Action {
             label: "Generate Chains",
             enabled: |_world, item| item.chain_request.is_some(),

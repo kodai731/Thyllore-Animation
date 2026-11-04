@@ -18,14 +18,12 @@ fn make_skeleton() -> Skeleton {
 }
 
 fn make_chain() -> Vec<GeneratedChain> {
-    use crate::cloth_setup::components::chain_gen::RootAttachment;
+    use crate::cloth_setup::components::chain_gen::ChainRole;
     use crate::cloth_setup::components::chain_gen::{joint_name, ChainGenParams, ChainGenSettings};
     use crate::cloth_setup::components::submesh_role::SubmeshSelector;
-    use crate::humanoid::components::role::HumanoidRole;
 
     let params = ChainGenParams {
-        root: Some(HumanoidRole::Head),
-        attachment: RootAttachment::Cap,
+        role: ChainRole::Hair,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings::default(),
     };

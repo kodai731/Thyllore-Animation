@@ -1,6 +1,6 @@
 use super::*;
 use crate::cloth_setup::components::chain_gen::{
-    ChainGenSettings, RootAttachment, SkinSurface, StrandMode,
+    ChainGenSettings, ChainRole, SkinSurface, StrandMode,
 };
 use crate::cloth_setup::components::submesh_role::SubmeshSelector;
 use crate::cloth_setup::systems::chain_gen::strand_merge::{
@@ -10,9 +10,8 @@ use crate::cloth_setup::systems::chain_gen::strand_mode::{
     decide_strand_mode, uv_strand_correlation,
 };
 use crate::cloth_setup::systems::chain_gen::{
-    cap_root_band, place_chains, place_chains_with_strands,
+    hair_root_band, place_chains, place_chains_with_strands,
 };
-use crate::humanoid::components::role::HumanoidRole;
 use thyllore_model_core::BoneId;
 
 const KEEP_ALL_BAND: f32 = -1.0;
@@ -480,8 +479,7 @@ fn card_input<'a>(mesh: &'a CardMesh, tex_coords: &'a [[f32; 2]]) -> ChainGenInp
 
 fn hair_params(column_count: u32, strand_merge_distance: f32) -> ChainGenParams {
     ChainGenParams {
-        root: Some(HumanoidRole::Head),
-        attachment: RootAttachment::Cap,
+        role: ChainRole::Hair,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings {
             column_count,
@@ -497,7 +495,7 @@ fn place_card_mesh_chains(mesh: &CardMesh, params: &ChainGenParams) -> Vec<Gener
 
 fn decide_card_mesh_mode(mesh: &CardMesh, tex_coords: &[[f32; 2]]) -> StrandMode {
     let input = card_input(mesh, tex_coords);
-    let band = cap_root_band(&input, &hair_params(0, 0.0)).expect("cap has a root band");
+    let band = hair_root_band(&input, &hair_params(0, 0.0)).expect("hair has a root band");
     decide_strand_mode(&input, &mesh.strip_vertices, band.progress)
 }
 
@@ -598,8 +596,7 @@ fn cards_without_tex_coords_use_the_azimuth_path() {
 fn garment_role_has_no_strand_placement() {
     let mesh = build_three_tilted_cards();
     let params = ChainGenParams {
-        root: Some(HumanoidRole::Hips),
-        attachment: RootAttachment::Ring,
+        role: ChainRole::Garment,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings::default(),
     };

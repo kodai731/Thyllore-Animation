@@ -8,12 +8,12 @@ import bpy
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
 from ..common.avatar_sidecar import bone_specs, submesh_to_sidecar, write_submesh_sidecar
 from ..common.bone_frames import bone_bind_matrix, bone_rest_frame
@@ -155,14 +155,14 @@ def _mesh_counts(meshes):
 
 
 def _sidecar_build_input(context, arm, meshes):
-    """Build the input dict for avatar_api.sidecar_build from arm and meshes.
+    """Build the input dict for tml.sidecar_build from arm and meshes.
 
     The sidecar the rig was imported from (``thyllore_spring.sidecar_json``) is passed as the base so the
     fields the addon does not edit survive the round trip."""
     bones = armature_bone_specs(context, arm)
     settings = arm.data.thyllore_spring
 
-    spring = avatar_api.spring_colliders_to_model(spring_settings_to_sidecar(settings), bones)
+    spring = tml.spring_colliders_to_model(spring_settings_to_sidecar(settings), bones)
 
     all_roles = []
     all_hidden = []
@@ -210,11 +210,11 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
-        if not _AVATAR_API_AVAILABLE:
-            report(self, "ERROR", "thyllore_avatar_api not available")
+        if not _TML_AVAILABLE:
+            report(self, "ERROR", "thyllore_ml_core not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -227,8 +227,8 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
             return {"CANCELLED"}
 
         try:
-            sidecar = avatar_api.sidecar_read(text)
-            spring = avatar_api.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
+            sidecar = tml.sidecar_read(text)
+            spring = tml.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"Invalid sidecar file: {e}")
             return {"CANCELLED"}
@@ -266,11 +266,11 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
-        if not _AVATAR_API_AVAILABLE:
-            report(self, "ERROR", "thyllore_avatar_api not available")
+        if not _TML_AVAILABLE:
+            report(self, "ERROR", "thyllore_ml_core not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -282,7 +282,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
         sidecar_input = _sidecar_build_input(context, arm, meshes)
 
         try:
-            json_text = avatar_api.sidecar_build(sidecar_input)
+            json_text = tml.sidecar_build(sidecar_input)
         except ValueError as e:
             report(self, "ERROR", f"Sidecar build failed: {e}")
             return {"CANCELLED"}
@@ -313,7 +313,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             report(self, "ERROR", f"Cannot write sidecar file: {e}")
             return {"CANCELLED"}
 
-        result = avatar_api.infer_humanoid_mapping(sidecar_input["bones"])
+        result = tml.infer_humanoid_mapping(sidecar_input["bones"])
         unresolved = result.get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
@@ -359,7 +359,7 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and hasattr(avatar_api, "vrm_write") and target_armature(context) is not None
+        return _TML_AVAILABLE and hasattr(tml, "vrm_write") and target_armature(context) is not None
 
     def invoke(self, context, event):
         if not self.filepath:
@@ -376,14 +376,14 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
         sidecar_input = _sidecar_build_input(context, arm, meshes)
         try:
-            json_text = avatar_api.sidecar_build(sidecar_input)
+            json_text = tml.sidecar_build(sidecar_input)
         except ValueError as e:
             report(self, "ERROR", f"Sidecar build failed: {e}")
             return {"CANCELLED"}
 
-        for warning in avatar_api.vrm_t_pose_warnings(sidecar_input["bones"], sidecar_input["humanoid_overrides"]):
+        for warning in tml.vrm_t_pose_warnings(sidecar_input["bones"], sidecar_input["humanoid_overrides"]):
             report(self, "WARNING", warning)
-        unresolved = avatar_api.infer_humanoid_mapping(sidecar_input["bones"]).get("unresolved", [])
+        unresolved = tml.infer_humanoid_mapping(sidecar_input["bones"]).get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
 
@@ -393,7 +393,7 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
         glb = _export_selection_glb(context, arm, meshes)
         try:
-            vrm = avatar_api.vrm_write(glb, json_text, meta, scale_length)
+            vrm = tml.vrm_write(glb, json_text, meta, scale_length)
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"VRM write failed: {e}")
             return {"CANCELLED"}

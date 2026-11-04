@@ -3,9 +3,9 @@ use thyllore_math_core::{centroid, widest_cross_section, world_y_axis, CROSS_SEC
 
 use super::attachment::attachment_or_target;
 use super::frame::collect_target_vertices;
-use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, RootAttachment};
+use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, ChainRole};
 
-/// The cap root band in root-relative progress (distance down the up axis from the root bone).
+/// The hair root band in root-relative progress (distance down the up axis from the root bone).
 #[derive(Debug, Clone, Copy)]
 pub struct RootBand {
     pub equator_progress: f32,
@@ -33,15 +33,17 @@ fn estimate_root_band(
     }
 }
 
-/// The root band a cap attachment uses; a ring attachment has none.
-pub fn cap_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<RootBand> {
-    if params.attachment != RootAttachment::Cap {
-        return None;
+/// The root band a hair generation uses; a garment has none.
+pub fn hair_root_band(input: &ChainGenInput, params: &ChainGenParams) -> Option<RootBand> {
+    match params.role {
+        ChainRole::Hair => {
+            let vertices = collect_target_vertices(input);
+            Some(estimate_root_band(
+                &attachment_or_target(input, &vertices),
+                input.root_position,
+                params.settings.azimuth.root_band_offset,
+            ))
+        }
+        ChainRole::Garment => None,
     }
-    let vertices = collect_target_vertices(input);
-    Some(estimate_root_band(
-        &attachment_or_target(input, &vertices),
-        input.root_position,
-        params.settings.azimuth.root_band_offset,
-    ))
 }

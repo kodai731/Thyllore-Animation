@@ -56,8 +56,8 @@ def _armature(bone_names, chains=()):
 def test_each_chain_gets_its_own_collection_under_the_parent():
     arm = _armature(["hair_h_00_00", "hair_h_00_01", "hair_h_01_00"])
 
-    apply_chain_bone_display(arm, "hair_h_00", ["hair_h_00_00", "hair_h_00_01"], "cap")
-    apply_chain_bone_display(arm, "hair_h_01", ["hair_h_01_00", "missing"], "cap")
+    apply_chain_bone_display(arm, "hair_h_00", ["hair_h_00_00", "hair_h_00_01"], "hair")
+    apply_chain_bone_display(arm, "hair_h_01", ["hair_h_01_00", "missing"], "hair")
 
     collections = arm.data.collections.items
     assert set(collections) == {CHAIN_COLLECTION_NAME, "hair_h_00", "hair_h_01"}
@@ -69,17 +69,17 @@ def test_each_chain_gets_its_own_collection_under_the_parent():
 
 def test_apply_chain_bone_display_reuses_an_existing_chain_collection():
     arm = _armature(["a_00", "a_01"])
-    apply_chain_bone_display(arm, "a", ["a_00"], "ring")
+    apply_chain_bone_display(arm, "a", ["a_00"], "garment")
 
-    apply_chain_bone_display(arm, "a", ["a_01"], "ring")
+    apply_chain_bone_display(arm, "a", ["a_01"], "garment")
 
     assert arm.data.collections.items["a"].bones == ["a_00", "a_01"]
 
 
 def test_remove_chain_collections_drops_only_the_named_chains():
     arm = _armature(["a_00", "b_00"])
-    apply_chain_bone_display(arm, "a", ["a_00"], "cap")
-    apply_chain_bone_display(arm, "b", ["b_00"], "cap")
+    apply_chain_bone_display(arm, "a", ["a_00"], "hair")
+    apply_chain_bone_display(arm, "b", ["b_00"], "hair")
 
     remove_chain_collections(arm, ["a", "absent"])
 
@@ -87,7 +87,7 @@ def test_remove_chain_collections_drops_only_the_named_chains():
 
 
 def test_apply_chain_display_names_collections_after_the_chains():
-    chain = SimpleNamespace(name="skirt", origin_attachment="ring", joints=[SimpleNamespace(bone="skirt_00")])
+    chain = SimpleNamespace(name="skirt", origin_role="garment", joints=[SimpleNamespace(bone="skirt_00")])
     arm = _armature(["skirt_00"], [chain])
 
     apply_chain_display(arm)

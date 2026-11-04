@@ -1,14 +1,13 @@
 use std::path::Path;
 
 use thyllore_anim_core::spring_bone::{
-    apply_ramp, chains_in_scope, ChainRamp, JointForce, RampEnd, RampScope, SpringJointParam,
-    VrmJointForce,
+    apply_ramp, chains_in_scope, ChainRamp, RampEnd, RampScope, SpringJointParam,
 };
 use thyllore_animation::ecs::systems::skeleton_to_bone_inputs;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar::read_sidecar_json;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame,
+    build_sidecar_spring, spring_setup_from_sidecar,
 };
 use thyllore_importer_core::{load_fbx_to_graphics_resources, ModelLoadResult};
 
@@ -23,10 +22,9 @@ fn test_woman1_edit_ramp_sibling_chains() {
     let skeleton = &model.skeletons[0];
 
     let bones: Vec<BoneInput> = skeleton_to_bone_inputs(skeleton);
-    let frames = BoneRestFrame::identity_for(bones.len());
 
     let sidecar = read_sidecar_json(sidecar_path).expect("read sidecar");
-    let setup = spring_setup_from_sidecar(&sidecar.spring, &bones, &frames);
+    let setup = spring_setup_from_sidecar(&sidecar.spring, &bones);
 
     let scope_chains = chains_in_scope(
         &setup,
@@ -45,10 +43,7 @@ fn test_woman1_edit_ramp_sibling_chains() {
     ramp.set_end(
         RampEnd::Root,
         SpringJointParam {
-            force: JointForce::Vrm(VrmJointForce {
-                stiffness: 0.8,
-                gravity_power: 0.0,
-            }),
+            stiffness: 0.8,
             drag_force: 0.6,
             ..Default::default()
         },
@@ -56,10 +51,7 @@ fn test_woman1_edit_ramp_sibling_chains() {
     ramp.set_end(
         RampEnd::Tip,
         SpringJointParam {
-            force: JointForce::Vrm(VrmJointForce {
-                stiffness: 0.2,
-                gravity_power: 0.0,
-            }),
+            stiffness: 0.2,
             drag_force: 0.1,
             ..Default::default()
         },
@@ -73,10 +65,10 @@ fn test_woman1_edit_ramp_sibling_chains() {
             .position(|c| c.id == *chain_id)
             .unwrap();
         let old_chain = modified_setup.chains[idx].clone();
-        modified_setup.chains[idx] = apply_ramp(&old_chain, &ramp).expect("apply ramp");
+        modified_setup.chains[idx] = apply_ramp(&old_chain, &ramp);
     }
 
-    let ramped_sidecar = build_sidecar_spring(&modified_setup, &bones, &frames);
+    let ramped_sidecar = build_sidecar_spring(&modified_setup, &bones);
 
     for (i, chain) in ramped_sidecar.chains.iter().enumerate() {
         let orig_chain = &sidecar.spring.chains[i];
@@ -102,22 +94,12 @@ fn test_woman1_edit_ramp_sibling_chains() {
             .zip(expected_stiffness.iter())
             .enumerate()
         {
-            let stiffness = match joint.force {
-                thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce::Vrm {
-                    stiffness,
-                    ..
-                } => stiffness,
-                other => panic!(
-                    "chain {} joint {} expected Vrm force, got {:?}",
-                    i, j, other
-                ),
-            };
             assert!(
-                (stiffness - expected).abs() < 1e-5,
+                (joint.stiffness - expected).abs() < 1e-5,
                 "chain {} joint {} stiffness: got {}, expected {}",
                 i,
                 j,
-                stiffness,
+                joint.stiffness,
                 expected
             );
         }

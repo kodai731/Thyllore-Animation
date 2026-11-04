@@ -5,12 +5,11 @@ use cgmath::{InnerSpace, Vector3};
 
 use super::*;
 use crate::cloth_setup::components::chain_gen::{
-    default_attachment, joint_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings,
-    ChainPlacement, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
+    joint_name, BodyCollider, ChainGenInput, ChainGenParams, ChainGenSettings, ChainPlacement,
+    ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface, VertexInfluences,
 };
 use crate::cloth_setup::components::submesh_role::SubmeshSelector;
 use crate::cloth_setup::systems::collider_surface::collider_surfaces;
-use crate::humanoid::components::role::HumanoidRole;
 use thyllore_model_core::BoneId;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
@@ -23,10 +22,9 @@ fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
     (positions, vec![[0, 1, 2], [2, 3, 4]])
 }
 
-fn build_params(root: HumanoidRole, joint_count: u32, column_count: u32) -> ChainGenParams {
+fn build_params(role: ChainRole, joint_count: u32, column_count: u32) -> ChainGenParams {
     ChainGenParams {
-        root: Some(root),
-        attachment: default_attachment(root),
+        role,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings {
             joint_count,
@@ -37,7 +35,7 @@ fn build_params(root: HumanoidRole, joint_count: u32, column_count: u32) -> Chai
 }
 
 fn build_hair_params(joint_count: u32) -> ChainGenParams {
-    build_params(HumanoidRole::Head, joint_count, 1)
+    build_params(ChainRole::Hair, joint_count, 1)
 }
 
 fn head_attachment() -> Vec<SkinSurface> {
@@ -188,7 +186,7 @@ fn garment_column_split_by_azimuth() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let params = build_params(HumanoidRole::Hips, 2, 8);
+    let params = build_params(ChainRole::Garment, 2, 8);
 
     let chains = place_chains(&input, &params).unwrap();
     assert_eq!(chains.len(), 8);
@@ -247,7 +245,7 @@ fn hair_azimuth_mode_detection() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let params = build_params(HumanoidRole::Head, 2, 0);
+    let params = build_params(ChainRole::Hair, 2, 0);
 
     let chains = place_chains(&input, &params).unwrap();
     assert_eq!(chains.len(), 2);
@@ -508,7 +506,7 @@ fn zero_column_blend_keeps_every_vertex_on_its_own_column() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let params = build_params(HumanoidRole::Hips, 3, 2);
+    let params = build_params(ChainRole::Garment, 3, 2);
 
     let chains = place_chains(&input, &params).unwrap();
     let weights = compute_chain_weights(&input, &params, &chains, &[]);
@@ -535,7 +533,7 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let mut params = build_params(HumanoidRole::Hips, 3, 2);
+    let mut params = build_params(ChainRole::Garment, 3, 2);
     let mut chains = place_chains(&input_for_chains, &params).unwrap();
 
     let boundary_vertex = positions.len() as u32;
@@ -584,7 +582,7 @@ fn cap_stays_on_root_and_each_card_is_one_column() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let params = build_params(HumanoidRole::Head, 3, 0);
+    let params = build_params(ChainRole::Hair, 3, 0);
 
     let chains = place_chains(&input, &params).unwrap();
     let weights = compute_chain_weights(&input, &params, &chains, &[]);
@@ -632,7 +630,7 @@ fn root_band_offset_moves_the_band_down() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let mut params = build_params(HumanoidRole::Head, 3, 2);
+    let mut params = build_params(ChainRole::Hair, 3, 2);
     let baseline = place_chains(&input, &params).unwrap();
     params.settings.azimuth.root_band_offset = 0.2;
 
@@ -658,7 +656,7 @@ fn root_band_without_attachment_uses_the_widest_slice_of_the_target() {
         given_chains: &[],
     };
 
-    let chains = place_chains(&input, &build_params(HumanoidRole::Head, 3, 2)).unwrap();
+    let chains = place_chains(&input, &build_params(ChainRole::Hair, 3, 2)).unwrap();
 
     assert_eq!(chains.len(), 2);
     assert!(chains.iter().all(|c| c.vertices.iter().all(|&v| v >= 48)));
@@ -688,7 +686,7 @@ fn component_labels_separate_the_cap_from_each_card() {
 }
 
 #[test]
-fn cap_root_band_reports_the_equator_and_the_offset_band() {
+fn hair_root_band_reports_the_equator_and_the_offset_band() {
     let (positions, triangles) = build_cap_with_two_cards();
     let head = head_attachment();
     let input = ChainGenInput {
@@ -701,10 +699,10 @@ fn cap_root_band_reports_the_equator_and_the_offset_band() {
         covered_vertices: &[],
         given_chains: &[],
     };
-    let mut params = build_params(HumanoidRole::Head, 3, 2);
+    let mut params = build_params(ChainRole::Hair, 3, 2);
     params.settings.azimuth.root_band_offset = 0.05;
 
-    let band = cap_root_band(&input, &params).unwrap();
+    let band = hair_root_band(&input, &params).unwrap();
 
     assert!((band.progress - band.equator_progress - 0.05).abs() < 1e-6);
     assert!(
@@ -712,7 +710,7 @@ fn cap_root_band_reports_the_equator_and_the_offset_band() {
         "ring height {:?}",
         band.center
     );
-    assert!(cap_root_band(&input, &build_params(HumanoidRole::Hips, 3, 2)).is_none());
+    assert!(hair_root_band(&input, &build_params(ChainRole::Garment, 3, 2)).is_none());
 }
 
 const BODY_BONE: BoneId = 5;
@@ -770,7 +768,7 @@ fn flared_dress() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
 }
 
 fn garment_support_params() -> ChainGenParams {
-    let mut params = build_params(HumanoidRole::Hips, 4, 1);
+    let mut params = build_params(ChainRole::Garment, 4, 1);
     params.settings.garment.fit_gap = 0.015;
     params.settings.garment.support_ratio = 0.5;
     params
@@ -983,7 +981,7 @@ fn marked_covered_vertices_without_a_body_keep_the_root_bone() {
     let input = garment_input(&positions, &triangles, &[], &marked);
 
     let placement =
-        place_chains_with_strands(&input, &build_params(HumanoidRole::Hips, 4, 1)).unwrap();
+        place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap();
     assert_eq!(placement.covered.len(), 3);
     assert!(placement
         .covered
@@ -999,7 +997,7 @@ fn marking_every_vertex_is_rejected() {
     let input = garment_input(&positions, &triangles, &[], &marked);
 
     let error =
-        place_chains_with_strands(&input, &build_params(HumanoidRole::Hips, 4, 1)).unwrap_err();
+        place_chains_with_strands(&input, &build_params(ChainRole::Garment, 4, 1)).unwrap_err();
     assert!(error.to_string().contains("covers every vertex"), "{error}");
 }
 

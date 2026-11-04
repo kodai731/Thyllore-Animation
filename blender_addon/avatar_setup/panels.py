@@ -110,7 +110,7 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
 
     @staticmethod
     def _draw_chain_list(layout, arm):
-        layout.operator("thyllore.add_chains_under_bone")
+        layout.operator("thyllore.use_existing_bones_as_springs")
         layout.operator("thyllore.remove_spring_chain")
         settings = arm.data.thyllore_spring
         _draw_list_when_filled(

@@ -3,7 +3,7 @@ use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
 use super::*;
-use crate::spring_edit_bridge::add_chains_under_bone;
+use crate::spring_edit_bridge::use_existing_bones_as_springs;
 
 fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneInput {
     BoneInput {
@@ -27,7 +27,8 @@ fn hanging_strand() -> (Vec<BoneInput>, Vec<MatrixRows>, SidecarSpring) {
         translation_rows(Vector3::new(0.0, -0.1, 0.0)),
         translation_rows(Vector3::new(0.0, -0.1, 0.0)),
     ];
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 2).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 2).unwrap();
     (bones, rest_locals, spring)
 }
 

@@ -66,7 +66,10 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(avatar_setup::infer_humanoid_mapping, m)?)?;
-    m.add_function(wrap_pyfunction!(spring_edit::add_chains_under_bone, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        spring_edit::use_existing_bones_as_springs,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(spring_edit::register_generated_chains, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::apply_ramp, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_in_scope, m)?)?;

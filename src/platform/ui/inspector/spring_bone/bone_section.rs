@@ -172,17 +172,17 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
             "Chain length comes from the Add Chain form in the entity's Spring Bones section",
         ));
         rows.push(UiRow::Action {
-            label: "Add Chains Under This Bone",
+            label: "Use Existing Bones as Springs",
             enabled: |_, _| true,
             on_click: |view: &BoneSpringView| {
-                Box::new(AvatarSetupEvent::AddSpringChainsUnder {
+                Box::new(AvatarSetupEvent::UseExistingBonesAsSprings {
                     root: view.bone_id,
                     min_joints: view.min_joints,
                 })
             },
         });
         rows.push(UiRow::Tooltip(
-            "Every run of non-humanoid bones under this bone becomes a chain; Min Joints comes from the Add Chain form",
+            "Registers every run of existing non-humanoid bones under this bone as a spring chain without adding bones; Min Joints comes from the Add Chain form",
         ));
     } else {
         rows.push(joint_list_row());
@@ -389,7 +389,7 @@ mod tests {
             visible_labels(&rows),
             [
                 "Add Chain From This Bone",
-                "Add Chains Under This Bone",
+                "Use Existing Bones as Springs",
                 "Add Collider On This Bone"
             ]
         );
@@ -408,7 +408,7 @@ mod tests {
             visible_labels(&rows),
             [
                 "Add Chain From This Bone",
-                "Add Chains Under This Bone",
+                "Use Existing Bones as Springs",
                 "Ramp",
                 "Add Collider On This Bone"
             ]

@@ -1,4 +1,4 @@
-"""Spring chain add/remove operators (thyllore.add_chains_under_bone, thyllore.remove_spring_chain)."""
+"""Spring chain add/remove operators (thyllore.use_existing_bones_as_springs, thyllore.remove_spring_chain)."""
 from __future__ import annotations
 
 import bpy
@@ -23,11 +23,11 @@ from .chain_reset import remove_generated_chains
 from .operators import armature_bone_specs, bound_meshes, target_armature
 
 
-class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
-    """Add a spring chain for every run of non-humanoid bones under a root bone."""
+class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
+    """Register every run of existing non-humanoid bones under the root bone as a spring chain; adds no bones"""
 
-    bl_idname = "thyllore.add_chains_under_bone"
-    bl_label = "Add Chains Under Bone"
+    bl_idname = "thyllore.use_existing_bones_as_springs"
+    bl_label = "Use Existing Bones as Springs"
     bl_options = {"REGISTER", "UNDO"}
 
     root_bone: bpy.props.StringProperty(name="Root Bone", default="Head")
@@ -59,9 +59,9 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
         try:
             sidecar = spring_settings_to_edit(settings)
             bones = armature_bone_specs(context, arm)
-            output = tml.add_chains_under_bone(sidecar, bones, self.root_bone, self.min_joints)
+            output = tml.use_existing_bones_as_springs(sidecar, bones, self.root_bone, self.min_joints)
         except ValueError as e:
-            report(self, "ERROR", f"add_chains_under_bone failed: {e}")
+            report(self, "ERROR", f"use_existing_bones_as_springs failed: {e}")
             return {"CANCELLED"}
 
         write_sidecar_spring(settings, output)
@@ -133,7 +133,7 @@ class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):
 
 
 OPERATORS = (
-    THYLLORE_OT_AddChainsUnderBone,
+    THYLLORE_OT_UseExistingBonesAsSprings,
     THYLLORE_OT_RemoveSpringChain,
 )
 

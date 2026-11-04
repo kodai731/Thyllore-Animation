@@ -14,14 +14,14 @@ use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 #[derive(Debug)]
-pub struct AddSpringChainsUnder {
+pub struct UseExistingBonesAsSprings {
     root: HumanoidRole,
     min_joints: u32,
 }
 
-impl BatchAction for AddSpringChainsUnder {
+impl BatchAction for UseExistingBonesAsSprings {
     fn name(&self) -> &'static str {
-        "add_spring_chains_under"
+        "use_existing_bones_as_springs"
     }
     fn apply(&self, world: &mut World) {
         let root = world
@@ -31,38 +31,40 @@ impl BatchAction for AddSpringChainsUnder {
             .get(&self.root)
             .copied();
         match root {
-            Some(root) => world.send_command(AvatarSetupEvent::AddSpringChainsUnder {
+            Some(root) => world.send_command(AvatarSetupEvent::UseExistingBonesAsSprings {
                 root: root as BoneId,
                 min_joints: self.min_joints,
             }),
             None => msg_error!(
-                "add_spring_chains_under: humanoid role {} is not mapped",
+                "use_existing_bones_as_springs: humanoid role {} is not mapped",
                 self.root.unity_name()
             ),
         }
     }
 }
 
-pub(super) fn add_spring_chains_under_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
-    let spec = text.strip_prefix("add_spring_chains_under=")?;
+pub(super) fn use_existing_bones_as_springs_parse(
+    text: &str,
+) -> Option<Result<Box<dyn BatchAction>>> {
+    let spec = text.strip_prefix("use_existing_bones_as_springs=")?;
     let mut parts = spec.split(',');
     let Some(root) = parts
         .next()
         .and_then(|role| HumanoidRole::from_unity_name(role.trim()))
     else {
-        return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+        return Some(Err(anyhow!("{USE_EXISTING_BONES_AS_SPRINGS_USAGE}")));
     };
     let mut min_joints = 2;
     for part in parts {
         let Some(value) = part.trim().strip_prefix("min_joints=") else {
-            return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}")));
+            return Some(Err(anyhow!("{USE_EXISTING_BONES_AS_SPRINGS_USAGE}")));
         };
         match value.parse::<u32>() {
             Ok(parsed) if parsed >= 1 => min_joints = parsed,
-            _ => return Some(Err(anyhow!("{ADD_SPRING_CHAINS_UNDER_USAGE}"))),
+            _ => return Some(Err(anyhow!("{USE_EXISTING_BONES_AS_SPRINGS_USAGE}"))),
         }
     }
-    Some(Ok(Box::new(AddSpringChainsUnder { root, min_joints })))
+    Some(Ok(Box::new(UseExistingBonesAsSprings { root, min_joints })))
 }
 
 #[derive(Debug)]
@@ -333,7 +335,10 @@ pub(super) fn spring_force_model_parse(text: &str) -> Option<Result<Box<dyn Batc
     };
     Some(Ok(Box::new(SpringForceModelAction { force_model })))
 }
-crate::batch_action!("add_spring_chains_under", add_spring_chains_under_parse);
+crate::batch_action!(
+    "use_existing_bones_as_springs",
+    use_existing_bones_as_springs_parse
+);
 crate::batch_action!("fit_body_colliders", fit_body_colliders_parse);
 crate::batch_action!("dump_spring_tails", dump_spring_tails_parse);
 crate::batch_action!("dump_skinned_vertices", dump_skinned_vertices_parse);
@@ -342,5 +347,5 @@ crate::batch_action!("spring_force_model", spring_force_model_parse);
 
 const FIT_BODY_COLLIDERS_USAGE: &str = "fit_body_colliders expects fit_body_colliders=<min_weight>,<radius_percentile>,<radius_scale>,<min_vertex_count>";
 
-const ADD_SPRING_CHAINS_UNDER_USAGE: &str =
-    "add_spring_chains_under expects add_spring_chains_under=<humanoid role>[,min_joints=<n>]";
+const USE_EXISTING_BONES_AS_SPRINGS_USAGE: &str =
+    "use_existing_bones_as_springs expects use_existing_bones_as_springs=<humanoid role>[,min_joints=<n>]";

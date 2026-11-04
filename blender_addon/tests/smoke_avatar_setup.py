@@ -136,7 +136,7 @@ def step_c_generate_chain_bones(arm, mesh, hair_material):
 
 def step_d_generated_chains_are_registered(arm, added):
     """(d) Generate Chain Bones registered one spring chain per 5 bones, each ending on its `_end` bone;
-    Add Chains Under Bone adds none more."""
+    Use Existing Bones as Springs adds none more."""
     import bpy
 
     settings = arm.data.thyllore_spring
@@ -175,11 +175,11 @@ def step_d_generated_chains_are_registered(arm, added):
     print(f"[smoke] step_d: head capsule r={head_colliders[0].radius:.3f} on every generated chain")
 
     bpy.context.view_layer.objects.active = arm
-    bpy.ops.thyllore.add_chains_under_bone(root_bone="mixamorig:Head", min_joints=2)
+    bpy.ops.thyllore.use_existing_bones_as_springs(root_bone="mixamorig:Head", min_joints=2)
     chain_count_after = len(settings.chains)
     if chain_count_after != expected:
         raise SystemExit(
-            f"AVATAR_SETUP_SMOKE failed: step_d — add_chains_under_bone changed the chain count {expected} -> {chain_count_after}"
+            f"AVATAR_SETUP_SMOKE failed: step_d — use_existing_bones_as_springs changed the chain count {expected} -> {chain_count_after}"
         )
 
     print(f"[smoke] step_d: {chain_count} spring chains registered by generation, idempotent under Head")

@@ -115,22 +115,23 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
     mesh = run.obj.data
     body_bones = armature_fit_bones(context, arm)
     attachment = {"AUTO": None, "CAP": "cap", "RING": "ring"}[settings.chain_generation.attachment]
-    return avatar_api.generate_chains(
-        [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
-        submesh_triangles(mesh, material_index),
-        root_engine_position(arm, run.root_name, run.scale_length),
-        run.target,
-        settings_from_properties(CHAIN_GEN_UI_PARAMS, settings.chain_generation),
-        run.skins,
-        arm.data.bones.find(run.root_name),
-        submesh_tex_coords(mesh),
-        run.marked,
-        body_collider_inputs(arm, settings, body_bones),
-        humanoid_bone_indices(arm, settings, body_bones),
-        body_bones,
-        run.given,
-        attachment=attachment,
-    )
+    request = {
+        "positions": [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
+        "triangles": submesh_triangles(mesh, material_index),
+        "root_position": root_engine_position(arm, run.root_name, run.scale_length),
+        "target": run.target,
+        "settings": settings_from_properties(CHAIN_GEN_UI_PARAMS, settings.chain_generation),
+        "skins": run.skins,
+        "root_bone": arm.data.bones.find(run.root_name),
+        "tex_coords": submesh_tex_coords(mesh),
+        "covered_vertices": run.marked,
+        "body_colliders": body_collider_inputs(arm, settings, body_bones),
+        "humanoid_bones": humanoid_bone_indices(arm, settings, body_bones),
+        "bones": body_bones,
+        "given_chains": run.given,
+        "attachment": attachment,
+    }
+    return avatar_api.generate_chains(request)
 
 
 def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:

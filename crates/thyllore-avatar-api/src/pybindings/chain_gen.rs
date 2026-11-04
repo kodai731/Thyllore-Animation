@@ -1,16 +1,12 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use pythonize::depythonize;
-use std::collections::BTreeMap;
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
-use crate::avatar_setup_bridge::BoneSpec;
 use crate::chain_gen_bridge::{
     body_colliders as body_colliders_from_inputs, chain_gen_params, role_bones, run_chain_gen,
-    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, BodyColliderIn,
-    GivenChainIn, SkinAttachment,
+    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, GenerateChainsRequest,
+    SkinAttachment,
 };
-use crate::collider_bridge::FitSkin;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
 
@@ -41,13 +37,6 @@ pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &chain_gen_params())
 }
 
-pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, f32)>> {
-    settings
-        .iter()
-        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
-        .collect::<PyResult<_>>()
-}
-
 /// The names among `candidates` that belong to a chain generated on the submesh `target`
 /// (`<mesh>/<material>`); the others name chains of other submeshes.
 #[pyfunction]
@@ -66,69 +55,42 @@ pub fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Ve
 /// chains the user assigned as `{name, vertices, joints?}` dicts (`joints` are the joint heads followed by the
 /// chain tail); the chains named for this submesh replace the split.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None, given_chains = None, *, attachment = None))]
-#[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
-    positions: Vec<[f32; 3]>,
-    triangles: Vec<[u32; 3]>,
-    root_position: [f32; 3],
-    target: &str,
-    settings: &Bound<'py, PyDict>,
-    skins: Option<&Bound<'py, PyAny>>,
-    root_bone: usize,
-    tex_coords: Vec<[f32; 2]>,
-    covered_vertices: Vec<u32>,
-    body_colliders: Option<&Bound<'py, PyAny>>,
-    humanoid_bones: BTreeMap<String, usize>,
-    bones: Option<&Bound<'py, PyAny>>,
-    given_chains: Option<&Bound<'py, PyAny>>,
-    attachment: Option<&str>,
+    request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let pairs = settings_pairs(settings)?;
-    let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
-    let skins: Vec<FitSkin> = match skins {
-        Some(skins) => depythonize(skins).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let collider_inputs: Vec<BodyColliderIn> = match body_colliders {
-        Some(colliders) => depythonize(colliders).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let bone_specs: Vec<BoneSpec> = match bones {
-        Some(bones) => depythonize(bones).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let given: Vec<GivenChainIn> = match given_chains {
-        Some(given) => depythonize(given).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let roles = role_bones(&humanoid_bones, &bone_specs);
-    let colliders = body_colliders_from_inputs(&collider_inputs, &roles, &bone_specs);
+    let request: GenerateChainsRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
 
-    let attachment = match attachment {
-        Some(s) => Some(crate::chain_gen_bridge::parse_attachment(s).map_err(anyhow_to_pyerr)?),
-        None => None,
-    };
+    let settings = settings_from_pairs(
+        &request
+            .settings
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect::<Vec<_>>(),
+    )
+    .map_err(anyhow_to_pyerr)?;
+    let roles = role_bones(&request.humanoid_bones, &request.bones);
+    let colliders = body_colliders_from_inputs(&request.body_colliders, &roles, &request.bones);
 
     let output = py
         .detach(|| {
             run_chain_gen(
-                &positions,
-                &triangles,
-                root_position,
-                target,
+                &request.positions,
+                &request.triangles,
+                request.root_position,
+                &request.target,
                 settings,
                 SkinAttachment {
-                    skins: &skins,
+                    skins: &request.skins,
                     body_colliders: &colliders,
                     roles: &roles,
-                    root_bone,
-                    covered_vertices: &covered_vertices,
+                    root_bone: request.root_bone,
+                    covered_vertices: &request.covered_vertices,
                 },
-                attachment,
-                &tex_coords,
-                &given,
+                request.attachment,
+                &request.tex_coords,
+                &request.given_chains,
             )
         })
         .map_err(anyhow_to_pyerr)?;

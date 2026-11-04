@@ -9,12 +9,12 @@ from bpy.app.handlers import persistent
 from mathutils import Matrix
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from .. import _debuglog
 from ..common.coordinates import blender_frame_to_engine_metres
@@ -81,7 +81,7 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
-    preview = tml.SpringPreview(spring, armature_bone_specs(context, arm), rest_locals)
+    preview = avatar_api.SpringPreview(spring, armature_bone_specs(context, arm), rest_locals)
     cached = _ArmaturePreview(preview, spring_key, rest_key)
     _previews[arm.name] = cached
     return cached
@@ -115,7 +115,7 @@ def _previewed_armatures(scene):
 
 @persistent
 def step_swing_preview(scene, _depsgraph=None) -> None:
-    if not _TML_AVAILABLE:
+    if not _AVATAR_API_AVAILABLE:
         return
     for arm in _previewed_armatures(scene):
         try:

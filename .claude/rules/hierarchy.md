@@ -117,14 +117,18 @@ but not `World`, it belongs in `thyllore-vulkan-core`.
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin
 (`crate-type = ["cdylib", "rlib"]`, `python` feature, abi3-py310):
 
-- `thyllore-ml-core` → the curve copilot and avatar setup addons (`blender_addon/`, wheels collected by
-  `scripts/collect_wheels.{sh,ps1}`, packaged by `scripts/build_blender_addon.{sh,ps1}` with
-  `--product curve-copilot | avatar-setup`). The two products are disjoint ZIPs with their own extension
-  ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`, the avatar setup ZIP excludes the
-  copilot operators, so one Blender never registers the shared property groups twice
-  (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
-  `thyllore-ml-api` is the ABI marker shared between that wheel and the addon; changing it requires a
-  coordinated wheel rebuild and end-user reinstall.
+- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback, skin weight transfer, debug log)
+  and `thyllore-avatar-api` → the avatar setup addon (chain generation, spring edit and preview, colliders,
+  clip bake, submesh roles, VRM export). Both live in `blender_addon/`; `scripts/collect_wheels.{sh,ps1}`
+  builds both wheels (`--crate` picks one) and `scripts/build_blender_addon.{sh,ps1}` packages one product
+  with `--product curve-copilot | avatar-setup`, keeping only that product's wheel. The two products are
+  disjoint ZIPs with their own extension ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`,
+  the avatar setup ZIP excludes the copilot operators, so one Blender never registers the shared property
+  groups twice (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
+  A wheel crate is named after what it serves; avatar setup code never goes back into `thyllore-ml-core`.
+  `thyllore-ml-api` holds the ABI marker both wheels export and the addon checks, plus the PyO3 helpers
+  both wheels share (`python` feature); changing the marker requires a coordinated wheel rebuild and
+  end-user reinstall.
 - `thyllore-effect-core` → the flame and water addons (`blender_addon/effects/<effect>/`, release workflows
   `blender_<effect>_addon_release.yml`). One crate serves every effect; the addon imports the analytic
   core and presets from it so the Blender preview and the engine share the same math.

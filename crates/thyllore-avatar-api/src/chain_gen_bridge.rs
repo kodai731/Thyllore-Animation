@@ -22,6 +22,34 @@ use crate::avatar_setup_bridge::BoneSpec;
 use crate::collider_bridge::FitSkin;
 use crate::param_rows::{param_rows, ParamRow};
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GenerateChainsRequest {
+    pub positions: Vec<[f32; 3]>,
+    pub triangles: Vec<[u32; 3]>,
+    pub root_position: [f32; 3],
+    pub target: String,
+    pub settings: BTreeMap<String, f32>,
+    #[serde(default)]
+    pub skins: Vec<FitSkin>,
+    #[serde(default)]
+    pub root_bone: usize,
+    #[serde(default)]
+    pub tex_coords: Vec<[f32; 2]>,
+    #[serde(default)]
+    pub covered_vertices: Vec<u32>,
+    #[serde(default)]
+    pub body_colliders: Vec<BodyColliderIn>,
+    #[serde(default)]
+    pub humanoid_bones: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub bones: Vec<BoneSpec>,
+    #[serde(default)]
+    pub given_chains: Vec<GivenChainIn>,
+    #[serde(default)]
+    pub attachment: Option<RootAttachment>,
+}
+
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
     pub chains: Vec<ChainOut>,

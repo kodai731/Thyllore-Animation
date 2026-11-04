@@ -98,12 +98,12 @@ unsafe fn destroy_device_buffer(device: &vulkanalia::Device, buf: &DeviceBuffer)
     device.free_memory(buf.memory, None);
 }
 
-unsafe fn execute_as_build(
-    rrdevice: &RRDevice,
-    rrcommand_pool: &RRCommandPool,
+unsafe fn record_as_build(
+    device: &vulkanalia::Device,
+    command_buffer: vk::CommandBuffer,
     build_info: &vk::AccelerationStructureBuildGeometryInfoKHRBuilder,
     primitive_count: u32,
-) -> Result<()> {
+) {
     let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
         .primitive_count(primitive_count)
         .primitive_offset(0)
@@ -112,12 +112,26 @@ unsafe fn execute_as_build(
         .build();
     let build_range_infos = [build_range_info];
 
-    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-
-    rrdevice.device.cmd_build_acceleration_structures_khr(
+    device.cmd_build_acceleration_structures_khr(
         command_buffer,
         std::slice::from_ref(build_info),
         &[&build_range_infos[0]],
+    );
+}
+
+unsafe fn execute_as_build(
+    rrdevice: &RRDevice,
+    rrcommand_pool: &RRCommandPool,
+    build_info: &vk::AccelerationStructureBuildGeometryInfoKHRBuilder,
+    primitive_count: u32,
+) -> Result<()> {
+    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
+
+    record_as_build(
+        &rrdevice.device,
+        command_buffer,
+        build_info,
+        primitive_count,
     );
 
     end_single_time_commands(
@@ -597,6 +611,39 @@ impl RRAccelerationStructure {
         index_buffer: &vk::Buffer,
         index_count: u32,
     ) -> Result<()> {
+        let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
+
+        Self::record_blas_update(
+            instance,
+            rrdevice,
+            blas,
+            vertex_buffer,
+            vertex_count,
+            vertex_stride,
+            index_buffer,
+            index_count,
+            command_buffer,
+        )?;
+
+        end_single_time_commands(
+            rrdevice,
+            rrdevice.graphics_queue,
+            rrcommand_pool.command_pool,
+            command_buffer,
+        )
+    }
+
+    pub unsafe fn record_blas_update(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        blas: &mut RRBLAS,
+        vertex_buffer: &vk::Buffer,
+        vertex_count: u32,
+        vertex_stride: u32,
+        index_buffer: &vk::Buffer,
+        index_count: u32,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
         let device = &rrdevice.device;
 
         let vertex_addr = device.get_buffer_device_address(
@@ -667,7 +714,7 @@ impl RRAccelerationStructure {
                 device_address: scratch.address,
             });
 
-        execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
+        record_as_build(device, command_buffer, &build_info, primitive_count);
 
         Ok(())
     }
@@ -680,11 +727,38 @@ impl RRAccelerationStructure {
         blas_list: &[RRBLAS],
         procedural_blas: &[RRBLAS],
     ) -> Result<()> {
-        let device = &rrdevice.device;
-
         if blas_list.is_empty() && procedural_blas.is_empty() {
             return Ok(());
         }
+
+        let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
+
+        Self::record_tlas_update(
+            instance,
+            rrdevice,
+            tlas,
+            blas_list,
+            procedural_blas,
+            command_buffer,
+        )?;
+
+        end_single_time_commands(
+            rrdevice,
+            rrdevice.graphics_queue,
+            rrcommand_pool.command_pool,
+            command_buffer,
+        )
+    }
+
+    pub unsafe fn record_tlas_update(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        tlas: &mut RRTLAS,
+        blas_list: &[RRBLAS],
+        procedural_blas: &[RRBLAS],
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        let device = &rrdevice.device;
 
         let total = blas_list.len() + procedural_blas.len();
         let instances_size =
@@ -779,7 +853,7 @@ impl RRAccelerationStructure {
                 device_address: scratch.address,
             });
 
-        execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
+        record_as_build(device, command_buffer, &build_info, primitive_count);
 
         Ok(())
     }

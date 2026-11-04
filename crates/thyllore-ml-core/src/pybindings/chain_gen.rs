@@ -37,14 +37,10 @@ pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, 
 }
 
 /// The names among `candidates` that belong to a chain generated on the submesh `target`
-/// (`<mesh>/<material>`) in `role`; the others name chains of other submeshes.
+/// (`<mesh>/<material>`); the others name chains of other submeshes.
 #[pyfunction]
-pub fn submesh_chain_names(
-    role: &str,
-    target: &str,
-    candidates: Vec<String>,
-) -> PyResult<Vec<String>> {
-    submesh_chain_names_of(role, target, &candidates).map_err(anyhow_to_pyerr)
+pub fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Vec<String>> {
+    submesh_chain_names_of(target, &candidates).map_err(anyhow_to_pyerr)
 }
 
 /// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the
@@ -58,14 +54,13 @@ pub fn submesh_chain_names(
 /// chains the user assigned as `{name, vertices, joints?}` dicts (`joints` are the joint heads followed by the
 /// chain tail); the chains named for this submesh replace the split.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, role, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None, given_chains = None))]
+#[pyo3(signature = (positions, triangles, root_position, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None, given_chains = None, *, attachment = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
     positions: Vec<[f32; 3]>,
     triangles: Vec<[u32; 3]>,
     root_position: [f32; 3],
-    role: &str,
     target: &str,
     settings: &Bound<'py, PyDict>,
     skins: Option<&Bound<'py, PyAny>>,
@@ -76,6 +71,7 @@ pub fn generate_chains<'py>(
     humanoid_bones: BTreeMap<String, usize>,
     bones: Option<&Bound<'py, PyAny>>,
     given_chains: Option<&Bound<'py, PyAny>>,
+    attachment: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let pairs = settings_pairs(settings)?;
     let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
@@ -98,13 +94,17 @@ pub fn generate_chains<'py>(
     let roles = role_bones(&humanoid_bones, &bone_specs);
     let colliders = body_colliders_from_inputs(&collider_inputs, &roles, &bone_specs);
 
+    let attachment = match attachment {
+        Some(s) => Some(crate::chain_gen_bridge::parse_attachment(s).map_err(anyhow_to_pyerr)?),
+        None => None,
+    };
+
     let output = py
         .detach(|| {
             run_chain_gen(
                 &positions,
                 &triangles,
                 root_position,
-                role,
                 target,
                 settings,
                 SkinAttachment {
@@ -114,6 +114,7 @@ pub fn generate_chains<'py>(
                     root_bone,
                     covered_vertices: &covered_vertices,
                 },
+                attachment,
                 &tex_coords,
                 &given,
             )

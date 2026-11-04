@@ -182,6 +182,7 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
         layout.label(text="Defaults for what no chain group or bone decides yet", icon="INFO")
         column = layout.column(align=True)
         _draw_labelled_prop(column, generation, "root_bone")
+        _draw_labelled_prop(column, generation, "attachment")
         for param in CHAIN_GEN_UI_PARAMS:
             _draw_labelled_prop(column, generation, param["name"])
 

@@ -7,7 +7,7 @@ use super::card_strands::place_card_chains;
 use super::columns::{group_into_components, split_garment_columns, split_hair_columns};
 use super::coverage::{chain_frames, garment_coverage, marked_garment_coverage, GarmentCoverage};
 use super::frame::{collect_target_vertices, compute_vertex_frames, BandPartition, VertexFrame};
-use super::root_band::{hair_root_band, RootBand};
+use super::root_band::{cap_root_band, RootBand};
 use super::strand_mode::decide_strand_mode;
 use crate::cloth_setup::components::chain_gen::{
     joint_name, ChainGenInput, ChainGenParams, ChainPlacement, GeneratedChain, GeneratedJoint,
@@ -205,7 +205,7 @@ pub fn place_chains_with_strands(
         return place_given_chains(input, params, &vertices);
     }
 
-    let root_band = hair_root_band(input, params);
+    let root_band = cap_root_band(input, params);
     let phi_center = root_band.map_or(input.root_position, |band| band.center);
     let all_frames = compute_vertex_frames(input, &vertices, phi_center);
     let coverage = garment_coverage(input, params, &vertices)?;

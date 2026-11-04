@@ -6,11 +6,7 @@ use crate::{
 };
 
 pub trait RenderBackend {
-    unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()>;
-
-    unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()>;
-
-    unsafe fn rebuild_tlas(&mut self) -> Result<()>;
+    unsafe fn upload_animated_meshes(&mut self, mesh_ids: &[MeshId]) -> Result<()>;
 
     unsafe fn create_static_line_buffers(
         &mut self,

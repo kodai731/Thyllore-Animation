@@ -152,13 +152,8 @@ pub unsafe fn upload_animations(
     backend: &mut dyn RenderBackend,
     updated_meshes: &[usize],
 ) -> Result<()> {
-    for &mesh_idx in updated_meshes {
-        backend.upload_mesh_vertices(mesh_idx)?;
-    }
-
     if !updated_meshes.is_empty() {
-        backend.update_acceleration_structure(updated_meshes)?;
-        backend.rebuild_tlas()?;
+        backend.upload_animated_meshes(updated_meshes)?;
     }
 
     Ok(())

@@ -1,5 +1,27 @@
 use super::*;
+use crate::avatar_setup_bridge::BoneSpec;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint;
+
+fn spec(name: &str, parent: Option<usize>) -> BoneSpec {
+    BoneSpec {
+        name: name.to_string(),
+        parent,
+        rest_position: [0.0, 0.0, 0.0],
+        rest_frame: None,
+    }
+}
+
+fn test_specs() -> Vec<BoneSpec> {
+    vec![
+        spec("Hips", None),
+        spec("Head", Some(0)),
+        spec("hair_a", Some(1)),
+        spec("hair_a.001", Some(2)),
+        spec("hair_a.002", Some(3)),
+        spec("hair_b", Some(1)),
+        spec("hair_b.001", Some(5)),
+    ]
+}
 
 fn bone(name: &str, parent: Option<usize>) -> BoneInput {
     BoneInput {
@@ -7,18 +29,6 @@ fn bone(name: &str, parent: Option<usize>) -> BoneInput {
         parent,
         rest_position: [0.0, 0.0, 0.0],
     }
-}
-
-fn test_bones() -> Vec<BoneInput> {
-    vec![
-        bone("Hips", None),
-        bone("Head", Some(0)),
-        bone("hair_a", Some(1)),
-        bone("hair_a.001", Some(2)),
-        bone("hair_a.002", Some(3)),
-        bone("hair_b", Some(1)),
-        bone("hair_b.001", Some(5)),
-    ]
 }
 
 fn ramp_input(shape: &str) -> RampInput {
@@ -55,10 +65,14 @@ fn vrm_stiffness_of(joint: &SidecarSpringJoint) -> f32 {
 
 #[test]
 fn spring_edit_bridge_builds_two_chains_under_head() {
-    let bones = test_bones();
-    let spring = SidecarSpring::default();
+    let request = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    };
 
-    let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let result = add_chains_under_bone(&request).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 
@@ -84,28 +98,48 @@ fn spring_edit_bridge_builds_two_chains_under_head() {
 
 #[test]
 fn spring_edit_bridge_idempotent_call_does_not_duplicate_chains() {
-    let bones = test_bones();
-    let spring = SidecarSpring::default();
-
-    let first = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let first_request = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    };
+    let first = add_chains_under_bone(&first_request).unwrap();
     assert_eq!(first.chains.len(), 2);
 
-    let second = add_chains_under_bone(&first, &bones, "Head", 1).unwrap();
+    let first_names: Vec<_> = first.chains.iter().map(|c| c.name.clone()).collect();
+
+    let second_request = AddChainsUnderBoneRequest {
+        spring: first,
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    };
+    let second = add_chains_under_bone(&second_request).unwrap();
 
     assert_eq!(second.chains.len(), 2);
 
-    let first_names: Vec<_> = first.chains.iter().map(|c| c.name.clone()).collect();
     let second_names: Vec<_> = second.chains.iter().map(|c| c.name.clone()).collect();
     assert_eq!(first_names, second_names);
 }
 
 #[test]
 fn spring_edit_bridge_unknown_root_or_short_runs_return_error() {
-    let bones = test_bones();
-    let spring = SidecarSpring::default();
+    let bad_root = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "nonexistent".to_string(),
+        min_joints: 1,
+    };
+    assert!(add_chains_under_bone(&bad_root).is_err());
 
-    assert!(add_chains_under_bone(&spring, &bones, "nonexistent", 1).is_err());
-    assert!(add_chains_under_bone(&spring, &bones, "Head", 4).is_err());
+    let too_short = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 4,
+    };
+    assert!(add_chains_under_bone(&too_short).is_err());
 }
 
 fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
@@ -120,14 +154,25 @@ fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
 
 #[test]
 fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
-    let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        add_chains_under_bone(&AddChainsUnderBoneRequest {
+            spring: SidecarSpring::default(),
+            bones: test_specs(),
+            root_bone: "Head".to_string(),
+            min_joints: 3,
+        })
+        .unwrap(),
     );
     let mut ramp = ramp_input("linear");
     ramp.rigid_fraction = 0.5;
 
-    let result = apply_ramp_to_chains(&spring, &bones, &["Chain_0".to_string()], &ramp).unwrap();
+    let request = ApplyRampRequest {
+        spring,
+        bones: test_specs(),
+        chain_names: vec!["Chain_0".to_string()],
+        ramp,
+    };
+    let result = apply_ramp_to_chains(&request).unwrap();
 
     let chain = &result.chains[0];
     assert!((vrm_stiffness_of(&chain.joints[0]) - 1.0).abs() < 1e-6);
@@ -137,13 +182,24 @@ fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
 
 #[test]
 fn spring_edit_bridge_ramp_linear_interpolation() {
-    let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        add_chains_under_bone(&AddChainsUnderBoneRequest {
+            spring: SidecarSpring::default(),
+            bones: test_specs(),
+            root_bone: "Head".to_string(),
+            min_joints: 3,
+        })
+        .unwrap(),
     );
     let ramp = ramp_input("linear");
 
-    let result = apply_ramp_to_chains(&spring, &bones, &["Chain_0".to_string()], &ramp).unwrap();
+    let request = ApplyRampRequest {
+        spring,
+        bones: test_specs(),
+        chain_names: vec!["Chain_0".to_string()],
+        ramp,
+    };
+    let result = apply_ramp_to_chains(&request).unwrap();
 
     assert_eq!(result.chains.len(), 1);
     let chain = &result.chains[0];
@@ -155,9 +211,14 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
 
 #[test]
 fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
-    let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        add_chains_under_bone(&AddChainsUnderBoneRequest {
+            spring: SidecarSpring::default(),
+            bones: test_specs(),
+            root_bone: "Head".to_string(),
+            min_joints: 3,
+        })
+        .unwrap(),
     );
     let mut rest_relative_ramp = ramp_input("linear");
     for end in [&mut rest_relative_ramp.root, &mut rest_relative_ramp.tip] {
@@ -167,22 +228,33 @@ fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
         };
     }
 
-    let result = apply_ramp_to_chains(
-        &spring,
-        &bones,
-        &["Chain_0".to_string()],
-        &rest_relative_ramp,
-    );
+    let request = ApplyRampRequest {
+        spring,
+        bones: test_specs(),
+        chain_names: vec!["Chain_0".to_string()],
+        ramp: rest_relative_ramp,
+    };
+    let result = apply_ramp_to_chains(&request);
 
     assert!(result.is_err());
 }
 
 #[test]
 fn spring_edit_bridge_chains_under_bone_head() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    })
+    .unwrap();
 
-    let result = chains_under_bone(&spring, &bones, "Head").unwrap();
+    let request = ChainsUnderBoneRequest {
+        spring,
+        bones: test_specs(),
+        bone_name: "Head".to_string(),
+    };
+    let result = chains_under_bone(&request).unwrap();
 
     assert_eq!(result.len(), 2);
     assert!(result.contains(&"Chain_0".to_string()));
@@ -191,68 +263,122 @@ fn spring_edit_bridge_chains_under_bone_head() {
 
 #[test]
 fn spring_edit_bridge_chains_in_scope_sibling_chains() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    })
+    .unwrap();
 
-    let result = chains_in_scope(&spring, &bones, "Chain_0", "sibling_chains").unwrap();
+    let request = ChainsInScopeRequest {
+        spring,
+        bones: test_specs(),
+        chain_name: "Chain_0".to_string(),
+        scope: "sibling_chains".to_string(),
+    };
+    let result = chains_in_scope(&request).unwrap();
 
     assert_eq!(result.len(), 2);
 }
 
 #[test]
 fn spring_edit_bridge_unknown_shape_returns_error() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 3,
+    })
+    .unwrap();
     let mut ramp = ramp_input("linear");
     ramp.shape = "unknown".to_string();
 
-    let result = apply_ramp_to_chains(&spring, &bones, &["Chain_0".to_string()], &ramp);
+    let request = ApplyRampRequest {
+        spring,
+        bones: test_specs(),
+        chain_names: vec!["Chain_0".to_string()],
+        ramp,
+    };
+    let result = apply_ramp_to_chains(&request);
     assert!(result.is_err());
 }
 
 #[test]
 fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 3,
+    })
+    .unwrap();
 
-    assert!(chains_with_radius(&spring, &bones, None, "all")
-        .unwrap()
-        .is_empty());
-    assert_eq!(
-        chains_with_radius(&spring, &bones, Some(2), "all")
-            .unwrap()
-            .len(),
-        1
-    );
-    assert!(chains_with_radius(&spring, &bones, Some(2), "none")
-        .unwrap()
-        .is_empty());
+    let request_none = ChainsWithRadiusRequest {
+        spring: spring.clone(),
+        bones: test_specs(),
+        active: None,
+        mode: "all".to_string(),
+    };
+    assert!(chains_with_radius(&request_none).unwrap().is_empty());
+
+    let request_some = ChainsWithRadiusRequest {
+        spring: spring.clone(),
+        bones: test_specs(),
+        active: Some(2),
+        mode: "all".to_string(),
+    };
+    assert_eq!(chains_with_radius(&request_some).unwrap().len(), 1);
+
+    let request_mode_none = ChainsWithRadiusRequest {
+        spring,
+        bones: test_specs(),
+        active: Some(2),
+        mode: "none".to_string(),
+    };
+    assert!(chains_with_radius(&request_mode_none).unwrap().is_empty());
 }
 
 #[test]
 fn spring_edit_bridge_chains_with_radius_unknown_mode_returns_error() {
-    let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: test_specs(),
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    })
+    .unwrap();
 
-    assert!(chains_with_radius(&spring, &bones, None, "unknown").is_err());
+    let request = ChainsWithRadiusRequest {
+        spring,
+        bones: test_specs(),
+        active: None,
+        mode: "unknown".to_string(),
+    };
+    assert!(chains_with_radius(&request).is_err());
 }
 
 #[test]
 fn spring_edit_bridge_resolves_humanoid_role_on_prefixed_bones() {
-    let bones: Vec<BoneInput> = vec![
-        bone("mixamorig:Hips", None),
-        bone("mixamorig:Spine", Some(0)),
-        bone("mixamorig:Neck", Some(1)),
-        bone("mixamorig:Head", Some(2)),
-        bone("hair_a", Some(3)),
-        bone("hair_a.001", Some(4)),
-        bone("hair_b", Some(3)),
-        bone("hair_b.001", Some(6)),
-        bone("hair_b.002", Some(7)),
+    let bones: Vec<BoneSpec> = vec![
+        spec("mixamorig:Hips", None),
+        spec("mixamorig:Spine", Some(0)),
+        spec("mixamorig:Neck", Some(1)),
+        spec("mixamorig:Head", Some(2)),
+        spec("hair_a", Some(3)),
+        spec("hair_a.001", Some(4)),
+        spec("hair_b", Some(3)),
+        spec("hair_b.001", Some(6)),
+        spec("hair_b.002", Some(7)),
     ];
-    let spring = SidecarSpring::default();
 
-    let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let request = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones,
+        root_bone: "Head".to_string(),
+        min_joints: 1,
+    };
+    let result = add_chains_under_bone(&request).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 

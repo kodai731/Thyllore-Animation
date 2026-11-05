@@ -2,27 +2,25 @@ use pyo3::prelude::*;
 use pythonize::depythonize;
 
 use super::avatar_setup::bones_from_py;
+use crate::chain_register_bridge::{self, RegisterGeneratedChainsRequest};
 use crate::spring_edit_bridge::{
     add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
     chains_in_scope as bridge_chains_in_scope, chains_under_bone as bridge_chains_under_bone,
-    chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name, RampInput,
+    chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name,
+    AddChainsUnderBoneRequest, ApplyRampRequest, ChainsInScopeRequest, ChainsUnderBoneRequest,
+    ChainsWithRadiusRequest,
 };
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 /// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
 #[pyfunction]
-#[pyo3(signature = (spring, bones, root_bone, min_joints = 2))]
 pub fn add_chains_under_bone<'py>(
     py: Python<'py>,
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    root_bone: &str,
-    min_joints: u32,
+    request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
-    let output = bridge_add_chains_under_bone(&spring, &bone_inputs, root_bone, min_joints)
+    let request: AddChainsUnderBoneRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    let output = bridge_add_chains_under_bone(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }
@@ -35,68 +33,41 @@ pub fn register_generated_chains<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let request: crate::chain_register_bridge::RegisterGeneratedChainsRequest =
+    let request: RegisterGeneratedChainsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
-    let output = crate::chain_register_bridge::register_generated_chains(&request)
+    let output = chain_register_bridge::register_generated_chains(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }
 
 #[pyfunction]
-pub fn apply_ramp<'py>(
-    py: Python<'py>,
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    chain_names: Vec<String>,
-    ramp: &Bound<PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
-    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
-    let ramp_input: RampInput = depythonize(ramp).map_err(depythonize_error_to_pyerr)?;
-    let output = apply_ramp_to_chains(&spring, &bone_inputs, &chain_names, &ramp_input)
+pub fn apply_ramp<'py>(py: Python<'py>, request: &Bound<PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let request: ApplyRampRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    let output = apply_ramp_to_chains(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }
 
 #[pyfunction]
-pub fn chains_in_scope(
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    chain_name: &str,
-    scope: &str,
-) -> PyResult<Vec<String>> {
-    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
-    bridge_chains_in_scope(&spring, &bone_inputs, chain_name, scope)
+pub fn chains_in_scope(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+    let request: ChainsInScopeRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    bridge_chains_in_scope(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]
-pub fn chains_under_bone(
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    bone_name: &str,
-) -> PyResult<Vec<String>> {
-    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
-    bridge_chains_under_bone(&spring, &bone_inputs, bone_name)
+pub fn chains_under_bone(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+    let request: ChainsUnderBoneRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    bridge_chains_under_bone(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]
-pub fn chains_with_radius(
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    active: Option<usize>,
-    mode: &str,
-) -> PyResult<Vec<String>> {
-    let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-        depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
-    bridge_chains_with_radius(&spring, &bone_inputs, active, mode)
+pub fn chains_with_radius(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+    let request: ChainsWithRadiusRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    bridge_chains_with_radius(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 

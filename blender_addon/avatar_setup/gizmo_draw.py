@@ -50,7 +50,7 @@ def _highlighted_chain_names(context, arm, settings) -> set[str]:
     """Names of the chains holding the active bone."""
     bones = armature_bone_specs(context, arm)
     spring = spring_settings_to_edit(settings)
-    return set(avatar_api.chains_with_radius(spring, bones, _active_bone_index(arm), "all"))
+    return set(avatar_api.chains_with_radius({"spring": spring, "bones": bones, "active": _active_bone_index(arm), "mode": "all"}))
 
 
 def _draw_chain_radii(context, shader, arm, settings):

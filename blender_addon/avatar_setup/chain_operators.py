@@ -56,7 +56,7 @@ class THYLLORE_OT_AddChainsUnderBone(bpy.types.Operator):
         try:
             sidecar = spring_settings_to_edit(settings)
             bones = armature_bone_specs(context, arm)
-            output = avatar_api.add_chains_under_bone(sidecar, bones, self.root_bone, self.min_joints)
+            output = avatar_api.add_chains_under_bone({"spring": sidecar, "bones": bones, "root_bone": self.root_bone, "min_joints": self.min_joints})
         except ValueError as e:
             report(self, "ERROR", f"add_chains_under_bone failed: {e}")
             return {"CANCELLED"}

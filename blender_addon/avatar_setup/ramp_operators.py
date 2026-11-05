@@ -60,12 +60,12 @@ def target_chain_names(context, arm, settings, spring, bones, scope):
     if bone_name is not None:
         chain = chain_with_joint(settings, bone_name)
         if chain is not None:
-            return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
-        return avatar_api.chains_under_bone(spring, bones, bone_name)
+            return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
+        return avatar_api.chains_under_bone({"spring": spring, "bones": bones, "bone_name": bone_name})
 
     chain = active_chain(settings)
     if chain is not None:
-        return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
+        return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
     raise ValueError("Select the submesh the chains were generated on, a bone, or a chain in the list")
 
 
@@ -99,12 +99,12 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = avatar_api.apply_ramp(
-                spring,
-                bones,
-                names,
-                ramp_values(form),
-            )
+            output = avatar_api.apply_ramp({
+                "spring": spring,
+                "bones": bones,
+                "chain_names": names,
+                "ramp": ramp_values(form),
+            })
         except ValueError as e:
             report(self, "ERROR", f"apply_ramp failed: {e}")
             return {"CANCELLED"}

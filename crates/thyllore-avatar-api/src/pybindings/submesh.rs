@@ -4,9 +4,8 @@ use pythonize::depythonize;
 use crate::submesh_bridge::{
     find_hidden_triangles as bridge_find_hidden_triangles,
     guess_submesh_role as bridge_guess_submesh_role,
-    hidden_mask_defaults as bridge_hidden_mask_defaults, MaskMeshInput,
+    hidden_mask_defaults as bridge_hidden_mask_defaults, FindHiddenTrianglesRequest,
 };
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
@@ -15,23 +14,14 @@ pub fn guess_submesh_role(mesh: &str, material: &str) -> String {
 }
 
 #[pyfunction]
-#[pyo3(signature = (body, garments, params))]
-pub fn find_hidden_triangles(
-    py: Python<'_>,
-    body: &Bound<PyAny>,
-    garments: Vec<Bound<'_, PyAny>>,
-    params: &Bound<PyAny>,
-) -> PyResult<Vec<u32>> {
-    let body_input: MaskMeshInput = depythonize(body).map_err(depythonize_error_to_pyerr)?;
-    let params: HiddenMaskParams = depythonize(params).map_err(depythonize_error_to_pyerr)?;
-    let garment_inputs: Vec<MaskMeshInput> = garments
-        .iter()
-        .map(|g| depythonize(&g).map_err(depythonize_error_to_pyerr))
-        .collect::<PyResult<_>>()?;
-
-    let output = py.detach(|| bridge_find_hidden_triangles(&body_input, &garment_inputs, &params));
-
-    Ok(output)
+pub fn find_hidden_triangles<'py>(
+    py: Python<'py>,
+    request: &Bound<PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let request: FindHiddenTrianglesRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    let output = py.detach(|| bridge_find_hidden_triangles(&request));
+    pythonize_value(py, &output)
 }
 
 #[pyfunction]

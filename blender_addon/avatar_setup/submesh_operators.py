@@ -132,7 +132,7 @@ class THYLLORE_OT_HideCoveredSkin(bpy.types.Operator):
             if not loop_indices:
                 continue
 
-            hidden_local = avatar_api.find_hidden_triangles(body_input, garment_inputs, params)
+            hidden_local = avatar_api.find_hidden_triangles({"body": body_input, "garments": garment_inputs, "params": params})
             loop_hidden = to_loop_triangle_indices(hidden_local, loop_indices)
 
             submesh = skin_mesh_obj.thyllore_submesh

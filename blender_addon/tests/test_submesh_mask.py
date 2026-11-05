@@ -176,7 +176,7 @@ def test_mask_mesh_input_feeds_wheel():
         body_input, _ = mask_mesh_input(body_positions, body_normals, body_triangles, [0, 0], 0, 1.0)
         garment_input, _ = mask_mesh_input(garment_positions, garment_normals, garment_triangles, [0, 0], 0, 1.0)
 
-        result = avatar_api.find_hidden_triangles(body_input, [garment_input], avatar_api.hidden_mask_defaults())
+        result = avatar_api.find_hidden_triangles({"body": body_input, "garments": [garment_input], "params": avatar_api.hidden_mask_defaults()})
 
         assert len(result) == 2
     finally:

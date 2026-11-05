@@ -2,19 +2,11 @@ use super::SubmeshSelector;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ChainRole {
-    Hair,
-    #[serde(alias = "skirt")]
-    Garment,
-}
-
-impl ChainRole {
-    pub fn bone_prefix(self) -> &'static str {
-        match self {
-            ChainRole::Hair => "hair",
-            ChainRole::Garment => "garment",
-        }
-    }
+pub enum RootAttachment {
+    /// The root sits on the top of a closed surface, such as the head.
+    Cap,
+    /// The root is a ring at the top edge of the mesh, such as a skirt or a sleeve.
+    Ring,
 }
 
 /// Where a spring chain came from: hand-authored, or generated on a submesh by the chain generator.
@@ -24,7 +16,7 @@ pub enum ChainOrigin {
     Authored,
     Generated {
         target: SubmeshSelector,
-        role: ChainRole,
+        attachment: RootAttachment,
     },
 }
 

@@ -67,8 +67,9 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
 - `thyllore-avatar-core/src/cloth_setup/` is the outfit setup domain (submesh roles, the hidden skin mask and
-  spring chain generation for both hair and garment roles); it is named after the setup, not after one role.
-- `thyllore-avatar-core/src/collider/` is the collider domain shared by every chain role: `components/`
+  spring chain generation, which takes a root bone and a `RootAttachment` (Cap / Ring), never a garment kind);
+  it is named after the setup, not after one role.
+- `thyllore-avatar-core/src/collider/` is the collider domain shared by every generated chain: `components/`
   holds the shapes (`HeadCapsule`), `systems/` their estimators from skin geometry (`estimate_head_capsule`
   on top of math-core's `widest_cross_section`) and from the skeleton (`torso_volume`: pelvis and spine capsules
   for torso bones whose skin was removed). `body_fit::fit_body_capsules` is the one sequence that turns skins

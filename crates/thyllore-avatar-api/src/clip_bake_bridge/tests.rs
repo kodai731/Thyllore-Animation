@@ -33,7 +33,12 @@ fn tpose_bones(prefix: &str) -> Vec<BoneSpec> {
 
 #[test]
 fn clip_bake_bridge_sways_hips_sideways_by_the_hips_height() {
-    let baked = bake_clip_file(&tpose_bones(""), HIPS_SWAY, 2).unwrap();
+    let baked = bake_clip_file(&BakeClipFileRequest {
+        bones: tpose_bones(""),
+        clip_ron: HIPS_SWAY.to_string(),
+        fps: 2,
+    })
+    .unwrap();
 
     assert_eq!(baked.name, "hips_sway");
     assert_eq!(baked.hips_bone, "Hips");
@@ -55,7 +60,12 @@ fn clip_bake_bridge_sways_hips_sideways_by_the_hips_height() {
 
 #[test]
 fn clip_bake_bridge_binds_role_tracks_to_prefixed_bones() {
-    let baked = bake_clip_file(&tpose_bones("mixamorig:"), HIPS_SWAY, 2).unwrap();
+    let baked = bake_clip_file(&BakeClipFileRequest {
+        bones: tpose_bones("mixamorig:"),
+        clip_ron: HIPS_SWAY.to_string(),
+        fps: 2,
+    })
+    .unwrap();
 
     assert_eq!(baked.hips_bone, "mixamorig:Hips");
     assert!((baked.hips_offsets[1][0].abs() - 0.15).abs() < 1e-5);
@@ -74,7 +84,12 @@ fn clip_bake_bridge_binds_role_tracks_to_prefixed_bones() {
 fn clip_bake_bridge_rejects_a_rig_without_feet() {
     let bones: Vec<BoneSpec> = tpose_bones("").into_iter().take(7).collect();
 
-    let error = bake_clip_file(&bones, HIPS_SWAY, 2).unwrap_err();
+    let error = bake_clip_file(&BakeClipFileRequest {
+        bones,
+        clip_ron: HIPS_SWAY.to_string(),
+        fps: 2,
+    })
+    .unwrap_err();
 
     assert!(error.to_string().contains("feet"), "{error}");
 }
@@ -84,7 +99,12 @@ fn clip_bake_bridge_rejects_a_bone_without_rest_frame() {
     let mut bones = tpose_bones("");
     bones[0].rest_frame = None;
 
-    let error = bake_clip_file(&bones, HIPS_SWAY, 2).unwrap_err();
+    let error = bake_clip_file(&BakeClipFileRequest {
+        bones,
+        clip_ron: HIPS_SWAY.to_string(),
+        fps: 2,
+    })
+    .unwrap_err();
 
     assert!(error.to_string().contains("rest_frame"), "{error}");
 }

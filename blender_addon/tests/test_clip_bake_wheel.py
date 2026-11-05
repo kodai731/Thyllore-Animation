@@ -59,7 +59,11 @@ def tpose_specs(prefix: str, scale_length: float):
 
 
 def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
-    baked = avatar_api.bake_clip_file(tpose_specs("mixamorig:", 1.0), HIPS_SWAY.read_text(encoding="utf-8"), 2)
+    baked = avatar_api.bake_clip_file({
+        "bones": tpose_specs("mixamorig:", 1.0),
+        "clip_ron": HIPS_SWAY.read_text(encoding="utf-8"),
+        "fps": 2,
+    })
 
     assert baked["name"] == "hips_sway"
     assert baked["hips_bone"] == "mixamorig:Hips"
@@ -71,7 +75,11 @@ def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
 
 
 def test_bake_clip_file_scales_the_sway_with_the_scene_unit(avatar_api):
-    baked = avatar_api.bake_clip_file(tpose_specs("", 0.01), HIPS_SWAY.read_text(encoding="utf-8"), 2)
+    baked = avatar_api.bake_clip_file({
+        "bones": tpose_specs("", 0.01),
+        "clip_ron": HIPS_SWAY.read_text(encoding="utf-8"),
+        "fps": 2,
+    })
 
     assert abs(baked["hips_offsets"][1][0]) == pytest.approx(0.0015, abs=1e-6)
 
@@ -80,4 +88,18 @@ def test_bake_clip_file_reports_a_rig_without_feet(avatar_api):
     specs = tpose_specs("", 1.0)[:7]
 
     with pytest.raises(RuntimeError, match="feet"):
-        avatar_api.bake_clip_file(specs, HIPS_SWAY.read_text(encoding="utf-8"), 2)
+        avatar_api.bake_clip_file({
+            "bones": specs,
+            "clip_ron": HIPS_SWAY.read_text(encoding="utf-8"),
+            "fps": 2,
+        })
+
+
+def test_bake_clip_file_rejects_an_unknown_request_key(avatar_api):
+    with pytest.raises(ValueError, match="unknown field"):
+        avatar_api.bake_clip_file({
+            "bones": tpose_specs("", 1.0),
+            "clip_ron": HIPS_SWAY.read_text(encoding="utf-8"),
+            "fps": 2,
+            "unknown_key": "should fail",
+        })

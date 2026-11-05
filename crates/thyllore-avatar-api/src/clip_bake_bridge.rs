@@ -36,16 +36,24 @@ pub struct BakedClip {
     pub bone_rotations: Vec<BoneRotationTrack>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BakeClipFileRequest {
+    pub bones: Vec<BoneSpec>,
+    pub clip_ron: String,
+    pub fps: u32,
+}
+
 /// Bakes a humanoid standard-space clip file onto the rig the way the engine plays a template:
 /// role-named tracks bind to the inferred humanoid bones, then every frame is retargeted.
-pub fn bake_clip_file(bones: &[BoneSpec], clip_ron: &str, fps: u32) -> anyhow::Result<BakedClip> {
-    let mut clip = parse_clip(clip_ron)?;
-    let inputs: Vec<BoneInput> = bones.iter().cloned().map(Into::into).collect();
+pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip> {
+    let mut clip = parse_clip(&request.clip_ron)?;
+    let inputs: Vec<BoneInput> = request.bones.iter().cloned().map(Into::into).collect();
     let (mapping, _) = infer_mapping(&inputs);
     clip_remap_bone_ids(&mut clip, &track_name_table(&inputs, &mapping));
 
-    let context = retarget_context(bones, &inputs, &mapping)?;
-    let baked = bake_humanoid_clip(&context, &clip, fps);
+    let context = retarget_context(&request.bones, &inputs, &mapping)?;
+    let baked = bake_humanoid_clip(&context, &clip, request.fps);
     let hips_index = *context
         .mapping
         .by_role
@@ -56,7 +64,7 @@ pub fn bake_clip_file(bones: &[BoneSpec], clip_ron: &str, fps: u32) -> anyhow::R
         .bone_rotations
         .iter()
         .map(|(&index, rotations)| BoneRotationTrack {
-            bone: bones[index].name.clone(),
+            bone: request.bones[index].name.clone(),
             rotations: rotations
                 .iter()
                 .map(|q| [q.s, q.v.x, q.v.y, q.v.z])
@@ -66,9 +74,9 @@ pub fn bake_clip_file(bones: &[BoneSpec], clip_ron: &str, fps: u32) -> anyhow::R
 
     Ok(BakedClip {
         name: clip.name,
-        fps,
+        fps: request.fps,
         frame_times: baked.frame_times,
-        hips_bone: bones[hips_index].name.clone(),
+        hips_bone: request.bones[hips_index].name.clone(),
         hips_offsets: baked.hips_offsets.iter().map(|v| [v.x, v.y, v.z]).collect(),
         bone_rotations,
     })

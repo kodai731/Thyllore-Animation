@@ -68,7 +68,11 @@ def bake_clip_onto_armature(context, arm, clip_text: str) -> dict:
     """Bake clip_text onto arm as an action named after the clip; returns the wheel's baked clip."""
     scene = context.scene
     scale_length = scene.unit_settings.scale_length
-    baked = avatar_api.bake_clip_file(armature_bone_specs(context, arm), clip_text, scene_fps(scene))
+    baked = avatar_api.bake_clip_file({
+        "bones": armature_bone_specs(context, arm),
+        "clip_ron": clip_text,
+        "fps": scene_fps(scene),
+    })
 
     _replace_action(arm, baked["name"])
     for track in baked["bone_rotations"]:

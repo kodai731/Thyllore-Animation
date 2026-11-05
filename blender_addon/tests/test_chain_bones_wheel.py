@@ -1,10 +1,9 @@
 """generate_chains from the wheel: bone specs, weights, settings table and the Blender-space conversion."""
 from __future__ import annotations
 
-import math
-import sys
-import zipfile
 from pathlib import Path
+
+import math
 
 import pytest
 
@@ -22,27 +21,6 @@ from blender_addon.common.chain_bones import (
     vertex_tex_coords,
 )
 from blender_addon.common.coordinates import blender_to_engine_point, engine_to_blender_point
-
-WHEELS_DIR = Path(__file__).resolve().parents[1] / "wheels"
-
-
-@pytest.fixture(scope="module")
-def avatar_api(tmp_path_factory):
-    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
-    if not wheels:
-        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
-
-    extract_dir = tmp_path_factory.mktemp("avatar_api_wheel")
-    with zipfile.ZipFile(wheels[-1]) as archive:
-        archive.extractall(extract_dir)
-
-    sys.path.insert(0, str(extract_dir))
-    try:
-        import thyllore_avatar_api
-
-        yield thyllore_avatar_api
-    finally:
-        sys.path.remove(str(extract_dir))
 
 
 HEAD_POSITIONS = [(0.2, 0.1, 0.0), (-0.2, 0.1, 0.0), (0.0, 0.1, 0.2), (0.0, 0.1, -0.2)]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -51,3 +52,25 @@ def server_config(mock_server, fast_retry):
         deadline_seconds=2.0,
         retry=fast_retry,
     )
+
+
+WHEELS_DIR = Path(__file__).resolve().parent.parent / "wheels"
+
+
+@pytest.fixture(scope="module")
+def avatar_api(tmp_path_factory):
+    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
+    if not wheels:
+        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
+
+    extract_dir = tmp_path_factory.mktemp("avatar_api_wheel")
+    with zipfile.ZipFile(wheels[-1]) as archive:
+        archive.extractall(extract_dir)
+
+    sys.path.insert(0, str(extract_dir))
+    try:
+        import thyllore_avatar_api
+
+        yield thyllore_avatar_api
+    finally:
+        sys.path.remove(str(extract_dir))

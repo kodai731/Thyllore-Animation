@@ -62,7 +62,7 @@ GitHub Actions workflows.
 
 ## CI Reproduction — Run `scripts/collect_wheels.sh` Before Pushing
 
-**IMPORTANT:** Before pushing any change that touches `crates/thyllore-ml-core`,
+**IMPORTANT:** Before pushing any change that touches `crates/thyllore-ml-core`, `crates/thyllore-avatar-api`,
 `pybindings/`, the blender addon, or anything affecting wheel builds, reproduce
 the GitHub Actions wheel build locally:
 

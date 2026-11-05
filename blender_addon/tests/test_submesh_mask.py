@@ -141,9 +141,9 @@ def test_mask_mesh_input_feeds_wheel():
     from pathlib import Path
 
     wheels_dir = Path(__file__).resolve().parents[1] / "wheels"
-    wheels = sorted(wheels_dir.glob("thyllore_ml_core-*.whl"))
+    wheels = sorted(wheels_dir.glob("thyllore_avatar_api-*.whl"))
     if not wheels:
-        pytest.skip("thyllore_ml_core wheel not built (run scripts/collect_wheels.sh)")
+        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
 
     import tempfile
 
@@ -153,7 +153,7 @@ def test_mask_mesh_input_feeds_wheel():
 
     sys.path.insert(0, extract_dir)
     try:
-        import thyllore_ml_core as tml
+        import thyllore_avatar_api as avatar_api
 
         body_positions = [
             (-0.5, 0.0, -0.5),
@@ -176,7 +176,7 @@ def test_mask_mesh_input_feeds_wheel():
         body_input, _ = mask_mesh_input(body_positions, body_normals, body_triangles, [0, 0], 0, 1.0)
         garment_input, _ = mask_mesh_input(garment_positions, garment_normals, garment_triangles, [0, 0], 0, 1.0)
 
-        result = tml.find_hidden_triangles(body_input, [garment_input], tml.hidden_mask_defaults())
+        result = avatar_api.find_hidden_triangles(body_input, [garment_input], avatar_api.hidden_mask_defaults())
 
         assert len(result) == 2
     finally:

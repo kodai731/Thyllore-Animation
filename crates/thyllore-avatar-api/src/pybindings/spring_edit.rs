@@ -1,8 +1,7 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
-use super::chain_gen::pythonize_value;
+use super::avatar_setup::bones_from_py;
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::chain_register_bridge::{
     register_generated_chains as bridge_register_generated_chains, GeneratedChainIn,
@@ -14,6 +13,7 @@ use crate::spring_edit_bridge::{
     chains_in_scope as bridge_chains_in_scope, chains_under_bone as bridge_chains_under_bone,
     chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name, RampInput,
 };
+use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 /// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
 #[pyfunction]
@@ -37,7 +37,7 @@ pub fn add_chains_under_bone<'py>(
 /// capsule (or a capsule fitted to the skin on the root bone) in the fitted body group, and the
 /// chains bound to that group. `bones` carry `bind_matrix` like the collider fit.
 #[pyfunction]
-#[pyo3(signature = (spring, bones, skins, root_bone, target, role, chains, head_capsule = None))]
+#[pyo3(signature = (spring, bones, skins, root_bone, target, attachment, chains, head_capsule = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn register_generated_chains<'py>(
     py: Python<'py>,
@@ -46,7 +46,7 @@ pub fn register_generated_chains<'py>(
     skins: &Bound<PyAny>,
     root_bone: &str,
     target: &str,
-    role: &str,
+    attachment: &str,
     chains: &Bound<PyAny>,
     head_capsule: Option<&Bound<PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -58,10 +58,12 @@ pub fn register_generated_chains<'py>(
     let head_capsule: Option<CapsuleOut> = head_capsule
         .map(|capsule| depythonize(capsule).map_err(depythonize_error_to_pyerr))
         .transpose()?;
+    let attachment = crate::chain_gen_bridge::parse_attachment(attachment)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     let request = RegisterRequest {
         root_name: root_bone,
         target,
-        role,
+        attachment,
         chains: &chains,
         head_capsule,
     };

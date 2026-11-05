@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain,
-    SpringColliderDef, SpringColliderGroup, SpringCollisionMode, SpringForceModel,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, RestClearance, SpringBoneSetup,
+    SpringChain, SpringColliderDef, SpringColliderGroup, SpringCollisionMode, SpringForceModel,
     SpringJointParam, VrmJointForce,
 };
 
@@ -221,6 +221,7 @@ fn convert_springs(
             tail_bone_id,
             enabled: true,
             origin: ChainOrigin::Authored,
+            rest_clearance: RestClearance::Baked,
         });
     }
 
@@ -324,6 +325,7 @@ mod tests {
 
         let chain = &setup.chains[0];
         assert_eq!(chain.name, "hair_front");
+        assert_eq!(chain.rest_clearance, RestClearance::Baked);
         assert_eq!(chain.center_bone_id, Some(10));
         assert_eq!(chain.collider_group_ids, [0, 1]);
         assert_eq!(chain.tail_bone_id, Some(15));

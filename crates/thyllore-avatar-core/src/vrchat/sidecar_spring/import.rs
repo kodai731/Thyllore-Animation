@@ -1,7 +1,7 @@
 use cgmath::Vector3;
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, SpringBoneSetup, SpringChain,
-    SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, RestClearance, SpringBoneSetup,
+    SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
     SpringCollisionMode, SpringJointParam, SubmeshSelector,
 };
 use thyllore_anim_core::BoneId;
@@ -196,6 +196,7 @@ fn import_chain(
             .and_then(|name| bone_id_of(bones, name)),
         enabled: chain.enabled,
         origin: chain_origin_from_sidecar(&chain.origin),
+        rest_clearance: RestClearance::Tolerated,
     });
 }
 

@@ -403,6 +403,7 @@ mod tests {
                 tail_bone_id: None,
                 enabled: true,
                 origin: Default::default(),
+                rest_clearance: Default::default(),
             }],
             colliders: vec![],
             collider_groups: vec![],
@@ -611,6 +612,7 @@ mod tests {
                     tail_bone_id: None,
                     enabled: false,
                     origin: Default::default(),
+                    rest_clearance: Default::default(),
                 },
                 SpringChain {
                     id: 1,
@@ -630,6 +632,7 @@ mod tests {
                     tail_bone_id: None,
                     enabled: true,
                     origin: Default::default(),
+                    rest_clearance: Default::default(),
                 },
             ],
             colliders: vec![],

@@ -6,7 +6,7 @@ use super::{
     recompute_global_transform, resolve_all_segment_collisions, resolve_all_tail_collisions,
     rotate_vector, segment_axis_distance, shrunk_collider_radius, tail_axis_distance,
     world_collider, ColliderShrink, JointForce, JointForces, JointRestFrame, JointRestGeometry,
-    RestTolerance, SpringBoneSetup, SpringChain, SpringChainId, SpringCollisionMode,
+    RestClearance, RestTolerance, SpringBoneSetup, SpringChain, SpringChainId, SpringCollisionMode,
     SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP,
 };
 use crate::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
@@ -153,8 +153,7 @@ fn initialize_chain(
     (chain_state, shrinks)
 }
 
-/// VRM joints have no rest tolerance at runtime (UniVRM), so theirs is projected onto the hit radius
-/// and, for a joint resting inside a collider, onto that collider's radius.
+/// VRM joints have no rest tolerance at runtime (UniVRM): it is projected onto the radii once, when authored.
 fn project_vrm_joints(
     chain: &SpringChain,
     joint_states: &mut [SpringJointState],
@@ -177,6 +176,12 @@ fn project_vrm_joints(
         })
         .collect();
     if vrm_joints.is_empty() {
+        return Vec::new();
+    }
+    if chain.rest_clearance == RestClearance::Baked {
+        for (index, _) in &vrm_joints {
+            joint_states[*index].rest_axis_distances.clear();
+        }
         return Vec::new();
     }
 
@@ -915,6 +920,42 @@ mod tests {
         let shrink = simulation.collider_shrinks[0];
         assert_eq!((shrink.collider_id, shrink.bone_id), (0, 1));
         assert!((shrink.to - 0.16).abs() < 1e-5, "{shrink:?}");
+    }
+
+    #[test]
+    fn a_shrunk_collider_follows_its_bone_scale_at_runtime() {
+        let skeleton = straight_strand(4);
+        let mut setup = sphere_group_at(Vector3::new(0.02, 2.0, 0.0), 0.2);
+        setup.chains = vec![vrm_chain_of(&[1, 2])];
+        let rest_globals =
+            compute_pose_global_transforms(&skeleton, &create_pose_from_rest(&skeleton));
+        let simulation =
+            spring_bone_initialize(&setup, &skeleton, &rest_globals, SpringSpace::IDENTITY);
+
+        let mut pose = create_pose_from_rest(&skeleton);
+        pose.bone_poses[0].scale = Vector3::new(2.0, 2.0, 2.0);
+        let scaled_globals = compute_pose_global_transforms(&skeleton, &pose);
+        let colliders =
+            collect_world_colliders(&setup, &[0], &scaled_globals, &simulation.collider_shrinks);
+
+        assert!((colliders[0].1.radius - 0.32).abs() < 1e-5, "{colliders:?}");
+    }
+
+    #[test]
+    fn a_baked_vrm_chain_keeps_its_radii_and_drops_the_tolerance() {
+        let skeleton = straight_strand(4);
+        let mut setup = sphere_group_at(Vector3::new(0.25, 2.0, 0.0), 0.2);
+        let mut chain = vrm_chain_of(&[1, 2]);
+        chain.rest_clearance = RestClearance::Baked;
+        setup.chains = vec![chain];
+        let globals = compute_pose_global_transforms(&skeleton, &create_pose_from_rest(&skeleton));
+
+        let simulation = spring_bone_initialize(&setup, &skeleton, &globals, SpringSpace::IDENTITY);
+
+        let root = &simulation.chain_states[0].joint_states[0];
+        assert_eq!(root.hit_radius, 0.1);
+        assert!(root.rest_axis_distances.is_empty());
+        assert!(simulation.collider_shrinks.is_empty());
     }
 
     #[test]

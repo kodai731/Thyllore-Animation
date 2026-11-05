@@ -4,7 +4,15 @@ use super::setup::{SpringChainId, SpringColliderId};
 use super::MIN_REST_CLEARANCE;
 use crate::BoneId;
 
-/// A collider shrunk so a joint resting inside it keeps its rest penetration without a tolerance.
+/// Whether a chain's radii still need the rest tolerance projected onto them, or already carry it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RestClearance {
+    #[default]
+    Tolerated,
+    Baked,
+}
+
+/// A collider shrunk (rest radii `from` -> `to`) so a joint resting inside it keeps its rest penetration.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColliderShrink {
     pub collider_id: SpringColliderId,
@@ -12,6 +20,12 @@ pub struct ColliderShrink {
     pub bone_id: BoneId,
     pub from: f32,
     pub to: f32,
+}
+
+impl ColliderShrink {
+    pub fn ratio(&self) -> f32 {
+        self.to / self.from
+    }
 }
 
 /// One joint's rest geometry: its hit radius, its rest distance to every chain collider and the
@@ -83,17 +97,18 @@ pub fn merge_collider_shrink(shrinks: &mut Vec<ColliderShrink>, shrink: Collider
     }
 }
 
-/// The radius a collider is simulated and exported with: its smallest shrink, else the authored one.
+/// The radius a collider is simulated and exported with: the current one times its smallest shrink ratio.
 pub fn shrunk_collider_radius(
     shrinks: &[ColliderShrink],
     collider_id: SpringColliderId,
-    authored: f32,
+    current: f32,
 ) -> f32 {
-    shrinks
+    let ratio = shrinks
         .iter()
         .filter(|s| s.collider_id == collider_id)
-        .map(|s| s.to)
-        .fold(authored, f32::min)
+        .map(ColliderShrink::ratio)
+        .fold(1.0, f32::min);
+    current * ratio
 }
 
 #[cfg(test)]
@@ -167,6 +182,13 @@ mod tests {
         );
         assert!((shrunk_collider_radius(&clearance.shrinks, 3, 0.2) - 0.15).abs() < 1e-6);
         assert_eq!(shrunk_collider_radius(&clearance.shrinks, 4, 0.2), 0.2);
+    }
+
+    #[test]
+    fn a_shrunk_collider_scales_with_its_bone() {
+        let clearance = project_chain_clearance(5, &[joint(0.1, &[0.15], 1.0)], &[(3, 0.2)]);
+        let scaled_radius = shrunk_collider_radius(&clearance.shrinks, 3, 0.4);
+        assert!((scaled_radius - 0.3).abs() < 1e-6, "{scaled_radius}");
     }
 
     #[test]

@@ -29,13 +29,17 @@ fn bones() -> Vec<FitBone> {
     ]
 }
 
-fn request<'a>(
-    chains: &'a [GeneratedChainIn],
+fn request(
+    spring: SidecarSpring,
+    chains: Vec<GeneratedChainIn>,
     head_capsule: Option<CapsuleOut>,
-) -> RegisterRequest<'a> {
-    RegisterRequest {
-        root_name: "Head",
-        target: "Hair_back/Hair",
+) -> RegisterGeneratedChainsRequest {
+    RegisterGeneratedChainsRequest {
+        spring,
+        bones: bones(),
+        skins: vec![],
+        root_bone: "Head".to_string(),
+        target: "Hair_back/Hair".to_string(),
         attachment: RootAttachment::Cap,
         chains,
         head_capsule,
@@ -69,13 +73,9 @@ fn capsule() -> CapsuleOut {
 #[test]
 fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
     let chains = generated();
-    let spring = register_generated_chains(
-        &SidecarSpring::default(),
-        &bones(),
-        &[],
-        &request(&chains, Some(capsule())),
-    )
-    .unwrap();
+    let spring =
+        register_generated_chains(&request(SidecarSpring::default(), chains, Some(capsule())))
+            .unwrap();
 
     assert_eq!(spring.colliders.len(), 1);
     let collider = &spring.colliders[0];
@@ -106,16 +106,13 @@ fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
 #[test]
 fn regenerating_the_same_target_replaces_its_chains_and_root_collider() {
     let chains = generated();
-    let first = register_generated_chains(
-        &SidecarSpring::default(),
-        &bones(),
-        &[],
-        &request(&chains, Some(capsule())),
-    )
+    let first = register_generated_chains(&request(
+        SidecarSpring::default(),
+        chains.clone(),
+        Some(capsule()),
+    ))
     .unwrap();
-    let second =
-        register_generated_chains(&first, &bones(), &[], &request(&chains, Some(capsule())))
-            .unwrap();
+    let second = register_generated_chains(&request(first, chains, Some(capsule()))).unwrap();
 
     assert_eq!(second.chains.len(), 1);
     assert_eq!(second.colliders.len(), 1);
@@ -125,13 +122,9 @@ fn regenerating_the_same_target_replaces_its_chains_and_root_collider() {
 #[test]
 fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
     let chains = generated();
-    let mut first = register_generated_chains(
-        &SidecarSpring::default(),
-        &bones(),
-        &[],
-        &request(&chains, Some(capsule())),
-    )
-    .unwrap();
+    let mut first =
+        register_generated_chains(&request(SidecarSpring::default(), chains, Some(capsule())))
+            .unwrap();
     first.chains[0].joints[1].hit_radius = 0.05;
     let newer = vec![GeneratedChainIn {
         name: "hair_hair_back_01".to_string(),
@@ -141,9 +134,7 @@ fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
         }],
     }];
 
-    let second =
-        register_generated_chains(&first, &bones(), &[], &request(&newer, Some(capsule())))
-            .unwrap();
+    let second = register_generated_chains(&request(first, newer, Some(capsule()))).unwrap();
 
     let names: Vec<&str> = second.chains.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, ["hair_hair_back_00", "hair_hair_back_01"]);
@@ -154,13 +145,8 @@ fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
 #[test]
 fn without_a_capsule_or_skin_the_chains_join_an_existing_fitted_group_only() {
     let chains = generated();
-    let spring = register_generated_chains(
-        &SidecarSpring::default(),
-        &bones(),
-        &[],
-        &request(&chains, None),
-    )
-    .unwrap();
+    let spring =
+        register_generated_chains(&request(SidecarSpring::default(), chains, None)).unwrap();
 
     assert!(spring.colliders.is_empty());
     assert!(spring.collider_groups.is_empty());
@@ -176,11 +162,5 @@ fn unknown_joint_bone_is_an_error() {
             hit_radius: 0.0,
         }],
     }];
-    assert!(register_generated_chains(
-        &SidecarSpring::default(),
-        &bones(),
-        &[],
-        &request(&chains, None)
-    )
-    .is_err());
+    assert!(register_generated_chains(&request(SidecarSpring::default(), chains, None)).is_err());
 }

@@ -137,16 +137,16 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
 def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:
     settings = arm.data.thyllore_spring
     bones = armature_fit_bones(context, arm)
-    spring = avatar_api.register_generated_chains(
-        avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
-        bones,
-        run.skins,
-        run.root_name,
-        run.target,
-        attachment,
-        new_chains,
-        head_capsule,
-    )
+    spring = avatar_api.register_generated_chains({
+        "spring": avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+        "bones": bones,
+        "skins": run.skins,
+        "root_bone": run.root_name,
+        "target": run.target,
+        "attachment": attachment,
+        "chains": new_chains,
+        "head_capsule": head_capsule,
+    })
     write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(spring, bones))
 
 

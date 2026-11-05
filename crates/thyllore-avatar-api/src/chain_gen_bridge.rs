@@ -177,11 +177,6 @@ pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSe
     Ok(settings)
 }
 
-pub fn parse_attachment(s: &str) -> anyhow::Result<RootAttachment> {
-    serde_json::from_value::<RootAttachment>(serde_json::Value::String(s.to_owned()))
-        .map_err(|_| anyhow::anyhow!("attachment must be \"cap\" or \"ring\", got \"{s}\""))
-}
-
 fn vector3_to_array(v: Vector3<f32>) -> [f32; 3] {
     [v.x, v.y, v.z]
 }

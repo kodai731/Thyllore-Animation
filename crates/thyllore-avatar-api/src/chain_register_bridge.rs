@@ -26,11 +26,17 @@ pub struct GeneratedJointIn {
     pub hit_radius: f32,
 }
 
-pub struct RegisterRequest<'a> {
-    pub root_name: &'a str,
-    pub target: &'a str,
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegisterGeneratedChainsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<FitBone>,
+    pub skins: Vec<FitSkin>,
+    pub root_bone: String,
+    pub target: String,
     pub attachment: RootAttachment,
-    pub chains: &'a [GeneratedChainIn],
+    pub chains: Vec<GeneratedChainIn>,
+    #[serde(default)]
     pub head_capsule: Option<CapsuleOut>,
 }
 
@@ -39,19 +45,16 @@ pub struct RegisterRequest<'a> {
 /// values), the root collider (the head capsule, or a capsule fitted to the skin on the root bone)
 /// joins the fitted body group, and every registered chain is bound to that group.
 pub fn register_generated_chains(
-    spring: &SidecarSpring,
-    bones: &[FitBone],
-    skins: &[FitSkin],
-    request: &RegisterRequest<'_>,
+    request: &RegisterGeneratedChainsRequest,
 ) -> anyhow::Result<SidecarSpring> {
     let target: SubmeshSelector = request.target.parse().map_err(anyhow::Error::msg)?;
     let attachment = request.attachment;
-    let skeleton = skeleton_from_fit_bones(bones)?;
-    let bone_inputs = to_bone_inputs(bones);
-    let root = bone_id(&skeleton, request.root_name)?;
+    let skeleton = skeleton_from_fit_bones(&request.bones)?;
+    let bone_inputs = to_bone_inputs(&request.bones);
+    let root = bone_id(&skeleton, &request.root_bone)?;
 
-    let frames = rest_frames(bones)?;
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
+    let frames = rest_frames(&request.bones)?;
+    let mut setup = spring_setup_from_sidecar(&request.spring, &bone_inputs, &frames);
     let replaced: Vec<&str> = request
         .chains
         .iter()
@@ -61,9 +64,9 @@ pub fn register_generated_chains(
         !(chain.origin.is_generated_on(&target) && replaced.contains(&chain.name.as_str()))
     });
 
-    let root_collider = match request.head_capsule {
-        Some(capsule) => Some(head_capsule_collider(&capsule, root, bones)?),
-        None => fit_root_collider(&skeleton, root, skins),
+    let root_collider = match &request.head_capsule {
+        Some(capsule) => Some(head_capsule_collider(capsule, root, &request.bones)?),
+        None => fit_root_collider(&skeleton, root, &request.skins),
     };
     let chains: Vec<SpringChain> = request
         .chains

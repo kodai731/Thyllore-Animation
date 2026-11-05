@@ -305,9 +305,11 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
     )
     empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
 
-    spring = avatar_api.register_generated_chains(
-        empty, bones, [], "Head", "strip/hair", "cap", output["chains"], output["head_capsule"]
-    )
+    spring = avatar_api.register_generated_chains({
+        "spring": empty, "bones": bones, "skins": [], "root_bone": "Head",
+        "target": "strip/hair", "attachment": "cap", "chains": output["chains"],
+        "head_capsule": output["head_capsule"],
+    })
 
     assert [c["name"] for c in spring["chains"]] == [c["name"] for c in output["chains"]]
     assert [c["bone"] for c in spring["colliders"]] == ["Head"]
@@ -318,11 +320,24 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
         assert chain["origin"] == {"mesh": "strip", "material": "hair", "attachment": "cap"}
         assert [j["hit_radius"] for j in chain["joints"]] == [j["hit_radius"] for j in generated["joints"]]
 
-    again = avatar_api.register_generated_chains(
-        spring, bones, [], "Head", "strip/hair", "cap", output["chains"], output["head_capsule"]
-    )
+    again = avatar_api.register_generated_chains({
+        "spring": spring, "bones": bones, "skins": [], "root_bone": "Head",
+        "target": "strip/hair", "attachment": "cap", "chains": output["chains"],
+        "head_capsule": output["head_capsule"],
+    })
     assert len(again["chains"]) == len(spring["chains"])
     assert len(again["colliders"]) == 1
+
+
+def test_register_generated_chains_rejects_unknown_attachment(avatar_api):
+    empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
+    bones = _fit_bones([("Head", None, (0.0, 0.0, 0.0))])
+
+    with pytest.raises(ValueError):
+        avatar_api.register_generated_chains({
+            "spring": empty, "bones": bones, "skins": [], "root_bone": "Head",
+            "target": "strip/hair", "attachment": "band", "chains": [],
+        })
 
 
 def test_group_weights_resolves_root_and_skin_bone_targets():

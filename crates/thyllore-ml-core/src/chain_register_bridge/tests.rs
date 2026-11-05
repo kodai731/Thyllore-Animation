@@ -97,12 +97,24 @@ fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
     assert_eq!(spring.collider_groups[0].name, FITTED_BODY_GROUP_NAME);
     assert_eq!(spring.chains.len(), 1);
     assert_eq!(spring.chains[0].collider_groups, [FITTED_BODY_GROUP_NAME]);
-    let radii: Vec<f32> = spring.chains[0]
+    let joints: Vec<(&str, f32)> = spring.chains[0]
         .joints
         .iter()
-        .map(|j| j.hit_radius)
+        .map(|j| (j.bone.as_str(), j.hit_radius))
         .collect();
-    assert_eq!(radii, [0.012, 0.008]);
+    assert_eq!(
+        joints,
+        [
+            ("hair_hair_back_00_00", 0.012),
+            ("hair_hair_back_00_01", 0.008),
+            ("hair_hair_back_00_01_end", 0.008),
+        ],
+        "the end bone is appended as the tail joint with the last radius"
+    );
+    assert_eq!(
+        spring.chains[0].tail.as_deref(),
+        Some("hair_hair_back_00_01_end")
+    );
 }
 
 #[test]

@@ -87,7 +87,8 @@ fn apply_spring_bone_simulation(
                 if !sb_state.initialized {
                     let rest_globals =
                         compute_pose_global_transforms(skeleton, &create_pose_from_rest(skeleton));
-                    sb_state.simulation = spring_bone_initialize(setup, skeleton, &rest_globals);
+                    sb_state.simulation =
+                        spring_bone_initialize(setup, skeleton, &rest_globals, space);
                     sb_state.initialized = true;
                     spring_bone_reseat_tails(setup, &mut sb_state.simulation, skeleton, globals);
                 }

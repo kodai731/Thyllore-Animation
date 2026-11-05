@@ -26,6 +26,7 @@ fn bones() -> Vec<FitBone> {
         fit_bone("Head", Some(0), [0.0, 1.5, 0.0]),
         fit_bone("hair_hair_back_00_00", Some(1), [0.0, 1.6, -0.1]),
         fit_bone("hair_hair_back_00_01", Some(2), [0.0, 1.4, -0.1]),
+        fit_bone("hair_hair_back_00_01_end", Some(3), [0.0, 1.2, -0.1]),
     ]
 }
 
@@ -55,6 +56,7 @@ fn generated() -> Vec<GeneratedChainIn> {
                 hit_radius: 0.008,
             },
         ],
+        end_bone: "hair_hair_back_00_01_end".to_string(),
     }]
 }
 
@@ -95,12 +97,24 @@ fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
     assert_eq!(spring.collider_groups[0].name, FITTED_BODY_GROUP_NAME);
     assert_eq!(spring.chains.len(), 1);
     assert_eq!(spring.chains[0].collider_groups, [FITTED_BODY_GROUP_NAME]);
-    let radii: Vec<f32> = spring.chains[0]
+    let joints: Vec<(&str, f32)> = spring.chains[0]
         .joints
         .iter()
-        .map(|j| j.hit_radius)
+        .map(|j| (j.bone.as_str(), j.hit_radius))
         .collect();
-    assert_eq!(radii, [0.012, 0.008]);
+    assert_eq!(
+        joints,
+        [
+            ("hair_hair_back_00_00", 0.012),
+            ("hair_hair_back_00_01", 0.008),
+            ("hair_hair_back_00_01_end", 0.008),
+        ],
+        "the end bone is appended as the tail joint with the last radius"
+    );
+    assert_eq!(
+        spring.chains[0].tail.as_deref(),
+        Some("hair_hair_back_00_01_end")
+    );
 }
 
 #[test]
@@ -139,6 +153,7 @@ fn a_chain_of_the_target_outside_the_request_keeps_its_values() {
             name: "hair_hair_back_00_00".to_string(),
             hit_radius: 0.02,
         }],
+        end_bone: "hair_hair_back_00_01".to_string(),
     }];
 
     let second =
@@ -175,6 +190,7 @@ fn unknown_joint_bone_is_an_error() {
             name: "missing".to_string(),
             hit_radius: 0.0,
         }],
+        end_bone: "hair_hair_back_00_01_end".to_string(),
     }];
     assert!(register_generated_chains(
         &SidecarSpring::default(),

@@ -7,8 +7,9 @@ use super::setup::{ColliderShape, SpringColliderDef};
 
 const MIN_TAIL_LEVER: f32 = 1e-3;
 /// A rest clearance below this is a joint authored on the collider axis, which the full radius pushes out.
-const MIN_REST_CLEARANCE: f32 = 1e-4;
+pub(super) const MIN_REST_CLEARANCE: f32 = 1e-4;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldCollider {
     pub center: Vector3<f32>,
     pub radius: f32,

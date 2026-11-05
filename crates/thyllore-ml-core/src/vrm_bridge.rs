@@ -4,7 +4,10 @@ use cgmath::Vector3;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::vrm::{t_pose_warnings, VrmMeta, T_POSE_TOLERANCE_DEG};
+use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+use thyllore_avatar_core::vrm::{
+    t_pose_warnings, vrm_rest_clearance, VrmMeta, T_POSE_TOLERANCE_DEG,
+};
 use thyllore_exporter_core::systems::gltf::write_vrm;
 
 use crate::avatar_setup_bridge::sidecar_read;
@@ -129,4 +132,18 @@ mod tests {
         let meta = VrmMeta::new("avatar", "tester");
         assert!(vrm_write(&two_bone_glb(), "{", &meta, 1.0).is_err());
     }
+}
+
+/// One warning per collider the VRM file shrinks because a joint rests inside it.
+pub fn vrm_rest_clearance_warnings(spring: &SidecarSpring, bones: &[BoneInput]) -> Vec<String> {
+    vrm_rest_clearance(spring, bones)
+        .shrinks
+        .iter()
+        .map(|shrink| {
+            format!(
+                "Collider {} shrinks from {:.3} m to {:.3} m in the VRM: joint {} of chain {} rests inside it",
+                shrink.collider, shrink.from_m, shrink.to_m, shrink.bone, shrink.chain
+            )
+        })
+        .collect()
 }

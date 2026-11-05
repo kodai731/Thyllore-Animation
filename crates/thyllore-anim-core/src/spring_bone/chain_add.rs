@@ -3,7 +3,10 @@ use crate::{BoneId, Skeleton};
 use super::chain_origin::ChainOrigin;
 use super::collider_fit::{ensure_fitted_collider, fitted_collider_exists_on, FittedCapsule};
 use super::space::SpringSpace;
-use super::{ColliderGroupOrigin, SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
+use super::{
+    ColliderGroupOrigin, RestClearance, SpringBoneSetup, SpringChain, SpringChainId,
+    SpringJointParam,
+};
 
 fn build_chain_joints(
     root_bone_id: BoneId,
@@ -57,6 +60,7 @@ pub fn add_chain(
         tail_bone_id: None,
         enabled: true,
         origin: ChainOrigin::Authored,
+        rest_clearance: RestClearance::Tolerated,
     };
     setup.chains.push(chain);
 
@@ -225,6 +229,7 @@ mod tests {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
                     role: ChainRole::Hair,
                 },
+                rest_clearance: RestClearance::Tolerated,
             },
             SpringChain {
                 id: 98,
@@ -242,6 +247,7 @@ mod tests {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
                     role: ChainRole::Hair,
                 },
+                rest_clearance: RestClearance::Tolerated,
             },
         ];
 

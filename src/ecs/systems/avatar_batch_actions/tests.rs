@@ -82,16 +82,18 @@ fn test_named_actions_reject_empty_values() {
     assert!(capture_expression_parse("capture_expression=")
         .expect("prefix matches")
         .is_err());
-    assert!(add_spring_chains_under_parse("add_spring_chains_under= ")
-        .expect("prefix matches")
-        .is_err());
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=0")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs= ")
             .expect("prefix matches")
             .is_err()
     );
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=3")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=0")
+            .expect("prefix matches")
+            .is_err()
+    );
+    assert!(
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=3")
             .expect("prefix matches")
             .is_ok()
     );

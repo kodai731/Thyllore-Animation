@@ -66,7 +66,10 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(avatar_setup::infer_humanoid_mapping, m)?)?;
-    m.add_function(wrap_pyfunction!(spring_edit::add_chains_under_bone, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        spring_edit::use_existing_bones_as_springs,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(spring_edit::register_generated_chains, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::apply_ramp, m)?)?;
     m.add_function(wrap_pyfunction!(spring_edit::chains_in_scope, m)?)?;
@@ -89,6 +92,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vrm::vrm_write, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_meta_fields, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_t_pose_warnings, m)?)?;
+    m.add_function(wrap_pyfunction!(vrm::vrm_rest_clearance_warnings, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;
 
     #[cfg(feature = "debug-log")]

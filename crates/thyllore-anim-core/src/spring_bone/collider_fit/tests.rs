@@ -1,5 +1,7 @@
 use super::*;
-use crate::spring_bone::{ColliderGroupOrigin, SpringChain, SpringColliderGroup, SpringJointParam};
+use crate::spring_bone::{
+    ColliderGroupOrigin, RestClearance, SpringChain, SpringColliderGroup, SpringJointParam,
+};
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 
 fn make_cylinder_points(radius: f32, length: f32, samples: usize) -> Vec<Vector3<f32>> {
@@ -232,6 +234,7 @@ fn test_replace_fitted_body_colliders_basic() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 
@@ -276,6 +279,7 @@ fn test_replace_fitted_body_colliders_idempotent() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 
@@ -321,6 +325,7 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 

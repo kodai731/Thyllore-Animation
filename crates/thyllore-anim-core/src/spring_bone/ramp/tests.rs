@@ -1,7 +1,7 @@
 use cgmath::Vector3;
 
 use super::*;
-use crate::spring_bone::{JointForce, VrmJointForce};
+use crate::spring_bone::{JointForce, RestClearance, VrmJointForce};
 
 fn make_chain(bone_ids: &[u32]) -> SpringChain {
     SpringChain {
@@ -445,6 +445,7 @@ fn load_ends_normal_chain() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 1);
@@ -470,6 +471,7 @@ fn load_ends_empty_chain_is_noop() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 99);

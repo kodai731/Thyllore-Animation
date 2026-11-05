@@ -240,6 +240,12 @@ pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> Strin
     format!("{}_{:02}", chain_name(params, column), joint)
 }
 
+/// The bone placed at the chain's end point under its last joint, so the last joint swings towards a
+/// measured tail instead of an extrapolated one (the VRM 1.0 terminal joint).
+pub fn end_bone_name(last_joint_name: &str) -> String {
+    format!("{last_joint_name}_end")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InfluenceTarget {
     Root,

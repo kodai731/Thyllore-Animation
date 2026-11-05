@@ -19,6 +19,7 @@ from ..common.spring_properties import (
     copy_joint_values,
     joint_for_bone,
     ramp_values,
+    simulated_joints,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
@@ -130,22 +131,19 @@ class THYLLORE_OT_LoadRampFromChain(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         settings = arm.data.thyllore_spring
-        chains = settings.chains
-        index = settings.active_chain_index
-
-        if index < 0 or index >= len(chains):
-            report(self, "ERROR", "Active chain index out of range")
+        chain = active_chain(settings)
+        if chain is None:
+            report(self, "ERROR", "Select a chain in the Chains list")
             return {"CANCELLED"}
-
-        chain = chains[index]
-        if len(chain.joints) == 0:
+        joints = simulated_joints(chain)
+        if len(joints) == 0:
             report(self, "ERROR", "Chain has no joints")
             return {"CANCELLED"}
 
         form = context.window_manager.thyllore_ramp
 
-        copy_joint_values(chain.joints[0], form.root)
-        copy_joint_values(chain.joints[-1], form.tip)
+        copy_joint_values(joints[0], form.root)
+        copy_joint_values(joints[-1], form.tip)
 
         report(self, "INFO", f"Loaded ramp from chain '{chain.name}'")
         return {"FINISHED"}

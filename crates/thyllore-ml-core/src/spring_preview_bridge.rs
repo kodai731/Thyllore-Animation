@@ -63,7 +63,8 @@ impl SpringPreview {
             spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
         let rest_globals =
             compute_pose_global_transforms(&skeleton, &create_pose_from_rest(&skeleton));
-        let simulation = spring_bone_initialize(&setup, &skeleton, &rest_globals);
+        let simulation =
+            spring_bone_initialize(&setup, &skeleton, &rest_globals, SpringSpace::IDENTITY);
         let affected_bone_ids = collect_affected_bone_ids(&setup);
 
         Ok(Self {

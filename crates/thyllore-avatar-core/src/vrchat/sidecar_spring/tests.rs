@@ -83,6 +83,7 @@ fn test_full_mapping() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: Default::default(),
     });
 
     setup.next_chain_id = 1;
@@ -227,6 +228,7 @@ fn setup_round_trips_through_the_sidecar() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: Default::default(),
     });
     setup.next_chain_id = 3;
     setup.next_collider_id = 5;
@@ -466,6 +468,7 @@ fn test_tail_joint_appended_when_child_exists() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: Default::default(),
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
@@ -514,6 +517,7 @@ fn test_no_tail_joint_when_no_child() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: Default::default(),
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
@@ -598,6 +602,7 @@ fn a_disabled_chain_and_a_fitted_group_survive_a_round_trip() {
         tail_bone_id: None,
         enabled: false,
         origin: Default::default(),
+        rest_clearance: Default::default(),
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));

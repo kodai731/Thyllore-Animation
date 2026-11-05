@@ -218,7 +218,7 @@ pub fn save_humanoid_mapping(world: &World) {
 
 /// Registers every run of non-humanoid bones under `root` as a spring chain; runs that already head
 /// a chain are kept as they are.
-pub fn add_spring_chains_under(
+pub fn use_existing_bones_as_springs(
     world: &mut World,
     assets: &AssetStorage,
     root: BoneId,

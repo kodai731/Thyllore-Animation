@@ -7,6 +7,7 @@ use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use super::chain_origin::ChainOrigin;
 use super::force::{JointForce, SpringForceModel};
+use super::rest_clearance::RestClearance;
 use crate::BoneId;
 
 pub type SpringChainId = u32;
@@ -89,6 +90,7 @@ pub struct SpringChain {
     pub tail_bone_id: Option<BoneId>,
     pub enabled: bool,
     pub origin: ChainOrigin,
+    pub rest_clearance: RestClearance,
 }
 
 impl Default for SpringChain {
@@ -102,6 +104,7 @@ impl Default for SpringChain {
             tail_bone_id: None,
             enabled: true,
             origin: ChainOrigin::Authored,
+            rest_clearance: RestClearance::Tolerated,
         }
     }
 }

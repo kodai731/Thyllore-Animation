@@ -11,7 +11,7 @@ use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::SkinSurface;
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{RootAttachment, SkinSurface};
 use thyllore_model_core::BoneId;
 
 /// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
@@ -93,6 +93,30 @@ pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
         return;
     };
     *assigned = role;
+}
+
+pub fn set_submesh_attachment(
+    world: &mut World,
+    key: SubmeshKey,
+    attachment: Option<RootAttachment>,
+) {
+    let mut state = world.resource_mut::<AvatarSetupState>();
+    if !state.submesh_roles.contains_key(&key) {
+        log_warn!(
+            "Cannot set submesh attachment for missing submesh ({}, {})",
+            key.mesh,
+            key.material
+        );
+        return;
+    }
+    match attachment {
+        Some(a) => {
+            state.submesh_attachments.insert(key, a);
+        }
+        None => {
+            state.submesh_attachments.remove(&key);
+        }
+    }
 }
 
 /// The scene entity that renders the submesh, found through its mesh asset.
@@ -237,6 +261,33 @@ mod tests {
             state.submesh_roles[&key("Body", "")],
             SubmeshRole::Accessory
         );
+    }
+
+    #[test]
+    fn test_set_submesh_attachment_overrides_and_clears() {
+        let mut world = World::new();
+        let mut state = AvatarSetupState::default();
+        let k = key("Body", "");
+        state.submesh_roles.insert(k.clone(), SubmeshRole::Skin);
+        world.insert_resource(state);
+        set_submesh_attachment(&mut world, k.clone(), Some(RootAttachment::Cap));
+        assert_eq!(
+            world.resource::<AvatarSetupState>().submesh_attachments[&k],
+            RootAttachment::Cap
+        );
+
+        set_submesh_attachment(&mut world, k.clone(), None);
+        assert!(!world
+            .resource::<AvatarSetupState>()
+            .submesh_attachments
+            .contains_key(&k));
+
+        let unknown = key("Missing", "");
+        set_submesh_attachment(&mut world, unknown.clone(), Some(RootAttachment::Ring));
+        assert!(!world
+            .resource::<AvatarSetupState>()
+            .submesh_attachments
+            .contains_key(&unknown));
     }
 }
 

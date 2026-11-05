@@ -5,8 +5,8 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    default_attachment, default_root_of_submesh, ChainGenRequest, ChainGenSettings,
-    CHAIN_GEN_UI_PARAMS,
+    attachment_or_default, default_attachment, default_root_of_submesh, ChainGenRequest,
+    ChainGenSettings, RootAttachment, CHAIN_GEN_UI_PARAMS,
 };
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -32,6 +32,7 @@ pub struct SubmeshesView {
 pub struct SubmeshItem {
     pub key: SubmeshKey,
     pub role: SubmeshRole,
+    pub attachment: Option<RootAttachment>,
     pub chain_request: Option<ChainGenRequest>,
 }
 
@@ -61,16 +62,19 @@ impl SubmeshesView {
             .submesh_roles
             .iter()
             .map(|(key, role)| {
+                let attachment = state.submesh_attachments.get(key).copied();
                 let chain_request = resolve_chain_request(
                     *role,
                     &state.mapping.by_role,
                     &state.bones,
                     key,
                     &state.chain_gen,
+                    attachment,
                 );
                 SubmeshItem {
                     key: key.clone(),
                     role: *role,
+                    attachment,
                     chain_request,
                 }
             })
@@ -88,6 +92,7 @@ fn resolve_chain_request(
     bones: &[BoneInput],
     key: &SubmeshKey,
     settings: &ChainGenSettings,
+    attachment: Option<RootAttachment>,
 ) -> Option<ChainGenRequest> {
     let root = default_root_of_submesh(role)?;
     let bone_index = *mapping.get(&root)?;
@@ -95,7 +100,7 @@ fn resolve_chain_request(
     Some(ChainGenRequest {
         target: SubmeshSelector::Submesh(key.clone()),
         root,
-        attachment: default_attachment(root),
+        attachment: attachment_or_default(Some(root), attachment),
         settings: settings.clone(),
     })
 }
@@ -162,6 +167,11 @@ fn item_rows(item: &SubmeshItem) -> Vec<UiRow<SubmeshItem>> {
     ];
 
     if chain_root.is_some() {
+        rows.push(UiRow::Choice {
+            label: "Attachment",
+            options: attachment_options,
+            pick: attachment_pick,
+        });
         rows.push(UiRow::Action {
             label: "Generate Chains",
             enabled: |_world, item| item.chain_request.is_some(),
@@ -192,15 +202,77 @@ fn role_pick(item: &mut SubmeshItem, index: usize) {
     item.role = SUBMESH_ROLE_CHOICES[index];
 }
 
+const ATTACHMENT_CHOICES: [Option<RootAttachment>; 3] =
+    [None, Some(RootAttachment::Cap), Some(RootAttachment::Ring)];
+
+fn attachment_options(_world: &World, item: &SubmeshItem) -> Vec<ChoiceOption> {
+    let chain_root = default_root_of_submesh(item.role);
+    ATTACHMENT_CHOICES
+        .iter()
+        .map(|choice| {
+            let label = match choice {
+                None => {
+                    if let Some(root) = chain_root {
+                        format!("Auto ({})", root_attachment_label(default_attachment(root)))
+                    } else {
+                        "Auto".to_string()
+                    }
+                }
+                Some(RootAttachment::Cap) => "Cap".to_string(),
+                Some(RootAttachment::Ring) => "Ring".to_string(),
+            };
+            ChoiceOption {
+                label,
+                selected: item.attachment == *choice,
+            }
+        })
+        .collect()
+}
+
+fn attachment_pick(item: &mut SubmeshItem, index: usize) {
+    item.attachment = ATTACHMENT_CHOICES[index];
+}
+
 fn list_on_change(
-    _view: &SubmeshesView,
-    _index: usize,
+    view: &SubmeshesView,
+    index: usize,
     item: SubmeshItem,
 ) -> Box<dyn crate::ecs::events::UiCommand> {
-    Box::new(AvatarSetupEvent::SetSubmeshRole {
-        key: item.key,
-        role: item.role,
-    })
+    let before = &view.submeshes[index];
+    match list_on_change_command(before, item) {
+        ListOnChangeCommand::SetRole { key, role } => {
+            Box::new(AvatarSetupEvent::SetSubmeshRole { key, role })
+        }
+        ListOnChangeCommand::SetAttachment { key, attachment } => {
+            Box::new(AvatarSetupEvent::SetSubmeshAttachment { key, attachment })
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ListOnChangeCommand {
+    SetRole {
+        key: SubmeshKey,
+        role: SubmeshRole,
+    },
+    SetAttachment {
+        key: SubmeshKey,
+        attachment: Option<RootAttachment>,
+    },
+}
+
+fn list_on_change_command(before: &SubmeshItem, after: SubmeshItem) -> ListOnChangeCommand {
+    if before.role != after.role {
+        ListOnChangeCommand::SetRole {
+            key: after.key,
+            role: after.role,
+        }
+    } else {
+        ListOnChangeCommand::SetAttachment {
+            key: after.key,
+            attachment: after.attachment,
+        }
+    }
 }
 
 fn generate_chains(item: &SubmeshItem) -> Box<dyn crate::ecs::events::UiCommand> {
@@ -217,6 +289,13 @@ fn submesh_role_label(role: SubmeshRole) -> &'static str {
         SubmeshRole::Garment => "Garment",
         SubmeshRole::Hair => "Hair",
         SubmeshRole::Accessory => "Accessory",
+    }
+}
+
+fn root_attachment_label(att: RootAttachment) -> &'static str {
+    match att {
+        RootAttachment::Cap => "Cap",
+        RootAttachment::Ring => "Ring",
     }
 }
 
@@ -289,5 +368,105 @@ mod tests {
 
         let view = SubmeshesView::from_state(&state);
         assert!(view.submeshes[0].chain_request.is_none());
+    }
+
+    #[test]
+    fn test_attachment_override_reaches_chain_request() {
+        let mut state = hair_state_with_head_bone();
+        state.mapping.by_role.insert(HumanoidRole::Head, 0);
+
+        let view = SubmeshesView::from_state(&state);
+        let request = view.submeshes[0]
+            .chain_request
+            .as_ref()
+            .expect("Head is mapped");
+        assert_eq!(request.attachment, RootAttachment::Cap);
+
+        state
+            .submesh_attachments
+            .insert(hair_key(), RootAttachment::Ring);
+        let view = SubmeshesView::from_state(&state);
+        let request = view.submeshes[0]
+            .chain_request
+            .as_ref()
+            .expect("Head is mapped");
+        assert_eq!(request.attachment, RootAttachment::Ring);
+    }
+
+    #[test]
+    fn test_list_on_change_emits_attachment_event() {
+        let before = SubmeshItem {
+            key: hair_key(),
+            role: SubmeshRole::Hair,
+            attachment: None,
+            chain_request: None,
+        };
+        let after = SubmeshItem {
+            key: hair_key(),
+            role: SubmeshRole::Hair,
+            attachment: Some(RootAttachment::Ring),
+            chain_request: None,
+        };
+
+        let command = list_on_change_command(&before, after);
+        assert_eq!(
+            command,
+            ListOnChangeCommand::SetAttachment {
+                key: hair_key(),
+                attachment: Some(RootAttachment::Ring),
+            }
+        );
+    }
+
+    #[test]
+    fn test_list_on_change_keeps_attachment_for_non_guessed_role() {
+        let before = SubmeshItem {
+            key: hair_key(),
+            role: SubmeshRole::Garment,
+            attachment: None,
+            chain_request: None,
+        };
+        let after = SubmeshItem {
+            key: hair_key(),
+            role: SubmeshRole::Garment,
+            attachment: Some(RootAttachment::Ring),
+            chain_request: None,
+        };
+
+        let command = list_on_change_command(&before, after);
+        assert_eq!(
+            command,
+            ListOnChangeCommand::SetAttachment {
+                key: hair_key(),
+                attachment: Some(RootAttachment::Ring),
+            }
+        );
+    }
+
+    #[test]
+    fn test_attachment_choices_select_matches_pick() {
+        let item = SubmeshItem {
+            key: hair_key(),
+            role: SubmeshRole::Hair,
+            attachment: None,
+            chain_request: None,
+        };
+
+        for index in 0..3 {
+            let mut picked = item.clone();
+            attachment_pick(&mut picked, index);
+            let options = attachment_options(&World::default(), &picked);
+            for (i, opt) in options.iter().enumerate() {
+                if i == index {
+                    assert!(opt.selected, "index {}: expected selected=true", index);
+                } else {
+                    assert!(
+                        !opt.selected,
+                        "index {}: expected selected=false at {}",
+                        index, i
+                    );
+                }
+            }
+        }
     }
 }

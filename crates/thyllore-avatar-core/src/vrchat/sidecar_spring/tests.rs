@@ -1,9 +1,9 @@
 use cgmath::{InnerSpace, Vector3};
 use serde_json::json;
 use thyllore_anim_core::spring_bone::{
-    ChainOrigin, ChainRole, ColliderGroupOrigin, ColliderShape, JointForce, RestRelativeJointForce,
-    SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup, SpringCollisionMode,
-    SpringJointParam, SubmeshSelector, VrmJointForce, FITTED_BODY_GROUP_NAME,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, RestRelativeJointForce,
+    RootAttachment, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
+    SpringCollisionMode, SpringJointParam, SubmeshSelector, VrmJointForce, FITTED_BODY_GROUP_NAME,
 };
 use thyllore_anim_core::BoneId;
 
@@ -284,7 +284,7 @@ fn generated_origin_round_trips_and_is_absent_for_authored_chains() {
     let bones = make_bones(&["Head", "Hair0", "Hair1", "Side0"]);
     let origin = ChainOrigin::Generated {
         target: SubmeshSelector::from_parts("Hair_back", Some("Hair")),
-        role: ChainRole::Hair,
+        attachment: RootAttachment::Cap,
     };
     let joints = |ids: &[BoneId]| -> Vec<SpringJointParam> {
         ids.iter()
@@ -314,8 +314,9 @@ fn generated_origin_round_trips_and_is_absent_for_authored_chains() {
 
     let sidecar = build_sidecar_spring(&setup, &bones, &BoneRestFrame::identity_for(bones.len()));
     let json = serde_json::to_string(&sidecar).unwrap();
-    assert!(json
-        .contains("\"origin\":{\"mesh\":\"Hair_back\",\"material\":\"Hair\",\"role\":\"hair\"}"));
+    assert!(json.contains(
+        "\"origin\":{\"mesh\":\"Hair_back\",\"material\":\"Hair\",\"attachment\":\"cap\"}"
+    ));
     assert_eq!(sidecar.chains[1].origin, None);
 
     let restored = spring_setup_from_sidecar(
@@ -651,4 +652,15 @@ fn an_authored_group_with_the_fitted_name_exports_authored_colliders() {
         restored.collider_groups[0].origin,
         ColliderGroupOrigin::Authored
     );
+}
+
+#[test]
+fn legacy_origin_role_reads_as_attachment() {
+    let json = r#"{"collision_mode":"vrm_compatible","colliders":[],"collider_groups":[],
+        "chains":[{"name":"c","center":null,"collider_groups":[],
+        "joints":[{"bone":"Hair0","force":{"model":"vrm","stiffness":1.0,"gravity_power":0.0},"drag_force":0.4,"gravity_dir":[0.0,-1.0,0.0],"hit_radius":0.02}],
+        "origin":{"mesh":"test","role":"skirt"}}]}"#;
+    let sidecar: SidecarSpring = serde_json::from_str(json).unwrap();
+    let origin = sidecar.chains[0].origin.as_ref().unwrap();
+    assert_eq!(origin.attachment, RootAttachment::Ring);
 }

@@ -6,12 +6,12 @@ from dataclasses import dataclass
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bone_display import apply_chain_bone_display, remove_chain_collections
 from ..common.chain_bones import (
@@ -39,7 +39,7 @@ from .chain_bone_edit import (
     write_weights,
 )
 from .chain_inputs import (
-    DEFAULT_ROOT_BY_ROLE,
+    _chain_roles,
     body_collider_inputs,
     engine_point,
     given_chains,
@@ -76,7 +76,7 @@ class GenerationRun:
 
 
 def _ensure_body_colliders(context, arm, settings, fit_bones) -> str:
-    if tml.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
+    if avatar_api.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
         return ""
     return f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
 
@@ -86,10 +86,10 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     generation = settings.chain_generation
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
-    root_name = tml.resolve_root_bone(fit_bones, generation.root_bone.strip() or DEFAULT_ROOT_BY_ROLE[role])
+    root_name = avatar_api.resolve_root_bone(fit_bones, generation.root_bone.strip() or _chain_roles()[role])
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
-    registered = generated_chain_bones(settings, {"mesh": obj.name, "material": material, "role": role})
+    registered = generated_chain_bones(settings, {"mesh": obj.name, "material": material})
     given = given_chains(obj, arm, registered, scale_length)
     read_back = {chain["name"] for chain in given if "joints" in chain}
     if not generation.root_bone.strip():
@@ -114,38 +114,40 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
     settings = arm.data.thyllore_spring
     mesh = run.obj.data
     body_bones = armature_fit_bones(context, arm)
-    return tml.generate_chains(
-        [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
-        submesh_triangles(mesh, material_index),
-        root_engine_position(arm, run.root_name, run.scale_length),
-        run.role,
-        run.target,
-        settings_from_properties(CHAIN_GEN_UI_PARAMS, settings.chain_generation),
-        run.skins,
-        arm.data.bones.find(run.root_name),
-        submesh_tex_coords(mesh),
-        run.marked,
-        body_collider_inputs(arm, settings, body_bones),
-        humanoid_bone_indices(arm, settings, body_bones),
-        body_bones,
-        run.given,
-    )
+    attachment = {"AUTO": None, "CAP": "cap", "RING": "ring"}[settings.chain_generation.attachment]
+    request = {
+        "positions": [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
+        "triangles": submesh_triangles(mesh, material_index),
+        "root_position": root_engine_position(arm, run.root_name, run.scale_length),
+        "target": run.target,
+        "settings": settings_from_properties(CHAIN_GEN_UI_PARAMS, settings.chain_generation),
+        "skins": run.skins,
+        "root_bone": arm.data.bones.find(run.root_name),
+        "tex_coords": submesh_tex_coords(mesh),
+        "covered_vertices": run.marked,
+        "body_colliders": body_collider_inputs(arm, settings, body_bones),
+        "humanoid_bones": humanoid_bone_indices(arm, settings, body_bones),
+        "bones": body_bones,
+        "given_chains": run.given,
+        "attachment": attachment,
+    }
+    return avatar_api.generate_chains(request)
 
 
-def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule) -> None:
+def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:
     settings = arm.data.thyllore_spring
     bones = armature_fit_bones(context, arm)
-    spring = tml.register_generated_chains(
-        tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
-        bones,
-        run.skins,
-        run.root_name,
-        run.target,
-        run.role,
-        new_chains,
-        head_capsule,
-    )
-    write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
+    spring = avatar_api.register_generated_chains({
+        "spring": avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+        "bones": bones,
+        "skins": run.skins,
+        "root_bone": run.root_name,
+        "target": run.target,
+        "attachment": attachment,
+        "chains": new_chains,
+        "head_capsule": head_capsule,
+    })
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(spring, bones))
 
 
 def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
@@ -177,9 +179,9 @@ def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
     if run.role == "garment":
         write_covered_group(obj, output["covered"], run.marked)
     for chain in output["chains"]:
-        apply_chain_bone_display(arm, chain["name"], [joint["name"] for joint in chain["joints"]], run.role)
+        apply_chain_bone_display(arm, chain["name"], [joint["name"] for joint in chain["joints"]], output["attachment"])
     if new_chains:
-        _register_new_chains(context, arm, run, new_chains, output.get("head_capsule"))
+        _register_new_chains(context, arm, run, new_chains, output.get("head_capsule"), output["attachment"])
     return {"bones": len(specs), "rewritten": len(rewritten), "rethickened": rethickened}
 
 
@@ -211,7 +213,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)

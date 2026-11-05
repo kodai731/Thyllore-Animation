@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bones import settings_from_properties
 from ..common.skin_input import skin_input, skin_role_meshes
@@ -22,7 +22,7 @@ from ..common.logged_report import report
 from .operators import armature_bone_specs, armature_fit_bones, bound_meshes, target_armature
 from .ramp_operators import active_bone_name, target_chain_names
 
-CAPSULE_FIT_UI_PARAMS = tml.capsule_fit_ui_params() if _TML_AVAILABLE else []
+CAPSULE_FIT_UI_PARAMS = avatar_api.capsule_fit_ui_params() if _AVATAR_API_AVAILABLE else []
 
 
 def _setting_annotations() -> dict[str, object]:
@@ -44,12 +44,14 @@ def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
         raise ValueError("No skin mesh found (no bound mesh has role 'skin')")
 
     bones = armature_fit_bones(context, arm)
-    sidecar = tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
+    sidecar = avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
     scale_length = context.scene.unit_settings.scale_length
     skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
-    output = tml.fit_body_colliders(sidecar, bones, skins, fit_settings)
+    output = avatar_api.fit_body_colliders({
+        "spring": sidecar, "bones": bones, "skins": skins, "settings": fit_settings,
+    })
 
-    write_sidecar_spring(settings, tml.spring_colliders_to_local(output, bones))
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(output, bones))
     return len(output.get("colliders", []))
 
 
@@ -64,7 +66,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -105,7 +107,7 @@ class THYLLORE_OT_AddCollider(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -186,7 +188,7 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -216,7 +218,9 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = tml.assign_collider_groups(spring, bones, chains, groups)
+            output = avatar_api.assign_collider_groups({
+                "spring": spring, "bones": bones, "chain_names": chains, "group_names": groups,
+            })
         except ValueError as e:
             report(self, "ERROR", f"assign_collider_groups failed: {e}")
             return {"CANCELLED"}

@@ -16,6 +16,15 @@ pub enum SubmeshRole {
     Accessory,
 }
 
+impl SubmeshRole {
+    pub const ALL: [SubmeshRole; 4] = [
+        SubmeshRole::Skin,
+        SubmeshRole::Garment,
+        SubmeshRole::Hair,
+        SubmeshRole::Accessory,
+    ];
+}
+
 #[derive(serde::Deserialize)]
 struct RoleKeywords {
     hair: Vec<String>,

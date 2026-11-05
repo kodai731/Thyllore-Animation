@@ -3,19 +3,32 @@ use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
 use super::*;
-use crate::spring_edit_bridge::add_chains_under_bone;
+use crate::avatar_setup_bridge::BoneSpec;
+use crate::spring_edit_bridge::{add_chains_under_bone, AddChainsUnderBoneRequest};
 
-fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneInput {
-    BoneInput {
+fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneSpec {
+    BoneSpec {
         name: name.to_string(),
         parent,
         rest_position,
+        rest_frame: None,
     }
+}
+
+fn to_bone_input(specs: &[BoneSpec]) -> Vec<BoneInput> {
+    specs
+        .iter()
+        .map(|s| BoneInput {
+            name: s.name.clone(),
+            parent: s.parent,
+            rest_position: s.rest_position,
+        })
+        .collect()
 }
 
 /// Head at the origin with a three-bone strand hanging straight down the -Y axis.
 fn hanging_strand() -> (Vec<BoneInput>, Vec<MatrixRows>, SidecarSpring) {
-    let bones = vec![
+    let bone_specs = vec![
         bone("Head", None, [0.0, 0.0, 0.0]),
         bone("hair_a", Some(0), [0.0, -0.1, 0.0]),
         bone("hair_a.001", Some(1), [0.0, -0.2, 0.0]),
@@ -27,8 +40,14 @@ fn hanging_strand() -> (Vec<BoneInput>, Vec<MatrixRows>, SidecarSpring) {
         translation_rows(Vector3::new(0.0, -0.1, 0.0)),
         translation_rows(Vector3::new(0.0, -0.1, 0.0)),
     ];
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 2).unwrap();
-    (bones, rest_locals, spring)
+    let request = AddChainsUnderBoneRequest {
+        spring: SidecarSpring::default(),
+        bones: bone_specs,
+        root_bone: "Head".to_string(),
+        min_joints: 2,
+    };
+    let spring = add_chains_under_bone(&request).unwrap();
+    (to_bone_input(&request.bones), rest_locals, spring)
 }
 
 fn step_frames(

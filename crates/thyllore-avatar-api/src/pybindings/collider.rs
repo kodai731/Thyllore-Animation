@@ -1,15 +1,14 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use pythonize::depythonize;
 
-use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
-use super::chain_gen::{pythonize_value, settings_pairs};
 use crate::collider_bridge::{
     assign_collider_groups as bridge_assign_collider_groups, capsule_fit_params,
     fit_body_colliders as bridge_fit_body_colliders,
-    has_fitted_body_colliders as bridge_has_fitted_body_colliders, FitBone, FitSkin,
+    has_fitted_body_colliders as bridge_has_fitted_body_colliders, AssignColliderGroupsRequest,
+    FitBodyCollidersRequest, FitBone,
 };
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
 pub fn capsule_fit_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
@@ -17,21 +16,15 @@ pub fn capsule_fit_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (spring, bones, skins, settings))]
 pub fn fit_body_colliders<'py>(
     py: Python<'py>,
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    skins: &Bound<PyAny>,
-    settings: &Bound<'py, PyDict>,
+    request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let spring: SidecarSpring = depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bones: Vec<FitBone> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
-    let skins: Vec<FitSkin> = depythonize(skins).map_err(depythonize_error_to_pyerr)?;
-    let pairs = settings_pairs(settings)?;
+    let request: FitBodyCollidersRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
 
     let output = py
-        .detach(|| bridge_fit_body_colliders(&spring, &bones, &skins, &pairs))
+        .detach(|| bridge_fit_body_colliders(&request))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
 
     pythonize_value(py, &output)
@@ -48,18 +41,14 @@ pub fn has_fitted_body_colliders(spring: &Bound<PyAny>, bones: &Bound<PyAny>) ->
 }
 
 #[pyfunction]
-#[pyo3(signature = (spring, bones, chain_names, group_names))]
 pub fn assign_collider_groups<'py>(
     py: Python<'py>,
-    spring: &Bound<PyAny>,
-    bones: &Bound<PyAny>,
-    chain_names: Vec<String>,
-    group_names: Vec<String>,
+    request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let spring: SidecarSpring = depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bone_inputs = bones_from_py(bones)?;
+    let request: AssignColliderGroupsRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
 
-    let output = bridge_assign_collider_groups(&spring, &bone_inputs, &chain_names, &group_names)
+    let output = bridge_assign_collider_groups(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
 
     pythonize_value(py, &output)

@@ -10,20 +10,19 @@ from mathutils import Vector
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _STYLE = tml.spring_gizmo_style()
-    _TML_AVAILABLE = True
+    _STYLE = avatar_api.spring_gizmo_style()
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
+    avatar_api = None  # type: ignore
     _STYLE = None
-    _TML_AVAILABLE = False
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.spring_properties import spring_settings_to_edit
 from .operators import armature_bone_specs, target_armature
 
 _handle: int | None = None
-INACTIVE_ALPHA = 0.35
 ACTIVE_ALPHA = 1.0
 
 
@@ -43,7 +42,7 @@ def _radius_segments(chains, arm, scale_length):
             if pb is not None:
                 head = tuple(arm.matrix_world @ pb.head)
                 radius = joint.hit_radius / scale_length
-                segments.extend(tml.wire_sphere_segments(head, radius, circle_segments))
+                segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 
@@ -51,7 +50,7 @@ def _highlighted_chain_names(context, arm, settings) -> set[str]:
     """Names of the chains holding the active bone."""
     bones = armature_bone_specs(context, arm)
     spring = spring_settings_to_edit(settings)
-    return set(tml.chains_with_radius(spring, bones, _active_bone_index(arm), "all"))
+    return set(avatar_api.chains_with_radius({"spring": spring, "bones": bones, "active": _active_bone_index(arm), "mode": "all"}))
 
 
 def _draw_chain_radii(context, shader, arm, settings):
@@ -61,7 +60,7 @@ def _draw_chain_radii(context, shader, arm, settings):
 
     inactive = [chain for chain in settings.chains if chain.name not in highlighted]
     active = [chain for chain in settings.chains if chain.name in highlighted]
-    _draw_segments(shader, color + (INACTIVE_ALPHA,), _radius_segments(inactive, arm, scale_length))
+    _draw_segments(shader, color + (_STYLE["inactive_alpha"],), _radius_segments(inactive, arm, scale_length))
     _draw_segments(shader, color + (ACTIVE_ALPHA,), _radius_segments(active, arm, scale_length))
 
 
@@ -81,9 +80,9 @@ def _collider_segments(colliders, arm):
         if collider.shape == "capsule" and collider.has_tail:
             tail = Vector(collider.tail)
             tail_world = tuple(world_matrix @ tail)
-            segments.extend(tml.wire_capsule_segments(head, tail_world, radius, circle_segments))
+            segments.extend(avatar_api.wire_capsule_segments(head, tail_world, radius, circle_segments))
         else:
-            segments.extend(tml.wire_sphere_segments(head, radius, circle_segments))
+            segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 
@@ -94,7 +93,7 @@ def _draw_colliders(shader, arm, settings):
 
     inactive = [c for i, c in enumerate(settings.colliders) if i != selected_index]
     selected = [c for i, c in enumerate(settings.colliders) if i == selected_index]
-    _draw_segments(shader, color + (INACTIVE_ALPHA,), _collider_segments(inactive, arm))
+    _draw_segments(shader, color + (_STYLE["inactive_alpha"],), _collider_segments(inactive, arm))
     _draw_segments(shader, color + (ACTIVE_ALPHA,), _collider_segments(selected, arm))
 
 
@@ -142,7 +141,7 @@ def _draw():
 def register() -> None:
     """Register the draw handler (no-op if wheel is unavailable)."""
     global _handle
-    if not _TML_AVAILABLE:
+    if not _AVATAR_API_AVAILABLE:
         return
     _handle = bpy.types.SpaceView3D.draw_handler_add(_draw, (), "WINDOW", "POST_VIEW")
 

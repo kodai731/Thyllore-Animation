@@ -2,12 +2,11 @@ use pyo3::prelude::*;
 use pythonize::depythonize;
 
 use crate::spring_preview_bridge::{MatrixRows, SpringPreview};
+use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
-use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
-use super::chain_gen::pythonize_value;
-use super::error::anyhow_to_pyerr;
+use super::avatar_setup::bones_from_py;
 
-#[pyclass(name = "SpringPreview", module = "thyllore_ml_core")]
+#[pyclass(name = "SpringPreview", module = "thyllore_avatar_api")]
 pub struct PySpringPreview {
     inner: SpringPreview,
 }

@@ -1,6 +1,10 @@
 use super::*;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
 
+fn fit_bones_to_specs(fit_bones: &[FitBone]) -> Vec<BoneSpec> {
+    fit_bones.iter().map(|fb| fb.bone.clone()).collect()
+}
+
 fn make_bones() -> Vec<FitBone> {
     let identity = [
         [1.0, 0.0, 0.0, 0.0],
@@ -100,7 +104,13 @@ fn collider_bridge_fit_produces_collider_on_spine() {
     let skins = make_cylinder_skin(&bones);
     let spring = empty_spring();
 
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     assert!(
         !result.colliders.is_empty(),
@@ -137,7 +147,13 @@ fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
     let bones = make_bones();
     let skins = make_cylinder_skin(&bones);
 
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     let fitted_group = result
         .collider_groups
@@ -196,14 +212,13 @@ fn collider_bridge_assign_collider_groups_replaces() {
     );
 
     let bones = make_bones();
-    let bone_inputs = to_bone_inputs(&bones);
 
-    let result = assign_collider_groups(
-        &spring,
-        &bone_inputs,
-        &["Spine".to_string()],
-        &["New".to_string()],
-    )
+    let result = assign_collider_groups(&AssignColliderGroupsRequest {
+        spring,
+        bones: fit_bones_to_specs(&bones),
+        chain_names: vec!["Spine".to_string()],
+        group_names: vec!["New".to_string()],
+    })
     .unwrap();
 
     let chain = &result.chains[0];
@@ -236,14 +251,13 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
         },
     );
     let bones = make_bones();
-    let bone_inputs = to_bone_inputs(&bones);
 
-    let err = assign_collider_groups(
-        &spring,
-        &bone_inputs,
-        &["Spine".to_string()],
-        &["Unknown".to_string()],
-    )
+    let err = assign_collider_groups(&AssignColliderGroupsRequest {
+        spring,
+        bones: fit_bones_to_specs(&bones),
+        chain_names: vec!["Spine".to_string()],
+        group_names: vec!["Unknown".to_string()],
+    })
     .unwrap_err();
 
     assert!(
@@ -280,7 +294,13 @@ fn collider_bridge_fit_high_bone_index_head() {
     }];
 
     let spring = empty_spring();
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     assert!(
         result

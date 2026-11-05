@@ -3,7 +3,9 @@ use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
+use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+    default_attachment, ChainGenRequest, ChainGenSettings,
+};
 use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     SubmeshKey, SubmeshRole, SubmeshSelector,
@@ -67,6 +69,7 @@ pub(super) fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn Ba
     let request = ChainGenRequest {
         target,
         root,
+        attachment: default_attachment(root),
         settings,
     };
     Some(Ok(Box::new(GenerateChainBones { request })))

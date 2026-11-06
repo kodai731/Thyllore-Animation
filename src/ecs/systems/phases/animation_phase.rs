@@ -7,8 +7,8 @@ use cgmath::Matrix4;
 use crate::animation::{BoneId, BoneLocalPose, SkeletonId};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::{
-    AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PhaseSubTimings, PoseApplyCache,
-    WeightHeatmapState,
+    AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PendingAnimatedMeshUploads,
+    PhaseSubTimings, PoseApplyCache, WeightHeatmapState,
 };
 use crate::ecs::FrameContext;
 use crate::ecs::{
@@ -161,6 +161,10 @@ pub unsafe fn run_animation_phase_gpu(
         let frame_slot = ctx.frame_slot;
         let mut backend = ctx.create_backend();
         playback_upload_animations(&mut backend, &updates.updated_meshes, frame_slot)?;
+        ctx.world
+            .resource_mut::<PendingAnimatedMeshUploads>()
+            .mesh_ids
+            .extend(updates.updated_meshes.iter().copied());
     }
     ctx.world
         .resource_mut::<PhaseSubTimings>()

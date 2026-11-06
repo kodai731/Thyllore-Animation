@@ -3,6 +3,7 @@ mod graphics;
 mod imgui_capture;
 mod imgui_textures;
 mod object_id_readback;
+mod pending_animated_mesh_uploads;
 mod pipeline_manager;
 mod post_process_targets;
 
@@ -11,5 +12,6 @@ pub use graphics::*;
 pub use imgui_capture::*;
 pub use imgui_textures::*;
 pub use object_id_readback::*;
+pub use pending_animated_mesh_uploads::*;
 pub use pipeline_manager::*;
 pub use post_process_targets::*;

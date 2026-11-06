@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub trait RenderBackend {
-    unsafe fn upload_animated_meshes(
+    unsafe fn stage_animated_meshes(
         &mut self,
         mesh_ids: &[MeshId],
         frame_slot: usize,

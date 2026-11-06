@@ -11,7 +11,7 @@ use thyllore_render_core::{
 
 use vulkanalia::prelude::v1_0::*;
 
-use crate::command::{with_single_time_commands, RRCommandPool};
+use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{SceneUniformData, Vertex};
 use crate::raytracing::RRAccelerationStructure;
@@ -207,48 +207,87 @@ unsafe fn record_acceleration_structure_updates(
     )
 }
 
+pub unsafe fn record_animated_mesh_uploads(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    raytracing: &mut RayTracingData,
+    mesh_ids: &[MeshId],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::ALL_COMMANDS,
+            vk::AccessFlags::empty(),
+        ),
+        (
+            vk::PipelineStageFlags::TRANSFER
+                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+    );
+
+    for &mesh_id in mesh_ids {
+        let Some(mesh) = graphics.meshes.get(mesh_id) else {
+            continue;
+        };
+        let size = mesh.vertex_data.vertices.len() as vk::DeviceSize
+            * size_of::<Vertex>() as vk::DeviceSize;
+        mesh.record_vertex_copy(frame_slot, &device.device, command_buffer, size);
+    }
+
+    if let Some(accel_struct) = raytracing.acceleration_structure.as_mut() {
+        record_acceleration_structure_updates(
+            instance,
+            device,
+            graphics,
+            accel_struct,
+            mesh_ids,
+            frame_slot,
+            command_buffer,
+        )?;
+    }
+
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::TRANSFER
+                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+        (
+            vk::PipelineStageFlags::VERTEX_INPUT
+                | vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+                | vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            vk::AccessFlags::VERTEX_ATTRIBUTE_READ
+                | vk::AccessFlags::SHADER_READ
+                | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    Ok(())
+}
+
 impl<'a> RenderBackend for VulkanBackend<'a> {
-    unsafe fn upload_animated_meshes(
+    unsafe fn stage_animated_meshes(
         &mut self,
         mesh_ids: &[MeshId],
         frame_slot: usize,
     ) -> Result<()> {
-        let staged_meshes = stage_mesh_vertices(
+        stage_mesh_vertices(
             self.instance,
             self.device,
             self.graphics,
             mesh_ids,
             frame_slot,
         )?;
-
-        let instance = self.instance;
-        let device = self.device;
-        let graphics: &GraphicsResources = self.graphics;
-        let acceleration_structure = &mut self.raytracing.acceleration_structure;
-
-        with_single_time_commands(device, self.command_pool.command_pool, |command_buffer| {
-            for &(mesh_id, size) in &staged_meshes {
-                graphics.meshes[mesh_id].record_vertex_copy(
-                    frame_slot,
-                    &device.device,
-                    command_buffer,
-                    size,
-                );
-            }
-
-            let Some(accel_struct) = acceleration_structure.as_mut() else {
-                return Ok(());
-            };
-            record_acceleration_structure_updates(
-                instance,
-                device,
-                graphics,
-                accel_struct,
-                mesh_ids,
-                frame_slot,
-                command_buffer,
-            )
-        })
+        Ok(())
     }
 
     unsafe fn create_static_line_buffers(

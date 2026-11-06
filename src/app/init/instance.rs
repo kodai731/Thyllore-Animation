@@ -331,6 +331,8 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::PhaseSubTimings::default());
         data.ecs_world
+            .insert_resource(crate::ecs::resource::PendingAnimatedMeshUploads::default());
+        data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);

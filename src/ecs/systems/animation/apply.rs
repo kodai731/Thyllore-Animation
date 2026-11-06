@@ -154,7 +154,7 @@ pub unsafe fn upload_animations(
     frame_slot: usize,
 ) -> Result<()> {
     if !updated_meshes.is_empty() {
-        backend.upload_animated_meshes(updated_meshes, frame_slot)?;
+        backend.stage_animated_meshes(updated_meshes, frame_slot)?;
     }
 
     Ok(())

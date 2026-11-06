@@ -14,7 +14,6 @@ use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
 use crate::loader::ModelLoadResult;
 use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
-use crate::render::RenderBackend;
 use thyllore_math_core::ScreenSpaceScale;
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
@@ -531,7 +530,7 @@ pub fn select_bone_by_ray(
 
 pub unsafe fn update_bone_gizmo_buffers(
     bone_gizmo: &mut BoneGizmoData,
-    backend: &mut dyn RenderBackend,
+    backend: &mut crate::vulkanr::VulkanBackend<'_>,
     frame_slot: usize,
 ) -> Result<()> {
     backend.update_or_create_line_buffers(&mut bone_gizmo.stick_mesh, frame_slot)

@@ -4,16 +4,140 @@ use crate::descriptor::{
     shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
 };
 use crate::render::pass::RRRender;
+use crate::types::{Pipeline, PipelineLayout, RenderPass};
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
-use vulkanalia::vk::PrimitiveTopology;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Topology {
+    TriangleList,
+    LineList,
+}
+impl From<Topology> for vk::PrimitiveTopology {
+    fn from(topology: Topology) -> Self {
+        match topology {
+            Topology::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
+            Topology::LineList => vk::PrimitiveTopology::LINE_LIST,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FillMode {
+    Fill,
+    Line,
+}
+impl From<FillMode> for vk::PolygonMode {
+    fn from(mode: FillMode) -> Self {
+        match mode {
+            FillMode::Fill => vk::PolygonMode::FILL,
+            FillMode::Line => vk::PolygonMode::LINE,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CullFace {
+    Back,
+}
+impl From<CullFace> for vk::CullModeFlags {
+    fn from(face: CullFace) -> Self {
+        match face {
+            CullFace::Back => vk::CullModeFlags::BACK,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DepthCompare {
+    Always,
+    GreaterOrEqual,
+    LessOrEqual,
+}
+impl DepthCompare {
+    const fn compare_op(self) -> vk::CompareOp {
+        match self {
+            DepthCompare::Always => vk::CompareOp::ALWAYS,
+            DepthCompare::GreaterOrEqual => vk::CompareOp::GREATER_OR_EQUAL,
+            DepthCompare::LessOrEqual => vk::CompareOp::LESS_OR_EQUAL,
+        }
+    }
+}
+impl From<DepthCompare> for vk::CompareOp {
+    fn from(compare: DepthCompare) -> Self {
+        compare.compare_op()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleCount {
+    One,
+    Two,
+    Four,
+    Eight,
+    Sixteen,
+    ThirtyTwo,
+    SixtyFour,
+}
+impl From<SampleCount> for vk::SampleCountFlags {
+    fn from(count: SampleCount) -> Self {
+        match count {
+            SampleCount::One => vk::SampleCountFlags::_1,
+            SampleCount::Two => vk::SampleCountFlags::_2,
+            SampleCount::Four => vk::SampleCountFlags::_4,
+            SampleCount::Eight => vk::SampleCountFlags::_8,
+            SampleCount::Sixteen => vk::SampleCountFlags::_16,
+            SampleCount::ThirtyTwo => vk::SampleCountFlags::_32,
+            SampleCount::SixtyFour => vk::SampleCountFlags::_64,
+        }
+    }
+}
+impl SampleCount {
+    #[inline]
+    pub fn bits(self) -> u32 {
+        let flags: vk::SampleCountFlags = self.into();
+        flags.bits()
+    }
+
+    pub(crate) fn from_raw(flags: vk::SampleCountFlags) -> Self {
+        match flags {
+            vk::SampleCountFlags::_1 => SampleCount::One,
+            vk::SampleCountFlags::_2 => SampleCount::Two,
+            vk::SampleCountFlags::_4 => SampleCount::Four,
+            vk::SampleCountFlags::_8 => SampleCount::Eight,
+            vk::SampleCountFlags::_16 => SampleCount::Sixteen,
+            vk::SampleCountFlags::_32 => SampleCount::ThirtyTwo,
+            vk::SampleCountFlags::_64 => SampleCount::SixtyFour,
+            _ => panic!(
+                "SampleCount::from_raw: unexpected flags (bits={:#x}), not a single-bit sample count",
+                flags.bits()
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ShaderStages {
+    Vertex,
+    Fragment,
+    Compute,
+}
+impl From<ShaderStages> for vk::ShaderStageFlags {
+    fn from(stage: ShaderStages) -> Self {
+        match stage {
+            ShaderStages::Vertex => vk::ShaderStageFlags::VERTEX,
+            ShaderStages::Fragment => vk::ShaderStageFlags::FRAGMENT,
+            ShaderStages::Compute => vk::ShaderStageFlags::COMPUTE,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct RRPipeline {
-    pub pipeline_layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
+    pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub(crate) pipeline: vk::Pipeline,
 }
 
 use crate::resource::gpu_resource::GpuResource;
@@ -50,7 +174,7 @@ fn vertex_format_to_vk(format: VertexFormat) -> vk::Format {
 pub struct DepthTestConfig {
     pub test_enable: bool,
     pub write_enable: bool,
-    pub compare_op: vk::CompareOp,
+    pub(crate) compare_op: vk::CompareOp,
 }
 
 impl Default for DepthTestConfig {
@@ -63,16 +187,42 @@ impl Default for DepthTestConfig {
     }
 }
 
+impl DepthTestConfig {
+    pub const fn disabled() -> Self {
+        Self {
+            test_enable: false,
+            write_enable: false,
+            compare_op: DepthCompare::Always.compare_op(),
+        }
+    }
+
+    pub const fn read_only(compare: DepthCompare) -> Self {
+        Self {
+            test_enable: true,
+            write_enable: false,
+            compare_op: compare.compare_op(),
+        }
+    }
+
+    pub const fn read_write(compare: DepthCompare) -> Self {
+        Self {
+            test_enable: true,
+            write_enable: true,
+            compare_op: compare.compare_op(),
+        }
+    }
+}
+
 /// Blend configuration
 #[derive(Clone, Copy)]
 pub struct BlendConfig {
     pub enable: bool,
-    pub src_color_factor: vk::BlendFactor,
-    pub dst_color_factor: vk::BlendFactor,
-    pub color_op: vk::BlendOp,
-    pub src_alpha_factor: vk::BlendFactor,
-    pub dst_alpha_factor: vk::BlendFactor,
-    pub alpha_op: vk::BlendOp,
+    pub(crate) src_color_factor: vk::BlendFactor,
+    pub(crate) dst_color_factor: vk::BlendFactor,
+    pub(crate) color_op: vk::BlendOp,
+    pub(crate) src_alpha_factor: vk::BlendFactor,
+    pub(crate) dst_alpha_factor: vk::BlendFactor,
+    pub(crate) alpha_op: vk::BlendOp,
 }
 
 impl Default for BlendConfig {
@@ -89,11 +239,57 @@ impl Default for BlendConfig {
     }
 }
 
+impl BlendConfig {
+    pub fn alpha() -> Self {
+        Self {
+            enable: true,
+            src_color_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            alpha_op: vk::BlendOp::ADD,
+        }
+    }
+
+    pub fn additive() -> Self {
+        Self {
+            enable: true,
+            src_color_factor: vk::BlendFactor::ONE,
+            dst_color_factor: vk::BlendFactor::ONE,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::ONE,
+            dst_alpha_factor: vk::BlendFactor::ONE,
+            alpha_op: vk::BlendOp::ADD,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct PushConstantConfig {
-    pub stage_flags: vk::ShaderStageFlags,
+    pub(crate) stage_flags: vk::ShaderStageFlags,
     pub offset: u32,
     pub size: u32,
+}
+
+impl PushConstantConfig {
+    pub fn new(stages: ShaderStages, offset: u32, size: u32) -> Self {
+        Self {
+            stage_flags: stages.into(),
+            offset,
+            size,
+        }
+    }
+}
+
+pub fn compute_push_constant_range(size: u32) -> crate::types::PushConstantRange {
+    crate::types::PushConstantRange(
+        vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .offset(0)
+            .size(size)
+            .build(),
+    )
 }
 
 /// Pipeline builder for flexible pipeline creation
@@ -151,8 +347,8 @@ impl PipelineBuilder {
     }
 
     /// Set custom render pass (for G-Buffer, etc.)
-    pub fn custom_render_pass(mut self, render_pass: vk::RenderPass) -> Self {
-        self.custom_render_pass = Some(render_pass);
+    pub fn custom_render_pass(mut self, render_pass: RenderPass) -> Self {
+        self.custom_render_pass = Some(render_pass.raw());
         self
     }
 
@@ -169,14 +365,14 @@ impl PipelineBuilder {
     }
 
     /// Set primitive topology (TRIANGLE_LIST, LINE_LIST, etc.)
-    pub fn topology(mut self, topology: vk::PrimitiveTopology) -> Self {
-        self.topology = topology;
+    pub fn topology(mut self, topology: Topology) -> Self {
+        self.topology = topology.into();
         self
     }
 
     /// Set polygon mode (FILL, LINE, POINT)
-    pub fn polygon_mode(mut self, mode: vk::PolygonMode) -> Self {
-        self.polygon_mode = mode;
+    pub fn polygon_mode(mut self, mode: FillMode) -> Self {
+        self.polygon_mode = mode.into();
         self
     }
 
@@ -187,8 +383,8 @@ impl PipelineBuilder {
         self
     }
 
-    pub fn cull_mode(mut self, mode: vk::CullModeFlags) -> Self {
-        self.cull_mode = mode;
+    pub fn cull_mode(mut self, mode: CullFace) -> Self {
+        self.cull_mode = mode.into();
         self
     }
 
@@ -218,7 +414,7 @@ impl PipelineBuilder {
     }
 
     /// Set dynamic states
-    pub fn dynamic_states(mut self, states: Vec<vk::DynamicState>) -> Self {
+    pub(crate) fn dynamic_states(mut self, states: Vec<vk::DynamicState>) -> Self {
         self.dynamic_states = states;
         self
     }
@@ -230,8 +426,8 @@ impl PipelineBuilder {
     }
 
     /// Set MSAA samples
-    pub fn msaa_samples(mut self, samples: vk::SampleCountFlags) -> Self {
-        self.msaa_samples = samples;
+    pub fn msaa_samples(mut self, samples: SampleCount) -> Self {
+        self.msaa_samples = samples.into();
         self
     }
 
@@ -240,8 +436,9 @@ impl PipelineBuilder {
         self,
         rrdevice: &RRDevice,
         rrrender: &RRRender,
-        swapchain_extent: Option<vk::Extent2D>,
+        swapchain_extent: Option<crate::types::Extent2D>,
     ) -> Result<RRPipeline> {
+        let swapchain_extent = swapchain_extent.map(|e| e.raw());
         let mut rrpipeline = RRPipeline::default();
 
         if self.pass.is_compute() {
@@ -388,7 +585,7 @@ impl PipelineBuilder {
             .push_constant_ranges(&push_constant_ranges);
 
         rrpipeline.pipeline_layout = rrdevice
-            .device
+            .device()
             .create_pipeline_layout(&pipeline_layout_info, None)?;
 
         // Create graphics pipeline
@@ -408,14 +605,14 @@ impl PipelineBuilder {
             .subpass(0);
 
         let pipelines = rrdevice
-            .device
+            .device()
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info.build()], None)
             .map_err(|e| anyhow::anyhow!("Failed to create pipeline: {:?}", e))?;
 
         rrpipeline.pipeline = pipelines.0[0];
 
         for stage in &shader_stages {
-            rrdevice.device.destroy_shader_module(stage.module, None);
+            rrdevice.device().destroy_shader_module(stage.module, None);
         }
 
         println!("Pipeline created successfully");
@@ -424,6 +621,16 @@ impl PipelineBuilder {
 }
 
 impl RRPipeline {
+    #[inline]
+    pub fn pipeline_layout(&self) -> PipelineLayout {
+        PipelineLayout(self.pipeline_layout)
+    }
+
+    #[inline]
+    pub fn pipeline(&self) -> Pipeline {
+        Pipeline(self.pipeline)
+    }
+
     /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)
     pub unsafe fn new_with_graphics_resources(
         rrdevice: &RRDevice,
@@ -431,9 +638,9 @@ impl RRPipeline {
         rrrender: &RRRender,
         layouts: &[&ReflectedSetLayout; 3],
         pass: &'static PassShaders,
-        topology: PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: CullFace,
     ) -> Result<Self> {
         let mut builder = PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Standard)
@@ -442,7 +649,7 @@ impl RRPipeline {
             .cull_mode(cull_mode)
             .descriptor_layouts(layouts);
 
-        if topology == vk::PrimitiveTopology::LINE_LIST {
+        if topology == Topology::LineList {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
@@ -450,7 +657,13 @@ impl RRPipeline {
             });
         }
 
-        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        builder.build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
     }
 
     /// Create a pipeline with GraphicsResources layouts (Set 0, Set 2 only - no material)
@@ -460,9 +673,9 @@ impl RRPipeline {
         rrrender: &RRRender,
         layouts: &[&ReflectedSetLayout; 2],
         pass: &'static PassShaders,
-        topology: PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: CullFace,
     ) -> Result<Self> {
         let mut builder = PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Standard)
@@ -471,7 +684,7 @@ impl RRPipeline {
             .cull_mode(cull_mode)
             .descriptor_layouts(layouts);
 
-        if topology == vk::PrimitiveTopology::LINE_LIST {
+        if topology == Topology::LineList {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
@@ -479,7 +692,13 @@ impl RRPipeline {
             });
         }
 
-        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        builder.build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
     }
 
     /// Create ImGui rendering pipeline (backward compatibility)
@@ -488,7 +707,7 @@ impl RRPipeline {
         rrrender: &RRRender,
         descriptor_set_layout: &ReflectedSetLayout,
         pass: &'static PassShaders,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: SampleCount,
     ) -> Result<Self> {
         PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::ImGui)
@@ -514,11 +733,17 @@ impl RRPipeline {
     ) -> Result<Self> {
         PipelineBuilder::from_pass(pass)
             .vertex_input(VertexInputConfig::Billboard)
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
+            .topology(Topology::TriangleList)
+            .polygon_mode(FillMode::Fill)
             .blend(BlendConfig::default())
             .descriptor_layouts(&[descriptor_set_layout])
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(
+                rrdevice,
+                rrrender,
+                Some(crate::types::Extent2D::from_raw(
+                    rrswapchain.swapchain_extent,
+                )),
+            )
     }
 
     /// Create compute pipeline for ray query or other compute shaders
@@ -535,9 +760,13 @@ impl RRPipeline {
         rrdevice: &RRDevice,
         pass: &'static PassShaders,
         descriptor_set_layouts: &[&ReflectedSetLayout],
-        push_constant_ranges: &[vk::PushConstantRange],
+        push_constant_ranges: &[crate::types::PushConstantRange],
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
+        let push_constant_ranges: Vec<vk::PushConstantRange> = push_constant_ranges
+            .iter()
+            .map(|range| range.raw())
+            .collect();
 
         let owned_layouts: Vec<ReflectedSetLayout> = descriptor_set_layouts
             .iter()
@@ -565,7 +794,7 @@ impl RRPipeline {
         // Create pipeline layout
         let mut layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&layout_handles);
         if !push_constant_ranges.is_empty() {
-            layout_info = layout_info.push_constant_ranges(push_constant_ranges);
+            layout_info = layout_info.push_constant_ranges(&push_constant_ranges);
         }
         let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 
@@ -588,7 +817,7 @@ impl RRPipeline {
         })
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         if self.pipeline != vk::Pipeline::null() {
             device.destroy_pipeline(self.pipeline, None);
         }
@@ -631,7 +860,7 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
         .code_size(bytecode.code_size())
         .code(bytecode.code());
 
-    Ok(rrdevice.device.create_shader_module(&info, None)?)
+    Ok(rrdevice.device().create_shader_module(&info, None)?)
 }
 
 type VertexInputDescriptions = (
@@ -753,7 +982,7 @@ fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions
 
 impl GpuResource for RRPipeline {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         self.pipeline = vk::Pipeline::null();
         self.pipeline_layout = vk::PipelineLayout::null();
     }

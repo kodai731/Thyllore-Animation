@@ -49,7 +49,11 @@ impl RRBloomDescriptorSets {
         })
     }
 
-    pub fn downsample_set(&self, frame_slot: usize, mip_index: usize) -> Result<vk::DescriptorSet> {
+    pub(crate) fn downsample_set(
+        &self,
+        frame_slot: usize,
+        mip_index: usize,
+    ) -> Result<vk::DescriptorSet> {
         self.frame(frame_slot)?
             .downsample_sets
             .get(mip_index)
@@ -57,7 +61,11 @@ impl RRBloomDescriptorSets {
             .ok_or_else(|| anyhow!("bloom downsample set {mip_index} is missing"))
     }
 
-    pub fn upsample_set(&self, frame_slot: usize, pass_index: usize) -> Result<vk::DescriptorSet> {
+    pub(crate) fn upsample_set(
+        &self,
+        frame_slot: usize,
+        pass_index: usize,
+    ) -> Result<vk::DescriptorSet> {
         self.frame(frame_slot)?
             .upsample_sets
             .get(pass_index)
@@ -88,9 +96,9 @@ impl RRBloomDescriptorSets {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        hdr_image_view: vk::ImageView,
-        mip_image_views: &[vk::ImageView],
-        sampler: vk::Sampler,
+        hdr_image_view: crate::types::ImageView,
+        mip_image_views: &[crate::types::ImageView],
+        sampler: crate::types::Sampler,
     ) -> Result<()> {
         let frame = self.frame(frame_slot)?;
         if mip_image_views.len() != frame.downsample_sets.len() {
@@ -106,12 +114,13 @@ impl RRBloomDescriptorSets {
                 0 => hdr_image_view,
                 _ => mip_image_views[mip_index - 1],
             };
-            self.write_input(rrdevice, *set, input_view, sampler)?;
+            self.write_input(rrdevice, *set, input_view.raw(), sampler.raw())?;
         }
 
         for (pass_index, set) in frame.upsample_sets.iter().enumerate() {
             let source_view_index = mip_image_views.len() - 1 - pass_index;
-            self.write_input(rrdevice, *set, mip_image_views[source_view_index], sampler)?;
+            let source_view = mip_image_views[source_view_index];
+            self.write_input(rrdevice, *set, source_view.raw(), sampler.raw())?;
         }
         Ok(())
     }

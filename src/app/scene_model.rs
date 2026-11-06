@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::model::load_model_from_file_system;
 use crate::app::{App, AppData};
@@ -9,11 +8,11 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::{CommandState, SwapchainState};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
+use thyllore_vulkan_core::types::Instance;
 
 impl App {
     unsafe fn prepare_model_reload(&mut self) -> Result<(Rc<RRCommandPool>, RRSwapchain)> {
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
         let command_pool = self.resource::<CommandState>().pool.clone();
         let swapchain = self.resource::<SwapchainState>().swapchain.clone();
         Ok((command_pool, swapchain))
@@ -28,7 +27,7 @@ impl App {
         model_path: &str,
         scene_will_provide_clips: bool,
     ) -> Result<()> {
-        rrdevice.device.device_wait_idle()?;
+        rrdevice.wait_idle()?;
 
         if let Some(ref mut gpu) = data.onion_skin_gpu {
             gpu.destroy(rrdevice);
@@ -205,7 +204,7 @@ impl App {
 
     pub unsafe fn load_model_additive(&mut self, path: &str) -> Result<()> {
         log!("Additively loading model from: {}", path);
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let procedural_primitives =
@@ -269,7 +268,7 @@ impl App {
                 "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
                 i,
                 mesh.render_to_gbuffer,
-                mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
                 mesh.index_buffer.indices
             );
             log!(

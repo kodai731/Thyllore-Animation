@@ -13,8 +13,8 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub unsafe fn load_model_from_file_system(
     path: &str,

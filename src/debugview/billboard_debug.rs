@@ -9,7 +9,7 @@ use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
     let camera = world.resource::<Camera>();
@@ -25,7 +25,7 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
     };
 
     let gbuffer_debug_info = raytracing.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
-        position_image_view: gb.position_image_view,
+        position_image_view: gb.position_image_view(),
         extent_width: gb.width,
         extent_height: gb.height,
     });
@@ -38,7 +38,7 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
         swapchain,
         &billboard.render_state.descriptor_set,
         gbuffer_debug_info.as_ref(),
-        raytracing.gbuffer_sampler,
+        raytracing.gbuffer_sampler(),
     );
 }
 
@@ -52,7 +52,7 @@ pub struct BillboardDebugInfo {
 }
 
 pub struct GBufferDebugInfo {
-    pub position_image_view: vk::ImageView,
+    pub position_image_view: ImageView,
     pub extent_width: u32,
     pub extent_height: u32,
 }
@@ -62,7 +62,7 @@ pub fn log_billboard_debug_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!("=== Billboard Depth Debug Info ===");
 
@@ -83,7 +83,7 @@ fn log_basic_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!(
         "Light position: ({:.2}, {:.2}, {:.2})",
@@ -104,7 +104,7 @@ fn log_basic_info(
         info.camera_direction.z
     );
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
     log!(
         "Swapchain extent: {}x{}",
         swapchain_extent.width,
@@ -140,14 +140,14 @@ fn log_basic_info(
     log!("  rrdata count: {}", billboard_descriptor_set.rrdata.len());
     log!(
         "  descriptor_sets count: {}",
-        billboard_descriptor_set.descriptor_sets.len()
+        billboard_descriptor_set.descriptor_sets().len()
     );
 }
 
 fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
     use crate::math::{coordinate_system::perspective_infinite_reverse, view};
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
 
     let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
     let light_view_pos = view_matrix

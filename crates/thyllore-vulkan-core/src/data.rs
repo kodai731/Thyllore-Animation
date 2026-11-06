@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_math_core::*;
 use thyllore_spirv_reflect::declare_gpu_block;
@@ -12,11 +13,11 @@ pub use thyllore_model_core::mesh::{Vertex, VertexData};
 #[derive(Clone, Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
     pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
@@ -75,39 +76,39 @@ impl RRData {
         self.rruniform_buffers.clear();
 
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
 
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
 
         if self.vertex_buffer.buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.vertex_buffer.buffer, None);
             self.vertex_buffer.buffer = vk::Buffer::null();
         }
 
         if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.vertex_buffer.buffer_memory, None);
             self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
         }
 
         if self.index_buffer.buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.index_buffer.buffer, None);
             self.index_buffer.buffer = vk::Buffer::null();
         }
 
         if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.index_buffer.buffer_memory, None);
             self.index_buffer.buffer_memory = vk::DeviceMemory::null();
         }
@@ -117,12 +118,12 @@ impl RRData {
         self.delete_buffers(rrdevice);
 
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
 
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }
@@ -188,7 +189,7 @@ impl Default for SceneUniformData {
     }
 }
 
-pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
+pub(crate) fn vertex_binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
         .binding(0)
         .stride(size_of::<Vertex>() as u32)
@@ -196,7 +197,7 @@ pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
         .build()
 }
 
-pub fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
+pub(crate) fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
     let pos = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(0)

@@ -3,25 +3,22 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::world::{Transform, World};
 use crate::math::{Vec2, Vec3, Vec4};
-use crate::render::MaterialUBO;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::MeshBuffer;
-use crate::vulkanr::vulkan::Instance;
-use thyllore_model_core::MeshMorph;
+use thyllore_render_core::MaterialUBO;
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
-use thyllore_vulkan_core::resource::image::{
-    create_image_view, create_texture_image_pixel, create_texture_sampler,
-};
+use thyllore_vulkan_core::resource::image::{create_rgba8_texture, TextureColorSpace};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::DeviceSize;
+use thyllore_vulkan_core::types::Instance;
 
 struct TestColorQuadSpec {
     color: Vec4,
@@ -165,7 +162,7 @@ unsafe fn create_quad_mesh_buffer(
         instance,
         device,
         command_pool,
-        (size_of::<Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+        (size_of::<Vertex>() * vertex_data.vertices.len()) as DeviceSize,
         vertex_data.vertices.as_ptr() as *const c_void,
         vertex_data.vertices.len(),
     )?;
@@ -180,38 +177,24 @@ unsafe fn create_quad_mesh_buffer(
     )?;
 
     let white_pixel = vec![255u8, 255, 255, 255];
-    let (image, image_memory, mip_level) =
-        create_texture_image_pixel(instance, device, command_pool, &white_pixel, 1, 1)?;
-
-    let image_view = create_image_view(
+    let rgba8 = create_rgba8_texture(
+        instance,
         device,
-        image,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageAspectFlags::COLOR,
-        mip_level,
+        command_pool,
+        &white_pixel,
+        1,
+        1,
+        TextureColorSpace::Srgb,
     )?;
-    let sampler = create_texture_sampler(device, mip_level)?;
 
     let object_index = graphics.objects.allocate_slot();
 
-    Ok(MeshBuffer {
-        vertex_buffer,
-        index_buffer,
-        vertex_data,
-        image,
-        image_memory,
-        mip_level,
-        image_view,
-        sampler,
-        render_to_gbuffer: true,
-        object_index,
-        skin_data: None,
-        skeleton_id: None,
-        node_index: None,
-        base_vertices: Vec::new(),
-        base_colors: None,
-        morph: MeshMorph::default(),
-    })
+    let mut mesh = MeshBuffer::with_texture(&rgba8);
+    mesh.vertex_buffer = vertex_buffer;
+    mesh.index_buffer = index_buffer;
+    mesh.vertex_data = vertex_data;
+    mesh.object_index = object_index;
+    Ok(mesh)
 }
 
 unsafe fn create_quad_material(
@@ -226,8 +209,8 @@ unsafe fn create_quad_material(
         instance,
         device,
         &name,
-        mesh.image_view,
-        mesh.sampler,
+        mesh.image_view(),
+        mesh.sampler(),
         MaterialUBO::default(),
     )?;
     Ok(material_id)

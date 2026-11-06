@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{AnimationClip, Skeleton, SkeletonId};
-use crate::render::MaterialUBO;
 use crate::vulkanr::resource::graphics_resource::MaterialId;
+use thyllore_render_core::MaterialUBO;
 
 pub type AssetId = u64;
 

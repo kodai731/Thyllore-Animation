@@ -1,12 +1,15 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{imgui_layout_spec, shader_bindings, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{
+    allocate_imgui_texture_set, imgui_layout_spec, imgui_texture_id, write_imgui_texture_set,
+    ReflectedSetLayout,
+};
 use crate::vulkanr::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
+use thyllore_vulkan_core::types::{CommandPool, DescriptorSet, Format, Instance};
 
 #[must_use]
 #[derive(Debug, Default, GpuResource)]
@@ -20,7 +23,7 @@ pub struct ViewportState {
     pub auto_exposure_buffers: Option<AutoExposureBuffers>,
     pub descriptor_set_layout: ReflectedSetLayout,
     #[gpu_resource(skip)]
-    pub descriptor_set: vk::DescriptorSet,
+    pub descriptor_set: DescriptorSet,
     #[gpu_resource(skip)]
     pub width: u32,
     #[gpu_resource(skip)]
@@ -33,11 +36,11 @@ impl ViewportState {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: CommandPool,
         width: u32,
         height: u32,
-        msaa_samples: vk::SampleCountFlags,
-        swapchain_format: vk::Format,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
+        swapchain_format: Format,
     ) -> Result<Self> {
         let offscreen = OffscreenFramebuffer::new(
             instance,
@@ -54,7 +57,7 @@ impl ViewportState {
         let bloom_chain = BloomChain::new(rrdevice, width, height, 5)?;
 
         let mut storage = RenderTargetStorage::default();
-        storage.set_extent_and_reset(&rrdevice.device, width, height);
+        storage.set_extent_and_reset(rrdevice, width, height);
 
         let dof_buffer = DofBuffer::new(rrdevice, width, height)?;
 
@@ -82,9 +85,9 @@ impl ViewportState {
     unsafe fn create_imgui_descriptor(
         rrdevice: &RRDevice,
         offscreen: &OffscreenFramebuffer,
-    ) -> Result<(ReflectedSetLayout, vk::DescriptorSet)> {
+    ) -> Result<(ReflectedSetLayout, DescriptorSet)> {
         let layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+        let descriptor_set = allocate_imgui_texture_set(rrdevice, &layout)?;
 
         Self::update_descriptor_set(rrdevice, &layout, descriptor_set, offscreen)?;
 
@@ -94,26 +97,23 @@ impl ViewportState {
     unsafe fn update_descriptor_set(
         rrdevice: &RRDevice,
         layout: &ReflectedSetLayout,
-        descriptor_set: vk::DescriptorSet,
+        descriptor_set: DescriptorSet,
         offscreen: &OffscreenFramebuffer,
     ) -> Result<()> {
-        layout
-            .writer(descriptor_set)
-            .image(
-                shader_bindings::imgui::TEX_SAMPLER,
-                offscreen.resolve_image_view(),
-                offscreen.sampler,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            )?
-            .apply(rrdevice);
-        Ok(())
+        write_imgui_texture_set(
+            rrdevice,
+            layout,
+            descriptor_set,
+            offscreen.resolve_image_view(),
+            offscreen.sampler(),
+        )
     }
 
     pub unsafe fn resize(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: CommandPool,
         new_width: u32,
         new_height: u32,
     ) -> Result<()> {
@@ -148,7 +148,7 @@ impl ViewportState {
         }
 
         self.storage
-            .set_extent_and_reset(&rrdevice.device, new_width, new_height);
+            .set_extent_and_reset(rrdevice, new_width, new_height);
 
         if let Some(ref mut dof_buffer) = self.dof_buffer {
             dof_buffer.resize(new_width, new_height);
@@ -162,6 +162,6 @@ impl ViewportState {
     }
 
     pub fn texture_id(&self) -> u64 {
-        self.descriptor_set.as_raw()
+        imgui_texture_id(self.descriptor_set)
     }
 }

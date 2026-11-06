@@ -11,6 +11,7 @@ use crate::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
 use crate::resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
@@ -220,8 +221,8 @@ impl GraphicsResources {
             instance,
             rrdevice,
             source.material_name,
-            mesh.image_view,
-            mesh.sampler,
+            mesh.image_view(),
+            mesh.sampler(),
             properties,
         )?;
 
@@ -317,32 +318,6 @@ impl GraphicsResources {
         }
         self.meshes.clear();
         self.mesh_material_ids.clear();
-    }
-
-    pub fn create_pipeline_key(
-        &self,
-        vertex_shader: &str,
-        fragment_shader: &str,
-        topology: vk::PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
-        depth_test_enable: bool,
-        blend_enable: bool,
-        render_pass: vk::RenderPass,
-    ) -> crate::pipeline::PipelineKey {
-        crate::pipeline::PipelineKey::new(
-            vertex_shader,
-            fragment_shader,
-            topology,
-            polygon_mode,
-            cull_mode,
-            depth_test_enable,
-            depth_test_enable,
-            blend_enable,
-            vk::SampleCountFlags::_1,
-            1,
-            render_pass,
-        )
     }
 }
 

@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::vulkanr::context::{CommandState, SwapchainState};
-use crate::vulkanr::vulkan::*;
 use anyhow::Result;
 
 impl App {
@@ -16,7 +15,7 @@ impl App {
         position: cgmath::Vector3<f32>,
     ) -> Result<()> {
         log!("Spawning debug primitive: {:?}", kind);
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let swapchain = self.resource::<SwapchainState>().swapchain.clone();
@@ -95,7 +94,7 @@ impl App {
     }
 
     pub unsafe fn delete_entities(&mut self, entities: &[u64]) -> Result<()> {
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         for &entity in entities {
             let mesh_ref = self

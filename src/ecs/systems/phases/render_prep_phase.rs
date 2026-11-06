@@ -9,7 +9,6 @@ use crate::ecs::systems::render_data_systems::{
 };
 use crate::ecs::FrameContext;
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
-use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
@@ -176,7 +175,7 @@ fn run_frame_prep_hooks(
 
 unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
     use crate::ecs::world::{GlobalTransform, MeshRef};
-    use crate::render::ObjectUBO;
+    use thyllore_render_core::ObjectUBO;
 
     let transforms: Vec<(usize, Matrix4<f32>)> = ctx
         .world

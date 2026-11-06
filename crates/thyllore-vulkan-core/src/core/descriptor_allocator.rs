@@ -12,7 +12,7 @@ pub struct PoolSignature {
 }
 
 impl PoolSignature {
-    pub fn from_bindings(bindings: &[vk::DescriptorSetLayoutBinding]) -> Self {
+    pub(crate) fn from_bindings(bindings: &[vk::DescriptorSetLayoutBinding]) -> Self {
         let mut counts: BTreeMap<i32, u32> = BTreeMap::new();
         for binding in bindings {
             *counts.entry(binding.descriptor_type.as_raw()).or_default() +=
@@ -83,7 +83,7 @@ pub struct DescriptorAllocator {
 }
 
 impl DescriptorAllocator {
-    pub unsafe fn allocate(
+    pub(crate) unsafe fn allocate(
         &mut self,
         device: &Device,
         layout: vk::DescriptorSetLayout,
@@ -136,7 +136,7 @@ impl DescriptorAllocator {
     }
 
     /// The caller guarantees no pending command buffer binds the sets, as for `vkFreeDescriptorSets`.
-    pub fn release(
+    pub(crate) fn release(
         &mut self,
         layout: vk::DescriptorSetLayout,
         sets: impl IntoIterator<Item = vk::DescriptorSet>,
@@ -144,11 +144,11 @@ impl DescriptorAllocator {
         self.recycled.put(layout, sets);
     }
 
-    pub fn forget_layout(&mut self, layout: vk::DescriptorSetLayout) {
+    pub(crate) fn forget_layout(&mut self, layout: vk::DescriptorSetLayout) {
         self.recycled.forget_layout(layout);
     }
 
-    pub unsafe fn destroy(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
         for block in self.pools.values().flatten() {
             device.destroy_descriptor_pool(block.pool, None);
         }

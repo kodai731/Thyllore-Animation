@@ -5,13 +5,13 @@ use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
 use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::FrameContext;
+use thyllore_vulkan_core::types::Instance;
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
     let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world
@@ -106,10 +106,10 @@ fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
         [model[0][1], model[1][1], model[2][1], model[3][1]],
         [model[0][2], model[1][2], model[2][2], model[3][2]],
     ];
-    if blas.transform.matrix == matrix {
+    if blas.transform().matrix() == matrix {
         return false;
     }
-    blas.transform.matrix = matrix;
+    blas.set_transform_rows(matrix);
     true
 }
 
@@ -147,7 +147,7 @@ pub unsafe fn ensure_effect_trace_pipeline(
         instance,
         rrdevice,
         &EFFECT_TRACE,
-        &[effect_trace_descriptor.layout.handle],
+        &[effect_trace_descriptor.layout.handle()],
         &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;

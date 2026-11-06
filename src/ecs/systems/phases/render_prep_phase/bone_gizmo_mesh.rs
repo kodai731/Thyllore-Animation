@@ -14,7 +14,6 @@ use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
 };
-use crate::render::RenderBackend;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3};

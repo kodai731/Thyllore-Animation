@@ -8,6 +8,7 @@ use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::resource::buffer::{copy_buffer, create_buffer};
 use crate::resource::GpuResource;
+use crate::types::Instance;
 use thyllore_model_core::mesh::{compute_vertex_layout, create_interleaved_buffer, MeshData};
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 
@@ -178,14 +179,14 @@ impl GpuBufferRegistry {
         if let Some(Some(gpu_buffer)) = self.vertex_buffers.get(index) {
             if gpu_buffer.is_host_visible {
                 let data_size = (size_of::<T>() * data.len()) as u64;
-                let ptr = device.device.map_memory(
+                let ptr = device.device().map_memory(
                     gpu_buffer.memory,
                     0,
                     data_size,
                     vk::MemoryMapFlags::empty(),
                 )?;
                 memcpy(data.as_ptr(), ptr.cast(), data.len());
-                device.device.unmap_memory(gpu_buffer.memory);
+                device.device().unmap_memory(gpu_buffer.memory);
             }
         }
 
@@ -206,14 +207,14 @@ impl GpuBufferRegistry {
         if let Some(Some(gpu_buffer)) = self.index_buffers.get(index) {
             if gpu_buffer.is_host_visible {
                 let data_size = (size_of::<u32>() * data.len()) as u64;
-                let ptr = device.device.map_memory(
+                let ptr = device.device().map_memory(
                     gpu_buffer.memory,
                     0,
                     data_size,
                     vk::MemoryMapFlags::empty(),
                 )?;
                 memcpy(data.as_ptr(), ptr.cast(), data.len());
-                device.device.unmap_memory(gpu_buffer.memory);
+                device.device().unmap_memory(gpu_buffer.memory);
             }
         }
 
@@ -242,7 +243,7 @@ impl GpuBufferRegistry {
             .unwrap_or(0)
     }
 
-    pub fn get_vertex_buffer(&self, handle: VertexBufferHandle) -> Option<vk::Buffer> {
+    pub fn get_vertex_buffer(&self, handle: VertexBufferHandle) -> Option<crate::types::Buffer> {
         if !handle.is_valid() {
             return None;
         }
@@ -250,10 +251,10 @@ impl GpuBufferRegistry {
         self.vertex_buffers
             .get(handle.index())
             .and_then(|opt| opt.as_ref())
-            .map(|buf| buf.buffer)
+            .map(|buf| crate::types::Buffer(buf.buffer))
     }
 
-    pub fn get_index_buffer(&self, handle: IndexBufferHandle) -> Option<vk::Buffer> {
+    pub fn get_index_buffer(&self, handle: IndexBufferHandle) -> Option<crate::types::Buffer> {
         if !handle.is_valid() {
             return None;
         }
@@ -261,7 +262,7 @@ impl GpuBufferRegistry {
         self.index_buffers
             .get(handle.index())
             .and_then(|opt| opt.as_ref())
-            .map(|buf| buf.buffer)
+            .map(|buf| crate::types::Buffer(buf.buffer))
     }
 
     pub unsafe fn destroy_vertex_buffer(&mut self, device: &RRDevice, handle: VertexBufferHandle) {
@@ -271,8 +272,8 @@ impl GpuBufferRegistry {
 
         let index = handle.index();
         if let Some(Some(gpu_buffer)) = self.vertex_buffers.get(index) {
-            device.device.destroy_buffer(gpu_buffer.buffer, None);
-            device.device.free_memory(gpu_buffer.memory, None);
+            device.device().destroy_buffer(gpu_buffer.buffer, None);
+            device.device().free_memory(gpu_buffer.memory, None);
         }
 
         if index < self.vertex_buffers.len() {
@@ -288,8 +289,8 @@ impl GpuBufferRegistry {
 
         let index = handle.index();
         if let Some(Some(gpu_buffer)) = self.index_buffers.get(index) {
-            device.device.destroy_buffer(gpu_buffer.buffer, None);
-            device.device.free_memory(gpu_buffer.memory, None);
+            device.device().destroy_buffer(gpu_buffer.buffer, None);
+            device.device().free_memory(gpu_buffer.memory, None);
         }
 
         if index < self.index_buffers.len() {
@@ -301,15 +302,15 @@ impl GpuBufferRegistry {
     pub unsafe fn destroy_all(&mut self, device: &RRDevice) {
         for buffer_opt in self.vertex_buffers.drain(..) {
             if let Some(gpu_buffer) = buffer_opt {
-                device.device.destroy_buffer(gpu_buffer.buffer, None);
-                device.device.free_memory(gpu_buffer.memory, None);
+                device.device().destroy_buffer(gpu_buffer.buffer, None);
+                device.device().free_memory(gpu_buffer.memory, None);
             }
         }
 
         for buffer_opt in self.index_buffers.drain(..) {
             if let Some(gpu_buffer) = buffer_opt {
-                device.device.destroy_buffer(gpu_buffer.buffer, None);
-                device.device.free_memory(gpu_buffer.memory, None);
+                device.device().destroy_buffer(gpu_buffer.buffer, None);
+                device.device().free_memory(gpu_buffer.memory, None);
             }
         }
 
@@ -374,14 +375,14 @@ impl GpuBufferRegistry {
             )?;
 
             if !data.is_empty() {
-                let ptr = device.device.map_memory(
+                let ptr = device.device().map_memory(
                     memory,
                     0,
                     buffer_size,
                     vk::MemoryMapFlags::empty(),
                 )?;
                 std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), buffer_size as usize);
-                device.device.unmap_memory(memory);
+                device.device().unmap_memory(memory);
             }
 
             GpuBuffer {
@@ -436,11 +437,12 @@ impl GpuBufferRegistry {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        let ptr = device
-            .device
-            .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())?;
+        let ptr =
+            device
+                .device()
+                .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())?;
         std::ptr::copy_nonoverlapping(data_ptr, ptr.cast(), size as usize);
-        device.device.unmap_memory(staging_memory);
+        device.device().unmap_memory(staging_memory);
 
         let (buffer, memory) = create_buffer(
             instance,
@@ -452,8 +454,8 @@ impl GpuBufferRegistry {
 
         copy_buffer(device, command_pool, staging_buffer, buffer, size)?;
 
-        device.device.destroy_buffer(staging_buffer, None);
-        device.device.free_memory(staging_memory, None);
+        device.device().destroy_buffer(staging_buffer, None);
+        device.device().free_memory(staging_memory, None);
 
         Ok(GpuBuffer {
             buffer,
@@ -547,14 +549,14 @@ impl GpuBufferRegistry {
 
         if data_count > 0 {
             let actual_size = size_of::<T>() * data_count;
-            let ptr = device.device.map_memory(
+            let ptr = device.device().map_memory(
                 memory,
                 0,
                 actual_size as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             std::ptr::copy_nonoverlapping(data_ptr, ptr.cast(), actual_size);
-            device.device.unmap_memory(memory);
+            device.device().unmap_memory(memory);
         }
 
         Ok(GpuBuffer {

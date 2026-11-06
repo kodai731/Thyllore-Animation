@@ -1,11 +1,9 @@
-use vulkanalia::prelude::v1_0::*;
-
 use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::SetRole;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::model;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_render_core::ObjectUBO;
 
 pub type ObjectId = u32;
@@ -13,7 +11,7 @@ pub type ObjectId = u32;
 #[derive(Clone, Debug, Default)]
 pub struct ObjectDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub sets: Vec<vk::DescriptorSet>,
+    pub(crate) sets: Vec<crate::types::DescriptorSet>,
     pub buffers: Vec<UniformBuffer<ObjectUBO>>,
     pub max_objects: usize,
     next_slot: usize,
@@ -57,8 +55,12 @@ impl ObjectDescriptorSet {
             return Ok(());
         }
 
-        self.sets
-            .extend(self.layout.allocate_sets(rrdevice, additional)?);
+        self.sets.extend(
+            self.layout
+                .allocate_sets(rrdevice, additional)?
+                .into_iter()
+                .map(crate::types::DescriptorSet),
+        );
         for _ in 0..additional {
             self.buffers.push(UniformBuffer::new(
                 instance,
@@ -73,7 +75,7 @@ impl ObjectDescriptorSet {
             .zip(&self.buffers[first_new..])
         {
             self.layout
-                .writer(*set)
+                .writer(set.raw())
                 .uniform(model::OBJECT, buffer, 0)?
                 .apply(rrdevice);
         }
@@ -143,10 +145,15 @@ impl ObjectDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for buffer in &mut self.buffers {
             buffer.destroy(device);
         }
         self.layout.destroy(rrdevice);
+    }
+
+    #[inline]
+    pub fn sets(&self) -> &[crate::types::DescriptorSet] {
+        &self.sets
     }
 }

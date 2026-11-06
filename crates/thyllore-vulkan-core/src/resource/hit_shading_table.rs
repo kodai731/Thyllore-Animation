@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_math_core::GpuMat4;
 
@@ -37,12 +38,17 @@ impl HitShadingRecord {
 /// HitShadingTable: a storage buffer holding an array of `HitShadingRecord`.
 #[derive(Clone, Debug)]
 pub struct HitShadingTable {
-    pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) memory: vk::DeviceMemory,
     pub capacity: usize,
 }
 
 impl HitShadingTable {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.buffer)
+    }
+
     /// Create a new HitShadingTable with capacity for `capacity` instances.
     pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, capacity: usize) -> Result<Self> {
         let size = (std::mem::size_of::<HitShadingRecord>() * capacity) as vk::DeviceSize;
@@ -70,7 +76,7 @@ impl HitShadingTable {
         let data_len = records.len() * record_size;
         let data = std::slice::from_raw_parts(records.as_ptr() as *const u8, data_len);
 
-        let mapped = rrdevice.device.map_memory(
+        let mapped = rrdevice.device().map_memory(
             self.memory,
             0,
             data.len() as vk::DeviceSize,
@@ -79,24 +85,19 @@ impl HitShadingTable {
 
         std::ptr::copy_nonoverlapping(data.as_ptr(), mapped as *mut u8, data.len());
 
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
 
         Ok(())
-    }
-
-    /// Get the Vulkan buffer handle.
-    pub fn vk_buffer(&self) -> vk::Buffer {
-        self.buffer
     }
 
     /// Destroy the underlying buffer and memory.
     pub unsafe fn destroy(mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
     }

@@ -2,7 +2,6 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::render::RenderBackend;
 use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
@@ -171,7 +170,7 @@ pub fn compute_node_global_transforms(
 }
 
 pub unsafe fn upload_animations(
-    backend: &mut dyn RenderBackend,
+    backend: &mut crate::vulkanr::VulkanBackend<'_>,
     updated_meshes: &[usize],
 ) -> Result<()> {
     for &mesh_idx in updated_meshes {

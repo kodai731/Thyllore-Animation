@@ -34,16 +34,30 @@ pub fn vrm_t_pose_warnings(
     Ok(t_pose_warnings(&mapping, &heads, T_POSE_TOLERANCE_DEG))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VrmWriteRequest {
+    pub glb: serde_bytes::ByteBuf,
+    pub sidecar_json: String,
+    pub meta: VrmMeta,
+    #[serde(default = "default_metres_per_gltf_unit")]
+    pub metres_per_gltf_unit: f32,
+}
+
+fn default_metres_per_gltf_unit() -> f32 {
+    1.0
+}
+
 /// The `.vrm` bytes for a GLB the standard glTF exporter wrote and the sidecar JSON of the same
 /// armature; `metres_per_gltf_unit` is the scene's unit scale (the sidecar is in metres).
-pub fn vrm_write(
-    glb_bytes: &[u8],
-    sidecar_json: &str,
-    meta: &VrmMeta,
-    metres_per_gltf_unit: f32,
-) -> anyhow::Result<Vec<u8>> {
-    let sidecar = sidecar_read(sidecar_json)?;
-    write_vrm(glb_bytes, &sidecar, meta, metres_per_gltf_unit)
+pub fn vrm_write(request: &VrmWriteRequest) -> anyhow::Result<Vec<u8>> {
+    let sidecar = sidecar_read(&request.sidecar_json)?;
+    write_vrm(
+        &request.glb,
+        &sidecar,
+        &request.meta,
+        request.metres_per_gltf_unit,
+    )
 }
 
 #[cfg(test)]
@@ -108,8 +122,14 @@ mod tests {
     #[test]
     fn writes_a_vrm_with_the_three_extensions() {
         let meta = VrmMeta::new("avatar", "tester");
+        let request = VrmWriteRequest {
+            glb: two_bone_glb().into(),
+            sidecar_json: sidecar_json(),
+            meta,
+            metres_per_gltf_unit: 1.0,
+        };
 
-        let vrm = vrm_write(&two_bone_glb(), &sidecar_json(), &meta, 1.0).expect("vrm");
+        let vrm = vrm_write(&request).expect("vrm");
 
         let json_length = u32::from_le_bytes(vrm[12..16].try_into().unwrap()) as usize;
         let json: serde_json::Value = serde_json::from_slice(&vrm[20..20 + json_length]).unwrap();
@@ -127,6 +147,29 @@ mod tests {
     #[test]
     fn invalid_sidecar_json_is_an_error() {
         let meta = VrmMeta::new("avatar", "tester");
-        assert!(vrm_write(&two_bone_glb(), "{", &meta, 1.0).is_err());
+        let request = VrmWriteRequest {
+            glb: two_bone_glb().into(),
+            sidecar_json: "{".to_string(),
+            meta,
+            metres_per_gltf_unit: 1.0,
+        };
+        assert!(vrm_write(&request).is_err());
+    }
+
+    #[test]
+    fn vrm_bridge_vrm_write_request_rejects_unknown_field() {
+        let meta_json = serde_json::to_value(VrmMeta::new("avatar", "tester")).unwrap();
+        let mut obj: serde_json::Value =
+            serde_json::from_str(r#"{"glb":"","sidecar_json":"{}","metres_per_gltf_unit":1.0}"#)
+                .unwrap();
+        obj["meta"] = meta_json;
+        obj["unknown_key"] = serde_json::json!(1);
+        let json = serde_json::to_string(&obj).unwrap();
+        let result = serde_json::from_str::<VrmWriteRequest>(&json);
+        let err = result.err().unwrap();
+        assert!(
+            err.to_string().contains("unknown field"),
+            "expected unknown field error, got: {err}"
+        );
     }
 }

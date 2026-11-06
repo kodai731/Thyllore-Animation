@@ -393,7 +393,7 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
         glb = _export_selection_glb(context, arm, meshes)
         try:
-            vrm = avatar_api.vrm_write(glb, json_text, meta, scale_length)
+            vrm = avatar_api.vrm_write({"glb": glb, "sidecar_json": json_text, "meta": meta, "metres_per_gltf_unit": scale_length})
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"VRM write failed: {e}")
             return {"CANCELLED"}

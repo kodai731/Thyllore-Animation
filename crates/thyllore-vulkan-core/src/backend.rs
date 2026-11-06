@@ -154,6 +154,7 @@ unsafe fn record_acceleration_structure_updates(
     graphics: &GraphicsResources,
     accel_struct: &mut RRAccelerationStructure,
     mesh_ids: &[MeshId],
+    frame_slot: usize,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     record_global_memory_barrier(
@@ -201,6 +202,7 @@ unsafe fn record_acceleration_structure_updates(
         &mut accel_struct.tlas,
         &accel_struct.blas_list,
         &accel_struct.procedural_blas,
+        frame_slot,
         command_buffer,
     )
 }
@@ -243,6 +245,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 graphics,
                 accel_struct,
                 mesh_ids,
+                frame_slot,
                 command_buffer,
             )
         })

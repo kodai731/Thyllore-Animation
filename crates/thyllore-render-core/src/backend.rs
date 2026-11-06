@@ -6,7 +6,11 @@ use crate::{
 };
 
 pub trait RenderBackend {
-    unsafe fn upload_animated_meshes(&mut self, mesh_ids: &[MeshId]) -> Result<()>;
+    unsafe fn upload_animated_meshes(
+        &mut self,
+        mesh_ids: &[MeshId],
+        frame_slot: usize,
+    ) -> Result<()>;
 
     unsafe fn create_static_line_buffers(
         &mut self,

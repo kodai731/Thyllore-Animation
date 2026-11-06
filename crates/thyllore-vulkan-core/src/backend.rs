@@ -77,13 +77,14 @@ unsafe fn stage_mesh_vertices(
     device: &RRDevice,
     graphics: &mut GraphicsResources,
     mesh_ids: &[MeshId],
+    frame_slot: usize,
 ) -> Result<Vec<(MeshId, vk::DeviceSize)>> {
     let mut staged_meshes = Vec::with_capacity(mesh_ids.len());
     for &mesh_id in mesh_ids {
         let Some(mesh) = graphics.meshes.get_mut(mesh_id) else {
             continue;
         };
-        let size = mesh.stage_vertices(instance, device)?;
+        let size = mesh.stage_vertices(instance, device, frame_slot)?;
         staged_meshes.push((mesh_id, size));
     }
     Ok(staged_meshes)
@@ -205,9 +206,18 @@ unsafe fn record_acceleration_structure_updates(
 }
 
 impl<'a> RenderBackend for VulkanBackend<'a> {
-    unsafe fn upload_animated_meshes(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
-        let staged_meshes =
-            stage_mesh_vertices(self.instance, self.device, self.graphics, mesh_ids)?;
+    unsafe fn upload_animated_meshes(
+        &mut self,
+        mesh_ids: &[MeshId],
+        frame_slot: usize,
+    ) -> Result<()> {
+        let staged_meshes = stage_mesh_vertices(
+            self.instance,
+            self.device,
+            self.graphics,
+            mesh_ids,
+            frame_slot,
+        )?;
 
         let instance = self.instance;
         let device = self.device;
@@ -216,7 +226,12 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
 
         with_single_time_commands(device, self.command_pool.command_pool, |command_buffer| {
             for &(mesh_id, size) in &staged_meshes {
-                graphics.meshes[mesh_id].record_vertex_copy(&device.device, command_buffer, size);
+                graphics.meshes[mesh_id].record_vertex_copy(
+                    frame_slot,
+                    &device.device,
+                    command_buffer,
+                    size,
+                );
             }
 
             let Some(accel_struct) = acceleration_structure.as_mut() else {

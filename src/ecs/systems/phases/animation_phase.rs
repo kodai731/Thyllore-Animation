@@ -158,8 +158,9 @@ pub unsafe fn run_animation_phase_gpu(
 ) -> Result<()> {
     let t = Instant::now();
     if !updates.updated_meshes.is_empty() {
+        let frame_slot = ctx.frame_slot;
         let mut backend = ctx.create_backend();
-        playback_upload_animations(&mut backend, &updates.updated_meshes)?;
+        playback_upload_animations(&mut backend, &updates.updated_meshes, frame_slot)?;
     }
     ctx.world
         .resource_mut::<PhaseSubTimings>()

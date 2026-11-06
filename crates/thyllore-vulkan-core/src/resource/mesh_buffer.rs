@@ -5,7 +5,7 @@ use anyhow::Result;
 use cgmath::Vector4;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::command::{with_single_time_commands, RRCommandPool};
+use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
@@ -60,12 +60,14 @@ impl MeshBuffer {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
+        frame_slot: usize,
     ) -> Result<vk::DeviceSize> {
         let vertices = &self.vertex_data.vertices;
         let size = (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize;
         self.vertex_buffer.stage(
             instance,
             rrdevice,
+            frame_slot,
             size,
             vertices.as_ptr() as *const c_void,
             vertices.len(),
@@ -75,11 +77,13 @@ impl MeshBuffer {
 
     pub unsafe fn record_vertex_copy(
         &self,
+        frame_slot: usize,
         device: &vulkanalia::Device,
         command_buffer: vk::CommandBuffer,
         size: vk::DeviceSize,
     ) {
-        self.vertex_buffer.record_copy(device, command_buffer, size);
+        self.vertex_buffer
+            .record_copy(frame_slot, device, command_buffer, size);
     }
 
     pub unsafe fn upload_vertices(
@@ -88,11 +92,16 @@ impl MeshBuffer {
         rrdevice: &RRDevice,
         command_pool: &RRCommandPool,
     ) -> Result<()> {
-        let size = self.stage_vertices(instance, rrdevice)?;
-        with_single_time_commands(rrdevice, command_pool.command_pool, |cmd| {
-            self.record_vertex_copy(&rrdevice.device, cmd, size);
-            Ok(())
-        })
+        let vertices = &self.vertex_data.vertices;
+        let size = (size_of::<Vertex>() * vertices.len()) as u64;
+        self.vertex_buffer.update(
+            instance,
+            rrdevice,
+            command_pool,
+            size,
+            vertices.as_ptr() as *const c_void,
+            vertices.len(),
+        )
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {

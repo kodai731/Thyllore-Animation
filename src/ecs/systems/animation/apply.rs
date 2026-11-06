@@ -151,9 +151,10 @@ pub fn compute_node_global_transforms(
 pub unsafe fn upload_animations(
     backend: &mut dyn RenderBackend,
     updated_meshes: &[usize],
+    frame_slot: usize,
 ) -> Result<()> {
     if !updated_meshes.is_empty() {
-        backend.upload_animated_meshes(updated_meshes)?;
+        backend.upload_animated_meshes(updated_meshes, frame_slot)?;
     }
 
     Ok(())

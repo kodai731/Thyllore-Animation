@@ -20,15 +20,12 @@ pub struct ImguiData {
 
 impl ImguiData {
     unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for slot in 0..MAX_FRAMES_IN_FLIGHT {
-            if let Some(ref mut vb) = self.vertex_buffers[slot] {
-                vb.destroy(rrdevice);
-            }
-            self.vertex_buffers[slot] = None;
-            if let Some(ref mut ib) = self.index_buffers[slot] {
-                ib.destroy(rrdevice);
-            }
-            self.index_buffers[slot] = None;
+        for buffer in self
+            .vertex_buffers
+            .iter_mut()
+            .chain(self.index_buffers.iter_mut())
+        {
+            buffer.destroy_gpu(rrdevice);
         }
 
         destroy_imgui_pipeline_objects(

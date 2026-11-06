@@ -1,5 +1,6 @@
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
 
@@ -18,10 +19,12 @@ impl HostBufferUsage {
     }
 }
 
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct HostBuffer {
     pub(crate) buffer: vk::Buffer,
     memory: vk::DeviceMemory,
+    #[gpu_resource(skip)]
     pub(crate) size: vk::DeviceSize,
 }
 
@@ -72,17 +75,5 @@ impl HostBuffer {
 
         rrdevice.device().unmap_memory(self.memory);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device().destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device().free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
-        }
-        self.size = 0;
     }
 }

@@ -79,17 +79,7 @@ pub unsafe fn read_image_bytes(
         layout.as_vk_layout(),
     )?;
 
-    let data =
-        rrdevice
-            .device()
-            .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
-    let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
-    let bytes = slice.to_vec();
-    rrdevice.device().unmap_memory(buffer_memory);
-    rrdevice.device().free_memory(buffer_memory, None);
-    rrdevice.device().destroy_buffer(buffer, None);
-
-    Ok(bytes)
+    copy_out_and_release(rrdevice, buffer, buffer_memory, byte_size)
 }
 
 pub unsafe fn read_buffer_bytes(
@@ -122,17 +112,27 @@ pub unsafe fn read_buffer_bytes(
         command_buffer,
     )?;
 
-    let data =
-        rrdevice
-            .device()
-            .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())?;
-    let slice = std::slice::from_raw_parts(data as *const u8, byte_size as usize);
-    let bytes = slice.to_vec();
-    rrdevice.device().unmap_memory(buffer_memory);
+    copy_out_and_release(rrdevice, buffer, buffer_memory, byte_size)
+}
+
+unsafe fn copy_out_and_release(
+    rrdevice: &RRDevice,
+    buffer: vk::Buffer,
+    buffer_memory: vk::DeviceMemory,
+    byte_size: vk::DeviceSize,
+) -> Result<Vec<u8>> {
+    let bytes = rrdevice
+        .device()
+        .map_memory(buffer_memory, 0, byte_size, vk::MemoryMapFlags::empty())
+        .map(|data| {
+            let bytes = std::slice::from_raw_parts(data as *const u8, byte_size as usize).to_vec();
+            rrdevice.device().unmap_memory(buffer_memory);
+            bytes
+        });
+
     rrdevice.device().free_memory(buffer_memory, None);
     rrdevice.device().destroy_buffer(buffer, None);
-
-    Ok(bytes)
+    Ok(bytes?)
 }
 
 unsafe fn record_image_to_buffer_copy(

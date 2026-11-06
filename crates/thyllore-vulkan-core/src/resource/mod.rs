@@ -34,7 +34,8 @@ pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
 pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
-pub use gbuffer::{read_picked_texel, RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
+pub(crate) use gbuffer::READBACK_POSITION_OFFSET;
+pub use gbuffer::{read_picked_texel, RRGBuffer};
 pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
 pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
@@ -50,7 +51,7 @@ pub use pipeline_storage::PipelineStorage;
 pub use raytracing_data::RayTracingData;
 pub use render_target_storage::{RenderTargetEntry, RenderTargetKey, RenderTargetStorage};
 pub use render_target_transient::{
-    RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,
+    RenderTargetTransient, TransientDesc, TransientHandle, TransientImage, TransientUsage,
 };
 pub use sampled_texture::{PixelRegion, SampledTexture};
 pub use uniform_buffer::{Placement, UniformBuffer};

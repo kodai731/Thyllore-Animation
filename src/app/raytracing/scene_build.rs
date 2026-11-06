@@ -11,7 +11,7 @@ use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_math_core::AffineRows3x4;
-use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
+use thyllore_vulkan_core::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::Instance;
 
@@ -37,7 +37,7 @@ pub unsafe fn rebuild_acceleration_structures(
     let mut acceleration_structure = RRAccelerationStructure::new();
 
     // Collect vertex_buffers in the same order as BLAS creation
-    let mesh_buffers: Vec<_> = graphics
+    let vertex_buffers: Vec<_> = graphics
         .meshes
         .iter()
         .filter(|mesh| mesh.render_to_gbuffer)
@@ -50,20 +50,6 @@ pub unsafe fn rebuild_acceleration_structures(
                 mesh.index_buffer.indices,
             )
         })
-        .collect();
-    let vertex_buffers: Vec<_> = mesh_buffers
-        .iter()
-        .map(
-            |(vertex_buffer, vertex_count, stride, index_buffer, index_count)| {
-                (
-                    vertex_buffer,
-                    *vertex_count,
-                    *stride,
-                    index_buffer,
-                    *index_count,
-                )
-            },
-        )
         .collect();
 
     for (mesh_index, mesh) in graphics.meshes.iter().enumerate() {

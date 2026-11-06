@@ -6,13 +6,18 @@ use thyllore_vulkan_core::resource::GpuResource;
 use thyllore_vulkan_core::types::{Extent2D, HDR_FORMAT};
 
 /// Render pass and framebuffer that blend the lightning resolve pass onto the HDR color image.
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct LightningRenderTargets {
     pub(crate) render_pass: thyllore_vulkan_core::types::RenderPass,
     pub framebuffer: thyllore_vulkan_core::types::Framebuffer,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
+
+crate::gpu_resource!(LightningRenderTargets);
 
 impl LightningRenderTargets {
     pub fn render_pass(&self) -> thyllore_vulkan_core::types::RenderPass {
@@ -61,23 +66,6 @@ pub unsafe fn create_lightning_render_targets(
     })
 }
 
-impl GpuResource for LightningRenderTargets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.framebuffer.is_destroyed() && self.render_pass.is_destroyed()
-    }
-}
-
-crate::gpu_resource!(LightningRenderTargets);
-
-pub unsafe fn destroy_render_targets(targets: &mut LightningRenderTargets, rrdevice: &RRDevice) {
-    thyllore_vulkan_core::render::destroy_framebuffer(rrdevice, &mut targets.framebuffer);
-    thyllore_vulkan_core::render::destroy_render_pass(rrdevice, &mut targets.render_pass);
-}
-
 pub unsafe fn recreate_lightning_render_targets(
     rrdevice: &RRDevice,
     targets: &mut LightningRenderTargets,
@@ -85,7 +73,7 @@ pub unsafe fn recreate_lightning_render_targets(
     width: u32,
     height: u32,
 ) -> Result<()> {
-    destroy_render_targets(targets, rrdevice);
+    targets.destroy_gpu(rrdevice);
     *targets = create_lightning_render_targets(rrdevice, width, height, hdr_view)?;
     Ok(())
 }

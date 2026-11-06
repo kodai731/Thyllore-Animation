@@ -854,7 +854,7 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        vertex_buffers: &[(&crate::types::Buffer, u32, u32, &crate::types::Buffer, u32)],
+        vertex_buffers: &[(crate::types::Buffer, u32, u32, crate::types::Buffer, u32)],
     ) -> Result<()> {
         for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in
             vertex_buffers.iter().enumerate()
@@ -892,7 +892,7 @@ impl RRAccelerationStructure {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        vertex_buffers: &[(&crate::types::Buffer, u32, u32, &crate::types::Buffer, u32)],
+        vertex_buffers: &[(crate::types::Buffer, u32, u32, crate::types::Buffer, u32)],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =

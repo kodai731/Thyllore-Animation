@@ -4,7 +4,7 @@ use crate::ecs::FrameContext;
 use crate::vulkanr::device::RRDevice;
 
 use anyhow::Result;
-use thyllore_vulkan_core::resource::{HostBuffer, HostBufferUsage};
+use thyllore_vulkan_core::resource::{GpuResource, HostBuffer, HostBufferUsage};
 use thyllore_vulkan_core::types::{DeviceSize, Instance};
 
 impl App {
@@ -112,9 +112,7 @@ unsafe fn resize_imgui_vertex_buffer(
     vtx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    if let Some(ref mut old) = data.imgui.vertex_buffers[frame_slot] {
-        old.destroy(rrdevice);
-    }
+    data.imgui.vertex_buffers[frame_slot].destroy_gpu(rrdevice);
 
     let vertex_buffer =
         HostBuffer::create(instance, rrdevice, vtx_buffer_size, HostBufferUsage::Vertex)?;
@@ -130,9 +128,7 @@ unsafe fn resize_imgui_index_buffer(
     idx_buffer_size: DeviceSize,
     frame_slot: usize,
 ) -> Result<()> {
-    if let Some(ref mut old) = data.imgui.index_buffers[frame_slot] {
-        old.destroy(rrdevice);
-    }
+    data.imgui.index_buffers[frame_slot].destroy_gpu(rrdevice);
 
     let index_buffer =
         HostBuffer::create(instance, rrdevice, idx_buffer_size, HostBufferUsage::Index)?;

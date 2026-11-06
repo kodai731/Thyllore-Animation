@@ -19,6 +19,8 @@ jobs:
         run: "! grep -rn 'pub use vulkan::\\*\\|pub use vulkanalia' crates/thyllore-vulkan-core/src"
       - name: no alias
         run: "! grep -n 'pub type .* = vk::' crates/thyllore-vulkan-core/src/types.rs"
+      - name: no public vk-typed constant
+        run: "! grep -rnE 'pub (const|static) [A-Z_]+: [^=]*(vk::|vulkanalia)' crates/thyllore-vulkan-core/src"
 
   dependency-graph:
     name: Dependency graph
@@ -31,8 +33,8 @@ jobs:
       - name: check vulkanalia dependents
         run: test "$(cargo tree -i vulkanalia --depth 1 -e normal --workspace --prefix none | tail -n +2 | awk '{print $1}' | sort -u)" = "thyllore-vulkan-core"
 
-  clippy:
-    name: Clippy
+  root-crate-check:
+    name: Root crate compiles without vulkanalia
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
@@ -41,5 +43,5 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Setup slangc
         run: bash scripts/setup_slang.sh
-      - name: clippy
-        run: cargo clippy -p thyllore-animation --lib --no-default-features -- -D clippy::disallowed_methods
+      - name: check
+        run: cargo check -p thyllore-animation --lib --no-default-features

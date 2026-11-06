@@ -9,8 +9,8 @@ use crate::types::Instance;
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from
 /// the same pixel so a click can compare what an effect covers against what the surface covers.
-pub const READBACK_POSITION_OFFSET: vk::DeviceSize = 16;
-pub const READBACK_STAGING_SIZE: vk::DeviceSize = READBACK_POSITION_OFFSET + 16;
+pub(crate) const READBACK_POSITION_OFFSET: vk::DeviceSize = 16;
+pub(crate) const READBACK_STAGING_SIZE: vk::DeviceSize = READBACK_POSITION_OFFSET + 16;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRGBuffer {

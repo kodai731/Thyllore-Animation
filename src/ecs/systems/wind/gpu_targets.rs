@@ -23,15 +23,20 @@ pub fn wind_shadow_volume_extent() -> Extent3D {
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
 /// the reduced resolution render pass used by the upsampled resolve path, and the
 /// shadow volume baked once per frame for every instance slot.
-#[derive(Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct WindRenderTargets {
     pub(crate) render_pass: thyllore_vulkan_core::types::RenderPass,
     pub framebuffer: thyllore_vulkan_core::types::Framebuffer,
     pub reduced: thyllore_vulkan_core::renderer::ReducedResolveTarget,
     pub shadow_volume: VolumeImage,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
 }
+
+crate::gpu_resource!(WindRenderTargets);
 
 impl WindRenderTargets {
     pub fn render_pass(&self) -> thyllore_vulkan_core::types::RenderPass {
@@ -90,27 +95,6 @@ pub unsafe fn create_wind_render_targets(
         width,
         height,
     })
-}
-
-impl GpuResource for WindRenderTargets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        destroy_render_targets(self, rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.framebuffer.is_destroyed()
-            && self.render_pass.is_destroyed()
-            && self.reduced.is_destroyed()
-    }
-}
-
-crate::gpu_resource!(WindRenderTargets);
-
-pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, rrdevice: &RRDevice) {
-    targets.shadow_volume.destroy_gpu(rrdevice);
-    targets.reduced.destroy_gpu(rrdevice);
-    thyllore_vulkan_core::render::destroy_framebuffer(rrdevice, &mut targets.framebuffer);
-    thyllore_vulkan_core::render::destroy_render_pass(rrdevice, &mut targets.render_pass);
 }
 
 pub unsafe fn recreate_wind_framebuffer(

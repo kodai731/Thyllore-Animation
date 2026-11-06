@@ -357,35 +357,6 @@ impl RRVertexBuffer {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RRBuffer {
-    pub(crate) buffer: vk::Buffer,
-    pub(crate) buffer_memory: vk::DeviceMemory,
-    pub indices: u32,
-}
-
-impl RRBuffer {
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device().destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device().free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.indices = 0;
-    }
-}
-
-impl Drop for RRBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRBuffer dropped without calling destroy()");
-        }
-    }
-}
-
 pub(crate) unsafe fn create_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,

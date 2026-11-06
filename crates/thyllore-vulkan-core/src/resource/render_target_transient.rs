@@ -9,6 +9,25 @@ use crate::vulkan::*;
 pub const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
 const MAX_FRAMEBUFFER_ATTACHMENTS: usize = 4;
 
+#[derive(Clone, Copy, Debug)]
+pub enum TransientUsage {
+    StorageSampled,
+    TransferDstSampled,
+}
+
+impl TransientUsage {
+    fn to_flags(self) -> vk::ImageUsageFlags {
+        match self {
+            TransientUsage::StorageSampled => {
+                vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED
+            }
+            TransientUsage::TransferDstSampled => {
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TransientDesc {
     pub width: u32,
@@ -22,7 +41,7 @@ impl TransientDesc {
         width: u32,
         height: u32,
         format: crate::types::Format,
-        usage: crate::resource::volume_image::VolumeUsage,
+        usage: TransientUsage,
     ) -> Self {
         Self {
             width,

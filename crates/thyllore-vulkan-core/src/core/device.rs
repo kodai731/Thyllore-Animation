@@ -21,10 +21,10 @@ impl ValidationMode {
     }
 }
 
-pub const VALIDATION_LAYER: vk::ExtensionName =
+pub(crate) const VALIDATION_LAYER: vk::ExtensionName =
     vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 
-pub const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
+pub(crate) const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
     vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
     vk::KHR_RAY_QUERY_EXTENSION.name,

@@ -155,7 +155,7 @@ impl RayTracingData {
         let mut acceleration_structure = RRAccelerationStructure::new();
 
         // Collect vertex_buffers in the same order as BLAS creation
-        let mesh_buffers: Vec<_> = meshes
+        let vertex_buffers: Vec<_> = meshes
             .iter()
             .filter(|mesh| mesh.render_to_gbuffer)
             .map(|mesh| {
@@ -167,20 +167,6 @@ impl RayTracingData {
                     mesh.vertex_data.indices.len() as u32,
                 )
             })
-            .collect();
-        let vertex_buffers: Vec<_> = mesh_buffers
-            .iter()
-            .map(
-                |(vertex_buffer, vertex_count, stride, index_buffer, index_count)| {
-                    (
-                        vertex_buffer,
-                        *vertex_count,
-                        *stride,
-                        index_buffer,
-                        *index_count,
-                    )
-                },
-            )
             .collect();
 
         for (mesh_index, mesh) in meshes.iter().enumerate() {

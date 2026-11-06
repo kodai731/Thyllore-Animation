@@ -94,12 +94,3 @@ pub unsafe fn destroy_framebuffer(
         *framebuffer = crate::types::Framebuffer::default();
     }
 }
-
-pub unsafe fn destroy_render_pass(rrdevice: &RRDevice, render_pass: &mut crate::types::RenderPass) {
-    if render_pass.raw() != vk::RenderPass::null() {
-        rrdevice
-            .device()
-            .destroy_render_pass(render_pass.raw(), None);
-        *render_pass = crate::types::RenderPass::default();
-    }
-}

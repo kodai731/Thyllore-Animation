@@ -6,7 +6,7 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::types::Instance;
 
-pub const HDR_FORMAT_RAW: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
+pub(crate) const HDR_FORMAT_RAW: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct HdrBuffer {

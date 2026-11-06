@@ -79,7 +79,7 @@ events and applies the queued commands, then calls three `App` methods in order 
    the screenshot.
 
 Descriptor sets that read a transient image exist once per frame slot (`MAX_FRAMES_IN_FLIGHT = 2`, in
-`src/app/init/instance.rs`). Never update a single descriptor set that a pending command buffer may still
+`src/ecs/frame_context.rs`). Never update a single descriptor set that a pending command buffer may still
 bind; either keep one set per frame slot or wait idle first (resize path).
 
 CPU-written meshes follow the same rule. A `DynamicMesh` (`thyllore-render-core` `mesh.rs`) keeps one vertex
@@ -141,10 +141,11 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 - Middle (wheel) drag: pan
 - Wheel: zoom toward the cursor
 
-## Constants (`src/app/init/instance.rs`)
+## Constants
 
-- `MAX_FRAMES_IN_FLIGHT = 2`
+- `MAX_FRAMES_IN_FLIGHT = 2` (`src/ecs/frame_context.rs`)
 - `VALIDATION_ENABLED = cfg!(debug_assertions)`, layer `VK_LAYER_KHRONOS_validation`
+  (`crates/thyllore-vulkan-core/src/core/instance.rs`)
 
 ## Model loading
 

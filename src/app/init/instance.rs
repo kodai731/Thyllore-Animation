@@ -40,10 +40,7 @@ use thyllore_vulkan_core::types::{DebugMessenger, Fence, Instance, Semaphore, Su
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use winit::window::Window;
 
-pub use crate::vulkanr::core::device::VALIDATION_LAYER;
-pub use thyllore_vulkan_core::core::instance::{
-    create_sync_objects, DEVICE_EXTENSIONS, PORTABILITY_MACOS_VERSION,
-};
+use thyllore_vulkan_core::core::instance::create_sync_objects;
 
 /// Clean up old screenshot files from the log directory
 pub fn cleanup_old_screenshots() -> Result<()> {

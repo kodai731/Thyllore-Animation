@@ -9,7 +9,7 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::types::Instance;
 
-pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+pub(crate) const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
 #[derive(Clone, Debug, Default)]
 pub struct OnionSkinPassResources {

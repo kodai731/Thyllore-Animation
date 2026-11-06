@@ -12,7 +12,7 @@ use crate::resource::image::{create_image, create_image_view};
 use crate::types::Instance;
 use thyllore_spirv_reflect::ShaderBinding;
 
-pub const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+pub(crate) const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 pub const SAMPLED_TEXTURE_BYTES_PER_PIXEL: usize = 4;
 
 /// Tightly packed rows of RGBA8 pixels destined for a rectangle of a texture.

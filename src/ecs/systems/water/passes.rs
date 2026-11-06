@@ -17,9 +17,7 @@ use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
 use thyllore_vulkan_core::renderer::{ClearColor, TracePush};
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;
-use thyllore_vulkan_core::types::{
-    AccelerationStructure, Buffer, CommandBuffer, DescriptorSet, Rect2D,
-};
+use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, CommandBuffer, Rect2D};
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
 pub const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[

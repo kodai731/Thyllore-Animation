@@ -512,7 +512,7 @@ texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup
 `upload_mesh_vertices` in `thyllore-vulkan-core`; every `World` resource the load touches is inserted
 once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `raytracing/`
 (acceleration structure rebuild), `render_context.rs`, `post_process/`,
-`features/` (see below), `util.rs`, `color_test_quad.rs`.
+`features/` (see below), `color_test_quad.rs`.
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
@@ -525,8 +525,8 @@ Belongs here:
 - ownership containers whose lifetime is the app or the viewport (core attachments, the render target
   storage and transient pools)
 - the frame driver: begin frame, update, record, submit, present, swapchain recreation
-- optional capabilities under `features/` (screenshot); `src/debugview/` builds on
-  `features/screenshot.rs::copy_image_to_buffer`
+- optional capabilities under `features/` (screenshot); `src/debugview/` reads images through
+  `CaptureContext::read_image_bytes` (`src/hooks/batch_capture.rs`, over vulkan-core's `read_image_bytes`)
 - context structs that bundle `App` fields for callees
 - wiring that must touch several subsystems at once (a resize fan-out, rebinding after a resize)
 - calls into the hook infrastructure of `src/hooks/` (setup, viewport resize, GPU resource teardown) and

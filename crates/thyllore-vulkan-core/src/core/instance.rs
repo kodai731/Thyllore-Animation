@@ -9,7 +9,7 @@ use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_M
 use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
 use winit::window::Window;
 
-pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
+pub(crate) const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
 const VALIDATION_MODE: crate::core::device::ValidationMode = if cfg!(debug_assertions) {
     crate::core::device::ValidationMode::Enabled
@@ -17,7 +17,7 @@ const VALIDATION_MODE: crate::core::device::ValidationMode = if cfg!(debug_asser
     crate::core::device::ValidationMode::Disabled
 };
 
-pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
+pub(crate) const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name,
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
     vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,

@@ -5,9 +5,10 @@ use thyllore_vulkan_core::resource::image::{
     SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter,
 };
 use thyllore_vulkan_core::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
-use thyllore_vulkan_core::resource::volume_image::VolumeUsage;
+
 use thyllore_vulkan_core::resource::{
     AccumulationTarget, GpuResource, HistoryTargets, HistoryTargetsDesc, TransientDesc,
+    TransientUsage,
 };
 use thyllore_vulkan_core::types::{CommandPool, Extent2D, Format, ImageView, Instance, HDR_FORMAT};
 
@@ -108,7 +109,7 @@ impl WaterRenderTargets {
             self.history.width,
             self.history.height,
             HDR_FORMAT,
-            VolumeUsage::TransferDstSampled,
+            TransientUsage::TransferDstSampled,
         )
     }
 
@@ -117,7 +118,7 @@ impl WaterRenderTargets {
             self.history.width,
             self.history.height,
             Format::R16G16B16A16_SFLOAT,
-            VolumeUsage::StorageSampled,
+            TransientUsage::StorageSampled,
         )
     }
 

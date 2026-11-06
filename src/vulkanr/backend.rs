@@ -6,7 +6,7 @@ use crate::ecs::resource::billboard::BillboardData;
 use crate::render::BillboardBackend;
 use crate::vulkanr::image::RRImage;
 
-pub use thyllore_vulkan_core::backend::VulkanBackend;
+pub use thyllore_vulkan_core::backend::{record_animated_mesh_uploads, VulkanBackend};
 
 impl<'a> BillboardBackend for VulkanBackend<'a> {
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {

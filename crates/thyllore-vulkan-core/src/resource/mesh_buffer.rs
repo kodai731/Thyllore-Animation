@@ -56,6 +56,36 @@ impl Default for MeshBuffer {
 }
 
 impl MeshBuffer {
+    pub unsafe fn stage_vertices(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        frame_slot: usize,
+    ) -> Result<vk::DeviceSize> {
+        let vertices = &self.vertex_data.vertices;
+        let size = (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize;
+        self.vertex_buffer.stage(
+            instance,
+            rrdevice,
+            frame_slot,
+            size,
+            vertices.as_ptr() as *const c_void,
+            vertices.len(),
+        )?;
+        Ok(size)
+    }
+
+    pub unsafe fn record_vertex_copy(
+        &self,
+        frame_slot: usize,
+        device: &vulkanalia::Device,
+        command_buffer: vk::CommandBuffer,
+        size: vk::DeviceSize,
+    ) {
+        self.vertex_buffer
+            .record_copy(frame_slot, device, command_buffer, size);
+    }
+
     pub unsafe fn upload_vertices(
         &mut self,
         instance: &Instance,
@@ -63,11 +93,12 @@ impl MeshBuffer {
         command_pool: &RRCommandPool,
     ) -> Result<()> {
         let vertices = &self.vertex_data.vertices;
+        let size = (size_of::<Vertex>() * vertices.len()) as u64;
         self.vertex_buffer.update(
             instance,
             rrdevice,
             command_pool,
-            (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+            size,
             vertices.as_ptr() as *const c_void,
             vertices.len(),
         )

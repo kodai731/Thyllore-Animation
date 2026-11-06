@@ -9,6 +9,8 @@ use thyllore_render_core::{
     ObjectUBO, ProjectionData, RenderBackend, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
+use vulkanalia::prelude::v1_0::*;
+
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{SceneUniformData, Vertex};
@@ -70,65 +72,221 @@ fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>
         .collect()
 }
 
-impl<'a> RenderBackend for VulkanBackend<'a> {
-    unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
-        self.graphics.upload_mesh_vertices(
-            self.instance,
-            self.device,
-            self.command_pool.as_ref(),
-            mesh_id,
-        )
-    }
-
-    unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
-        let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
-            return Ok(());
+unsafe fn stage_mesh_vertices(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &mut GraphicsResources,
+    mesh_ids: &[MeshId],
+    frame_slot: usize,
+) -> Result<Vec<(MeshId, vk::DeviceSize)>> {
+    let mut staged_meshes = Vec::with_capacity(mesh_ids.len());
+    for &mesh_id in mesh_ids {
+        let Some(mesh) = graphics.meshes.get_mut(mesh_id) else {
+            continue;
         };
+        let size = mesh.stage_vertices(instance, device, frame_slot)?;
+        staged_meshes.push((mesh_id, size));
+    }
+    Ok(staged_meshes)
+}
 
-        let blas_index_of_mesh = collect_blas_index_of_mesh(self.graphics);
+unsafe fn record_global_memory_barrier(
+    device: &RRDevice,
+    command_buffer: vk::CommandBuffer,
+    (src_stage, src_access): (vk::PipelineStageFlags, vk::AccessFlags),
+    (dst_stage, dst_access): (vk::PipelineStageFlags, vk::AccessFlags),
+) {
+    let barrier = vk::MemoryBarrier::builder()
+        .src_access_mask(src_access)
+        .dst_access_mask(dst_access)
+        .build();
+    device.device.cmd_pipeline_barrier(
+        command_buffer,
+        src_stage,
+        dst_stage,
+        vk::DependencyFlags::empty(),
+        &[barrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &[] as &[vk::ImageMemoryBarrier],
+    );
+}
 
-        for &mesh_id in mesh_ids {
-            let Some(blas_index) = blas_index_of_mesh.get(mesh_id).copied().flatten() else {
-                continue;
-            };
-            if blas_index >= accel_struct.blas_list.len() {
-                continue;
-            }
+unsafe fn record_blas_updates(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    accel_struct: &mut RRAccelerationStructure,
+    mesh_ids: &[MeshId],
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let blas_index_of_mesh = collect_blas_index_of_mesh(graphics);
 
-            let mesh = &self.graphics.meshes[mesh_id];
-            let blas = &mut accel_struct.blas_list[blas_index];
-
-            RRAccelerationStructure::update_blas(
-                self.instance,
-                self.device,
-                self.command_pool.as_ref(),
-                blas,
-                &mesh.vertex_buffer.buffer,
-                mesh.vertex_data.vertices.len() as u32,
-                size_of::<Vertex>() as u32,
-                &mesh.index_buffer.buffer,
-                mesh.vertex_data.indices.len() as u32,
-            )?;
+    for &mesh_id in mesh_ids {
+        let Some(blas_index) = blas_index_of_mesh.get(mesh_id).copied().flatten() else {
+            continue;
+        };
+        if blas_index >= accel_struct.blas_list.len() {
+            continue;
         }
 
-        Ok(())
+        let mesh = &graphics.meshes[mesh_id];
+        let blas = &mut accel_struct.blas_list[blas_index];
+
+        RRAccelerationStructure::record_blas_update(
+            instance,
+            device,
+            blas,
+            &mesh.vertex_buffer.buffer,
+            mesh.vertex_data.vertices.len() as u32,
+            size_of::<Vertex>() as u32,
+            &mesh.index_buffer.buffer,
+            mesh.vertex_data.indices.len() as u32,
+            command_buffer,
+        )?;
     }
 
-    unsafe fn rebuild_tlas(&mut self) -> Result<()> {
-        let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
-            return Ok(());
-        };
+    Ok(())
+}
 
-        let tlas = &mut accel_struct.tlas;
-        RRAccelerationStructure::update_tlas(
+unsafe fn record_acceleration_structure_updates(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    accel_struct: &mut RRAccelerationStructure,
+    mesh_ids: &[MeshId],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::TRANSFER,
+            vk::AccessFlags::TRANSFER_WRITE,
+        ),
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::SHADER_READ | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    record_blas_updates(
+        instance,
+        device,
+        graphics,
+        accel_struct,
+        mesh_ids,
+        command_buffer,
+    )?;
+
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    if accel_struct.blas_list.is_empty() && accel_struct.procedural_blas.is_empty() {
+        return Ok(());
+    }
+
+    RRAccelerationStructure::record_tlas_update(
+        instance,
+        device,
+        &mut accel_struct.tlas,
+        &accel_struct.blas_list,
+        &accel_struct.procedural_blas,
+        frame_slot,
+        command_buffer,
+    )
+}
+
+pub unsafe fn record_animated_mesh_uploads(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    raytracing: &mut RayTracingData,
+    mesh_ids: &[MeshId],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::ALL_COMMANDS,
+            vk::AccessFlags::empty(),
+        ),
+        (
+            vk::PipelineStageFlags::TRANSFER
+                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+    );
+
+    for &mesh_id in mesh_ids {
+        let Some(mesh) = graphics.meshes.get(mesh_id) else {
+            continue;
+        };
+        let size = mesh.vertex_data.vertices.len() as vk::DeviceSize
+            * size_of::<Vertex>() as vk::DeviceSize;
+        mesh.record_vertex_copy(frame_slot, &device.device, command_buffer, size);
+    }
+
+    if let Some(accel_struct) = raytracing.acceleration_structure.as_mut() {
+        record_acceleration_structure_updates(
+            instance,
+            device,
+            graphics,
+            accel_struct,
+            mesh_ids,
+            frame_slot,
+            command_buffer,
+        )?;
+    }
+
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::TRANSFER
+                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+        (
+            vk::PipelineStageFlags::VERTEX_INPUT
+                | vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+                | vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            vk::AccessFlags::VERTEX_ATTRIBUTE_READ
+                | vk::AccessFlags::SHADER_READ
+                | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    Ok(())
+}
+
+impl<'a> RenderBackend for VulkanBackend<'a> {
+    unsafe fn stage_animated_meshes(
+        &mut self,
+        mesh_ids: &[MeshId],
+        frame_slot: usize,
+    ) -> Result<()> {
+        stage_mesh_vertices(
             self.instance,
             self.device,
-            self.command_pool.as_ref(),
-            tlas,
-            &accel_struct.blas_list,
-            &accel_struct.procedural_blas,
+            self.graphics,
+            mesh_ids,
+            frame_slot,
         )?;
-
         Ok(())
     }
 

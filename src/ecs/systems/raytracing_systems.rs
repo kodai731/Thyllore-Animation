@@ -97,6 +97,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         &mut acceleration_structure.tlas,
         &acceleration_structure.blas_list,
         &acceleration_structure.procedural_blas,
+        ctx.frame_slot,
     )
 }
 

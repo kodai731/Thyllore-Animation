@@ -3,8 +3,9 @@ use vulkanalia::prelude::v1_0::*;
 
 use super::App;
 use crate::app::build_pass_context;
-use crate::ecs::resource::GpuPassTimings;
+use crate::ecs::resource::{GpuPassTimings, PendingAnimatedMeshUploads};
 use crate::hooks::pass::{TargetUse, TransientRequest};
+use crate::vulkanr::backend::record_animated_mesh_uploads;
 use crate::vulkanr::renderer::deferred;
 
 impl App {
@@ -57,6 +58,25 @@ impl App {
 
         self.gpu_timestamp_profiler
             .begin_frame(&self.rrdevice.device, command_buffer, image_index);
+
+        let mesh_ids = {
+            let mut pending = self
+                .data
+                .ecs_world
+                .resource_mut::<PendingAnimatedMeshUploads>();
+            std::mem::take(&mut pending.mesh_ids)
+        };
+        if !mesh_ids.is_empty() {
+            record_animated_mesh_uploads(
+                &self.instance,
+                &self.rrdevice,
+                &self.data.graphics_resources,
+                &mut self.data.raytracing,
+                &mesh_ids,
+                frame_slot,
+                command_buffer,
+            )?;
+        }
 
         let use_gbuffer =
             self.data.raytracing.is_available() && self.data.viewport.offscreen.is_some();

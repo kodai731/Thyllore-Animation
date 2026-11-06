@@ -6,6 +6,7 @@ use crate::vulkan::*;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
+use thyllore_render_core::FRAMES_IN_FLIGHT;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRUniformBuffer {
@@ -193,13 +194,77 @@ impl Drop for RRIndexBuffer {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct StagingBuffer {
+    pub buffer: vk::Buffer,
+    pub memory: vk::DeviceMemory,
+    pub capacity: u64,
+}
+
+impl StagingBuffer {
+    pub unsafe fn allocate(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        capacity: u64,
+    ) -> Result<Self> {
+        let (buffer, memory) = create_buffer(
+            instance,
+            rrdevice,
+            capacity,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+        )?;
+        Ok(Self {
+            buffer,
+            memory,
+            capacity,
+        })
+    }
+
+    pub unsafe fn free(&mut self, rrdevice: &RRDevice) {
+        if self.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+        if self.memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.memory, None);
+            self.memory = vk::DeviceMemory::null();
+        }
+        self.capacity = 0;
+    }
+
+    pub unsafe fn write(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        size: u64,
+        data: *const c_void,
+    ) -> Result<()> {
+        if self.is_empty() || size > self.capacity {
+            self.free(rrdevice);
+            *self = Self::allocate(instance, rrdevice, size * 2)?;
+        }
+
+        let map_memory =
+            rrdevice
+                .device
+                .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
+        memcpy(data, map_memory.cast(), size as usize);
+        rrdevice.device.unmap_memory(self.memory);
+
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffer == vk::Buffer::null()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct RRVertexBuffer {
     pub buffer: vk::Buffer,
     pub buffer_memory: vk::DeviceMemory,
     pub vertices: u32,
-    pub staging_buffer: vk::Buffer,
-    pub staging_memory: vk::DeviceMemory,
-    pub staging_capacity: u64,
+    pub staging: [StagingBuffer; FRAMES_IN_FLIGHT],
 }
 
 impl RRVertexBuffer {
@@ -212,22 +277,10 @@ impl RRVertexBuffer {
         length: usize,
     ) -> Result<Self> {
         let mut rrvertex_buffer = RRVertexBuffer::default();
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        )?;
-        let map_memory = rrdevice.device.map_memory(
-            staging_buffer_memory,
-            0,
-            size,
-            vk::MemoryMapFlags::empty(),
-        )?;
 
-        memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_buffer_memory);
+        let initial_staging = &mut rrvertex_buffer.staging[0];
+        *initial_staging = StagingBuffer::allocate(instance, rrdevice, size)?;
+        initial_staging.write(instance, rrdevice, size, data)?;
 
         let (vertex_buffer, vertex_buffer_memory) = create_buffer(
             instance,
@@ -244,7 +297,7 @@ impl RRVertexBuffer {
         copy_buffer(
             rrdevice,
             rr_command_pool,
-            staging_buffer,
+            rrvertex_buffer.staging[0].buffer,
             vertex_buffer,
             size,
         )?;
@@ -252,23 +305,14 @@ impl RRVertexBuffer {
         rrvertex_buffer.buffer = vertex_buffer;
         rrvertex_buffer.buffer_memory = vertex_buffer_memory;
         rrvertex_buffer.vertices = length as u32;
-        rrvertex_buffer.staging_buffer = staging_buffer;
-        rrvertex_buffer.staging_memory = staging_buffer_memory;
-        rrvertex_buffer.staging_capacity = size;
 
         Ok(rrvertex_buffer)
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.staging_buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.staging_buffer, None);
-            self.staging_buffer = vk::Buffer::null();
+        for staging in &mut self.staging {
+            staging.free(rrdevice);
         }
-        if self.staging_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.staging_memory, None);
-            self.staging_memory = vk::DeviceMemory::null();
-        }
-        self.staging_capacity = 0;
         if self.buffer != vk::Buffer::null() {
             rrdevice.device.destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
@@ -286,7 +330,7 @@ impl Drop for RRVertexBuffer {
         if self.buffer != vk::Buffer::null() {
             log_warn!("RRVertexBuffer dropped without calling destroy()");
         }
-        if self.staging_buffer != vk::Buffer::null() {
+        if self.staging.iter().any(|staging| !staging.is_empty()) {
             log_warn!(
                 "RRVertexBuffer dropped without calling destroy() (staging buffer not freed)"
             );
@@ -295,6 +339,37 @@ impl Drop for RRVertexBuffer {
 }
 
 impl RRVertexBuffer {
+    pub unsafe fn stage(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        frame_slot: usize,
+        size: u64,
+        data: *const c_void,
+        length: usize,
+    ) -> Result<()> {
+        self.staging[frame_slot].write(instance, rrdevice, size, data)?;
+        self.vertices = length as u32;
+
+        Ok(())
+    }
+
+    pub unsafe fn record_copy(
+        &self,
+        frame_slot: usize,
+        device: &vulkanalia::Device,
+        command_buffer: vk::CommandBuffer,
+        size: vk::DeviceSize,
+    ) {
+        let regions = vk::BufferCopy::builder().size(size);
+        device.cmd_copy_buffer(
+            command_buffer,
+            self.staging[frame_slot].buffer,
+            self.buffer,
+            &[regions],
+        );
+    }
+
     pub unsafe fn update(
         &mut self,
         instance: &Instance,
@@ -304,44 +379,8 @@ impl RRVertexBuffer {
         data: *const c_void,
         length: usize,
     ) -> Result<()> {
-        // Allocate or grow staging buffer if needed
-        let (staging_buffer, staging_memory) =
-            if self.staging_buffer == vk::Buffer::null() || size > self.staging_capacity {
-                // Free old staging buffer if it exists
-                if self.staging_buffer != vk::Buffer::null() {
-                    rrdevice.device.destroy_buffer(self.staging_buffer, None);
-                }
-                if self.staging_memory != vk::DeviceMemory::null() {
-                    rrdevice.device.free_memory(self.staging_memory, None);
-                }
-                let new_capacity = size * 2;
-                let (buf, mem) = create_buffer(
-                    instance,
-                    rrdevice,
-                    new_capacity,
-                    vk::BufferUsageFlags::TRANSFER_SRC,
-                    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-                )?;
-                self.staging_buffer = buf;
-                self.staging_memory = mem;
-                self.staging_capacity = new_capacity;
-                (buf, mem)
-            } else {
-                (self.staging_buffer, self.staging_memory)
-            };
-
-        let map_memory =
-            rrdevice
-                .device
-                .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())?;
-
-        memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(staging_memory);
-
-        copy_buffer(rrdevice, rr_command_pool, staging_buffer, self.buffer, size)?;
-
+        upload_through_staging(instance, rrdevice, rr_command_pool, data, size, self.buffer)?;
         self.vertices = length as u32;
-
         Ok(())
     }
 }
@@ -462,19 +501,13 @@ pub unsafe fn copy_buffer(
     destination: vk::Buffer,
     size: vk::DeviceSize,
 ) -> Result<()> {
-    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-    let regions = vk::BufferCopy::builder().size(size);
-    rrdevice
-        .device
-        .cmd_copy_buffer(command_buffer, source, destination, &[regions]);
-    end_single_time_commands(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        command_buffer,
-    )?;
-
-    Ok(())
+    with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+        let regions = vk::BufferCopy::builder().size(size);
+        rrdevice
+            .device
+            .cmd_copy_buffer(cmd, source, destination, &[regions]);
+        Ok(())
+    })
 }
 
 pub unsafe fn copy_buffer_to_image(

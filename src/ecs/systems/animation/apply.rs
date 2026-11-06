@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector4};
 
 use crate::animation::{compose_transform, Skeleton, SkeletonPose};
 use crate::render::RenderBackend;
@@ -29,42 +29,20 @@ pub fn apply_skinning_to_single_mesh(
     global_transforms: &[Matrix4<f32>],
     skeleton: &Skeleton,
 ) -> bool {
-    if mesh_idx >= graphics.meshes.len() {
+    let Some(mesh) = graphics.meshes.get_mut(mesh_idx) else {
         return false;
-    }
-
-    let skin_data = match &graphics.meshes[mesh_idx].skin_data {
-        Some(sd) => sd,
-        None => return false,
     };
 
-    let vertex_count = skin_data.base_positions.len();
-    let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-    let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+    let Some(skin_data) = &mesh.skin_data else {
+        return false;
+    };
 
-    let _ = thyllore_model_core::apply_skinning(
+    let _ = thyllore_model_core::apply_skinning_to_vertices(
         skin_data,
         global_transforms,
         skeleton,
-        &mut skinned_positions,
-        &mut skinned_normals,
+        &mut mesh.vertex_data.vertices,
     );
-
-    let mesh = &mut graphics.meshes[mesh_idx];
-    for (i, pos) in skinned_positions.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].pos.x = pos.x;
-            mesh.vertex_data.vertices[i].pos.y = pos.y;
-            mesh.vertex_data.vertices[i].pos.z = pos.z;
-        }
-    }
-    for (i, normal) in skinned_normals.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].normal.x = normal.x;
-            mesh.vertex_data.vertices[i].normal.y = normal.y;
-            mesh.vertex_data.vertices[i].normal.z = normal.z;
-        }
-    }
 
     true
 }
@@ -173,14 +151,10 @@ pub fn compute_node_global_transforms(
 pub unsafe fn upload_animations(
     backend: &mut dyn RenderBackend,
     updated_meshes: &[usize],
+    frame_slot: usize,
 ) -> Result<()> {
-    for &mesh_idx in updated_meshes {
-        backend.upload_mesh_vertices(mesh_idx)?;
-    }
-
     if !updated_meshes.is_empty() {
-        backend.update_acceleration_structure(updated_meshes)?;
-        backend.rebuild_tlas()?;
+        backend.stage_animated_meshes(updated_meshes, frame_slot)?;
     }
 
     Ok(())

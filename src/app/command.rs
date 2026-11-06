@@ -6,7 +6,6 @@ use crate::ecs::resource::{
 use crate::ecs::systems::generate_and_apply_chain_bones;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
-use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -307,7 +306,7 @@ unsafe fn apply_model_scale_command(
     factor: f32,
     history: ScaleHistory,
 ) -> anyhow::Result<()> {
-    app.rrdevice.device.device_wait_idle()?;
+    app.rrdevice.wait_idle()?;
     let pool = app
         .resource::<crate::vulkanr::context::CommandState>()
         .pool
@@ -356,7 +355,7 @@ unsafe fn apply_hidden_triangles(
 ) -> anyhow::Result<()> {
     use thyllore_avatar_core::cloth_setup::systems::hidden_mask::order_visible_triangles_first;
 
-    app.rrdevice.device.device_wait_idle()?;
+    app.rrdevice.wait_idle()?;
     let pool = app
         .resource::<crate::vulkanr::context::CommandState>()
         .pool

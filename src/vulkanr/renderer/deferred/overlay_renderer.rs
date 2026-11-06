@@ -275,7 +275,7 @@ impl<'a> OverlayRenderer<'a> {
     unsafe fn draw_spring_bone_gizmo(
         &self,
         ctx: &FrameRenderContext<'_>,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
     ) -> Result<()> {
         let Some(spring_gizmo) = self.world.get_resource::<SpringBoneGizmoData>() else {
             return Ok(());

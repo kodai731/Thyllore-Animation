@@ -53,11 +53,21 @@ pub fn baked_motion_to_clip(
     skeleton: &Skeleton,
     hips_bone: usize,
     clip_name: &str,
-) -> EditableAnimationClip {
+) -> anyhow::Result<EditableAnimationClip> {
     let mut clip = EditableAnimationClip::new(0, clip_name.to_string());
 
     for (&bone_index, rotations) in &baked.bone_rotations {
-        let bone_name = skeleton.bones[bone_index].name.clone();
+        let bone_name = skeleton
+            .bones
+            .get(bone_index)
+            .map(|bone| bone.name.clone())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "baked bone index {} is outside the skeleton ({} bones)",
+                    bone_index,
+                    skeleton.bones.len()
+                )
+            })?;
         let track = clip.add_track(bone_index as BoneId, bone_name);
 
         let mut prev_euler: Option<Vector3<f32>> = None;
@@ -94,7 +104,7 @@ pub fn baked_motion_to_clip(
         clip.duration = *last_time;
     }
 
-    clip
+    Ok(clip)
 }
 
 pub fn build_role_retarget_context(
@@ -135,7 +145,7 @@ pub fn bake_to_bone_clip(
         .by_role
         .get(&HumanoidRole::Hips)
         .ok_or_else(|| anyhow::anyhow!("mapping has no Hips bone"))?;
-    let mut baked_clip = baked_motion_to_clip(&baked, skeleton, hips_bone, &clip.name);
+    let mut baked_clip = baked_motion_to_clip(&baked, skeleton, hips_bone, &clip.name)?;
 
     for track in clip.tracks.values() {
         if baked_clip.tracks.contains_key(&track.bone_id) {
@@ -403,7 +413,7 @@ mod tests {
             hips_offsets: vec![],
             morph_weights: BTreeMap::new(),
         };
-        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test");
+        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test").expect("bake");
         let track = clip.get_track(0).expect("track for bone 0");
 
         for (i, quat) in quaternions.iter().enumerate() {
@@ -440,7 +450,7 @@ mod tests {
             hips_offsets: vec![],
             morph_weights: BTreeMap::new(),
         };
-        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test");
+        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test").expect("bake");
         let track = clip.get_track(0).expect("track for bone 0");
 
         let z0 = track.rotation_z.keyframes[0].value;
@@ -474,7 +484,7 @@ mod tests {
             hips_offsets: vec![baked_offset],
             morph_weights: BTreeMap::new(),
         };
-        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test");
+        let clip = baked_motion_to_clip(&baked, &skeleton, 0, "test").expect("bake");
         let track = clip.get_track(0).expect("track for Hips");
 
         let tx = track.translation_x.keyframes[0].value;

@@ -2,14 +2,16 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use crate::expression::components::preset::ExpressionLibrary;
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::stats::components::stats::AvatarStats;
 use crate::vrchat::blink::find_blink_candidates;
+use crate::vrchat::sidecar_spring::SidecarSpring;
 use crate::vrchat::viseme::VISEME_CHANNELS;
 
-pub const SIDECAR_SCHEMA_VERSION: u32 = 2;
+pub const SIDECAR_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -20,10 +22,27 @@ pub struct AvatarSidecar {
     pub blink: SidecarBlink,
     pub expression_mesh: Option<String>,
     pub expressions: Vec<SidecarExpression>,
-    pub spring_chains: Vec<SidecarSpringChain>,
+    pub spring: SidecarSpring,
     /// Base colour texture per material name, as a `/` separated path relative to the model.
     pub materials: BTreeMap<String, String>,
+    pub submesh_roles: Vec<SidecarSubmeshRole>,
+    pub hidden_triangles: Vec<SidecarHiddenTriangles>,
     pub stats: AvatarStats,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SidecarSubmeshRole {
+    pub mesh: String,
+    pub material: String,
+    pub role: SubmeshRole,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SidecarHiddenTriangles {
+    pub mesh: String,
+    pub material: String,
+    pub triangles: Vec<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -41,24 +60,16 @@ pub struct SidecarExpression {
     pub weights: BTreeMap<String, f32>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct SidecarSpringChain {
-    pub root: String,
-    pub stiffness: f32,
-    pub gravity: f32,
-    pub drag: f32,
-    pub colliders: Vec<String>,
-}
-
 pub struct SidecarInput<'a> {
     pub mapping: &'a HumanoidMapping,
     pub bones: &'a [BoneInput],
     pub channel_names: &'a [String],
     pub expression_mesh_name: Option<&'a str>,
     pub library: &'a ExpressionLibrary,
-    pub spring_chains: &'a [SidecarSpringChain],
+    pub spring: &'a SidecarSpring,
     pub materials: &'a BTreeMap<String, String>,
+    pub submesh_roles: &'a BTreeMap<SubmeshKey, SubmeshRole>,
+    pub hidden_triangles: &'a BTreeMap<SubmeshKey, Vec<u32>>,
     pub stats: &'a AvatarStats,
 }
 
@@ -76,13 +87,15 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
         blink,
         expression_mesh,
         expressions,
-        spring_chains: input.spring_chains.to_vec(),
+        spring: input.spring.clone(),
         materials: input.materials.clone(),
+        submesh_roles: build_submesh_roles(input.submesh_roles),
+        hidden_triangles: build_hidden_triangles(input.hidden_triangles),
         stats: input.stats.clone(),
     }
 }
 
-fn build_hybrid_bone_map(
+pub fn build_hybrid_bone_map(
     mapping: &HumanoidMapping,
     bones: &[BoneInput],
 ) -> BTreeMap<String, String> {
@@ -130,10 +143,48 @@ fn build_expressions(library: &ExpressionLibrary) -> Vec<SidecarExpression> {
         .collect()
 }
 
+fn build_submesh_roles(roles: &BTreeMap<SubmeshKey, SubmeshRole>) -> Vec<SidecarSubmeshRole> {
+    roles
+        .iter()
+        .map(|(key, role)| SidecarSubmeshRole {
+            mesh: key.mesh.clone(),
+            material: key.material.clone(),
+            role: *role,
+        })
+        .collect()
+}
+
+fn build_hidden_triangles(
+    triangles: &BTreeMap<SubmeshKey, Vec<u32>>,
+) -> Vec<SidecarHiddenTriangles> {
+    triangles
+        .iter()
+        .filter(|(_, tris)| !tris.is_empty())
+        .map(|(key, tris)| SidecarHiddenTriangles {
+            mesh: key.mesh.clone(),
+            material: key.material.clone(),
+            triangles: tris.clone(),
+        })
+        .collect()
+}
+
 pub fn write_sidecar_json(path: &Path, sidecar: &AvatarSidecar) -> anyhow::Result<()> {
     let content = serde_json::to_string_pretty(sidecar)?;
     fs::write(path, content)?;
     Ok(())
+}
+
+pub fn read_sidecar_json(path: &Path) -> anyhow::Result<AvatarSidecar> {
+    let content = fs::read_to_string(path)?;
+    let sidecar: AvatarSidecar = serde_json::from_str(&content)?;
+    if sidecar.schema != SIDECAR_SCHEMA_VERSION {
+        anyhow::bail!(
+            "sidecar schema {} is not the supported schema {}",
+            sidecar.schema,
+            SIDECAR_SCHEMA_VERSION
+        );
+    }
+    Ok(sidecar)
 }
 
 pub fn sidecar_path(model_path: &Path) -> PathBuf {
@@ -221,8 +272,10 @@ mod tests {
             channel_names: &channel_names,
             expression_mesh_name: Some("face_expression"),
             library: &library,
-            spring_chains: &[],
+            spring: &SidecarSpring::default(),
             materials: &materials,
+            submesh_roles: &BTreeMap::new(),
+            hidden_triangles: &BTreeMap::new(),
             stats: &stats,
         };
 
@@ -230,7 +283,7 @@ mod tests {
 
         let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
 
-        assert_eq!(value["schema"], 2);
+        assert_eq!(value["schema"], SIDECAR_SCHEMA_VERSION);
         assert_eq!(value["materials"]["face"], "../PNG/face.png");
 
         assert_eq!(value["humanoid"]["Hips"], "Hips");
@@ -272,8 +325,10 @@ mod tests {
             },
             expression_mesh: None,
             expressions: vec![],
-            spring_chains: vec![],
+            spring: SidecarSpring::default(),
             materials: BTreeMap::new(),
+            submesh_roles: vec![],
+            hidden_triangles: vec![],
             stats: AvatarStats::default(),
         };
 
@@ -282,6 +337,89 @@ mod tests {
         let data = fs::read_to_string(&path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-        assert_eq!(parsed["schema"], 2);
+        assert_eq!(parsed["schema"], SIDECAR_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_submesh_roles_in_json() {
+        let mut roles = BTreeMap::new();
+        roles.insert(
+            SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Skin".to_string(),
+            },
+            SubmeshRole::Skin,
+        );
+
+        let sidecar = AvatarSidecar {
+            schema: SIDECAR_SCHEMA_VERSION,
+            humanoid: BTreeMap::new(),
+            visemes: BTreeMap::new(),
+            blink: SidecarBlink {
+                both: None,
+                left: None,
+                right: None,
+            },
+            expression_mesh: None,
+            expressions: vec![],
+            spring: SidecarSpring::default(),
+            materials: BTreeMap::new(),
+            submesh_roles: build_submesh_roles(&roles),
+            hidden_triangles: vec![],
+            stats: AvatarStats::default(),
+        };
+
+        let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
+        let array = value["submesh_roles"].as_array().unwrap();
+        assert_eq!(array.len(), 1);
+        assert_eq!(array[0]["mesh"], "Body");
+        assert_eq!(array[0]["material"], "Skin");
+        assert_eq!(array[0]["role"], "skin");
+    }
+
+    #[test]
+    fn test_hidden_triangles_in_json() {
+        let mut triangles = BTreeMap::new();
+        triangles.insert(
+            SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Skin".to_string(),
+            },
+            vec![0, 1, 2],
+        );
+        triangles.insert(
+            SubmeshKey {
+                mesh: "Body".to_string(),
+                material: "Cloth".to_string(),
+            },
+            vec![],
+        );
+
+        let sidecar = AvatarSidecar {
+            schema: SIDECAR_SCHEMA_VERSION,
+            humanoid: BTreeMap::new(),
+            visemes: BTreeMap::new(),
+            blink: SidecarBlink {
+                both: None,
+                left: None,
+                right: None,
+            },
+            expression_mesh: None,
+            expressions: vec![],
+            spring: SidecarSpring::default(),
+            materials: BTreeMap::new(),
+            submesh_roles: vec![],
+            hidden_triangles: build_hidden_triangles(&triangles),
+            stats: AvatarStats::default(),
+        };
+
+        let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
+        let array = value["hidden_triangles"].as_array().unwrap();
+        assert_eq!(array.len(), 1);
+        assert_eq!(array[0]["mesh"], "Body");
+        assert_eq!(array[0]["material"], "Skin");
+        assert_eq!(array[0]["triangles"][0], 0);
+        assert_eq!(array[0]["triangles"][1], 1);
+        assert_eq!(array[0]["triangles"][2], 2);
     }
 }

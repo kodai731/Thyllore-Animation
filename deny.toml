@@ -12,6 +12,8 @@ yanked = "deny"
 # Known unmaintained crates we accept for now
 ignore = [
     "RUSTSEC-2025-0141", # bincode - no direct replacement yet, evaluate alternatives later
+    "RUSTSEC-2026-0196", # cgmath unmaintained - used by 14 crates, migration is a separate task
+    "RUSTSEC-2026-0197", # cgmath swap_columns UB on identical indices - never called in this workspace
 ]
 
 [licenses]

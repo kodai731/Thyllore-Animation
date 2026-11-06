@@ -8,6 +8,7 @@ description = "Layer 2 file format data shared by importer-core and exporter-cor
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-anim-core = { path = "../thyllore-anim-core" }
 cgmath = "0.18"

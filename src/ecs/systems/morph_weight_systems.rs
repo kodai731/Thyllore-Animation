@@ -6,7 +6,7 @@ use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
 use thyllore_model_core::MeshMorph;
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AppliedMorphWeights, MorphWeights};
+use crate::ecs::component::{AppliedMorphWeights, MorphChannelCatalog, MorphWeights};
 use crate::ecs::resource::BlendShapeInspectorState;
 use crate::ecs::world::{Entity, MeshRef, Parent, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -38,7 +38,30 @@ pub fn find_morph_channel_names(
     find_mesh_morph(world, entity, assets, graphics).map(MeshMorph::channel_names)
 }
 
-pub fn find_deforming_morph_channels(
+pub fn attach_morph_channel_catalogs(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    entities: &[Entity],
+) {
+    let catalogs: Vec<(Entity, MorphChannelCatalog)> = entities
+        .iter()
+        .filter_map(|&entity| {
+            let morph = find_mesh_morph(world, entity, assets, graphics)?;
+            let catalog = MorphChannelCatalog {
+                names: morph.channel_names(),
+                deforming_channels: find_deforming_morph_channels(world, entity, assets, graphics),
+            };
+            Some((entity, catalog))
+        })
+        .collect();
+
+    for (entity, catalog) in catalogs {
+        world.insert_component(entity, catalog);
+    }
+}
+
+fn find_deforming_morph_channels(
     world: &World,
     entity: Entity,
     assets: &AssetStorage,
@@ -189,7 +212,7 @@ pub fn reset_morph_weights_on_siblings(
 
 pub fn reset_morph_weights(world: &mut World, entity: Entity, morph: &MeshMorph) {
     let preserved_channels: Vec<usize> =
-        group_channels(&morph.channel_names(), &ExpressionGrouping::default())
+        group_channels(&morph.channel_names(), ExpressionGrouping::shared())
             .into_iter()
             .filter(|group| group.exclude_from_reset)
             .flat_map(|group| group.channel_indices)

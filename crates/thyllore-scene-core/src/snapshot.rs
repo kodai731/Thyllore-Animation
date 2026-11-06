@@ -37,3 +37,9 @@ impl<T: SnapshotValues> SnapshotValues for Option<T> {
         self.as_ref().map(T::snapshot_values).unwrap_or_default()
     }
 }
+
+impl SnapshotValues for cgmath::Vector3<f32> {
+    fn snapshot_values(&self) -> Vec<f32> {
+        vec![self.x, self.y, self.z]
+    }
+}

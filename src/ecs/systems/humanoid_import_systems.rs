@@ -151,7 +151,7 @@ fn sample_hips_offset(
     time: f32,
 ) -> Vector3<f32> {
     let zero = Vector3::new(0.0, 0.0, 0.0);
-    let Some(&hips_bone) = rig.mapping.by_role.get(&HumanoidRole::Hips) else {
+    let Some(hips_bone) = rig.mapping.bone_of(HumanoidRole::Hips) else {
         return zero;
     };
     let Some(track) = clip
@@ -195,7 +195,7 @@ fn key_standard_pose(
     previous_eulers: &mut BTreeMap<HumanoidRole, Vector3<f32>>,
 ) {
     for (&role, &rotation) in &pose.rotations {
-        let Some(&bone_index) = rig.mapping.by_role.get(&role) else {
+        let Some(bone_index) = rig.mapping.bone_of(role) else {
             continue;
         };
         let Some(track) = standard.tracks.get_mut(&(bone_index as BoneId)) else {

@@ -3,14 +3,16 @@ use thyllore_anim_core::AnimationType;
 use thyllore_model_core::SkeletonId;
 
 use crate::{
-    BoneDisplayStyle, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, MeshScale,
-    RenderInfo, StaticLineMesh,
+    BoneDisplayStyle, BoneDrawMode, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh,
+    MeshScale, RenderInfo, StaticLineMesh,
 };
 
 #[derive(Clone, Debug)]
 pub struct BoneGizmoData {
     pub visible: bool,
     pub display_style: BoneDisplayStyle,
+    pub draw_mode: BoneDrawMode,
+    pub drawn_bones: Vec<bool>,
     pub in_front: bool,
     pub distance_scaling_enabled: bool,
     pub distance_scaling_factor: f32,
@@ -40,6 +42,8 @@ impl Default for BoneGizmoData {
         Self {
             visible: false,
             display_style: BoneDisplayStyle::default(),
+            draw_mode: BoneDrawMode::default(),
+            drawn_bones: Vec::new(),
             in_front: true,
             distance_scaling_enabled: false,
             distance_scaling_factor: 0.03,

@@ -12,6 +12,7 @@ pub enum DialogRequest {
         format: ClipExportFormat,
     },
     ExportModelGltf,
+    ExportModelFbx,
     SaveSpringBoneBake,
     PickMaterialTexture {
         material: String,

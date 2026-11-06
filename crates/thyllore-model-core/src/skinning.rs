@@ -2,6 +2,7 @@ use cgmath::{Matrix4, Vector3, Vector4};
 
 use crate::skeleton::Skeleton;
 use crate::skin::SkinData;
+use crate::skin::INFLUENCES_PER_VERTEX;
 
 pub struct SkinningDiagnostics {
     pub zero_weight_fallback_count: u32,
@@ -34,7 +35,7 @@ pub fn apply_skinning(
         let mut skinned_normal = Vector3::new(0.0, 0.0, 0.0);
         let mut has_valid_weight = false;
 
-        for j in 0..4 {
+        for j in 0..INFLUENCES_PER_VERTEX {
             let bone_idx = match j {
                 0 => indices.x,
                 1 => indices.y,

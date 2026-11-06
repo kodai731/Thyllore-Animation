@@ -3,7 +3,7 @@ use cgmath::Vector3;
 
 use cgmath::{Matrix4, SquareMatrix};
 
-use crate::animation::{BoneId, SkeletonId};
+use crate::animation::{BoneId, Skeleton, SkeletonId};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::gizmo::transform::TransformGizmoHandle;
@@ -14,12 +14,13 @@ use crate::ecs::resource::{
     KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose, TimelineState,
     TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
 };
+use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::systems::{
     apply_mesh_selection, camera_anchor_pivot_to_focus, camera_move_to_pose,
     camera_pose_looking_at, compute_local_override_from_global_rotation,
     compute_local_override_from_global_scale, compute_local_override_from_global_translation,
-    fly_direction_is_active, select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
-    CameraMotion,
+    fly_direction_is_active, hierarchy_reveal_bone, select_bone_by_mesh_ray, select_bone_by_ray,
+    transform_gizmo_systems, CameraMotion,
 };
 use crate::ecs::world::{Entity, GlobalTransform, Parent, Transform};
 use crate::ecs::{
@@ -318,13 +319,14 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
 
     let (ray_origin, ray_direction) = compute_bone_pick_ray(ctx);
 
-    let (skeleton_id, transforms, offsets, mesh_scale) = {
+    let (skeleton_id, transforms, offsets, mesh_scale, draw_set) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
             bone_gizmo.mesh_scale,
+            BoneDrawSet::from_flags(bone_gizmo.drawn_bones.clone()),
         )
     };
 
@@ -345,6 +347,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
         &offsets,
         mesh_scale,
         None,
+        &draw_set,
     );
 
     let hit = widget_hit.or_else(|| {
@@ -358,7 +361,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
     let is_shift = ctx.world.resource::<KeyboardModifiers>().shift;
     let new_active_bone = apply_bone_selection_result(ctx, &skeleton, hit, is_shift);
 
-    sync_bone_selection_to_hierarchy(ctx, new_active_bone, is_shift);
+    sync_bone_selection_to_hierarchy(ctx, &skeleton, new_active_bone, is_shift);
     sync_curve_editor_bone(ctx, new_active_bone);
 
     Ok(bone_hit)
@@ -1058,6 +1061,7 @@ fn sync_transform_gizmo_to_entity(ctx: &mut EcsContext) {
 
 fn sync_bone_selection_to_hierarchy(
     ctx: &mut EcsContext,
+    skeleton: &Skeleton,
     new_active_bone: Option<BoneId>,
     is_shift: bool,
 ) {
@@ -1065,6 +1069,7 @@ fn sync_bone_selection_to_hierarchy(
         let mut hierarchy = ctx.hierarchy_state_mut();
         hierarchy.selected_bone_id = Some(bone_id);
         hierarchy.display_mode = HierarchyDisplayMode::Bones;
+        hierarchy_reveal_bone(&mut hierarchy, skeleton, bone_id);
     } else if !is_shift {
         ctx.hierarchy_state_mut().selected_bone_id = None;
     }

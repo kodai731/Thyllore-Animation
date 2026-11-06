@@ -1,10 +1,12 @@
 use crate::app::{features::export_actions, App};
 use crate::ecs::resource::{
-    AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand,
+    AssetEditCommand, ClipLibrary, CommandQueue, EntityRemovalCommand, OutputCommand, ScaleHistory,
     SceneLoadCommand,
 };
+use crate::ecs::systems::generate_and_apply_chain_bones;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
+use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -104,6 +106,56 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             }
         }
 
+        AssetEditCommand::AddBone {
+            parent,
+            name,
+            local_offset,
+        } => {
+            if let Err(e) = crate::ecs::systems::add_skeleton_bone(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &app.data.graphics_resources,
+                &parent,
+                &name,
+                local_offset,
+            ) {
+                msg_error!("Failed to add bone: {}", e);
+            }
+        }
+        AssetEditCommand::RemoveBone { bone } => {
+            if let Err(e) = crate::ecs::systems::remove_skeleton_bone(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                &bone,
+            ) {
+                msg_error!("Failed to remove bone: {}", e);
+            }
+        }
+        AssetEditCommand::SetBoneOffset { bone, local_offset } => {
+            if let Err(e) = crate::ecs::systems::set_skeleton_bone_offset(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &app.data.graphics_resources,
+                &bone,
+                local_offset,
+            ) {
+                msg_error!("Failed to move bone: {}", e);
+            }
+        }
+        AssetEditCommand::RestoreSkeletonSnapshot { snapshot } => {
+            crate::ecs::systems::restore_skeleton_snapshot(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                *snapshot,
+            );
+        }
+        AssetEditCommand::ApplyModelScale { factor, history } => {
+            if let Err(e) = apply_model_scale_command(app, factor, history) {
+                msg_error!("Failed to apply model scale: {:?}", e);
+            }
+        }
         AssetEditCommand::AssignMaterialTexture { material, path } => {
             crate::ecs::systems::set_material_texture(
                 &mut app.data.ecs_world,
@@ -190,7 +242,9 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportClipFbx { source_id, path } => {
-            export_actions::export_clip_fbx(app, source_id, &path)
+            if bake_entity_scale_for_export(app) {
+                export_actions::export_clip_fbx(app, source_id, &path)
+            }
         }
 
         OutputCommand::ExportClipGltf { source_id, path } => {
@@ -202,5 +256,138 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+        OutputCommand::ExportModelFbx { path } => {
+            if bake_entity_scale_for_export(app) {
+                export_actions::export_model_fbx(app, &path)
+            }
+        }
+
+        OutputCommand::GenerateChainBones { request } => {
+            if let Err(e) = generate_and_apply_chain_bones(
+                &mut app.data.ecs_world,
+                &mut app.data.ecs_assets,
+                &mut app.data.graphics_resources,
+                &request,
+            ) {
+                msg_error!("Failed to generate chain bones: {:?}", e);
+            }
+        }
+
+        OutputCommand::ApplyHiddenTriangles { meshes } => {
+            if let Err(e) = apply_hidden_triangles(app, meshes) {
+                msg_error!("Failed to apply hidden triangles: {:?}", e);
+            }
+        }
     }
+}
+
+/// An FBX carries no entity transform, so a scaled model root is baked into the assets before it is written.
+unsafe fn bake_entity_scale_for_export(app: &mut App) -> bool {
+    let pending = match crate::ecs::systems::pending_entity_scale(&app.data.ecs_world) {
+        Ok(pending) => pending,
+        Err(e) => {
+            msg_error!("FBX export failed: {}", e);
+            return false;
+        }
+    };
+    let Some(factor) = pending else {
+        return true;
+    };
+    match apply_model_scale_command(app, factor, ScaleHistory::Record) {
+        Ok(()) => true,
+        Err(e) => {
+            msg_error!("FBX export failed: could not bake entity scale: {:?}", e);
+            false
+        }
+    }
+}
+
+unsafe fn apply_model_scale_command(
+    app: &mut App,
+    factor: f32,
+    history: ScaleHistory,
+) -> anyhow::Result<()> {
+    app.rrdevice.device.device_wait_idle()?;
+    let pool = app
+        .resource::<crate::vulkanr::context::CommandState>()
+        .pool
+        .clone();
+
+    let previous_root_scales = crate::ecs::systems::apply_model_scale(
+        &mut app.data.ecs_world,
+        &mut app.data.ecs_assets,
+        &mut app.data.graphics_resources,
+        factor,
+    )?;
+
+    for mesh_index in 0..app.data.graphics_resources.mesh_count() {
+        app.data.graphics_resources.upload_mesh_vertices(
+            &app.instance,
+            &app.rrdevice,
+            &pool,
+            mesh_index,
+        )?;
+    }
+    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
+        &app.instance,
+        &app.rrdevice,
+        &mut app.data,
+        &pool,
+    )?;
+
+    match history {
+        ScaleHistory::Record => app
+            .data
+            .ecs_world
+            .resource_mut::<crate::ecs::resource::EditHistory>()
+            .push_model_scale(factor, previous_root_scales, "Apply model scale"),
+        ScaleHistory::Replay => {}
+        ScaleHistory::Revert { root_scales } => {
+            crate::ecs::systems::set_model_root_scales(&mut app.data.ecs_world, root_scales)
+        }
+    }
+    msg_info!("Applied model scale {}", factor);
+    Ok(())
+}
+
+unsafe fn apply_hidden_triangles(
+    app: &mut App,
+    meshes: Vec<(usize, Vec<u32>)>,
+) -> anyhow::Result<()> {
+    use thyllore_avatar_core::cloth_setup::systems::hidden_mask::order_visible_triangles_first;
+
+    app.rrdevice.device.device_wait_idle()?;
+    let pool = app
+        .resource::<crate::vulkanr::context::CommandState>()
+        .pool
+        .clone();
+
+    let mut total_hidden = 0u32;
+    for (mesh_index, hidden) in &meshes {
+        let mesh = &mut app.data.graphics_resources.meshes[*mesh_index];
+        let (ordered, visible_count) =
+            order_visible_triangles_first(&mesh.vertex_data.indices, hidden);
+        total_hidden += hidden.len() as u32;
+        mesh.index_buffer.overwrite(
+            &app.instance,
+            &app.rrdevice,
+            &pool,
+            &ordered,
+            visible_count,
+        )?;
+    }
+
+    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
+        &app.instance,
+        &app.rrdevice,
+        &mut app.data,
+        &pool,
+    )?;
+
+    msg_info!(
+        "Applied hidden triangles to {} meshes ({} triangles hidden)",
+        meshes.len(),
+        total_hidden
+    );
+    Ok(())
 }

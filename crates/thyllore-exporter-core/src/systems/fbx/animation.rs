@@ -5,6 +5,8 @@ use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
+use crate::systems::fbx::writer::ARRAY_ENCODING;
+
 use crate::systems::fbx::file_identity::{FileIdentity, CREATOR, DEFAULT_CREATION_TIME};
 
 use thyllore_anim_core::editable::{
@@ -1114,35 +1116,35 @@ pub(crate) fn write_anim_curve<W: Write + Seek>(
 
     {
         let mut ta = writer.new_node("KeyTime")?;
-        ta.append_arr_i64_from_iter(None, curve.key_times.iter().copied())?;
+        ta.append_arr_i64_from_iter(ARRAY_ENCODING, curve.key_times.iter().copied())?;
         drop(ta);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("KeyValueFloat")?;
-        va.append_arr_f32_from_iter(None, curve.key_values.iter().copied())?;
+        va.append_arr_f32_from_iter(ARRAY_ENCODING, curve.key_values.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut fa = writer.new_node("KeyAttrFlags")?;
-        fa.append_arr_i32_from_iter(None, curve.key_attr_flags.iter().copied())?;
+        fa.append_arr_i32_from_iter(ARRAY_ENCODING, curve.key_attr_flags.iter().copied())?;
         drop(fa);
         writer.close_node()?;
     }
 
     {
         let mut da = writer.new_node("KeyAttrDataFloat")?;
-        da.append_arr_f32_from_iter(None, curve.key_attr_data.iter().copied())?;
+        da.append_arr_f32_from_iter(ARRAY_ENCODING, curve.key_attr_data.iter().copied())?;
         drop(da);
         writer.close_node()?;
     }
 
     {
         let mut ra = writer.new_node("KeyAttrRefCount")?;
-        ra.append_arr_i32_from_iter(None, curve.key_attr_ref_count.iter().copied())?;
+        ra.append_arr_i32_from_iter(ARRAY_ENCODING, curve.key_attr_ref_count.iter().copied())?;
         drop(ra);
         writer.close_node()?;
     }

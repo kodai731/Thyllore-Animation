@@ -285,6 +285,25 @@ mod tests {
     }
 
     #[test]
+    fn test_mixamo_spine_chain_maps_spine2_to_upper_chest() {
+        let bones = vec![
+            make_bone("mixamorig:Hips"),
+            make_bone("mixamorig:Spine"),
+            make_bone("mixamorig:Spine1"),
+            make_bone("mixamorig:Spine2"),
+            make_bone("mixamorig:Neck"),
+            make_bone("mixamorig:Head"),
+        ];
+
+        let (mapping, _) = infer_mapping_by_name(&bones);
+
+        assert_eq!(mapping.bone_of(HumanoidRole::Spine), Some(1));
+        assert_eq!(mapping.bone_of(HumanoidRole::Chest), Some(2));
+        assert_eq!(mapping.bone_of(HumanoidRole::UpperChest), Some(3));
+        assert_eq!(mapping.bone_of(HumanoidRole::Neck), Some(4));
+    }
+
+    #[test]
     fn test_no_duplicate_assignments() {
         let bones = blender_style_skeleton();
         let (mapping, _) = infer_mapping_by_name(&bones);

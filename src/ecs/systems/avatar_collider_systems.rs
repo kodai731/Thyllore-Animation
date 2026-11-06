@@ -1,0 +1,87 @@
+use crate::animation::spring_bone::replace_fitted_body_colliders;
+use crate::asset::AssetStorage;
+use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup};
+use crate::ecs::resource::AvatarSetupState;
+use crate::ecs::systems::avatar_setup_systems::{
+    find_first_skeleton, find_or_create_spring_bone_setup_entity,
+};
+use crate::ecs::systems::avatar_submesh_role_systems::skin_role_skins;
+use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::world::World;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
+use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
+use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
+
+pub fn fit_body_colliders(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    params: &CapsuleFitParams,
+) {
+    let Some(skeleton) = find_first_skeleton(assets) else {
+        msg_error!("Cannot fit body colliders: no skeleton loaded");
+        return;
+    };
+
+    let skin_data = skin_role_skins(world, assets, graphics, skeleton.id);
+    if skin_data.is_empty() {
+        msg_error!(
+            "Cannot fit body colliders: no mesh with the skin role is bound to this skeleton"
+        );
+        return;
+    }
+
+    let mapping = world.resource::<AvatarSetupState>().mapping.clone();
+    let fitted = fit_body_capsules(&skin_data, skeleton, &mapping, params);
+    if fitted.is_empty() {
+        msg_error!("Cannot fit body colliders: no humanoid body bones are mapped");
+        return;
+    }
+
+    let Some(spring_entity) = find_or_create_spring_bone_setup_entity(world) else {
+        msg_error!("Cannot fit body colliders: no animated model loaded");
+        return;
+    };
+
+    let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(spring_entity) else {
+        msg_error!("Cannot fit body colliders: spring bone setup missing");
+        return;
+    };
+    replace_fitted_body_colliders(&mut setup, &fitted);
+
+    reset_spring_bone_state(world);
+
+    msg_info!("Fitted {} body colliders", fitted.len());
+}
+
+/// Collider offsets are in the bone's frame: the spring solver places them at `global[bone] * offset`.
+pub(crate) fn head_capsule_collider(
+    capsule: &HeadCapsule,
+    root: thyllore_model_core::BoneId,
+    model_to_root_local: cgmath::Matrix4<f32>,
+) -> FittedCapsule {
+    let to_local = |p: cgmath::Vector3<f32>| (model_to_root_local * p.extend(1.0)).truncate();
+    FittedCapsule {
+        bone_id: root,
+        head: to_local(capsule.bottom),
+        tail: to_local(capsule.top),
+        radius: capsule.radius,
+    }
+}
+
+pub(crate) fn fit_body_collider(
+    world: &World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+    skeleton_id: crate::animation::SkeletonId,
+    root: thyllore_model_core::BoneId,
+) -> Option<FittedCapsule> {
+    let skins = skin_role_skins(world, assets, graphics, skeleton_id);
+    let skeleton = assets
+        .skeletons
+        .values()
+        .find(|sa| sa.skeleton_id == skeleton_id)?;
+    let params = &world.resource::<AvatarSetupState>().body_collider_fit;
+    fit_bone_capsule(&skins, skeleton.skeleton.get_bone(root)?, params)
+}

@@ -3,19 +3,20 @@ use cgmath::Vector3;
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::BoneDisplayStyle;
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
 use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
-    ClipLibrary, EntityRemovalCommand, EntityRemovalQueue, HierarchyState, TimelineState,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue,
+    HierarchyState, TimelineState,
 };
 use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
-    hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone,
-    hierarchy_toggle_selection, navigate_hierarchy, rename_entity, resolve_mesh_bone_id,
-    resolve_transform_entity, update_entity_scale, update_entity_translation,
-    update_entity_visible, TreeNavigation, TreeSelection,
+    hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_reveal_bone, hierarchy_select,
+    hierarchy_select_bone, hierarchy_toggle_selection, navigate_hierarchy, rename_entity,
+    resolve_mesh_bone_id, resolve_transform_entity, uniform_scale_factor, update_entity_scale,
+    update_entity_translation, update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
@@ -33,6 +34,8 @@ pub enum HierarchyEvent {
     SetSearchFilter(String),
     SetHierarchyDisplayMode(HierarchyDisplayMode),
     SelectBone(BoneId),
+    /// Selects the bone, switches the hierarchy to its Bones tab and scrolls to it
+    RevealBone(BoneId),
     DeselectBone,
     ExpandBone(BoneId),
     CollapseBone(BoneId),
@@ -47,9 +50,17 @@ pub enum HierarchyEvent {
     },
     ScrollToSelectionDone,
     SetBoneDisplayStyle(BoneDisplayStyle),
+    SetBoneDrawMode(BoneDrawMode),
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
     SetBoneDistanceScaleFactor(f32),
+    AddChildBone {
+        parent: BoneId,
+        name: String,
+        local_offset: Vector3<f32>,
+    },
+    SetBoneOffset(BoneId, Vector3<f32>),
+    DeleteBone(BoneId),
 }
 
 impl UiCommand for HierarchyEvent {
@@ -58,11 +69,81 @@ impl UiCommand for HierarchyEvent {
     }
 }
 
+fn select_bone(world: &mut World, assets: &AssetStorage, bone_id: BoneId) {
+    let descendants: Vec<usize> = assets
+        .skeletons
+        .values()
+        .next()
+        .map(|skel_asset| {
+            skel_asset
+                .skeleton
+                .collect_descendants(bone_id)
+                .into_iter()
+                .map(|id| id as usize)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    {
+        let mut hierarchy_state = world.resource_mut::<HierarchyState>();
+        hierarchy_select_bone(&mut hierarchy_state, bone_id);
+    }
+
+    if let Some(mut selection) = world.get_resource_mut::<BoneSelectionState>() {
+        let bone_idx = bone_id as usize;
+        selection.selected_bone_indices.clear();
+        selection.selected_bone_indices.insert(bone_idx);
+        for desc_idx in descendants {
+            selection.selected_bone_indices.insert(desc_idx);
+        }
+        selection.active_bone_index = Some(bone_idx);
+    }
+}
+
 fn dispatch_hierarchy_events(events: &[HierarchyEvent], world: &mut World, assets: &AssetStorage) {
     dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
+    queue_skeleton_edits(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
     dispatch_hierarchy_navigation_events(events, world, assets);
+}
+
+fn bone_name(assets: &AssetStorage, bone_id: BoneId) -> Option<String> {
+    assets
+        .skeletons
+        .values()
+        .next()
+        .and_then(|asset| asset.skeleton.get_bone(bone_id))
+        .map(|bone| bone.name.clone())
+}
+
+/// Skeleton edits touch skin data, so they are queued for `App` instead of applied here.
+fn queue_skeleton_edits(events: &[HierarchyEvent], world: &mut World, assets: &AssetStorage) {
+    for event in events {
+        let command = match event {
+            HierarchyEvent::AddChildBone {
+                parent,
+                name,
+                local_offset,
+            } => bone_name(assets, *parent).map(|parent| AssetEditCommand::AddBone {
+                parent,
+                name: name.clone(),
+                local_offset: *local_offset,
+            }),
+            HierarchyEvent::SetBoneOffset(bone_id, local_offset) => bone_name(assets, *bone_id)
+                .map(|bone| AssetEditCommand::SetBoneOffset {
+                    bone,
+                    local_offset: *local_offset,
+                }),
+            HierarchyEvent::DeleteBone(bone_id) => {
+                bone_name(assets, *bone_id).map(|bone| AssetEditCommand::RemoveBone { bone })
+            }
+            _ => None,
+        };
+        if let Some(command) = command {
+            world.resource_mut::<AssetEditQueue>().push(command);
+        }
+    }
 }
 
 fn dispatch_hierarchy_navigation_events(
@@ -206,33 +287,15 @@ fn dispatch_hierarchy_bone_events(
     for event in events {
         match event {
             HierarchyEvent::SelectBone(bone_id) => {
-                let descendants: Vec<usize> = assets
-                    .skeletons
-                    .values()
-                    .next()
-                    .map(|skel_asset| {
-                        skel_asset
-                            .skeleton
-                            .collect_descendants(*bone_id)
-                            .into_iter()
-                            .map(|id| id as usize)
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                select_bone(world, assets, *bone_id);
+            }
 
-                {
-                    let mut hierarchy_state = world.resource_mut::<HierarchyState>();
-                    hierarchy_select_bone(&mut hierarchy_state, *bone_id);
-                }
-
-                if let Some(mut selection) = world.get_resource_mut::<BoneSelectionState>() {
-                    let bone_idx = *bone_id as usize;
-                    selection.selected_bone_indices.clear();
-                    selection.selected_bone_indices.insert(bone_idx);
-                    for desc_idx in descendants {
-                        selection.selected_bone_indices.insert(desc_idx);
-                    }
-                    selection.active_bone_index = Some(bone_idx);
+            HierarchyEvent::RevealBone(bone_id) => {
+                select_bone(world, assets, *bone_id);
+                let mut hierarchy_state = world.resource_mut::<HierarchyState>();
+                hierarchy_state.display_mode = HierarchyDisplayMode::Bones;
+                if let Some(skeleton_asset) = assets.skeletons.values().next() {
+                    hierarchy_reveal_bone(&mut hierarchy_state, &skeleton_asset.skeleton, *bone_id);
                 }
             }
 
@@ -261,6 +324,12 @@ fn dispatch_hierarchy_bone_events(
             HierarchyEvent::SetBoneDisplayStyle(style) => {
                 if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
                     bone_gizmo.display_style = *style;
+                }
+            }
+
+            HierarchyEvent::SetBoneDrawMode(mode) => {
+                if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
+                    bone_gizmo.draw_mode = *mode;
                 }
             }
 
@@ -315,7 +384,7 @@ fn sync_curve_editor_on_selection(
                 }
             }
 
-            HierarchyEvent::SelectBone(bone_id) => {
+            HierarchyEvent::SelectBone(bone_id) | HierarchyEvent::RevealBone(bone_id) => {
                 let has_track = {
                     let clip_library = world.resource::<ClipLibrary>();
                     let source_id = world.resource::<TimelineState>().current_clip_id;

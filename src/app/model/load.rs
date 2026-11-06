@@ -149,7 +149,7 @@ pub(crate) unsafe fn append_model_to_scene(
 
     let parent_entity = entities::spawn_model_part_entity(part_name, world);
     entities::spawn_mesh_entities(
-        part_name,
+        &entities::mesh_entity_names(part_name, &load_result.meshes, mesh_index_offset),
         graphics,
         world,
         assets,
@@ -198,7 +198,7 @@ unsafe fn replace_scene_model(
     fbx_model: Option<FbxModel>,
 ) -> Result<Entity> {
     cleanup::reset_scene_model(device, graphics, raytracing, world, assets)?;
-    caches::insert_model_caches(world, model_name, fbx_model);
+    caches::insert_model_caches(world, model_name, fbx_model, graphics.meshes.len());
     clips::register_imported_animation(world, load_result, assets);
     nodes::replace_node_assets(world, assets, load_result);
 

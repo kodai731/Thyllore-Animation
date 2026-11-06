@@ -737,7 +737,7 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+            .insert_resource(crate::ecs::resource::SpringBoneInspectorState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
         data.ecs_world
@@ -1022,6 +1022,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
+        Self::insert_default_if_missing::<crate::scratch::loader::ScratchHost>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::InjectedInput>(data);

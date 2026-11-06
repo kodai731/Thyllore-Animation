@@ -1,10 +1,11 @@
 use cgmath::Vector3;
+use thyllore_anim_core::spring_bone::{JointForce, VrmJointForce};
 
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
 use crate::ecs::component::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
-    SpringJointParam, WithSpringBone,
+    ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringJointParam, WithSpringBone,
 };
 use crate::ecs::resource::SpringBoneState;
 use crate::ecs::world::{Animator, World};
@@ -38,9 +39,11 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
             .iter()
             .map(|&bone_id| SpringJointParam {
                 bone_id,
-                stiffness: 0.5,
+                force: JointForce::Vrm(VrmJointForce {
+                    stiffness: 0.5,
+                    gravity_power: 1.0,
+                }),
                 drag_force: 0.7,
-                gravity_power: 1.0,
                 gravity_dir: Vector3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.02,
             })
@@ -291,6 +294,7 @@ fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
         id: group_id,
         name: String::from("test_colliders"),
         collider_ids,
+        origin: ColliderGroupOrigin::Authored,
     });
 
     for chain in &mut setup.chains {

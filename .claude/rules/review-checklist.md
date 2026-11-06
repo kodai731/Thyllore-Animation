@@ -5,7 +5,7 @@ paths:
 
 # Review Checklist
 
-Before opening a PR or finishing an edit, run the branch diff through these 11 items. Each item's detailed rules live in the existing rule files listed at the end of each line — those are the single source of truth, so this checklist does not repeat them.
+Before opening a PR or finishing an edit, run the branch diff through the items below. Begin with `structural-review.md` to evaluate the model and structure, then check implementation details. Each item's detailed rules live in the existing rule files listed at the end of each line — those are the single source of truth, so this checklist does not repeat them.
 
 1. `mod.rs` / `lib.rs` hold `mod` declarations and re-exports only; logic lives in sibling files → `ecs-architecture.md`, `module-structure.md`
 2. Generic code (`src/app/`, `ecs/systems/phases/`, `event_dispatch`, `vulkan-core`, `scene`) never names a feature; features register through hooks → `hierarchy.md` "Feature isolation"
@@ -17,4 +17,5 @@ Before opening a PR or finishing an edit, run the branch diff through these 11 i
 8. Split oversized files and structs with many fields into sub-modules / sub-structs → `coding.md` §5
 9. UI interactions are self-applying `UiCommand`s sent with `World::send_command`, not new central event enums; one-off work runs where it is triggered → `hierarchy.md` "Hook or command?"
 10. No hard-coded tuning numbers and no golden-text comparisons; pin facts at their declaration → `hierarchy.md`, `ui.md`
-11. `vk::` / `vulkanalia` / raw `Device` calls only inside `thyllore-vulkan-core`; outside it use `thyllore_vulkan_core::types` and core helpers; a public function or field of vulkan-core must not expose a `vk::` type (use `types::*` / the core enums; `pub(crate)` otherwise); effect GPU code belongs in `src/ecs/systems/<effect>/`, not in vulkan-core → `hierarchy.md`, `rendering-architecture.md`
+11. Labelled widgets live in `UiRow` declarations drawn by `draw_rows`; `&imgui::Ui` builds exist only for self-drawn surfaces, and no `FormSection` wraps an imgui closure → `ui.md` "Form windows"
+12. Choose models that support human understanding; check responsibilities, dependencies, and contracts across representations → `structural-review.md`

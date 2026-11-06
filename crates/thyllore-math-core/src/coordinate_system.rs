@@ -1,16 +1,7 @@
 use crate::matrix::Mat4;
-use crate::vector::Vector4;
-use cgmath::{vec3, Deg, InnerSpace, Matrix4, Rad, SquareMatrix, Vector2, Vector3};
+use cgmath::{vec3, Deg, InnerSpace, Matrix4, Quaternion, Rad, SquareMatrix, Vector2, Vector3};
 use std::f32::EPSILON;
 
-pub fn fix_coord() -> Mat4 {
-    Matrix4::from_cols(
-        Vector4::new(1.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 1.0, 0.0),
-        Vector4::new(0.0, 1.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 1.0),
-    )
-}
 pub unsafe fn view(
     camera_pos: cgmath::Vector3<f32>,
     direction: cgmath::Vector3<f32>,
@@ -110,14 +101,21 @@ pub fn blender_to_engine_rows() -> [[f32; 4]; 4] {
     rows
 }
 
-/// glTF Y-up → ワールド Y-up 変換（恒等変換）
-pub fn gltf_to_world() -> Matrix4<f32> {
-    Matrix4::identity()
+pub fn blender_to_engine_point(point: Vector3<f32>) -> Vector3<f32> {
+    (BLENDER_TO_ENGINE * point.extend(1.0)).truncate()
 }
 
-/// Blender Z-up → ワールド Y-up 変換（FBXと同じ）
-pub fn blender_to_world() -> Matrix4<f32> {
-    BLENDER_TO_ENGINE
+pub fn engine_to_blender_point(point: Vector3<f32>) -> Vector3<f32> {
+    (ENGINE_TO_BLENDER * point.extend(1.0)).truncate()
+}
+
+/// Rotation of a quaternion by the same axis swap: (w, x, y, z) in Blender becomes (w, x, z, -y).
+pub fn blender_to_engine_quaternion(q: Quaternion<f32>) -> Quaternion<f32> {
+    Quaternion::new(q.s, q.v.x, q.v.z, -q.v.y)
+}
+
+pub fn engine_to_blender_quaternion(q: Quaternion<f32>) -> Quaternion<f32> {
+    Quaternion::new(q.s, q.v.x, -q.v.z, q.v.y)
 }
 
 /// ワールド座標系のY軸（上向き）
@@ -329,7 +327,7 @@ pub fn ray_to_triangle_barycentric(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{vec3, vec4, InnerSpace, Matrix4, SquareMatrix, Vector3};
+    use cgmath::{vec3, vec4, InnerSpace, Rotation3, Vector3};
 
     #[test]
     fn test_blender_to_engine_maps_z_up_to_y_up() {
@@ -339,8 +337,22 @@ mod tests {
     }
 
     #[test]
-    fn test_gltf_to_world() {
-        assert_eq!(gltf_to_world(), Matrix4::identity());
+    fn test_point_conversion_round_trips() {
+        let blender = vec3(0.3, -1.2, 1.7);
+        let engine = blender_to_engine_point(blender);
+        assert_eq!(engine, vec3(0.3, 1.7, 1.2));
+        assert_eq!(engine_to_blender_point(engine), blender);
+    }
+
+    #[test]
+    fn test_quaternion_conversion_matches_the_matrix() {
+        let blender = Quaternion::from_angle_z(Deg(90.0));
+        let engine = blender_to_engine_quaternion(blender);
+        let rotated_by_quaternion = engine * vec3(1.0, 0.0, 0.0);
+        let rotated_in_blender = blender * vec3(1.0, 0.0, 0.0);
+        let expected = blender_to_engine_point(rotated_in_blender);
+        assert!((rotated_by_quaternion - expected).magnitude() < 1e-6);
+        assert_eq!(engine_to_blender_quaternion(engine), blender);
     }
 
     #[test]
@@ -405,15 +417,6 @@ mod tests {
 
             assert_eq!(view_matrix.w.w, 1.0);
         }
-    }
-
-    #[test]
-    fn test_fix_coord() {
-        let m = fix_coord();
-        assert_eq!(m.x.x, 1.0);
-        assert_eq!(m.y.z, 1.0);
-        assert_eq!(m.z.y, 1.0);
-        assert_eq!(m.w.w, 1.0);
     }
 
     #[test]

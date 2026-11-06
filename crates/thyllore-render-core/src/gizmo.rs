@@ -60,6 +60,39 @@ pub enum BoneDisplayStyle {
     Sphere,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BoneDrawMode {
+    #[default]
+    All,
+    Selected,
+    SelectedAndParents,
+    SelectedAndChildren,
+    SelectedWithParentsAndChildren,
+    None,
+}
+
+impl BoneDrawMode {
+    pub const ALL: [BoneDrawMode; 6] = [
+        BoneDrawMode::All,
+        BoneDrawMode::Selected,
+        BoneDrawMode::SelectedAndParents,
+        BoneDrawMode::SelectedAndChildren,
+        BoneDrawMode::SelectedWithParentsAndChildren,
+        BoneDrawMode::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            BoneDrawMode::All => "All",
+            BoneDrawMode::Selected => "Selected",
+            BoneDrawMode::SelectedAndParents => "Selected + Parents",
+            BoneDrawMode::SelectedAndChildren => "Selected + Children",
+            BoneDrawMode::SelectedWithParentsAndChildren => "Selected + Parents + Children",
+            BoneDrawMode::None => "None",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum TransformGizmoHandle {
     #[default]

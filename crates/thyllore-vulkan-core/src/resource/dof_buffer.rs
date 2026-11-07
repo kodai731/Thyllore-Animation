@@ -3,28 +3,38 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
+use crate::types::HDR_FORMAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct DofBuffer {
-    pub render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
     pub width: u32,
     pub height: u32,
 }
 
 impl DofBuffer {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub unsafe fn new(rrdevice: &RRDevice, width: u32, height: u32) -> Result<Self> {
         let render_pass = Self::create_render_pass(rrdevice)?;
 
         let sampler = match rrdevice
-            .device
+            .device()
             .create_sampler(&Self::linear_clamp_sampler_info(), None)
         {
             Ok(sampler) => sampler,
             Err(error) => {
-                rrdevice.device.destroy_render_pass(render_pass, None);
+                rrdevice.device().destroy_render_pass(render_pass, None);
                 return Err(error.into());
             }
         };
@@ -43,14 +53,14 @@ impl DofBuffer {
         TransientDesc {
             width: self.width,
             height: self.height,
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
         }
     }
 
     unsafe fn create_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
-            .format(HDR_FORMAT)
+            .format(HDR_FORMAT.raw())
             .samples(vk::SampleCountFlags::_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
@@ -96,7 +106,7 @@ impl DofBuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -123,7 +133,7 @@ impl DofBuffer {
         self.height = new_height;
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.sampler != vk::Sampler::null() {
             device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
@@ -136,7 +146,7 @@ impl DofBuffer {
         log!("Destroyed DOF buffer");
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
+    pub(crate) fn extent(&self) -> vk::Extent2D {
         vk::Extent2D {
             width: self.width,
             height: self.height,
@@ -154,7 +164,7 @@ impl Drop for DofBuffer {
 
 impl GpuResource for DofBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

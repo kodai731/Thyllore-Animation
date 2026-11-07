@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::{
     scale_animation_clip_translations, scale_editable_clip_translations, scale_spring_setup,
     ConstraintType,
@@ -19,7 +19,7 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 const UNIFORM_SCALE_TOLERANCE: f32 = 1e-4;
 
 /// The one uniform factor an entity scale stands for, or why it cannot be baked.
-pub fn uniform_scale_factor(scale: Vector3<f32>) -> anyhow::Result<f32> {
+pub fn uniform_scale_factor(scale: Vec3) -> anyhow::Result<f32> {
     let spread = (scale.x - scale.y).abs().max((scale.x - scale.z).abs());
     if spread > UNIFORM_SCALE_TOLERANCE * scale.x.abs().max(1.0) {
         anyhow::bail!(
@@ -47,7 +47,7 @@ pub fn apply_model_scale(
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
     factor: f32,
-) -> anyhow::Result<Vec<(Entity, Vector3<f32>)>> {
+) -> anyhow::Result<Vec<(Entity, Vec3)>> {
     validate_scale_factor(factor)?;
     if assets.meshes.is_empty() && assets.skeletons.is_empty() {
         anyhow::bail!("no model is loaded");
@@ -61,7 +61,7 @@ pub fn apply_model_scale(
         world,
         previous_root_scales
             .iter()
-            .map(|(root, _)| (*root, Vector3::new(1.0, 1.0, 1.0))),
+            .map(|(root, _)| (*root, Vec3::new(1.0, 1.0, 1.0))),
     );
 
     request_bake_scan(world);
@@ -177,7 +177,7 @@ fn is_same_scale(a: f32, b: f32) -> bool {
     (a - b).abs() <= UNIFORM_SCALE_TOLERANCE * a.abs().max(b.abs()).max(1.0)
 }
 
-fn model_root_scales(world: &World) -> Vec<(Entity, Vector3<f32>)> {
+fn model_root_scales(world: &World) -> Vec<(Entity, Vec3)> {
     model_root_entities(world)
         .into_iter()
         .filter_map(|root| {
@@ -187,10 +187,7 @@ fn model_root_scales(world: &World) -> Vec<(Entity, Vector3<f32>)> {
         .collect()
 }
 
-pub fn set_model_root_scales(
-    world: &mut World,
-    scales: impl IntoIterator<Item = (Entity, Vector3<f32>)>,
-) {
+pub fn set_model_root_scales(world: &mut World, scales: impl IntoIterator<Item = (Entity, Vec3)>) {
     for (root, scale) in scales {
         if let Some(transform) = world.get_component_mut::<Transform>(root) {
             transform.scale = scale;
@@ -205,12 +202,12 @@ mod tests {
     #[test]
     fn uniform_scale_accepts_equal_components_and_rejects_the_rest() {
         assert_eq!(
-            uniform_scale_factor(Vector3::new(0.01, 0.01, 0.01)).unwrap(),
+            uniform_scale_factor(Vec3::new(0.01, 0.01, 0.01)).unwrap(),
             0.01
         );
-        assert!(uniform_scale_factor(Vector3::new(1.0, 2.0, 1.0)).is_err());
-        assert!(uniform_scale_factor(Vector3::new(0.0, 0.0, 0.0)).is_err());
-        assert!(uniform_scale_factor(Vector3::new(-1.0, -1.0, -1.0)).is_err());
+        assert!(uniform_scale_factor(Vec3::new(1.0, 2.0, 1.0)).is_err());
+        assert!(uniform_scale_factor(Vec3::new(0.0, 0.0, 0.0)).is_err());
+        assert!(uniform_scale_factor(Vec3::new(-1.0, -1.0, -1.0)).is_err());
     }
 
     #[test]
@@ -230,10 +227,10 @@ mod tests {
 
         assert_eq!(pending_entity_scale(&world).unwrap(), None);
 
-        world.get_component_mut::<Transform>(root).unwrap().scale = Vector3::new(0.01, 0.01, 0.01);
+        world.get_component_mut::<Transform>(root).unwrap().scale = Vec3::new(0.01, 0.01, 0.01);
         assert_eq!(pending_entity_scale(&world).unwrap(), Some(0.01));
 
-        world.get_component_mut::<Transform>(root).unwrap().scale = Vector3::new(1.0, 2.0, 1.0);
+        world.get_component_mut::<Transform>(root).unwrap().scale = Vec3::new(1.0, 2.0, 1.0);
         assert!(pending_entity_scale(&world).is_err());
     }
 
@@ -245,7 +242,7 @@ mod tests {
                 .entity()
                 .with_name(name)
                 .with_transform(Transform {
-                    scale: Vector3::new(scale, scale, scale),
+                    scale: Vec3::new(scale, scale, scale),
                     ..Default::default()
                 })
                 .build();

@@ -25,6 +25,7 @@ from ..common.chain_bones import (
 from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.spring_properties import (
     generated_chain_bones,
+    generated_chain_joints,
     remove_chains_named,
     spring_settings_to_edit,
     write_sidecar_spring,
@@ -89,11 +90,13 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     root_name = avatar_api.resolve_root_bone(fit_bones, generation.root_bone.strip() or DEFAULT_ROOT_BY_ROLE[role])
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
-    registered = generated_chain_bones(settings, {"mesh": obj.name, "material": material})
-    given = given_chains(obj, arm, registered, scale_length)
+    origin = {"mesh": obj.name, "material": material}
+    registered = generated_chain_bones(settings, origin)
+    registered_joints = generated_chain_joints(settings, origin)
+    given = given_chains(obj, arm, registered_joints, scale_length)
     read_back = {chain["name"] for chain in given if "joints" in chain}
     if not generation.root_bone.strip():
-        root_name = read_back_root(arm, registered, given) or root_name
+        root_name = read_back_root(arm, registered_joints, given) or root_name
     return GenerationRun(
         obj=obj,
         role=role,
@@ -178,7 +181,8 @@ def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
     if run.role == "garment":
         write_covered_group(obj, output["covered"], run.marked)
     for chain in output["chains"]:
-        apply_chain_bone_display(arm, chain["name"], [joint["name"] for joint in chain["joints"]], output["attachment"])
+        chain_bones = [joint["name"] for joint in chain["joints"]] + [chain["end_bone"]]
+        apply_chain_bone_display(arm, chain["name"], chain_bones, output["attachment"])
     if new_chains:
         _register_new_chains(context, arm, run, new_chains, output.get("head_capsule"), output["attachment"])
     return {"bones": len(specs), "rewritten": len(rewritten), "rethickened": rethickened}

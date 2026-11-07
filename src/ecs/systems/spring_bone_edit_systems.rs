@@ -6,6 +6,7 @@ use crate::ecs::component::{
 };
 use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
 use crate::ecs::world::{Entity, World};
+use glam::Vec3;
 
 pub fn handle_spring_chain_add(
     world: &mut World,
@@ -83,7 +84,7 @@ pub fn handle_spring_collider_add(
     let collider = SpringColliderDef {
         id: collider_id,
         bone_id,
-        offset: cgmath::Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape,
     };
     setup.colliders.push(collider);

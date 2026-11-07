@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
@@ -32,7 +32,7 @@ pub enum EditCommand {
     },
     ModelScaled {
         factor: f32,
-        root_scales: Vec<(Entity, Vector3<f32>)>,
+        root_scales: Vec<(Entity, Vec3)>,
         description: &'static str,
     },
 }
@@ -160,7 +160,7 @@ impl EditHistory {
     pub fn push_model_scale(
         &mut self,
         factor: f32,
-        root_scales: Vec<(Entity, Vector3<f32>)>,
+        root_scales: Vec<(Entity, Vec3)>,
         description: &'static str,
     ) {
         self.push_entry(EditEntry {

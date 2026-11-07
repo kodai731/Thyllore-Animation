@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_scene_core::declare_scene_format;
 
 use crate::ecs::component::MotionPath;
@@ -18,7 +18,7 @@ declare_scene_format! {
     persisted {
         center: [f32; 3] {
             get: |p| [p.center.x, p.center.y, p.center.z],
-            set: |p, v| p.center = Vector3::new(v[0], v[1], v[2]),
+            set: |p, v| p.center = Vec3::new(v[0], v[1], v[2]),
         },
         radius: f32 { get: |p| p.radius, set: |p, v| p.radius = v },
         angular_speed: f32 {
@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn test_motion_path_serializes_to_the_legacy_motion_path_data_json() {
         let path = MotionPath {
-            center: Vector3::new(1.0, 2.0, 3.0),
+            center: Vec3::new(1.0, 2.0, 3.0),
             radius: 5.0,
             angular_speed: 0.5,
             phase_offset: 1.5,
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn test_motion_path_roundtrip() {
         let path = MotionPath {
-            center: Vector3::new(-1.0, 0.5, 2.0),
+            center: Vec3::new(-1.0, 0.5, 2.0),
             radius: 2.5,
             angular_speed: 0.7,
             phase_offset: 0.25,

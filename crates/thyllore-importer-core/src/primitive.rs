@@ -1,5 +1,5 @@
+use glam::{Vec2, Vec3, Vec4};
 use thyllore_anim_core::AnimationSystem;
-use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
 

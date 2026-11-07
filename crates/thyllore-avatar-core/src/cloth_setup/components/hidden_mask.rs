@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 /// Cone of rays a skin vertex casts along its normal; it is hidden when at least `hidden_ratio` of them hit a garment within `cover_distance`.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -23,7 +23,7 @@ impl Default for HiddenMaskParams {
 /// The triangles the mask test reads: a skin mesh as the ray origins or the merged garments as the occluder.
 #[derive(Clone, Debug, Default)]
 pub struct MaskMesh {
-    pub positions: Vec<Vector3<f32>>,
-    pub normals: Vec<Vector3<f32>>,
+    pub positions: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
     pub triangles: Vec<[u32; 3]>,
 }

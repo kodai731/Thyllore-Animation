@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::Vector4;
+use glam::{UVec4, Vec4};
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 
 use crate::animation::editable::{BoneTrack, SourceClipId};
@@ -12,8 +12,8 @@ use crate::ecs::world::Entity;
 #[derive(Clone, Debug)]
 pub struct SkinSnapshot {
     pub mesh_index: usize,
-    pub bone_indices: Vec<Vector4<u32>>,
-    pub bone_weights: Vec<Vector4<f32>>,
+    pub bone_indices: Vec<UVec4>,
+    pub bone_weights: Vec<Vec4>,
 }
 
 /// Everything a skeleton edit can change, taken before and after the edit for undo / redo.

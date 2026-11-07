@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{tangent_frame_around, world_y_axis};
 
 use crate::cloth_setup::components::chain_gen::ChainGenInput;
@@ -27,18 +27,14 @@ pub(crate) fn collect_target_vertices(input: &ChainGenInput) -> Vec<u32> {
         .collect()
 }
 
-pub(crate) fn progress_of(
-    position: Vector3<f32>,
-    root_position: Vector3<f32>,
-    up: Vector3<f32>,
-) -> f32 {
+pub(crate) fn progress_of(position: Vec3, root_position: Vec3, up: Vec3) -> f32 {
     -(position - root_position).dot(up)
 }
 
 pub(super) fn compute_vertex_frames(
     input: &ChainGenInput,
     vertices: &[u32],
-    phi_center: Vector3<f32>,
+    phi_center: Vec3,
 ) -> Vec<VertexFrame> {
     let up = world_y_axis();
     let (reference, side) = tangent_frame_around(up);

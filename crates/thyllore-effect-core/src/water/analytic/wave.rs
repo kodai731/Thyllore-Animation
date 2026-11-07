@@ -1,5 +1,5 @@
 #[cfg(test)]
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::LinearCongruentialGenerator;
 
 pub const WATER_WAVE_MODE_COUNT: usize = 8;
@@ -182,15 +182,15 @@ pub fn water_perturbed_normal(
     h_v: f32,
     major_radius: f32,
     minor_radius: f32,
-) -> Vector3<f32> {
+) -> Vec3 {
     let cos_u = u.cos();
     let sin_u = u.sin();
     let cos_v = v.cos();
     let sin_v = v.sin();
 
-    let e_u = Vector3::new(-sin_u, 0.0, cos_u);
-    let e_v = Vector3::new(-sin_v * cos_u, cos_v, -sin_v * sin_u);
-    let n = Vector3::new(cos_v * cos_u, sin_v, cos_v * sin_u);
+    let e_u = Vec3::new(-sin_u, 0.0, cos_u);
+    let e_v = Vec3::new(-sin_v * cos_u, cos_v, -sin_v * sin_u);
+    let n = Vec3::new(cos_v * cos_u, sin_v, cos_v * sin_u);
     let kappa1 = 1.0 / minor_radius;
     let kappa2 = cos_v / (major_radius + minor_radius * cos_v);
 
@@ -198,7 +198,7 @@ pub fn water_perturbed_normal(
         - (1.0 + h * kappa1) * h_u / (major_radius + minor_radius * cos_v) * e_u
         - (1.0 + h * kappa2) * h_v / minor_radius * e_v;
 
-    let mag = n_prime.magnitude();
+    let mag = n_prime.length();
     if mag > 1e-6 {
         n_prime /= mag;
     } else {

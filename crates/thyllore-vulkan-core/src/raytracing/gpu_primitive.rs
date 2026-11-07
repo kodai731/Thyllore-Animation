@@ -1,3 +1,4 @@
+use glam::Mat4;
 use vulkanalia::vk;
 
 #[derive(Clone, Debug)]
@@ -14,12 +15,54 @@ pub enum BlasGeometry<'a> {
     },
 }
 
+impl BlasGeometry<'_> {
+    pub fn procedural_aabb(min: [f32; 3], max: [f32; 3]) -> Self {
+        Self::ProceduralAabb {
+            aabb: vk::AabbPositionsKHR {
+                min_x: min[0],
+                min_y: min[1],
+                min_z: min[2],
+                max_x: max[0],
+                max_y: max[1],
+                max_z: max[2],
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GpuPrimitive<'a> {
     pub geometry: BlasGeometry<'a>,
-    pub model: cgmath::Matrix4<f32>,
+    pub model: Mat4,
     pub base_color: [f32; 4],
     pub params: [f32; 4],
     /// Device address of the effect's own instance block, read by its closest hit shader; 0 when none.
-    pub effect_data_address: vk::DeviceAddress,
+    pub(crate) effect_data_address: vk::DeviceAddress,
+}
+
+impl<'a> GpuPrimitive<'a> {
+    pub fn new(
+        geometry: BlasGeometry<'a>,
+        model: Mat4,
+        base_color: [f32; 4],
+        params: [f32; 4],
+    ) -> Self {
+        Self {
+            geometry,
+            model,
+            base_color,
+            params,
+            effect_data_address: 0,
+        }
+    }
+
+    #[inline]
+    pub fn effect_data_address(&self) -> crate::types::DeviceAddress {
+        self.effect_data_address
+    }
+
+    #[inline]
+    pub fn set_effect_data_address(&mut self, address: crate::types::DeviceAddress) {
+        self.effect_data_address = address;
+    }
 }

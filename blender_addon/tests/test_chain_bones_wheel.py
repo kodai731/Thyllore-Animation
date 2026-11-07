@@ -112,15 +112,19 @@ def test_bone_specs_chain_joints_root_to_tip(avatar_api):
         "strip_hair_00_01",
         "strip_hair_00_02",
         "strip_hair_00_03",
+        "strip_hair_00_03_end",
     ]
     assert [parent for _, parent, _, _ in specs] == [
         "Head",
         "strip_hair_00_00",
         "strip_hair_00_01",
         "strip_hair_00_02",
+        "strip_hair_00_03",
     ]
     for (_, _, _, tail), (_, _, next_head, _) in zip(specs, specs[1:]):
         assert tail == next_head
+    assert specs[-1][2] == tuple(output["chains"][0]["tail"])
+    assert specs[-1][2] != specs[-1][3]
     assert specs[0][2][1] > specs[-1][2][1]
 
 
@@ -282,9 +286,11 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
         bones=[{"name": "Head", "parent": None, "rest_position": [0.0, 0.0, 0.0]}],
     )
     joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
+    end_names = [chain["end_bone"] for chain in output["chains"]]
     bones = _fit_bones(
         [("Hips", None, (0.0, -1.0, 0.0)), ("Head", 0, (0.0, 0.0, 0.0))]
         + [(name, 1 + i, (0.0, -0.1 * (i + 1), 0.0)) for i, name in enumerate(joint_names)]
+        + [(name, 1 + len(joint_names), (0.0, -0.1 * (len(joint_names) + 1), 0.0)) for name in end_names]
     )
     empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
 
@@ -299,7 +305,10 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
     for chain, generated in zip(spring["chains"], output["chains"]):
         assert chain["collider_groups"] == ["Fitted Body"]
         assert chain["origin"] == {"mesh": "strip", "material": "hair", "attachment": "cap"}
-        assert [j["hit_radius"] for j in chain["joints"]] == [j["hit_radius"] for j in generated["joints"]]
+        assert chain["tail"] == generated["end_bone"]
+        assert chain["joints"][-1]["bone"] == generated["end_bone"]
+        simulated = chain["joints"][:-1]
+        assert [j["hit_radius"] for j in simulated] == [j["hit_radius"] for j in generated["joints"]]
 
     again = avatar_api.register_generated_chains(
         spring, bones, [], "Head", "strip/hair", "cap", output["chains"], output["head_capsule"]

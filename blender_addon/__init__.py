@@ -151,8 +151,10 @@ if _BPY_AVAILABLE:
             telemetry.register()
         if _debuglog.is_debug_enabled():
             from . import debug_rpc  # noqa: E402
+            from .common import viewport_recording  # noqa: E402
 
             debug_rpc.register()
+            viewport_recording.register()
         _apply_mock_server_pin_if_requested()
         _REGISTERED_ABI_FAILURE = False
         print("[Thyllore] Addon registered successfully")
@@ -166,7 +168,9 @@ if _BPY_AVAILABLE:
             feedback_message.unregister()
         if _debuglog.is_debug_enabled() and not _REGISTERED_ABI_FAILURE:
             from . import debug_rpc  # noqa: E402
+            from .common import viewport_recording  # noqa: E402
 
+            viewport_recording.unregister()
             debug_rpc.unregister()
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:

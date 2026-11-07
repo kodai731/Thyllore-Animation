@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// When the strand clustering stops joining the two closest centerlines.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -20,16 +20,12 @@ impl StrandMergeStop {
     }
 }
 
-fn centerline_distance(a: &[Vector3<f32>], b: &[Vector3<f32>]) -> f32 {
+fn centerline_distance(a: &[Vec3], b: &[Vec3]) -> f32 {
     let len = a.len().min(b.len());
-    a.iter()
-        .zip(b)
-        .map(|(p, q)| (p - q).magnitude())
-        .sum::<f32>()
-        / len as f32
+    a.iter().zip(b).map(|(p, q)| (p - q).length()).sum::<f32>() / len as f32
 }
 
-pub fn merge_strands(centerlines: &[Vec<Vector3<f32>>], stop: StrandMergeStop) -> Vec<Vec<usize>> {
+pub fn merge_strands(centerlines: &[Vec<Vec3>], stop: StrandMergeStop) -> Vec<Vec<usize>> {
     let n = centerlines.len();
     if n == 0 {
         return vec![];
@@ -67,7 +63,7 @@ pub fn merge_strands(centerlines: &[Vec<Vector3<f32>>], stop: StrandMergeStop) -
 
 fn closest_cluster_pair(
     clusters: &[Vec<usize>],
-    centerlines: &[Vec<Vector3<f32>>],
+    centerlines: &[Vec<Vec3>],
 ) -> Option<(usize, usize, f32)> {
     if clusters.len() < 2 {
         return None;
@@ -90,7 +86,7 @@ fn closest_cluster_pair(
     Some((best_i, best_j, best_dist))
 }
 
-fn cluster_distance(a: &[usize], b: &[usize], centerlines: &[Vec<Vector3<f32>>]) -> f32 {
+fn cluster_distance(a: &[usize], b: &[usize], centerlines: &[Vec<Vec3>]) -> f32 {
     let mut total = 0.0;
     let mut count = 0usize;
     for &ai in a {
@@ -103,10 +99,10 @@ fn cluster_distance(a: &[usize], b: &[usize], centerlines: &[Vec<Vector3<f32>>])
 }
 
 pub fn tuft_centerline(
-    centerlines: &[Vec<Vector3<f32>>],
+    centerlines: &[Vec<Vec3>],
     weights: &[usize],
     members: &[usize],
-) -> Vec<Vector3<f32>> {
+) -> Vec<Vec3> {
     let total_weight: usize = members.iter().map(|&c| weights[c]).sum();
     if total_weight == 0 || centerlines.is_empty() {
         return vec![];
@@ -116,7 +112,7 @@ pub fn tuft_centerline(
     let mut result = Vec::with_capacity(sample_count);
 
     for k in 0..sample_count {
-        let mut sum = Vector3::new(0.0, 0.0, 0.0);
+        let mut sum = Vec3::new(0.0, 0.0, 0.0);
         for &c in members {
             sum += centerlines[c][k] * weights[c] as f32;
         }

@@ -49,7 +49,8 @@ mod tests {
         convert_positions_to_fbx, convert_uvs_to_fbx, encode_triangle_polygon_indices,
     };
     use crate::systems::fbx::skin::matrix4_to_flat_f64_scaled;
-    use cgmath::Matrix4;
+    use glam::Mat4;
+    use glam::Vec3;
     use std::path::PathBuf;
     use thyllore_file_format_core::fbx::FbxData;
 
@@ -78,8 +79,7 @@ mod tests {
 
     #[test]
     fn test_matrix4_to_flat_f64_scaled() {
-        use cgmath::SquareMatrix;
-        let identity = Matrix4::<f32>::identity();
+        let identity = Mat4::IDENTITY;
         let flat = matrix4_to_flat_f64_scaled(&identity, 2.0);
         assert!((flat[0] - 1.0).abs() < 1e-8);
         assert!((flat[5] - 1.0).abs() < 1e-8);
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn test_convert_positions_to_fbx_no_scale() {
         let mut fbx_data = FbxData::new();
-        fbx_data.positions = vec![cgmath::Vector3::new(0.01, 0.02, 0.03)];
+        fbx_data.positions = vec![Vec3::new(0.01, 0.02, 0.03)];
         fbx_data.local_positions = vec![];
 
         let positions = convert_positions_to_fbx(&fbx_data, 1.0);

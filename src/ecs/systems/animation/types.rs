@@ -1,11 +1,11 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::SkeletonId;
 use crate::ecs::resource::AnimationType;
 
 pub struct AnimationEvalResult {
     pub updated_meshes: Vec<usize>,
-    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
 #[derive(Clone)]

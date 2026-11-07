@@ -2,6 +2,7 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::systems::InspectorData;
 use crate::ecs::world::{Entity, Visibility, World};
+use glam::Vec3;
 
 use crate::platform::ui::form_window::{rows_section, FormSection};
 use crate::platform::ui::ui_rows::UiRow;
@@ -167,12 +168,12 @@ fn commit_transform_view(world: &World, shown: &TransformView, view: &TransformV
         let pos = view.position.unwrap_or([0.0, 0.0, 0.0]);
         world.send_command(HierarchyEvent::SetEntityTranslation(
             view.entity,
-            cgmath::Vector3::new(pos[0], pos[1], pos[2]),
+            Vec3::new(pos[0], pos[1], pos[2]),
         ));
     }
     if shown.rotation != view.rotation {
         let rot = view.rotation.unwrap_or([0.0, 0.0, 0.0]);
-        let euler = cgmath::Vector3::new(rot[0], rot[1], rot[2]);
+        let euler = Vec3::new(rot[0], rot[1], rot[2]);
         let quat = crate::math::euler_degrees_to_quaternion(&euler);
         world.send_command(HierarchyEvent::SetEntityRotation(view.entity, quat));
     }
@@ -180,7 +181,7 @@ fn commit_transform_view(world: &World, shown: &TransformView, view: &TransformV
         let scl = view.scale.unwrap_or([1.0, 1.0, 1.0]);
         world.send_command(HierarchyEvent::SetEntityScale(
             view.entity,
-            cgmath::Vector3::new(scl[0], scl[1], scl[2]),
+            Vec3::new(scl[0], scl[1], scl[2]),
         ));
     }
 }

@@ -1,4 +1,3 @@
-pub mod backend;
 mod billboard;
 mod buffer_handle;
 mod gizmo;
@@ -12,7 +11,6 @@ mod settings;
 mod settings_scene_format;
 mod ubo;
 
-pub use backend::RenderBackend;
 pub use billboard::{BillboardMesh, BillboardTransform, BillboardVertex};
 pub use buffer_handle::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 pub use gizmo::{

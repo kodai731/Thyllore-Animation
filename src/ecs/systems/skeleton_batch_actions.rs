@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
@@ -54,7 +54,7 @@ impl BatchAction for QueuedSkeletonEdit {
     }
 }
 
-fn parse_offset(parts: &[&str], usage: &str) -> Result<Vector3<f32>> {
+fn parse_offset(parts: &[&str], usage: &str) -> Result<Vec3> {
     let [x, y, z] = parts else {
         return Err(anyhow!("{usage}"));
     };
@@ -65,7 +65,7 @@ fn parse_offset(parts: &[&str], usage: &str) -> Result<Vector3<f32>> {
             .filter(|v| v.is_finite())
             .ok_or_else(|| anyhow!("{usage}"))
     };
-    Ok(Vector3::new(parse(x)?, parse(y)?, parse(z)?))
+    Ok(Vec3::new(parse(x)?, parse(y)?, parse(z)?))
 }
 
 fn non_empty(text: &str, usage: &str) -> Result<String> {

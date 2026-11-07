@@ -6,8 +6,10 @@ use std::collections::BTreeMap;
 
 use super::avatar_setup::bones_from_py;
 use crate::vrm_bridge::{
+    vrm_rest_clearance_warnings as bridge_rest_clearance_warnings,
     vrm_t_pose_warnings as bridge_t_pose_warnings, vrm_write as bridge_vrm_write,
 };
+use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 use thyllore_avatar_core::vrm::{
     vrm_meta_fields as avatar_vrm_meta_fields, VrmMeta, VRM_META_DEFAULT_VERSION,
 };
@@ -40,6 +42,16 @@ pub fn vrm_t_pose_warnings(
     let overrides: BTreeMap<String, String> =
         depythonize(humanoid_overrides).map_err(depythonize_error_to_pyerr)?;
     bridge_t_pose_warnings(&bone_inputs, &overrides).map_err(anyhow_to_pyerr)
+}
+
+#[pyfunction]
+pub fn vrm_rest_clearance_warnings(
+    spring: &Bound<PyAny>,
+    bones: &Bound<PyAny>,
+) -> PyResult<Vec<String>> {
+    let spring: SidecarSpring = depythonize(spring).map_err(depythonize_error_to_pyerr)?;
+    let bone_inputs = bones_from_py(bones)?;
+    Ok(bridge_rest_clearance_warnings(&spring, &bone_inputs))
 }
 
 #[pyfunction]

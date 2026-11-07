@@ -9,16 +9,17 @@ use crate::chain_register_bridge::{
 };
 use crate::collider_bridge::{FitBone, FitSkin};
 use crate::spring_edit_bridge::{
-    add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
-    chains_in_scope as bridge_chains_in_scope, chains_under_bone as bridge_chains_under_bone,
-    chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name, RampInput,
+    apply_ramp_to_chains, chains_in_scope as bridge_chains_in_scope,
+    chains_under_bone as bridge_chains_under_bone, chains_with_radius as bridge_chains_with_radius,
+    resolve_root_bone_name, use_existing_bones_as_springs as bridge_use_existing_bones_as_springs,
+    RampInput,
 };
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
-/// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
+/// Registers every run of existing non-humanoid bones under `root_bone` with at least `min_joints` bones as a spring chain; adds no bones.
 #[pyfunction]
 #[pyo3(signature = (spring, bones, root_bone, min_joints = 2))]
-pub fn add_chains_under_bone<'py>(
+pub fn use_existing_bones_as_springs<'py>(
     py: Python<'py>,
     spring: &Bound<PyAny>,
     bones: &Bound<PyAny>,
@@ -28,7 +29,7 @@ pub fn add_chains_under_bone<'py>(
     let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
         depythonize(spring).map_err(depythonize_error_to_pyerr)?;
     let bone_inputs = bones_from_py(bones)?;
-    let output = bridge_add_chains_under_bone(&spring, &bone_inputs, root_bone, min_joints)
+    let output = bridge_use_existing_bones_as_springs(&spring, &bone_inputs, root_bone, min_joints)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }

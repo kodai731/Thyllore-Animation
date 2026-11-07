@@ -1,6 +1,7 @@
 use anyhow::{bail, Context};
-use cgmath::Vector3;
+use glam::Vec3;
 
+use crate::cloth_setup::components::chain_gen::end_bone_name;
 use crate::humanoid::components::skeleton_input::BoneInput;
 use crate::vrchat::sidecar_spring::{BoneRestFrame, SidecarSpring, SidecarSpringChain};
 
@@ -64,7 +65,7 @@ fn end_node_of_chain(
     let frame = frames
         .get(leaf_index)
         .with_context(|| format!("bone {:?} has no rest frame", leaf.name))?;
-    let name = format!("{}_end", leaf.name);
+    let name = end_bone_name(&leaf.name);
     if bones.iter().any(|bone| bone.name == name) {
         bail!(
             "end node {name:?} for chain {:?} collides with an existing bone",
@@ -72,7 +73,7 @@ fn end_node_of_chain(
         );
     }
 
-    let last_segment = Vector3::from(leaf.rest_position) - Vector3::from(parent.rest_position);
+    let last_segment = Vec3::from(leaf.rest_position) - Vec3::from(parent.rest_position);
     Ok(Some(SpringEndNode {
         chain: chain.name.clone(),
         parent_bone: leaf.name.clone(),

@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::{Mat4, Vec3};
 
 use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
 use crate::animation::spring_bone::{
@@ -55,7 +55,7 @@ pub fn spring_bone_bake(
 
     let mut pose = create_pose_from_rest(skeleton);
     let mut globals = compute_pose_global_transforms(skeleton, &pose);
-    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
+    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals, config.space);
 
     let mut editable = EditableAnimationClip::new(0, format!("{}_spring_baked", base_clip.name));
 
@@ -132,7 +132,7 @@ pub fn simulate_skinned_positions(
     constraints: Option<&ConstraintSet>,
     looping: bool,
     skin: &thyllore_model_core::SkinData,
-) -> Vec<Vec<Vector3<f32>>> {
+) -> Vec<Vec<Vec3>> {
     let mut frames = Vec::with_capacity(count_bake_frames(config));
 
     for_each_spring_frame(
@@ -170,11 +170,11 @@ fn for_each_spring_frame(
     base_clip: &AnimationClip,
     constraints: Option<&ConstraintSet>,
     looping: bool,
-    mut visit_frame: impl FnMut(usize, &SpringSimulation, &[cgmath::Matrix4<f32>]),
+    mut visit_frame: impl FnMut(usize, &SpringSimulation, &[Mat4]),
 ) {
     let mut pose = create_pose_from_rest(skeleton);
     let mut globals = compute_pose_global_transforms(skeleton, &pose);
-    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
+    let mut sb_state = spring_bone_initialize(setup, skeleton, &globals, config.space);
 
     let dt = 1.0 / config.sample_rate;
 
@@ -240,7 +240,7 @@ fn step_spring_frame(
     looping: bool,
     constraints: Option<&ConstraintSet>,
     sb_state: &mut SpringSimulation,
-    globals: &mut Vec<cgmath::Matrix4<f32>>,
+    globals: &mut Vec<Mat4>,
     setup: &SpringBoneSetup,
     affected_ids: &[BoneId],
     dt: f32,
@@ -338,7 +338,7 @@ mod tests {
     };
     use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
-    use cgmath::{InnerSpace, Matrix4, Vector3};
+    use glam::{Mat4, Vec3};
 
     fn create_test_skeleton() -> Skeleton {
         let bones = vec![
@@ -347,7 +347,7 @@ mod tests {
                 name: "Root".to_string(),
                 parent_id: None,
                 children: vec![1],
-                local_transform: Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0)),
+                local_transform: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
                 ..Default::default()
             },
             Bone {
@@ -355,7 +355,7 @@ mod tests {
                 name: "Spring".to_string(),
                 parent_id: Some(0),
                 children: vec![2],
-                local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+                local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
                 ..Default::default()
             },
             Bone {
@@ -363,7 +363,7 @@ mod tests {
                 name: "SpringTip".to_string(),
                 parent_id: Some(1),
                 children: vec![],
-                local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+                local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
                 ..Default::default()
             },
         ];
@@ -379,7 +379,7 @@ mod tests {
             bones,
             bone_name_to_id,
             root_bone_ids: vec![0],
-            root_transform: Matrix4::from_scale(1.0),
+            root_transform: Mat4::IDENTITY,
         }
     }
 
@@ -394,7 +394,7 @@ mod tests {
                         stiffness: 1.0,
                         gravity_power: 0.0,
                     }),
-                    gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                    gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                     drag_force: 1.0,
                     hit_radius: 0.0,
                 }],
@@ -403,6 +403,7 @@ mod tests {
                 tail_bone_id: None,
                 enabled: true,
                 origin: Default::default(),
+                rest_clearance: Default::default(),
             }],
             colliders: vec![],
             collider_groups: vec![],
@@ -417,9 +418,9 @@ mod tests {
     fn scale_skeleton_lengths(skeleton: &Skeleton, factor: f32) -> Skeleton {
         let mut scaled = skeleton.clone();
         for bone in &mut scaled.bones {
-            bone.local_transform.w.x *= factor;
-            bone.local_transform.w.y *= factor;
-            bone.local_transform.w.z *= factor;
+            bone.local_transform.w_axis.x *= factor;
+            bone.local_transform.w_axis.y *= factor;
+            bone.local_transform.w_axis.z *= factor;
         }
         scaled
     }
@@ -436,7 +437,7 @@ mod tests {
                 gravity_power: 1.0,
             }),
             drag_force: 0.4,
-            gravity_dir: Vector3::new(1.0, 0.0, 0.0),
+            gravity_dir: Vec3::new(1.0, 0.0, 0.0),
             hit_radius: 0.0,
         };
         let clip = AnimationClip::new("test");
@@ -470,7 +471,7 @@ mod tests {
         assert!(bent, "gravity must visibly bend the chain in the test");
         for (unit, centimetre) in unit_tails.iter().zip(&centimetre_tails) {
             let rescaled = centimetre.position * 0.01;
-            let error = (rescaled - unit.position).magnitude();
+            let error = (rescaled - unit.position).length();
             assert!(
                 error < 1e-4,
                 "frame {} bone {}: unit {:?} vs rescaled {:?}",
@@ -602,7 +603,7 @@ mod tests {
                             stiffness: 1.0,
                             gravity_power: 0.0,
                         }),
-                        gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                        gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                         drag_force: 1.0,
                         hit_radius: 0.0,
                     }],
@@ -611,6 +612,7 @@ mod tests {
                     tail_bone_id: None,
                     enabled: false,
                     origin: Default::default(),
+                    rest_clearance: Default::default(),
                 },
                 SpringChain {
                     id: 1,
@@ -621,7 +623,7 @@ mod tests {
                             stiffness: 1.0,
                             gravity_power: 0.0,
                         }),
-                        gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                        gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                         drag_force: 1.0,
                         hit_radius: 0.0,
                     }],
@@ -630,6 +632,7 @@ mod tests {
                     tail_bone_id: None,
                     enabled: true,
                     origin: Default::default(),
+                    rest_clearance: Default::default(),
                 },
             ],
             colliders: vec![],

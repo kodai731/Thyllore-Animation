@@ -58,7 +58,7 @@ fn spring_edit_bridge_builds_two_chains_under_head() {
     let bones = test_bones();
     let spring = SidecarSpring::default();
 
-    let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let result = use_existing_bones_as_springs(&spring, &bones, "Head", 1).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 
@@ -87,10 +87,10 @@ fn spring_edit_bridge_idempotent_call_does_not_duplicate_chains() {
     let bones = test_bones();
     let spring = SidecarSpring::default();
 
-    let first = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let first = use_existing_bones_as_springs(&spring, &bones, "Head", 1).unwrap();
     assert_eq!(first.chains.len(), 2);
 
-    let second = add_chains_under_bone(&first, &bones, "Head", 1).unwrap();
+    let second = use_existing_bones_as_springs(&first, &bones, "Head", 1).unwrap();
 
     assert_eq!(second.chains.len(), 2);
 
@@ -104,8 +104,8 @@ fn spring_edit_bridge_unknown_root_or_short_runs_return_error() {
     let bones = test_bones();
     let spring = SidecarSpring::default();
 
-    assert!(add_chains_under_bone(&spring, &bones, "nonexistent", 1).is_err());
-    assert!(add_chains_under_bone(&spring, &bones, "Head", 4).is_err());
+    assert!(use_existing_bones_as_springs(&spring, &bones, "nonexistent", 1).is_err());
+    assert!(use_existing_bones_as_springs(&spring, &bones, "Head", 4).is_err());
 }
 
 fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
@@ -122,7 +122,7 @@ fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
 fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
     let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
     );
     let mut ramp = ramp_input("linear");
     ramp.rigid_fraction = 0.5;
@@ -139,7 +139,7 @@ fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
 fn spring_edit_bridge_ramp_linear_interpolation() {
     let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
     );
     let ramp = ramp_input("linear");
 
@@ -157,7 +157,7 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
 fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
     let bones = test_bones();
     let spring = with_vrm_joints(
-        add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 3).unwrap(),
     );
     let mut rest_relative_ramp = ramp_input("linear");
     for end in [&mut rest_relative_ramp.root, &mut rest_relative_ramp.tip] {
@@ -180,7 +180,8 @@ fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
 #[test]
 fn spring_edit_bridge_chains_under_bone_head() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
     let result = chains_under_bone(&spring, &bones, "Head").unwrap();
 
@@ -192,7 +193,8 @@ fn spring_edit_bridge_chains_under_bone_head() {
 #[test]
 fn spring_edit_bridge_chains_in_scope_sibling_chains() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
     let result = chains_in_scope(&spring, &bones, "Chain_0", "sibling_chains").unwrap();
 
@@ -202,7 +204,8 @@ fn spring_edit_bridge_chains_in_scope_sibling_chains() {
 #[test]
 fn spring_edit_bridge_unknown_shape_returns_error() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
     let mut ramp = ramp_input("linear");
     ramp.shape = "unknown".to_string();
 
@@ -213,7 +216,8 @@ fn spring_edit_bridge_unknown_shape_returns_error() {
 #[test]
 fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 3).unwrap();
 
     assert!(chains_with_radius(&spring, &bones, None, "all")
         .unwrap()
@@ -232,7 +236,8 @@ fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
 #[test]
 fn spring_edit_bridge_chains_with_radius_unknown_mode_returns_error() {
     let bones = test_bones();
-    let spring = add_chains_under_bone(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
+    let spring =
+        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 1).unwrap();
 
     assert!(chains_with_radius(&spring, &bones, None, "unknown").is_err());
 }
@@ -252,7 +257,7 @@ fn spring_edit_bridge_resolves_humanoid_role_on_prefixed_bones() {
     ];
     let spring = SidecarSpring::default();
 
-    let result = add_chains_under_bone(&spring, &bones, "Head", 1).unwrap();
+    let result = use_existing_bones_as_springs(&spring, &bones, "Head", 1).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 

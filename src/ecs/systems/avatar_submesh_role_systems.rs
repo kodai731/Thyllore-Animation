@@ -2,7 +2,7 @@ use thyllore_avatar_core::cloth_setup::components::submesh_role::{
     refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 
-use cgmath::Matrix4;
+use glam::{Mat4, UVec4, Vec3, Vec4};
 
 use crate::animation::{Skeleton, SkeletonId, SkinData};
 use crate::asset::{AssetStorage, MeshAsset};
@@ -15,7 +15,7 @@ use thyllore_avatar_core::cloth_setup::components::chain_gen::{RootAttachment, S
 use thyllore_model_core::BoneId;
 
 /// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
-pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Matrix4<f32> {
+pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Mat4 {
     compute_bone_global_transform(skeleton, bone) * skeleton.bones[bone].inverse_bind_pose
 }
 
@@ -327,10 +327,7 @@ pub(crate) fn skin_role_skins<'a>(
         .collect()
 }
 
-fn influences_heaviest_first(
-    indices: cgmath::Vector4<u32>,
-    weights: cgmath::Vector4<f32>,
-) -> Vec<(BoneId, f32)> {
+fn influences_heaviest_first(indices: UVec4, weights: Vec4) -> Vec<(BoneId, f32)> {
     let mut influences: Vec<(BoneId, f32)> = [
         (indices.x, weights.x),
         (indices.y, weights.y),
@@ -350,9 +347,9 @@ pub(crate) fn skin_role_surfaces(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     skeleton_id: SkeletonId,
-    geometry_to_model: Matrix4<f32>,
+    geometry_to_model: Mat4,
 ) -> Vec<SkinSurface> {
-    let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
+    let to_model = |p: &Vec3| (geometry_to_model * p.extend(1.0)).truncate();
     skin_role_mesh_indices(world, assets, graphics)
         .into_iter()
         .map(|mesh_index| &graphics.meshes[mesh_index])

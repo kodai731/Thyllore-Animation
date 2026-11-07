@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
@@ -11,14 +11,14 @@ pub fn compute_tpose_world_rotations(
     mapping: &HumanoidMapping,
     frame: &HumanoidFrame,
     rest_pose: RestPose,
-) -> Vec<Quaternion<f32>> {
+) -> Vec<Quat> {
     let mut rotations: Vec<_> = skeleton.bones.iter().map(|b| b.world_rotation).collect();
 
     if rest_pose == RestPose::Unknown {
         return rotations;
     }
 
-    let right = Vector3::from(frame.right);
+    let right = Vec3::from(frame.right);
     apply_arm_correction(
         &mut rotations,
         skeleton,
@@ -40,12 +40,12 @@ pub fn compute_tpose_world_rotations(
 }
 
 fn apply_arm_correction(
-    rotations: &mut [Quaternion<f32>],
+    rotations: &mut [Quat],
     skeleton: &RetargetSkeleton,
     mapping: &HumanoidMapping,
     upper_role: HumanoidRole,
     lower_role: HumanoidRole,
-    target_direction: Vector3<f32>,
+    target_direction: Vec3,
 ) {
     let (Some(&upper_idx), Some(&lower_idx)) = (
         mapping.by_role.get(&upper_role),
@@ -56,15 +56,12 @@ fn apply_arm_correction(
 
     let bind_direction =
         skeleton.bones[lower_idx].world_position - skeleton.bones[upper_idx].world_position;
-    if bind_direction.magnitude2() < 1e-12 {
+    if bind_direction.length_squared() < 1e-12 {
         return;
     }
 
-    let correction = Quaternion::from_arc(
-        bind_direction.normalize(),
-        target_direction.normalize(),
-        None,
-    );
+    let correction =
+        Quat::from_rotation_arc(bind_direction.normalize(), target_direction.normalize());
 
     let mut visited = vec![false; skeleton.bones.len()];
     let mut stack = vec![upper_idx];
@@ -73,7 +70,7 @@ fn apply_arm_correction(
             continue;
         }
         visited[bone_idx] = true;
-        rotations[bone_idx] = correction * rotations[bone_idx];
+        rotations[bone_idx] = (correction * rotations[bone_idx]).normalize();
         for (child_idx, bone) in skeleton.bones.iter().enumerate() {
             if bone.parent == Some(bone_idx) && !visited[child_idx] {
                 stack.push(child_idx);
@@ -84,7 +81,7 @@ fn apply_arm_correction(
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{InnerSpace, One, Quaternion, Rotation, Vector3};
+    use glam::{Quat, Vec3};
 
     use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
@@ -113,8 +110,8 @@ mod tests {
     fn bone(parent: Option<usize>, x: f32, y: f32) -> RetargetBone {
         RetargetBone {
             parent,
-            world_position: Vector3::new(x, y, 0.0),
-            world_rotation: Quaternion::one(),
+            world_position: Vec3::new(x, y, 0.0),
+            world_rotation: Quat::IDENTITY,
         }
     }
 
@@ -163,20 +160,18 @@ mod tests {
 
     fn corrected_arm_direction(
         skeleton: &RetargetSkeleton,
-        rotations: &[Quaternion<f32>],
+        rotations: &[Quat],
         upper_idx: usize,
         lower_idx: usize,
-    ) -> Vector3<f32> {
+    ) -> Vec3 {
         let bind_direction =
             skeleton.bones[lower_idx].world_position - skeleton.bones[upper_idx].world_position;
-        rotations[lower_idx]
-            .rotate_vector(bind_direction)
-            .normalize()
+        rotations[lower_idx].mul_vec3(bind_direction).normalize()
     }
 
-    fn assert_rotation_close(actual: Quaternion<f32>, expected: Quaternion<f32>) {
+    fn assert_rotation_close(actual: Quat, expected: Quat) {
         assert!(
-            (actual - expected).magnitude() < 1e-5,
+            (actual - expected).length() < 1e-5,
             "{:?} != {:?}",
             actual,
             expected
@@ -188,7 +183,7 @@ mod tests {
         let skeleton = build_skeleton(std::f32::consts::FRAC_PI_4);
         let mapping = build_mapping(LEFT_LOWER_ARM);
         let frame = default_frame();
-        let right = Vector3::from(frame.right);
+        let right = Vec3::from(frame.right);
 
         let rotations = compute_tpose_world_rotations(&skeleton, &mapping, &frame, RestPose::APose);
 
@@ -198,7 +193,7 @@ mod tests {
         assert!(left.dot(-right) > 0.9999, "left arm: {:?}", left);
         assert!(right_arm.dot(right) > 0.9999, "right arm: {:?}", right_arm);
         for idx in [HIPS, SPINE, HEAD] {
-            assert_rotation_close(rotations[idx], Quaternion::one());
+            assert_rotation_close(rotations[idx], Quat::IDENTITY);
         }
     }
 
@@ -237,7 +232,7 @@ mod tests {
         skeleton.bones.push(RetargetBone {
             parent: Some(LEFT_UPPER_ARM),
             world_position: (upper + lower) * 0.5,
-            world_rotation: Quaternion::one(),
+            world_rotation: Quat::IDENTITY,
         });
         skeleton.bones[LEFT_LOWER_ARM].parent = Some(intermediate_idx);
         let mapping = build_mapping(LEFT_LOWER_ARM);
@@ -247,7 +242,7 @@ mod tests {
 
         let left = corrected_arm_direction(&skeleton, &rotations, LEFT_UPPER_ARM, LEFT_LOWER_ARM);
         assert!(
-            left.dot(-Vector3::from(frame.right)) > 0.9999,
+            left.dot(-Vec3::from(frame.right)) > 0.9999,
             "left arm: {:?}",
             left
         );

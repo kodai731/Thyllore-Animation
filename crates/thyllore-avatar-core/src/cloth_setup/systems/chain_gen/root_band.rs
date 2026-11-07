@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::{centroid, widest_cross_section, world_y_axis, CROSS_SECTION_SLICE_COUNT};
 
 use super::attachment::attachment_or_target;
@@ -10,15 +10,11 @@ use crate::cloth_setup::components::chain_gen::{ChainGenInput, ChainGenParams, R
 pub struct RootBand {
     pub equator_progress: f32,
     pub progress: f32,
-    pub center: Vector3<f32>,
+    pub center: Vec3,
 }
 
 /// The widest horizontal cross-section of the attachment surface, shifted by the setting.
-fn estimate_root_band(
-    attachment: &[Vector3<f32>],
-    root_position: Vector3<f32>,
-    offset: f32,
-) -> RootBand {
+fn estimate_root_band(attachment: &[Vec3], root_position: Vec3, offset: f32) -> RootBand {
     let (members, equator_progress) = widest_cross_section(
         attachment,
         root_position,
@@ -29,7 +25,7 @@ fn estimate_root_band(
     RootBand {
         equator_progress,
         progress: equator_progress + offset,
-        center: centroid(&members).unwrap_or(Vector3::new(0.0, 0.0, 0.0)),
+        center: centroid(&members).unwrap_or(Vec3::new(0.0, 0.0, 0.0)),
     }
 }
 

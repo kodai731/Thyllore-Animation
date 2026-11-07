@@ -1,19 +1,19 @@
 use super::*;
-use cgmath::Matrix4;
+use glam::{Mat4, UVec4};
 
 fn build_skin(influences: &[[(u32, f32); 4]]) -> SkinData {
     SkinData {
         skeleton_id: 0,
         bone_indices: influences
             .iter()
-            .map(|v| Vector4::new(v[0].0, v[1].0, v[2].0, v[3].0))
+            .map(|v| UVec4::new(v[0].0, v[1].0, v[2].0, v[3].0))
             .collect(),
         bone_weights: influences
             .iter()
-            .map(|v| Vector4::new(v[0].1, v[1].1, v[2].1, v[3].1))
+            .map(|v| Vec4::new(v[0].1, v[1].1, v[2].1, v[3].1))
             .collect(),
-        base_positions: vec![Vector3::new(0.0, 0.0, 0.0); influences.len()],
-        base_normals: vec![Vector3::new(0.0, 1.0, 0.0); influences.len()],
+        base_positions: vec![Vec3::new(0.0, 0.0, 0.0); influences.len()],
+        base_normals: vec![Vec3::new(0.0, 1.0, 0.0); influences.len()],
     }
 }
 
@@ -24,7 +24,7 @@ fn remove_middle_of_three() -> (Vec<BoneId>, BoneRemap, Option<BoneId>) {
     skeleton.add_bone("tip", Some(middle));
     skeleton.add_bone("side", Some(root));
     for bone in &mut skeleton.bones {
-        bone.inverse_bind_pose = Matrix4::from_scale(1.0);
+        bone.inverse_bind_pose = Mat4::IDENTITY;
     }
     let removed = skeleton.remove_bone(middle).unwrap();
     (removed.removed, removed.remap, removed.parent)
@@ -41,11 +41,11 @@ fn removed_subtree_weight_moves_to_its_parent_and_merges() {
 
     merge_removed_bone_weights(&mut skin, &removed, parent, &remap);
 
-    assert_eq!(skin.bone_indices[0], Vector4::new(0, 0, 0, 0));
+    assert_eq!(skin.bone_indices[0], UVec4::new(0, 0, 0, 0));
     assert!((skin.bone_weights[0].x - 1.0).abs() < 1e-6);
-    assert_eq!(skin.bone_indices[1], Vector4::new(0, 0, 0, 0));
+    assert_eq!(skin.bone_indices[1], UVec4::new(0, 0, 0, 0));
     assert!((skin.bone_weights[1].x - 1.0).abs() < 1e-6);
-    assert_eq!(skin.bone_indices[2], Vector4::new(0, 1, 0, 0));
+    assert_eq!(skin.bone_indices[2], UVec4::new(0, 1, 0, 0));
     assert!((skin.bone_weights[2].x - 0.5).abs() < 1e-6);
     assert!((skin.bone_weights[2].y - 0.5).abs() < 1e-6);
 }
@@ -57,14 +57,14 @@ fn removed_root_weight_is_dropped_and_the_rest_renormalized() {
     skeleton.add_bone("child", Some(root));
     skeleton.add_bone("other", None);
     for bone in &mut skeleton.bones {
-        bone.inverse_bind_pose = Matrix4::from_scale(1.0);
+        bone.inverse_bind_pose = Mat4::IDENTITY;
     }
     let removed = skeleton.remove_bone(root).unwrap();
     let mut skin = build_skin(&[[(0, 0.25), (1, 0.25), (2, 0.5), (0, 0.0)]]);
 
     merge_removed_bone_weights(&mut skin, &removed.removed, removed.parent, &removed.remap);
 
-    assert_eq!(skin.bone_indices[0], Vector4::new(0, 0, 0, 0));
+    assert_eq!(skin.bone_indices[0], UVec4::new(0, 0, 0, 0));
     assert!((skin.bone_weights[0].x - 1.0).abs() < 1e-6);
 }
 
@@ -104,14 +104,14 @@ fn restore_skin_weights_writes_the_snapshot_back_when_sizes_match() {
     let mut skin = build_skin(&[[(0, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]]);
     let snapshot = SkinSnapshot {
         mesh_index: 0,
-        bone_indices: vec![Vector4::new(2, 1, 0, 0)],
-        bone_weights: vec![Vector4::new(0.5, 0.5, 0.0, 0.0)],
+        bone_indices: vec![UVec4::new(2, 1, 0, 0)],
+        bone_weights: vec![Vec4::new(0.5, 0.5, 0.0, 0.0)],
     };
 
     restore_skin_weights(&mut skin, &snapshot);
 
-    assert_eq!(skin.bone_indices[0], Vector4::new(2, 1, 0, 0));
-    assert_eq!(skin.bone_weights[0], Vector4::new(0.5, 0.5, 0.0, 0.0));
+    assert_eq!(skin.bone_indices[0], UVec4::new(2, 1, 0, 0));
+    assert_eq!(skin.bone_weights[0], Vec4::new(0.5, 0.5, 0.0, 0.0));
 }
 
 #[test]
@@ -315,7 +315,7 @@ fn adding_a_bone_registers_it_in_the_rig_track_table() {
         &graphics,
         "Hips",
         "Extra",
-        Vector3::new(0.0, 0.1, 0.0),
+        Vec3::new(0.0, 0.1, 0.0),
     )
     .unwrap();
 

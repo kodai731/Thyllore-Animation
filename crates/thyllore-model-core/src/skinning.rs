@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::skeleton::Skeleton;
 use crate::skin::SkinData;
@@ -11,10 +11,10 @@ pub struct SkinningDiagnostics {
 
 pub fn apply_skinning(
     skin_data: &SkinData,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     skeleton: &Skeleton,
-    out_positions: &mut [Vector3<f32>],
-    out_normals: &mut [Vector3<f32>],
+    out_positions: &mut [Vec3],
+    out_normals: &mut [Vec3],
 ) -> SkinningDiagnostics {
     let mut skin_matrices = Vec::with_capacity(skeleton.bone_count());
 
@@ -31,8 +31,8 @@ pub fn apply_skinning(
         let indices = &skin_data.bone_indices[i];
         let weights = &skin_data.bone_weights[i];
 
-        let mut skinned_pos = Vector3::new(0.0, 0.0, 0.0);
-        let mut skinned_normal = Vector3::new(0.0, 0.0, 0.0);
+        let mut skinned_pos = Vec3::new(0.0, 0.0, 0.0);
+        let mut skinned_normal = Vec3::new(0.0, 0.0, 0.0);
         let mut has_valid_weight = false;
 
         for j in 0..INFLUENCES_PER_VERTEX {
@@ -57,14 +57,14 @@ pub fn apply_skinning(
                 let m = &skin_matrices[bone_idx];
 
                 let pos = skin_data.base_positions[i];
-                let transformed = m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
-                skinned_pos += Vector3::new(transformed.x, transformed.y, transformed.z) * weight;
+                let transformed = m * Vec4::new(pos.x, pos.y, pos.z, 1.0);
+                skinned_pos += Vec3::new(transformed.x, transformed.y, transformed.z) * weight;
 
                 if i < skin_data.base_normals.len() {
                     let normal = skin_data.base_normals[i];
-                    let transformed_n = m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
+                    let transformed_n = m * Vec4::new(normal.x, normal.y, normal.z, 0.0);
                     skinned_normal +=
-                        Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z) * weight;
+                        Vec3::new(transformed_n.x, transformed_n.y, transformed_n.z) * weight;
                 }
             }
         }
@@ -76,14 +76,13 @@ pub fn apply_skinning(
 
             if fallback_bone < skin_matrices.len() {
                 let m = &skin_matrices[fallback_bone];
-                let transformed = m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
-                skinned_pos = Vector3::new(transformed.x, transformed.y, transformed.z);
+                let transformed = m * Vec4::new(pos.x, pos.y, pos.z, 1.0);
+                skinned_pos = Vec3::new(transformed.x, transformed.y, transformed.z);
 
                 if i < skin_data.base_normals.len() {
                     let normal = skin_data.base_normals[i];
-                    let transformed_n = m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
-                    skinned_normal =
-                        Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z);
+                    let transformed_n = m * Vec4::new(normal.x, normal.y, normal.z, 0.0);
+                    skinned_normal = Vec3::new(transformed_n.x, transformed_n.y, transformed_n.z);
                 }
             } else {
                 skinned_pos = pos;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
@@ -14,7 +14,6 @@ use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
 use crate::loader::ModelLoadResult;
 use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
-use crate::render::RenderBackend;
 use thyllore_math_core::ScreenSpaceScale;
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
@@ -36,14 +35,14 @@ const SPHERE_SEGMENT_COUNT: usize = 8;
 
 pub fn compute_bone_local_offsets(
     skeleton: &Skeleton,
-    _rest_global_transforms: &[Matrix4<f32>],
+    _rest_global_transforms: &[Mat4],
 ) -> Vec<[f32; 3]> {
     vec![[0.0, 0.0, 0.0]; skeleton.bones.len()]
 }
 
 pub fn build_bone_line_mesh(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
@@ -101,7 +100,7 @@ pub fn build_bone_line_mesh(
 
 pub fn build_octahedral_bone_meshes(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     solid_mesh: &mut LineMesh,
@@ -124,7 +123,7 @@ pub fn build_octahedral_bone_meshes(
 
 pub fn build_octahedral_bone_meshes_with_selection(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
@@ -324,7 +323,7 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
 }
 
 pub(crate) fn compute_display_transforms(
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
 ) -> Vec<[f32; 3]> {
@@ -337,7 +336,7 @@ pub(crate) fn compute_display_transforms(
 }
 
 pub(crate) fn compute_display_transforms_with_skeleton(
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton: Option<&Skeleton>,
@@ -346,16 +345,16 @@ pub(crate) fn compute_display_transforms_with_skeleton(
         .map(|idx| {
             let world_pos = if let Some(skel) = skeleton {
                 let bone = &skel.bones[idx];
-                if bone.inverse_bind_pose != Matrix4::identity() {
+                if bone.inverse_bind_pose != Mat4::IDENTITY {
                     let skin_matrix = global_transforms[idx] * bone.inverse_bind_pose;
-                    skin_matrix * Vector4::new(0.0, 0.0, 0.0, 1.0)
+                    skin_matrix * Vec4::new(0.0, 0.0, 0.0, 1.0)
                 } else {
                     let offset = bone_local_offsets.get(idx).copied().unwrap_or([0.0; 3]);
-                    global_transforms[idx] * Vector4::new(offset[0], offset[1], offset[2], 1.0)
+                    global_transforms[idx] * Vec4::new(offset[0], offset[1], offset[2], 1.0)
                 }
             } else {
                 let offset = bone_local_offsets.get(idx).copied().unwrap_or([0.0; 3]);
-                global_transforms[idx] * Vector4::new(offset[0], offset[1], offset[2], 1.0)
+                global_transforms[idx] * Vec4::new(offset[0], offset[1], offset[2], 1.0)
             };
             [
                 world_pos.x * mesh_scale,
@@ -404,7 +403,7 @@ const OCTAHEDRAL_TRIANGLES: [[usize; 3]; 8] = [
 
 pub fn compute_octahedral_vertices_per_bone(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
@@ -485,10 +484,10 @@ pub fn compute_octahedral_vertices_per_bone(
 }
 
 pub fn select_bone_by_ray(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     skeleton_for_display: Option<&Skeleton>,
@@ -514,9 +513,9 @@ pub fn select_bone_by_ray(
             if let Some(t) = ray_to_triangle_intersection(
                 ray_origin,
                 ray_direction,
-                Vector3::new(v0[0], v0[1], v0[2]),
-                Vector3::new(v1[0], v1[1], v1[2]),
-                Vector3::new(v2[0], v2[1], v2[2]),
+                Vec3::new(v0[0], v0[1], v0[2]),
+                Vec3::new(v1[0], v1[1], v1[2]),
+                Vec3::new(v2[0], v2[1], v2[2]),
             ) {
                 let is_closer = closest.map_or(true, |(_, prev_t)| t < prev_t);
                 if is_closer {
@@ -531,19 +530,19 @@ pub fn select_bone_by_ray(
 
 pub unsafe fn update_bone_gizmo_buffers(
     bone_gizmo: &mut BoneGizmoData,
-    backend: &mut dyn RenderBackend,
+    backend: &mut crate::vulkanr::VulkanBackend<'_>,
     frame_slot: usize,
 ) -> Result<()> {
     backend.update_or_create_line_buffers(&mut bone_gizmo.stick_mesh, frame_slot)
 }
 
 pub fn select_bone_by_mesh_ray(
-    ray_origin_world: Vector3<f32>,
-    ray_direction_world: Vector3<f32>,
+    ray_origin_world: Vec3,
+    ray_direction_world: Vec3,
     mesh_assets: &MeshAssets,
-    entity_world_transform: Matrix4<f32>,
+    entity_world_transform: Mat4,
 ) -> Option<(usize, f32)> {
-    let inv_world = entity_world_transform.invert()?;
+    let inv_world = entity_world_transform.try_inverse()?;
     let (ray_origin, ray_direction) =
         transform_ray_to_local(&inv_world, ray_origin_world, ray_direction_world);
 
@@ -564,32 +563,32 @@ struct MeshTriangleHit {
 }
 
 fn transform_ray_to_local(
-    inv_world: &Matrix4<f32>,
-    ray_origin_world: Vector3<f32>,
-    ray_direction_world: Vector3<f32>,
-) -> (Vector3<f32>, Vector3<f32>) {
+    inv_world: &Mat4,
+    ray_origin_world: Vec3,
+    ray_direction_world: Vec3,
+) -> (Vec3, Vec3) {
     let o = inv_world
-        * Vector4::new(
+        * Vec4::new(
             ray_origin_world.x,
             ray_origin_world.y,
             ray_origin_world.z,
             1.0,
         );
     let d = inv_world
-        * Vector4::new(
+        * Vec4::new(
             ray_direction_world.x,
             ray_direction_world.y,
             ray_direction_world.z,
             0.0,
         );
 
-    (Vector3::new(o.x, o.y, o.z), Vector3::new(d.x, d.y, d.z))
+    (Vec3::new(o.x, o.y, o.z), Vec3::new(d.x, d.y, d.z))
 }
 
 fn find_closest_triangle_hit(
     mesh_assets: &MeshAssets,
-    ray_origin_local: Vector3<f32>,
-    ray_direction_local: Vector3<f32>,
+    ray_origin_local: Vec3,
+    ray_direction_local: Vec3,
 ) -> Option<MeshTriangleHit> {
     let direction_length = ray_direction_local.dot(ray_direction_local).sqrt();
     if direction_length < f32::EPSILON {
@@ -642,8 +641,8 @@ fn find_closest_triangle_hit(
     best
 }
 
-fn vertex_position(vertex: &crate::vulkanr::data::Vertex) -> Vector3<f32> {
-    Vector3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)
+fn vertex_position(vertex: &crate::vulkanr::data::Vertex) -> Vec3 {
+    Vec3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)
 }
 
 fn pick_dominant_bone_from_triangle(
@@ -683,7 +682,7 @@ fn pick_dominant_bone_from_triangle(
 
 pub fn build_box_bone_meshes_with_selection(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
@@ -819,7 +818,7 @@ fn append_box_wire_colored(mesh: &mut LineMesh, verts: &[[f32; 3]; 8], color: [f
 
 pub fn build_sphere_bone_meshes_with_selection(
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
@@ -1012,11 +1011,12 @@ mod tests {
     use crate::loader::{LoadedNode, ModelLoadResult};
     use crate::vulkanr::data::{Vertex, VertexData};
     use crate::vulkanr::resource::graphics_resource::MeshBuffer;
+    use glam::UVec4;
 
     fn make_mesh_buffer_single_triangle(
         bone_indices: [[u32; 4]; 3],
         bone_weights: [[f32; 4]; 3],
-        positions: [Vector3<f32>; 3],
+        positions: [Vec3; 3],
     ) -> MeshBuffer {
         let mut mesh = MeshBuffer::default();
         let mut vertex_data = VertexData::default();
@@ -1033,11 +1033,11 @@ mod tests {
         let mut skin = SkinData::default();
         skin.bone_indices = bone_indices
             .iter()
-            .map(|bi| cgmath::Vector4::new(bi[0], bi[1], bi[2], bi[3]))
+            .map(|bi| UVec4::new(bi[0], bi[1], bi[2], bi[3]))
             .collect();
         skin.bone_weights = bone_weights
             .iter()
-            .map(|bw| cgmath::Vector4::new(bw[0], bw[1], bw[2], bw[3]))
+            .map(|bw| Vec4::new(bw[0], bw[1], bw[2], bw[3]))
             .collect();
         skin.base_positions = positions.to_vec();
         mesh.skin_data = Some(skin);
@@ -1051,18 +1051,17 @@ mod tests {
             [[5, 0, 0, 0], [5, 0, 0, 0], [5, 0, 0, 0]],
             [[1.0, 0.0, 0.0, 0.0]; 3],
             [
-                Vector3::new(-1.0, -1.0, 0.0),
-                Vector3::new(1.0, -1.0, 0.0),
-                Vector3::new(0.0, 1.0, 0.0),
+                Vec3::new(-1.0, -1.0, 0.0),
+                Vec3::new(1.0, -1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
             ],
         );
         let mesh_assets = MeshAssets { meshes: vec![mesh] };
 
-        let ray_origin = Vector3::new(0.0, 0.0, 5.0);
-        let ray_direction = Vector3::new(0.0, 0.0, -1.0);
+        let ray_origin = Vec3::new(0.0, 0.0, 5.0);
+        let ray_direction = Vec3::new(0.0, 0.0, -1.0);
 
-        let hit =
-            select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Matrix4::identity());
+        let hit = select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Mat4::IDENTITY);
 
         let (bone_index, _t) = hit.expect("expected a mesh ray hit");
         assert_eq!(
@@ -1077,18 +1076,17 @@ mod tests {
             [[1, 0, 0, 0], [2, 0, 0, 0], [3, 0, 0, 0]],
             [[1.0, 0.0, 0.0, 0.0]; 3],
             [
-                Vector3::new(-1.0, -1.0, 0.0),
-                Vector3::new(1.0, -1.0, 0.0),
-                Vector3::new(0.0, 1.0, 0.0),
+                Vec3::new(-1.0, -1.0, 0.0),
+                Vec3::new(1.0, -1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
             ],
         );
         let mesh_assets = MeshAssets { meshes: vec![mesh] };
 
-        let ray_origin = Vector3::new(0.9, -0.9, 5.0);
-        let ray_direction = Vector3::new(0.0, 0.0, -1.0);
+        let ray_origin = Vec3::new(0.9, -0.9, 5.0);
+        let ray_direction = Vec3::new(0.0, 0.0, -1.0);
 
-        let hit =
-            select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Matrix4::identity());
+        let hit = select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Mat4::IDENTITY);
 
         let (bone_index, _t) = hit.expect("expected a mesh ray hit near vertex 1");
         assert_eq!(
@@ -1103,18 +1101,17 @@ mod tests {
             [[1, 0, 0, 0]; 3],
             [[1.0, 0.0, 0.0, 0.0]; 3],
             [
-                Vector3::new(-1.0, -1.0, 0.0),
-                Vector3::new(1.0, -1.0, 0.0),
-                Vector3::new(0.0, 1.0, 0.0),
+                Vec3::new(-1.0, -1.0, 0.0),
+                Vec3::new(1.0, -1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
             ],
         );
         let mesh_assets = MeshAssets { meshes: vec![mesh] };
 
-        let ray_origin = Vector3::new(10.0, 10.0, 5.0);
-        let ray_direction = Vector3::new(0.0, 0.0, -1.0);
+        let ray_origin = Vec3::new(10.0, 10.0, 5.0);
+        let ray_direction = Vec3::new(0.0, 0.0, -1.0);
 
-        let hit =
-            select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Matrix4::identity());
+        let hit = select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, Mat4::IDENTITY);
 
         assert!(hit.is_none(), "ray outside triangle should not hit");
     }
@@ -1125,17 +1122,17 @@ mod tests {
             [[7, 0, 0, 0]; 3],
             [[1.0, 0.0, 0.0, 0.0]; 3],
             [
-                Vector3::new(-1.0, -1.0, 0.0),
-                Vector3::new(1.0, -1.0, 0.0),
-                Vector3::new(0.0, 1.0, 0.0),
+                Vec3::new(-1.0, -1.0, 0.0),
+                Vec3::new(1.0, -1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
             ],
         );
         let mesh_assets = MeshAssets { meshes: vec![mesh] };
 
-        let entity_transform = Matrix4::from_translation(Vector3::new(100.0, 0.0, 0.0));
+        let entity_transform = Mat4::from_translation(Vec3::new(100.0, 0.0, 0.0));
 
-        let ray_origin = Vector3::new(100.0, 0.0, 5.0);
-        let ray_direction = Vector3::new(0.0, 0.0, -1.0);
+        let ray_origin = Vec3::new(100.0, 0.0, 5.0);
+        let ray_direction = Vec3::new(0.0, 0.0, -1.0);
 
         let hit =
             select_bone_by_mesh_ray(ray_origin, ray_direction, &mesh_assets, entity_transform);
@@ -1162,17 +1159,17 @@ mod tests {
         Some(ModelLoadResult::from_gltf(gltf))
     }
 
-    fn compute_node_global_transforms(nodes: &[LoadedNode]) -> Vec<Matrix4<f32>> {
+    fn compute_node_global_transforms(nodes: &[LoadedNode]) -> Vec<Mat4> {
         let count = nodes.len();
-        let mut globals = vec![Matrix4::identity(); count];
+        let mut globals = vec![Mat4::IDENTITY; count];
         let mut computed = vec![false; count];
 
         fn compute(
             nodes: &[LoadedNode],
             idx: usize,
             computed: &mut [bool],
-            globals: &mut [Matrix4<f32>],
-        ) -> Matrix4<f32> {
+            globals: &mut [Mat4],
+        ) -> Mat4 {
             if computed[idx] {
                 return globals[idx];
             }
@@ -1217,9 +1214,9 @@ mod tests {
     fn compute_node_mesh_center_per_bone(
         result: &ModelLoadResult,
         skeleton: &Skeleton,
-    ) -> Vec<Option<Vector3<f32>>> {
+    ) -> Vec<Option<Vec3>> {
         let bone_count = skeleton.bones.len();
-        let mut sums: Vec<Vector3<f32>> = vec![Vector3::new(0.0, 0.0, 0.0); bone_count];
+        let mut sums: Vec<Vec3> = vec![Vec3::new(0.0, 0.0, 0.0); bone_count];
         let mut counts = vec![0u32; bone_count];
         let node_globals = compute_node_global_transforms(&result.nodes);
         let scale = result.node_animation_scale;
@@ -1237,8 +1234,8 @@ mod tests {
             let transform = node_globals[nai];
 
             for v in &mesh.local_vertices {
-                let pos = transform * Vector4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
-                sums[bone_idx] += Vector3::new(pos.x * scale, pos.y * scale, pos.z * scale);
+                let pos = transform * Vec4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
+                sums[bone_idx] += Vec3::new(pos.x * scale, pos.y * scale, pos.z * scale);
                 counts[bone_idx] += 1;
             }
         }
@@ -1251,12 +1248,12 @@ mod tests {
 
     fn compute_skinned_mesh_center_per_bone(
         skin_data: &SkinData,
-        global_transforms: &[Matrix4<f32>],
+        global_transforms: &[Mat4],
         skeleton: &Skeleton,
-    ) -> Vec<Option<Vector3<f32>>> {
+    ) -> Vec<Option<Vec3>> {
         let vc = skin_data.base_positions.len();
-        let mut positions = vec![Vector3::new(0.0f32, 0.0, 0.0); vc];
-        let mut normals = vec![Vector3::new(0.0f32, 1.0, 0.0); vc];
+        let mut positions = vec![Vec3::new(0.0f32, 0.0, 0.0); vc];
+        let mut normals = vec![Vec3::new(0.0f32, 1.0, 0.0); vc];
         thyllore_model_core::apply_skinning(
             skin_data,
             global_transforms,
@@ -1266,7 +1263,7 @@ mod tests {
         );
 
         let bc = skeleton.bones.len();
-        let mut sums = vec![Vector3::new(0.0f32, 0.0, 0.0); bc];
+        let mut sums = vec![Vec3::new(0.0f32, 0.0, 0.0); bc];
         let mut counts = vec![0u32; bc];
 
         for i in 0..vc {
@@ -1294,12 +1291,9 @@ mod tests {
             .collect()
     }
 
-    fn build_node_globals_for_skeleton(
-        nodes: &[LoadedNode],
-        skeleton: &Skeleton,
-    ) -> Vec<Matrix4<f32>> {
+    fn build_node_globals_for_skeleton(nodes: &[LoadedNode], skeleton: &Skeleton) -> Vec<Mat4> {
         let node_globals = compute_node_global_transforms(nodes);
-        let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
+        let mut transforms = vec![Mat4::IDENTITY; skeleton.bones.len()];
         for bone in &skeleton.bones {
             if let Some(nai) = nodes.iter().position(|n| n.name == bone.name) {
                 transforms[bone.id as usize] = node_globals[nai];
@@ -1329,8 +1323,8 @@ mod tests {
 
         for (bi, center) in mesh_centers.iter().enumerate() {
             let Some(center) = center else { continue };
-            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
-            let dist = (gizmo - center).magnitude();
+            let gizmo = Vec3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).length();
             max_dist = max_dist.max(dist);
             tested += 1;
 
@@ -1382,8 +1376,8 @@ mod tests {
 
         for (bi, center) in mesh_centers.iter().enumerate() {
             let Some(center) = center else { continue };
-            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
-            let dist = (gizmo - center).magnitude();
+            let gizmo = Vec3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).length();
             max_dist = max_dist.max(dist);
             tested += 1;
 
@@ -1422,7 +1416,7 @@ mod tests {
                 name: n.name.clone(),
                 parent_index: n.parent_index,
                 local_transform: n.local_transform,
-                global_transform: Matrix4::identity(),
+                global_transform: Mat4::IDENTITY,
             })
             .collect()
     }
@@ -1430,7 +1424,7 @@ mod tests {
     fn simulate_runtime_node_gizmo_transforms(
         result: &ModelLoadResult,
         skeleton: &Skeleton,
-    ) -> Vec<Matrix4<f32>> {
+    ) -> Vec<Mat4> {
         use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let pose = create_pose_from_rest(skeleton);
@@ -1508,8 +1502,8 @@ mod tests {
             let Some(center) = center else { continue };
             tested += 1;
 
-            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
-            let dist = (gizmo - center).magnitude();
+            let gizmo = Vec3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).length();
 
             if dist >= tolerance {
                 failures.push(format!(
@@ -1547,7 +1541,7 @@ mod tests {
             }
             total += 1;
 
-            if transforms[idx] == Matrix4::identity() {
+            if transforms[idx] == Mat4::IDENTITY {
                 identity_count += 1;
                 eprintln!(
                     "  bone[{}] '{}' has identity transform (node_index={:?})",
@@ -1589,8 +1583,8 @@ mod tests {
             let Some(center) = center else { continue };
             tested += 1;
 
-            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
-            let dist = (gizmo - center).magnitude();
+            let gizmo = Vec3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).length();
 
             if dist >= tolerance {
                 failures.push(format!(
@@ -1727,7 +1721,7 @@ mod tests {
             bone.node_index = Some(42);
         }
 
-        let node_transform = Matrix4::from_translation(Vector3::new(1.0, 2.0, 3.0));
+        let node_transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
         let nodes = vec![NodeData {
             index: 42,
             name: "different_name".to_string(),
@@ -1756,8 +1750,8 @@ mod tests {
             bone.node_index = Some(99);
         }
 
-        let name_transform = Matrix4::from_translation(Vector3::new(1.0, 0.0, 0.0));
-        let index_transform = Matrix4::from_translation(Vector3::new(9.0, 9.0, 9.0));
+        let name_transform = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
+        let index_transform = Mat4::from_translation(Vec3::new(9.0, 9.0, 9.0));
 
         let nodes = vec![
             NodeData {

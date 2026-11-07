@@ -1,8 +1,7 @@
+use glam::Mat4;
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::SquareMatrix;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::ecs::systems::collect_mesh_transforms;
@@ -11,10 +10,10 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
-use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
+use thyllore_vulkan_core::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub fn collect_procedural_primitives(world: &World) -> Vec<GpuPrimitive<'static>> {
     crate::hooks::gpu_primitive::collect_all(world)
@@ -27,12 +26,12 @@ pub unsafe fn rebuild_acceleration_structures(
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
     procedural_primitives: &[GpuPrimitive<'static>],
-    mesh_transforms: &[cgmath::Matrix4<f32>],
+    mesh_transforms: &[Mat4],
 ) -> Result<()> {
     log!("Rebuilding acceleration structures...");
     if let Some(mut previous) = raytracing.acceleration_structure.take() {
-        device.device.device_wait_idle()?;
-        previous.destroy(&device.device);
+        device.wait_idle()?;
+        previous.destroy(device);
     }
 
     let mut acceleration_structure = RRAccelerationStructure::new();
@@ -44,10 +43,10 @@ pub unsafe fn rebuild_acceleration_structures(
         .filter(|mesh| mesh.render_to_gbuffer)
         .map(|mesh| {
             (
-                &mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                mesh.index_buffer.buffer(),
                 mesh.index_buffer.indices,
             )
         })
@@ -62,34 +61,30 @@ pub unsafe fn rebuild_acceleration_structures(
             instance,
             device,
             command_pool.as_ref(),
-            &mesh.vertex_buffer.buffer,
+            &mesh.vertex_buffer.buffer(),
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
-            &mesh.index_buffer.buffer,
+            &mesh.index_buffer.buffer(),
             mesh.index_buffer.indices,
         )?;
 
         let model = mesh_transforms
             .get(mesh_index)
             .copied()
-            .unwrap_or_else(cgmath::Matrix4::identity);
-        blas.transform = vk::TransformMatrixKHR {
-            matrix: AffineRows3x4::from_mat4(model).rows,
-        };
+            .unwrap_or(Mat4::IDENTITY);
+        blas.set_transform_rows(AffineRows3x4::from_mat4(model).rows);
 
         acceleration_structure.blas_list.push(blas);
         log!("Created BLAS for mesh");
     }
 
     for primitive in procedural_primitives {
-        if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
-            let blas = RRAccelerationStructure::create_procedural_blas(
-                instance,
-                device,
-                command_pool.as_ref(),
-                &primitive.model,
-                *aabb,
-            )?;
+        if let Some(blas) = RRAccelerationStructure::create_procedural_blas(
+            instance,
+            device,
+            command_pool.as_ref(),
+            primitive,
+        )? {
             acceleration_structure.procedural_blas.push(blas);
         }
     }

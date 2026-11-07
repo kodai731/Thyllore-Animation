@@ -1,7 +1,7 @@
 #![cfg(test)]
 use std::fmt::Write;
 
-use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, SquareMatrix, Vector3};
+use glam::{DMat3, DMat4, DQuat, DVec3};
 
 use super::rig_convention::{ContainerNode, RigConvention};
 use super::rig_nodes::build_rig_nodes;
@@ -112,15 +112,15 @@ pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::Rig
         let dir = super::rig_nodes::bone_direction(&positions, bi, child_idx);
         let len = match child_idx {
             Some(ci) => {
-                let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
-                let c: Vector3<f64> = [positions[ci][0], positions[ci][1], positions[ci][2]].into();
-                (c - p).magnitude()
+                let p: DVec3 = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+                let c: DVec3 = [positions[ci][0], positions[ci][1], positions[ci][2]].into();
+                (c - p).length()
             }
             None => 0.1 * convention.body_scale / (convention.unit_scale_factor / 100.0),
         };
         let half = 0.02 * convention.body_scale / (convention.unit_scale_factor / 100.0);
 
-        let p: Vector3<f64> = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
+        let p: DVec3 = [positions[bi][0], positions[bi][1], positions[bi][2]].into();
         let verts = cube_vertices(p, dir, len, half);
         for v in &verts {
             vertices.push(*v);
@@ -444,49 +444,28 @@ fn write_mesh_and_skin(
     write_bind_pose(out, nodes, mesh);
 }
 
-fn world_matrix(node: &super::rig_nodes::RigNode) -> Matrix4<f64> {
-    let pos = Vector3::new(
-        node.world_position.x,
-        node.world_position.y,
-        node.world_position.z,
-    );
-    let q = node.world_rotation;
-    let rot: Matrix3<f64> = Matrix3::from(q);
-    let mut m = Matrix4::identity();
-    for r in 0..3 {
-        for c in 0..3 {
-            m[r][c] = rot[r][c];
-        }
-    }
-    m[3][0] = pos.x;
-    m[3][1] = pos.y;
-    m[3][2] = pos.z;
-    m
+fn world_matrix(node: &super::rig_nodes::RigNode) -> DMat4 {
+    DMat4::from_rotation_translation(node.world_rotation, node.world_position)
 }
 
-fn parent_world_inverse(nodes: &[super::rig_nodes::RigNode], index: usize) -> Matrix4<f64> {
+fn parent_world_inverse(nodes: &[super::rig_nodes::RigNode], index: usize) -> DMat4 {
     match nodes[index].parent {
-        Some(parent_idx) => world_matrix(&nodes[parent_idx]).invert().unwrap(),
-        None => Matrix4::identity(),
+        Some(parent_idx) => world_matrix(&nodes[parent_idx]).try_inverse().unwrap(),
+        None => DMat4::IDENTITY,
     }
 }
 
-fn decompose(m: &Matrix4<f64>) -> ([f64; 3], Quaternion<f64>) {
-    let translation = [m[3][0], m[3][1], m[3][2]];
-    let rot_matrix = Matrix3::new(
-        m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2],
-    );
-    let q = Quaternion::from(rot_matrix);
-    (translation, q)
+fn decompose(m: &DMat4) -> ([f64; 3], DQuat) {
+    (m.w_axis.truncate().to_array(), DQuat::from_mat4(m))
 }
 
-fn rotation_matrix(q: &Quaternion<f64>) -> Matrix3<f64> {
-    Matrix3::from(*q)
+fn rotation_matrix(q: &DQuat) -> DMat3 {
+    DMat3::from_quat(*q)
 }
 
-fn matrix_to_euler_degrees(m: Matrix3<f64>) -> [f64; 3] {
-    fn r(m: Matrix3<f64>, row: usize, col: usize) -> f64 {
-        m[col][row] as f64
+fn matrix_to_euler_degrees(m: DMat3) -> [f64; 3] {
+    fn r(m: DMat3, row: usize, col: usize) -> f64 {
+        m.col(col)[row] as f64
     }
 
     let sy = (r(m, 0, 0) * r(m, 0, 0) + r(m, 1, 0) * r(m, 1, 0)).sqrt();
@@ -509,22 +488,17 @@ fn fmt(v: f64) -> String {
     format!("{:.9}", v)
 }
 
-fn matrix4_flat(m: &Matrix4<f64>) -> Vec<f64> {
+fn matrix4_flat(m: &DMat4) -> Vec<f64> {
     let mut flat = Vec::with_capacity(16);
     for c in 0..4 {
         for r in 0..4 {
-            flat.push(m[c][r]);
+            flat.push(m.col(c)[r]);
         }
     }
     flat
 }
 
-pub fn cube_vertices(
-    center: Vector3<f64>,
-    dir: Vector3<f64>,
-    length: f64,
-    half: f64,
-) -> [[f64; 3]; 8] {
+pub fn cube_vertices(center: DVec3, dir: DVec3, length: f64, half: f64) -> [[f64; 3]; 8] {
     let axis = perpendicular_to(dir);
     let perp = dir.cross(axis).normalize();
 
@@ -576,16 +550,16 @@ pub fn cube_vertices(
     ]
 }
 
-fn perpendicular_to(v: Vector3<f64>) -> Vector3<f64> {
+fn perpendicular_to(v: DVec3) -> DVec3 {
     let ax = v.x.abs();
     let ay = v.y.abs();
     let az = v.z.abs();
     if ax < ay && ax < az {
-        Vector3::new(1.0, 0.0, 0.0).cross(v).normalize()
+        DVec3::new(1.0, 0.0, 0.0).cross(v).normalize()
     } else if ay < az {
-        Vector3::new(0.0, 1.0, 0.0).cross(v).normalize()
+        DVec3::new(0.0, 1.0, 0.0).cross(v).normalize()
     } else {
-        Vector3::new(0.0, 0.0, 1.0).cross(v).normalize()
+        DVec3::new(0.0, 0.0, 1.0).cross(v).normalize()
     }
 }
 
@@ -632,7 +606,7 @@ fn write_bind_pose(out: &mut String, nodes: &[super::rig_nodes::RigNode], mesh: 
     out.push_str("    Version: 100\n");
     write!(out, "    NbPoseNodes: {}\n", pose_node_count).unwrap();
 
-    let mesh_world = Matrix4::identity();
+    let mesh_world = DMat4::IDENTITY;
     let flat_mesh: Vec<f64> = matrix4_flat(&mesh_world);
     out.push_str("    PoseNode: {\n");
     write!(out, "      Node: {}\n", MESH_MODEL_ID).unwrap();
@@ -718,7 +692,7 @@ fn write_skin_and_clusters(out: &mut String, nodes: &[super::rig_nodes::RigNode]
         }
         out.push_str(" }\n");
 
-        let mesh_to_bone = world_mat.invert().unwrap();
+        let mesh_to_bone = world_mat.try_inverse().unwrap();
         let flat_mesh_to_bone: Vec<f64> = matrix4_flat(&mesh_to_bone);
         out.push_str("    Transform: *16 { a: ");
         for (i, v) in flat_mesh_to_bone.iter().enumerate() {

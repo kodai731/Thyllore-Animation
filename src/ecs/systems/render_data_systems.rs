@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::ecs::component::{DynamicMesh, GpuMeshRef, MeshBuffers};
 use crate::ecs::resource::gizmo::{
@@ -29,7 +29,7 @@ pub fn grid_mesh_render_data(grid: &GridMeshData) -> RenderData {
         index_count,
     );
     RenderData::new(mesh_ref, grid.render_info)
-        .with_model_matrix(Matrix4::from_scale(grid.scale.value()))
+        .with_model_matrix(Mat4::from_scale(Vec3::splat(grid.scale.value())))
 }
 
 pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
@@ -43,13 +43,14 @@ pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
 
 pub fn gizmo_selectable_render_data(
     gizmo: &LightGizmoData,
-    camera_position: Vector3<f32>,
+    camera_position: Vec3,
     frame_slot: usize,
 ) -> RenderData {
     let gizmo_pos = gizmo.position.position;
-    let distance = (gizmo_pos - camera_position).magnitude();
+    let distance = (gizmo_pos - camera_position).length();
     let scale_factor = distance * 0.03;
-    let model_matrix = Matrix4::from_translation(gizmo_pos) * Matrix4::from_scale(scale_factor);
+    let model_matrix =
+        Mat4::from_translation(gizmo_pos) * Mat4::from_scale(Vec3::splat(scale_factor));
 
     let mesh_ref = frame_slot_mesh_ref(&gizmo.mesh, frame_slot);
     RenderData::new(mesh_ref, gizmo.render_info).with_model_matrix(model_matrix)
@@ -98,7 +99,7 @@ pub fn spring_bone_gizmo_render_data(
 
 pub fn transform_gizmo_render_data(
     gizmo: &TransformGizmoData,
-    camera_position: Vector3<f32>,
+    camera_position: Vec3,
     gizmo_scale: f32,
     frame_slot: usize,
 ) -> Vec<RenderData> {
@@ -107,9 +108,10 @@ pub fn transform_gizmo_render_data(
     }
 
     let gizmo_pos = gizmo.position.position;
-    let distance = (gizmo_pos - camera_position).magnitude();
+    let distance = (gizmo_pos - camera_position).length();
     let scale_factor = distance * gizmo_scale;
-    let model_matrix = Matrix4::from_translation(gizmo_pos) * Matrix4::from_scale(scale_factor);
+    let model_matrix =
+        Mat4::from_translation(gizmo_pos) * Mat4::from_scale(Vec3::splat(scale_factor));
 
     let mut result = Vec::new();
 

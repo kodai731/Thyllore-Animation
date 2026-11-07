@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::animation::editable::{clip_from_animation, EditableAnimationClip};
 use crate::animation::{AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel};
@@ -21,11 +21,9 @@ pub fn constraint_bake_evaluate(
     let frame_count = (duration * sample_fps).ceil() as usize + 1;
     let bone_names = collect_bone_names(skeleton);
 
-    let mut bone_translations: Vec<Vec<(f32, Vector3<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_rotations: Vec<Vec<(f32, Quaternion<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_translations: Vec<Vec<(f32, Vec3)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_rotations: Vec<Vec<(f32, Quat)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_scales: Vec<Vec<(f32, Vec3)>> = vec![Vec::new(); skeleton.bone_count()];
 
     for i in 0..frame_count {
         let time = (i as f32 / sample_fps).min(duration);
@@ -63,11 +61,9 @@ pub fn constraint_bake_rest_pose(
     let mut pose = create_pose_from_rest(skeleton);
     apply_constraints(constraint_set, skeleton, &mut pose);
 
-    let mut bone_translations: Vec<Vec<(f32, Vector3<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_rotations: Vec<Vec<(f32, Quaternion<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_translations: Vec<Vec<(f32, Vec3)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_rotations: Vec<Vec<(f32, Quat)>> = vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_scales: Vec<Vec<(f32, Vec3)>> = vec![Vec::new(); skeleton.bone_count()];
 
     record_pose_keyframes(
         &pose,
@@ -107,9 +103,9 @@ fn collect_bone_names(skeleton: &Skeleton) -> HashMap<BoneId, String> {
 fn record_pose_keyframes(
     pose: &SkeletonPose,
     time: f32,
-    bone_translations: &mut [Vec<(f32, Vector3<f32>)>],
-    bone_rotations: &mut [Vec<(f32, Quaternion<f32>)>],
-    bone_scales: &mut [Vec<(f32, Vector3<f32>)>],
+    bone_translations: &mut [Vec<(f32, Vec3)>],
+    bone_rotations: &mut [Vec<(f32, Quat)>],
+    bone_scales: &mut [Vec<(f32, Vec3)>],
 ) {
     for (idx, bp) in pose.bone_poses.iter().enumerate() {
         bone_translations[idx].push((time, bp.translation));
@@ -121,9 +117,9 @@ fn record_pose_keyframes(
 fn build_animation_clip(
     name: &str,
     duration: f32,
-    bone_translations: &[Vec<(f32, Vector3<f32>)>],
-    bone_rotations: &[Vec<(f32, Quaternion<f32>)>],
-    bone_scales: &[Vec<(f32, Vector3<f32>)>],
+    bone_translations: &[Vec<(f32, Vec3)>],
+    bone_rotations: &[Vec<(f32, Quat)>],
+    bone_scales: &[Vec<(f32, Vec3)>],
 ) -> AnimationClip {
     let mut clip = AnimationClip::new(name);
     clip.duration = duration;

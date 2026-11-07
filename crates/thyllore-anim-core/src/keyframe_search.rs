@@ -12,12 +12,12 @@ pub fn find_keyframe_segment<T>(keyframes: &[Keyframe<T>], time: f32) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Vector3;
+    use glam::Vec3;
 
-    fn make_keyframes(times: &[f32]) -> Vec<Keyframe<Vector3<f32>>> {
+    fn make_keyframes(times: &[f32]) -> Vec<Keyframe<Vec3>> {
         times
             .iter()
-            .map(|&t| Keyframe::new(t, Vector3::new(t, 0.0, 0.0)))
+            .map(|&t| Keyframe::new(t, Vec3::new(t, 0.0, 0.0)))
             .collect()
     }
 

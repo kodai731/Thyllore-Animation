@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{resample_polyline, tangent_frame_around, world_y_axis, TAU};
 
 use super::frame::progress_of;
@@ -11,10 +11,10 @@ use crate::cloth_setup::components::chain_gen::{
 
 pub const CENTERLINE_SAMPLE_COUNT: usize = 16;
 fn build_v_bin_centroids(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     tex_coords: &[[f32; 2]],
     members: &[u32],
-) -> Vec<Vector3<f32>> {
+) -> Vec<Vec3> {
     let v_of = |member: u32| tex_coords[member as usize][1];
     let min_v = members
         .iter()
@@ -28,7 +28,7 @@ fn build_v_bin_centroids(
         .unwrap_or_default();
     let bin_width = (max_v - min_v) / CENTERLINE_SAMPLE_COUNT as f32;
 
-    let mut bin_sums = vec![(Vector3::new(0.0, 0.0, 0.0), 0usize); CENTERLINE_SAMPLE_COUNT];
+    let mut bin_sums = vec![(Vec3::new(0.0, 0.0, 0.0), 0usize); CENTERLINE_SAMPLE_COUNT];
     for &member in members {
         let bin = if bin_width > 0.0 {
             (((v_of(member) - min_v) / bin_width) as usize).min(CENTERLINE_SAMPLE_COUNT - 1)
@@ -47,9 +47,9 @@ fn build_v_bin_centroids(
 }
 
 fn card_cutoff_progress(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     members: &[u32],
-    root_position: Vector3<f32>,
+    root_position: Vec3,
     root_rigid_length: f32,
 ) -> Option<f32> {
     let up = world_y_axis();
@@ -61,12 +61,12 @@ fn card_cutoff_progress(
 }
 
 pub fn strand_centerline(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     tex_coords: &[[f32; 2]],
     members: &[u32],
-    root_position: Vector3<f32>,
+    root_position: Vec3,
     root_rigid_length: f32,
-) -> Option<Vec<Vector3<f32>>> {
+) -> Option<Vec<Vec3>> {
     let up = world_y_axis();
     let mut centroids = build_v_bin_centroids(positions, tex_coords, members);
 
@@ -89,7 +89,7 @@ pub fn strand_centerline(
 }
 struct CardStrand {
     component: u32,
-    centerline: Vec<Vector3<f32>>,
+    centerline: Vec<Vec3>,
     below_band: Vec<u32>,
 }
 
@@ -145,7 +145,7 @@ fn build_tuft_chain(
     column: usize,
     strands: &[CardStrand],
     tuft: &[usize],
-    centerline: Vec<Vector3<f32>>,
+    centerline: Vec<Vec3>,
     params: &ChainGenParams,
 ) -> GeneratedChain {
     let joints: Vec<GeneratedJoint> =
@@ -184,7 +184,7 @@ fn build_tuft_chain(
 pub(crate) fn place_card_chains(
     input: &ChainGenInput,
     components: &[Vec<u32>],
-    phi_center: Vector3<f32>,
+    phi_center: Vec3,
     params: &ChainGenParams,
 ) -> (Vec<GeneratedChain>, Vec<StrandCenterlineRecord>) {
     let strands: Vec<CardStrand> = components
@@ -193,7 +193,7 @@ pub(crate) fn place_card_chains(
             build_card_strand(input, members, params.settings.card.root_rigid_length)
         })
         .collect();
-    let centerlines: Vec<Vec<Vector3<f32>>> = strands
+    let centerlines: Vec<Vec<Vec3>> = strands
         .iter()
         .map(|strand| strand.centerline.clone())
         .collect();
@@ -208,7 +208,7 @@ pub(crate) fn place_card_chains(
     let tufts = merge_strands(&centerlines, stop);
 
     let (reference, side) = tangent_frame_around(world_y_axis());
-    let mut tuft_centerlines: Vec<(f32, Vec<usize>, Vec<Vector3<f32>>)> = tufts
+    let mut tuft_centerlines: Vec<(f32, Vec<usize>, Vec<Vec3>)> = tufts
         .into_iter()
         .map(|tuft| {
             let centerline = tuft_centerline(&centerlines, &weights, &tuft);

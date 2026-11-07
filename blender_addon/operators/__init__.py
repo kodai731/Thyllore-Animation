@@ -1,8 +1,8 @@
 """Operator registration collation.
 
-- ``curve_copilot`` (PyO3) and ``skin_weight_transfer`` ship in the curve
-  copilot product ZIP; the avatar setup product ZIP excludes them
-  (``scripts/build_blender_addon.sh/.ps1 --product``).
+- ``curve_copilot`` (PyO3) ships in the curve copilot product ZIP and
+  ``skin_weight_transfer`` in the avatar setup product ZIP; each product
+  excludes the other's operator (``scripts/build_blender_addon.sh/.ps1 --product``).
 - ``text_to_motion``, ``auto_rig`` and ``text_to_mesh`` are unshipped
   gRPC-backed operators, excluded from every ZIP.
 

@@ -122,9 +122,9 @@ but not `World`, it belongs in `thyllore-vulkan-core` (generic only; effect-spec
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin
 (`crate-type = ["cdylib", "rlib"]`, `python` feature, abi3-py310):
 
-- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback, skin weight transfer, debug log)
-  and `thyllore-avatar-api` → the avatar setup addon (chain generation, spring edit and preview, colliders,
-  clip bake, submesh roles, VRM export). Both live in `blender_addon/`; `scripts/collect_wheels.{sh,ps1}`
+- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback, debug log) and
+  `thyllore-avatar-api` → the avatar setup addon (chain generation, spring edit and preview, colliders,
+  clip bake, submesh roles, skin weight transfer, VRM export). Both live in `blender_addon/`; `scripts/collect_wheels.{sh,ps1}`
   builds both wheels (`--crate` picks one) and `scripts/build_blender_addon.{sh,ps1}` packages one product
   with `--product curve-copilot | avatar-setup`, keeping only that product's wheel. The two products are
   disjoint ZIPs with their own extension ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`,

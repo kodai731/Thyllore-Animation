@@ -4154,7 +4154,6 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "flate2",
- "glam 0.34.2",
  "ndarray 0.16.1",
  "ndarray-npy",
  "numpy",

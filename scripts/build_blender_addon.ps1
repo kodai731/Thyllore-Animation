@@ -126,12 +126,12 @@ $UnshippedRelPaths = @(
 )
 $CurveCopilotOnlyRelPaths = @(
     "operators/curve_copilot.py",
-    "operators/skin_weight_transfer.py",
     "_ghost_overlay.py",
     "modal"
 )
 $AvatarSetupOnlyRelPaths = @(
-    "avatar_setup"
+    "avatar_setup",
+    "operators/skin_weight_transfer.py"
 )
 switch ($Product) {
     "avatar-setup" {

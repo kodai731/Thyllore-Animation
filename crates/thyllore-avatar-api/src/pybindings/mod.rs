@@ -5,6 +5,7 @@ mod chain_gen;
 mod clip_bake;
 mod collider;
 mod gizmo;
+mod skin_weight;
 mod spring_edit;
 mod spring_preview;
 mod submesh;
@@ -59,6 +60,7 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(submesh::guess_submesh_role, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::find_hidden_triangles, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;
+    m.add_function(wrap_pyfunction!(skin_weight::transfer_skin_weights, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_write, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_meta_fields, m)?)?;
     m.add_function(wrap_pyfunction!(vrm::vrm_t_pose_warnings, m)?)?;

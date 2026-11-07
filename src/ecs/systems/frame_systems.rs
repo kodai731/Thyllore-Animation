@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Matrix4, Vector2, Vector3};
+use glam::{Mat4, Vec2, Vec3};
 
 use super::{
     billboard_transform_update_look_at, compute_camera_direction, compute_camera_position,
@@ -15,10 +15,10 @@ pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> Pr
     let direction = compute_camera_direction(camera);
     let up = compute_camera_up(camera);
 
-    let view = unsafe { crate::math::view(position, direction, up) };
+    let view = crate::math::view(position, direction, up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(camera.fov_y, aspect, camera.near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     ProjectionData {
         view,
@@ -31,9 +31,9 @@ pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> Pr
 pub unsafe fn update_frame_ubo(
     backend: &mut crate::vulkanr::VulkanBackend<'_>,
     proj_data: &ProjectionData,
-    camera_position: Vector3<f32>,
-    light_position: Vector3<f32>,
-    light_color: Vector3<f32>,
+    camera_position: Vec3,
+    light_position: Vec3,
+    light_color: Vec3,
     image_index: usize,
 ) -> Result<()> {
     backend.update_frame_ubo(
@@ -47,7 +47,7 @@ pub unsafe fn update_frame_ubo(
 
 pub unsafe fn update_object_ubos(
     backend: &mut crate::vulkanr::VulkanBackend<'_>,
-    model_matrix: Matrix4<f32>,
+    model_matrix: Mat4,
     object_index: usize,
     image_index: usize,
 ) -> Result<()> {
@@ -56,9 +56,9 @@ pub unsafe fn update_object_ubos(
 
 pub fn update_billboard_transform(
     billboard: &mut BillboardData,
-    light_position: Vector3<f32>,
-    camera_position: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    light_position: Vec3,
+    camera_position: Vec3,
+    camera_up: Vec3,
 ) {
     if billboard.transform.is_none() {
         billboard.transform = Some(create_billboard_transform(light_position));
@@ -72,8 +72,8 @@ pub fn update_billboard_transform(
 
 pub fn update_light_auto_target(
     light_state: &mut LightState,
-    all_positions: &[Vector3<f32>],
-    _camera_position: Vector3<f32>,
+    all_positions: &[Vec3],
+    _camera_position: Vec3,
     move_light_to: LightMoveTarget,
 ) {
     if matches!(move_light_to, LightMoveTarget::None) {
@@ -94,12 +94,12 @@ pub fn update_light_auto_target(
     let offset = 2.0;
     let current = light_state.light_position;
     let new_pos = match move_light_to {
-        LightMoveTarget::XMin => Vector3::new(min.x - offset, current.y, current.z),
-        LightMoveTarget::XMax => Vector3::new(max.x + offset, current.y, current.z),
-        LightMoveTarget::YMin => Vector3::new(current.x, min.y - offset, current.z),
-        LightMoveTarget::YMax => Vector3::new(current.x, max.y + offset, current.z),
-        LightMoveTarget::ZMin => Vector3::new(current.x, current.y, min.z - offset),
-        LightMoveTarget::ZMax => Vector3::new(current.x, current.y, max.z + offset),
+        LightMoveTarget::XMin => Vec3::new(min.x - offset, current.y, current.z),
+        LightMoveTarget::XMax => Vec3::new(max.x + offset, current.y, current.z),
+        LightMoveTarget::YMin => Vec3::new(current.x, min.y - offset, current.z),
+        LightMoveTarget::YMax => Vec3::new(current.x, max.y + offset, current.z),
+        LightMoveTarget::ZMin => Vec3::new(current.x, current.y, min.z - offset),
+        LightMoveTarget::ZMax => Vec3::new(current.x, current.y, max.z + offset),
         LightMoveTarget::None => current,
     };
 
@@ -127,9 +127,9 @@ pub fn update_light_auto_target(
     light_state.light_position = new_pos;
 }
 
-fn compute_model_bounds(positions: &[Vector3<f32>]) -> (Vector3<f32>, Vector3<f32>) {
-    let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-    let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+fn compute_model_bounds(positions: &[Vec3]) -> (Vec3, Vec3) {
+    let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+    let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
 
     for pos in positions {
         min.x = min.x.min(pos.x);

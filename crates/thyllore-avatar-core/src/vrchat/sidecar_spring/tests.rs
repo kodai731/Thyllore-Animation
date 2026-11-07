@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use serde_json::json;
 use thyllore_anim_core::spring_bone::{
     ChainOrigin, ChainRole, ColliderGroupOrigin, ColliderShape, JointForce, RestRelativeJointForce,
@@ -32,17 +32,17 @@ fn test_full_mapping() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.1, 0.0),
+        offset: Vec3::new(0.0, 0.1, 0.0),
         shape: ColliderShape::Sphere { radius: 0.05 },
     });
 
     setup.colliders.push(SpringColliderDef {
         id: 1,
         bone_id: 1,
-        offset: Vector3::new(0.0, -0.2, 0.0),
+        offset: Vec3::new(0.0, -0.2, 0.0),
         shape: ColliderShape::Capsule {
             radius: 0.03,
-            tail: Vector3::new(0.0, 0.1, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
         },
     });
 
@@ -64,7 +64,7 @@ fn test_full_mapping() {
                     gravity_power: 1.0,
                 }),
                 drag_force: 0.5,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.02,
             },
             SpringJointParam {
@@ -74,7 +74,7 @@ fn test_full_mapping() {
                     gravity_power: 0.5,
                 }),
                 drag_force: 0.4,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.01,
             },
         ],
@@ -161,7 +161,7 @@ fn test_fitted_body_origin() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.1 },
     });
 
@@ -188,10 +188,10 @@ fn setup_round_trips_through_the_sidecar() {
     setup.colliders.push(SpringColliderDef {
         id: 4,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.1, 0.0),
+        offset: Vec3::new(0.0, 0.1, 0.0),
         shape: ColliderShape::Capsule {
             radius: 0.05,
-            tail: Vector3::new(0.0, 0.2, 0.0),
+            tail: Vec3::new(0.0, 0.2, 0.0),
         },
     });
     setup.collider_groups.push(SpringColliderGroup {
@@ -272,7 +272,7 @@ fn setup_round_trips_through_the_sidecar() {
     match restored.colliders[0].shape {
         ColliderShape::Capsule { radius, tail } => {
             assert_eq!(radius, 0.05);
-            assert_eq!(tail, Vector3::new(0.0, 0.2, 0.0));
+            assert_eq!(tail, Vec3::new(0.0, 0.2, 0.0));
         }
         ColliderShape::Sphere { .. } => panic!("capsule lost"),
     }
@@ -382,10 +382,10 @@ fn test_serde_format() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Capsule {
             radius: 0.05,
-            tail: Vector3::new(0.0, 0.1, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
         },
     });
 
@@ -405,14 +405,14 @@ fn test_out_of_range_bone_id_filtered() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 99,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.1 },
     });
 
     setup.colliders.push(SpringColliderDef {
         id: 1,
         bone_id: 1,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.1 },
     });
 
@@ -449,7 +449,7 @@ fn test_tail_joint_appended_when_child_exists() {
                     gravity_power: 1.0,
                 }),
                 drag_force: 0.5,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.02,
             },
             SpringJointParam {
@@ -459,7 +459,7 @@ fn test_tail_joint_appended_when_child_exists() {
                     gravity_power: 0.5,
                 }),
                 drag_force: 0.4,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.01,
             },
         ],
@@ -498,7 +498,7 @@ fn test_no_tail_joint_when_no_child() {
                     gravity_power: 1.0,
                 }),
                 drag_force: 0.5,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.02,
             },
             SpringJointParam {
@@ -508,7 +508,7 @@ fn test_no_tail_joint_when_no_child() {
                     gravity_power: 0.5,
                 }),
                 drag_force: 0.4,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.01,
             },
         ],
@@ -541,28 +541,26 @@ fn colliders_are_written_in_model_space_and_read_back_through_the_bone_frame() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 1,
-        offset: Vector3::new(1.0, 0.0, 0.0),
+        offset: Vec3::new(1.0, 0.0, 0.0),
         shape: ColliderShape::Capsule {
             radius: 0.5,
-            tail: Vector3::new(0.0, 2.0, 0.0),
+            tail: Vec3::new(0.0, 2.0, 0.0),
         },
     });
 
     let sidecar = build_sidecar_spring(&setup, &bones, &frames);
     let collider = &sidecar.colliders[0];
-    assert!((Vector3::from(collider.offset) - Vector3::new(0.0, 100.0, 0.0)).magnitude() < 1e-4);
-    assert!(
-        (Vector3::from(collider.tail.unwrap()) - Vector3::new(-200.0, 0.0, 0.0)).magnitude() < 1e-4
-    );
+    assert!((Vec3::from(collider.offset) - Vec3::new(0.0, 100.0, 0.0)).length() < 1e-4);
+    assert!((Vec3::from(collider.tail.unwrap()) - Vec3::new(-200.0, 0.0, 0.0)).length() < 1e-4);
     assert!((collider.radius - 50.0).abs() < 1e-4);
 
     let restored = spring_setup_from_sidecar(&sidecar, &bones, &frames);
     let restored_collider = &restored.colliders[0];
-    assert!((restored_collider.offset - Vector3::new(1.0, 0.0, 0.0)).magnitude() < 1e-5);
+    assert!((restored_collider.offset - Vec3::new(1.0, 0.0, 0.0)).length() < 1e-5);
     match restored_collider.shape {
         ColliderShape::Capsule { radius, tail } => {
             assert!((radius - 0.5).abs() < 1e-5);
-            assert!((tail - Vector3::new(0.0, 2.0, 0.0)).magnitude() < 1e-5);
+            assert!((tail - Vec3::new(0.0, 2.0, 0.0)).length() < 1e-5);
         }
         ColliderShape::Sphere { .. } => panic!("capsule expected"),
     }
@@ -575,7 +573,7 @@ fn a_disabled_chain_and_a_fitted_group_survive_a_round_trip() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.1 },
     });
     setup.collider_groups.push(SpringColliderGroup {
@@ -637,7 +635,7 @@ fn an_authored_group_with_the_fitted_name_exports_authored_colliders() {
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 0,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.1 },
     });
     setup.collider_groups.push(SpringColliderGroup {

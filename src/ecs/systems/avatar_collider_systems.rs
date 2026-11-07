@@ -9,6 +9,7 @@ use crate::ecs::systems::avatar_submesh_role_systems::skin_role_skins;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
@@ -59,9 +60,9 @@ pub fn fit_body_colliders(
 pub(crate) fn head_capsule_collider(
     capsule: &HeadCapsule,
     root: thyllore_model_core::BoneId,
-    model_to_root_local: cgmath::Matrix4<f32>,
+    model_to_root_local: Mat4,
 ) -> FittedCapsule {
-    let to_local = |p: cgmath::Vector3<f32>| (model_to_root_local * p.extend(1.0)).truncate();
+    let to_local = |p: Vec3| (model_to_root_local * p.extend(1.0)).truncate();
     FittedCapsule {
         bone_id: root,
         head: to_local(capsule.bottom),

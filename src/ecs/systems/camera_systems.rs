@@ -1,4 +1,4 @@
-use cgmath::{Deg, InnerSpace, Rad, Vector2, Vector3};
+use glam::{Vec2, Vec3};
 use thyllore_math_core::BoundingSphere;
 
 use crate::ecs::resource::{Camera, CameraFlyInput, CameraPose, CameraTransition};
@@ -13,9 +13,9 @@ pub const NEAR_PLANE_DISTANCE_RATIO: f32 = 0.01;
 pub const NEAR_PLANE_RANGE: (f32, f32) = (0.001, 0.1);
 pub const FLY_SPEED_MIN_DISTANCE: f32 = 0.01;
 
-pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
+pub fn create_camera(position: Vec3, target: Vec3) -> Camera {
     let diff = position - target;
-    let distance = diff.magnitude();
+    let distance = diff.length();
     let yaw = diff.x.atan2(diff.z);
     let pitch = (diff.y / distance).asin();
 
@@ -24,7 +24,7 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
         yaw,
         pitch,
         distance,
-        fov_y: Deg(45.0),
+        fov_y: f32::to_radians(45.0),
         near_plane: near_plane_for_distance(distance),
         initial_pivot: target,
         initial_yaw: yaw,
@@ -44,29 +44,29 @@ pub fn update_camera_near_plane(camera: &mut Camera) {
     camera.near_plane = near_plane_for_distance(camera.distance);
 }
 
-pub fn compute_camera_backward(camera: &Camera) -> Vector3<f32> {
-    Vector3::new(
+pub fn compute_camera_backward(camera: &Camera) -> Vec3 {
+    Vec3::new(
         camera.pitch.cos() * camera.yaw.sin(),
         camera.pitch.sin(),
         camera.pitch.cos() * camera.yaw.cos(),
     )
 }
 
-pub fn compute_camera_position(camera: &Camera) -> Vector3<f32> {
+pub fn compute_camera_position(camera: &Camera) -> Vec3 {
     camera.pivot + compute_camera_backward(camera) * camera.distance
 }
 
-pub fn compute_camera_direction(camera: &Camera) -> Vector3<f32> {
+pub fn compute_camera_direction(camera: &Camera) -> Vec3 {
     -compute_camera_backward(camera)
 }
 
-pub fn compute_camera_right(camera: &Camera) -> Vector3<f32> {
-    let world_up = Vector3::new(0.0, 1.0, 0.0);
+pub fn compute_camera_right(camera: &Camera) -> Vec3 {
+    let world_up = Vec3::new(0.0, 1.0, 0.0);
     let direction = compute_camera_direction(camera);
     direction.cross(world_up).normalize()
 }
 
-pub fn compute_camera_up(camera: &Camera) -> Vector3<f32> {
+pub fn compute_camera_up(camera: &Camera) -> Vec3 {
     let right = compute_camera_right(camera);
     let backward = compute_camera_backward(camera);
     right.cross(-backward).normalize()
@@ -83,8 +83,8 @@ pub fn camera_input_system_inner(
     mouse_pos: [f32; 2],
     screen_size: [f32; 2],
 ) {
-    let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
-    let any_input = diff.magnitude() > 0.001
+    let diff = Vec2::new(mouse_diff[0], mouse_diff[1]);
+    let any_input = diff.length() > 0.001
         || mouse_wheel != 0.0
         || (is_right_clicked && fly_direction_is_active(fly));
     if any_input {
@@ -97,27 +97,27 @@ pub fn camera_input_system_inner(
     }
 
     if is_right_clicked && is_alt_held {
-        if diff.magnitude() > 0.001 {
+        if diff.length() > 0.001 {
             camera_orbit(camera, diff);
         }
     } else if is_right_clicked {
-        if diff.magnitude() > 0.001 {
+        if diff.length() > 0.001 {
             camera_look(camera, diff);
         }
         camera_fly_move(camera, fly);
-    } else if is_wheel_clicked && diff.magnitude() > 0.001 {
-        let screen = Vector2::new(screen_size[0], screen_size[1]);
+    } else if is_wheel_clicked && diff.length() > 0.001 {
+        let screen = Vec2::new(screen_size[0], screen_size[1]);
         camera_pan(camera, diff, screen);
     }
 
     if mouse_wheel != 0.0 {
-        let pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
-        let screen = Vector2::new(screen_size[0], screen_size[1]);
+        let pos = Vec2::new(mouse_pos[0], mouse_pos[1]);
+        let screen = Vec2::new(screen_size[0], screen_size[1]);
         camera_zoom(camera, mouse_wheel, pos, screen);
     }
 }
 
-fn apply_yaw_pitch(camera: &mut Camera, mouse_diff: Vector2<f32>) {
+fn apply_yaw_pitch(camera: &mut Camera, mouse_diff: Vec2) {
     let sensitivity = 0.005;
     camera.yaw -= mouse_diff.x * sensitivity;
     camera.pitch += mouse_diff.y * sensitivity;
@@ -126,11 +126,11 @@ fn apply_yaw_pitch(camera: &mut Camera, mouse_diff: Vector2<f32>) {
     camera.pitch = camera.pitch.clamp(-max_pitch, max_pitch);
 }
 
-pub fn camera_orbit(camera: &mut Camera, mouse_diff: Vector2<f32>) {
+pub fn camera_orbit(camera: &mut Camera, mouse_diff: Vec2) {
     apply_yaw_pitch(camera, mouse_diff);
 }
 
-pub fn camera_look(camera: &mut Camera, mouse_diff: Vector2<f32>) {
+pub fn camera_look(camera: &mut Camera, mouse_diff: Vec2) {
     let position = compute_camera_position(camera);
     apply_yaw_pitch(camera, mouse_diff);
     camera.pivot = position - compute_camera_backward(camera) * camera.distance;
@@ -144,7 +144,7 @@ pub fn camera_fly_move(camera: &mut Camera, fly: &CameraFlyInput) {
     let movement = compute_camera_direction(camera) * fly.forward
         + compute_camera_right(camera) * fly.right
         + compute_camera_up(camera) * fly.up;
-    if movement.magnitude() < 1e-6 || fly.delta_seconds <= 0.0 {
+    if movement.length() < 1e-6 || fly.delta_seconds <= 0.0 {
         return;
     }
 
@@ -166,8 +166,7 @@ pub fn adjust_fly_speed(camera: &mut Camera, mouse_wheel: f32) {
 /// Unity `GetPerspectiveCameraDistance`: the sphere fills the narrower of the two view angles.
 pub fn camera_pose_framing(camera: &Camera, bounds: BoundingSphere, aspect: f32) -> CameraPose {
     let radius = bounds.radius.max(camera.near_plane * 4.0) * CAMERA_FRAMING_MARGIN;
-    let fov_y: Rad<f32> = camera.fov_y.into();
-    let half_fov_y = fov_y.0 * 0.5;
+    let half_fov_y = camera.fov_y * 0.5;
     let half_fov_x = (half_fov_y.tan() * aspect.max(1e-3)).atan();
     let half_fov = half_fov_y.min(half_fov_x);
 
@@ -239,10 +238,10 @@ pub fn tick_fly_speed_indicator(camera: &mut Camera, delta_seconds: f32) {
 }
 
 /// The pose that turns the camera towards the focus point without moving it.
-pub fn camera_pose_looking_at(camera: &Camera, focus: Vector3<f32>) -> Option<CameraPose> {
+pub fn camera_pose_looking_at(camera: &Camera, focus: Vec3) -> Option<CameraPose> {
     let position = compute_camera_position(camera);
     let diff = position - focus;
-    let distance = diff.magnitude();
+    let distance = diff.length();
     if distance <= camera.near_plane * 2.0 {
         return None;
     }
@@ -257,7 +256,7 @@ pub fn camera_pose_looking_at(camera: &Camera, focus: Vector3<f32>) -> Option<Ca
 
 /// Moves the pivot onto the focus point's depth plane so pan and zoom scale with the distance
 /// between the camera and the focused object; the camera position and orientation stay put.
-pub fn camera_anchor_pivot_to_focus(camera: &mut Camera, focus: Vector3<f32>) {
+pub fn camera_anchor_pivot_to_focus(camera: &mut Camera, focus: Vec3) {
     let position = compute_camera_position(camera);
     let depth = (focus - position).dot(compute_camera_direction(camera));
     if depth <= camera.near_plane * 2.0 {
@@ -268,23 +267,18 @@ pub fn camera_anchor_pivot_to_focus(camera: &mut Camera, focus: Vector3<f32>) {
     camera.distance = depth;
 }
 
-pub fn camera_pan(camera: &mut Camera, mouse_diff: Vector2<f32>, screen_size: Vector2<f32>) {
+pub fn camera_pan(camera: &mut Camera, mouse_diff: Vec2, screen_size: Vec2) {
     let right = compute_camera_right(camera);
     let up = compute_camera_up(camera);
 
-    let fov_rad: Rad<f32> = camera.fov_y.into();
-    let pan_speed = camera.distance * 2.0 * (fov_rad.0 / 2.0).tan() / screen_size.y;
+    let fov_rad = camera.fov_y;
+    let pan_speed = camera.distance * 2.0 * (fov_rad / 2.0).tan() / screen_size.y;
 
     camera.pivot += right * (-mouse_diff.x * pan_speed);
     camera.pivot += up * (mouse_diff.y * pan_speed);
 }
 
-pub fn camera_zoom(
-    camera: &mut Camera,
-    mouse_wheel: f32,
-    mouse_pos: Vector2<f32>,
-    screen_size: Vector2<f32>,
-) {
+pub fn camera_zoom(camera: &mut Camera, mouse_wheel: f32, mouse_pos: Vec2, screen_size: Vec2) {
     let old_distance = camera.distance;
     let zoom_factor = (-mouse_wheel * 0.1).exp();
     let new_distance = (old_distance * zoom_factor).max(camera.near_plane * 2.0);
@@ -292,8 +286,8 @@ pub fn camera_zoom(
     let ndc_x = 2.0 * mouse_pos.x / screen_size.x - 1.0;
     let ndc_y = 2.0 * mouse_pos.y / screen_size.y - 1.0;
 
-    let fov_rad: Rad<f32> = camera.fov_y.into();
-    let half_height = old_distance * (fov_rad.0 / 2.0).tan();
+    let fov_rad = camera.fov_y;
+    let half_height = old_distance * (fov_rad / 2.0).tan();
     let aspect = screen_size.x / screen_size.y;
     let half_width = half_height * aspect;
 
@@ -326,14 +320,14 @@ pub fn camera_reset(camera: &mut Camera) {
     );
 }
 
-pub fn camera_look_at(camera: &mut Camera, target: Vector3<f32>) {
+pub fn camera_look_at(camera: &mut Camera, target: Vec3) {
     camera.pivot = target;
 }
 
-pub fn camera_move_to_look_at(camera: &mut Camera, target: Vector3<f32>, offset: Vector3<f32>) {
+pub fn camera_move_to_look_at(camera: &mut Camera, target: Vec3, offset: Vec3) {
     let new_position = target + offset;
     let diff = new_position - target;
-    let distance = diff.magnitude();
+    let distance = diff.length();
     let yaw = diff.x.atan2(diff.z);
     let pitch = (diff.y / distance).asin();
 
@@ -355,7 +349,7 @@ mod tests {
     fn framing_distance_fills_the_vertical_fov_on_a_wide_viewport() {
         let camera = Camera::default();
         let bounds = BoundingSphere {
-            center: Vector3::new(1.0, 2.0, 3.0),
+            center: Vec3::new(1.0, 2.0, 3.0),
             radius: 0.8,
         };
         let pose = camera_pose_framing(&camera, bounds, 16.0 / 9.0);
@@ -370,7 +364,7 @@ mod tests {
     fn framing_uses_the_horizontal_fov_on_a_tall_viewport() {
         let camera = Camera::default();
         let bounds = BoundingSphere {
-            center: Vector3::new(0.0, 0.0, 0.0),
+            center: Vec3::new(0.0, 0.0, 0.0),
             radius: 1.0,
         };
         let wide = camera_pose_framing(&camera, bounds, 2.0);
@@ -382,7 +376,7 @@ mod tests {
     fn eased_transition_reaches_the_target_and_clears_itself() {
         let mut camera = Camera::default();
         let target = CameraPose {
-            pivot: Vector3::new(1.0, 1.0, 1.0),
+            pivot: Vec3::new(1.0, 1.0, 1.0),
             yaw: 0.3,
             pitch: 0.2,
             distance: 2.0,
@@ -430,7 +424,7 @@ mod tests {
         camera_anchor_pivot_to_focus(&mut camera, focus);
 
         let position_after = compute_camera_position(&camera);
-        assert!((position_after - position_before).magnitude() < 1e-4);
+        assert!((position_after - position_before).length() < 1e-4);
         assert!(approx(camera.distance, 3.0));
         assert!(approx((camera.pivot - position_after).dot(direction), 3.0));
     }
@@ -455,13 +449,13 @@ mod tests {
         camera_anchor_pivot_to_focus(&mut near, position + direction * 2.0);
         camera_anchor_pivot_to_focus(&mut far, position + direction * 20.0);
 
-        let screen = Vector2::new(100.0, 100.0);
-        let cursor = Vector2::new(50.0, 50.0);
+        let screen = Vec2::new(100.0, 100.0);
+        let cursor = Vec2::new(50.0, 50.0);
         camera_zoom(&mut near, 1.0, cursor, screen);
         camera_zoom(&mut far, 1.0, cursor, screen);
 
-        let moved_near = (compute_camera_position(&near) - position).magnitude();
-        let moved_far = (compute_camera_position(&far) - position).magnitude();
+        let moved_near = (compute_camera_position(&near) - position).length();
+        let moved_far = (compute_camera_position(&far) - position).length();
         assert!(approx(moved_far / moved_near, 10.0));
     }
 
@@ -469,16 +463,16 @@ mod tests {
     fn looking_at_a_focus_point_keeps_the_camera_position() {
         let camera = Camera::default();
         let position = compute_camera_position(&camera);
-        let focus = Vector3::new(-2.0, 0.5, 1.0);
+        let focus = Vec3::new(-2.0, 0.5, 1.0);
 
         let pose = camera_pose_looking_at(&camera, focus).expect("focus in range");
 
         let mut turned = Camera::default();
         turned.set_pose(pose);
-        assert!((compute_camera_position(&turned) - position).magnitude() < 1e-4);
+        assert!((compute_camera_position(&turned) - position).length() < 1e-4);
         assert_eq!(turned.pivot, focus);
         let to_focus = (focus - position).normalize();
-        assert!((compute_camera_direction(&turned) - to_focus).magnitude() < 1e-4);
+        assert!((compute_camera_direction(&turned) - to_focus).length() < 1e-4);
     }
 
     #[test]

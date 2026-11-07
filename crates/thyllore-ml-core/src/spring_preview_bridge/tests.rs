@@ -1,4 +1,4 @@
-use cgmath::{AbsDiffEq, Deg, InnerSpace, Matrix, Quaternion, Rotation3, SquareMatrix, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
@@ -22,10 +22,10 @@ fn hanging_strand() -> (Vec<BoneInput>, Vec<MatrixRows>, SidecarSpring) {
         bone("hair_a.002", Some(2), [0.0, -0.3, 0.0]),
     ];
     let rest_locals = vec![
-        translation_rows(Vector3::new(0.0, 0.0, 0.0)),
-        translation_rows(Vector3::new(0.0, -0.1, 0.0)),
-        translation_rows(Vector3::new(0.0, -0.1, 0.0)),
-        translation_rows(Vector3::new(0.0, -0.1, 0.0)),
+        translation_rows(Vec3::new(0.0, 0.0, 0.0)),
+        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
+        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
+        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
     ];
     let spring =
         use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 2).unwrap();
@@ -58,9 +58,9 @@ fn spring_preview_strand_at_rest_under_gravity_stays_still() {
     assert_eq!(rotations.len(), 3);
     for rotation in &rotations {
         assert!(angle_degrees(rotation.rotation) < 1e-2, "{rotation:?}");
-        let basis = cgmath::Matrix4::from(rotation.basis).transpose();
+        let basis = Mat4::from_cols_array_2d(&rotation.basis).transpose();
         assert!(
-            basis.abs_diff_eq(&cgmath::Matrix4::identity(), 1e-4),
+            basis.abs_diff_eq(Mat4::IDENTITY, 1e-4),
             "a joint at rest has the identity basis: {basis:?}"
         );
     }
@@ -73,13 +73,8 @@ fn spring_preview_strand_lags_behind_a_turned_head() {
     preview.reset(&rest_locals).unwrap();
 
     let mut turned = rest_locals.clone();
-    let head = cgmath::Matrix4::from(Quaternion::from_angle_z(Deg(60.0)));
-    turned[0] = [
-        [head.x.x, head.y.x, head.z.x, 0.0],
-        [head.x.y, head.y.y, head.z.y, 0.0],
-        [head.x.z, head.y.z, head.z.z, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
+    let head = Mat4::from_quat(Quat::from_rotation_z(f32::to_radians(60.0)));
+    turned[0] = head.transpose().to_cols_array_2d();
     let rotations = step_frames(&mut preview, &turned, 1);
     let root_angle = angle_degrees(rotations[0].rotation);
     assert!(
@@ -87,15 +82,16 @@ fn spring_preview_strand_lags_behind_a_turned_head() {
         "root joint should counter the head turn: {root_angle}"
     );
 
-    let rigidly_turned_tip = Quaternion::from_angle_z(Deg(60.0)) * Vector3::new(0.0, -0.4, 0.0);
-    let tip_after_one_frame = Vector3::from(preview.tails().last().unwrap().position);
+    let rigidly_turned_tip =
+        Quat::from_rotation_z(f32::to_radians(60.0)) * Vec3::new(0.0, -0.4, 0.0);
+    let tip_after_one_frame = Vec3::from(preview.tails().last().unwrap().position);
     assert!(
-        (tip_after_one_frame - rigidly_turned_tip).magnitude() > 0.1,
+        (tip_after_one_frame - rigidly_turned_tip).length() > 0.1,
         "{tip_after_one_frame:?}"
     );
 
     step_frames(&mut preview, &turned, 300);
-    let settled_tip = Vector3::from(preview.tails().last().unwrap().position);
+    let settled_tip = Vec3::from(preview.tails().last().unwrap().position);
     assert!(
         settled_tip.x > 0.1,
         "the strand should follow the head over time: {settled_tip:?}"

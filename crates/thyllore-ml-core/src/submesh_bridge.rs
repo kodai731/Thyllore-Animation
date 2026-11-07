@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
@@ -17,8 +17,8 @@ pub struct MaskMeshInput {
 
 fn to_mask_mesh(input: &MaskMeshInput) -> MaskMesh {
     MaskMesh {
-        positions: input.positions.iter().map(|p| Vector3::from(*p)).collect(),
-        normals: input.normals.iter().map(|n| Vector3::from(*n)).collect(),
+        positions: input.positions.iter().map(|p| Vec3::from(*p)).collect(),
+        normals: input.normals.iter().map(|n| Vec3::from(*n)).collect(),
         triangles: input.triangles.clone(),
     }
 }

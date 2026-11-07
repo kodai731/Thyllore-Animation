@@ -1,5 +1,5 @@
 //! Robust Skin Weights Transfer (Abdrashitov et al., SIGGRAPH Asia 2023).
-use cgmath::{InnerSpace, Vector3};
+use glam::{DVec3, Vec3};
 
 use crate::connected_components::triangle_component_labels;
 use crate::triangle::barycentric_coordinates;
@@ -9,16 +9,16 @@ const DEGENERATE_AREA_EPSILON: f64 = 1e-12;
 
 /// A skinned surface: one weight row per vertex, `bone_count` columns.
 pub struct WeightedSurface<'a> {
-    pub positions: &'a [Vector3<f32>],
-    pub normals: &'a [Vector3<f32>],
+    pub positions: &'a [Vec3],
+    pub normals: &'a [Vec3],
     pub triangles: &'a [[u32; 3]],
     pub weights: &'a [Vec<f32>],
 }
 
 /// The surface that receives the weights.
 pub struct TargetSurface<'a> {
-    pub positions: &'a [Vector3<f32>],
-    pub normals: &'a [Vector3<f32>],
+    pub positions: &'a [Vec3],
+    pub normals: &'a [Vec3],
     pub triangles: &'a [[u32; 3]],
 }
 
@@ -36,7 +36,7 @@ pub struct WeightTransferParams {
 struct SurfaceMatch {
     distance: f32,
     weights: Vec<f64>,
-    normal: Vector3<f32>,
+    normal: Vec3,
 }
 
 /// Weights for every target vertex: copied from the nearest source surface where the surfaces
@@ -92,14 +92,14 @@ pub fn transfer_skin_weights(
 fn nearest_surface_match(
     source: &WeightedSurface,
     bvh: &TriangleBvh,
-    point: Vector3<f32>,
+    point: Vec3,
     bone_count: usize,
 ) -> SurfaceMatch {
     let Some(surface) = bvh.closest_point(point, f32::INFINITY) else {
         return SurfaceMatch {
             distance: f32::INFINITY,
             weights: vec![0.0; bone_count],
-            normal: Vector3::new(0.0, 0.0, 0.0),
+            normal: Vec3::new(0.0, 0.0, 0.0),
         };
     };
     let corners = source.triangles[surface.triangle as usize];
@@ -107,7 +107,7 @@ fn nearest_surface_match(
     let barycentric = barycentric_coordinates(surface.point, a, b, c);
 
     let mut weights = vec![0.0f64; bone_count];
-    let mut normal = Vector3::new(0.0, 0.0, 0.0);
+    let mut normal = Vec3::new(0.0, 0.0, 0.0);
     for (corner, &coordinate) in corners.iter().zip(barycentric.as_ref() as &[f32; 3]) {
         for (sum, &w) in weights.iter_mut().zip(&source.weights[*corner as usize]) {
             *sum += coordinate as f64 * w as f64;
@@ -125,8 +125,8 @@ fn nearest_surface_match(
 /// `max_angle_deg` of the surface normal in either direction.
 pub fn is_matched(
     distance: f32,
-    target_normal: Vector3<f32>,
-    source_normal: Vector3<f32>,
+    target_normal: Vec3,
+    source_normal: Vec3,
     params: &WeightTransferParams,
 ) -> bool {
     if distance > params.max_distance {
@@ -140,15 +140,15 @@ pub fn is_matched(
     angle_deg <= params.max_angle_deg || angle_deg >= 180.0 - params.max_angle_deg
 }
 
-fn double_area(a: Vector3<f64>, b: Vector3<f64>, c: Vector3<f64>) -> f64 {
-    (b - a).cross(c - a).magnitude()
+fn double_area(a: DVec3, b: DVec3, c: DVec3) -> f64 {
+    (b - a).cross(c - a).length()
 }
 
-fn to_f64(v: Vector3<f32>) -> Vector3<f64> {
-    Vector3::new(v.x as f64, v.y as f64, v.z as f64)
+fn to_f64(v: Vec3) -> DVec3 {
+    v.as_dvec3()
 }
 
-fn nondegenerate_triangles(positions: &[Vector3<f32>], triangles: &[[u32; 3]]) -> Vec<[u32; 3]> {
+fn nondegenerate_triangles(positions: &[Vec3], triangles: &[[u32; 3]]) -> Vec<[u32; 3]> {
     triangles
         .iter()
         .copied()
@@ -183,7 +183,7 @@ impl SparseTriplets {
 }
 
 /// The cotangent Laplacian of the mesh: symmetric, with zero row sums.
-pub fn cotangent_laplacian(positions: &[Vector3<f32>], triangles: &[[u32; 3]]) -> SparseTriplets {
+pub fn cotangent_laplacian(positions: &[Vec3], triangles: &[[u32; 3]]) -> SparseTriplets {
     let mut laplacian = SparseTriplets {
         rows: Vec::new(),
         cols: Vec::new(),
@@ -263,7 +263,7 @@ fn normalize_rows(weights: &mut [Vec<f64>]) {
 /// The vertices whose component has no matched vertex: with no boundary to inpaint from, they
 /// keep the weights interpolated from the nearest source surface.
 fn components_without_match(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     triangles: &[[u32; 3]],
     matched: &[bool],
 ) -> Vec<bool> {
@@ -285,7 +285,7 @@ fn components_without_match(
 
 /// Fills the unmatched vertices by harmonic interpolation of the matched ones.
 pub fn inpaint_weights(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     triangles: &[[u32; 3]],
     weights: &[Vec<f64>],
     matched: &[bool],
@@ -350,8 +350,8 @@ pub fn inpaint_weights(
 mod tests {
     use super::*;
 
-    fn v(x: f32, y: f32, z: f32) -> Vector3<f32> {
-        Vector3::new(x, y, z)
+    fn v(x: f32, y: f32, z: f32) -> Vec3 {
+        Vec3::new(x, y, z)
     }
 
     const PARAMS: WeightTransferParams = WeightTransferParams {

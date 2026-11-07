@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use std::collections::HashMap;
 use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
@@ -46,8 +46,8 @@ fn read_axes_from_scene(axes: &ufbx::CoordinateAxes) -> FbxAxesInfo {
     }
 }
 
-fn ufbx_matrix_to_cgmath(m: &ufbx::Matrix) -> Matrix4<f32> {
-    Matrix4::new(
+fn ufbx_matrix_to_mat4(m: &ufbx::Matrix) -> Mat4 {
+    Mat4::from_cols_array(&[
         m.m00 as f32,
         m.m10 as f32,
         m.m20 as f32,
@@ -64,47 +64,12 @@ fn ufbx_matrix_to_cgmath(m: &ufbx::Matrix) -> Matrix4<f32> {
         m.m13 as f32,
         m.m23 as f32,
         1.0,
-    )
+    ])
 }
 
-fn decompose_transform(m: &Matrix4<f32>) -> ([f32; 3], Quaternion<f32>, [f32; 3]) {
-    let translation = [m[3][0], m[3][1], m[3][2]];
-
-    let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
-    let sy = (m[1][0] * m[1][0] + m[1][1] * m[1][1] + m[1][2] * m[1][2]).sqrt();
-    let sz = (m[2][0] * m[2][0] + m[2][1] * m[2][1] + m[2][2] * m[2][2]).sqrt();
-    let scale = [sx, sy, sz];
-
-    let inv_sx = if sx > 1e-6 { 1.0 / sx } else { 0.0 };
-    let inv_sy = if sy > 1e-6 { 1.0 / sy } else { 0.0 };
-    let inv_sz = if sz > 1e-6 { 1.0 / sz } else { 0.0 };
-
-    let r00 = m[0][0] * inv_sx;
-    let r01 = m[0][1] * inv_sx;
-    let r02 = m[0][2] * inv_sx;
-    let r10 = m[1][0] * inv_sy;
-    let r11 = m[1][1] * inv_sy;
-    let r12 = m[1][2] * inv_sy;
-    let r20 = m[2][0] * inv_sz;
-    let r21 = m[2][1] * inv_sz;
-    let r22 = m[2][2] * inv_sz;
-
-    let trace = r00 + r11 + r22;
-    let rotation = if trace > 0.0 {
-        let s = 0.5 / (trace + 1.0).sqrt();
-        Quaternion::new(0.25 / s, (r12 - r21) * s, (r20 - r02) * s, (r01 - r10) * s)
-    } else if r00 > r11 && r00 > r22 {
-        let s = 2.0 * (1.0 + r00 - r11 - r22).sqrt();
-        Quaternion::new((r12 - r21) / s, 0.25 * s, (r10 + r01) / s, (r20 + r02) / s)
-    } else if r11 > r22 {
-        let s = 2.0 * (1.0 + r11 - r00 - r22).sqrt();
-        Quaternion::new((r20 - r02) / s, (r10 + r01) / s, 0.25 * s, (r12 + r21) / s)
-    } else {
-        let s = 2.0 * (1.0 + r22 - r00 - r11).sqrt();
-        Quaternion::new((r01 - r10) / s, (r20 + r02) / s, (r12 + r21) / s, 0.25 * s)
-    };
-
-    (translation, rotation, scale)
+fn decompose_transform(m: &Mat4) -> ([f32; 3], Quat, [f32; 3]) {
+    let (translation, rotation, scale) = thyllore_math_core::decompose(m);
+    (translation.to_array(), rotation, scale.to_array())
 }
 
 pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
@@ -226,10 +191,10 @@ struct CornerKey {
 }
 
 struct MaterialPart {
-    positions: Vec<Vector3<f32>>,
-    local_positions: Vec<Vector3<f32>>,
-    normals: Vec<Vector3<f32>>,
-    local_normals: Vec<Vector3<f32>>,
+    positions: Vec<Vec3>,
+    local_positions: Vec<Vec3>,
+    normals: Vec<Vec3>,
+    local_normals: Vec<Vec3>,
     tex_coords: Vec<[f32; 2]>,
     indices: Vec<u32>,
     vertex_map: ControlPointVertexMap,
@@ -276,9 +241,9 @@ fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, ControlPoin
             let ctrl_idx = mesh.vertex_indices[uidx];
             let normal = if mesh.vertex_normal.exists {
                 let n = mesh.vertex_normal[uidx];
-                Vector3::new(n.x as f32, n.y as f32, n.z as f32)
+                Vec3::new(n.x as f32, n.y as f32, n.z as f32)
             } else {
-                Vector3::new(0.0, 1.0, 0.0)
+                Vec3::new(0.0, 1.0, 0.0)
             };
             let tex_coord = if mesh.vertex_uv.exists {
                 let uv = mesh.vertex_uv[uidx];
@@ -296,7 +261,7 @@ fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, ControlPoin
             let mapped = *part.corner_to_vertex.entry(key).or_insert(next_id);
             if mapped == next_id {
                 let pos = mesh.vertex_position[uidx];
-                let v = Vector3::new(pos.x as f32, pos.y as f32, pos.z as f32);
+                let v = Vec3::new(pos.x as f32, pos.y as f32, pos.z as f32);
                 part.positions.push(v);
                 part.local_positions.push(v);
                 part.normals.push(normal);
@@ -377,9 +342,9 @@ fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos:
                 .map(|n| n.element.name.to_string())
                 .unwrap_or_else(|| "Unknown".to_string());
 
-            let geometry_to_bone = ufbx_matrix_to_cgmath(&cluster.geometry_to_bone);
+            let geometry_to_bone = ufbx_matrix_to_mat4(&cluster.geometry_to_bone);
 
-            let transform_link = geometry_to_bone.invert().unwrap_or(Matrix4::identity());
+            let transform_link = geometry_to_bone.try_inverse().unwrap_or(Mat4::IDENTITY);
 
             for (fbx_idx, info) in split_infos.iter().enumerate() {
                 if info.ufbx_mesh_typed_id != typed_id {
@@ -402,7 +367,7 @@ fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos:
                 if !vertex_indices.is_empty() {
                     fbx_model.fbx_data[fbx_idx].clusters.push(ClusterInfo {
                         bone_name: bone_name.clone(),
-                        transform: Matrix4::identity(),
+                        transform: Mat4::IDENTITY,
                         transform_link,
                         inverse_bind_pose: geometry_to_bone,
                         vertex_indices,
@@ -429,7 +394,7 @@ fn build_bone_hierarchy(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
             .filter(|p| !p.is_root)
             .map(|p| p.element.name.to_string());
 
-        let local_transform = ufbx_matrix_to_cgmath(&node.node_to_parent);
+        let local_transform = ufbx_matrix_to_mat4(&node.node_to_parent);
 
         let (default_translation, default_rotation, default_scaling) =
             decompose_transform(&local_transform);
@@ -517,16 +482,16 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
                 })
                 .collect();
 
-            let rotation_keys: Vec<KeyFrame<Quaternion<f32>>> = bake_node
+            let rotation_keys: Vec<KeyFrame<Quat>> = bake_node
                 .rotation_keys
                 .iter()
                 .map(|k| KeyFrame {
                     time: key_time(k.time, time_begin),
-                    value: Quaternion::new(
-                        k.value.w as f32,
+                    value: Quat::from_xyzw(
                         k.value.x as f32,
                         k.value.y as f32,
                         k.value.z as f32,
+                        k.value.w as f32,
                     ),
                 })
                 .collect();
@@ -682,7 +647,7 @@ fn extract_position_constraint(
         constraint_type: ConstraintType::Position(PositionConstraintData {
             constrained_bone: constrained_bone_id,
             target_bone: target_bone_id,
-            offset: Vector3::new(0.0, 0.0, 0.0),
+            offset: Vec3::new(0.0, 0.0, 0.0),
             affect_axes,
             enabled,
             weight,
@@ -709,7 +674,7 @@ fn extract_rotation_constraint(
         constraint_type: ConstraintType::Rotation(RotationConstraintData {
             constrained_bone: constrained_bone_id,
             target_bone: target_bone_id,
-            offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            offset: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             affect_axes,
             enabled,
             weight,
@@ -736,7 +701,7 @@ fn extract_scale_constraint(
         constraint_type: ConstraintType::Scale(ScaleConstraintData {
             constrained_bone: constrained_bone_id,
             target_bone: target_bone_id,
-            offset: Vector3::new(1.0, 1.0, 1.0),
+            offset: Vec3::new(1.0, 1.0, 1.0),
             affect_axes,
             enabled,
             weight,
@@ -783,13 +748,13 @@ fn extract_aim_constraint(
 ) -> LoadedConstraint {
     let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
-    let aim_axis = Vector3::new(
+    let aim_axis = Vec3::new(
         constraint.aim_vector.x as f32,
         constraint.aim_vector.y as f32,
         constraint.aim_vector.z as f32,
     );
 
-    let up_axis = Vector3::new(
+    let up_axis = Vec3::new(
         constraint.aim_up_vector.x as f32,
         constraint.aim_up_vector.y as f32,
         constraint.aim_up_vector.z as f32,
@@ -830,7 +795,7 @@ fn extract_ik_constraint(
         .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied())
         .unwrap_or(constrained_bone_id);
 
-    let pole_vector = Vector3::new(
+    let pole_vector = Vec3::new(
         constraint.ik_pole_vector.x as f32,
         constraint.ik_pole_vector.y as f32,
         constraint.ik_pole_vector.z as f32,
@@ -966,7 +931,7 @@ mod tests {
     #[test]
     fn test_fbx_data_add_position() {
         let mut data = FbxData::new();
-        data.positions.push(Vector3::new(1.0, 2.0, 3.0));
+        data.positions.push(Vec3::new(1.0, 2.0, 3.0));
 
         assert_eq!(data.positions.len(), 1);
         assert_eq!(data.positions[0].x, 1.0);

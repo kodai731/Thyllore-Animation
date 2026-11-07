@@ -1,3 +1,5 @@
+use glam::Vec3;
+
 pub trait SnapshotValues {
     fn snapshot_values(&self) -> Vec<f32>;
 }
@@ -38,7 +40,7 @@ impl<T: SnapshotValues> SnapshotValues for Option<T> {
     }
 }
 
-impl SnapshotValues for cgmath::Vector3<f32> {
+impl SnapshotValues for Vec3 {
     fn snapshot_values(&self) -> Vec<f32> {
         vec![self.x, self.y, self.z]
     }

@@ -53,7 +53,7 @@ pub(crate) fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Matrix4, Vector3};
+    use glam::{Mat4, Vec3};
     use thyllore_model_core::MeshMorph;
     use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
 
@@ -67,11 +67,11 @@ mod tests {
         let spine = skeleton.add_bone("Spine", Some(root));
         let chest = skeleton.add_bone("Chest", Some(spine));
         skeleton.bones[root as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.bones[spine as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.5, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0));
         skeleton.bones[chest as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.25, 0.1));
+            Mat4::from_translation(Vec3::new(0.0, 0.25, 0.1));
         skeleton
     }
 

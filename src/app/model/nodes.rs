@@ -1,10 +1,9 @@
-use cgmath::SquareMatrix;
-
 use crate::asset::{AssetStorage, NodeAsset};
 use crate::ecs::resource::NodeAssets;
 use crate::ecs::world::World;
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::resource::graphics_resource::NodeData;
+use glam::Mat4;
 
 pub(super) fn replace_node_assets(
     world: &mut World,
@@ -28,7 +27,7 @@ pub(super) fn replace_node_assets(
             name: n.name.clone(),
             parent_index: n.parent_index,
             local_transform: n.local_transform,
-            global_transform: cgmath::Matrix4::identity(),
+            global_transform: Mat4::IDENTITY,
         })
         .collect();
     log!("Loaded {} nodes into NodeAssets", nodes.len());

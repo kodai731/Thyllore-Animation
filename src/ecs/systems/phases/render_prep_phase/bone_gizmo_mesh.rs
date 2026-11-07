@@ -16,7 +16,7 @@ use crate::ecs::{
 };
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::Result;
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::SpringChainId;
 use thyllore_math_core::ScreenSpaceScale;
 
@@ -177,14 +177,14 @@ fn joint_marker_scale(ctx: &FrameContext) -> ScreenSpaceScale {
     let viewport_height = ctx.world.resource::<ProjectionData>().screen_size.y;
     ScreenSpaceScale::new(
         compute_camera_position(&camera),
-        cgmath::Rad::from(camera.fov_y).0,
+        camera.fov_y,
         viewport_height,
     )
 }
 
 fn compute_visual_scale(
     ctx: &FrameContext,
-    transforms: &[Matrix4<f32>],
+    transforms: &[Mat4],
     distance_scaling_enabled: bool,
     distance_scaling_factor: f32,
 ) -> f32 {
@@ -197,23 +197,23 @@ fn compute_visual_scale(
         compute_camera_position(&ctx.world.resource::<Camera>())
     };
 
-    let mut center = Vector3::new(0.0f32, 0.0, 0.0);
+    let mut center = Vec3::new(0.0f32, 0.0, 0.0);
     for t in transforms.iter() {
-        center.x += t[3][0];
-        center.y += t[3][1];
-        center.z += t[3][2];
+        center.x += t.col(3)[0];
+        center.y += t.col(3)[1];
+        center.z += t.col(3)[2];
     }
     let count = transforms.len() as f32;
     center /= count;
 
-    let distance = (center - camera_pos).magnitude();
+    let distance = (center - camera_pos).length();
     (distance * distance_scaling_factor).max(0.1)
 }
 
 unsafe fn update_stick_bone_mesh(
     ctx: &mut FrameContext,
     skeleton: &crate::animation::Skeleton,
-    transforms: &[Matrix4<f32>],
+    transforms: &[Mat4],
     offsets: &[[f32; 3]],
     mesh_scale: f32,
     draw_set: &BoneDrawSet,
@@ -256,7 +256,7 @@ unsafe fn update_stick_bone_mesh(
 unsafe fn update_octahedral_bone_mesh(
     ctx: &mut FrameContext,
     skeleton: &crate::animation::Skeleton,
-    transforms: &[Matrix4<f32>],
+    transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,
@@ -303,7 +303,7 @@ unsafe fn update_octahedral_bone_mesh(
 unsafe fn update_box_bone_mesh(
     ctx: &mut FrameContext,
     skeleton: &crate::animation::Skeleton,
-    transforms: &[Matrix4<f32>],
+    transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,
@@ -350,7 +350,7 @@ unsafe fn update_box_bone_mesh(
 unsafe fn update_sphere_bone_mesh(
     ctx: &mut FrameContext,
     skeleton: &crate::animation::Skeleton,
-    transforms: &[Matrix4<f32>],
+    transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
     mesh_scale: f32,

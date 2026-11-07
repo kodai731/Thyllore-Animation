@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
@@ -13,15 +13,15 @@ use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::FrameContext;
 use thyllore_vulkan_core::types::Instance;
 
-pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
-    let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world
+pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Mat4> {
+    let indexed_transforms: Vec<(usize, Mat4)> = world
         .iter_components::<MeshRef>()
         .filter_map(|(entity, mesh_ref)| {
             let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
             let model_matrix = world
                 .get_component::<GlobalTransform>(entity)
                 .map(|global_transform| global_transform.0)
-                .unwrap_or_else(Matrix4::identity);
+                .unwrap_or(Mat4::IDENTITY);
             Some((mesh_asset.graphics_mesh_index, model_matrix))
         })
         .collect();
@@ -32,7 +32,7 @@ pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matr
         .max()
         .unwrap_or(0);
 
-    let mut transforms = vec![Matrix4::identity(); transform_count];
+    let mut transforms = vec![Mat4::IDENTITY; transform_count];
     for (index, model_matrix) in indexed_transforms {
         transforms[index] = model_matrix;
     }
@@ -75,7 +75,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         let model = mesh_transforms
             .get(mesh_index)
             .copied()
-            .unwrap_or_else(Matrix4::identity);
+            .unwrap_or(Mat4::IDENTITY);
         needs_update |= apply_instance_transform(blas, &model);
     }
     for (blas, primitive) in acceleration_structure
@@ -100,11 +100,26 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
     )
 }
 
-fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
+fn apply_instance_transform(blas: &mut RRBLAS, model: &Mat4) -> bool {
     let matrix = [
-        [model[0][0], model[1][0], model[2][0], model[3][0]],
-        [model[0][1], model[1][1], model[2][1], model[3][1]],
-        [model[0][2], model[1][2], model[2][2], model[3][2]],
+        [
+            model.col(0)[0],
+            model.col(1)[0],
+            model.col(2)[0],
+            model.col(3)[0],
+        ],
+        [
+            model.col(0)[1],
+            model.col(1)[1],
+            model.col(2)[1],
+            model.col(3)[1],
+        ],
+        [
+            model.col(0)[2],
+            model.col(1)[2],
+            model.col(2)[2],
+            model.col(3)[2],
+        ],
     ];
     if blas.transform().matrix() == matrix {
         return false;

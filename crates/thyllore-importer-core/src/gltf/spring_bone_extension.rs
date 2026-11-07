@@ -1,3 +1,4 @@
+use glam::Vec3;
 use serde::Deserialize;
 
 use thyllore_anim_core::spring_bone::{
@@ -130,22 +131,22 @@ fn convert_colliders(
 }
 
 /// Offset and tail are both points in the node's space (VRM 1.0), the same frame the engine places them in.
-fn convert_shape(shape: &VrmcColliderShape) -> (cgmath::Vector3<f32>, ColliderShape) {
+fn convert_shape(shape: &VrmcColliderShape) -> (Vec3, ColliderShape) {
     if let Some(capsule) = &shape.capsule {
         let offset = capsule.offset.unwrap_or([0.0; 3]);
         let tail = capsule.tail.unwrap_or(offset);
         return (
-            cgmath::Vector3::from(offset),
+            Vec3::from(offset),
             ColliderShape::Capsule {
                 radius: capsule.radius.unwrap_or(0.0),
-                tail: cgmath::Vector3::from(tail),
+                tail: Vec3::from(tail),
             },
         );
     }
     let sphere = shape.sphere.as_ref();
     let offset = sphere.and_then(|s| s.offset).unwrap_or([0.0; 3]);
     (
-        cgmath::Vector3::from(offset),
+        Vec3::from(offset),
         ColliderShape::Sphere {
             radius: sphere.and_then(|s| s.radius).unwrap_or(0.0),
         },
@@ -194,8 +195,8 @@ fn convert_springs(
                     drag_force: vj.drag_force.unwrap_or(0.5),
                     gravity_dir: vj
                         .gravity_dir
-                        .map(|d| cgmath::Vector3::new(d[0], d[1], d[2]))
-                        .unwrap_or(cgmath::Vector3::new(0.0, -1.0, 0.0)),
+                        .map(|d| Vec3::new(d[0], d[1], d[2]))
+                        .unwrap_or(Vec3::new(0.0, -1.0, 0.0)),
                     hit_radius: vj.hit_radius.unwrap_or(0.0),
                 })
             })
@@ -302,16 +303,16 @@ mod tests {
 
         let sphere = &setup.colliders[0];
         assert_eq!(sphere.bone_id, 11);
-        assert_eq!(sphere.offset, cgmath::Vector3::new(0.0, 0.05, 0.02));
+        assert_eq!(sphere.offset, Vec3::new(0.0, 0.05, 0.02));
         assert_eq!(sphere.shape, ColliderShape::Sphere { radius: 0.08 });
         let capsule = &setup.colliders[1];
         assert_eq!(capsule.bone_id, 12);
-        assert_eq!(capsule.offset, cgmath::Vector3::new(0.0, 0.1, 0.0));
+        assert_eq!(capsule.offset, Vec3::new(0.0, 0.1, 0.0));
         assert_eq!(
             capsule.shape,
             ColliderShape::Capsule {
                 radius: 0.04,
-                tail: cgmath::Vector3::new(0.0, -0.25, 0.0),
+                tail: Vec3::new(0.0, -0.25, 0.0),
             },
             "the tail stays a point in node space, not an offset from the capsule head"
         );
@@ -360,6 +361,6 @@ mod tests {
         assert!(chain
             .joints
             .iter()
-            .all(|j| j.gravity_dir == cgmath::Vector3::new(0.0, -1.0, 0.0)));
+            .all(|j| j.gravity_dir == Vec3::new(0.0, -1.0, 0.0)));
     }
 }

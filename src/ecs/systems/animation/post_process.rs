@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::{BoneId, BoneLocalPose, SkeletonId, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -33,7 +33,7 @@ pub(crate) fn compute_spring_bone_result(
     shared_constraints: &Option<ConstraintSet>,
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
     dt: f32,
-) -> Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)> {
+) -> Option<(SkeletonId, Vec<Mat4>, SkeletonPose)> {
     let info = entities
         .iter()
         .find(|e| world.has_component::<WithSpringBone>(e.entity))?;
@@ -71,7 +71,7 @@ fn apply_spring_bone_simulation(
     world: &World,
     setup: &SpringBoneSetup,
     skeleton: &crate::animation::Skeleton,
-    globals: &mut [Matrix4<f32>],
+    globals: &mut [Mat4],
     pose: &mut SkeletonPose,
     dt: f32,
     space: SpringSpace,

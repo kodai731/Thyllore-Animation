@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::SquareMatrix;
+use glam::Mat4;
 
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{EffectTraceGpuState, WaterGpuState};
@@ -109,7 +109,9 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<Rect2D>
                 .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
                 .map(|accum| accum.frame_index as u32)
                 .unwrap_or(0);
-            let model = thyllore_effect_core::build_water_ubo(&effect, frame_index).model;
+            let model = thyllore_effect_core::build_water_ubo(&effect, frame_index)
+                .model
+                .to_mat4();
             compute_bounds_scissor(
                 ctx.world,
                 extent,
@@ -269,20 +271,17 @@ impl RenderPassNode for WaterTraceNode {
             projection.proj,
             projection.view,
         );
-        let view_inverse = projection
-            .view
-            .invert()
-            .unwrap_or_else(cgmath::Matrix4::identity);
+        let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
         let light_position = ctx
             .world
             .resource::<crate::ecs::resource::LightState>()
             .light_position;
         let trace_push = TracePush {
-            inv_view_proj,
+            inv_view_proj: inv_view_proj.into(),
             camera_pos: [
-                view_inverse[3][0],
-                view_inverse[3][1],
-                view_inverse[3][2],
+                view_inverse.col(3)[0],
+                view_inverse.col(3)[1],
+                view_inverse.col(3)[2],
                 1.0,
             ],
             light_pos: [light_position.x, light_position.y, light_position.z, 1.0],
@@ -849,7 +848,7 @@ unsafe fn record_water_ubo_updates(
             .unwrap_or_default();
 
         let mut ubo = thyllore_effect_core::build_water_ubo(effect, accum.frame_index as u32);
-        ubo.inv_view_proj = inv_view_proj;
+        ubo.inv_view_proj = inv_view_proj.into();
         ubo.temporal = [accum.weight, accum.frame_index as f32, 0.0, 0.0];
         ubo.composite[3] = settings.caustic_debug as f32;
 

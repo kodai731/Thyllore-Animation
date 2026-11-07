@@ -1,5 +1,5 @@
 use anyhow::{bail, Context};
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::cloth_setup::components::chain_gen::end_bone_name;
 use crate::humanoid::components::skeleton_input::BoneInput;
@@ -73,7 +73,7 @@ fn end_node_of_chain(
         );
     }
 
-    let last_segment = Vector3::from(leaf.rest_position) - Vector3::from(parent.rest_position);
+    let last_segment = Vec3::from(leaf.rest_position) - Vec3::from(parent.rest_position);
     Ok(Some(SpringEndNode {
         chain: chain.name.clone(),
         parent_bone: leaf.name.clone(),

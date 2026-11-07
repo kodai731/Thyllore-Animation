@@ -1,14 +1,14 @@
 use crate::wind::analytic::slang::{wind_clamp_ray_to_cone_slang, wind_envelope_radius_slang};
 use crate::wind::WindUBO;
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 const PICK_T_MAX: f32 = 1e4;
 
 /// Distance along the world ray at which it enters the tornado envelope, if it does.
 pub fn pick_wind(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    inverse_model: Matrix4<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    inverse_model: Mat4,
     ubo: &WindUBO,
 ) -> Option<f32> {
     let local_origin = (inverse_model * ray_origin.extend(1.0)).truncate();
@@ -21,10 +21,10 @@ pub fn pick_wind(
 }
 
 /// Corners of the local axis-aligned box enclosing the envelope cone frustum.
-pub fn wind_local_bounds_corners(ubo: &WindUBO) -> [Vector3<f32>; 8] {
+pub fn wind_local_bounds_corners(ubo: &WindUBO) -> [Vec3; 8] {
     let radius = wind_envelope_radius_slang(ubo, 0.0).max(wind_envelope_radius_slang(ubo, 1.0));
     let height = ubo.shape[0];
-    let mut corners = [Vector3::new(0.0, 0.0, 0.0); 8];
+    let mut corners = [Vec3::new(0.0, 0.0, 0.0); 8];
     for (index, corner) in corners.iter_mut().enumerate() {
         corner.x = if index & 1 == 0 { -radius } else { radius };
         corner.y = if index & 2 == 0 { 0.0 } else { height };

@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::tangent_frame_around;
 
 use thyllore_model_core::BoneId;
@@ -14,13 +14,13 @@ pub fn supports_garments(role: HumanoidRole) -> bool {
     torso_roles().contains(&role)
 }
 
-fn sample_capsule(collider: &BodyCollider) -> Vec<Vector3<f32>> {
+fn sample_capsule(collider: &BodyCollider) -> Vec<Vec3> {
     let axis = collider.tail - collider.head;
-    let axis_length = axis.magnitude();
+    let axis_length = axis.length();
     let direction = if axis_length > 1e-6 {
         axis / axis_length
     } else {
-        Vector3::unit_y()
+        Vec3::Y
     };
     let (reference, side) = tangent_frame_around(direction);
     let axis_steps = ((axis_length / SUPPORT_RING_HEIGHT).ceil() as usize).max(1) + 1;
@@ -108,8 +108,8 @@ mod tests {
     fn capsule_samples_lie_on_the_capsule_and_carry_the_bone() {
         let collider = BodyCollider {
             bone: 7,
-            head: Vector3::new(0.0, 0.0, 0.0),
-            tail: Vector3::new(0.0, 0.4, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 0.4, 0.0),
             radius: 0.1,
         };
         let surfaces = collider_surfaces(&[collider]);
@@ -118,7 +118,7 @@ mod tests {
         assert!(surface.influences.iter().all(|i| *i == vec![(7, 1.0)]));
         for point in &surface.positions {
             let clamped_y = point.y.clamp(0.0, 0.4);
-            let distance = (point - Vector3::new(0.0, clamped_y, 0.0)).magnitude();
+            let distance = (point - Vec3::new(0.0, clamped_y, 0.0)).length();
             assert!((distance - 0.1).abs() < 1e-5, "{point:?}");
         }
     }
@@ -127,8 +127,8 @@ mod tests {
     fn capsule_samples_are_no_further_apart_than_a_support_ring() {
         let collider = BodyCollider {
             bone: 1,
-            head: Vector3::new(0.0, 0.0, 0.0),
-            tail: Vector3::new(0.0, 0.7, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 0.7, 0.0),
             radius: 0.1,
         };
         let surface = &collider_surfaces(&[collider])[0];
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn limb_skin_loses_its_influences_and_torso_skin_keeps_them() {
         let mut surfaces = vec![SkinSurface {
-            positions: vec![Vector3::new(0.0, 0.0, 0.0); 3],
+            positions: vec![Vec3::new(0.0, 0.0, 0.0); 3],
             triangles: Vec::new(),
             influences: vec![vec![(1, 0.8), (2, 0.2)], vec![(2, 0.9)], vec![(3, 1.0)]],
         }];
@@ -169,13 +169,13 @@ mod tests {
     fn sphere_samples_lie_on_the_sphere() {
         let collider = BodyCollider {
             bone: 1,
-            head: Vector3::new(1.0, 2.0, 3.0),
-            tail: Vector3::new(1.0, 2.0, 3.0),
+            head: Vec3::new(1.0, 2.0, 3.0),
+            tail: Vec3::new(1.0, 2.0, 3.0),
             radius: 0.05,
         };
         let surface = &collider_surfaces(&[collider])[0];
         for point in &surface.positions {
-            assert!(((point - collider.head).magnitude() - 0.05).abs() < 1e-5);
+            assert!(((point - collider.head).length() - 0.05).abs() < 1e-5);
         }
     }
 }

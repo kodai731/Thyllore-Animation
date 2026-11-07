@@ -1,4 +1,4 @@
-use cgmath::{Matrix, Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
     SpringChain, SpringJointParam, SpringSpace,
@@ -113,11 +113,11 @@ fn head_capsule_collider(
     root: BoneId,
     bones: &[FitBone],
 ) -> anyhow::Result<FittedCapsule> {
-    let root_global = Matrix4::from(bones[root as usize].bind_matrix).transpose();
+    let root_global = Mat4::from_cols_array_2d(&bones[root as usize].bind_matrix).transpose();
     let model_to_root_local = root_global
-        .invert()
+        .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("bind matrix of the root bone is singular"))?;
-    let to_local = |p: [f32; 3]| (model_to_root_local * Vector3::from(p).extend(1.0)).truncate();
+    let to_local = |p: [f32; 3]| (model_to_root_local * Vec3::from(p).extend(1.0)).truncate();
     Ok(FittedCapsule {
         bone_id: root,
         head: to_local(capsule.bottom),

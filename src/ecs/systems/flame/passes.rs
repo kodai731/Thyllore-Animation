@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::ecs::component::FlameEffect;
 use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
@@ -91,19 +91,20 @@ fn sort_flames_back_to_front(ctx: &PassContext, flames: &mut [Entity]) {
     else {
         return;
     };
-    let view_inverse = projection
-        .view
-        .invert()
-        .unwrap_or_else(cgmath::Matrix4::identity);
-    let camera_pos = Vector3::new(view_inverse[3][0], view_inverse[3][1], view_inverse[3][2]);
+    let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
+    let camera_pos = Vec3::new(
+        view_inverse.col(3)[0],
+        view_inverse.col(3)[1],
+        view_inverse.col(3)[2],
+    );
 
     let camera_distance = |flame: &Entity| {
         ctx.world
             .get_component::<crate::ecs::component::FlameEffect>(*flame)
             .map(|effect| {
                 let position =
-                    Vector3::new(effect.position[0], effect.position[1], effect.position[2]);
-                (position - camera_pos).magnitude()
+                    Vec3::new(effect.position[0], effect.position[1], effect.position[2]);
+                (position - camera_pos).length()
             })
     };
     flames.sort_by(|a, b| match (camera_distance(a), camera_distance(b)) {
@@ -169,7 +170,7 @@ fn instance_scissor(
     compute_bounds_scissor(
         ctx.world,
         extent,
-        &ubo.model,
+        &ubo.model.to_mat4(),
         thyllore_effect_core::flame_local_bounds_corners(&bounds),
     )
 }

@@ -1,7 +1,7 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct CameraState {
-    pub position: Vector3<f32>,
-    pub direction: Vector3<f32>,
+    pub position: Vec3,
+    pub direction: Vec3,
 }

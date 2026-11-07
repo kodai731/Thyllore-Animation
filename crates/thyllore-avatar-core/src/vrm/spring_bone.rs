@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use serde_json::{json, Value};
 
 use super::force::vrm_magnitudes;
@@ -232,13 +232,13 @@ fn bone_frame<'a>(input: &'a SpringBoneInput<'_>, bone: &str) -> Option<&'a Bone
 
 /// The rest length of the strand in metres: the joint-to-joint distances, the appended tail included.
 fn strand_length_m(joints: &[SidecarSpringJoint], bones: &[BoneInput]) -> f32 {
-    let positions: Vec<Vector3<f32>> = joints
+    let positions: Vec<Vec3> = joints
         .iter()
         .filter_map(|joint| bones.iter().find(|bone| bone.name == joint.bone))
-        .map(|bone| Vector3::from(bone.rest_position))
+        .map(|bone| Vec3::from(bone.rest_position))
         .collect();
     positions
         .windows(2)
-        .map(|pair| (pair[1] - pair[0]).magnitude())
+        .map(|pair| (pair[1] - pair[0]).length())
         .sum()
 }

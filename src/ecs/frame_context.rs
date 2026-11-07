@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::billboard::BillboardData;
@@ -75,22 +75,22 @@ impl<'a> FrameContext<'a> {
         self.world.resource::<DebugViewState>()
     }
 
-    pub fn camera_position(&self) -> Vector3<f32> {
+    pub fn camera_position(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_position;
         compute_camera_position(&self.camera())
     }
 
-    pub fn camera_direction(&self) -> Vector3<f32> {
+    pub fn camera_direction(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_direction;
         compute_camera_direction(&self.camera())
     }
 
-    pub fn camera_up(&self) -> Vector3<f32> {
+    pub fn camera_up(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_up;
         compute_camera_up(&self.camera())
     }
 
-    pub fn light_position(&self) -> Vector3<f32> {
+    pub fn light_position(&self) -> Vec3 {
         self.light_state().light_position
     }
 
@@ -144,9 +144,9 @@ impl<'a> FrameContext<'a> {
 
     pub unsafe fn update_billboard_ubo_internal(
         &mut self,
-        model: Matrix4<f32>,
-        view: Matrix4<f32>,
-        proj: Matrix4<f32>,
+        model: Mat4,
+        view: Mat4,
+        proj: Mat4,
         image_index: usize,
     ) -> Result<()> {
         let mut billboard = self.world.resource_mut::<BillboardData>();

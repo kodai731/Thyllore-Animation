@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use cgmath::Vector3;
+use glam::Vec3;
 
 use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
 
@@ -74,14 +74,14 @@ pub enum AssetEditCommand {
     AddBone {
         parent: String,
         name: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
     RemoveBone {
         bone: String,
     },
     SetBoneOffset {
         bone: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
     RestoreSkeletonSnapshot {
         snapshot: Box<SkeletonSnapshot>,
@@ -97,9 +97,7 @@ pub enum AssetEditCommand {
 pub enum ScaleHistory {
     Record,
     Replay,
-    Revert {
-        root_scales: Vec<(Entity, Vector3<f32>)>,
-    },
+    Revert { root_scales: Vec<(Entity, Vec3)> },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use cgmath::{Matrix4, SquareMatrix};
+use glam::{Mat4, UVec4, Vec3, Vec4};
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
 use crate::cloth_setup::components::chain_gen::{
@@ -32,7 +32,7 @@ pub fn append_chain_bones(
         .ok_or_else(|| anyhow::anyhow!("root bone not found"))?;
     let b_root = root_bone
         .inverse_bind_pose
-        .invert()
+        .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("root inverse_bind_pose is singular"))?;
 
     chains
@@ -73,9 +73,9 @@ fn chain_bone_names(chain: &GeneratedChain) -> Vec<String> {
     names
 }
 
-fn bind_pose_at(b_root: Matrix4<f32>, head: cgmath::Vector3<f32>) -> Matrix4<f32> {
+fn bind_pose_at(b_root: Mat4, head: Vec3) -> Mat4 {
     let mut bind_pose = b_root;
-    bind_pose.w = head.extend(1.0);
+    bind_pose.w_axis = head.extend(1.0);
     bind_pose
 }
 
@@ -83,17 +83,17 @@ fn bind_pose_at(b_root: Matrix4<f32>, head: cgmath::Vector3<f32>) -> Matrix4<f32
 fn add_bone_at(
     skeleton: &mut Skeleton,
     name: &str,
-    parent: (BoneId, Matrix4<f32>),
-    head: cgmath::Vector3<f32>,
-    b_root: Matrix4<f32>,
+    parent: (BoneId, Mat4),
+    head: Vec3,
+    b_root: Mat4,
 ) -> anyhow::Result<BoneId> {
     let (parent_id, b_parent) = parent;
     let b_bone = bind_pose_at(b_root, head);
     let parent_inverse = b_parent
-        .invert()
+        .try_inverse()
         .with_context(|| format!("bind pose of the parent of {name} is singular"))?;
     let bone_inverse = b_bone
-        .invert()
+        .try_inverse()
         .with_context(|| format!("bind pose of {name} is singular"))?;
 
     let bone_id = skeleton.add_bone(name, Some(parent_id));
@@ -142,9 +142,8 @@ pub fn write_chain_weights(
         let vert_idx = inf.vertex as usize;
         if vert_idx < skin.bone_indices.len() {
             skin.bone_indices[vert_idx] =
-                cgmath::Vector4::new(indices[0], indices[1], indices[2], indices[3]);
-            skin.bone_weights[vert_idx] =
-                cgmath::Vector4::new(weights[0], weights[1], weights[2], weights[3]);
+                UVec4::new(indices[0], indices[1], indices[2], indices[3]);
+            skin.bone_weights[vert_idx] = Vec4::new(weights[0], weights[1], weights[2], weights[3]);
         }
     }
 }

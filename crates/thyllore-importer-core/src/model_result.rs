@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use thyllore_anim_core::spring_bone::SpringBoneSetup;
 use thyllore_anim_core::{AnimationClip, AnimationSystem, Skeleton, SkeletonId, SkinData};
@@ -62,7 +62,7 @@ pub struct LoadedNode {
     pub index: usize,
     pub name: String,
     pub parent_index: Option<usize>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
 }
 
 #[derive(Clone, Debug, Default)]

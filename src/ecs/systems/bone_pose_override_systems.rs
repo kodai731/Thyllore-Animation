@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
 use crate::animation::{
     compose_transform, decompose_transform, BoneId, BoneLocalPose, Skeleton, SkeletonPose,
@@ -8,9 +8,9 @@ use crate::animation::{
 
 pub fn compute_local_override_from_global_translation(
     skeleton: &Skeleton,
-    cached_globals: &[Matrix4<f32>],
+    cached_globals: &[Mat4],
     bone_id: BoneId,
-    new_global_pos: Vector3<f32>,
+    new_global_pos: Vec3,
 ) -> Option<BoneLocalPose> {
     let idx = bone_id as usize;
     if idx >= cached_globals.len() {
@@ -26,10 +26,10 @@ pub fn compute_local_override_from_global_translation(
 
 pub fn compute_local_override_from_global_rotation(
     skeleton: &Skeleton,
-    cached_globals: &[Matrix4<f32>],
+    cached_globals: &[Mat4],
     bone_id: BoneId,
-    gizmo_pos: Vector3<f32>,
-    rotation: Quaternion<f32>,
+    gizmo_pos: Vec3,
+    rotation: Quat,
 ) -> Option<BoneLocalPose> {
     let idx = bone_id as usize;
     if idx >= cached_globals.len() {
@@ -37,9 +37,9 @@ pub fn compute_local_override_from_global_rotation(
     }
 
     let current_global = cached_globals[idx];
-    let rot_mat: Matrix4<f32> = rotation.into();
-    let translate_to_origin = Matrix4::from_translation(-gizmo_pos);
-    let translate_back = Matrix4::from_translation(gizmo_pos);
+    let rot_mat = Mat4::from_quat(rotation);
+    let translate_to_origin = Mat4::from_translation(-gizmo_pos);
+    let translate_back = Mat4::from_translation(gizmo_pos);
     let new_global = translate_back * rot_mat * translate_to_origin * current_global;
 
     compute_local_from_global(skeleton, cached_globals, bone_id, new_global)
@@ -47,9 +47,9 @@ pub fn compute_local_override_from_global_rotation(
 
 pub fn compute_local_override_from_global_scale(
     skeleton: &Skeleton,
-    cached_globals: &[Matrix4<f32>],
+    cached_globals: &[Mat4],
     bone_id: BoneId,
-    scale: Vector3<f32>,
+    scale: Vec3,
 ) -> Option<BoneLocalPose> {
     let idx = bone_id as usize;
     if idx >= cached_globals.len() {
@@ -57,7 +57,7 @@ pub fn compute_local_override_from_global_scale(
     }
 
     let current_global = cached_globals[idx];
-    let scale_mat = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
+    let scale_mat = Mat4::from_scale(Vec3::new(scale.x, scale.y, scale.z));
     let new_global = current_global * scale_mat;
 
     compute_local_from_global(skeleton, cached_globals, bone_id, new_global)
@@ -65,9 +65,9 @@ pub fn compute_local_override_from_global_scale(
 
 fn compute_local_from_global(
     skeleton: &Skeleton,
-    cached_globals: &[Matrix4<f32>],
+    cached_globals: &[Mat4],
     bone_id: BoneId,
-    new_global: Matrix4<f32>,
+    new_global: Mat4,
 ) -> Option<BoneLocalPose> {
     let bone = skeleton.get_bone(bone_id)?;
 
@@ -83,7 +83,7 @@ fn compute_local_from_global(
         None => skeleton.root_transform,
     };
 
-    let parent_inverse = parent_global.invert().unwrap_or(Matrix4::identity());
+    let parent_inverse = parent_global.try_inverse().unwrap_or(Mat4::IDENTITY);
     let local_matrix = parent_inverse * new_global;
     let (translation, rotation, scale) = decompose_transform(&local_matrix);
 

@@ -4,7 +4,8 @@ use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
-use thyllore_math_core::*;
+use glam::{Mat4, Vec4};
+use std::mem::offset_of;
 use thyllore_spirv_reflect::declare_gpu_block;
 
 pub use thyllore_model_core::mesh::{Vertex, VertexData};
@@ -150,7 +151,7 @@ declare_gpu_block! {
 
 impl Default for UniformBufferObject {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             model: identity,
             view: identity,
@@ -175,7 +176,7 @@ declare_gpu_block! {
 
 impl Default for SceneUniformData {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
             light_color: Vec4::new(1.0, 1.0, 1.0, thyllore_render_core::AMBIENT_INTENSITY),
@@ -202,28 +203,28 @@ pub(crate) fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescri
         .binding(0)
         .location(0)
         .format(vk::Format::R32G32B32_SFLOAT)
-        .offset(0)
+        .offset(offset_of!(Vertex, pos) as u32)
         .build();
 
     let color = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(1)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(size_of::<Vec3>() as u32)
+        .offset(offset_of!(Vertex, color) as u32)
         .build();
 
     let tex_coord = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(2)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset((size_of::<Vec3>() + size_of::<Vec4>()) as u32)
+        .offset(offset_of!(Vertex, tex_coord) as u32)
         .build();
 
     let normal = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(3)
         .format(vk::Format::R32G32B32_SFLOAT)
-        .offset((size_of::<Vec3>() + size_of::<Vec4>() + size_of::<Vec2>()) as u32)
+        .offset(offset_of!(Vertex, normal) as u32)
         .build();
 
     [pos, color, tex_coord, normal]

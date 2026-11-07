@@ -4,7 +4,7 @@ use super::effect::{
 };
 use crate::water::{build_water_model_matrix, build_water_ubo, WaterTorusEffect, WaterUBO};
 use crate::WaterParameterOwner;
-use cgmath::Vector4;
+use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use thyllore_math_core::torus_local_bounds_corners;
@@ -56,7 +56,7 @@ pub fn water_bounds_corners(
         torus_local_bounds_corners(effect.major_radius, effect.minor_radius)
             .iter()
             .map(|corner| {
-                let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+                let world = model * Vec4::new(corner.x, corner.y, corner.z, 1.0);
                 [world.x, world.y, world.z]
             })
             .collect(),

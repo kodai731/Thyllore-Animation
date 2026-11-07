@@ -2,7 +2,7 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use anyhow::Result;
-use cgmath::Vector4;
+use glam::Vec4;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
@@ -29,7 +29,7 @@ pub struct MeshBuffer {
     pub skeleton_id: Option<SkeletonId>,
     pub node_index: Option<usize>,
     pub base_vertices: Vec<Vertex>,
-    pub base_colors: Option<Vec<Vector4<f32>>>,
+    pub base_colors: Option<Vec<Vec4>>,
     pub morph: MeshMorph,
 }
 

@@ -1,14 +1,14 @@
 use crate::wind::analytic::integral::WindShellParams;
 use crate::wind::analytic::motion::rotation_phase;
-use cgmath::{Matrix3, Vector3};
-use thyllore_math_core::{gradient_noise3, smoothstep, Mat3};
+use glam::{Mat3, Vec3};
+use thyllore_math_core::{gradient_noise3, smoothstep};
 
-const OCTAVE_ROTATION: Mat3 = Matrix3::new(
+const OCTAVE_ROTATION: Mat3 = Mat3::from_cols_array(&[
     0.784750, 0.509329, -0.353201, -0.045714, 0.615862, 0.786527, 0.618124, -0.601081, 0.506581,
-);
+]);
 
 fn rotate(p: [f32; 3]) -> [f32; 3] {
-    let rotated = OCTAVE_ROTATION * Vector3::new(p[0], p[1], p[2]);
+    let rotated = OCTAVE_ROTATION * Vec3::new(p[0], p[1], p[2]);
     [rotated.x, rotated.y, rotated.z]
 }
 

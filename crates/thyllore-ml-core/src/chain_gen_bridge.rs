@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     chain_column, chain_name, end_bone_name, BodyCollider, ChainGenInput, ChainGenParams,
     ChainGenSettings, ChainRole, GeneratedChain, GivenChain, InfluenceTarget, SkinSurface,
@@ -58,7 +58,7 @@ pub fn role_bones(humanoid_bones: &BTreeMap<String, usize>, bones: &[BoneSpec]) 
             Some(RoleBone {
                 role: HumanoidRole::from_unity_name(role)?,
                 bone: bone as BoneId,
-                head: Vector3::from(bones.get(bone)?.rest_position),
+                head: Vec3::from(bones.get(bone)?.rest_position),
             })
         })
         .collect()
@@ -77,14 +77,14 @@ pub fn body_colliders(
             role_of_bone(roles, collider.bone as BoneId).is_none_or(supports_garments)
         })
         .filter_map(|collider| {
-            let rest_head = Vector3::from(bones.get(collider.bone)?.rest_position);
-            let head = rest_head + Vector3::from(collider.head);
+            let rest_head = Vec3::from(bones.get(collider.bone)?.rest_position);
+            let head = rest_head + Vec3::from(collider.head);
             Some(BodyCollider {
                 bone: collider.bone as BoneId,
                 head,
                 tail: collider
                     .tail
-                    .map_or(head, |tail| rest_head + Vector3::from(tail)),
+                    .map_or(head, |tail| rest_head + Vec3::from(tail)),
                 radius: collider.radius,
             })
         })
@@ -158,15 +158,12 @@ pub(crate) fn role_from_str(role: &str) -> anyhow::Result<ChainRole> {
     }
 }
 
-fn vector3_to_array(v: Vector3<f32>) -> [f32; 3] {
+fn vector3_to_array(v: Vec3) -> [f32; 3] {
     [v.x, v.y, v.z]
 }
 
-fn to_vectors(points: &[[f32; 3]]) -> Vec<Vector3<f32>> {
-    points
-        .iter()
-        .map(|p| Vector3::new(p[0], p[1], p[2]))
-        .collect()
+fn to_vectors(points: &[[f32; 3]]) -> Vec<Vec3> {
+    points.iter().map(|p| Vec3::new(p[0], p[1], p[2])).collect()
 }
 
 fn skin_surface_from_fit_skin(skin: &FitSkin) -> SkinSurface {
@@ -330,7 +327,7 @@ pub fn run_chain_gen(
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
-        root_position: Vector3::from(root_position),
+        root_position: Vec3::from(root_position),
         root_bone: attachment.root_bone as BoneId,
         skins: &skins,
         tex_coords,

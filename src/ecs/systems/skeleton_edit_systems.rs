@@ -1,4 +1,4 @@
-use cgmath::{Vector3, Vector4};
+use glam::{UVec4, Vec3, Vec4};
 use thyllore_model_core::{BoneRemap, SkinData, INFLUENCES_PER_VERTEX};
 
 use crate::animation::editable::SourceClipId;
@@ -43,7 +43,7 @@ pub fn add_skeleton_bone(
     graphics: &GraphicsResources,
     parent_name: &str,
     name: &str,
-    local_offset: Vector3<f32>,
+    local_offset: Vec3,
 ) -> anyhow::Result<BoneId> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
 
@@ -62,7 +62,7 @@ pub fn set_skeleton_bone_offset(
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
     bone_name: &str,
-    local_offset: Vector3<f32>,
+    local_offset: Vec3,
 ) -> anyhow::Result<()> {
     let (_, skeleton) = edited_skeleton_mut(assets)?;
     let bone_id = resolve_bone(skeleton, bone_name)?;
@@ -325,8 +325,8 @@ pub fn merge_removed_bone_weights(
         merge_duplicate_influences(&mut influences);
         normalize_influences(&mut influences);
 
-        *indices = Vector4::new(0, 0, 0, 0);
-        *weights = Vector4::new(0.0, 0.0, 0.0, 0.0);
+        *indices = UVec4::new(0, 0, 0, 0);
+        *weights = Vec4::new(0.0, 0.0, 0.0, 0.0);
         for (slot, (bone, weight)) in influences.into_iter().take(4).enumerate() {
             indices[slot] = bone;
             weights[slot] = weight;

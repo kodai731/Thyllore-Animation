@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector3, Vector4};
+use glam::{vec4, Mat4, Vec3, Vec4};
 
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::World;
@@ -47,8 +47,8 @@ pub(crate) fn full_extent_scissor(extent: Extent2D) -> Rect2D {
 pub(crate) fn compute_bounds_scissor(
     world: &World,
     extent: Extent2D,
-    model: &Matrix4<f32>,
-    corners: impl IntoIterator<Item = Vector3<f32>>,
+    model: &Mat4,
+    corners: impl IntoIterator<Item = Vec3>,
 ) -> Option<Rect2D> {
     let projection = world.get_resource::<ProjectionData>();
     compute_projected_bounds_scissor(projection.as_deref(), extent, model, corners)
@@ -57,16 +57,16 @@ pub(crate) fn compute_bounds_scissor(
 pub(crate) fn compute_projected_bounds_scissor(
     projection: Option<&ProjectionData>,
     extent: Extent2D,
-    model: &Matrix4<f32>,
-    corners: impl IntoIterator<Item = Vector3<f32>>,
+    model: &Mat4,
+    corners: impl IntoIterator<Item = Vec3>,
 ) -> Option<Rect2D> {
     let Some(projection) = projection else {
         return Some(full_extent_scissor(extent));
     };
     let model_view_proj = projection.proj * projection.view * model;
-    let clip_corners: Vec<Vector4<f32>> = corners
+    let clip_corners: Vec<Vec4> = corners
         .into_iter()
-        .map(|corner| model_view_proj * cgmath::vec4(corner.x, corner.y, corner.z, 1.0))
+        .map(|corner| model_view_proj * vec4(corner.x, corner.y, corner.z, 1.0))
         .collect();
 
     let corners_behind_camera = clip_corners.iter().filter(|clip| clip.w <= 0.0).count();

@@ -107,6 +107,7 @@ mod tests {
     use crate::spring_bone::{
         ChainOrigin, ChainRole, ColliderShape, SpringForceModel, SubmeshSelector,
     };
+    use glam::Vec3;
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -169,15 +170,15 @@ mod tests {
         let mut setup = SpringBoneSetup::default();
         let skin_fit = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, -0.05, 0.0),
-            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            head: Vec3::new(0.0, -0.05, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
             radius: 0.09,
         };
         ensure_fitted_collider(&mut setup, &skin_fit);
         let estimate = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, 0.1, 0.0),
-            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            head: Vec3::new(0.0, 0.1, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
             radius: 0.1,
         };
 
@@ -207,8 +208,8 @@ mod tests {
         let mut setup = SpringBoneSetup::default();
         let root_collider = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, 0.0, 0.0),
-            tail: cgmath::Vector3::new(0.0, 1.0, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.1,
         };
 

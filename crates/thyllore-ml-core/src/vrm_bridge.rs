@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
@@ -30,9 +30,9 @@ pub fn vrm_t_pose_warnings(
             })?;
         mapping.by_role.insert(role, bone);
     }
-    let heads: Vec<Vector3<f32>> = bones
+    let heads: Vec<Vec3> = bones
         .iter()
-        .map(|bone| Vector3::from(bone.rest_position))
+        .map(|bone| Vec3::from(bone.rest_position))
         .collect();
     Ok(t_pose_warnings(&mapping, &heads, T_POSE_TOLERANCE_DEG))
 }

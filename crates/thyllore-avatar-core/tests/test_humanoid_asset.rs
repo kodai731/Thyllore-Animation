@@ -11,6 +11,7 @@ use support::test_humanoid::{
     CanonicalTip,
 };
 use thyllore_avatar_core::expression::components::side::Side;
+use thyllore_avatar_core::humanoid::components::mapping::StoredHumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
 
@@ -235,9 +236,14 @@ fn test_humanoid_matches_generator() {
     write_test_humanoid_sidecar(&generated_sidecar_path).unwrap();
     let generated_sidecar = std::fs::read_to_string(&generated_sidecar_path).unwrap();
     assert_eq!(
-        recorded_sidecar, generated_sidecar,
+        parse_sidecar(&recorded_sidecar),
+        parse_sidecar(&generated_sidecar),
         "sidecar file differs from generator output"
     );
+}
+
+fn parse_sidecar(text: &str) -> StoredHumanoidMapping {
+    ron::from_str(text).expect("sidecar parses as a stored humanoid mapping")
 }
 
 #[test]

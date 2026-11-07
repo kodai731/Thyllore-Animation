@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::editable::components::clip::EditableAnimationClip;
 use crate::editable::components::curve::PropertyCurve;
@@ -97,7 +97,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let z = curve_sample(&track.translation_z, time).unwrap_or(0.0);
             channel
                 .translation
-                .push(Keyframe::new(time, Vector3::new(x, y, z)));
+                .push(Keyframe::new(time, Vec3::new(x, y, z)));
         }
 
         let rotation_curves = [&track.rotation_x, &track.rotation_y, &track.rotation_z];
@@ -105,7 +105,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let ex = curve_sample(&track.rotation_x, time).unwrap_or(0.0);
             let ey = curve_sample(&track.rotation_y, time).unwrap_or(0.0);
             let ez = curve_sample(&track.rotation_z, time).unwrap_or(0.0);
-            let q = euler_degrees_to_quaternion(&Vector3::new(ex, ey, ez));
+            let q = euler_degrees_to_quaternion(&Vec3::new(ex, ey, ez));
             channel.rotation.push(Keyframe::new(time, q));
         }
 
@@ -114,9 +114,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let x = curve_sample(&track.scale_x, time).unwrap_or(1.0);
             let y = curve_sample(&track.scale_y, time).unwrap_or(1.0);
             let z = curve_sample(&track.scale_z, time).unwrap_or(1.0);
-            channel
-                .scale
-                .push(Keyframe::new(time, Vector3::new(x, y, z)));
+            channel.scale.push(Keyframe::new(time, Vec3::new(x, y, z)));
         }
 
         if !channel.translation.is_empty()
@@ -171,10 +169,7 @@ fn import_scalar_keyframes(keyframes: &[Keyframe<f32>], curve: &mut PropertyCurv
     }
 }
 
-fn import_vec3_keyframes(
-    keyframes: &[Keyframe<Vector3<f32>>],
-    curves: &mut [&mut PropertyCurve; 3],
-) {
+fn import_vec3_keyframes(keyframes: &[Keyframe<Vec3>], curves: &mut [&mut PropertyCurve; 3]) {
     for (idx, kf) in keyframes.iter().enumerate() {
         let values = [kf.value.x, kf.value.y, kf.value.z];
         let is_cubic = kf.interpolation == Interpolation::CubicSpline;

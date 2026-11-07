@@ -9,6 +9,7 @@ use crate::ecs::systems::hierarchy_systems::{
 };
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::hooks::object_pick::ObjectPickHooks;
+use glam::Vec3;
 
 pub fn find_entity_by_object_id(
     world: &World,
@@ -108,8 +109,8 @@ pub(crate) fn resolve_closest_pick(
     }
 
     let surface_distance = surface_world_position
-        .map(|p| cgmath::Vector3::new(p[0], p[1], p[2]) - ray.origin)
-        .map(|to_surface| cgmath::dot(to_surface, ray.direction))
+        .map(|p| Vec3::new(p[0], p[1], p[2]) - ray.origin)
+        .map(|to_surface| to_surface.dot(ray.direction))
         .unwrap_or(f32::INFINITY);
 
     if effect_distance < surface_distance {

@@ -1,5 +1,5 @@
 use super::*;
-use cgmath::{Deg, Matrix4, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use thyllore_color_core::blackbody_rgb;
 use thyllore_math_core::{evaluate_chebyshev, fit_chebyshev, integrate_chebyshev};
 
@@ -108,17 +108,17 @@ fn test_resolved_step_count_selects_per_mode_count() {
 #[test]
 fn test_build_flame_model_and_inverse_are_consistent() {
     let effect = FlameEffect {
-        position: Vector3::new(1.5, -0.25, 3.0),
+        position: Vec3::new(1.5, -0.25, 3.0),
         height: 2.0,
         radius: 0.5,
         ..FlameEffect::default()
     };
     let product = build_flame_model_matrix(&effect) * build_flame_inverse_model_matrix(&effect);
-    let identity = Matrix4::<f32>::from_scale(1.0);
+    let identity = Mat4::IDENTITY;
     for column in 0..4 {
         for row in 0..4 {
             assert!(
-                (product[column][row] - identity[column][row]).abs() < 1e-5,
+                (product.col(column)[row] - identity.col(column)[row]).abs() < 1e-5,
                 "model * inverse_model differs from identity at [{column}][{row}]"
             );
         }
@@ -137,8 +137,8 @@ fn test_build_flame_ubo_clamps_degenerate_extent() {
         &FlameBaked::default(),
         &FlameTemporalAccum::default(),
     );
-    assert!(ubo.model[0][0] > 0.0);
-    assert!(ubo.inverse_model[1][1].is_finite());
+    assert!(ubo.model.columns[0][0] > 0.0);
+    assert!(ubo.inverse_model.columns[1][1].is_finite());
 }
 
 #[test]
@@ -424,19 +424,19 @@ fn test_evaluate_self_shadow_optical_depth_smooth_density() {
 #[test]
 fn test_flame_model_matrix_inverse_parity() {
     let mut effect = FlameEffect::default();
-    effect.position = Vector3::new(1.0, 2.0, 3.0);
-    effect.rotation = Quaternion::from(cgmath::Euler::new(Deg(0.0), Deg(0.0), Deg(30.0)));
+    effect.position = Vec3::new(1.0, 2.0, 3.0);
+    effect.rotation = Quat::from_rotation_z(30.0_f32.to_radians());
     let model = build_flame_model_matrix(&effect);
     let inverse = build_flame_inverse_model_matrix(&effect);
     let identity = model * inverse;
     for i in 0..4 {
         for j in 0..4 {
             assert!(
-                (identity[i][j] - (if i == j { 1.0 } else { 0.0 })).abs() < 1e-4,
+                (identity.col(i)[j] - (if i == j { 1.0 } else { 0.0 })).abs() < 1e-4,
                 "identity[{}][{}] = {}",
                 i,
                 j,
-                identity[i][j]
+                identity.col(i)[j]
             );
         }
     }

@@ -1,7 +1,7 @@
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::PickRay;
 use crate::ecs::world::{Entity, World};
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// Nearest lightning whose bounding sphere the ray enters, with the distance at which it enters.
 pub fn find_lightning_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
@@ -17,27 +17,22 @@ pub fn find_lightning_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entit
         .min_by(|(_, a), (_, b)| a.total_cmp(b))
 }
 
-fn strike_bounding_sphere(effect: &LightningEffect) -> (Vector3<f32>, f32) {
+fn strike_bounding_sphere(effect: &LightningEffect) -> (Vec3, f32) {
     let start = effect.position;
-    let end = start + Vector3::from(effect.shape.end_offset);
+    let end = start + Vec3::from(effect.shape.end_offset);
 
     let tip_radius = effect.shape.core_radius * effect.shape.tip_radius_ratio;
     let sheath_radius = effect.shape.core_radius.max(tip_radius) * effect.look.rim_ratio;
 
     let center = (start + end) * 0.5;
-    let radius = (end - start).magnitude() * 0.5 + sheath_radius;
+    let radius = (end - start).length() * 0.5 + sheath_radius;
     (center, radius)
 }
 
-fn ray_sphere_entry(
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    center: Vector3<f32>,
-    radius: f32,
-) -> Option<f32> {
+fn ray_sphere_entry(origin: Vec3, direction: Vec3, center: Vec3, radius: f32) -> Option<f32> {
     let to_center = center - origin;
     let projection = to_center.dot(direction);
-    let gap_squared = to_center.magnitude2() - projection * projection;
+    let gap_squared = to_center.length_squared() - projection * projection;
     let half_chord_squared = radius * radius - gap_squared;
     if half_chord_squared < 0.0 {
         return None;

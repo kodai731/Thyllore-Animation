@@ -87,7 +87,7 @@ def test_remove_chain_collections_drops_only_the_named_chains():
 
 
 def test_apply_chain_display_names_collections_after_the_chains():
-    chain = SimpleNamespace(name="skirt", origin_attachment="ring", joints=[SimpleNamespace(bone="skirt_00")])
+    chain = SimpleNamespace(name="skirt", origin_attachment="ring", tail="", joints=[SimpleNamespace(bone="skirt_00")])
     arm = _armature(["skirt_00"], [chain])
 
     apply_chain_display(arm)

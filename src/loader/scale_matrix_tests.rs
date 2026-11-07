@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, UVec4, Vec3, Vec4};
 
 use crate::animation::{Skeleton, SkeletonPose, SkinData};
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
@@ -6,37 +6,37 @@ use crate::loader::LoadedNode;
 use crate::vulkanr::resource::graphics_resource::NodeData;
 
 const TOLERANCE: f32 = 0.001;
-const EXPECTED_POSITION: Vector3<f32> = Vector3::new(0.5, 1.0, 0.0);
+const EXPECTED_POSITION: Vec3 = Vec3::new(0.5, 1.0, 0.0);
 
 fn create_skeleton_meters() -> Skeleton {
     let mut skeleton = Skeleton::new("test_skeleton");
 
     let root_id = skeleton.add_bone("root", None);
     skeleton.bones[root_id as usize].local_transform =
-        Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0));
-    skeleton.bones[root_id as usize].inverse_bind_pose = Matrix4::identity();
+        Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0));
+    skeleton.bones[root_id as usize].inverse_bind_pose = Mat4::IDENTITY;
 
     let child_id = skeleton.add_bone("child", Some(root_id));
     skeleton.bones[child_id as usize].local_transform =
-        Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+        Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
 
-    let child_bind_global = Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+    let child_bind_global = Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
     skeleton.bones[child_id as usize].inverse_bind_pose = child_bind_global
-        .invert()
+        .try_inverse()
         .expect("child bind pose must be invertible");
 
     skeleton
 }
 
 fn create_skin_data_meters() -> SkinData {
-    let base_pos = Vector3::new(0.5, 1.0, 0.0);
+    let base_pos = Vec3::new(0.5, 1.0, 0.0);
 
     SkinData {
         skeleton_id: 0,
-        bone_indices: vec![Vector4::new(1, 0, 0, 0)],
-        bone_weights: vec![Vector4::new(1.0, 0.0, 0.0, 0.0)],
+        bone_indices: vec![UVec4::new(1, 0, 0, 0)],
+        bone_weights: vec![Vec4::new(1.0, 0.0, 0.0, 0.0)],
         base_positions: vec![base_pos],
-        base_normals: vec![Vector3::new(0.0, 1.0, 0.0)],
+        base_normals: vec![Vec3::new(0.0, 1.0, 0.0)],
     }
 }
 
@@ -46,13 +46,13 @@ fn create_nodes_meters() -> Vec<LoadedNode> {
             index: 0,
             name: "root".to_string(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         },
         LoadedNode {
             index: 1,
             name: "child".to_string(),
             parent_index: Some(0),
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
         },
     ]
 }
@@ -65,7 +65,7 @@ fn to_node_data(loaded_nodes: &[LoadedNode]) -> Vec<NodeData> {
             name: n.name.clone(),
             parent_index: n.parent_index,
             local_transform: n.local_transform,
-            global_transform: Matrix4::identity(),
+            global_transform: Mat4::IDENTITY,
         })
         .collect()
 }
@@ -74,7 +74,7 @@ fn rest_pose(skeleton: &Skeleton) -> SkeletonPose {
     create_pose_from_rest(skeleton)
 }
 
-fn assert_position_correct(label: &str, actual: Vector3<f32>, expected: Vector3<f32>) {
+fn assert_position_correct(label: &str, actual: Vec3, expected: Vec3) {
     let dx = (actual.x - expected.x).abs();
     let dy = (actual.y - expected.y).abs();
     let dz = (actual.z - expected.z).abs();
@@ -91,12 +91,12 @@ fn assert_position_correct(label: &str, actual: Vector3<f32>, expected: Vector3<
     );
 }
 
-fn run_skinning(skeleton: &Skeleton, skin_data: &SkinData) -> Vector3<f32> {
+fn run_skinning(skeleton: &Skeleton, skin_data: &SkinData) -> Vec3 {
     let pose = rest_pose(skeleton);
     let global_transforms = compute_pose_global_transforms(skeleton, &pose);
     let vertex_count = skin_data.base_positions.len();
-    let mut out_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-    let mut out_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+    let mut out_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+    let mut out_normals = vec![Vec3::new(0.0, 1.0, 0.0); vertex_count];
     thyllore_model_core::apply_skinning(
         skin_data,
         &global_transforms,
@@ -110,10 +110,10 @@ fn run_skinning(skeleton: &Skeleton, skin_data: &SkinData) -> Vector3<f32> {
 fn run_node_animation(
     loaded_nodes: &[LoadedNode],
     skeleton: &Skeleton,
-    vertex_local: Vector3<f32>,
+    vertex_local: Vec3,
     mesh_node_index: usize,
     node_animation_scale: f32,
-) -> Vector3<f32> {
+) -> Vec3 {
     let pose = rest_pose(skeleton);
     let mut node_data = to_node_data(loaded_nodes);
     crate::ecs::systems::animation::apply::compute_node_global_transforms(
@@ -123,8 +123,8 @@ fn run_node_animation(
     );
 
     let global_transform = node_data[mesh_node_index].global_transform;
-    let v4 = global_transform * Vector4::new(vertex_local.x, vertex_local.y, vertex_local.z, 1.0);
-    Vector3::new(
+    let v4 = global_transform * Vec4::new(vertex_local.x, vertex_local.y, vertex_local.z, 1.0);
+    Vec3::new(
         v4.x * node_animation_scale,
         v4.y * node_animation_scale,
         v4.z * node_animation_scale,
@@ -148,7 +148,7 @@ fn fbx_armature_node_animation() {
     let skeleton = create_skeleton_meters();
     let nodes = create_nodes_meters();
 
-    let vertex_local = Vector3::new(0.5, 0.0, 0.0);
+    let vertex_local = Vec3::new(0.5, 0.0, 0.0);
     let mesh_node_index = 1;
 
     let final_pos = run_node_animation(
@@ -164,7 +164,7 @@ fn fbx_armature_node_animation() {
 
 #[test]
 fn fbx_no_armature_static() {
-    let vertex_meters = Vector3::new(0.5, 1.0, 0.0);
+    let vertex_meters = Vec3::new(0.5, 1.0, 0.0);
 
     assert_position_correct("FBX no armature static", vertex_meters, EXPECTED_POSITION);
 }
@@ -178,25 +178,25 @@ fn fbx_no_armature_node_animation() {
             index: 0,
             name: "root".to_string(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         },
         LoadedNode {
             index: 1,
             name: "child".to_string(),
             parent_index: Some(0),
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
         },
     ];
 
-    let vertex_local = Vector3::new(0.5, 0.0, 0.0);
+    let vertex_local = Vec3::new(0.5, 0.0, 0.0);
 
     let mut node_data = to_node_data(&nodes);
     node_data[0].global_transform = node_data[0].local_transform;
     node_data[1].global_transform = node_data[0].global_transform * node_data[1].local_transform;
 
     let global_transform = node_data[1].global_transform;
-    let v4 = global_transform * Vector4::new(vertex_local.x, vertex_local.y, vertex_local.z, 1.0);
-    let final_pos = Vector3::new(
+    let v4 = global_transform * Vec4::new(vertex_local.x, vertex_local.y, vertex_local.z, 1.0);
+    let final_pos = Vec3::new(
         v4.x * node_animation_scale,
         v4.y * node_animation_scale,
         v4.z * node_animation_scale,
@@ -226,14 +226,15 @@ fn gltf_armature_node_animation() {
     let skeleton_cm = {
         let mut s = Skeleton::new("test_skeleton_cm");
         let root_id = s.add_bone("root", None);
-        s.bones[root_id as usize].local_transform = Matrix4::identity();
-        s.bones[root_id as usize].inverse_bind_pose = Matrix4::identity();
+        s.bones[root_id as usize].local_transform = Mat4::IDENTITY;
+        s.bones[root_id as usize].inverse_bind_pose = Mat4::IDENTITY;
 
         let child_id = s.add_bone("child", Some(root_id));
         s.bones[child_id as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 100.0, 0.0));
-        let child_bind = Matrix4::from_translation(Vector3::new(0.0, 100.0, 0.0));
-        s.bones[child_id as usize].inverse_bind_pose = child_bind.invert().expect("invertible");
+            Mat4::from_translation(Vec3::new(0.0, 100.0, 0.0));
+        let child_bind = Mat4::from_translation(Vec3::new(0.0, 100.0, 0.0));
+        s.bones[child_id as usize].inverse_bind_pose =
+            child_bind.try_inverse().expect("invertible");
         s
     };
 
@@ -242,17 +243,17 @@ fn gltf_armature_node_animation() {
             index: 0,
             name: "root".to_string(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         },
         LoadedNode {
             index: 1,
             name: "child".to_string(),
             parent_index: Some(0),
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 100.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 100.0, 0.0)),
         },
     ];
 
-    let vertex_local_meters = Vector3::new(0.5, 0.0, 0.0);
+    let vertex_local_meters = Vec3::new(0.5, 0.0, 0.0);
     let mesh_node_index = 1;
 
     let final_pos = run_node_animation(
@@ -274,7 +275,7 @@ fn gltf_armature_node_animation() {
 
 #[test]
 fn gltf_no_armature_static() {
-    let vertex_meters = Vector3::new(0.5, 1.0, 0.0);
+    let vertex_meters = Vec3::new(0.5, 1.0, 0.0);
 
     assert_position_correct("glTF no armature static", vertex_meters, EXPECTED_POSITION);
 }
@@ -288,17 +289,17 @@ fn gltf_no_armature_node_animation() {
             index: 0,
             name: "root".to_string(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         },
         LoadedNode {
             index: 1,
             name: "child".to_string(),
             parent_index: Some(0),
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
         },
     ];
 
-    let vertex_local_meters = Vector3::new(0.5, 0.0, 0.0);
+    let vertex_local_meters = Vec3::new(0.5, 0.0, 0.0);
 
     let mut node_data = to_node_data(&nodes);
     node_data[0].global_transform = node_data[0].local_transform;
@@ -306,13 +307,13 @@ fn gltf_no_armature_node_animation() {
 
     let global_transform = node_data[1].global_transform;
     let v4 = global_transform
-        * Vector4::new(
+        * Vec4::new(
             vertex_local_meters.x,
             vertex_local_meters.y,
             vertex_local_meters.z,
             1.0,
         );
-    let final_pos = Vector3::new(
+    let final_pos = Vec3::new(
         v4.x * node_animation_scale,
         v4.y * node_animation_scale,
         v4.z * node_animation_scale,

@@ -1,13 +1,13 @@
 use crate::bounds::Aabb;
 use crate::coordinate_system::ray_to_triangle_barycentric;
 use crate::triangle::closest_point_on_triangle;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 #[derive(Clone, Debug)]
 pub struct TriangleBvh {
     nodes: Vec<BvhNode>,
     triangle_order: Vec<u32>,
-    positions: Vec<Vector3<f32>>,
+    positions: Vec<Vec3>,
     triangles: Vec<[u32; 3]>,
 }
 
@@ -23,22 +23,22 @@ struct BvhNode {
 pub struct RayHit {
     pub triangle: u32,
     pub distance: f32,
-    pub barycentric: Vector3<f32>,
+    pub barycentric: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct SurfacePoint {
     pub triangle: u32,
     pub distance: f32,
-    pub point: Vector3<f32>,
+    pub point: Vec3,
 }
 
 impl BvhNode {
     fn placeholder() -> Self {
         BvhNode {
             bounds: Aabb {
-                min: Vector3::new(0.0, 0.0, 0.0),
-                max: Vector3::new(0.0, 0.0, 0.0),
+                min: Vec3::new(0.0, 0.0, 0.0),
+                max: Vec3::new(0.0, 0.0, 0.0),
             },
             first: 0,
             count: 0,
@@ -48,14 +48,14 @@ impl BvhNode {
 }
 
 struct BvhBuilder<'a> {
-    positions: &'a [Vector3<f32>],
+    positions: &'a [Vec3],
     triangles: &'a [[u32; 3]],
     nodes: Vec<BvhNode>,
     triangle_order: Vec<u32>,
 }
 
 impl<'a> BvhBuilder<'a> {
-    fn new(positions: &'a [Vector3<f32>], triangles: &'a [[u32; 3]]) -> Self {
+    fn new(positions: &'a [Vec3], triangles: &'a [[u32; 3]]) -> Self {
         let n = triangles.len();
         let triangle_order: Vec<u32> = (0..n as u32).collect();
         let mut nodes = Vec::with_capacity(2 * n);
@@ -128,7 +128,7 @@ impl<'a> BvhBuilder<'a> {
 
     fn range_bounds(&self, first: usize, count: usize) -> Aabb {
         let slice = &self.triangle_order[first..first + count];
-        let points: Vec<Vector3<f32>> = slice
+        let points: Vec<Vec3> = slice
             .iter()
             .flat_map(|&idx| {
                 let tri = self.triangles[idx as usize];
@@ -143,7 +143,7 @@ impl<'a> BvhBuilder<'a> {
     }
 
     fn longest_centroid_axis(&self, first: usize, count: usize) -> usize {
-        let centroids: Vec<Vector3<f32>> = self.triangle_order[first..first + count]
+        let centroids: Vec<Vec3> = self.triangle_order[first..first + count]
             .iter()
             .map(|&idx| centroid(self.positions, self.triangles[idx as usize]))
             .collect();
@@ -161,12 +161,12 @@ impl<'a> BvhBuilder<'a> {
     }
 }
 
-fn centroid(positions: &[Vector3<f32>], tri: [u32; 3]) -> Vector3<f32> {
+fn centroid(positions: &[Vec3], tri: [u32; 3]) -> Vec3 {
     (positions[tri[0] as usize] + positions[tri[1] as usize] + positions[tri[2] as usize])
         * (1.0 / 3.0)
 }
 
-fn axis_component(axis: usize, v: Vector3<f32>) -> f32 {
+fn axis_component(axis: usize, v: Vec3) -> f32 {
     match axis {
         0 => v.x,
         1 => v.y,
@@ -175,23 +175,17 @@ fn axis_component(axis: usize, v: Vector3<f32>) -> f32 {
 }
 
 impl TriangleBvh {
-    pub fn build(positions: &[Vector3<f32>], triangles: &[[u32; 3]]) -> Self {
+    pub fn build(positions: &[Vec3], triangles: &[[u32; 3]]) -> Self {
         BvhBuilder::new(positions, triangles).build()
     }
 }
 
 impl TriangleBvh {
-    pub fn raycast(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        max_distance: f32,
-    ) -> Option<RayHit> {
+    pub fn raycast(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Option<RayHit> {
         if self.triangles.is_empty() {
             return None;
         }
-        let inverse_direction =
-            Vector3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z);
+        let inverse_direction = Vec3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z);
         let mut nearest: Option<RayHit> = None;
         let mut stack: Vec<u32> = vec![0];
 
@@ -219,8 +213,8 @@ impl TriangleBvh {
     fn nearest_leaf_hit(
         &self,
         leaf: &BvhNode,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         limit: f32,
     ) -> Option<RayHit> {
         let mut nearest: Option<RayHit> = None;
@@ -235,7 +229,7 @@ impl TriangleBvh {
                 nearest = Some(RayHit {
                     triangle,
                     distance,
-                    barycentric: Vector3::new(1.0 - u - v, u, v),
+                    barycentric: Vec3::new(1.0 - u - v, u, v),
                 });
             }
         }
@@ -246,8 +240,8 @@ impl TriangleBvh {
     fn push_children_nearest_first(
         &self,
         node: &BvhNode,
-        origin: Vector3<f32>,
-        inverse_direction: Vector3<f32>,
+        origin: Vec3,
+        inverse_direction: Vec3,
         stack: &mut Vec<u32>,
     ) {
         let left = node.left_child;
@@ -277,7 +271,7 @@ impl TriangleBvh {
 
 impl TriangleBvh {
     /// The surface point nearest to `point` within `max_distance`, if any.
-    pub fn closest_point(&self, point: Vector3<f32>, max_distance: f32) -> Option<SurfacePoint> {
+    pub fn closest_point(&self, point: Vec3, max_distance: f32) -> Option<SurfacePoint> {
         if self.triangles.is_empty() {
             return None;
         }
@@ -301,18 +295,13 @@ impl TriangleBvh {
         nearest
     }
 
-    fn nearest_leaf_point(
-        &self,
-        leaf: &BvhNode,
-        point: Vector3<f32>,
-        limit: f32,
-    ) -> Option<SurfacePoint> {
+    fn nearest_leaf_point(&self, leaf: &BvhNode, point: Vec3, limit: f32) -> Option<SurfacePoint> {
         let mut nearest: Option<SurfacePoint> = None;
         for slot in leaf.first..leaf.first + leaf.count {
             let triangle = self.triangle_order[slot as usize];
             let [a, b, c] = self.triangles[triangle as usize].map(|v| self.positions[v as usize]);
             let closest = closest_point_on_triangle(point, a, b, c);
-            let distance = (closest - point).magnitude();
+            let distance = (closest - point).length();
             if distance < nearest.map_or(limit, |hit| hit.distance) {
                 nearest = Some(SurfacePoint {
                     triangle,
@@ -324,12 +313,7 @@ impl TriangleBvh {
         nearest
     }
 
-    fn push_children_closest_first(
-        &self,
-        node: &BvhNode,
-        point: Vector3<f32>,
-        stack: &mut Vec<u32>,
-    ) {
+    fn push_children_closest_first(&self, node: &BvhNode, point: Vec3, stack: &mut Vec<u32>) {
         let left = node.left_child;
         let right = left + 1;
         let left_distance = aabb_distance(&self.nodes[left as usize].bounds, point);
@@ -344,32 +328,28 @@ impl TriangleBvh {
     }
 
     /// The corner of `triangle` nearest to `point`, as a vertex index.
-    pub fn nearest_corner(&self, triangle: u32, point: Vector3<f32>) -> u32 {
+    pub fn nearest_corner(&self, triangle: u32, point: Vec3) -> u32 {
         self.triangles[triangle as usize]
             .into_iter()
             .min_by(|&a, &b| {
-                let da = (self.positions[a as usize] - point).magnitude2();
-                let db = (self.positions[b as usize] - point).magnitude2();
+                let da = (self.positions[a as usize] - point).length_squared();
+                let db = (self.positions[b as usize] - point).length_squared();
                 da.total_cmp(&db)
             })
             .expect("a triangle has three corners")
     }
 }
 
-fn aabb_distance(bounds: &Aabb, point: Vector3<f32>) -> f32 {
-    let clamped = Vector3::new(
+fn aabb_distance(bounds: &Aabb, point: Vec3) -> f32 {
+    let clamped = Vec3::new(
         point.x.clamp(bounds.min.x, bounds.max.x),
         point.y.clamp(bounds.min.y, bounds.max.y),
         point.z.clamp(bounds.min.z, bounds.max.z),
     );
-    (clamped - point).magnitude()
+    (clamped - point).length()
 }
 
-fn ray_aabb_entry(
-    bounds: &Aabb,
-    origin: Vector3<f32>,
-    inverse_direction: Vector3<f32>,
-) -> Option<f32> {
+fn ray_aabb_entry(bounds: &Aabb, origin: Vec3, inverse_direction: Vec3) -> Option<f32> {
     let t_min_x = (bounds.min.x - origin.x) * inverse_direction.x;
     let t_max_x = (bounds.max.x - origin.x) * inverse_direction.x;
     let mut t_enter = t_min_x.min(t_max_x);
@@ -409,9 +389,9 @@ mod tests {
     fn test_raycast_random_matches_brute_force() {
         let mut rng = Rng::with_seed(11);
         let n_vertices: usize = 300;
-        let vertices: Vec<Vector3<f32>> = (0..n_vertices)
+        let vertices: Vec<Vec3> = (0..n_vertices)
             .map(|_| {
-                Vector3::new(
+                Vec3::new(
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
@@ -428,14 +408,14 @@ mod tests {
                 ]
             })
             .collect();
-        let queries: Vec<(Vector3<f32>, Vector3<f32>)> = (0..100)
+        let queries: Vec<(Vec3, Vec3)> = (0..100)
             .map(|_| {
-                let origin = Vector3::new(
+                let origin = Vec3::new(
                     rng.f32() * 4.0 - 2.0,
                     rng.f32() * 4.0 - 2.0,
                     rng.f32() * 4.0 - 2.0,
                 );
-                let direction = Vector3::new(
+                let direction = Vec3::new(
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
@@ -490,9 +470,9 @@ mod tests {
     #[test]
     fn test_closest_point_random_matches_brute_force() {
         let mut rng = Rng::with_seed(7);
-        let vertices: Vec<Vector3<f32>> = (0..300)
+        let vertices: Vec<Vec3> = (0..300)
             .map(|_| {
-                Vector3::new(
+                Vec3::new(
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
                     rng.f32() * 2.0 - 1.0,
@@ -505,7 +485,7 @@ mod tests {
         let bvh = TriangleBvh::build(&vertices, &triangles);
 
         for _ in 0..100 {
-            let point = Vector3::new(
+            let point = Vec3::new(
                 rng.f32() * 4.0 - 2.0,
                 rng.f32() * 4.0 - 2.0,
                 rng.f32() * 4.0 - 2.0,
@@ -514,7 +494,7 @@ mod tests {
                 .iter()
                 .map(|tri| {
                     let [a, b, c] = tri.map(|v| vertices[v as usize]);
-                    (closest_point_on_triangle(point, a, b, c) - point).magnitude()
+                    (closest_point_on_triangle(point, a, b, c) - point).length()
                 })
                 .fold(f32::INFINITY, f32::min);
             let hit = bvh
@@ -531,29 +511,29 @@ mod tests {
 
     #[test]
     fn test_raycast_back_facing_only_returns_none() {
-        let positions: Vec<Vector3<f32>> = vec![
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
+        let positions: Vec<Vec3> = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
         ];
         let triangles: Vec<[u32; 3]> = vec![[0, 1, 2]];
         let bvh = TriangleBvh::build(&positions, &triangles);
-        let origin = Vector3::new(0.5, 0.5, -1.0);
-        let direction = Vector3::new(0.0, 0.0, -1.0);
+        let origin = Vec3::new(0.5, 0.5, -1.0);
+        let direction = Vec3::new(0.0, 0.0, -1.0);
         assert!(bvh.raycast(origin, direction, f32::MAX).is_none());
     }
 
     #[test]
     fn test_raycast_max_distance_clips() {
-        let positions: Vec<Vector3<f32>> = vec![
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
+        let positions: Vec<Vec3> = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
         ];
         let triangles: Vec<[u32; 3]> = vec![[0, 1, 2]];
         let bvh = TriangleBvh::build(&positions, &triangles);
-        let origin = Vector3::new(0.5, 0.5, -10.0);
-        let direction = Vector3::new(0.0, 0.0, 1.0);
+        let origin = Vec3::new(0.5, 0.5, -10.0);
+        let direction = Vec3::new(0.0, 0.0, 1.0);
         assert!(bvh.raycast(origin, direction, 5.0).is_none());
         let hit = bvh.raycast(origin, direction, f32::MAX).unwrap();
         assert!((hit.distance - 10.0).abs() < 1e-5);

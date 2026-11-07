@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::animation::BoneId;
 use crate::asset::AssetStorage;
@@ -21,7 +21,7 @@ use crate::ecs::systems::{
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use cgmath::Quaternion;
+use glam::Quat;
 
 #[derive(Clone, Debug)]
 pub enum HierarchyEvent {
@@ -40,9 +40,9 @@ pub enum HierarchyEvent {
     ExpandBone(BoneId),
     CollapseBone(BoneId),
     SetEntityVisible(Entity, Visibility),
-    SetEntityTranslation(Entity, Vector3<f32>),
-    SetEntityRotation(Entity, Quaternion<f32>),
-    SetEntityScale(Entity, Vector3<f32>),
+    SetEntityTranslation(Entity, Vec3),
+    SetEntityRotation(Entity, Quat),
+    SetEntityScale(Entity, Vec3),
     RenameEntity(Entity, String),
     NavigateTree {
         navigation: TreeNavigation,
@@ -57,9 +57,9 @@ pub enum HierarchyEvent {
     AddChildBone {
         parent: BoneId,
         name: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
-    SetBoneOffset(BoneId, Vector3<f32>),
+    SetBoneOffset(BoneId, Vec3),
     DeleteBone(BoneId),
 }
 

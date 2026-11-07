@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::SquareMatrix;
+use glam::Mat4;
 use std::rc::Rc;
 use thyllore_math_core::AffineRows3x4;
 use vulkanalia::prelude::v1_0::*;
@@ -16,27 +16,28 @@ use crate::descriptor::{
     COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
-    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+    compute_push_constant_range, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
+    RRPipeline, SampleCount, Topology, VertexInputConfig,
 };
-use crate::raytracing::RRAccelerationStructure;
-use crate::raytracing::{BlasGeometry, GpuPrimitive};
+use crate::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use crate::render::RRRender;
 use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
+use crate::types::Instance;
 
 #[must_use]
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]
-    pub command_pool: vk::CommandPool,
+    pub(crate) command_pool: vk::CommandPool,
 
     pub gbuffer: Option<RRGBuffer>,
     pub gbuffer_pipeline: Option<RRPipeline>,
-    pub gbuffer_sampler: Option<vk::Sampler>,
-    pub object_id_sampler: Option<vk::Sampler>,
+    pub(crate) gbuffer_sampler: Option<vk::Sampler>,
+    pub(crate) object_id_sampler: Option<vk::Sampler>,
 
     pub acceleration_structure: Option<RRAccelerationStructure>,
 
@@ -67,6 +68,25 @@ pub struct RayTracingData {
 }
 
 impl RayTracingData {
+    #[inline]
+    pub fn command_pool(&self) -> crate::types::CommandPool {
+        crate::types::CommandPool(self.command_pool)
+    }
+
+    pub fn set_command_pool(&mut self, rrcommand_pool: &RRCommandPool) {
+        self.command_pool = rrcommand_pool.command_pool;
+    }
+
+    #[inline]
+    pub fn gbuffer_sampler(&self) -> Option<crate::types::Sampler> {
+        self.gbuffer_sampler.map(crate::types::Sampler)
+    }
+
+    #[inline]
+    pub fn object_id_sampler(&self) -> Option<crate::types::Sampler> {
+        self.object_id_sampler.map(crate::types::Sampler)
+    }
+
     pub fn has_valid_tlas(&self) -> bool {
         self.acceleration_structure
             .as_ref()
@@ -104,7 +124,7 @@ impl RayTracingData {
 
         log!("init_gbuffer: RRGBuffer::new succeeded");
 
-        if let Err(e) = gbuffer.transition_layouts(rrdevice, rrcommand_pool.command_pool) {
+        if let Err(e) = gbuffer.transition_layouts(rrdevice, rrcommand_pool.command_pool()) {
             log_warn!("init_gbuffer: transition_layouts failed (ignored): {:?}", e);
         }
 
@@ -123,13 +143,13 @@ impl RayTracingData {
         rrdevice: &RRDevice,
         rrcommand_pool: &Rc<RRCommandPool>,
         meshes: &[MeshBuffer],
-        mesh_transforms: &[cgmath::Matrix4<f32>],
+        mesh_transforms: &[Mat4],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         log!("Building acceleration structures...");
         if let Some(mut previous) = self.acceleration_structure.take() {
-            rrdevice.device.device_wait_idle()?;
-            previous.destroy(&rrdevice.device);
+            rrdevice.device().device_wait_idle()?;
+            previous.destroy(rrdevice);
         }
 
         let mut acceleration_structure = RRAccelerationStructure::new();
@@ -140,10 +160,10 @@ impl RayTracingData {
             .filter(|mesh| mesh.render_to_gbuffer)
             .map(|mesh| {
                 (
-                    &mesh.vertex_buffer.buffer,
+                    mesh.vertex_buffer.buffer(),
                     mesh.vertex_data.vertices.len() as u32,
                     std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                    &mesh.index_buffer.buffer,
+                    mesh.index_buffer.buffer(),
                     mesh.vertex_data.indices.len() as u32,
                 )
             })
@@ -158,17 +178,17 @@ impl RayTracingData {
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &mesh.vertex_buffer.buffer,
+                &mesh.vertex_buffer.buffer(),
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
+                &mesh.index_buffer.buffer(),
                 mesh.vertex_data.indices.len() as u32,
             )?;
 
             let model = mesh_transforms
                 .get(mesh_index)
                 .copied()
-                .unwrap_or_else(cgmath::Matrix4::identity);
+                .unwrap_or(Mat4::IDENTITY);
             blas.transform = vk::TransformMatrixKHR {
                 matrix: AffineRows3x4::from_mat4(model).rows,
             };
@@ -178,14 +198,12 @@ impl RayTracingData {
         }
 
         for primitive in procedurals {
-            if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
-                let blas = RRAccelerationStructure::create_procedural_blas(
-                    instance,
-                    rrdevice,
-                    rrcommand_pool,
-                    &primitive.model,
-                    *aabb,
-                )?;
+            if let Some(blas) = RRAccelerationStructure::create_procedural_blas(
+                instance,
+                rrdevice,
+                rrcommand_pool,
+                primitive,
+            )? {
                 acceleration_structure.procedural_blas.push(blas);
             }
         }
@@ -224,9 +242,9 @@ impl RayTracingData {
         rrrender: &RRRender,
         graphics_resources: &GraphicsResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
-        offscreen_render_pass: Option<vk::RenderPass>,
-        offscreen_extent: Option<vk::Extent2D>,
-        hdr_render_pass: Option<vk::RenderPass>,
+        offscreen_render_pass: Option<crate::types::RenderPass>,
+        offscreen_extent: Option<crate::types::Extent2D>,
+        hdr_render_pass: Option<crate::types::RenderPass>,
     ) -> Result<()> {
         let render_layouts = [
             &graphics_resources.frame_set.layout,
@@ -288,7 +306,10 @@ impl RayTracingData {
         else {
             return Ok(());
         };
-        let scene_buffer_handle = self.scene_uniform_buffer_handle();
+        let scene_buffer_handle = self
+            .scene_uniform_buffer
+            .as_ref()
+            .map(|buffer| buffer.handle().raw());
         let (Some(descriptor), Some(gbuffer), Some(scene_buffer)) = (
             self.ray_query_descriptor.as_mut(),
             self.gbuffer.as_ref(),
@@ -306,9 +327,9 @@ impl RayTracingData {
         if descriptor.descriptor_set == vk::DescriptorSet::null() {
             descriptor.allocate_and_update(
                 rrdevice,
-                gbuffer.position_image_view,
-                gbuffer.normal_image_view,
-                gbuffer.shadow_mask_image_view,
+                gbuffer.position_image_view(),
+                gbuffer.normal_image_view(),
+                gbuffer.shadow_mask_image_view(),
                 tlas,
                 scene_buffer,
                 hit_shading_table_buffer,
@@ -327,12 +348,12 @@ impl RayTracingData {
     ) -> Result<vk::Buffer> {
         let scene_uniform_buffer =
             UniformBuffer::new(instance, rrdevice, 1, Placement::HostMapped)?;
-        let handle = scene_uniform_buffer.handle();
+        let handle = scene_uniform_buffer.handle().raw();
         self.scene_uniform_buffer = Some(scene_uniform_buffer);
         Ok(handle)
     }
 
-    pub fn scene_uniform_buffer_handle(&self) -> Option<vk::Buffer> {
+    pub fn scene_uniform_buffer_handle(&self) -> Option<crate::types::Buffer> {
         self.scene_uniform_buffer
             .as_ref()
             .map(UniformBuffer::handle)
@@ -347,19 +368,25 @@ unsafe fn build_gbuffer_pipeline(
 ) -> Result<RRPipeline> {
     PipelineBuilder::from_pass(&GBUFFER)
         .vertex_input(VertexInputConfig::Standard)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .custom_render_pass(rrrender.gbuffer_render_pass)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
+        .custom_render_pass(rrrender.gbuffer_render_pass())
         .mrt_attachments(4)
         .no_blend_attachment(3)
-        .msaa_samples(vk::SampleCountFlags::_1)
+        .msaa_samples(SampleCount::One)
         .descriptor_layouts(render_layouts)
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
             size: std::mem::size_of::<GBufferPushConstants>() as u32,
         })
-        .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+        .build(
+            rrdevice,
+            rrrender,
+            Some(crate::types::Extent2D::from_raw(
+                rrswapchain.swapchain_extent,
+            )),
+        )
 }
 
 unsafe fn build_ray_query_pipeline(
@@ -379,9 +406,9 @@ unsafe fn build_ray_query_pipeline(
                 .unwrap_or(vk::Buffer::null());
             descriptor.allocate_and_update(
                 rrdevice,
-                gbuffer.position_image_view,
-                gbuffer.normal_image_view,
-                gbuffer.shadow_mask_image_view,
+                gbuffer.position_image_view(),
+                gbuffer.normal_image_view(),
+                gbuffer.shadow_mask_image_view(),
                 tlas,
                 scene_buffer,
                 hit_shading_table_buffer,
@@ -389,17 +416,13 @@ unsafe fn build_ray_query_pipeline(
         }
     }
 
-    let push_constant_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::COMPUTE)
-        .offset(0)
-        .size(std::mem::size_of::<f32>() as u32)
-        .build();
-
     let pipeline = RRPipeline::new_compute_with_push_constants(
         rrdevice,
         &RAY_QUERY_SHADOW,
         &[&descriptor.layout],
-        &[push_constant_range],
+        &[compute_push_constant_range(
+            std::mem::size_of::<f32>() as u32
+        )],
     )?;
 
     Ok((descriptor, pipeline))
@@ -416,9 +439,9 @@ unsafe fn build_composite_pipeline(
     object_id_sampler: vk::Sampler,
     scene_buffer: vk::Buffer,
     billboard_descriptor_set: &mut RRBillboardDescriptorSet,
-    offscreen_render_pass: Option<vk::RenderPass>,
-    offscreen_extent: Option<vk::Extent2D>,
-    hdr_render_pass: Option<vk::RenderPass>,
+    offscreen_render_pass: Option<crate::types::RenderPass>,
+    offscreen_extent: Option<crate::types::Extent2D>,
+    hdr_render_pass: Option<crate::types::RenderPass>,
 ) -> Result<(RRCompositeDescriptorSet, RRPipeline)> {
     let mut descriptor = RRCompositeDescriptorSet::new(rrdevice)?;
 
@@ -444,8 +467,8 @@ unsafe fn build_composite_pipeline(
         billboard_descriptor_set.update_position_sampler(
             rrdevice,
             rrswapchain,
-            gbuffer.position_image_view,
-            gbuffer_sampler,
+            gbuffer.position_image_view(),
+            crate::types::Sampler(gbuffer_sampler),
         )?;
     }
 
@@ -454,8 +477,8 @@ unsafe fn build_composite_pipeline(
             bindings: vec![],
             attributes: vec![],
         })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
+        .topology(Topology::TriangleList)
+        .polygon_mode(FillMode::Fill)
         .descriptor_layouts(&[&descriptor.layout])
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -467,7 +490,7 @@ unsafe fn build_composite_pipeline(
         builder = builder
             .no_depth_test()
             .custom_render_pass(render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1);
+            .msaa_samples(SampleCount::One);
     } else if let Some(render_pass) = offscreen_render_pass {
         builder = builder
             .depth_test(DepthTestConfig {
@@ -484,7 +507,8 @@ unsafe fn build_composite_pipeline(
         });
     }
 
-    let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
+    let extent = offscreen_extent
+        .unwrap_or_else(|| crate::types::Extent2D::from_raw(rrswapchain.swapchain_extent));
     let pipeline = builder.build(rrdevice, rrrender, Some(extent))?;
 
     Ok((descriptor, pipeline))

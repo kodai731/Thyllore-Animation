@@ -1,5 +1,5 @@
 use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
-use cgmath::{InnerSpace, Vector3, Zero};
+use glam::Vec3;
 
 // Tapered capsule as a compact-support shell in the squared distance to the segment [a, b]:
 //   density = 1 inside, faded by a smootherstep over the last `edge_width_q` of
@@ -44,28 +44,24 @@ enum CapsuleRegion {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct CapsuleAxis {
-    direction: Vector3<f32>,
+    direction: Vec3,
     length: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VolumeCapsule {
-    pub a: Vector3<f32>,
-    pub b: Vector3<f32>,
+    pub a: Vec3,
+    pub b: Vec3,
     pub radius_start: f32,
     pub radius_end: f32,
     pub edge_width_q: f32,
 }
 
-fn cap_delta_quadratic(
-    offset: Vector3<f32>,
-    direction: Vector3<f32>,
-    radius: f32,
-) -> (f32, f32, f32) {
+fn cap_delta_quadratic(offset: Vec3, direction: Vec3, radius: f32) -> (f32, f32, f32) {
     (
         1.0,
         2.0 * offset.dot(direction),
-        offset.magnitude2() - radius * radius,
+        offset.length_squared() - radius * radius,
     )
 }
 
@@ -83,14 +79,14 @@ fn density_from_delta(delta: f32, edge_width_q: f32) -> f32 {
 impl VolumeCapsule {
     fn axis(&self) -> Option<CapsuleAxis> {
         let delta = self.b - self.a;
-        let length = delta.magnitude();
+        let length = delta.length();
         (length >= RAY_LINEAR_COEFFICIENT_EPSILON).then(|| CapsuleAxis {
             direction: delta / length,
             length,
         })
     }
 
-    fn region_of_point(&self, point: Vector3<f32>, axis: CapsuleAxis) -> CapsuleRegion {
+    fn region_of_point(&self, point: Vec3, axis: CapsuleAxis) -> CapsuleRegion {
         let lambda = (point - self.a).dot(axis.direction);
         if lambda <= 0.0 {
             CapsuleRegion::CapStart
@@ -105,8 +101,8 @@ impl VolumeCapsule {
     /// `(s^2, s, 1)` of the ray parameter; the direction must be normalised.
     fn delta_quadratic(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         region: CapsuleRegion,
         axis: CapsuleAxis,
     ) -> (f32, f32, f32) {
@@ -127,18 +123,18 @@ impl VolumeCapsule {
                 (
                     1.0 - lambda_1 * lambda_1 - radius_1 * radius_1,
                     2.0 * (offset.dot(direction) - lambda_0 * lambda_1 - radius_0 * radius_1),
-                    offset.magnitude2() - lambda_0 * lambda_0 - radius_0 * radius_0,
+                    offset.length_squared() - lambda_0 * lambda_0 - radius_0 * radius_0,
                 )
             }
         }
     }
 
-    fn delta_at_point(&self, point: Vector3<f32>, axis: CapsuleAxis) -> f32 {
+    fn delta_at_point(&self, point: Vec3, axis: CapsuleAxis) -> f32 {
         let region = self.region_of_point(point, axis);
-        self.delta_quadratic(point, Vector3::zero(), region, axis).2
+        self.delta_quadratic(point, Vec3::ZERO, region, axis).2
     }
 
-    pub fn density_at(&self, point: Vector3<f32>) -> f32 {
+    pub fn density_at(&self, point: Vec3) -> f32 {
         let Some(axis) = self.axis() else {
             return 0.0;
         };
@@ -148,8 +144,8 @@ impl VolumeCapsule {
     /// Region boundaries and support boundaries of the ray, appended unsorted.
     pub fn collect_knots<const N: usize>(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
         knots: &mut RayKnots<N>,
@@ -179,8 +175,8 @@ impl VolumeCapsule {
 
     pub fn knots(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
     ) -> RayKnots<CAPSULE_MAX_KNOTS> {
@@ -191,13 +187,7 @@ impl VolumeCapsule {
     }
 
     /// Integral of the density over the piece [s0, s1], which must not cross a knot.
-    pub fn piece_integral(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        s0: f32,
-        s1: f32,
-    ) -> f32 {
+    pub fn piece_integral(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> f32 {
         let length = s1 - s0;
         if length <= EMPTY_INTERVAL_EPSILON {
             return 0.0;
@@ -226,13 +216,7 @@ impl VolumeCapsule {
         (length * edge_fade_mean(c0, c1, c2)).max(0.0)
     }
 
-    pub fn ray_emission(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        t_near: f32,
-        t_far: f32,
-    ) -> f32 {
+    pub fn ray_emission(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> f32 {
         if t_far <= t_near {
             return 0.0;
         }
@@ -255,8 +239,8 @@ mod tests {
 
     fn midpoint_reference_steps(
         capsule: &VolumeCapsule,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
         steps: usize,
@@ -273,8 +257,8 @@ mod tests {
 
     fn assert_matches_reference(
         capsule: &VolumeCapsule,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         bounds: (f32, f32),
     ) {
         let (t_near, t_far) = bounds;
@@ -292,8 +276,8 @@ mod tests {
 
     fn tapered_capsule() -> VolumeCapsule {
         VolumeCapsule {
-            a: Vector3::new(-1.0, 0.0, 0.0),
-            b: Vector3::new(1.5, 0.5, 0.0),
+            a: Vec3::new(-1.0, 0.0, 0.0),
+            b: Vec3::new(1.5, 0.5, 0.0),
             radius_start: 0.4,
             radius_end: 0.15,
             edge_width_q: 0.09,
@@ -312,8 +296,8 @@ mod tests {
     #[test]
     fn perpendicular_ray_matches_midpoint_quadrature() {
         let capsule = tapered_capsule();
-        let origin = Vector3::new(0.0, 0.1, -3.0);
-        assert_matches_reference(&capsule, origin, Vector3::new(0.0, 0.0, 1.0), (0.0, 6.0));
+        let origin = Vec3::new(0.0, 0.1, -3.0);
+        assert_matches_reference(&capsule, origin, Vec3::new(0.0, 0.0, 1.0), (0.0, 6.0));
     }
 
     #[test]
@@ -323,8 +307,8 @@ mod tests {
             radius_end: tapered.radius_start,
             ..tapered
         };
-        let origin = Vector3::new(-2.0, 1.3, -1.7);
-        let direction = Vector3::new(0.7, -0.55, 0.9);
+        let origin = Vec3::new(-2.0, 1.3, -1.7);
+        let direction = Vec3::new(0.7, -0.55, 0.9);
         assert_matches_reference(&tapered, origin, direction, (0.0, 6.0));
         assert_matches_reference(&constant, origin, direction, (0.0, 6.0));
     }
@@ -332,46 +316,34 @@ mod tests {
     #[test]
     fn missing_ray_integrates_to_zero() {
         let capsule = tapered_capsule();
-        let origin = Vector3::new(-3.0, 4.0, 0.0);
-        let direction = Vector3::new(1.0, 0.0, 0.0).normalize();
+        let origin = Vec3::new(-3.0, 4.0, 0.0);
+        let direction = Vec3::new(1.0, 0.0, 0.0).normalize();
         assert_eq!(capsule.ray_emission(origin, direction, 0.0, 8.0), 0.0);
     }
 
     fn thin_tapered_capsule() -> VolumeCapsule {
         VolumeCapsule {
-            a: Vector3::new(0.0, 0.0, 0.0),
-            b: Vector3::new(0.0, -1.0, 0.0),
+            a: Vec3::new(0.0, 0.0, 0.0),
+            b: Vec3::new(0.0, -1.0, 0.0),
             radius_start: 0.1,
             radius_end: 0.05,
             edge_width_q: 0.005,
         }
     }
 
-    fn start_cap_diagonal_rays() -> [(Vector3<f32>, Vector3<f32>); 11] {
+    fn start_cap_diagonal_rays() -> [(Vec3, Vec3); 11] {
         [
-            (Vector3::new(0.30, -0.24, 0.0), Vector3::new(-1.0, 1.0, 0.0)),
-            (Vector3::new(0.30, 0.24, 0.0), Vector3::new(-1.0, -1.0, 0.0)),
-            (Vector3::new(0.30, 0.30, 0.0), Vector3::new(-1.0, -1.0, 0.0)),
-            (Vector3::new(0.30, 0.02, 0.0), Vector3::new(-1.0, 0.6, 0.0)),
-            (Vector3::new(0.30, -0.02, 0.0), Vector3::new(-1.0, 0.6, 0.0)),
-            (
-                Vector3::new(0.25, -0.25, 0.04),
-                Vector3::new(-1.0, 1.0, -0.1),
-            ),
-            (
-                Vector3::new(0.25, 0.25, -0.04),
-                Vector3::new(-1.0, -1.0, 0.1),
-            ),
-            (
-                Vector3::new(0.30, -0.15, 0.0),
-                Vector3::new(-1.0, 0.577, 0.0),
-            ),
-            (
-                Vector3::new(0.30, 0.15, 0.0),
-                Vector3::new(-1.0, -0.577, 0.0),
-            ),
-            (Vector3::new(-0.30, 0.20, 0.0), Vector3::new(1.0, -1.0, 0.0)),
-            (Vector3::new(-0.30, -0.20, 0.0), Vector3::new(1.0, 1.0, 0.0)),
+            (Vec3::new(0.30, -0.24, 0.0), Vec3::new(-1.0, 1.0, 0.0)),
+            (Vec3::new(0.30, 0.24, 0.0), Vec3::new(-1.0, -1.0, 0.0)),
+            (Vec3::new(0.30, 0.30, 0.0), Vec3::new(-1.0, -1.0, 0.0)),
+            (Vec3::new(0.30, 0.02, 0.0), Vec3::new(-1.0, 0.6, 0.0)),
+            (Vec3::new(0.30, -0.02, 0.0), Vec3::new(-1.0, 0.6, 0.0)),
+            (Vec3::new(0.25, -0.25, 0.04), Vec3::new(-1.0, 1.0, -0.1)),
+            (Vec3::new(0.25, 0.25, -0.04), Vec3::new(-1.0, -1.0, 0.1)),
+            (Vec3::new(0.30, -0.15, 0.0), Vec3::new(-1.0, 0.577, 0.0)),
+            (Vec3::new(0.30, 0.15, 0.0), Vec3::new(-1.0, -0.577, 0.0)),
+            (Vec3::new(-0.30, 0.20, 0.0), Vec3::new(1.0, -1.0, 0.0)),
+            (Vec3::new(-0.30, -0.20, 0.0), Vec3::new(1.0, 1.0, 0.0)),
         ]
     }
 
@@ -400,7 +372,7 @@ mod tests {
         for (origin, direction) in start_cap_diagonal_rays() {
             for offset in [-0.2f32, 0.0, 0.2] {
                 let dir = direction.normalize();
-                let shifted_origin = origin + Vector3::new(0.0, offset, offset);
+                let shifted_origin = origin + Vec3::new(0.0, offset, offset);
                 let mut unbounded = RayKnots::<RAY_MAX_KNOTS>::begin(-2.0, 3.0);
                 capsule.collect_knots(shifted_origin, dir, -2.0, 3.0, &mut unbounded);
                 most = most.max(unbounded.count());
@@ -425,14 +397,14 @@ mod tests {
     #[test]
     fn long_thin_capsule_missing_ray_over_wide_bounds_is_exactly_zero() {
         let capsule = VolumeCapsule {
-            a: Vector3::new(0.0, 0.0, 0.0),
-            b: Vector3::new(0.0, 4.6, 0.0),
+            a: Vec3::new(0.0, 0.0, 0.0),
+            b: Vec3::new(0.0, 4.6, 0.0),
             radius_start: 0.015,
             radius_end: 0.015,
             edge_width_q: 0.0001,
         };
-        let origin = Vector3::new(0.5, 2.3, -5000.0);
-        let direction = Vector3::new(0.0, 0.0, 1.0);
+        let origin = Vec3::new(0.5, 2.3, -5000.0);
+        let direction = Vec3::new(0.0, 0.0, 1.0);
         assert_eq!(capsule.ray_emission(origin, direction, 0.0, 1e4), 0.0);
     }
 }

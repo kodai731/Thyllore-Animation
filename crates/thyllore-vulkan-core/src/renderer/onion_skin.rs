@@ -11,9 +11,10 @@ pub unsafe fn record_onion_skin_ghost_pass(
     resources: &OnionSkinPassResources,
     onion_skin_gpu: &OnionSkinGpuState,
     image_index: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     begin_ghost_render_pass(device, resources, cmd);
     bind_ghost_pipeline_and_state(device, resources, cmd);
     draw_ghosts(ctx, resources, onion_skin_gpu, image_index, cmd)?;
@@ -24,9 +25,10 @@ pub unsafe fn record_onion_skin_ghost_pass(
 pub unsafe fn record_onion_skin_composite_pass(
     ctx: &FrameRenderContext,
     resources: &OnionSkinPassResources,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     begin_composite_render_pass(device, resources, cmd);
 
     device.cmd_bind_pipeline(
@@ -153,7 +155,7 @@ unsafe fn draw_ghosts(
     image_index: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let graphics_resources = ctx.graphics;
 
     let source_mesh_index = onion_skin_gpu
@@ -187,7 +189,7 @@ unsafe fn draw_ghosts(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline_layout,
             0,
-            &[frame_set],
+            &[frame_set.raw()],
             &[],
         );
 
@@ -213,7 +215,7 @@ unsafe fn draw_ghosts(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline_layout,
             2,
-            &[object_set],
+            &[object_set.raw()],
             &[],
         );
 

@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_model_core::BoneId;
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
@@ -170,15 +170,15 @@ pub fn submesh_label(target: &SubmeshSelector) -> String {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BodyCollider {
     pub bone: BoneId,
-    pub head: Vector3<f32>,
-    pub tail: Vector3<f32>,
+    pub head: Vec3,
+    pub tail: Vec3,
     pub radius: f32,
 }
 
 /// A body surface in the same space as the target: skin vertices or collider samples with the bones that drive them.
 #[derive(Debug, Clone, Default)]
 pub struct SkinSurface {
-    pub positions: Vec<Vector3<f32>>,
+    pub positions: Vec<Vec3>,
     pub triangles: Vec<[u32; 3]>,
     /// Per-vertex bone influences, heaviest first
     pub influences: Vec<Vec<(BoneId, f32)>>,
@@ -186,7 +186,7 @@ pub struct SkinSurface {
 
 impl SkinSurface {
     /// A point set every vertex of which `bone` drives alone, without a surface.
-    pub fn points_driven_by(bone: BoneId, positions: Vec<Vector3<f32>>) -> Self {
+    pub fn points_driven_by(bone: BoneId, positions: Vec<Vec3>) -> Self {
         let influences = vec![vec![(bone, 1.0)]; positions.len()];
         Self {
             positions,
@@ -198,9 +198,9 @@ impl SkinSurface {
 
 #[derive(Debug, Clone)]
 pub struct ChainGenInput<'a> {
-    pub positions: &'a [Vector3<f32>],
+    pub positions: &'a [Vec3],
     pub triangles: &'a [[u32; 3]],
-    pub root_position: Vector3<f32>,
+    pub root_position: Vec3,
     pub root_bone: BoneId,
     /// The body surfaces (skin meshes and collider samples) in the same space as `positions`; empty falls back to `positions` as the attachment surface
     pub skins: &'a [SkinSurface],
@@ -217,20 +217,20 @@ pub struct ChainGenInput<'a> {
 pub struct GivenChain {
     pub column: usize,
     pub vertices: Vec<u32>,
-    pub joints: Option<Vec<Vector3<f32>>>,
+    pub joints: Option<Vec<Vec3>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GeneratedJoint {
     pub name: String,
-    pub head: Vector3<f32>,
+    pub head: Vec3,
 }
 
 #[derive(Debug, Clone)]
 pub struct GeneratedChain {
     pub column: usize,
     pub joints: Vec<GeneratedJoint>,
-    pub tail: Vector3<f32>,
+    pub tail: Vec3,
     pub vertices: Vec<u32>,
 }
 
@@ -249,6 +249,12 @@ pub fn chain_column(params: &ChainGenParams, name: &str) -> Option<usize> {
 
 pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
     format!("{}_{:02}", chain_name(params, column), joint)
+}
+
+/// The bone placed at the chain's end point under its last joint, so the last joint swings towards a
+/// measured tail instead of an extrapolated one (the VRM 1.0 terminal joint).
+pub fn end_bone_name(last_joint_name: &str) -> String {
+    format!("{last_joint_name}_end")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

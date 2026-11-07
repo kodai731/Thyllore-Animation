@@ -11,6 +11,7 @@ use support::test_humanoid::{
     CanonicalTip,
 };
 use thyllore_avatar_core::expression::components::side::Side;
+use thyllore_avatar_core::humanoid::components::mapping::StoredHumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
 
@@ -235,9 +236,14 @@ fn test_humanoid_matches_generator() {
     write_test_humanoid_sidecar(&generated_sidecar_path).unwrap();
     let generated_sidecar = std::fs::read_to_string(&generated_sidecar_path).unwrap();
     assert_eq!(
-        recorded_sidecar, generated_sidecar,
+        parse_sidecar(&recorded_sidecar),
+        parse_sidecar(&generated_sidecar),
         "sidecar file differs from generator output"
     );
+}
+
+fn parse_sidecar(text: &str) -> StoredHumanoidMapping {
+    ron::from_str(text).expect("sidecar parses as a stored humanoid mapping")
 }
 
 #[test]
@@ -273,8 +279,8 @@ fn test_humanoid_rest_rotations_are_identity() {
             continue;
         }
         let q = bone.world_rotation;
-        let diff_pos = (q.s - 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
-        let diff_neg = (q.s + 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
+        let diff_pos = (q.w - 1.0).abs() + q.x.abs() + q.y.abs() + q.z.abs();
+        let diff_neg = (q.w + 1.0).abs() + q.x.abs() + q.y.abs() + q.z.abs();
         assert!(
             diff_pos < 1e-5 || diff_neg < 1e-5,
             "bone '{}' (index {}) world_rotation {:?} is not identity",

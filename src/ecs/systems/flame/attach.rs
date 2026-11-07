@@ -1,6 +1,7 @@
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect};
 use crate::ecs::world::Entity;
 use crate::ecs::FrameContext;
+use glam::{Quat, Vec3};
 
 pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
     use crate::ecs::component::resolve_bone_index;
@@ -50,8 +51,7 @@ pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
         if idx >= positions.len() {
             continue;
         }
-        let translation =
-            cgmath::Vector3::new(positions[idx][0], positions[idx][1], positions[idx][2]);
+        let translation = Vec3::new(positions[idx][0], positions[idx][1], positions[idx][2]);
         if let Some(transform) = ctx
             .world
             .get_component_mut::<crate::ecs::world::Transform>(entity)
@@ -62,8 +62,8 @@ pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
                 entity,
                 crate::ecs::world::Transform {
                     translation,
-                    rotation: cgmath::Quaternion::new(0.0, 0.0, 0.0, 1.0),
-                    scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+                    rotation: Quat::from_xyzw(0.0, 0.0, 1.0, 0.0),
+                    scale: Vec3::new(1.0, 1.0, 1.0),
                 },
             );
         }

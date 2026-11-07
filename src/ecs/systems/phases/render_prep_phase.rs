@@ -9,10 +9,9 @@ use crate::ecs::systems::render_data_systems::{
 };
 use crate::ecs::FrameContext;
 use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
-use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec2, Vec3};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -176,9 +175,9 @@ fn run_frame_prep_hooks(
 
 unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
     use crate::ecs::world::{GlobalTransform, MeshRef};
-    use crate::render::ObjectUBO;
+    use thyllore_render_core::ObjectUBO;
 
-    let transforms: Vec<(usize, Matrix4<f32>)> = ctx
+    let transforms: Vec<(usize, Mat4)> = ctx
         .world
         .iter_components::<MeshRef>()
         .map(|(entity, mesh_ref)| {
@@ -186,7 +185,7 @@ unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
                 .world
                 .get_component::<GlobalTransform>(entity)
                 .map(|gt| gt.0)
-                .unwrap_or_else(Matrix4::identity);
+                .unwrap_or(Mat4::IDENTITY);
             (mesh_ref.object_index, model_matrix)
         })
         .collect();
@@ -205,11 +204,11 @@ unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
 
 unsafe fn update_frame_and_scene_uniforms(
     ctx: &mut FrameContext,
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
-    screen_size: cgmath::Vector2<f32>,
+    view: Mat4,
+    proj: Mat4,
+    screen_size: Vec2,
     aspect: f32,
-    camera_position: Vector3<f32>,
+    camera_position: Vec3,
 ) -> Result<()> {
     let light_position = ctx.light_state().light_position;
 
@@ -226,7 +225,7 @@ unsafe fn update_frame_and_scene_uniforms(
             &proj_data,
             camera_position,
             light_position,
-            Vector3::new(1.0, 1.0, 1.0),
+            Vec3::new(1.0, 1.0, 1.0),
             image_index,
         )?;
     }
@@ -269,7 +268,7 @@ unsafe fn update_frame_and_scene_uniforms(
 
 fn collect_gizmo_render_data(
     ctx: &FrameContext,
-    camera_position: Vector3<f32>,
+    camera_position: Vec3,
 ) -> Vec<crate::ecs::component::RenderData> {
     let frame_slot = ctx.frame_slot;
     let mut render_data_vec = vec![
@@ -317,18 +316,14 @@ fn collect_gizmo_render_data(
     render_data_vec
 }
 
-unsafe fn update_billboard_ubo(
-    ctx: &mut FrameContext,
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
-) -> Result<()> {
+unsafe fn update_billboard_ubo(ctx: &mut FrameContext, view: Mat4, proj: Mat4) -> Result<()> {
     let model_matrix = {
         let billboard = ctx.billboard();
         billboard
             .transform
             .as_ref()
             .map(|t| t.model_matrix)
-            .unwrap_or(Matrix4::identity())
+            .unwrap_or(Mat4::IDENTITY)
     };
 
     let image_index = ctx.image_index;

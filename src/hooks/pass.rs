@@ -1,10 +1,11 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::PassContext;
 pub use thyllore_vulkan_core::renderer::{
-    CoreTarget, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest, TransientSlot,
+    AttachmentStart, CoreTarget, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest,
+    TransientSlot,
 };
+use thyllore_vulkan_core::types::CommandBuffer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PassStage {
@@ -41,7 +42,7 @@ pub trait RenderPassNode: Sync {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()>;
@@ -103,7 +104,7 @@ mod tests {
         unsafe fn record(
             &self,
             _: &PassContext,
-            _: vk::CommandBuffer,
+            _: CommandBuffer,
             _: usize,
             _: usize,
         ) -> Result<()> {

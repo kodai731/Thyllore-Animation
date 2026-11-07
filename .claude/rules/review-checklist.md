@@ -19,3 +19,4 @@ Before opening a PR or finishing an edit, run the branch diff through the items 
 10. No hard-coded tuning numbers and no golden-text comparisons; pin facts at their declaration → `hierarchy.md`, `ui.md`
 11. Labelled widgets live in `UiRow` declarations drawn by `draw_rows`; `&imgui::Ui` builds exist only for self-drawn surfaces, and no `FormSection` wraps an imgui closure → `ui.md` "Form windows"
 12. Choose models that support human understanding; check responsibilities, dependencies, and contracts across representations → `structural-review.md`
+13. `vk::` / `vulkanalia` / raw `Device` calls only inside `thyllore-vulkan-core`; outside it use `thyllore_vulkan_core::types` and core helpers; a public function or field of vulkan-core must not expose a `vk::` type (use `types::*` / the core enums; `pub(crate)` otherwise); effect GPU code belongs in `src/ecs/systems/<effect>/`, not in vulkan-core → `hierarchy.md`, `rendering-architecture.md`

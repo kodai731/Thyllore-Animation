@@ -292,7 +292,7 @@ fn apply_morph_to_mesh(mesh: &mut MeshBuffer, weights: &[f32]) {
 mod tests {
     use super::*;
     use crate::vulkanr::data::Vertex;
-    use thyllore_math_core::{Vec2, Vec3, Vec4};
+    use glam::{Vec2, Vec3, Vec4};
     use thyllore_model_core::{MeshMorph, MorphChannel, SparseDelta};
 
     fn make_test_mesh() -> MeshBuffer {

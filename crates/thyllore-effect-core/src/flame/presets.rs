@@ -1,13 +1,13 @@
 use crate::flame::{refresh_flame_coefficients, FlameBaked, FlameEffect};
-use cgmath::{Quaternion, Vector2, Vector3};
+use glam::{Quat, Vec2, Vec3};
 
 pub const FLAME_PRESET_NAMES: &[&str] = &["campfire", "candle", "torch", "inferno", "blue", "ring"];
 
-fn runtime_state(effect: &FlameEffect) -> (Vector3<f32>, Quaternion<f32>, f32) {
+fn runtime_state(effect: &FlameEffect) -> (Vec3, Quat, f32) {
     (effect.position, effect.rotation, effect.time)
 }
 
-fn apply_runtime_state(effect: &mut FlameEffect, state: (Vector3<f32>, Quaternion<f32>, f32)) {
+fn apply_runtime_state(effect: &mut FlameEffect, state: (Vec3, Quat, f32)) {
     let (position, rotation, time) = state;
     effect.position = position;
     effect.rotation = rotation;
@@ -42,7 +42,7 @@ pub fn apply_flame_preset(effect: &mut FlameEffect, name: &str) -> bool {
             preset.height = 1.2;
             preset.radius = 0.3;
             preset.intensity = 2.4;
-            preset.wind.direction = Vector2::new(0.2, 0.0);
+            preset.wind.direction = Vec2::new(0.2, 0.0);
             preset.wind.bend_amount = 0.1;
             preset.noise.amplitude = 1.2;
             preset.warp.amp = 1.2;
@@ -63,7 +63,7 @@ pub fn apply_flame_preset(effect: &mut FlameEffect, name: &str) -> bool {
             preset.edge.white_boost = 3.5;
             preset.wind.bend_amount = 0.25;
             preset.wind.bend_power = 2.0;
-            preset.wind.direction = Vector2::new(0.4, 0.2);
+            preset.wind.direction = Vec2::new(0.4, 0.2);
             preset.radial_sharpness = 3.0;
         }
         "blue" => {

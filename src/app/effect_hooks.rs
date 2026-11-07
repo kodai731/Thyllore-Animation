@@ -1,10 +1,10 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::app::{App, AppData};
 use crate::ecs::EffectContext;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::types::Instance;
 
 pub fn build_effect_context<'a>(
     instance: &'a Instance,
@@ -21,7 +21,7 @@ pub fn build_effect_context<'a>(
             .viewport
             .hdr_buffer
             .as_ref()
-            .map(|hdr| hdr.color_image_view),
+            .map(|hdr| hdr.color_image_view()),
         storage: &mut data.viewport.storage,
         raytracing: &mut data.raytracing,
         pass_image_states: &mut data.pass_image_states,

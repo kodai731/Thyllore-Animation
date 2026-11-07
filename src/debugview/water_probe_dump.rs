@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::debugview::flame_history_dump::decode_rgba16f;
 use crate::ecs::component::WaterTorusEffect;
@@ -10,7 +10,8 @@ use crate::ecs::systems::water::probe::{
     compute_water_probe_report, inverse_view_proj_f64, ProbeRoot,
 };
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
-use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::resource::ReadbackLayout;
+use thyllore_vulkan_core::types::{DeviceSize, Image};
 
 /// With `--batch-water-probe <path>`, compares the HDR image against the analytic torus and
 /// writes `<path>.json` / `<path>.npy`.
@@ -30,17 +31,17 @@ impl BatchCapture for WaterProbeCapture {
             .clone();
 
         let (width, height) = (hdr.width, hdr.height);
-        let f32_data = read_hdr_rgba16f(ctx, hdr.color_image, width, height)?;
+        let f32_data = read_hdr_rgba16f(ctx, hdr.color_image(), width, height)?;
 
         let proj_data = ctx.world.resource::<ProjectionData>();
         let inv_view_proj = inverse_view_proj_f64(proj_data.proj, proj_data.view);
-        let inv_view = proj_data.view.invert().unwrap_or_else(Matrix4::identity);
-        let camera_pos = Vector3::new(inv_view[3][0], inv_view[3][1], inv_view[3][2]);
+        let inv_view = proj_data.view.try_inverse().unwrap_or(Mat4::IDENTITY);
+        let camera_pos = Vec3::new(inv_view.col(3)[0], inv_view.col(3)[1], inv_view.col(3)[2]);
         drop(proj_data);
 
         let inverse_model = thyllore_effect_core::build_water_model_matrix(&effect)
-            .invert()
-            .unwrap_or_else(Matrix4::identity);
+            .try_inverse()
+            .unwrap_or(Mat4::IDENTITY);
         let root = probe_root_of(ctx);
         let report = compute_water_probe_report(
             &f32_data,
@@ -91,25 +92,19 @@ fn probe_root_of(ctx: &CaptureContext) -> ProbeRoot {
 
 pub(crate) unsafe fn read_hdr_rgba16f(
     ctx: &CaptureContext,
-    image: vk::Image,
+    image: Image,
     width: u32,
     height: u32,
 ) -> Result<Vec<f32>> {
-    let image_size = (width * height * 8) as vk::DeviceSize;
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let image_size = (width * height * 8) as DeviceSize;
+    let bytes = ctx.read_image_bytes(
         image,
         width,
         height,
         image_size,
-        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        ReadbackLayout::ShaderReadOnly,
     )?;
-    let device = &ctx.device.device;
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
-    let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
-    let values = decode_rgba16f(slice);
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    let values = decode_rgba16f(&bytes);
     Ok(values)
 }
 

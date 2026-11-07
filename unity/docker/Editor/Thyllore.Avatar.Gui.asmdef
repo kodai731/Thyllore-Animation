@@ -1,0 +1,16 @@
+{
+  "name": "Thyllore.Avatar.Gui",
+  "rootNamespace": "Thyllore.Avatar",
+  "references": [
+    "Thyllore.Avatar.Editor",
+    "VRC.SDK3A",
+    "VRC.SDKBase",
+    "VRM10",
+    "UniGLTF",
+    "UniGLTF.Utils"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false
+}

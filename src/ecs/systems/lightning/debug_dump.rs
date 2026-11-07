@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 use serde_json::{json, Value};
 
 use crate::ecs::component::LightningEffect;
@@ -24,7 +24,7 @@ pub fn build_lightning_debug_record(
     let inv_view_proj = world
         .get_resource::<ProjectionData>()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view))
-        .unwrap_or_else(Matrix4::identity);
+        .unwrap_or(Mat4::IDENTITY);
 
     let lightnings: Vec<Value> = world
         .entities_with::<LightningEffect>()
@@ -75,7 +75,7 @@ fn build_lightning_instance_json(
     world: &World,
     entity: Entity,
     index: usize,
-    inv_view_proj: Matrix4<f32>,
+    inv_view_proj: Mat4,
 ) -> Value {
     let Some(effect) = world.get_component::<LightningEffect>(entity) else {
         return Value::Null;
@@ -113,13 +113,13 @@ fn build_effect_json(effect: &LightningEffect) -> Value {
 
 fn build_ubo_json(ubo: &LightningUBO) -> Value {
     json!({
-        "model": matrix_json(&ubo.model),
-        "inverse_model": matrix_json(&ubo.inverse_model),
+        "model": matrix_json(&ubo.model.to_mat4()),
+        "inverse_model": matrix_json(&ubo.inverse_model.to_mat4()),
         "core": ubo.core,
         "rim": ubo.rim,
         "flash": ubo.flash,
         "shape": ubo.shape,
-        "inv_view_proj": matrix_json(&ubo.inv_view_proj),
+        "inv_view_proj": matrix_json(&ubo.inv_view_proj.to_mat4()),
     })
 }
 

@@ -6,6 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::types::Instance;
 
 pub struct DynamicUniformBuffer<T: Copy> {
     buffer: vk::Buffer,
@@ -34,7 +35,7 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
         let mapped_ptr =
             rrdevice
-                .device
+                .device()
                 .map_memory(memory, 0, total_size, vk::MemoryMapFlags::empty())?;
 
         Ok(Self {
@@ -50,10 +51,6 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
     fn align_size(size: u64, alignment: u64) -> u64 {
         (size + alignment - 1) & !(alignment - 1)
-    }
-
-    pub fn buffer(&self) -> vk::Buffer {
-        self.buffer
     }
 
     pub fn alignment(&self) -> u64 {
@@ -107,17 +104,17 @@ impl<T: Copy> DynamicUniformBuffer<T> {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.mapped_ptr != std::ptr::null_mut() {
-            rrdevice.device.unmap_memory(self.memory);
+            rrdevice.device().unmap_memory(self.memory);
             self.mapped_ptr = std::ptr::null_mut();
         }
 
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
 
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
     }

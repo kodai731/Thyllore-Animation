@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::SkeletonId;
 use crate::ecs::context::EcsContext;
@@ -69,7 +69,7 @@ pub fn update_phases() -> impl Iterator<Item = FramePhase> {
 
 struct Carry {
     updated_meshes: Vec<usize>,
-    bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
 impl Carry {

@@ -7,7 +7,7 @@ pub struct AddChainForm {
     pub root_bone: Option<BoneId>,
     #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
     pub chain_length: u32,
-    /// Shortest run of bones under a root that Add Chains Under This Bone turns into a chain
+    /// Shortest run of bones under a root that Use Existing Bones as Springs turns into a chain
     #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
     pub min_joints: u32,
 }

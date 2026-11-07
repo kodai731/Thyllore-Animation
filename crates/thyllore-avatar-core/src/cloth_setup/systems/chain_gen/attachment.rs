@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_model_core::BoneId;
 
 use crate::cloth_setup::components::chain_gen::{ChainGenInput, SkinSurface};
@@ -14,7 +14,7 @@ fn heaviest_bone(influences: &[(BoneId, f32)]) -> Option<BoneId> {
 }
 
 /// The skin vertices `root_bone` drives more than any other bone: the surface the chains hang from.
-pub fn root_attachment_positions(skins: &[SkinSurface], root_bone: BoneId) -> Vec<Vector3<f32>> {
+pub fn root_attachment_positions(skins: &[SkinSurface], root_bone: BoneId) -> Vec<Vec3> {
     skins
         .iter()
         .flat_map(|skin| skin.positions.iter().zip(&skin.influences))
@@ -27,7 +27,7 @@ pub fn root_attachment_positions(skins: &[SkinSurface], root_bone: BoneId) -> Ve
 pub(crate) fn attachment_or_target<'a>(
     input: &ChainGenInput<'a>,
     vertices: &[u32],
-) -> Cow<'a, [Vector3<f32>]> {
+) -> Cow<'a, [Vec3]> {
     if input.skins.is_empty() {
         return Cow::Owned(
             vertices

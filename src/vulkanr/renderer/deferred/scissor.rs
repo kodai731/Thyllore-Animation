@@ -1,8 +1,8 @@
-use cgmath::{Matrix4, Vector3, Vector4};
-use vulkanalia::prelude::v1_0::*;
+use glam::{vec4, Mat4, Vec3, Vec4};
 
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::World;
+use thyllore_vulkan_core::types::{Extent2D, Offset2D, Rect2D};
 
 const SCISSOR_MARGIN_PX: f32 = 2.0;
 
@@ -34,11 +34,11 @@ impl ScreenBounds {
     }
 }
 
-pub(crate) fn full_extent_scissor(extent: vk::Extent2D) -> vk::Rect2D {
-    vk::Rect2D::builder()
-        .offset(vk::Offset2D { x: 0, y: 0 })
-        .extent(extent)
-        .build()
+pub(crate) fn full_extent_scissor(extent: Extent2D) -> Rect2D {
+    Rect2D {
+        offset: Offset2D { x: 0, y: 0 },
+        extent,
+    }
 }
 
 /// Projects local-space bound corners to a screen scissor. Returns the full extent when the
@@ -46,27 +46,27 @@ pub(crate) fn full_extent_scissor(extent: vk::Extent2D) -> vk::Rect2D {
 /// behind the camera or the projected bounds are empty.
 pub(crate) fn compute_bounds_scissor(
     world: &World,
-    extent: vk::Extent2D,
-    model: &Matrix4<f32>,
-    corners: impl IntoIterator<Item = Vector3<f32>>,
-) -> Option<vk::Rect2D> {
+    extent: Extent2D,
+    model: &Mat4,
+    corners: impl IntoIterator<Item = Vec3>,
+) -> Option<Rect2D> {
     let projection = world.get_resource::<ProjectionData>();
     compute_projected_bounds_scissor(projection.as_deref(), extent, model, corners)
 }
 
 pub(crate) fn compute_projected_bounds_scissor(
     projection: Option<&ProjectionData>,
-    extent: vk::Extent2D,
-    model: &Matrix4<f32>,
-    corners: impl IntoIterator<Item = Vector3<f32>>,
-) -> Option<vk::Rect2D> {
+    extent: Extent2D,
+    model: &Mat4,
+    corners: impl IntoIterator<Item = Vec3>,
+) -> Option<Rect2D> {
     let Some(projection) = projection else {
         return Some(full_extent_scissor(extent));
     };
     let model_view_proj = projection.proj * projection.view * model;
-    let clip_corners: Vec<Vector4<f32>> = corners
+    let clip_corners: Vec<Vec4> = corners
         .into_iter()
-        .map(|corner| model_view_proj * cgmath::vec4(corner.x, corner.y, corner.z, 1.0))
+        .map(|corner| model_view_proj * vec4(corner.x, corner.y, corner.z, 1.0))
         .collect();
 
     let corners_behind_camera = clip_corners.iter().filter(|clip| clip.w <= 0.0).count();
@@ -96,16 +96,14 @@ pub(crate) fn compute_projected_bounds_scissor(
         return None;
     }
 
-    Some(
-        vk::Rect2D::builder()
-            .offset(vk::Offset2D {
-                x: min_x as i32,
-                y: min_y as i32,
-            })
-            .extent(vk::Extent2D {
-                width: (max_x - min_x).ceil() as u32,
-                height: (max_y - min_y).ceil() as u32,
-            })
-            .build(),
-    )
+    Some(Rect2D {
+        offset: Offset2D {
+            x: min_x as i32,
+            y: min_y as i32,
+        },
+        extent: Extent2D {
+            width: (max_x - min_x).ceil() as u32,
+            height: (max_y - min_y).ceil() as u32,
+        },
+    })
 }

@@ -8,7 +8,6 @@ use crate::ecs::resource::gizmo::{
 use crate::ecs::systems::{ColliderGizmo, SpringGizmoSelection};
 use crate::ecs::FrameContext;
 use crate::ecs::{build_constraint_gizmo_mesh, build_spring_bone_gizmo_mesh};
-use crate::render::RenderBackend;
 use anyhow::Result;
 use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius};
 

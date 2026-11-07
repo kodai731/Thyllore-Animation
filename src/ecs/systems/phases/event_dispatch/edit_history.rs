@@ -385,7 +385,7 @@ fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     #[test]
     fn undo_of_a_model_scale_reverts_the_assets_and_the_root_scales() {
@@ -394,7 +394,7 @@ mod tests {
         world.insert_resource(AssetEditQueue::default());
         world.insert_resource(UiToast::default());
         let root = world.spawn();
-        let root_scales = vec![(root, Vector3::new(0.01, 0.01, 0.01))];
+        let root_scales = vec![(root, Vec3::new(0.01, 0.01, 0.01))];
         world.resource_mut::<EditHistory>().push_model_scale(
             0.01,
             root_scales.clone(),

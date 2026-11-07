@@ -10,7 +10,7 @@ use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Animator, Entity, World};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use cgmath::Matrix4;
+use glam::Mat4;
 use std::path::Path;
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
@@ -49,19 +49,16 @@ pub fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
                 name: bone.name.clone(),
                 parent: bone.parent_id.map(|parent_id| parent_id as usize),
                 rest_position: [
-                    global_transform.w.x,
-                    global_transform.w.y,
-                    global_transform.w.z,
+                    global_transform.w_axis.x,
+                    global_transform.w_axis.y,
+                    global_transform.w_axis.z,
                 ],
             }
         })
         .collect()
 }
 
-pub(crate) fn compute_bone_global_transform(
-    skeleton: &Skeleton,
-    bone_index: usize,
-) -> Matrix4<f32> {
+pub(crate) fn compute_bone_global_transform(skeleton: &Skeleton, bone_index: usize) -> Mat4 {
     let bone = &skeleton.bones[bone_index];
     let mut global_transform = bone.local_transform;
     let mut parent_id = bone.parent_id;
@@ -218,7 +215,7 @@ pub fn save_humanoid_mapping(world: &World) {
 
 /// Registers every run of non-humanoid bones under `root` as a spring chain; runs that already head
 /// a chain are kept as they are.
-pub fn add_spring_chains_under(
+pub fn use_existing_bones_as_springs(
     world: &mut World,
     assets: &AssetStorage,
     root: BoneId,
@@ -299,7 +296,7 @@ fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     use super::*;
     use crate::ecs::component::{SpringChain, SpringJointParam};
@@ -310,11 +307,11 @@ mod tests {
         let spine = skeleton.add_bone("Spine", Some(root));
         let chest = skeleton.add_bone("Chest", Some(spine));
         skeleton.bones[root as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.bones[spine as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.5, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0));
         skeleton.bones[chest as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.25, 0.1));
+            Mat4::from_translation(Vec3::new(0.0, 0.25, 0.1));
         skeleton
     }
 

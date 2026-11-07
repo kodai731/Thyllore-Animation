@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
     chains_under_bone as anim_chains_under_bone, chains_with_radius as anim_chains_with_radius,
@@ -50,7 +50,7 @@ pub fn resolve_root_bone_name(bones: &[BoneInput], root_name: &str) -> anyhow::R
 
 /// Every run of non-humanoid bones under `root_name` becomes a chain; a run that already heads a
 /// chain is kept. The humanoid bones are inferred from the bone names, as the collider fit does.
-pub fn add_chains_under_bone(
+pub fn use_existing_bones_as_springs(
     spring: &SidecarSpring,
     bones: &[BoneInput],
     root_name: &str,
@@ -116,7 +116,7 @@ impl JointValues {
             bone_id: 0,
             force: JointForce::from(self.force),
             drag_force: self.drag_force,
-            gravity_dir: Vector3::from(self.gravity_dir),
+            gravity_dir: Vec3::from(self.gravity_dir),
             hit_radius: self.hit_radius,
         }
     }

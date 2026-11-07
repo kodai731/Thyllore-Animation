@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::resample_polyline;
 
 use super::card_strands::place_card_chains;
@@ -17,13 +17,13 @@ use crate::cloth_setup::components::chain_gen::{
 /// Band centroids from the root down plus the deepest vertex as the tail.
 fn build_centerline(
     frames: &[&VertexFrame],
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     joint_count: usize,
-) -> (Vec<Vector3<f32>>, Vector3<f32>) {
+) -> (Vec<Vec3>, Vec3) {
     let owned: Vec<VertexFrame> = frames.iter().map(|frame| **frame).collect();
     let bands = BandPartition::of_frames(&owned, joint_count);
 
-    let mut band_sums = vec![(Vector3::new(0.0, 0.0, 0.0), 0usize); joint_count];
+    let mut band_sums = vec![(Vec3::new(0.0, 0.0, 0.0), 0usize); joint_count];
     for frame in frames {
         let band = bands.band_of(frame.progress);
         band_sums[band].0 += positions[frame.vertex as usize];
@@ -74,7 +74,7 @@ fn build_chain(
 
 fn build_chain_at_given_joints(
     column: usize,
-    heads_then_tail: &[Vector3<f32>],
+    heads_then_tail: &[Vec3],
     vertices: Vec<u32>,
     params: &ChainGenParams,
 ) -> anyhow::Result<GeneratedChain> {

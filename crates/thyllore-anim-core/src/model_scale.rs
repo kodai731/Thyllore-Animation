@@ -61,7 +61,7 @@ fn scale_curve_values(curve: &mut PropertyCurve, factor: f32) {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     use super::*;
     use crate::clip::{Keyframe, TransformChannel};
@@ -81,10 +81,10 @@ mod tests {
         setup.colliders.push(SpringColliderDef {
             id: 0,
             bone_id: 0,
-            offset: Vector3::new(1.0, 0.0, 0.0),
+            offset: Vec3::new(1.0, 0.0, 0.0),
             shape: ColliderShape::Capsule {
                 radius: 0.1,
-                tail: Vector3::new(0.0, 2.0, 0.0),
+                tail: Vec3::new(0.0, 2.0, 0.0),
             },
         });
 
@@ -93,11 +93,11 @@ mod tests {
         let joint = &setup.chains[0].joints[0];
         assert_eq!(joint.hit_radius, 0.02);
         assert_eq!(joint.force, SpringJointParam::default().force);
-        assert_eq!(setup.colliders[0].offset, Vector3::new(100.0, 0.0, 0.0));
+        assert_eq!(setup.colliders[0].offset, Vec3::new(100.0, 0.0, 0.0));
         match setup.colliders[0].shape {
             ColliderShape::Capsule { radius, tail } => {
                 assert!((radius - 10.0).abs() < 1e-5);
-                assert_eq!(tail, Vector3::new(0.0, 200.0, 0.0));
+                assert_eq!(tail, Vec3::new(0.0, 200.0, 0.0));
             }
             ColliderShape::Sphere { .. } => panic!("shape kind changed"),
         }
@@ -109,9 +109,9 @@ mod tests {
         clip.channels.insert(
             0,
             TransformChannel {
-                translation: vec![Keyframe::new(0.0, Vector3::new(1.0, 2.0, 3.0))],
+                translation: vec![Keyframe::new(0.0, Vec3::new(1.0, 2.0, 3.0))],
                 rotation: Vec::new(),
-                scale: vec![Keyframe::new(0.0, Vector3::new(1.0, 1.0, 1.0))],
+                scale: vec![Keyframe::new(0.0, Vec3::new(1.0, 1.0, 1.0))],
             },
         );
 
@@ -119,12 +119,9 @@ mod tests {
 
         assert_eq!(
             clip.channels[&0].translation[0].value,
-            Vector3::new(0.5, 1.0, 1.5)
+            Vec3::new(0.5, 1.0, 1.5)
         );
-        assert_eq!(
-            clip.channels[&0].scale[0].value,
-            Vector3::new(1.0, 1.0, 1.0)
-        );
+        assert_eq!(clip.channels[&0].scale[0].value, Vec3::new(1.0, 1.0, 1.0));
     }
 
     #[test]

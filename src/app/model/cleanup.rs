@@ -69,8 +69,7 @@ fn reset_model_world_state(world: &mut World) {
 mod tests {
     use super::*;
     use crate::animation::editable::EditableAnimationClip;
-    use cgmath::Matrix4;
-    use cgmath::SquareMatrix;
+    use glam::Mat4;
 
     fn make_world_with_model_resources() -> World {
         let mut world = World::new();
@@ -87,8 +86,8 @@ mod tests {
     fn reset_model_world_state_forgets_applied_poses() {
         let mut world = make_world_with_model_resources();
         let mut cache = PoseApplyCache::default();
-        cache.skinned_cache.insert(6, vec![Matrix4::identity()]);
-        cache.node_cache.insert(9, (Matrix4::identity(), 1.0));
+        cache.skinned_cache.insert(6, vec![Mat4::IDENTITY]);
+        cache.node_cache.insert(9, (Mat4::IDENTITY, 1.0));
         world.insert_resource(cache);
 
         reset_model_world_state(&mut world);

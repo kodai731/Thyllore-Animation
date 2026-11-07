@@ -1,7 +1,7 @@
 use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::animation::{
-    decompose_transform, normalize_quat, slerp, AimConstraintData, BoneId, ConstraintType,
+    decompose_transform, normalize_quat, AimConstraintData, BoneId, ConstraintType,
     IkConstraintData, ParentConstraintData, PositionConstraintData, RotationConstraintData,
     ScaleConstraintData, Skeleton, SkeletonPose,
 };
@@ -66,19 +66,6 @@ fn lerp_vec3(a: Vec3, b: Vec3, t: f32) -> Vec3 {
     a + (b - a) * t
 }
 
-fn conjugate_quat(q: Quat) -> Quat {
-    Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
-}
-
-fn quat_mul(a: Quat, b: Quat) -> Quat {
-    Quat::from_xyzw(
-        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-    )
-}
-
 fn rotation_between_vectors(from: Vec3, to: Vec3) -> Quat {
     let from_n = from.normalize();
     let to_n = to.normalize();
@@ -107,14 +94,6 @@ fn rotation_between_vectors(from: Vec3, to: Vec3) -> Quat {
         axis.z * inv_s,
         s * 0.5,
     ))
-}
-
-fn quaternion_from_axis_angle(axis: Vec3, angle: f32) -> Quat {
-    let half = angle * 0.5;
-    let s = half.sin();
-    let c = half.cos();
-    let a = axis.normalize();
-    Quat::from_xyzw(a.x * s, a.y * s, a.z * s, c)
 }
 
 fn solve_position_constraint(
@@ -183,13 +162,13 @@ fn solve_rotation_constraint(
     }
 
     let (_, target_rot, _) = decompose_transform(&globals[target_idx]);
-    let target_rot = quat_mul(target_rot, data.offset);
+    let target_rot = target_rot * data.offset;
 
     let parent_global = get_parent_global_transform(data.constrained_bone, skeleton, globals);
     let (_, parent_rot, _) = decompose_transform(&parent_global);
-    let parent_rot_inv = conjugate_quat(parent_rot);
+    let parent_rot_inv = parent_rot.conjugate();
 
-    let local_rot = normalize_quat(quat_mul(parent_rot_inv, target_rot));
+    let local_rot = normalize_quat(parent_rot_inv * target_rot);
 
     let effective_weight = if data.affect_axes.iter().all(|&a| a) {
         data.weight
@@ -199,7 +178,7 @@ fn solve_rotation_constraint(
     };
 
     let current = pose.bone_poses[bone_idx].rotation;
-    pose.bone_poses[bone_idx].rotation = slerp(current, local_rot, effective_weight);
+    pose.bone_poses[bone_idx].rotation = current.slerp(local_rot, effective_weight);
 }
 
 fn solve_scale_constraint(
@@ -291,7 +270,7 @@ fn solve_parent_constraint(
             first_rotation = false;
         } else {
             let normalized_t = source_weight / (total_weight + source_weight);
-            blended_rotation = slerp(blended_rotation, r, normalized_t);
+            blended_rotation = blended_rotation.slerp(r, normalized_t);
         }
 
         total_weight += source_weight;
@@ -326,9 +305,9 @@ fn solve_parent_constraint(
 
     if data.affect_rotation {
         let (_, parent_rot, _) = decompose_transform(&parent_global);
-        let parent_rot_inv = conjugate_quat(parent_rot);
-        let local_r = normalize_quat(quat_mul(parent_rot_inv, blended_rotation));
-        pose.bone_poses[bone_idx].rotation = slerp(current_r, local_r, data.weight);
+        let parent_rot_inv = parent_rot.conjugate();
+        let local_r = normalize_quat(parent_rot_inv * blended_rotation);
+        pose.bone_poses[bone_idx].rotation = current_r.slerp(local_r, data.weight);
     }
 }
 
@@ -361,7 +340,7 @@ fn solve_aim_constraint(
     let direction = direction.normalize();
 
     let (_, source_rot, _) = decompose_transform(&globals[source_idx]);
-    let current_aim = rotate_vector_by_quat(source_rot, data.aim_axis);
+    let current_aim = source_rot * data.aim_axis;
 
     let aim_rotation = rotation_between_vectors(current_aim, direction);
 
@@ -377,27 +356,24 @@ fn solve_aim_constraint(
         data.up_axis
     };
 
-    let rotated_up = rotate_vector_by_quat(
-        aim_rotation,
-        rotate_vector_by_quat(source_rot, data.up_axis),
-    );
+    let rotated_up = aim_rotation * (source_rot * data.up_axis);
     let desired_up = up_world - direction * direction.dot(up_world);
     let actual_up = rotated_up - direction * direction.dot(rotated_up);
 
     let final_rot = if desired_up.length_squared() > 1e-8 && actual_up.length_squared() > 1e-8 {
         let twist = rotation_between_vectors(actual_up.normalize(), desired_up.normalize());
-        normalize_quat(quat_mul(twist, quat_mul(aim_rotation, source_rot)))
+        normalize_quat(twist * aim_rotation * source_rot)
     } else {
-        normalize_quat(quat_mul(aim_rotation, source_rot))
+        normalize_quat(aim_rotation * source_rot)
     };
 
     let parent_global = get_parent_global_transform(data.source_bone, skeleton, globals);
     let (_, parent_rot, _) = decompose_transform(&parent_global);
-    let parent_rot_inv = conjugate_quat(parent_rot);
-    let local_rot = normalize_quat(quat_mul(parent_rot_inv, final_rot));
+    let parent_rot_inv = parent_rot.conjugate();
+    let local_rot = normalize_quat(parent_rot_inv * final_rot);
 
     let current = pose.bone_poses[source_idx].rotation;
-    pose.bone_poses[source_idx].rotation = slerp(current, local_rot, data.weight);
+    pose.bone_poses[source_idx].rotation = current.slerp(local_rot, data.weight);
 }
 
 fn solve_ik_constraint(
@@ -501,21 +477,21 @@ fn solve_ik_root_bone_rotation(
         compute_bend_plane_normal(data, root_pos, mid_pos, effector_pos, target_dir, globals);
 
     let base_rotation = rotation_between_vectors(current_upper_dir, target_dir);
-    let angle_offset = quaternion_from_axis_angle(pole_normal, -root_angle);
-    let root_world_rot = normalize_quat(quat_mul(angle_offset, base_rotation));
+    let angle_offset = Quat::from_axis_angle(pole_normal.normalize(), -root_angle);
+    let root_world_rot = normalize_quat(angle_offset * base_rotation);
 
     let (_, old_root_rot, _) = decompose_transform(&globals[root_idx]);
-    let root_correction = normalize_quat(quat_mul(root_world_rot, conjugate_quat(old_root_rot)));
+    let root_correction = normalize_quat(root_world_rot * old_root_rot.conjugate());
 
     let root_parent_global = get_parent_global_transform(root_bone_id, skeleton, globals);
     let (_, root_parent_rot, _) = decompose_transform(&root_parent_global);
-    let root_parent_inv = conjugate_quat(root_parent_rot);
+    let root_parent_inv = root_parent_rot.conjugate();
 
-    let new_root_global_rot = normalize_quat(quat_mul(root_correction, old_root_rot));
-    let new_root_local_rot = normalize_quat(quat_mul(root_parent_inv, new_root_global_rot));
+    let new_root_global_rot = normalize_quat(root_correction * old_root_rot);
+    let new_root_local_rot = normalize_quat(root_parent_inv * new_root_global_rot);
 
     let current_root_local = pose.bone_poses[root_idx].rotation;
-    pose.bone_poses[root_idx].rotation = slerp(current_root_local, new_root_local_rot, data.weight);
+    pose.bone_poses[root_idx].rotation = current_root_local.slerp(new_root_local_rot, data.weight);
 }
 
 fn solve_ik_mid_bone_rotation(
@@ -542,15 +518,15 @@ fn solve_ik_mid_bone_rotation(
     };
 
     let mid_correction = rotation_between_vectors(current_lower_dir, desired_lower_dir);
-    let new_mid_global_rot = normalize_quat(quat_mul(mid_correction, mid_global_rot));
+    let new_mid_global_rot = normalize_quat(mid_correction * mid_global_rot);
 
     let mid_parent_global = get_parent_global_transform(mid_bone_id, skeleton, globals);
     let (_, mid_parent_rot, _) = decompose_transform(&mid_parent_global);
-    let mid_parent_inv = conjugate_quat(mid_parent_rot);
+    let mid_parent_inv = mid_parent_rot.conjugate();
 
-    let new_mid_local_rot = normalize_quat(quat_mul(mid_parent_inv, new_mid_global_rot));
+    let new_mid_local_rot = normalize_quat(mid_parent_inv * new_mid_global_rot);
     let current_mid_local = pose.bone_poses[mid_idx].rotation;
-    pose.bone_poses[mid_idx].rotation = slerp(current_mid_local, new_mid_local_rot, data.weight);
+    pose.bone_poses[mid_idx].rotation = current_mid_local.slerp(new_mid_local_rot, data.weight);
 }
 
 fn apply_ik_twist(
@@ -573,8 +549,8 @@ fn apply_ik_twist(
         Vec3::new(0.0, 1.0, 0.0)
     };
 
-    let twist_rot = quaternion_from_axis_angle(target_dir, data.twist);
-    let twisted = normalize_quat(quat_mul(twist_rot, pose.bone_poses[root_idx].rotation));
+    let twist_rot = Quat::from_axis_angle(target_dir.normalize(), data.twist);
+    let twisted = normalize_quat(twist_rot * pose.bone_poses[root_idx].rotation);
     pose.bone_poses[root_idx].rotation = twisted;
 }
 
@@ -616,15 +592,15 @@ fn solve_ik_single_bone(
     let correction = rotation_between_vectors(current_dir.normalize(), desired_dir.normalize());
 
     let (_, parent_global_rot, _) = decompose_transform(&globals[parent_idx]);
-    let new_global_rot = normalize_quat(quat_mul(correction, parent_global_rot));
+    let new_global_rot = normalize_quat(correction * parent_global_rot);
 
     let grandparent_global = get_parent_global_transform(parent_id, skeleton, globals);
     let (_, grandparent_rot, _) = decompose_transform(&grandparent_global);
-    let grandparent_inv = conjugate_quat(grandparent_rot);
+    let grandparent_inv = grandparent_rot.conjugate();
 
-    let new_local_rot = normalize_quat(quat_mul(grandparent_inv, new_global_rot));
+    let new_local_rot = normalize_quat(grandparent_inv * new_global_rot);
     let current_local = pose.bone_poses[parent_idx].rotation;
-    pose.bone_poses[parent_idx].rotation = slerp(current_local, new_local_rot, data.weight);
+    pose.bone_poses[parent_idx].rotation = current_local.slerp(new_local_rot, data.weight);
 }
 
 fn compute_bend_plane_normal(
@@ -666,11 +642,4 @@ fn compute_bend_plane_normal(
         Vec3::new(0.0, 1.0, 0.0)
     };
     target_dir.cross(fallback).normalize()
-}
-
-fn rotate_vector_by_quat(q: Quat, v: Vec3) -> Vec3 {
-    let qv = Vec3::new(q.x, q.y, q.z);
-    let uv = qv.cross(v);
-    let uuv = qv.cross(uv);
-    v + (uv * q.w + uuv) * 2.0
 }

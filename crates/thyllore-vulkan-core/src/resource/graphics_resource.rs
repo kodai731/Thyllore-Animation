@@ -172,7 +172,7 @@ impl GraphicsResources {
             mesh.vertex_data
                 .vertices
                 .iter()
-                .map(|v| Vec4::new(v.color.x, v.color.y, v.color.z, v.color.w))
+                .map(|v| Vec4::from_array(v.color))
                 .collect(),
         );
 

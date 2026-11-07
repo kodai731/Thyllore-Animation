@@ -68,7 +68,7 @@ fn ufbx_matrix_to_mat4(m: &ufbx::Matrix) -> Mat4 {
 }
 
 fn decompose_transform(m: &Mat4) -> ([f32; 3], Quat, [f32; 3]) {
-    let (scale, rotation, translation) = m.to_scale_rotation_translation();
+    let (translation, rotation, scale) = thyllore_math_core::decompose(m);
     (translation.to_array(), rotation, scale.to_array())
 }
 

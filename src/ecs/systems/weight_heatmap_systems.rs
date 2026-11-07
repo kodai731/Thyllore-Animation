@@ -101,14 +101,14 @@ fn apply_heatmap_to_vertices(
         let weight = extract_weight_for_bone(&skin.bone_indices[i], &skin.bone_weights[i], bone_id);
         let rgb = weight_to_heatmap_rgb(weight);
         let base_alpha = base_colors[i].w;
-        vertices[i].color = Vec4::new(rgb.x, rgb.y, rgb.z, base_alpha);
+        vertices[i].color = [rgb.x, rgb.y, rgb.z, base_alpha];
     }
 }
 
 fn restore_base_colors(vertices: &mut [Vertex], base_colors: &[Vec4]) {
     debug_assert_eq!(vertices.len(), base_colors.len());
     for (i, base) in base_colors.iter().enumerate() {
-        vertices[i].color = Vec4::new(base.x, base.y, base.z, base.w);
+        vertices[i].color = base.to_array();
     }
 }
 
@@ -227,10 +227,10 @@ mod tests {
         apply_heatmap_to_vertices(&mut vertices, &skin, &base_colors, 5);
 
         for vertex in &vertices {
-            assert!((vertex.color.x - 1.0).abs() < 1e-5);
-            assert!(vertex.color.y.abs() < 1e-5);
-            assert!(vertex.color.z.abs() < 1e-5);
-            assert!((vertex.color.w - 0.5).abs() < 1e-5);
+            assert!((vertex.color[0] - 1.0).abs() < 1e-5);
+            assert!(vertex.color[1].abs() < 1e-5);
+            assert!(vertex.color[2].abs() < 1e-5);
+            assert!((vertex.color[3] - 0.5).abs() < 1e-5);
         }
     }
 
@@ -243,26 +243,26 @@ mod tests {
         apply_heatmap_to_vertices(&mut vertices, &skin, &base_colors, 99);
 
         for vertex in &vertices {
-            assert!(vertex.color.x.abs() < 1e-5);
-            assert!(vertex.color.y.abs() < 1e-5);
-            assert!((vertex.color.z - 1.0).abs() < 1e-5);
+            assert!(vertex.color[0].abs() < 1e-5);
+            assert!(vertex.color[1].abs() < 1e-5);
+            assert!((vertex.color[2] - 1.0).abs() < 1e-5);
         }
     }
 
     #[test]
     fn restore_base_colors_copies_exact_values() {
         let mut vertices = vec![Vertex::default(); 2];
-        vertices[0].color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-        vertices[1].color = Vec4::new(0.0, 1.0, 0.0, 1.0);
+        vertices[0].color = [1.0, 0.0, 0.0, 1.0];
+        vertices[1].color = [0.0, 1.0, 0.0, 1.0];
 
         let base_colors = vec![Vec4::new(0.1, 0.2, 0.3, 0.4), Vec4::new(0.5, 0.6, 0.7, 0.8)];
 
         restore_base_colors(&mut vertices, &base_colors);
 
-        assert!((vertices[0].color.x - 0.1).abs() < 1e-5);
-        assert!((vertices[0].color.w - 0.4).abs() < 1e-5);
-        assert!((vertices[1].color.z - 0.7).abs() < 1e-5);
-        assert!((vertices[1].color.w - 0.8).abs() < 1e-5);
+        assert!((vertices[0].color[0] - 0.1).abs() < 1e-5);
+        assert!((vertices[0].color[3] - 0.4).abs() < 1e-5);
+        assert!((vertices[1].color[2] - 0.7).abs() < 1e-5);
+        assert!((vertices[1].color[3] - 0.8).abs() < 1e-5);
     }
 
     fn build_graphics_with_single_skinned_mesh(bone_id: BoneId) -> GraphicsResources {
@@ -304,7 +304,7 @@ mod tests {
         update_weight_heatmap(&mut graphics, &mut heatmap, &selection);
 
         for vertex in &graphics.meshes[0].vertex_data.vertices {
-            assert!((vertex.color.x - 1.0).abs() < 1e-5);
+            assert!((vertex.color[0] - 1.0).abs() < 1e-5);
         }
         assert_eq!(
             heatmap.last_applied(),
@@ -327,8 +327,8 @@ mod tests {
 
         assert_eq!(changed.len(), 1);
         for vertex in &graphics.meshes[0].vertex_data.vertices {
-            assert!((vertex.color.x - 0.2).abs() < 1e-5);
-            assert!((vertex.color.w - 1.0).abs() < 1e-5);
+            assert!((vertex.color[0] - 0.2).abs() < 1e-5);
+            assert!((vertex.color[3] - 1.0).abs() < 1e-5);
         }
         assert_eq!(heatmap.last_applied(), &HeatmapApplication::NotApplied);
     }
@@ -343,7 +343,7 @@ mod tests {
         update_weight_heatmap(&mut graphics, &mut heatmap, &selection);
 
         for vertex in &graphics.meshes[0].vertex_data.vertices {
-            assert!((vertex.color.x - 0.2).abs() < 1e-5);
+            assert!((vertex.color[0] - 0.2).abs() < 1e-5);
         }
         assert_eq!(heatmap.last_applied(), &HeatmapApplication::Applied(None));
     }

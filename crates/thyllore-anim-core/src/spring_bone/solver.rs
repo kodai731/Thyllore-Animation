@@ -1,13 +1,13 @@
 use glam::{Mat4, Quat, Vec3};
 
 use super::{
-    apply_length_constraint, compute_joint_rotation, compute_tail_position, conjugate,
-    extract_world_position, integrate_joint, merge_collider_shrink, project_chain_clearance,
-    recompute_global_transform, resolve_all_segment_collisions, resolve_all_tail_collisions,
-    rotate_vector, segment_axis_distance, shrunk_collider_radius, tail_axis_distance,
-    world_collider, ColliderShrink, JointForce, JointForces, JointRestFrame, JointRestGeometry,
-    RestClearance, RestTolerance, SpringBoneSetup, SpringChain, SpringChainId, SpringCollisionMode,
-    SpringJointParam, SpringSpace, WorldCollider, DEFAULT_SIMULATION_STEP,
+    apply_length_constraint, compute_joint_rotation, compute_tail_position, extract_world_position,
+    integrate_joint, merge_collider_shrink, project_chain_clearance, recompute_global_transform,
+    resolve_all_segment_collisions, resolve_all_tail_collisions, segment_axis_distance,
+    shrunk_collider_radius, tail_axis_distance, world_collider, ColliderShrink, JointForce,
+    JointForces, JointRestFrame, JointRestGeometry, RestClearance, RestTolerance, SpringBoneSetup,
+    SpringChain, SpringChainId, SpringCollisionMode, SpringJointParam, SpringSpace, WorldCollider,
+    DEFAULT_SIMULATION_STEP,
 };
 use crate::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
 use thyllore_math_core::{world_y_axis, world_y_down, EARTH_GRAVITY_M_PER_S2};
@@ -242,8 +242,7 @@ fn initialize_joint(
     let rest_axis_distances =
         rest_axis_distances(head_pos, tail, world_colliders, setup.collision_mode);
     let parent_world_rotation = extract_parent_world_rotation(skeleton, idx, global_transforms);
-    let gravity_in_parent_rest =
-        rotate_vector(conjugate(parent_world_rotation), joint_param.gravity_dir);
+    let gravity_in_parent_rest = parent_world_rotation.conjugate() * joint_param.gravity_dir;
 
     SpringJointState {
         prev_tail: tail,
@@ -621,7 +620,7 @@ fn compute_bone_length_and_axis(
         let length = diff.length();
         if length > 1e-6 {
             let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
-            return (length, rotate_vector(conjugate(bone_rot), diff / length));
+            return (length, bone_rot.conjugate() * (diff / length));
         }
     }
 
@@ -647,10 +646,7 @@ fn extrapolated_leaf_bone_length_and_axis(
         return (0.1, world_y_axis());
     }
     let (_, bone_rot, _) = decompose_transform(&global_transforms[idx]);
-    (
-        length,
-        rotate_vector(conjugate(bone_rot), offset_from_parent / length),
-    )
+    (length, bone_rot.conjugate() * (offset_from_parent / length))
 }
 
 fn parent_global_transform(
@@ -797,7 +793,7 @@ mod tests {
     fn leaf_extends_its_own_bone_direction() {
         let tail = leaf_tail_for_local_rotation(Quat::from_xyzw(0.0, 0.0, 0.0, 1.0));
         let parent_rotation = Quat::from_rotation_z(f32::to_radians(30.0));
-        let offset = rotate_vector(parent_rotation, Vec3::new(0.1, -0.2, 0.05));
+        let offset = parent_rotation * Vec3::new(0.1, -0.2, 0.05);
         let head = Vec3::new(0.0, 1.0, 0.0) + offset;
 
         assert!((tail - (head + offset)).length() < 1e-5, "{tail:?}");

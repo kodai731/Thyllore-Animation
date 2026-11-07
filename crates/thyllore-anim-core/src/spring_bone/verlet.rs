@@ -35,7 +35,7 @@ pub fn integrate_joint(
 ) -> Vec3 {
     let velocity = (current_tail - prev_tail) * (1.0 - forces.drag_force);
     let rest_rotation = frame.parent_world_rotation * frame.initial_local_rotation;
-    let rest_dir = unit_or_up(rotate_vector(rest_rotation, frame.bone_axis));
+    let rest_dir = unit_or_up(rest_rotation * frame.bone_axis);
 
     match model {
         SpringForceModel::Vrm => {
@@ -45,8 +45,7 @@ pub fn integrate_joint(
                 + forces.gravity_dir * forces.gravity * dt
         }
         SpringForceModel::RestRelative => {
-            let rest_gravity =
-                rotate_vector(frame.parent_world_rotation, frame.gravity_in_parent_rest);
+            let rest_gravity = frame.parent_world_rotation * frame.gravity_in_parent_rest;
             let rest_tail = frame.head + rest_dir * frame.bone_length;
             let return_share = (forces.stiffness * dt).min(1.0);
             current_tail
@@ -84,7 +83,7 @@ pub fn compute_joint_rotation(
     bone_axis: Vec3,
     current_tail: Vec3,
 ) -> Quat {
-    let rest_dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
+    let rest_dir = (parent_world_rotation * initial_local_rotation) * bone_axis;
 
     let actual_dir = current_tail - head_position;
     let actual_len = actual_dir.length();
@@ -95,7 +94,7 @@ pub fn compute_joint_rotation(
 
     let rotation_diff = rotation_between(rest_dir, actual_dir);
 
-    let parent_rot_inv = conjugate(parent_world_rotation);
+    let parent_rot_inv = parent_world_rotation.conjugate();
     normalize_quat(parent_rot_inv * rotation_diff * parent_world_rotation * initial_local_rotation)
 }
 
@@ -110,7 +109,7 @@ pub fn compute_tail_position(
     bone_axis: Vec3,
     bone_length: f32,
 ) -> Vec3 {
-    let dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
+    let dir = (parent_world_rotation * initial_local_rotation) * bone_axis;
     head_position + dir * bone_length
 }
 
@@ -122,16 +121,6 @@ pub fn recompute_global_transform(
     let (t, _, s) = decompose_transform(original_local_transform);
     let local = compose_transform(t, local_rotation, s);
     parent_global * local
-}
-
-pub fn rotate_vector(q: Quat, v: Vec3) -> Vec3 {
-    let qv = Quat::from_xyzw(v.x, v.y, v.z, 0.0);
-    let result = q * qv * conjugate(q);
-    Vec3::new(result.x, result.y, result.z)
-}
-
-pub fn conjugate(q: Quat) -> Quat {
-    Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
 }
 
 fn rotation_between(from: Vec3, to: Vec3) -> Quat {
@@ -272,7 +261,7 @@ mod tests {
             SpringForceModel::RestRelative,
             1.0,
         );
-        let expected_gravity = DOWN - rotate_vector(tilted.parent_world_rotation, DOWN);
+        let expected_gravity = DOWN - tilted.parent_world_rotation * DOWN;
         assert!((result - current - expected_gravity).length() < 1e-5);
     }
 

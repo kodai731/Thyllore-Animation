@@ -13,15 +13,23 @@ pub fn mean_axis_scale(linear: &Mat3) -> f32 {
     (linear.x_axis.length() + linear.y_axis.length() + linear.z_axis.length()) / 3.0
 }
 
+/// Translation, rotation and scale of an affine matrix; a collapsed axis keeps its zero scale and yields the identity rotation.
 pub fn decompose(m: &Mat4) -> (Vec3, Quat, Vec3) {
-    let (scale, rotation, translation) = m.to_scale_rotation_translation();
+    let translation = m.w_axis.truncate();
+    let axis_lengths = Vec3::new(
+        m.x_axis.truncate().length(),
+        m.y_axis.truncate().length(),
+        m.z_axis.truncate().length(),
+    );
+    if axis_lengths.min_element() <= COLLAPSED_AXIS_LENGTH {
+        return (translation, Quat::IDENTITY, axis_lengths);
+    }
+
+    let (scale, rotation, _) = m.to_scale_rotation_translation();
     (translation, rotation, scale)
 }
 
-/// Reads a quaternion stored as `[w, x, y, z]` from one stored as `[x, y, z, w]`.
-pub fn swap(q: &Quat) -> Quat {
-    Quat::from_xyzw(q.y, q.z, q.w, q.x)
-}
+const COLLAPSED_AXIS_LENGTH: f32 = 1e-6;
 
 /// The same transform between two spaces that were both scaled by `factor`: rotation kept, translation scaled.
 pub fn scale_translation(m: &Mat4, factor: f32) -> Mat4 {
@@ -44,9 +52,20 @@ mod tests {
     }
 
     #[test]
-    fn test_swap_quaternion() {
-        let swapped = swap(&Quat::from_xyzw(1.0, 2.0, 3.0, 4.0));
-        assert_eq!(swapped, Quat::from_xyzw(2.0, 3.0, 4.0, 1.0));
+    fn decompose_of_a_collapsed_axis_is_finite() {
+        let flat = Mat4::from_scale(Vec3::new(1.0, 0.0, 1.0));
+        let (translation, rotation, scale) = decompose(&flat);
+        assert!(translation.abs_diff_eq(Vec3::ZERO, 1e-6));
+        assert_eq!(rotation, Quat::IDENTITY);
+        assert!(scale.abs_diff_eq(Vec3::new(1.0, 0.0, 1.0), 1e-6));
+    }
+
+    #[test]
+    fn decompose_keeps_a_mirrored_axis_as_a_negative_scale() {
+        let mirrored = Mat4::from_scale(Vec3::new(-1.0, 1.0, 1.0));
+        let (_, rotation, scale) = decompose(&mirrored);
+        assert!(rotation.is_finite());
+        assert!(scale.abs_diff_eq(Vec3::new(-1.0, 1.0, 1.0), 1e-6));
     }
 
     #[test]

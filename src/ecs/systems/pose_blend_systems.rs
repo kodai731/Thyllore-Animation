@@ -1,7 +1,7 @@
 use glam::{Quat, Vec3};
 
 use crate::animation::editable::EaseType;
-use crate::animation::{normalize_quat, slerp, BoneLocalPose, SkeletonPose};
+use crate::animation::{normalize_quat, BoneLocalPose, SkeletonPose};
 
 pub fn blend_poses_override(
     base: &SkeletonPose,
@@ -17,7 +17,7 @@ pub fn blend_poses_override(
 
         result.bone_poses[i] = BoneLocalPose {
             translation: lerp_vec3(b.translation, o.translation, weight),
-            rotation: slerp(b.rotation, o.rotation, weight),
+            rotation: b.rotation.slerp(o.rotation, weight),
             scale: lerp_vec3(b.scale, o.scale, weight),
         };
     }
@@ -45,13 +45,13 @@ pub fn blend_poses_additive(
         let r = &rest.bone_poses[i];
 
         let delta_t = (a.translation - r.translation) * weight;
-        let inv_rest_r = conjugate_quat(r.rotation);
-        let delta_r = slerp(identity, quat_mul(inv_rest_r, a.rotation), weight);
+        let inv_rest_r = r.rotation.conjugate();
+        let delta_r = identity.slerp(inv_rest_r * a.rotation, weight);
         let delta_s = (a.scale - r.scale) * weight;
 
         result.bone_poses[i] = BoneLocalPose {
             translation: b.translation + delta_t,
-            rotation: normalize_quat(quat_mul(b.rotation, delta_r)),
+            rotation: normalize_quat(b.rotation * delta_r),
             scale: b.scale + delta_s,
         };
     }
@@ -127,18 +127,5 @@ fn lerp_vec3(a: Vec3, b: Vec3, t: f32) -> Vec3 {
         a.x + (b.x - a.x) * t,
         a.y + (b.y - a.y) * t,
         a.z + (b.z - a.z) * t,
-    )
-}
-
-fn conjugate_quat(q: Quat) -> Quat {
-    Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
-}
-
-fn quat_mul(a: Quat, b: Quat) -> Quat {
-    Quat::from_xyzw(
-        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
     )
 }

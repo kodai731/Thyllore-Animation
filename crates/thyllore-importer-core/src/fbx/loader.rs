@@ -323,14 +323,14 @@ fn convert_fbx_data_to_mesh(
 
         vertices.push(Vertex {
             pos: Vec3::new(pos.x, pos.y, pos.z),
-            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            color: [1.0, 1.0, 1.0, 1.0],
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal.x, normal.y, normal.z),
         });
 
         local_vertices.push(Vertex {
             pos: Vec3::new(local_pos.x, local_pos.y, local_pos.z),
-            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            color: [1.0, 1.0, 1.0, 1.0],
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal.x, normal.y, normal.z),
         });

@@ -627,14 +627,14 @@ fn build_vertices(
 
         mesh_data.vertex_data.vertices.push(Vertex {
             pos: Vec3::new(pos[0], pos[1], pos[2]),
-            color: Vec4::new(color[0], color[1], color[2], color[3]),
+            color,
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal[0], normal[1], normal[2]),
         });
 
         mesh_data.local_vertices.push(Vertex {
             pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
-            color: Vec4::new(color[0], color[1], color[2], color[3]),
+            color,
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal[0], normal[1], normal[2]),
         });

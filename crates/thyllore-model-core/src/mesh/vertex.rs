@@ -6,7 +6,7 @@ use glam::{Vec2, Vec3, Vec4};
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Vertex {
     pub pos: Vec3,
-    pub color: Vec4,
+    pub color: [f32; 4],
     pub tex_coord: Vec2,
     pub normal: Vec3,
 }
@@ -15,7 +15,7 @@ impl Vertex {
     pub fn new(pos: Vec3, color: Vec4, tex_coord: Vec2) -> Self {
         Self {
             pos,
-            color,
+            color: color.to_array(),
             tex_coord,
             normal: Vec3::new(0.0, 0.0, 1.0),
         }
@@ -24,7 +24,7 @@ impl Vertex {
     pub fn new_with_normal(pos: Vec3, color: Vec4, tex_coord: Vec2, normal: Vec3) -> Self {
         Self {
             pos,
-            color,
+            color: color.to_array(),
             tex_coord,
             normal,
         }
@@ -62,4 +62,19 @@ impl Hash for Vertex {
 pub struct VertexData {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::{offset_of, size_of};
+
+    #[test]
+    fn vertex_is_packed_without_padding() {
+        assert_eq!(size_of::<Vertex>(), 48);
+        assert_eq!(offset_of!(Vertex, pos), 0);
+        assert_eq!(offset_of!(Vertex, color), 12);
+        assert_eq!(offset_of!(Vertex, tex_coord), 28);
+        assert_eq!(offset_of!(Vertex, normal), 36);
+    }
 }

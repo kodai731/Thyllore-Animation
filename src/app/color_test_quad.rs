@@ -115,31 +115,32 @@ pub unsafe fn spawn_color_test_quads(
 }
 
 fn build_quad_vertex_data(color: Vec4) -> VertexData {
+    let rgba = color.to_array();
     let half = 1.5;
     let normal = Vec3::new(0.0, 0.0, 1.0);
 
     let vertices = vec![
         Vertex {
             pos: Vec3::new(-half, -half, 0.0),
-            color,
+            color: rgba,
             tex_coord: Vec2::new(0.0, 1.0),
             normal,
         },
         Vertex {
             pos: Vec3::new(half, -half, 0.0),
-            color,
+            color: rgba,
             tex_coord: Vec2::new(1.0, 1.0),
             normal,
         },
         Vertex {
             pos: Vec3::new(half, half, 0.0),
-            color,
+            color: rgba,
             tex_coord: Vec2::new(1.0, 0.0),
             normal,
         },
         Vertex {
             pos: Vec3::new(-half, half, 0.0),
-            color,
+            color: rgba,
             tex_coord: Vec2::new(0.0, 0.0),
             normal,
         },

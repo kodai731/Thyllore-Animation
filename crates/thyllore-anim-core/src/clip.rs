@@ -150,7 +150,7 @@ impl TransformChannel {
                     let wrap_duration = dur - last_kf.time + first_kf.time;
                     if wrap_duration > 0.0001 {
                         let t = (time - last_kf.time) / wrap_duration;
-                        return Some(slerp(last_kf.value, first_kf.value, t));
+                        return Some(last_kf.value.slerp(first_kf.value, t));
                     }
                 }
             }
@@ -164,7 +164,7 @@ impl TransformChannel {
 
         match k0.interpolation {
             Interpolation::Step => Some(k0.value),
-            Interpolation::Linear => Some(slerp(k0.value, k1.value, t)),
+            Interpolation::Linear => Some(k0.value.slerp(k1.value, t)),
             Interpolation::CubicSpline => Some(normalize_quat(hermite_quat(k0, k1, t))),
         }
     }
@@ -208,48 +208,12 @@ fn hermite_quat(k0: &Keyframe<Quat>, k1: &Keyframe<Quat>, t: f32) -> Quat {
     )
 }
 
-pub fn slerp(a: Quat, b: Quat, t: f32) -> Quat {
-    let dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
-
-    let (b, dot) = if dot < 0.0 {
-        (Quat::from_xyzw(-b.x, -b.y, -b.z, -b.w), -dot)
-    } else {
-        (b, dot)
-    };
-
-    let dot = dot.clamp(-1.0, 1.0);
-
-    if dot > 0.9995 {
-        let result = Quat::from_xyzw(
-            a.x + t * (b.x - a.x),
-            a.y + t * (b.y - a.y),
-            a.z + t * (b.z - a.z),
-            a.w + t * (b.w - a.w),
-        );
-        return normalize_quat(result);
-    }
-
-    let theta_0 = dot.acos();
-    let sin_theta_0 = theta_0.sin();
-
-    let s0 = ((1.0 - t) * theta_0).sin() / sin_theta_0;
-    let s1 = (t * theta_0).sin() / sin_theta_0;
-
-    let result = Quat::from_xyzw(
-        s0 * a.x + s1 * b.x,
-        s0 * a.y + s1 * b.y,
-        s0 * a.z + s1 * b.z,
-        s0 * a.w + s1 * b.w,
-    );
-    normalize_quat(result)
-}
-
+/// Unit quaternion of `q`; the zero quaternion maps to the identity rotation.
 pub fn normalize_quat(q: Quat) -> Quat {
-    let len = (q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z).sqrt();
-    if len > 0.0 {
-        Quat::from_xyzw(q.x / len, q.y / len, q.z / len, q.w / len)
+    if q.length_squared() > 0.0 {
+        q.normalize()
     } else {
-        Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)
+        Quat::IDENTITY
     }
 }
 
@@ -299,8 +263,7 @@ pub fn compose_transform(translation: Vec3, rotation: Quat, scale: Vec3) -> Mat4
 }
 
 pub fn decompose_transform(m: &Mat4) -> (Vec3, Quat, Vec3) {
-    let (scale, rotation, translation) = m.to_scale_rotation_translation();
-    (translation, rotation, scale)
+    thyllore_math_core::decompose(m)
 }
 
 #[derive(Clone, Debug, Default)]

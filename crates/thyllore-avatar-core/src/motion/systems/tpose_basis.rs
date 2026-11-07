@@ -70,7 +70,7 @@ fn apply_arm_correction(
             continue;
         }
         visited[bone_idx] = true;
-        rotations[bone_idx] = correction * rotations[bone_idx];
+        rotations[bone_idx] = (correction * rotations[bone_idx]).normalize();
         for (child_idx, bone) in skeleton.bones.iter().enumerate() {
             if bone.parent == Some(bone_idx) && !visited[child_idx] {
                 stack.push(child_idx);

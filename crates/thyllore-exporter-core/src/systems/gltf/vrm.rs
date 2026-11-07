@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use gltf::binary::Glb;
 use gltf::json;
 
@@ -92,7 +92,7 @@ fn append_end_node(
 /// Every glTF node as a bone in node order: rest positions in metres, rest globals in glTF units.
 struct NodeSkeleton {
     bones: Vec<BoneInput>,
-    globals: Vec<Matrix4<f32>>,
+    globals: Vec<Mat4>,
     node_of_bone: BTreeMap<String, u32>,
 }
 
@@ -115,7 +115,7 @@ impl NodeSkeleton {
             .map(|(index, node)| BoneInput {
                 name: node.name.clone().unwrap_or_default(),
                 parent: parents[index],
-                rest_position: (globals[index].w.truncate() * metres_per_gltf_unit).into(),
+                rest_position: (globals[index].w_axis.truncate() * metres_per_gltf_unit).into(),
             })
             .collect();
 
@@ -139,24 +139,24 @@ fn parent_of_each_node(nodes: &[json::scene::Node]) -> Vec<Option<usize>> {
     parents
 }
 
-fn global_transforms(nodes: &[json::scene::Node], parents: &[Option<usize>]) -> Vec<Matrix4<f32>> {
-    let locals: Vec<Matrix4<f32>> = nodes.iter().map(local_transform).collect();
-    let mut globals: Vec<Option<Matrix4<f32>>> = vec![None; nodes.len()];
+fn global_transforms(nodes: &[json::scene::Node], parents: &[Option<usize>]) -> Vec<Mat4> {
+    let locals: Vec<Mat4> = nodes.iter().map(local_transform).collect();
+    let mut globals: Vec<Option<Mat4>> = vec![None; nodes.len()];
     for index in 0..nodes.len() {
         resolve_global(index, parents, &locals, &mut globals);
     }
     globals
         .into_iter()
-        .map(|global| global.unwrap_or_else(Matrix4::identity))
+        .map(|global| global.unwrap_or(Mat4::IDENTITY))
         .collect()
 }
 
 fn resolve_global(
     index: usize,
     parents: &[Option<usize>],
-    locals: &[Matrix4<f32>],
-    globals: &mut [Option<Matrix4<f32>>],
-) -> Matrix4<f32> {
+    locals: &[Mat4],
+    globals: &mut [Option<Mat4>],
+) -> Mat4 {
     if let Some(global) = globals[index] {
         return global;
     }
@@ -168,16 +168,16 @@ fn resolve_global(
     global
 }
 
-fn local_transform(node: &json::scene::Node) -> Matrix4<f32> {
+fn local_transform(node: &json::scene::Node) -> Mat4 {
     if let Some(matrix) = node.matrix {
-        return Matrix4::from(matrix_columns(matrix));
+        return Mat4::from_cols_array_2d(&matrix_columns(matrix));
     }
-    let translation = Vector3::from(node.translation.unwrap_or([0.0; 3]));
+    let translation = Vec3::from(node.translation.unwrap_or([0.0; 3]));
     let [x, y, z, w] = node.rotation.unwrap_or_default().0;
     let scale = node.scale.unwrap_or([1.0; 3]);
-    Matrix4::from_translation(translation)
-        * Matrix4::from(Quaternion::new(w, x, y, z))
-        * Matrix4::from_nonuniform_scale(scale[0], scale[1], scale[2])
+    Mat4::from_translation(translation)
+        * Mat4::from_quat(Quat::from_xyzw(x, y, z, w))
+        * Mat4::from_scale(Vec3::new(scale[0], scale[1], scale[2]))
 }
 
 fn matrix_columns(flat: [f32; 16]) -> [[f32; 4]; 4] {
@@ -192,7 +192,7 @@ fn matrix_columns(flat: [f32; 16]) -> [[f32; 4]; 4] {
 mod tests {
     use std::collections::BTreeMap;
 
-    use cgmath::{InnerSpace, Matrix4, Vector3};
+    use glam::{Mat4, Vec3};
     use thyllore_anim_core::spring_bone::{ColliderShape, JointForce, VrmJointForce};
     use thyllore_anim_core::Skeleton;
     use thyllore_avatar_core::stats::components::stats::AvatarStats;
@@ -219,7 +219,7 @@ mod tests {
         skeleton.add_bone("Hair3", Some(hair2));
         let heights = [1.0, 0.5, 0.1, -0.1, -0.1];
         for (bone, height) in skeleton.bones.iter_mut().zip(heights) {
-            bone.local_transform = Matrix4::from_translation(Vector3::new(0.0, height, 0.0));
+            bone.local_transform = Mat4::from_translation(Vec3::new(0.0, height, 0.0));
         }
         let root = build_minimal_gltf_json(&skeleton).expect("minimal glTF");
         glb_bytes(&root, Vec::new()).expect("GLB bytes")
@@ -328,11 +328,11 @@ mod tests {
 
         let collider = &setup.colliders[0];
         assert_eq!(collider.bone_id, 1);
-        assert!((collider.offset - Vector3::new(0.0, 0.05, 0.02)).magnitude() < 1e-6);
+        assert!((collider.offset - Vec3::new(0.0, 0.05, 0.02)).length() < 1e-6);
         assert!(matches!(
             collider.shape,
             ColliderShape::Capsule { radius, tail }
-                if (radius - 0.08).abs() < 1e-6 && (tail - Vector3::new(0.0, 0.15, 0.02)).magnitude() < 1e-6
+                if (radius - 0.08).abs() < 1e-6 && (tail - Vec3::new(0.0, 0.15, 0.02)).length() < 1e-6
         ));
         let chain = &setup.chains[0];
         assert_eq!(chain.center_bone_id, Some(1));
@@ -371,7 +371,7 @@ mod tests {
         let end_node = &root.nodes[5];
         assert_eq!(end_node.name.as_deref(), Some("Hair3_end"));
         let translation = end_node.translation.expect("translation");
-        assert!((Vector3::from(translation) - Vector3::new(0.0, -0.1, 0.0)).magnitude() < 1e-6);
+        assert!((Vec3::from(translation) - Vec3::new(0.0, -0.1, 0.0)).length() < 1e-6);
         let hair3_children = root.nodes[4].children.as_ref().expect("Hair3 children");
         assert_eq!(hair3_children.len(), 1);
         assert_eq!(hair3_children[0].value(), 5);
@@ -411,7 +411,7 @@ mod tests {
         let setup = parse_vrmc_spring_bone(&extensions[VRMC_SPRING_BONE], &Some).expect("parses");
 
         let collider = &setup.colliders[0];
-        assert!((collider.offset - Vector3::new(0.0, 5.0, 2.0)).magnitude() < 1e-4);
+        assert!((collider.offset - Vec3::new(0.0, 5.0, 2.0)).length() < 1e-4);
         assert!(
             matches!(collider.shape, ColliderShape::Capsule { radius, .. } if (radius - 8.0).abs() < 1e-4)
         );

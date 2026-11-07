@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
+use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 
 use crate::ecs::component::mesh::presets::{POSITION, TEX_COORD_0};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
@@ -65,10 +65,10 @@ pub fn create_billboard() -> BillboardData {
     }
 }
 
-pub fn create_billboard_transform(position: Vector3<f32>) -> BillboardTransform {
+pub fn create_billboard_transform(position: Vec3) -> BillboardTransform {
     BillboardTransform {
         position,
-        model_matrix: Matrix4::from_translation(position),
+        model_matrix: Mat4::from_translation(position),
     }
 }
 
@@ -91,14 +91,13 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
         let position = transform.translation;
         let to_camera = camera.position - position;
 
-        if to_camera.magnitude() > 0.001 {
+        if to_camera.length() > 0.001 {
             let forward = to_camera.normalize();
-            let up = Vector3::new(0.0, 1.0, 0.0);
+            let up = Vec3::new(0.0, 1.0, 0.0);
             let right = up.cross(forward).normalize();
             let adjusted_up = forward.cross(right);
 
-            transform.rotation =
-                cgmath::Quaternion::from(cgmath::Matrix3::from_cols(right, adjusted_up, forward));
+            transform.rotation = Quat::from_mat3(&Mat3::from_cols(right, adjusted_up, forward));
         }
     }
 }
@@ -112,27 +111,24 @@ pub unsafe fn billboard_create_buffers(
 
 pub fn billboard_transform_update_look_at(
     transform: &mut BillboardTransform,
-    camera_position: Vector3<f32>,
-    world_up: Vector3<f32>,
+    camera_position: Vec3,
+    world_up: Vec3,
 ) {
     let forward = (camera_position - transform.position).normalize();
     let right = world_up.cross(forward).normalize();
     let up = forward.cross(right);
 
-    let rotation = Matrix4::from_cols(
+    let rotation = Mat4::from_cols(
         right.extend(0.0),
         up.extend(0.0),
         forward.extend(0.0),
-        Vector4::new(0.0, 0.0, 0.0, 1.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
     );
 
-    let translation = Matrix4::from_translation(transform.position);
+    let translation = Mat4::from_translation(transform.position);
     transform.model_matrix = translation * rotation;
 }
 
-pub fn billboard_transform_set_position(
-    transform: &mut BillboardTransform,
-    position: Vector3<f32>,
-) {
+pub fn billboard_transform_set_position(transform: &mut BillboardTransform, position: Vec3) {
     transform.position = position;
 }

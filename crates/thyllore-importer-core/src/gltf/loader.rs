@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, Quat, UVec4, Vec2, Vec3, Vec4};
 use gltf::buffer::Data;
 use gltf::{Document, Node};
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ pub struct NodeInfo {
     pub index: usize,
     pub name: String,
     pub parent_index: Option<usize>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
 }
 
 impl Default for NodeInfo {
@@ -49,7 +49,7 @@ impl Default for NodeInfo {
             index: 0,
             name: String::new(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         }
     }
 }
@@ -87,21 +87,21 @@ struct JointAnimation {
 struct NodeAnimation {
     node_index: usize,
     translation_keyframes: Vec<f32>,
-    translations: Vec<Vector3<f32>>,
-    translation_in_tangents: Vec<Vector3<f32>>,
-    translation_out_tangents: Vec<Vector3<f32>>,
+    translations: Vec<Vec3>,
+    translation_in_tangents: Vec<Vec3>,
+    translation_out_tangents: Vec<Vec3>,
     rotation_keyframes: Vec<f32>,
-    rotations: Vec<Quaternion<f32>>,
-    rotation_in_tangents: Vec<Quaternion<f32>>,
-    rotation_out_tangents: Vec<Quaternion<f32>>,
+    rotations: Vec<Quat>,
+    rotation_in_tangents: Vec<Quat>,
+    rotation_out_tangents: Vec<Quat>,
     scale_keyframes: Vec<f32>,
-    scales: Vec<Vector3<f32>>,
-    scale_in_tangents: Vec<Vector3<f32>>,
-    scale_out_tangents: Vec<Vector3<f32>>,
+    scales: Vec<Vec3>,
+    scale_in_tangents: Vec<Vec3>,
+    scale_out_tangents: Vec<Vec3>,
     interpolation: Interpolation,
-    default_translation: Vector3<f32>,
-    default_rotation: Quaternion<f32>,
-    default_scale: Vector3<f32>,
+    default_translation: Vec3,
+    default_rotation: Quat,
+    default_scale: Vec3,
 }
 
 impl Default for NodeAnimation {
@@ -121,9 +121,9 @@ impl Default for NodeAnimation {
             scale_in_tangents: Vec::new(),
             scale_out_tangents: Vec::new(),
             interpolation: Interpolation::Linear,
-            default_translation: Vector3::new(0.0, 0.0, 0.0),
-            default_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            default_scale: Vector3::new(1.0, 1.0, 1.0),
+            default_translation: Vec3::new(0.0, 0.0, 0.0),
+            default_rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            default_scale: Vec3::new(1.0, 1.0, 1.0),
         }
     }
 }
@@ -169,10 +169,10 @@ impl NodeJointMap {
 
 struct MeshBuildData {
     vertex_data: VertexData,
-    bone_indices: Vec<Vector4<u32>>,
-    bone_weights: Vec<Vector4<f32>>,
+    bone_indices: Vec<UVec4>,
+    bone_weights: Vec<Vec4>,
     base_positions: Vec<[f32; 3]>,
-    base_normals: Vec<Vector3<f32>>,
+    base_normals: Vec<Vec3>,
     morph: MeshMorph,
     image_data: Vec<ImageData>,
     has_joints: bool,
@@ -270,15 +270,7 @@ unsafe fn parse_gltf_imported(
 
     for scene in gltf.scenes() {
         for node in scene.nodes() {
-            process_node(
-                gltf,
-                buffers,
-                images,
-                &node,
-                ctx,
-                &Matrix4::identity(),
-                None,
-            )?;
+            process_node(gltf, buffers, images, &node, ctx, &Mat4::IDENTITY, None)?;
         }
     }
 
@@ -397,7 +389,7 @@ fn compute_node_global_transform(
     gltf: &Document,
     node_index: usize,
     parent_map: &HashMap<usize, usize>,
-) -> Matrix4<f32> {
+) -> Mat4 {
     let mut transform_chain = Vec::new();
     let mut current_index = Some(node_index);
 
@@ -408,7 +400,7 @@ fn compute_node_global_transform(
         current_index = parent_map.get(&idx).copied();
     }
 
-    let mut global = Matrix4::identity();
+    let mut global = Mat4::IDENTITY;
     for transform in transform_chain.iter().rev() {
         global = global * transform;
     }
@@ -507,7 +499,7 @@ where
 fn transform_positions(
     raw_positions: &[[f32; 3]],
     has_joints: bool,
-    cumulative_transform: &Matrix4<f32>,
+    cumulative_transform: &Mat4,
     node_name: &str,
 ) -> Vec<[f32; 3]> {
     if node_name.contains("NurbsPath.009") {
@@ -518,22 +510,31 @@ fn transform_positions(
         );
         let ct = cumulative_transform;
         let scale = (
-            (ct[0][0] * ct[0][0] + ct[0][1] * ct[0][1] + ct[0][2] * ct[0][2]).sqrt(),
-            (ct[1][0] * ct[1][0] + ct[1][1] * ct[1][1] + ct[1][2] * ct[1][2]).sqrt(),
-            (ct[2][0] * ct[2][0] + ct[2][1] * ct[2][1] + ct[2][2] * ct[2][2]).sqrt(),
+            (ct.col(0)[0] * ct.col(0)[0]
+                + ct.col(0)[1] * ct.col(0)[1]
+                + ct.col(0)[2] * ct.col(0)[2])
+                .sqrt(),
+            (ct.col(1)[0] * ct.col(1)[0]
+                + ct.col(1)[1] * ct.col(1)[1]
+                + ct.col(1)[2] * ct.col(1)[2])
+                .sqrt(),
+            (ct.col(2)[0] * ct.col(2)[0]
+                + ct.col(2)[1] * ct.col(2)[1]
+                + ct.col(2)[2] * ct.col(2)[2])
+                .sqrt(),
         );
         log!(
             "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
             scale.0,
             scale.1,
             scale.2,
-            ct[3][0],
-            ct[3][1],
-            ct[3][2]
+            ct.col(3)[0],
+            ct.col(3)[1],
+            ct.col(3)[2]
         );
         if !raw_positions.is_empty() {
             let raw = raw_positions[0];
-            let pos = *cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
+            let pos = cumulative_transform.transform_point3(Vec3::from(raw));
             log!(
                 "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
                 raw[0],
@@ -552,8 +553,9 @@ fn transform_positions(
         raw_positions
             .iter()
             .map(|p| {
-                let pos = *cumulative_transform * [p[0], p[1], p[2], 1.0].to_vec4();
-                [pos.x, pos.y, pos.z]
+                cumulative_transform
+                    .transform_point3(Vec3::from(*p))
+                    .to_array()
             })
             .collect()
     }
@@ -640,7 +642,7 @@ fn build_vertices(
         mesh_data.base_positions.push(pos);
         mesh_data
             .base_normals
-            .push(Vector3::new(normal[0], normal[1], normal[2]));
+            .push(Vec3::new(normal[0], normal[1], normal[2]));
 
         let ji = attrs.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
         let jw = attrs
@@ -648,7 +650,7 @@ fn build_vertices(
             .get(i)
             .copied()
             .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-        mesh_data.bone_indices.push(Vector4::new(
+        mesh_data.bone_indices.push(UVec4::new(
             ji[0] as u32,
             ji[1] as u32,
             ji[2] as u32,
@@ -656,7 +658,7 @@ fn build_vertices(
         ));
         mesh_data
             .bone_weights
-            .push(Vector4::new(jw[0], jw[1], jw[2], jw[3]));
+            .push(Vec4::new(jw[0], jw[1], jw[2], jw[3]));
     }
 }
 
@@ -700,7 +702,7 @@ fn load_primitive_texture(
 fn register_node_info(
     ctx: &mut GltfParseContext,
     node: &Node,
-    node_transform: Matrix4<f32>,
+    node_transform: Mat4,
     parent_node_index: Option<usize>,
 ) {
     ctx.rrnodes.push(RRNode {
@@ -721,7 +723,7 @@ fn register_node_info(
 fn update_joint_hierarchy(
     ctx: &mut GltfParseContext,
     node: &Node,
-    node_transform: Matrix4<f32>,
+    node_transform: Mat4,
     parent_node_index: Option<usize>,
 ) {
     if let Some(&joint_index) = ctx.node_joint_map.node_to_joint.get(&(node.index() as u16)) {
@@ -745,7 +747,7 @@ unsafe fn process_node(
     images: &Vec<gltf::image::Data>,
     node: &Node,
     ctx: &mut GltfParseContext,
-    parent_transform: &Matrix4<f32>,
+    parent_transform: &Mat4,
     parent_node_index: Option<usize>,
 ) -> Result<()> {
     let node_transform = mat4_from_array(node.transform().matrix());
@@ -891,23 +893,23 @@ enum ParsedChannelData {
 
 struct TranslationChannelData {
     joint_matrices: Vec<Mat4>,
-    values: Vec<Vector3<f32>>,
-    in_tangents: Vec<Vector3<f32>>,
-    out_tangents: Vec<Vector3<f32>>,
+    values: Vec<Vec3>,
+    in_tangents: Vec<Vec3>,
+    out_tangents: Vec<Vec3>,
 }
 
 struct RotationChannelData {
     joint_matrices: Vec<Mat4>,
-    quats: Vec<Quaternion<f32>>,
-    in_tangents: Vec<Quaternion<f32>>,
-    out_tangents: Vec<Quaternion<f32>>,
+    quats: Vec<Quat>,
+    in_tangents: Vec<Quat>,
+    out_tangents: Vec<Quat>,
 }
 
 struct ScaleChannelData {
     joint_matrices: Vec<Mat4>,
-    values: Vec<Vector3<f32>>,
-    in_tangents: Vec<Vector3<f32>>,
-    out_tangents: Vec<Vector3<f32>>,
+    values: Vec<Vec3>,
+    in_tangents: Vec<Vec3>,
+    out_tangents: Vec<Vec3>,
 }
 
 fn read_primitive_morph<'a, 's, F>(
@@ -1026,19 +1028,19 @@ fn parse_translation_outputs(
         let all: Vec<_> = translations.collect();
         for chunk in all.chunks(3) {
             if chunk.len() == 3 {
-                let vec = Vector3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
-                data.joint_matrices.push(Matrix4::from_translation(vec));
+                let vec = Vec3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
+                data.joint_matrices.push(Mat4::from_translation(vec));
                 data.values.push(vec);
                 data.in_tangents
-                    .push(Vector3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
+                    .push(Vec3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
                 data.out_tangents
-                    .push(Vector3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
+                    .push(Vec3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
             }
         }
     } else {
         for t in translations {
-            let vec = Vector3::new(t[0], t[1], t[2]);
-            data.joint_matrices.push(Matrix4::from_translation(vec));
+            let vec = Vec3::new(t[0], t[1], t[2]);
+            data.joint_matrices.push(Mat4::from_translation(vec));
             data.values.push(vec);
         }
     }
@@ -1061,28 +1063,28 @@ fn parse_rotation_outputs(
         let all: Vec<_> = rotations.into_f32().collect();
         for chunk in all.chunks(3) {
             if chunk.len() == 3 {
-                let quat = Quaternion::new(chunk[1][3], chunk[1][0], chunk[1][1], chunk[1][2]);
+                let quat = Quat::from_xyzw(chunk[1][0], chunk[1][1], chunk[1][2], chunk[1][3]);
                 data.quats.push(quat);
-                data.joint_matrices.push(Matrix4::from(quat));
-                data.in_tangents.push(Quaternion::new(
-                    chunk[0][3],
+                data.joint_matrices.push(Mat4::from_quat(quat));
+                data.in_tangents.push(Quat::from_xyzw(
                     chunk[0][0],
                     chunk[0][1],
                     chunk[0][2],
+                    chunk[0][3],
                 ));
-                data.out_tangents.push(Quaternion::new(
-                    chunk[2][3],
+                data.out_tangents.push(Quat::from_xyzw(
                     chunk[2][0],
                     chunk[2][1],
                     chunk[2][2],
+                    chunk[2][3],
                 ));
             }
         }
     } else {
         for r in rotations.into_f32() {
-            let quat = Quaternion::new(r[3], r[0], r[1], r[2]);
+            let quat = Quat::from_xyzw(r[0], r[1], r[2], r[3]);
             data.quats.push(quat);
-            data.joint_matrices.push(Matrix4::from(quat));
+            data.joint_matrices.push(Mat4::from_quat(quat));
         }
     }
 
@@ -1101,21 +1103,21 @@ fn parse_scale_outputs(scales: gltf::animation::util::Scales, is_cubic: bool) ->
         let all: Vec<_> = scales.collect();
         for chunk in all.chunks(3) {
             if chunk.len() == 3 {
-                let vec = Vector3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
+                let vec = Vec3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
                 data.joint_matrices
-                    .push(Matrix4::from_nonuniform_scale(vec.x, vec.y, vec.z));
+                    .push(Mat4::from_scale(Vec3::new(vec.x, vec.y, vec.z)));
                 data.values.push(vec);
                 data.in_tangents
-                    .push(Vector3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
+                    .push(Vec3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
                 data.out_tangents
-                    .push(Vector3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
+                    .push(Vec3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
             }
         }
     } else {
         for s in scales {
-            let vec = Vector3::new(s[0], s[1], s[2]);
+            let vec = Vec3::new(s[0], s[1], s[2]);
             data.joint_matrices
-                .push(Matrix4::from_nonuniform_scale(vec.x, vec.y, vec.z));
+                .push(Mat4::from_scale(Vec3::new(vec.x, vec.y, vec.z)));
             data.values.push(vec);
         }
     }
@@ -1373,7 +1375,7 @@ fn build_meshes(
                 base_positions: mesh
                     .base_positions
                     .iter()
-                    .map(|p| Vector3::new(p[0], p[1], p[2]))
+                    .map(|p| Vec3::new(p[0], p[1], p[2]))
                     .collect(),
                 base_normals: mesh.base_normals,
             })
@@ -1488,8 +1490,8 @@ fn convert_joints_to_skeleton(
     if let Some(transform) = skeleton_root_transform {
         skeleton.root_transform = mat4_from_array(*transform);
         log!("Skeleton root_transform set from glTF: diag=[{:.4}, {:.4}, {:.4}], trans=[{:.4}, {:.4}, {:.4}]",
-            skeleton.root_transform[0][0], skeleton.root_transform[1][1], skeleton.root_transform[2][2],
-            skeleton.root_transform[3][0], skeleton.root_transform[3][1], skeleton.root_transform[3][2]);
+            skeleton.root_transform.col(0)[0], skeleton.root_transform.col(1)[1], skeleton.root_transform.col(2)[2],
+            skeleton.root_transform.col(3)[0], skeleton.root_transform.col(3)[1], skeleton.root_transform.col(3)[2]);
     }
 
     for joint in joints {
@@ -1576,9 +1578,9 @@ fn convert_joint_animations_to_clip(joint_animations: &[Vec<JointAnimation>]) ->
         let has_scale_source = anims.iter().any(|a| !a.scales.is_empty());
 
         for &time in &all_times {
-            let mut combined_translate = Matrix4::identity();
-            let mut combined_rotation = Matrix4::identity();
-            let mut combined_scale = Matrix4::identity();
+            let mut combined_translate = Mat4::IDENTITY;
+            let mut combined_rotation = Mat4::IDENTITY;
+            let mut combined_scale = Mat4::IDENTITY;
 
             for anim in anims {
                 let key_frame_id = identify_key_frame_index_step(&anim.key_frames, time);
@@ -1597,10 +1599,10 @@ fn convert_joint_animations_to_clip(joint_animations: &[Vec<JointAnimation>]) ->
             if has_translation_source {
                 channel.translation.push(Keyframe::with_interpolation(
                     time,
-                    Vector3::new(
-                        combined_translate[3][0],
-                        combined_translate[3][1],
-                        combined_translate[3][2],
+                    Vec3::new(
+                        combined_translate.col(3)[0],
+                        combined_translate.col(3)[1],
+                        combined_translate.col(3)[2],
                     ),
                     Interpolation::Step,
                 ));
@@ -1617,10 +1619,10 @@ fn convert_joint_animations_to_clip(joint_animations: &[Vec<JointAnimation>]) ->
             if has_scale_source {
                 channel.scale.push(Keyframe::with_interpolation(
                     time,
-                    Vector3::new(
-                        combined_scale[0][0],
-                        combined_scale[1][1],
-                        combined_scale[2][2],
+                    Vec3::new(
+                        combined_scale.col(0)[0],
+                        combined_scale.col(1)[1],
+                        combined_scale.col(2)[2],
                     ),
                     Interpolation::Step,
                 ));
@@ -1740,60 +1742,21 @@ fn convert_node_animations_to_clip(
     clip
 }
 
-fn mat4_from_array(arr: [[f32; 4]; 4]) -> Matrix4<f32> {
-    Matrix4::from_cols(
-        Vector4::new(arr[0][0], arr[0][1], arr[0][2], arr[0][3]),
-        Vector4::new(arr[1][0], arr[1][1], arr[1][2], arr[1][3]),
-        Vector4::new(arr[2][0], arr[2][1], arr[2][2], arr[2][3]),
-        Vector4::new(arr[3][0], arr[3][1], arr[3][2], arr[3][3]),
+fn mat4_from_array(arr: [[f32; 4]; 4]) -> Mat4 {
+    Mat4::from_cols(
+        Vec4::new(arr[0][0], arr[0][1], arr[0][2], arr[0][3]),
+        Vec4::new(arr[1][0], arr[1][1], arr[1][2], arr[1][3]),
+        Vec4::new(arr[2][0], arr[2][1], arr[2][2], arr[2][3]),
+        Vec4::new(arr[3][0], arr[3][1], arr[3][2], arr[3][3]),
     )
 }
 
-fn array_from_mat4(m: Matrix4<f32>) -> [[f32; 4]; 4] {
-    [
-        [m[0][0], m[0][1], m[0][2], m[0][3]],
-        [m[1][0], m[1][1], m[1][2], m[1][3]],
-        [m[2][0], m[2][1], m[2][2], m[2][3]],
-        [m[3][0], m[3][1], m[3][2], m[3][3]],
-    ]
+fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
+    m.to_cols_array_2d()
 }
 
-fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
-    let trace = m[0][0] + m[1][1] + m[2][2];
-
-    if trace > 0.0 {
-        let s = (trace + 1.0).sqrt() * 2.0;
-        Quaternion::new(
-            0.25 * s,
-            (m[1][2] - m[2][1]) / s,
-            (m[2][0] - m[0][2]) / s,
-            (m[0][1] - m[1][0]) / s,
-        )
-    } else if m[0][0] > m[1][1] && m[0][0] > m[2][2] {
-        let s = (1.0 + m[0][0] - m[1][1] - m[2][2]).sqrt() * 2.0;
-        Quaternion::new(
-            (m[1][2] - m[2][1]) / s,
-            0.25 * s,
-            (m[1][0] + m[0][1]) / s,
-            (m[2][0] + m[0][2]) / s,
-        )
-    } else if m[1][1] > m[2][2] {
-        let s = (1.0 + m[1][1] - m[0][0] - m[2][2]).sqrt() * 2.0;
-        Quaternion::new(
-            (m[2][0] - m[0][2]) / s,
-            (m[1][0] + m[0][1]) / s,
-            0.25 * s,
-            (m[2][1] + m[1][2]) / s,
-        )
-    } else {
-        let s = (1.0 + m[2][2] - m[0][0] - m[1][1]).sqrt() * 2.0;
-        Quaternion::new(
-            (m[0][1] - m[1][0]) / s,
-            (m[2][0] + m[0][2]) / s,
-            (m[2][1] + m[1][2]) / s,
-            0.25 * s,
-        )
-    }
+fn matrix_to_quaternion(m: &Mat4) -> Quat {
+    Quat::from_mat4(m)
 }
 
 #[cfg(test)]
@@ -1801,15 +1764,15 @@ mod tests {
     use super::*;
 
     fn make_identity_mat4() -> Mat4 {
-        Matrix4::identity()
+        Mat4::IDENTITY
     }
 
     fn make_translation_mat4(x: f32, y: f32, z: f32) -> Mat4 {
-        Matrix4::from_translation(Vector3::new(x, y, z))
+        Mat4::from_translation(Vec3::new(x, y, z))
     }
 
     fn make_rotation_y_mat4(radians: f32) -> Mat4 {
-        Matrix4::from_angle_y(cgmath::Rad(radians))
+        Mat4::from_rotation_y(radians)
     }
 
     #[test]

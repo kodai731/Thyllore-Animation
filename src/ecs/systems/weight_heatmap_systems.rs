@@ -1,9 +1,8 @@
-use cgmath::{Vector3, Vector4};
+use glam::{UVec4, Vec3, Vec4};
 
 use crate::animation::{BoneId, SkinData};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::{HeatmapApplication, WeightHeatmapState};
-use crate::math::Vec4;
 use crate::vulkanr::data::Vertex;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::mesh_buffer::MeshBuffer;
@@ -91,7 +90,7 @@ fn update_mesh_colors(mesh: &mut MeshBuffer, desired: &HeatmapApplication) -> Me
 fn apply_heatmap_to_vertices(
     vertices: &mut [Vertex],
     skin: &SkinData,
-    base_colors: &[Vector4<f32>],
+    base_colors: &[Vec4],
     bone_id: BoneId,
 ) {
     debug_assert_eq!(vertices.len(), skin.bone_indices.len());
@@ -106,14 +105,14 @@ fn apply_heatmap_to_vertices(
     }
 }
 
-fn restore_base_colors(vertices: &mut [Vertex], base_colors: &[Vector4<f32>]) {
+fn restore_base_colors(vertices: &mut [Vertex], base_colors: &[Vec4]) {
     debug_assert_eq!(vertices.len(), base_colors.len());
     for (i, base) in base_colors.iter().enumerate() {
         vertices[i].color = Vec4::new(base.x, base.y, base.z, base.w);
     }
 }
 
-fn extract_weight_for_bone(indices: &Vector4<u32>, weights: &Vector4<f32>, bone_id: BoneId) -> f32 {
+fn extract_weight_for_bone(indices: &UVec4, weights: &Vec4, bone_id: BoneId) -> f32 {
     let slots = [
         (indices.x, weights.x),
         (indices.y, weights.y),
@@ -127,14 +126,14 @@ fn extract_weight_for_bone(indices: &Vector4<u32>, weights: &Vector4<f32>, bone_
         .sum()
 }
 
-fn weight_to_heatmap_rgb(w: f32) -> Vector3<f32> {
+fn weight_to_heatmap_rgb(w: f32) -> Vec3 {
     let w = w.clamp(0.0, 1.0);
     let stops = [
-        (0.00_f32, Vector3::new(0.0, 0.0, 1.0)),
-        (0.25_f32, Vector3::new(0.0, 1.0, 1.0)),
-        (0.50_f32, Vector3::new(0.0, 1.0, 0.0)),
-        (0.75_f32, Vector3::new(1.0, 1.0, 0.0)),
-        (1.00_f32, Vector3::new(1.0, 0.0, 0.0)),
+        (0.00_f32, Vec3::new(0.0, 0.0, 1.0)),
+        (0.25_f32, Vec3::new(0.0, 1.0, 1.0)),
+        (0.50_f32, Vec3::new(0.0, 1.0, 0.0)),
+        (0.75_f32, Vec3::new(1.0, 1.0, 0.0)),
+        (1.00_f32, Vec3::new(1.0, 0.0, 0.0)),
     ];
     for window in stops.windows(2) {
         let (t0, c0) = window[0];
@@ -151,44 +150,44 @@ fn weight_to_heatmap_rgb(w: f32) -> Vector3<f32> {
 mod tests {
     use super::*;
 
-    fn approx_eq_vec3(a: Vector3<f32>, b: Vector3<f32>) -> bool {
+    fn approx_eq_vec3(a: Vec3, b: Vec3) -> bool {
         (a.x - b.x).abs() < 1e-5 && (a.y - b.y).abs() < 1e-5 && (a.z - b.z).abs() < 1e-5
     }
 
     #[test]
     fn weight_to_heatmap_rgb_returns_blue_at_zero() {
         let color = weight_to_heatmap_rgb(0.0);
-        assert!(approx_eq_vec3(color, Vector3::new(0.0, 0.0, 1.0)));
+        assert!(approx_eq_vec3(color, Vec3::new(0.0, 0.0, 1.0)));
     }
 
     #[test]
     fn weight_to_heatmap_rgb_returns_red_at_one() {
         let color = weight_to_heatmap_rgb(1.0);
-        assert!(approx_eq_vec3(color, Vector3::new(1.0, 0.0, 0.0)));
+        assert!(approx_eq_vec3(color, Vec3::new(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn weight_to_heatmap_rgb_returns_green_at_half() {
         let color = weight_to_heatmap_rgb(0.5);
-        assert!(approx_eq_vec3(color, Vector3::new(0.0, 1.0, 0.0)));
+        assert!(approx_eq_vec3(color, Vec3::new(0.0, 1.0, 0.0)));
     }
 
     #[test]
     fn weight_to_heatmap_rgb_clamps_below_zero() {
         let color = weight_to_heatmap_rgb(-0.5);
-        assert!(approx_eq_vec3(color, Vector3::new(0.0, 0.0, 1.0)));
+        assert!(approx_eq_vec3(color, Vec3::new(0.0, 0.0, 1.0)));
     }
 
     #[test]
     fn weight_to_heatmap_rgb_clamps_above_one() {
         let color = weight_to_heatmap_rgb(2.0);
-        assert!(approx_eq_vec3(color, Vector3::new(1.0, 0.0, 0.0)));
+        assert!(approx_eq_vec3(color, Vec3::new(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn extract_weight_for_bone_returns_matching_slot() {
-        let indices = Vector4::new(0, 3, 5, 7);
-        let weights = Vector4::new(0.1, 0.4, 0.3, 0.2);
+        let indices = UVec4::new(0, 3, 5, 7);
+        let weights = Vec4::new(0.1, 0.4, 0.3, 0.2);
 
         assert!((extract_weight_for_bone(&indices, &weights, 3) - 0.4).abs() < 1e-6);
         assert!((extract_weight_for_bone(&indices, &weights, 5) - 0.3).abs() < 1e-6);
@@ -196,26 +195,26 @@ mod tests {
 
     #[test]
     fn extract_weight_for_bone_returns_zero_when_not_present() {
-        let indices = Vector4::new(0, 1, 2, 3);
-        let weights = Vector4::new(0.25, 0.25, 0.25, 0.25);
+        let indices = UVec4::new(0, 1, 2, 3);
+        let weights = Vec4::new(0.25, 0.25, 0.25, 0.25);
 
         assert!(extract_weight_for_bone(&indices, &weights, 99).abs() < 1e-6);
     }
 
     #[test]
     fn extract_weight_for_bone_sums_duplicate_slots() {
-        let indices = Vector4::new(5, 5, 3, 1);
-        let weights = Vector4::new(0.2, 0.3, 0.4, 0.1);
+        let indices = UVec4::new(5, 5, 3, 1);
+        let weights = Vec4::new(0.2, 0.3, 0.4, 0.1);
 
         assert!((extract_weight_for_bone(&indices, &weights, 5) - 0.5).abs() < 1e-6);
     }
 
     fn make_skin_single_bone(vertex_count: usize, bone_id: BoneId) -> SkinData {
         let mut skin = SkinData::default();
-        skin.bone_indices = vec![Vector4::new(bone_id, 0, 0, 0); vertex_count];
-        skin.bone_weights = vec![Vector4::new(1.0, 0.0, 0.0, 0.0); vertex_count];
-        skin.base_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-        skin.base_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+        skin.bone_indices = vec![UVec4::new(bone_id, 0, 0, 0); vertex_count];
+        skin.bone_weights = vec![Vec4::new(1.0, 0.0, 0.0, 0.0); vertex_count];
+        skin.base_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+        skin.base_normals = vec![Vec3::new(0.0, 1.0, 0.0); vertex_count];
         skin
     }
 
@@ -223,7 +222,7 @@ mod tests {
     fn apply_heatmap_to_vertices_writes_red_for_full_weight() {
         let mut vertices = vec![Vertex::default(); 3];
         let skin = make_skin_single_bone(3, 5);
-        let base_colors = vec![Vector4::new(0.9, 0.8, 0.7, 0.5); 3];
+        let base_colors = vec![Vec4::new(0.9, 0.8, 0.7, 0.5); 3];
 
         apply_heatmap_to_vertices(&mut vertices, &skin, &base_colors, 5);
 
@@ -239,7 +238,7 @@ mod tests {
     fn apply_heatmap_to_vertices_writes_blue_for_non_matching_bone() {
         let mut vertices = vec![Vertex::default(); 3];
         let skin = make_skin_single_bone(3, 5);
-        let base_colors = vec![Vector4::new(0.9, 0.8, 0.7, 1.0); 3];
+        let base_colors = vec![Vec4::new(0.9, 0.8, 0.7, 1.0); 3];
 
         apply_heatmap_to_vertices(&mut vertices, &skin, &base_colors, 99);
 
@@ -256,10 +255,7 @@ mod tests {
         vertices[0].color = Vec4::new(1.0, 0.0, 0.0, 1.0);
         vertices[1].color = Vec4::new(0.0, 1.0, 0.0, 1.0);
 
-        let base_colors = vec![
-            Vector4::new(0.1, 0.2, 0.3, 0.4),
-            Vector4::new(0.5, 0.6, 0.7, 0.8),
-        ];
+        let base_colors = vec![Vec4::new(0.1, 0.2, 0.3, 0.4), Vec4::new(0.5, 0.6, 0.7, 0.8)];
 
         restore_base_colors(&mut vertices, &base_colors);
 
@@ -276,7 +272,7 @@ mod tests {
         let vertex_count = 3;
         mesh.vertex_data.vertices = vec![Vertex::default(); vertex_count];
         mesh.skin_data = Some(make_skin_single_bone(vertex_count, bone_id));
-        mesh.base_colors = Some(vec![Vector4::new(0.2, 0.2, 0.2, 1.0); vertex_count]);
+        mesh.base_colors = Some(vec![Vec4::new(0.2, 0.2, 0.2, 1.0); vertex_count]);
 
         graphics.meshes.push(mesh);
         graphics

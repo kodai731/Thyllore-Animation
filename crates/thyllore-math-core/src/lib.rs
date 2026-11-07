@@ -9,7 +9,6 @@ mod constants;
 pub mod coordinate_system;
 mod cross_section;
 mod faddeeva;
-mod glam_bridge;
 mod gpu_matrix;
 mod half_float;
 mod hash;
@@ -62,7 +61,6 @@ pub use coordinate_system::{
 pub use cross_section::*;
 pub use erf_moments::*;
 pub use erf_response::*;
-pub use glam_bridge::*;
 pub use gpu_matrix::*;
 pub use half_float::*;
 pub use hash::*;
@@ -87,9 +85,3 @@ pub use triangle_bvh::*;
 pub use vector::*;
 pub use winding::*;
 pub use wire_shape::*;
-
-pub use cgmath::Quaternion;
-pub use cgmath::Rad;
-pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
-pub use cgmath::{prelude::*, Vector3};
-pub use cgmath::{vec2, vec3, vec4};

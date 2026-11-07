@@ -1,4 +1,4 @@
-use cgmath::{Matrix, Matrix4, Quaternion, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use thyllore_anim_core::spring_bone::{
     collect_affected_bone_ids, spring_bone_initialize, spring_bone_reseat_tails,
     spring_bone_update, spring_bone_write_back_to_pose, SpringBoneSetup, SpringSimulation,
@@ -134,7 +134,7 @@ impl SpringPreview {
     fn joint_pose(&self, pose: &SkeletonPose, bone_id: BoneId) -> anyhow::Result<JointPose> {
         let bone = &self.skeleton.bones[bone_id as usize];
         let local = &pose.bone_poses[bone_id as usize];
-        let rest_inverse = bone.local_transform.invert().ok_or_else(|| {
+        let rest_inverse = bone.local_transform.try_inverse().ok_or_else(|| {
             anyhow::anyhow!("rest local of bone \"{}\" is not invertible", bone.name)
         })?;
         let swung = compose_transform(local.translation, local.rotation, local.scale);
@@ -176,12 +176,12 @@ fn check_bone_count(skeleton: &Skeleton, matrix_count: usize) -> anyhow::Result<
     Ok(())
 }
 
-fn column_major(rows: &MatrixRows) -> Matrix4<f32> {
-    Matrix4::from(*rows).transpose()
+fn column_major(rows: &MatrixRows) -> Mat4 {
+    Mat4::from_cols_array_2d(&*rows).transpose()
 }
 
-fn rows(matrix: Matrix4<f32>) -> MatrixRows {
-    matrix.transpose().into()
+fn rows(matrix: Mat4) -> MatrixRows {
+    matrix.transpose().to_cols_array_2d()
 }
 
 fn pose_from_locals(skeleton: &Skeleton, locals: &[MatrixRows]) -> SkeletonPose {
@@ -202,11 +202,11 @@ fn pose_from_locals(skeleton: &Skeleton, locals: &[MatrixRows]) -> SkeletonPose 
     }
 }
 
-fn wxyz(q: Quaternion<f32>) -> [f32; 4] {
-    [q.s, q.v.x, q.v.y, q.v.z]
+fn wxyz(q: Quat) -> [f32; 4] {
+    [q.w, q.x, q.y, q.z]
 }
 
-pub fn translation_rows(translation: Vector3<f32>) -> MatrixRows {
+pub fn translation_rows(translation: Vec3) -> MatrixRows {
     [
         [1.0, 0.0, 0.0, translation.x],
         [0.0, 1.0, 0.0, translation.y],

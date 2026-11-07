@@ -7,7 +7,7 @@ use crate::ecs::world::World;
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::swapchain::RRSwapchain;
-use cgmath::{Deg, Vector3};
+use glam::{Vec3, Vec4};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 
@@ -43,12 +43,12 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
 }
 
 pub struct BillboardDebugInfo {
-    pub light_position: Vector3<f32>,
-    pub camera_position: Vector3<f32>,
-    pub camera_direction: Vector3<f32>,
-    pub camera_up: Vector3<f32>,
+    pub light_position: Vec3,
+    pub camera_position: Vec3,
+    pub camera_direction: Vec3,
+    pub camera_up: Vec3,
     pub near_plane: f32,
-    pub fov_y: Deg<f32>,
+    pub fov_y: f32,
 }
 
 pub struct GBufferDebugInfo {
@@ -149,9 +149,9 @@ fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapch
 
     let swapchain_extent = swapchain.swapchain_extent();
 
-    let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
+    let view_matrix = view(info.camera_position, info.camera_direction, info.camera_up);
     let light_view_pos = view_matrix
-        * cgmath::Vector4::new(
+        * Vec4::new(
             info.light_position.x,
             info.light_position.y,
             info.light_position.z,
@@ -173,13 +173,13 @@ fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapch
 
     let light_clip_pos = proj * light_view_pos;
     let light_ndc = if light_clip_pos.w.abs() > 0.0001 {
-        cgmath::Vector3::new(
+        Vec3::new(
             light_clip_pos.x / light_clip_pos.w,
             light_clip_pos.y / light_clip_pos.w,
             light_clip_pos.z / light_clip_pos.w,
         )
     } else {
-        cgmath::Vector3::new(0.0, 0.0, 0.0)
+        Vec3::new(0.0, 0.0, 0.0)
     };
     log!(
         "Billboard NDC: ({:.4}, {:.4}, {:.4})",

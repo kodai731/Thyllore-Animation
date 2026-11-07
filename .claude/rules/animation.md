@@ -97,4 +97,4 @@ Bones are `Skeleton.bones: Vec<Bone>` identified by `BoneId`; see `ecs-architect
 - [glTF 2.0 Specification - Animation](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#animations)
 - [glTF 2.0 Specification - Skins](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#skins)
 - [Bevy Engine - Animation](https://github.com/bevyengine/bevy/tree/main/crates/bevy_animation)
-- [cgmath crate documentation](https://docs.rs/cgmath/latest/cgmath/)
+- [glam crate documentation](https://docs.rs/glam/latest/glam/)

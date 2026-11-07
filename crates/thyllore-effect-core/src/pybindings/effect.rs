@@ -1,5 +1,5 @@
 use crate::water::{inverse_view_proj_f64, ABSORPTION_REFERENCE_DISTANCE};
-use cgmath::Matrix4;
+use glam::Mat4;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::de::DeserializeOwned;
@@ -174,15 +174,15 @@ pub fn blender_to_engine_matrix() -> [[f32; 4]; 4] {
     thyllore_math_core::blender_to_engine_rows()
 }
 
-pub fn matrix_from_column_major(values: [f32; 16]) -> Matrix4<f32> {
-    Matrix4::new(
+pub fn matrix_from_column_major(values: [f32; 16]) -> Mat4 {
+    Mat4::from_cols_array(&[
         values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
         values[8], values[9], values[10], values[11], values[12], values[13], values[14],
         values[15],
-    )
+    ])
 }
 
-pub fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Matrix4<f32> {
+pub fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Mat4 {
     inverse_view_proj_f64(
         matrix_from_column_major(proj),
         matrix_from_column_major(view),

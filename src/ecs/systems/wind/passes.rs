@@ -70,7 +70,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
         let effect = ctx.world.get_component::<WindTornadoEffect>(wind)?;
         let mut ubo = build_wind_ubo(&effect, WindShadowSlot(slot as u32));
         if let Some(inv_view_proj) = inv_view_proj {
-            ubo.inv_view_proj = inv_view_proj;
+            ubo.inv_view_proj = inv_view_proj.into();
         }
         let scissor = if settings.debug_view == WindDebugView::Coverage {
             Some(full_extent_scissor(extent))
@@ -78,7 +78,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
             compute_bounds_scissor(
                 ctx.world,
                 extent,
-                &ubo.model,
+                &ubo.model.to_mat4(),
                 wind_local_bounds_corners(&ubo),
             )
         };

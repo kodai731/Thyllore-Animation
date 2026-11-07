@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{vec3, Deg, InnerSpace, Vector2, Vector3};
+use glam::{vec3, Vec2, Vec3};
 
 use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
@@ -48,7 +48,7 @@ pub fn create_grid_gizmo_mesh_data() -> MeshData {
 }
 
 #[deprecated(note = "Use create_light_gizmo_mesh_data() instead")]
-pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
+pub fn create_light_gizmo(position: Vec3) -> LightGizmoData {
     let axis_length = 1.0;
     let yellow = [1.0, 1.0, 0.0];
 
@@ -130,24 +130,24 @@ pub fn gizmo_try_select(
     position: &GizmoPosition,
     selectable: &mut GizmoSelectable,
     draggable: &mut GizmoDraggable,
-    mouse_pos: Vector2<f32>,
-    camera_pos: Vector3<f32>,
-    camera_direction: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    mouse_pos: Vec2,
+    camera_pos: Vec3,
+    camera_direction: Vec3,
+    camera_up: Vec3,
     swapchain_extent: (u32, u32),
     billboard_click_rect: Option<[f32; 4]>,
-    fov_y: Deg<f32>,
+    fov_y: f32,
     near_plane: f32,
 ) {
     let light_pos = position.position;
-    let view_mat = unsafe { view(camera_pos, camera_direction, camera_up) };
+    let view_mat = view(camera_pos, camera_direction, camera_up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
-    let distance = (light_pos - camera_pos).magnitude();
+    let distance = (light_pos - camera_pos).length();
     let scale_factor = distance * 0.03;
 
     let billboard_clicked = billboard_click_rect
@@ -199,7 +199,7 @@ pub fn gizmo_try_select(
         draggable.drag_axis = selected_axis;
         draggable.initial_position = light_pos;
 
-        let drag_depth = (light_pos - camera_pos).magnitude();
+        let drag_depth = (light_pos - camera_pos).length();
         log!(
             "Gizmo selected - axis: {:?}, depth: {:.2}",
             selected_axis,
@@ -208,7 +208,7 @@ pub fn gizmo_try_select(
     }
 }
 
-pub fn gizmo_update_position(position: &mut GizmoPosition, new_position: Vector3<f32>) {
+pub fn gizmo_update_position(position: &mut GizmoPosition, new_position: Vec3) {
     position.position = new_position;
 }
 
@@ -216,10 +216,10 @@ pub fn gizmo_reset_selection(selectable: &mut GizmoSelectable, draggable: &mut G
     selectable.is_selected = false;
     selectable.selected_axis = GizmoAxis::None;
     draggable.drag_axis = GizmoAxis::None;
-    draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
+    draggable.initial_position = Vec3::new(0.0, 0.0, 0.0);
 }
 
-pub fn gizmo_sync_position(position: &mut GizmoPosition, source_position: Vector3<f32>) {
+pub fn gizmo_sync_position(position: &mut GizmoPosition, source_position: Vec3) {
     if position.position.x != source_position.x
         || position.position.y != source_position.y
         || position.position.z != source_position.z
@@ -243,7 +243,7 @@ pub fn gizmo_sync_position(position: &mut GizmoPosition, source_position: Vector
 
 pub fn gizmo_update_position_with_constraint(
     position: &mut GizmoPosition,
-    new_position: Vector3<f32>,
+    new_position: Vec3,
     draggable: &GizmoDraggable,
     is_ctrl_pressed: bool,
 ) {
@@ -256,11 +256,11 @@ pub fn gizmo_update_position_with_constraint(
         let abs_z = delta.z.abs();
 
         let constrained_pos = if abs_x >= abs_y && abs_x >= abs_z {
-            Vector3::new(initial.x + delta.x, initial.y, initial.z)
+            Vec3::new(initial.x + delta.x, initial.y, initial.z)
         } else if abs_y >= abs_x && abs_y >= abs_z {
-            Vector3::new(initial.x, initial.y + delta.y, initial.z)
+            Vec3::new(initial.x, initial.y + delta.y, initial.z)
         } else {
-            Vector3::new(initial.x, initial.y, initial.z + delta.z)
+            Vec3::new(initial.x, initial.y, initial.z + delta.z)
         };
 
         log!(
@@ -345,7 +345,7 @@ pub unsafe fn gizmo_destroy_ray_buffers(
 }
 
 pub unsafe fn run_vertical_lines_update(ctx: &mut crate::ecs::FrameContext) -> Result<()> {
-    let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
+    let model_tops: Vec<Vec3> = Vec::new();
 
     {
         let mut gizmo = ctx.light_gizmo_mut();
@@ -376,7 +376,7 @@ pub unsafe fn run_vertical_lines_update(ctx: &mut crate::ecs::FrameContext) -> R
 pub fn gizmo_update_vertical_lines(
     lines: &mut LineMesh,
     position: &GizmoPosition,
-    model_positions: &[Vector3<f32>],
+    model_positions: &[Vec3],
 ) {
     let orange = [1.0, 0.5, 0.0];
 

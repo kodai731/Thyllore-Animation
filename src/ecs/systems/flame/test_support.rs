@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::editable::PropertyType;
 
 use super::{spawn_flame, spawn_flame_with_clip, DEFAULT_FLAME_NAME};
@@ -49,7 +49,7 @@ pub(super) fn world_with_flame_at(x: f32) -> (World, Entity) {
     let mut world = World::new();
     world.insert_resource(ObjectPickHooks::collect().expect("object pick hooks"));
     let effect = FlameEffect {
-        position: Vector3::new(x, 0.0, 0.0),
+        position: Vec3::new(x, 0.0, 0.0),
         ..FlameEffect::default()
     };
     let entity = spawn_flame(&mut world, "Flame", effect);
@@ -58,7 +58,7 @@ pub(super) fn world_with_flame_at(x: f32) -> (World, Entity) {
 
 pub(super) fn ray_towards_origin() -> PickRay {
     PickRay {
-        origin: Vector3::new(0.0, 0.5, RAY_START_Z),
-        direction: Vector3::new(0.0, 0.0, 1.0),
+        origin: Vec3::new(0.0, 0.5, RAY_START_Z),
+        direction: Vec3::new(0.0, 0.0, 1.0),
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
 use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
@@ -40,7 +40,7 @@ pub fn skeleton_to_retarget_skeleton(skeleton: &Skeleton) -> RetargetSkeleton {
             let world_matrix = compute_bone_global_transform(skeleton, bone_index);
             RetargetBone {
                 parent: bone.parent_id.map(|id| id as usize),
-                world_position: world_matrix.w.truncate(),
+                world_position: world_matrix.w_axis.truncate(),
                 world_rotation: decompose(&world_matrix).1,
             }
         })
@@ -70,7 +70,7 @@ pub fn baked_motion_to_clip(
             })?;
         let track = clip.add_track(bone_index as BoneId, bone_name);
 
-        let mut prev_euler: Option<Vector3<f32>> = None;
+        let mut prev_euler: Option<Vec3> = None;
         for (&time, quat) in baked.frame_times.iter().zip(rotations) {
             let continuous = continuous_euler(quaternion_to_euler_degrees(quat), prev_euler);
             curve_add_keyframe(&mut track.rotation_x, time, continuous.x);
@@ -81,14 +81,14 @@ pub fn baked_motion_to_clip(
 
         if bone_index == hips_bone {
             let hips = &skeleton.bones[hips_bone];
-            let bind_translation = hips.local_transform.w.truncate();
+            let bind_translation = hips.local_transform.w_axis.truncate();
             let parent_world_rotation_inv = match hips.parent_id {
                 Some(parent_id) => {
                     decompose(&compute_bone_global_transform(skeleton, parent_id as usize))
                         .1
                         .conjugate()
                 }
-                None => Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                None => Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             };
 
             for (&time, offset) in baked.frame_times.iter().zip(&baked.hips_offsets) {
@@ -372,7 +372,6 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    use cgmath::{InnerSpace, Rad, Rotation3};
     use thyllore_math_core::euler_degrees_to_quaternion;
 
     use crate::ecs::systems::humanoid_rig_systems::{
@@ -395,10 +394,10 @@ mod tests {
     #[test]
     fn test_quaternion_roundtrip() {
         let skeleton = make_chain_skeleton(3);
-        let quaternions: Vec<Quaternion<f32>> = vec![
-            Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            Quaternion::from_angle_x(Rad(90.0_f32.to_radians())),
-            Quaternion::from_angle_y(Rad(45.0_f32.to_radians())),
+        let quaternions: Vec<Quat> = vec![
+            Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            Quat::from_rotation_x(90.0_f32.to_radians()),
+            Quat::from_rotation_y(45.0_f32.to_radians()),
         ];
         let fps = 30;
         let frame_times: Vec<f32> = (0..quaternions.len())
@@ -420,7 +419,7 @@ mod tests {
             let rx = track.rotation_x.keyframes[i].value;
             let ry = track.rotation_y.keyframes[i].value;
             let rz = track.rotation_z.keyframes[i].value;
-            let reconstructed = euler_degrees_to_quaternion(&Vector3::new(rx, ry, rz));
+            let reconstructed = euler_degrees_to_quaternion(&Vec3::new(rx, ry, rz));
             let dot = quat.dot(reconstructed);
             assert!(
                 dot.abs() > 0.9999,
@@ -434,8 +433,8 @@ mod tests {
     #[test]
     fn test_baked_motion_to_clip_keeps_euler_continuous() {
         let skeleton = make_chain_skeleton(1);
-        let q1 = Quaternion::from_angle_z(Rad(170.0_f32.to_radians()));
-        let q2 = Quaternion::from_angle_z(Rad(190.0_f32.to_radians()));
+        let q1 = Quat::from_rotation_z(170.0_f32.to_radians());
+        let q2 = Quat::from_rotation_z(190.0_f32.to_radians());
         let quaternions = vec![q1, q2];
         let fps = 30;
         let frame_times: Vec<f32> = (0..quaternions.len())
@@ -471,8 +470,8 @@ mod tests {
     fn test_hips_offset_translation() {
         let mut skeleton = Skeleton::new("test");
         skeleton.add_bone("Hips", None);
-        let baked_offset = Vector3::new(1.0, 2.0, 3.0);
-        let quaternions = vec![Quaternion::new(1.0, 0.0, 0.0, 0.0)];
+        let baked_offset = Vec3::new(1.0, 2.0, 3.0);
+        let quaternions = vec![Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)];
         let fps = 30;
         let frame_times = vec![0.0];
         let mut bone_rotations = BTreeMap::new();

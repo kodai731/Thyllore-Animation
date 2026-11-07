@@ -1,7 +1,7 @@
+use glam::Mat4;
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::SquareMatrix;
 
 use crate::app::AppData;
 use crate::ecs::systems::collect_mesh_transforms;
@@ -26,7 +26,7 @@ pub unsafe fn rebuild_acceleration_structures(
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
     procedural_primitives: &[GpuPrimitive<'static>],
-    mesh_transforms: &[cgmath::Matrix4<f32>],
+    mesh_transforms: &[Mat4],
 ) -> Result<()> {
     log!("Rebuilding acceleration structures...");
     if let Some(mut previous) = raytracing.acceleration_structure.take() {
@@ -71,7 +71,7 @@ pub unsafe fn rebuild_acceleration_structures(
         let model = mesh_transforms
             .get(mesh_index)
             .copied()
-            .unwrap_or_else(cgmath::Matrix4::identity);
+            .unwrap_or(Mat4::IDENTITY);
         blas.set_transform_rows(AffineRows3x4::from_mat4(model).rows);
 
         acceleration_structure.blas_list.push(blas);

@@ -1,3 +1,4 @@
+use glam::Mat4;
 use vulkanalia::vk;
 
 #[derive(Clone, Debug)]
@@ -32,7 +33,7 @@ impl BlasGeometry<'_> {
 #[derive(Clone, Debug)]
 pub struct GpuPrimitive<'a> {
     pub geometry: BlasGeometry<'a>,
-    pub model: cgmath::Matrix4<f32>,
+    pub model: Mat4,
     pub base_color: [f32; 4],
     pub params: [f32; 4],
     /// Device address of the effect's own instance block, read by its closest hit shader; 0 when none.
@@ -42,7 +43,7 @@ pub struct GpuPrimitive<'a> {
 impl<'a> GpuPrimitive<'a> {
     pub fn new(
         geometry: BlasGeometry<'a>,
-        model: cgmath::Matrix4<f32>,
+        model: Mat4,
         base_color: [f32; 4],
         params: [f32; 4],
     ) -> Self {

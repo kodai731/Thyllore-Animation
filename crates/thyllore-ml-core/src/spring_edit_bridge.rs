@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
     chains_under_bone as anim_chains_under_bone, chains_with_radius as anim_chains_with_radius,
@@ -116,7 +116,7 @@ impl JointValues {
             bone_id: 0,
             force: JointForce::from(self.force),
             drag_force: self.drag_force,
-            gravity_dir: Vector3::from(self.gravity_dir),
+            gravity_dir: Vec3::from(self.gravity_dir),
             hit_radius: self.hit_radius,
         }
     }

@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::{Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use thyllore_render_core::{
     BillboardMesh, BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh,
@@ -84,9 +84,9 @@ impl<'a> VulkanBackend<'a> {
     pub unsafe fn update_billboard_ubo(
         &mut self,
         render_state: &mut BillboardRenderState,
-        model: Matrix4<f32>,
-        view: Matrix4<f32>,
-        proj: Matrix4<f32>,
+        model: Mat4,
+        view: Mat4,
+        proj: Mat4,
         image_index: usize,
     ) -> Result<()> {
         for i in 0..render_state.descriptor_set.rrdata.len() {
@@ -278,17 +278,17 @@ impl<'a> VulkanBackend<'a> {
     pub unsafe fn update_frame_ubo(
         &mut self,
         proj_data: &ProjectionData,
-        camera_pos: Vector3<f32>,
-        light_pos: Vector3<f32>,
-        light_color: Vector3<f32>,
+        camera_pos: Vec3,
+        light_pos: Vec3,
+        light_color: Vec3,
         image_index: usize,
     ) -> Result<()> {
         let ubo = FrameUBO {
             view: proj_data.view,
             proj: proj_data.proj,
-            camera_pos: Vector4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
-            light_pos: Vector4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
-            light_color: Vector4::new(light_color.x, light_color.y, light_color.z, 1.0),
+            camera_pos: Vec4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
+            light_pos: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 1.0),
         };
 
         self.graphics
@@ -300,7 +300,7 @@ impl<'a> VulkanBackend<'a> {
 
     pub unsafe fn update_object_ubo(
         &mut self,
-        model_matrix: Matrix4<f32>,
+        model_matrix: Mat4,
         object_index: usize,
         image_index: usize,
     ) -> Result<()> {
@@ -315,10 +315,10 @@ impl<'a> VulkanBackend<'a> {
 
     pub unsafe fn update_scene_uniform(
         &mut self,
-        view: Matrix4<f32>,
-        proj: Matrix4<f32>,
-        light_pos: Vector3<f32>,
-        light_color: Vector3<f32>,
+        view: Mat4,
+        proj: Mat4,
+        light_pos: Vec3,
+        light_color: Vec3,
         debug_mode: i32,
         shadow_strength: f32,
         distance_attenuation: DistanceAttenuation,
@@ -329,13 +329,8 @@ impl<'a> VulkanBackend<'a> {
         };
 
         let scene_data = SceneUniformData {
-            light_position: thyllore_math_core::Vec4::new(
-                light_pos.x,
-                light_pos.y,
-                light_pos.z,
-                1.0,
-            ),
-            light_color: thyllore_math_core::Vec4::new(
+            light_position: glam::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: glam::Vec4::new(
                 light_color.x,
                 light_color.y,
                 light_color.z,

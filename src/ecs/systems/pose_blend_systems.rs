@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::animation::editable::EaseType;
 use crate::animation::{normalize_quat, slerp, BoneLocalPose, SkeletonPose};
@@ -37,7 +37,7 @@ pub fn blend_poses_additive(
         .min(additive.bone_poses.len())
         .min(rest.bone_poses.len());
     let mut result = base.clone();
-    let identity = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    let identity = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
 
     for i in 0..bone_count {
         let b = &base.bone_poses[i];
@@ -122,23 +122,23 @@ pub fn compute_local_time(
     }
 }
 
-fn lerp_vec3(a: Vector3<f32>, b: Vector3<f32>, t: f32) -> Vector3<f32> {
-    Vector3::new(
+fn lerp_vec3(a: Vec3, b: Vec3, t: f32) -> Vec3 {
+    Vec3::new(
         a.x + (b.x - a.x) * t,
         a.y + (b.y - a.y) * t,
         a.z + (b.z - a.z) * t,
     )
 }
 
-fn conjugate_quat(q: Quaternion<f32>) -> Quaternion<f32> {
-    Quaternion::new(q.s, -q.v.x, -q.v.y, -q.v.z)
+fn conjugate_quat(q: Quat) -> Quat {
+    Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
 }
 
-fn quat_mul(a: Quaternion<f32>, b: Quaternion<f32>) -> Quaternion<f32> {
-    Quaternion::new(
-        a.s * b.s - a.v.x * b.v.x - a.v.y * b.v.y - a.v.z * b.v.z,
-        a.s * b.v.x + a.v.x * b.s + a.v.y * b.v.z - a.v.z * b.v.y,
-        a.s * b.v.y - a.v.x * b.v.z + a.v.y * b.s + a.v.z * b.v.x,
-        a.s * b.v.z + a.v.x * b.v.y - a.v.y * b.v.x + a.v.z * b.s,
+fn quat_mul(a: Quat, b: Quat) -> Quat {
+    Quat::from_xyzw(
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
     )
 }

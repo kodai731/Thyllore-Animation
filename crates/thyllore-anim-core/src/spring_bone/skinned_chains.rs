@@ -30,10 +30,11 @@ pub fn chains_skinned_to(setup: &SpringBoneSetup, skin: &SkinData) -> Vec<Spring
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Vector4, Zero};
+    use glam::Vec4;
 
     use super::*;
     use crate::spring_bone::{setup::SpringJointParam, SpringChain};
+    use glam::UVec4;
 
     fn chain(id: SpringChainId, bone_ids: &[u32]) -> SpringChain {
         SpringChain {
@@ -49,7 +50,7 @@ mod tests {
         }
     }
 
-    fn skin(vertices: &[(Vector4<u32>, Vector4<f32>)]) -> SkinData {
+    fn skin(vertices: &[(UVec4, Vec4)]) -> SkinData {
         SkinData {
             bone_indices: vertices.iter().map(|(i, _)| *i).collect(),
             bone_weights: vertices.iter().map(|(_, w)| *w).collect(),
@@ -64,8 +65,8 @@ mod tests {
             ..Default::default()
         };
         let skin = skin(&[
-            (Vector4::new(5, 12, 0, 0), Vector4::new(0.7, 0.3, 0.0, 0.0)),
-            (Vector4::new(5, 0, 0, 0), Vector4::new(1.0, 0.0, 0.0, 0.0)),
+            (UVec4::new(5, 12, 0, 0), Vec4::new(0.7, 0.3, 0.0, 0.0)),
+            (UVec4::new(5, 0, 0, 0), Vec4::new(1.0, 0.0, 0.0, 0.0)),
         ]);
         assert_eq!(chains_skinned_to(&setup, &skin), vec![1]);
     }
@@ -76,7 +77,7 @@ mod tests {
             chains: vec![chain(1, &[10, 11])],
             ..Default::default()
         };
-        let skin = skin(&[(Vector4::new(10, 11, 0, 0), Vector4::zero())]);
+        let skin = skin(&[(UVec4::new(10, 11, 0, 0), Vec4::ZERO)]);
         assert!(chains_skinned_to(&setup, &skin).is_empty());
     }
 }

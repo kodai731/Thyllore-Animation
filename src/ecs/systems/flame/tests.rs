@@ -13,7 +13,7 @@ use super::*;
 use crate::ecs::component::EditorDisplay;
 use crate::ecs::systems::object_picking_systems::resolve_closest_pick;
 use crate::ecs::world::{GlobalTransform, Name};
-use cgmath::Vector3;
+use glam::{Quat, Vec3};
 
 #[test]
 fn spawned_flame_carries_the_components_the_editor_queries() {
@@ -42,13 +42,13 @@ fn spawned_flame_appears_as_a_hierarchy_root() {
 fn spawn_mirrors_the_effect_position_onto_the_transform() {
     let mut world = World::new();
     let effect = FlameEffect {
-        position: cgmath::Vector3::new(1.5, 2.5, -3.5),
+        position: Vec3::new(1.5, 2.5, -3.5),
         ..FlameEffect::default()
     };
     let entity = spawn_flame(&mut world, "Flame 2", effect);
 
     let transform = world.get_component::<Transform>(entity).unwrap();
-    assert_eq!(transform.translation, cgmath::Vector3::new(1.5, 2.5, -3.5));
+    assert_eq!(transform.translation, Vec3::new(1.5, 2.5, -3.5));
 }
 
 #[test]
@@ -95,10 +95,10 @@ fn selecting_a_non_flame_entity_keeps_editing_the_first_flame() {
 fn apply_effect_update_moves_the_flame_transform() {
     let mut world = World::new();
     let entity = spawn_default_flame(&mut world, DEFAULT_FLAME_NAME);
-    let translation = cgmath::Vector3::new(4.0, 0.0, 2.0);
+    let translation = Vec3::new(4.0, 0.0, 2.0);
     let effect = FlameEffect {
         position: translation,
-        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+        rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
         ..FlameEffect::default()
     };
 
@@ -263,7 +263,7 @@ fn a_ray_beside_the_flame_finds_nothing() {
 fn the_nearest_flame_wins_when_two_overlap() {
     let (mut world, far_flame) = world_with_flame_at(0.0);
     let near_effect = FlameEffect {
-        position: Vector3::new(0.0, 0.0, -5.0),
+        position: Vec3::new(0.0, 0.0, -5.0),
         ..FlameEffect::default()
     };
     let near_flame = spawn_flame(&mut world, "Flame 2", near_effect);

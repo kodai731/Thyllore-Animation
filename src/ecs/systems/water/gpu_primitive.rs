@@ -9,7 +9,9 @@ use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive};
 
 impl GpuPrimitiveSource for WaterTorusEffect {
     fn gpu_primitive(&self) -> GpuPrimitive<'static> {
-        let model = thyllore_effect_core::build_water_ubo(self, 0).model;
+        let model = thyllore_effect_core::build_water_ubo(self, 0)
+            .model
+            .to_mat4();
         let extent = self.major_radius + self.minor_radius;
 
         GpuPrimitive::new(

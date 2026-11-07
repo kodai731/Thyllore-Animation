@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, RestClearance, SpringBoneSetup,
     SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
@@ -88,7 +88,7 @@ fn import_colliders(
         setup.colliders.push(SpringColliderDef {
             id,
             bone_id,
-            offset: frame.to_local(Vector3::from(collider.offset)),
+            offset: frame.to_local(Vec3::from(collider.offset)),
             shape: collider_shape(collider, frame),
         });
         ids_by_name.push((collider.name.clone(), id));
@@ -120,7 +120,7 @@ fn collider_shape(collider: &SidecarCollider, frame: &BoneRestFrame) -> Collider
     match (&collider.shape, collider.tail) {
         (SidecarColliderShape::Capsule, Some(tail)) => ColliderShape::Capsule {
             radius,
-            tail: frame.to_local(Vector3::from(tail)),
+            tail: frame.to_local(Vec3::from(tail)),
         },
         (SidecarColliderShape::Capsule, None) | (SidecarColliderShape::Sphere, _) => {
             ColliderShape::Sphere { radius }
@@ -166,7 +166,7 @@ fn import_chain(
                 bone_id: bone_id_of(bones, &joint.bone)?,
                 force: JointForce::from(joint.force),
                 drag_force: joint.drag_force,
-                gravity_dir: Vector3::from(joint.gravity_dir),
+                gravity_dir: Vec3::from(joint.gravity_dir),
                 hit_radius: joint.hit_radius,
             })
         })

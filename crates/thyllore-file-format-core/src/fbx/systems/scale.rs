@@ -47,20 +47,21 @@ fn scale_fbx_data(data: &mut FbxData, factor: f32) {
 mod tests {
     use std::collections::HashMap;
 
-    use cgmath::{Matrix4, Vector3};
+    use glam::{Mat4, Vec3};
 
     use super::*;
     use crate::fbx::components::{
         BoneAnimation, BoneNode, ClusterInfo, FbxAnimation, KeyFrame, MeshPart,
     };
+    use glam::Quat;
 
     #[test]
     fn fbx_model_scale_touches_every_length_and_nothing_else() {
-        let translation = Matrix4::from_translation(Vector3::new(1.0, 2.0, 3.0));
+        let translation = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
         let mut data = FbxData::new();
-        data.positions = vec![Vector3::new(1.0, 0.0, 0.0)];
-        data.local_positions = vec![Vector3::new(0.0, 1.0, 0.0)];
-        data.normals = vec![Vector3::new(0.0, 0.0, 1.0)];
+        data.positions = vec![Vec3::new(1.0, 0.0, 0.0)];
+        data.local_positions = vec![Vec3::new(0.0, 1.0, 0.0)];
+        data.normals = vec![Vec3::new(0.0, 0.0, 1.0)];
         data.clusters.push(ClusterInfo {
             bone_name: "b".into(),
             transform: translation,
@@ -71,7 +72,7 @@ mod tests {
         });
         data.mesh_parts.push(MeshPart {
             mesh_name: "m".into(),
-            local_positions: vec![Vector3::new(2.0, 0.0, 0.0)],
+            local_positions: vec![Vec3::new(2.0, 0.0, 0.0)],
             parent_bone: None,
             local_transform: translation,
             vertex_offset: 0,
@@ -86,7 +87,7 @@ mod tests {
                 parent: None,
                 local_transform: translation,
                 default_translation: [1.0, 2.0, 3.0],
-                default_rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                default_rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
                 default_scaling: [1.0, 1.0, 1.0],
             },
         );
@@ -111,30 +112,30 @@ mod tests {
         scale_fbx_model(&mut model, 10.0);
 
         let data = &model.fbx_data[0];
-        assert_eq!(data.positions[0], Vector3::new(10.0, 0.0, 0.0));
-        assert_eq!(data.local_positions[0], Vector3::new(0.0, 10.0, 0.0));
-        assert_eq!(data.normals[0], Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(data.positions[0], Vec3::new(10.0, 0.0, 0.0));
+        assert_eq!(data.local_positions[0], Vec3::new(0.0, 10.0, 0.0));
+        assert_eq!(data.normals[0], Vec3::new(0.0, 0.0, 1.0));
         assert_eq!(
-            data.clusters[0].inverse_bind_pose.w.truncate(),
-            Vector3::new(10.0, 20.0, 30.0)
+            data.clusters[0].inverse_bind_pose.w_axis.truncate(),
+            Vec3::new(10.0, 20.0, 30.0)
         );
         assert_eq!(
-            data.clusters[0].transform_link.w.truncate(),
-            Vector3::new(10.0, 20.0, 30.0)
+            data.clusters[0].transform_link.w_axis.truncate(),
+            Vec3::new(10.0, 20.0, 30.0)
         );
         assert_eq!(
             data.mesh_parts[0].local_positions[0],
-            Vector3::new(20.0, 0.0, 0.0)
+            Vec3::new(20.0, 0.0, 0.0)
         );
         assert_eq!(
-            data.mesh_parts[0].local_transform.w.truncate(),
-            Vector3::new(10.0, 20.0, 30.0)
+            data.mesh_parts[0].local_transform.w_axis.truncate(),
+            Vec3::new(10.0, 20.0, 30.0)
         );
         let node = &model.nodes["b"];
         assert_eq!(node.default_translation, [10.0, 20.0, 30.0]);
         assert_eq!(
-            node.local_transform.w.truncate(),
-            Vector3::new(10.0, 20.0, 30.0)
+            node.local_transform.w_axis.truncate(),
+            Vec3::new(10.0, 20.0, 30.0)
         );
         assert_eq!(
             model.animations[0].bone_animations["b"].translation_keys[0].value,

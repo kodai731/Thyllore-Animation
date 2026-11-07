@@ -1,10 +1,10 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::Vec2;
+use glam::{Mat4, UVec4, Vec3, Vec4};
 use std::collections::HashMap;
 use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Keyframe, Skeleton, SkinData, TransformChannel,
 };
-use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 
 use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
@@ -14,7 +14,7 @@ pub struct FbxNodeInfo {
     pub index: usize,
     pub name: String,
     pub parent_index: Option<usize>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
 }
 
 impl Default for FbxNodeInfo {
@@ -23,7 +23,7 @@ impl Default for FbxNodeInfo {
             index: 0,
             name: String::new(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         }
     }
 }
@@ -280,7 +280,7 @@ fn convert_fbx_animation_to_clip(
             for key in &bone_anim.translation_keys {
                 channel.translation.push(Keyframe::new(
                     key.time,
-                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                    Vec3::new(key.value[0], key.value[1], key.value[2]),
                 ));
             }
 
@@ -291,7 +291,7 @@ fn convert_fbx_animation_to_clip(
             for key in &bone_anim.scale_keys {
                 channel.scale.push(Keyframe::new(
                     key.time,
-                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                    Vec3::new(key.value[0], key.value[1], key.value[2]),
                 ));
             }
 
@@ -318,7 +318,7 @@ fn convert_fbx_data_to_mesh(
             .normals
             .get(i)
             .cloned()
-            .unwrap_or(Vector3::new(0.0, 1.0, 0.0));
+            .unwrap_or(Vec3::new(0.0, 1.0, 0.0));
         let tex_coord = fbx_data.tex_coords.get(i).cloned().unwrap_or([0.5, 0.5]);
 
         vertices.push(Vertex {
@@ -381,8 +381,8 @@ fn convert_clusters_to_skin_data(
 ) -> SkinData {
     let vertex_count = fbx_data.positions.len();
 
-    let mut bone_indices: Vec<Vector4<u32>> = vec![Vector4::new(0, 0, 0, 0); vertex_count];
-    let mut bone_weights: Vec<Vector4<f32>> = vec![Vector4::new(0.0, 0.0, 0.0, 0.0); vertex_count];
+    let mut bone_indices: Vec<UVec4> = vec![UVec4::ZERO; vertex_count];
+    let mut bone_weights: Vec<Vec4> = vec![Vec4::new(0.0, 0.0, 0.0, 0.0); vertex_count];
 
     let mut vertex_bone_data: Vec<Vec<(u32, f32)>> = vec![Vec::new(); vertex_count];
 
@@ -426,17 +426,17 @@ fn convert_clusters_to_skin_data(
             }
         }
 
-        bone_indices[vert_idx] = Vector4::new(indices[0], indices[1], indices[2], indices[3]);
-        bone_weights[vert_idx] = Vector4::new(weights[0], weights[1], weights[2], weights[3]);
+        bone_indices[vert_idx] = UVec4::new(indices[0], indices[1], indices[2], indices[3]);
+        bone_weights[vert_idx] = Vec4::new(weights[0], weights[1], weights[2], weights[3]);
     }
 
-    let base_positions: Vec<Vector3<f32>> = if !fbx_data.local_positions.is_empty() {
+    let base_positions: Vec<Vec3> = if !fbx_data.local_positions.is_empty() {
         fbx_data.local_positions.clone()
     } else {
         fbx_data.positions.clone()
     };
 
-    let base_normals: Vec<Vector3<f32>> = if !fbx_data.local_normals.is_empty() {
+    let base_normals: Vec<Vec3> = if !fbx_data.local_normals.is_empty() {
         fbx_data.local_normals.clone()
     } else {
         fbx_data.normals.clone()

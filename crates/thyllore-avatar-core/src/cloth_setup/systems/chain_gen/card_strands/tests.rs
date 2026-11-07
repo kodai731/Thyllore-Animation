@@ -18,13 +18,13 @@ const KEEP_ALL_BAND: f32 = -1.0;
 const ROOT_BONE: BoneId = 0;
 
 struct Strip {
-    positions: Vec<Vector3<f32>>,
+    positions: Vec<Vec3>,
     tex_coords: Vec<[f32; 2]>,
     members: Vec<u32>,
 }
 
 impl Strip {
-    fn top(&self) -> Vector3<f32> {
+    fn top(&self) -> Vec3 {
         self.positions
             .iter()
             .copied()
@@ -32,7 +32,7 @@ impl Strip {
             .expect("strip has vertices")
     }
 
-    fn centerline(&self, root_position: Vector3<f32>, root_offset: f32) -> Vec<Vector3<f32>> {
+    fn centerline(&self, root_position: Vec3, root_offset: f32) -> Vec<Vec3> {
         strand_centerline(
             &self.positions,
             &self.tex_coords,
@@ -44,7 +44,7 @@ impl Strip {
     }
 }
 
-fn build_strip(rows: usize, place_row: impl Fn(f32) -> Vector3<f32>) -> Strip {
+fn build_strip(rows: usize, place_row: impl Fn(f32) -> Vec3) -> Strip {
     let columns = 3;
     let mut positions = Vec::new();
     let mut tex_coords = Vec::new();
@@ -53,7 +53,7 @@ fn build_strip(rows: usize, place_row: impl Fn(f32) -> Vector3<f32>) -> Strip {
         let v = 1.0 - row as f32 / (rows - 1) as f32;
         for column in 0..columns {
             let width_offset = column as f32 - 1.0;
-            positions.push(place_row(v) + Vector3::new(width_offset, 0.0, 0.0));
+            positions.push(place_row(v) + Vec3::new(width_offset, 0.0, 0.0));
             tex_coords.push([column as f32 / (columns - 1) as f32, v]);
         }
     }
@@ -67,18 +67,18 @@ fn build_strip(rows: usize, place_row: impl Fn(f32) -> Vector3<f32>) -> Strip {
 }
 
 fn build_vertical_strip() -> Strip {
-    build_strip(10, |v| Vector3::new(0.0, 9.0 * v, 0.0))
+    build_strip(10, |v| Vec3::new(0.0, 9.0 * v, 0.0))
 }
 
 fn tilt_about_z(strip: &mut Strip, angle: f32) {
     let (sin, cos) = angle.sin_cos();
     for p in &mut strip.positions {
-        *p = Vector3::new(p.x * cos - p.y * sin, p.x * sin + p.y * cos, p.z);
+        *p = Vec3::new(p.x * cos - p.y * sin, p.x * sin + p.y * cos, p.z);
     }
 }
 
-fn angle_between_degrees(a: Vector3<f32>, b: Vector3<f32>) -> f32 {
-    (a.dot(b) / (a.magnitude() * b.magnitude()))
+fn angle_between_degrees(a: Vec3, b: Vec3) -> f32 {
+    (a.dot(b) / (a.length() * b.length()))
         .clamp(-1.0, 1.0)
         .acos()
         .to_degrees()
@@ -120,7 +120,7 @@ fn quarter_circle_strip_centerline_turns_ninety_degrees() {
     let radius = 5.0;
     let strip = build_strip(30, |v| {
         let angle = v * std::f32::consts::FRAC_PI_2;
-        Vector3::new(radius * angle.cos(), radius * angle.sin(), 0.0)
+        Vec3::new(radius * angle.cos(), radius * angle.sin(), 0.0)
     });
     let centerline = strip.centerline(strip.top(), 0.0);
 
@@ -160,7 +160,7 @@ fn root_offset_drops_rows_near_the_card_root() {
 #[test]
 fn zero_root_offset_keeps_the_whole_card() {
     let strip = build_vertical_strip();
-    let root_position = Vector3::new(0.0, 14.0, 0.0);
+    let root_position = Vec3::new(0.0, 14.0, 0.0);
     let centerline = strip.centerline(root_position, 0.0);
 
     assert!((centerline[0].y - 9.0).abs() < 1e-4);
@@ -188,11 +188,11 @@ fn random_v_does_not_correlate_with_strand_axis() {
     assert!(r.abs() < 0.5, "r {r}");
 }
 
-fn make_vertical_centerline(offset_x: f32) -> Vec<Vector3<f32>> {
+fn make_vertical_centerline(offset_x: f32) -> Vec<Vec3> {
     (0..CENTERLINE_SAMPLE_COUNT)
         .map(|i| {
             let t = i as f32 / (CENTERLINE_SAMPLE_COUNT - 1) as f32;
-            Vector3::new(offset_x, 9.0 * (1.0 - t), 0.0)
+            Vec3::new(offset_x, 9.0 * (1.0 - t), 0.0)
         })
         .collect()
 }
@@ -302,7 +302,7 @@ fn merge_strands_single_centerline() {
 }
 
 struct StripSet {
-    positions: Vec<Vector3<f32>>,
+    positions: Vec<Vec3>,
     tex_coords: Vec<[f32; 2]>,
     components: Vec<Vec<u32>>,
 }
@@ -316,7 +316,7 @@ fn build_three_vertical_strips() -> StripSet {
     for index in 0..3 {
         let strip = build_vertical_strip();
         let first_vertex = strip_set.positions.len() as u32;
-        let offset = Vector3::new(5.0 * index as f32, 0.0, 0.0);
+        let offset = Vec3::new(5.0 * index as f32, 0.0, 0.0);
 
         strip_set
             .components
@@ -333,7 +333,7 @@ fn decide_mode_for(strip_set: &StripSet, tex_coords: &[[f32; 2]]) -> StrandMode 
     let input = ChainGenInput {
         positions: &strip_set.positions,
         triangles: &[],
-        root_position: Vector3::new(0.0, 9.0, 0.0),
+        root_position: Vec3::new(0.0, 9.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords,
@@ -386,23 +386,23 @@ struct CardPlacement {
 }
 
 struct CardMesh {
-    positions: Vec<Vector3<f32>>,
+    positions: Vec<Vec3>,
     triangles: Vec<[u32; 3]>,
     tex_coords: Vec<[f32; 2]>,
     skins: Vec<SkinSurface>,
-    strip_axes: Vec<(Vector3<f32>, Vector3<f32>)>,
+    strip_axes: Vec<(Vec3, Vec3)>,
     strip_vertices: Vec<Vec<u32>>,
 }
 
-fn card_root() -> Vector3<f32> {
-    Vector3::new(0.0, 10.0, 0.0)
+fn card_root() -> Vec3 {
+    Vec3::new(0.0, 10.0, 0.0)
 }
 
 fn build_head_ring(height: f32) -> Vec<SkinSurface> {
     let ring = (0..16)
         .map(|index| {
             let angle = index as f32 / 16.0 * TAU;
-            Vector3::new(angle.cos(), height, angle.sin())
+            Vec3::new(angle.cos(), height, angle.sin())
         })
         .collect();
     vec![SkinSurface::points_driven_by(ROOT_BONE, ring)]
@@ -410,11 +410,11 @@ fn build_head_ring(height: f32) -> Vec<SkinSurface> {
 
 fn add_card_strip(mesh: &mut CardMesh, placement: &CardPlacement, length: f32) {
     let azimuth = placement.azimuth_degrees.to_radians();
-    let outward = Vector3::new(azimuth.cos(), 0.0, azimuth.sin());
+    let outward = Vec3::new(azimuth.cos(), 0.0, azimuth.sin());
     let across = world_y_axis().cross(outward);
     let tilt = CARD_TILT_DEGREES.to_radians();
     let down = outward * tilt.sin() - world_y_axis() * tilt.cos();
-    let top = Vector3::new(0.0, 8.5, 0.0) + outward + across * placement.side_shift;
+    let top = Vec3::new(0.0, 8.5, 0.0) + outward + across * placement.side_shift;
     let first_vertex = mesh.positions.len() as u32;
 
     for row in 0..CARD_ROWS {
@@ -499,10 +499,10 @@ fn decide_card_mesh_mode(mesh: &CardMesh, tex_coords: &[[f32; 2]]) -> StrandMode
     decide_strand_mode(&input, &mesh.strip_vertices, band.progress)
 }
 
-fn distance_to_segment(point: Vector3<f32>, (start, end): (Vector3<f32>, Vector3<f32>)) -> f32 {
+fn distance_to_segment(point: Vec3, (start, end): (Vec3, Vec3)) -> f32 {
     let along = end - start;
-    let t = ((point - start).dot(along) / along.magnitude2()).clamp(0.0, 1.0);
-    (point - (start + along * t)).magnitude()
+    let t = ((point - start).dot(along) / along.length_squared()).clamp(0.0, 1.0);
+    (point - (start + along * t)).length()
 }
 
 #[test]

@@ -8,7 +8,6 @@ use super::support::{garment_support, nearest_body_influences};
 use crate::cloth_setup::components::chain_gen::{
     ChainGenInput, ChainGenParams, ChainRole, CoveredVertex, GarmentSupport,
 };
-use cgmath::InnerSpace;
 
 /// The target vertices the body covers, each with the influences of its nearest body point.
 pub(super) struct GarmentCoverage {

@@ -4,7 +4,7 @@ use super::wave::{
 };
 use crate::flame::*;
 use crate::flame_trail::FlameTrailState;
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_math_core::{evaluate_chebyshev, fit_erf_response};
 
 /// Medium spread gain alpha (motion_design L3); the reach shares the tip
@@ -83,9 +83,9 @@ impl FlameUboScratch {
 }
 
 struct FlameUboPlacement {
-    model: Matrix4<f32>,
-    inverse_model: Matrix4<f32>,
-    trail_unit_inverse: Matrix4<f32>,
+    model: Mat4,
+    inverse_model: Mat4,
+    trail_unit_inverse: Mat4,
     trail_meta: FlameTrailMeta,
     trail_coefficients: [[f32; 4]; 4],
 }
@@ -95,7 +95,7 @@ fn build_placement(effect: &FlameEffect, trail: Option<&FlameTrailState>) -> Fla
         return FlameUboPlacement {
             model: build_flame_model_matrix(effect),
             inverse_model: build_flame_inverse_model_matrix(effect),
-            trail_unit_inverse: Matrix4::<f32>::from_scale(1.0),
+            trail_unit_inverse: Mat4::IDENTITY,
             trail_meta: FlameTrailMeta {
                 sample_count: 0.0,
                 max_age: 0.0,
@@ -106,9 +106,15 @@ fn build_placement(effect: &FlameEffect, trail: Option<&FlameTrailState>) -> Fla
     };
 
     let model = build_flame_trail_expanded_matrix(effect, &trail.samples);
-    let inverse_model =
-        Matrix4::from_nonuniform_scale(1.0 / model[0][0], 1.0 / model[1][1], 1.0 / model[2][2])
-            * Matrix4::from_translation(-Vector3::new(model[3][0], model[3][1], model[3][2]));
+    let inverse_model = Mat4::from_scale(Vec3::new(
+        1.0 / model.col(0)[0],
+        1.0 / model.col(1)[1],
+        1.0 / model.col(2)[2],
+    )) * Mat4::from_translation(-Vec3::new(
+        model.col(3)[0],
+        model.col(3)[1],
+        model.col(3)[2],
+    ));
     let (trail_unit_inverse, trail_meta, trail_coefficients) =
         build_flame_trail_ubo_fields(effect, trail);
     FlameUboPlacement {
@@ -164,8 +170,8 @@ pub fn build_flame_ubo_from_inputs(inputs: &FlameUboInputs) -> FlameUBO {
     let placement = build_placement(effect, trail);
 
     FlameUBO {
-        model: placement.model,
-        inverse_model: placement.inverse_model,
+        model: placement.model.into(),
+        inverse_model: placement.inverse_model.into(),
         height_primitive_coefficients: effect.coefficients.height_primitive,
         radial_coefficients: effect.coefficients.radial,
         height_coefficients: effect.coefficients.height,
@@ -199,7 +205,7 @@ pub fn build_flame_ubo_from_inputs(inputs: &FlameUboInputs) -> FlameUBO {
         warp_style: build_warp_style(&effect.warp),
         edge_style: build_edge_style(&effect.edge, &effect.noise),
         wind_bend: build_wind_bend(&effect.wind),
-        trail_unit_inverse: placement.trail_unit_inverse,
+        trail_unit_inverse: placement.trail_unit_inverse.into(),
         trail_meta: placement.trail_meta,
         trail_coefficients: placement.trail_coefficients,
         emitter_params: build_emitter_params(&effect.emitter, effect.radius),
@@ -243,13 +249,13 @@ fn build_light_params(effect: &FlameEffect) -> FlameLightParams {
     let radius = flame_bounding_radius(effect).max(MIN_FLAME_EXTENT);
     let height = effect.height.max(MIN_FLAME_EXTENT);
     let relative = effect.light_position_world - effect.position;
-    let direction = Vector3::new(
+    let direction = Vec3::new(
         relative.x / radius,
         relative.y / height,
         relative.z / radius,
     );
     let unit_direction = if direction.dot(direction) < 1e-6 {
-        Vector3::new(0.0, 1.0, 0.0)
+        Vec3::new(0.0, 1.0, 0.0)
     } else {
         direction.normalize()
     };

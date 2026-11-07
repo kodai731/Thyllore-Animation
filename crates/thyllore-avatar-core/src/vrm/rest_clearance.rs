@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::{spring_bone_initialize, SpringSpace};
 use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest, Skeleton};
 
@@ -108,10 +108,10 @@ fn rest_skeleton(bones: &[BoneInput]) -> Skeleton {
         let parent_position = bone
             .parent
             .and_then(|parent| bones.get(parent))
-            .map(|parent| Vector3::from(parent.rest_position))
-            .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+            .map(|parent| Vec3::from(parent.rest_position))
+            .unwrap_or(Vec3::new(0.0, 0.0, 0.0));
         skeleton.bones[bone_id as usize].local_transform =
-            Matrix4::from_translation(Vector3::from(bone.rest_position) - parent_position);
+            Mat4::from_translation(Vec3::from(bone.rest_position) - parent_position);
     }
     skeleton
 }

@@ -6,7 +6,7 @@
 //! `g(s) <= 1` and every band integral reduces to power-rule moments.
 
 use crate::polynomial::{poly_mul, Poly};
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// Biweight kernel `(1 - u^2)^2` for `u^2 <= 1`, exactly zero outside.
 pub fn biweight_profile(u_squared: f32) -> f32 {
@@ -55,10 +55,10 @@ pub fn biweight_quadratic_integral(u0: f32, u1: f32, u2: f32) -> f32 {
 /// along the piece `p = start + direction * piece_length * sigma`, which must lie inside
 /// the sphere.
 pub fn biweight_sphere_piece_integral(
-    center: Vector3<f32>,
+    center: Vec3,
     radius: f32,
-    start: Vector3<f32>,
-    direction: Vector3<f32>,
+    start: Vec3,
+    direction: Vec3,
     piece_length: f32,
 ) -> f32 {
     let offset = start - center;
@@ -164,9 +164,9 @@ mod tests {
 
     #[test]
     fn test_biweight_sphere_piece_matches_quadratic_form() {
-        let center = Vector3::new(0.5, -0.25, 1.0);
-        let start = Vector3::new(0.3, -0.1, 0.9);
-        let direction = Vector3::new(0.6, 0.2, -0.3);
+        let center = Vec3::new(0.5, -0.25, 1.0);
+        let start = Vec3::new(0.3, -0.1, 0.9);
+        let direction = Vec3::new(0.6, 0.2, -0.3);
         let radius = 0.8;
         let piece_length = 0.4;
         let through_sphere =

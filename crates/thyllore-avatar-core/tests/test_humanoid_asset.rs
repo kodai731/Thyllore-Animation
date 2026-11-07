@@ -273,8 +273,8 @@ fn test_humanoid_rest_rotations_are_identity() {
             continue;
         }
         let q = bone.world_rotation;
-        let diff_pos = (q.s - 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
-        let diff_neg = (q.s + 1.0).abs() + q.v.x.abs() + q.v.y.abs() + q.v.z.abs();
+        let diff_pos = (q.w - 1.0).abs() + q.x.abs() + q.y.abs() + q.z.abs();
+        let diff_neg = (q.w + 1.0).abs() + q.x.abs() + q.y.abs() + q.z.abs();
         assert!(
             diff_pos < 1e-5 || diff_neg < 1e-5,
             "bone '{}' (index {}) world_rotation {:?} is not identity",

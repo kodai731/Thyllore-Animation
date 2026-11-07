@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::f32::consts::{PI, TAU};
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 use super::*;
 use crate::cloth_setup::components::chain_gen::{
@@ -15,9 +15,9 @@ use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
 const ROOT_BONE: BoneId = 0;
 
-fn build_straight_strand() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+fn build_straight_strand() -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let positions = (1..=5)
-        .map(|step| Vector3::new(0.0, -0.1 * step as f32, 0.0))
+        .map(|step| Vec3::new(0.0, -0.1 * step as f32, 0.0))
         .collect();
     (positions, vec![[0, 1, 2], [2, 3, 4]])
 }
@@ -42,21 +42,21 @@ fn head_attachment() -> Vec<SkinSurface> {
     let ring = (0..8)
         .map(|i| {
             let angle = TAU * i as f32 / 8.0;
-            Vector3::new(0.2 * angle.cos(), 0.1, 0.2 * angle.sin())
+            Vec3::new(0.2 * angle.cos(), 0.1, 0.2 * angle.sin())
         })
         .collect();
     vec![SkinSurface::points_driven_by(ROOT_BONE, ring)]
 }
 
-fn build_cap_with_two_cards() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+fn build_cap_with_two_cards() -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let mut positions = Vec::new();
     let mut triangles = Vec::new();
 
-    let cap_ring = |y: f32, radius: f32| -> Vec<Vector3<f32>> {
+    let cap_ring = |y: f32, radius: f32| -> Vec<Vec3> {
         (0..12)
             .map(|i| {
                 let angle = TAU * i as f32 / 12.0;
-                Vector3::new(radius * angle.cos(), y, radius * angle.sin())
+                Vec3::new(radius * angle.cos(), y, radius * angle.sin())
             })
             .collect()
     };
@@ -79,8 +79,8 @@ fn build_cap_with_two_cards() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
         let (sin, cos) = angle.sin_cos();
         for step in 0..5 {
             let y = 0.05 - 0.08 * step as f32;
-            positions.push(Vector3::new(0.21 * cos, y, 0.21 * sin));
-            positions.push(Vector3::new(
+            positions.push(Vec3::new(0.21 * cos, y, 0.21 * sin));
+            positions.push(Vec3::new(
                 0.21 * cos + 0.01 * sin,
                 y,
                 0.21 * sin - 0.01 * cos,
@@ -102,7 +102,7 @@ fn straight_strand_places_heads_at_equal_spacing() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -118,14 +118,14 @@ fn straight_strand_places_heads_at_equal_spacing() {
     assert_eq!(chains[0].joints.len(), 4);
     assert_eq!(chains[0].joints[0].name, joint_name(&params, 0, 0));
     for (joint_index, joint) in chains[0].joints.iter().enumerate() {
-        let expected = Vector3::new(0.0, -0.1 - 0.1 * joint_index as f32, 0.0);
+        let expected = Vec3::new(0.0, -0.1 - 0.1 * joint_index as f32, 0.0);
         assert!(
-            (joint.head - expected).magnitude() < 1e-4,
+            (joint.head - expected).length() < 1e-4,
             "joint {joint_index}: {:?}",
             joint.head
         );
     }
-    assert!((chains[0].tail - Vector3::new(0.0, -0.5, 0.0)).magnitude() < 1e-4);
+    assert!((chains[0].tail - Vec3::new(0.0, -0.5, 0.0)).length() < 1e-4);
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn zero_joint_count_is_rejected() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -148,7 +148,7 @@ fn zero_joint_count_is_rejected() {
 
 #[test]
 fn garment_column_split_by_azimuth() {
-    let mut positions: Vec<Vector3<f32>> = Vec::new();
+    let mut positions: Vec<Vec3> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
     let ring_count = 2;
     let samples_per_ring = 24;
@@ -158,7 +158,7 @@ fn garment_column_split_by_azimuth() {
     for &y in &y_offsets {
         for i in 0..samples_per_ring {
             let angle = TAU * i as f32 / samples_per_ring as f32;
-            positions.push(Vector3::new(radius * angle.cos(), y, radius * angle.sin()));
+            positions.push(Vec3::new(radius * angle.cos(), y, radius * angle.sin()));
         }
     }
 
@@ -179,7 +179,7 @@ fn garment_column_split_by_azimuth() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -214,7 +214,7 @@ fn garment_column_split_by_azimuth() {
 #[test]
 fn hair_azimuth_mode_detection() {
     let head = head_attachment();
-    let mut positions: Vec<Vector3<f32>> = Vec::new();
+    let mut positions: Vec<Vec3> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
 
     let mode_centers = [0.5f32, 3.5];
@@ -224,7 +224,7 @@ fn hair_azimuth_mode_detection() {
         for i in 0..count_per_mode {
             let angle = center + (i as f32 - 2.5) * 0.05;
             let y = -0.1 * (i as f32 + 1.0);
-            positions.push(Vector3::new(angle.cos() * 0.3, y, angle.sin() * 0.3));
+            positions.push(Vec3::new(angle.cos() * 0.3, y, angle.sin() * 0.3));
         }
     }
 
@@ -238,7 +238,7 @@ fn hair_azimuth_mode_detection() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -258,7 +258,7 @@ fn weights_sum_to_one() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -288,7 +288,7 @@ fn midpoint_vertex_has_equal_joint_weights() {
         &ChainGenInput {
             positions: &positions,
             triangles: &triangles,
-            root_position: Vector3::new(0.0, 0.0, 0.0),
+            root_position: Vec3::new(0.0, 0.0, 0.0),
             root_bone: ROOT_BONE,
             skins: &head,
             tex_coords: &[],
@@ -300,12 +300,12 @@ fn midpoint_vertex_has_equal_joint_weights() {
     .unwrap();
 
     let midpoint_vertex = positions.len() as u32;
-    positions.push(Vector3::new(0.0, -0.25, 0.0));
+    positions.push(Vec3::new(0.0, -0.25, 0.0));
     chains[0].vertices.push(midpoint_vertex);
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -349,7 +349,7 @@ fn first_vertex_has_full_root_weight() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -380,14 +380,14 @@ fn first_vertex_has_full_root_weight() {
 #[test]
 fn hair_joints_y_monotonically_decreasing() {
     let head = head_attachment();
-    let positions: Vec<Vector3<f32>> = (0..6)
-        .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
+    let positions: Vec<Vec3> = (0..6)
+        .map(|i| Vec3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
         .collect();
     let triangles = vec![[0u32, 1, 2], [2, 3, 4], [4, 5, 0]];
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -414,14 +414,14 @@ fn hair_joints_y_monotonically_decreasing() {
 #[test]
 fn reversed_vertex_order_same_joints() {
     let head = head_attachment();
-    let positions: Vec<Vector3<f32>> = (0..6)
-        .map(|i| Vector3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
+    let positions: Vec<Vec3> = (0..6)
+        .map(|i| Vec3::new(0.0, 0.2 - 0.1 * i as f32, 0.0))
         .collect();
     let triangles = vec![[0u32, 1, 2], [2, 3, 4], [4, 5, 0]];
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -430,14 +430,14 @@ fn reversed_vertex_order_same_joints() {
     };
 
     let chains = place_chains(&input, &build_hair_params(2)).unwrap();
-    let original_joints: Vec<Vector3<f32>> = chains[0].joints.iter().map(|j| j.head).collect();
+    let original_joints: Vec<Vec3> = chains[0].joints.iter().map(|j| j.head).collect();
 
-    let reversed_positions: Vec<Vector3<f32>> = positions.iter().rev().cloned().collect();
+    let reversed_positions: Vec<Vec3> = positions.iter().rev().cloned().collect();
     let reversed_triangles = vec![[5u32, 4, 3], [3, 2, 0], [0, 1, 5]];
     let reversed_input = ChainGenInput {
         positions: &reversed_positions,
         triangles: &reversed_triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -446,8 +446,7 @@ fn reversed_vertex_order_same_joints() {
     };
 
     let reversed_chains = place_chains(&reversed_input, &build_hair_params(2)).unwrap();
-    let reversed_joints: Vec<Vector3<f32>> =
-        reversed_chains[0].joints.iter().map(|j| j.head).collect();
+    let reversed_joints: Vec<Vec3> = reversed_chains[0].joints.iter().map(|j| j.head).collect();
 
     assert_eq!(original_joints.len(), reversed_joints.len());
     for (i, (a, b)) in original_joints.iter().zip(&reversed_joints).enumerate() {
@@ -463,14 +462,14 @@ fn reversed_vertex_order_same_joints() {
     }
 }
 
-fn build_two_strands() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+fn build_two_strands() -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let mut positions = Vec::new();
     let mut triangles = Vec::new();
     for (strand, x) in [(0u32, -0.05f32), (1, 0.05)] {
         let base = positions.len() as u32;
         for step in 0..4 {
-            positions.push(Vector3::new(x, -0.1 * step as f32 - 0.1, 0.0));
-            positions.push(Vector3::new(x, -0.1 * step as f32 - 0.1, 0.02));
+            positions.push(Vec3::new(x, -0.1 * step as f32 - 0.1, 0.0));
+            positions.push(Vec3::new(x, -0.1 * step as f32 - 0.1, 0.02));
         }
         for step in 0..3u32 {
             let a = base + 2 * step;
@@ -499,7 +498,7 @@ fn zero_column_blend_keeps_every_vertex_on_its_own_column() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -526,7 +525,7 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
     let input_for_chains = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -537,13 +536,13 @@ fn column_blend_shares_boundary_vertices_between_neighbouring_columns() {
     let mut chains = place_chains(&input_for_chains, &params).unwrap();
 
     let boundary_vertex = positions.len() as u32;
-    positions.push(Vector3::new(0.0, -0.25, 0.01));
+    positions.push(Vec3::new(0.0, -0.25, 0.01));
     chains[0].vertices.push(boundary_vertex);
     params.settings.column_blend_width = 0.1;
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -575,7 +574,7 @@ fn cap_stays_on_root_and_each_card_is_one_column() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -623,7 +622,7 @@ fn root_band_offset_moves_the_band_down() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -648,7 +647,7 @@ fn root_band_without_attachment_uses_the_widest_slice_of_the_target() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -668,7 +667,7 @@ fn component_labels_separate_the_cap_from_each_card() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &[],
         tex_coords: &[],
@@ -692,7 +691,7 @@ fn hair_root_band_reports_the_equator_and_the_offset_band() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -721,14 +720,14 @@ fn build_tube_with_radius(
     top_y: f32,
     bottom_y: f32,
     rows: usize,
-) -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let mut positions = Vec::new();
     for row in 0..rows {
         let y = top_y + (bottom_y - top_y) * row as f32 / (rows - 1) as f32;
         let radius = radius_at(y);
         for i in 0..8 {
             let angle = TAU * i as f32 / 8.0;
-            positions.push(Vector3::new(radius * angle.cos(), y, radius * angle.sin()));
+            positions.push(Vec3::new(radius * angle.cos(), y, radius * angle.sin()));
         }
     }
     let mut triangles = Vec::new();
@@ -743,12 +742,7 @@ fn build_tube_with_radius(
     (positions, triangles)
 }
 
-fn build_tube(
-    radius: f32,
-    top_y: f32,
-    bottom_y: f32,
-    rows: usize,
-) -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+fn build_tube(radius: f32, top_y: f32, bottom_y: f32, rows: usize) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     build_tube_with_radius(|_| radius, top_y, bottom_y, rows)
 }
 
@@ -763,7 +757,7 @@ fn body_tube(bone: BoneId, radius: f32, top_y: f32, bottom_y: f32) -> SkinSurfac
 }
 
 /// A dress: fitted (radius 0.11) over the body down to the waist, flared (radius 0.2) below it.
-fn flared_dress() -> (Vec<Vector3<f32>>, Vec<[u32; 3]>) {
+fn flared_dress() -> (Vec<Vec3>, Vec<[u32; 3]>) {
     build_tube_with_radius(|y| if y > -0.4 { 0.11 } else { 0.2 }, -0.1, -0.9, 11)
 }
 
@@ -775,7 +769,7 @@ fn garment_support_params() -> ChainGenParams {
 }
 
 fn garment_input<'a>(
-    positions: &'a [Vector3<f32>],
+    positions: &'a [Vec3],
     triangles: &'a [[u32; 3]],
     skins: &'a [SkinSurface],
     covered_vertices: &'a [u32],
@@ -783,7 +777,7 @@ fn garment_input<'a>(
     ChainGenInput {
         positions,
         triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins,
         tex_coords: &[],
@@ -792,11 +786,7 @@ fn garment_input<'a>(
     }
 }
 
-fn assert_split_at_boundary(
-    placement: &ChainPlacement,
-    positions: &[Vector3<f32>],
-    boundary_height: f32,
-) {
+fn assert_split_at_boundary(placement: &ChainPlacement, positions: &[Vec3], boundary_height: f32) {
     let chain: BTreeSet<u32> = placement.chains[0].vertices.iter().copied().collect();
     let covered: BTreeSet<u32> = placement.covered.iter().map(|c| c.vertex).collect();
     assert!(chain.is_disjoint(&covered));
@@ -867,8 +857,8 @@ fn a_ring_narrower_than_the_body_below_it_is_caught() {
 fn collider_samples_count_as_body() {
     let capsule = BodyCollider {
         bone: PELVIS_BONE,
-        head: Vector3::new(0.0, -0.1, 0.0),
-        tail: Vector3::new(0.0, -0.8, 0.0),
+        head: Vec3::new(0.0, -0.1, 0.0),
+        tail: Vec3::new(0.0, -0.8, 0.0),
         radius: 0.10,
     };
     let skins = collider_surfaces(&[capsule]);
@@ -926,9 +916,9 @@ fn fully_supported_garment_is_rejected() {
 #[test]
 fn root_attachment_positions_are_the_skin_vertices_the_root_drives_most() {
     let positions = vec![
-        Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(1.0, 0.0, 0.0),
-        Vector3::new(2.0, 0.0, 0.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(2.0, 0.0, 0.0),
     ];
     let skin = SkinSurface {
         positions,
@@ -941,7 +931,7 @@ fn root_attachment_positions_are_the_skin_vertices_the_root_drives_most() {
     };
 
     let attachment = root_attachment_positions(&[skin], ROOT_BONE);
-    assert_eq!(attachment, vec![Vector3::new(0.0, 0.0, 0.0)]);
+    assert_eq!(attachment, vec![Vec3::new(0.0, 0.0, 0.0)]);
 }
 
 #[test]
@@ -1097,9 +1087,9 @@ fn given_joints_are_the_heads_then_the_tail() {
     let head = head_attachment();
     let (positions, triangles) = build_straight_strand();
     let heads_then_tail = vec![
-        Vector3::new(0.1, -0.1, 0.0),
-        Vector3::new(0.1, -0.3, 0.0),
-        Vector3::new(0.1, -0.6, 0.0),
+        Vec3::new(0.1, -0.1, 0.0),
+        Vec3::new(0.1, -0.3, 0.0),
+        Vec3::new(0.1, -0.6, 0.0),
     ];
     let given = [GivenChain {
         column: 0,
@@ -1109,7 +1099,7 @@ fn given_joints_are_the_heads_then_the_tail() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],
@@ -1118,7 +1108,7 @@ fn given_joints_are_the_heads_then_the_tail() {
     };
 
     let chains = place_chains(&input, &build_hair_params(4)).unwrap();
-    let heads: Vec<Vector3<f32>> = chains[0].joints.iter().map(|joint| joint.head).collect();
+    let heads: Vec<Vec3> = chains[0].joints.iter().map(|joint| joint.head).collect();
     assert_eq!(heads, heads_then_tail[..2]);
     assert_eq!(chains[0].tail, heads_then_tail[2]);
 }
@@ -1135,7 +1125,7 @@ fn given_chain_without_a_target_vertex_is_rejected() {
     let input = ChainGenInput {
         positions: &positions,
         triangles: &triangles,
-        root_position: Vector3::new(0.0, 0.0, 0.0),
+        root_position: Vec3::new(0.0, 0.0, 0.0),
         root_bone: ROOT_BONE,
         skins: &head,
         tex_coords: &[],

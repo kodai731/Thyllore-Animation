@@ -4,7 +4,7 @@ use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
-use thyllore_math_core::*;
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use thyllore_spirv_reflect::declare_gpu_block;
 
 pub use thyllore_model_core::mesh::{Vertex, VertexData};
@@ -150,7 +150,7 @@ declare_gpu_block! {
 
 impl Default for UniformBufferObject {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             model: identity,
             view: identity,
@@ -175,7 +175,7 @@ declare_gpu_block! {
 
 impl Default for SceneUniformData {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
             light_color: Vec4::new(1.0, 1.0, 1.0, thyllore_render_core::AMBIENT_INTENSITY),

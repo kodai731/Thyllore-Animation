@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use crate::animation::{
     decompose_transform, AnimationClip, BoneId, BoneLocalPose, Skeleton, SkeletonPose,
@@ -53,15 +53,15 @@ pub fn sample_clip_to_pose(
     }
 }
 
-pub fn compute_rest_global_transforms(skeleton: &Skeleton) -> Vec<Matrix4<f32>> {
+pub fn compute_rest_global_transforms(skeleton: &Skeleton) -> Vec<Mat4> {
     let bone_count = skeleton.bones.len();
-    let mut global_transforms = vec![Matrix4::identity(); bone_count];
+    let mut global_transforms = vec![Mat4::IDENTITY; bone_count];
 
     fn compute_recursive(
         skeleton: &Skeleton,
         bone_id: BoneId,
-        parent_transform: Matrix4<f32>,
-        global_transforms: &mut [Matrix4<f32>],
+        parent_transform: Mat4,
+        global_transforms: &mut [Mat4],
     ) {
         let Some(bone) = skeleton.get_bone(bone_id) else {
             return;

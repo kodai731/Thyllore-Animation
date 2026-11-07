@@ -4,7 +4,7 @@ use crate::animation::spring_bone::{
 };
 use crate::animation::{Bone, Keyframe, TransformChannel};
 use crate::ecs::component::SpringJointParam;
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 fn create_test_skeleton() -> Skeleton {
     let bones = vec![
@@ -13,7 +13,7 @@ fn create_test_skeleton() -> Skeleton {
             name: "Root".to_string(),
             parent_id: None,
             children: vec![1],
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             ..Default::default()
         },
         Bone {
@@ -21,7 +21,7 @@ fn create_test_skeleton() -> Skeleton {
             name: "Spring".to_string(),
             parent_id: Some(0),
             children: vec![2],
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
             ..Default::default()
         },
         Bone {
@@ -29,7 +29,7 @@ fn create_test_skeleton() -> Skeleton {
             name: "SpringTip".to_string(),
             parent_id: Some(1),
             children: vec![],
-            local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            local_transform: Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
             ..Default::default()
         },
     ];
@@ -45,7 +45,7 @@ fn create_test_skeleton() -> Skeleton {
         bones,
         bone_name_to_id,
         root_bone_ids: vec![0],
-        root_transform: Matrix4::from_scale(1.0),
+        root_transform: Mat4::IDENTITY,
     }
 }
 
@@ -60,7 +60,7 @@ fn create_default_setup() -> SpringBoneSetup {
                     stiffness: 0.5,
                     gravity_power: 1.0,
                 }),
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 drag_force: 0.4,
                 hit_radius: 0.0,
             }],
@@ -86,13 +86,13 @@ fn create_test_clip() -> AnimationClip {
     let mut channel = TransformChannel::default();
     channel
         .translation
-        .push(Keyframe::new(0.0, Vector3::new(0.0, 0.0, 0.0)));
+        .push(Keyframe::new(0.0, Vec3::new(0.0, 0.0, 0.0)));
     channel
         .translation
-        .push(Keyframe::new(0.5, Vector3::new(1.0, 0.0, 0.0)));
+        .push(Keyframe::new(0.5, Vec3::new(1.0, 0.0, 0.0)));
     channel
         .translation
-        .push(Keyframe::new(1.0, Vector3::new(0.0, 0.0, 0.0)));
+        .push(Keyframe::new(1.0, Vec3::new(0.0, 0.0, 0.0)));
     clip.add_channel(0, channel);
     clip
 }
@@ -113,7 +113,7 @@ fn test_fit_improves_rms() {
                     stiffness: 1.5,
                     gravity_power: 0.3,
                 }),
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 drag_force: 0.2,
                 hit_radius: 0.0,
             }],

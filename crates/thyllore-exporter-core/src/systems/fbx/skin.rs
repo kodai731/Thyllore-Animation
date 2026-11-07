@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use thyllore_file_format_core::fbx::FbxData;
 
@@ -67,23 +67,23 @@ pub(crate) fn build_skin_exports(
     skins
 }
 
-pub(crate) fn matrix4_to_flat_f64_scaled(m: &Matrix4<f32>, inv_unit_scale: f32) -> [f64; 16] {
+pub(crate) fn matrix4_to_flat_f64_scaled(m: &Mat4, inv_unit_scale: f32) -> [f64; 16] {
     [
-        m[0][0] as f64,
-        m[0][1] as f64,
-        m[0][2] as f64,
-        m[0][3] as f64,
-        m[1][0] as f64,
-        m[1][1] as f64,
-        m[1][2] as f64,
-        m[1][3] as f64,
-        m[2][0] as f64,
-        m[2][1] as f64,
-        m[2][2] as f64,
-        m[2][3] as f64,
-        (m[3][0] * inv_unit_scale) as f64,
-        (m[3][1] * inv_unit_scale) as f64,
-        (m[3][2] * inv_unit_scale) as f64,
-        m[3][3] as f64,
+        m.col(0)[0] as f64,
+        m.col(0)[1] as f64,
+        m.col(0)[2] as f64,
+        m.col(0)[3] as f64,
+        m.col(1)[0] as f64,
+        m.col(1)[1] as f64,
+        m.col(1)[2] as f64,
+        m.col(1)[3] as f64,
+        m.col(2)[0] as f64,
+        m.col(2)[1] as f64,
+        m.col(2)[2] as f64,
+        m.col(2)[3] as f64,
+        (m.col(3)[0] * inv_unit_scale) as f64,
+        (m.col(3)[1] * inv_unit_scale) as f64,
+        (m.col(3)[2] * inv_unit_scale) as f64,
+        m.col(3)[3] as f64,
     ]
 }

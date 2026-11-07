@@ -1,4 +1,5 @@
 use anyhow::Result;
+use glam::Mat4;
 
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{LightningGpuState, LightningRenderSettings, ProjectionData};
@@ -52,7 +53,7 @@ pub(super) fn compute_lightning_scissor(
     if debug_view == LightningDebugView::Off && ubo.flash[0] > 0.0 {
         return Some(full_extent_scissor(extent));
     }
-    compute_projected_bounds_scissor(projection, extent, &ubo.model, corners)
+    compute_projected_bounds_scissor(projection, extent, &ubo.model.to_mat4(), corners)
 }
 
 fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
@@ -73,7 +74,7 @@ fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
     let inv_view_proj = projection
         .as_deref()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view))
-        .unwrap_or_else(cgmath::SquareMatrix::identity);
+        .unwrap_or(Mat4::IDENTITY);
     let debug_view = lightning_render_settings(ctx).debug_view;
 
     let mut instances = Vec::with_capacity(lightnings.len());

@@ -1,12 +1,12 @@
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_model_core::MeshMorph;
 
 #[derive(Clone, Debug)]
 pub struct ClusterInfo {
     pub bone_name: String,
-    pub transform: Matrix4<f32>,
-    pub transform_link: Matrix4<f32>,
-    pub inverse_bind_pose: Matrix4<f32>,
+    pub transform: Mat4,
+    pub transform_link: Mat4,
+    pub inverse_bind_pose: Mat4,
     pub vertex_indices: Vec<usize>,
     pub vertex_weights: Vec<f32>,
 }
@@ -14,19 +14,19 @@ pub struct ClusterInfo {
 #[derive(Clone, Debug)]
 pub struct MeshPart {
     pub mesh_name: String,
-    pub local_positions: Vec<Vector3<f32>>,
+    pub local_positions: Vec<Vec3>,
     pub parent_bone: Option<String>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
     pub vertex_offset: usize,
     pub vertex_count: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct FbxData {
-    pub positions: Vec<Vector3<f32>>,
-    pub local_positions: Vec<Vector3<f32>>,
-    pub normals: Vec<Vector3<f32>>,
-    pub local_normals: Vec<Vector3<f32>>,
+    pub positions: Vec<Vec3>,
+    pub local_positions: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
+    pub local_normals: Vec<Vec3>,
     pub indices: Vec<u32>,
     pub tex_coords: Vec<[f32; 2]>,
     pub clusters: Vec<ClusterInfo>,

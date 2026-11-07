@@ -18,7 +18,7 @@ use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use cgmath::{InnerSpace, SquareMatrix};
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
     SpringJointParam,
@@ -45,7 +45,7 @@ use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thickne
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_math_core::{array3_from_vec, world_y_axis};
+use thyllore_math_core::world_y_axis;
 
 pub struct GeneratedChainBones {
     pub report: ChainGenReport,
@@ -81,16 +81,15 @@ fn generate_chain_bones(
     skins.extend(collider_surfaces(&body.colliders));
     let root_global = compute_bone_global_transform(skeleton, root as usize);
     let model_to_geometry = geometry_to_model
-        .invert()
+        .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("geometry transform of the skin is singular"))?;
 
-    let to_model = |p: &cgmath::Vector3<f32>| (geometry_to_model * p.extend(1.0)).truncate();
-    let model_positions: Vec<cgmath::Vector3<f32>> =
-        geometry.positions.iter().map(to_model).collect();
+    let to_model = |p: &Vec3| (geometry_to_model * p.extend(1.0)).truncate();
+    let model_positions: Vec<Vec3> = geometry.positions.iter().map(to_model).collect();
     let input = ChainGenInput {
         positions: &model_positions,
         triangles: &geometry.triangles,
-        root_position: root_global.w.truncate(),
+        root_position: root_global.w_axis.truncate(),
         root_bone: root,
         skins: &skins,
         tex_coords: &geometry.tex_coords,
@@ -103,7 +102,7 @@ fn generate_chain_bones(
         settings: request.settings.clone(),
     };
     let model_to_root_local = root_global
-        .invert()
+        .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("global transform of the root bone is singular"))?;
     let head_capsule = hair_head_capsule(&input, &params);
     let root_collider = match head_capsule {
@@ -289,7 +288,9 @@ fn body_volume(world: &World, skeleton: &thyllore_model_core::Skeleton) -> BodyV
         .map(|(&role, &bone)| RoleBone {
             role,
             bone: bone as thyllore_model_core::BoneId,
-            head: compute_bone_global_transform(skeleton, bone).w.truncate(),
+            head: compute_bone_global_transform(skeleton, bone)
+                .w_axis
+                .truncate(),
         })
         .collect();
     let placed: Vec<BodyCollider> = world
@@ -298,7 +299,7 @@ fn body_volume(world: &World, skeleton: &thyllore_model_core::Skeleton) -> BodyV
         .filter(|def| (def.bone_id as usize) < skeleton.bones.len())
         .map(|def| {
             let bone_global = compute_bone_global_transform(skeleton, def.bone_id as usize);
-            let place = |local: cgmath::Vector3<f32>| (bone_global * local.extend(1.0)).truncate();
+            let place = |local: Vec3| (bone_global * local.extend(1.0)).truncate();
             let (radius, tail) = match def.shape {
                 ColliderShape::Sphere { radius } => (radius, def.offset),
                 ColliderShape::Capsule { radius, tail } => (radius, tail),
@@ -364,12 +365,12 @@ struct ReportSource<'a> {
     component_labels: &'a [usize],
 }
 
-fn root_band_record(band: RootBand, root_position: cgmath::Vector3<f32>) -> RootBandRecord {
+fn root_band_record(band: RootBand, root_position: Vec3) -> RootBandRecord {
     let root_height = root_position.dot(world_y_axis());
     RootBandRecord {
         equator_height: root_height - band.equator_progress,
         height: root_height - band.progress,
-        center: array3_from_vec(band.center),
+        center: band.center.to_array(),
     }
 }
 
@@ -395,8 +396,8 @@ fn bone_records(
                 GeneratedBoneRecord {
                     name: joint.name.clone(),
                     parent: bone_name(parent_id),
-                    head: array3_from_vec(joint.head),
-                    tail: (ji == last_joint).then(|| array3_from_vec(chain.tail)),
+                    head: joint.head.to_array(),
+                    tail: (ji == last_joint).then(|| chain.tail.to_array()),
                 }
             });
             let end = source.bone_ids[ci]
@@ -405,7 +406,7 @@ fn bone_records(
                 .map(|&last| GeneratedBoneRecord {
                     name: bone_name(source.bone_ids[ci].end),
                     parent: bone_name(last),
-                    head: array3_from_vec(chain.tail),
+                    head: chain.tail.to_array(),
                     tail: None,
                 });
             joints.chain(end)
@@ -431,7 +432,7 @@ fn weight_records(
         let part_label = format!("{}:{}", part.key.mesh, part.key.material);
         for influence in influences_of_part(part, source.influences) {
             let merged_vertex = (influence.vertex + part.vertex_offset) as usize;
-            let position = array3_from_vec(source.input.positions[merged_vertex]);
+            let position = source.input.positions[merged_vertex].to_array();
             let component = source.component_labels[merged_vertex] as u32;
             vertex_weights.extend(influence.influences.iter().map(|(target_bone, weight)| {
                 ChainWeightRecord {
@@ -465,13 +466,13 @@ fn build_report(
             .root_band
             .map(|band| root_band_record(band, source.input.root_position)),
         head_capsule: source.head_capsule.map(|capsule| HeadCapsuleRecord {
-            bottom: array3_from_vec(capsule.bottom),
-            top: array3_from_vec(capsule.top),
+            bottom: capsule.bottom.to_array(),
+            top: capsule.top.to_array(),
             radius: capsule.radius,
         }),
         attachment_positions: root_attachment_positions(source.input.skins, source.input.root_bone)
             .into_iter()
-            .map(array3_from_vec)
+            .map(|position| position.to_array())
             .collect(),
         strand_mode,
         strand_centerlines,

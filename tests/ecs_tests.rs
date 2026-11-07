@@ -453,7 +453,7 @@ mod component_registry_tests {
 
 mod world_tests {
     use super::*;
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     #[test]
     fn test_world_new() {
@@ -506,14 +506,14 @@ mod world_tests {
         world.insert_component(
             entity,
             Transform {
-                translation: Vector3::new(0.0, 0.0, 0.0),
+                translation: Vec3::new(0.0, 0.0, 0.0),
                 ..Transform::default()
             },
         );
 
         {
             let transform = world.get_component_mut::<Transform>(entity).unwrap();
-            transform.translation = Vector3::new(10.0, 20.0, 30.0);
+            transform.translation = Vec3::new(10.0, 20.0, 30.0);
         }
 
         let transform = world.get_component::<Transform>(entity).unwrap();
@@ -763,7 +763,7 @@ mod components_tests {
 }
 
 mod constraint_solver_tests {
-    use cgmath::{assert_relative_eq, InnerSpace, Quaternion, Vector3};
+    use glam::{Mat4, Quat, Vec3};
     use thyllore_animation::animation::{
         BoneLocalPose, ConstraintType, IkConstraintData, PositionConstraintData,
         RotationConstraintData, ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
@@ -780,11 +780,8 @@ mod constraint_solver_tests {
             let bone_id = skeleton.add_bone(&format!("bone_{}", i), parent);
 
             let bone = skeleton.get_bone_mut(bone_id).unwrap();
-            bone.local_transform = cgmath::Matrix4::from_translation(Vector3::new(
-                0.0,
-                if i == 0 { 0.0 } else { bone_length },
-                0.0,
-            ));
+            bone.local_transform =
+                Mat4::from_translation(Vec3::new(0.0, if i == 0 { 0.0 } else { bone_length }, 0.0));
         }
         skeleton
     }
@@ -820,21 +817,9 @@ mod constraint_solver_tests {
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
         for (i, bp) in pose.bone_poses.iter().enumerate() {
-            assert_relative_eq!(
-                bp.translation.x,
-                original.bone_poses[i].translation.x,
-                epsilon = 0.001
-            );
-            assert_relative_eq!(
-                bp.translation.y,
-                original.bone_poses[i].translation.y,
-                epsilon = 0.001
-            );
-            assert_relative_eq!(
-                bp.translation.z,
-                original.bone_poses[i].translation.z,
-                epsilon = 0.001
-            );
+            assert!((bp.translation.x - original.bone_poses[i].translation.x).abs() < 0.001);
+            assert!((bp.translation.y - original.bone_poses[i].translation.y).abs() < 0.001);
+            assert!((bp.translation.z - original.bone_poses[i].translation.z).abs() < 0.001);
         }
     }
 
@@ -859,10 +844,8 @@ mod constraint_solver_tests {
 
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        assert_relative_eq!(
-            pose.bone_poses[1].translation.y,
-            original.bone_poses[1].translation.y,
-            epsilon = 0.001
+        assert!(
+            (pose.bone_poses[1].translation.y - original.bone_poses[1].translation.y).abs() < 0.001
         );
     }
 
@@ -887,10 +870,8 @@ mod constraint_solver_tests {
 
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        assert_relative_eq!(
-            pose.bone_poses[1].translation.y,
-            original.bone_poses[1].translation.y,
-            epsilon = 0.001
+        assert!(
+            (pose.bone_poses[1].translation.y - original.bone_poses[1].translation.y).abs() < 0.001
         );
     }
 
@@ -899,7 +880,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[2].translation = Vector3::new(5.0, 5.0, 5.0);
+        pose.bone_poses[2].translation = Vec3::new(5.0, 5.0, 5.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -907,7 +888,7 @@ mod constraint_solver_tests {
             ConstraintType::Position(PositionConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Vector3::new(0.0, 0.0, 0.0),
+                offset: Vec3::new(0.0, 0.0, 0.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -918,8 +899,7 @@ mod constraint_solver_tests {
         let original_y = pose.bone_poses[1].translation.y;
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        let moved =
-            (pose.bone_poses[1].translation - Vector3::new(0.0, original_y, 0.0)).magnitude();
+        let moved = (pose.bone_poses[1].translation - Vec3::new(0.0, original_y, 0.0)).length();
         assert!(moved > 0.01, "bone should have moved");
     }
 
@@ -928,7 +908,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        let target_rot = Quaternion::new(0.7071, 0.0, 0.7071, 0.0);
+        let target_rot = Quat::from_xyzw(0.0, 0.7071, 0.0, 0.7071);
         pose.bone_poses[2].rotation = target_rot;
 
         let mut constraint_set = ConstraintSet::new();
@@ -937,7 +917,7 @@ mod constraint_solver_tests {
             ConstraintType::Rotation(RotationConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                offset: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -948,10 +928,10 @@ mod constraint_solver_tests {
         let original_rot = pose.bone_poses[1].rotation;
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        let dot = pose.bone_poses[1].rotation.s * original_rot.s
-            + pose.bone_poses[1].rotation.v.x * original_rot.v.x
-            + pose.bone_poses[1].rotation.v.y * original_rot.v.y
-            + pose.bone_poses[1].rotation.v.z * original_rot.v.z;
+        let dot = pose.bone_poses[1].rotation.w * original_rot.w
+            + pose.bone_poses[1].rotation.x * original_rot.x
+            + pose.bone_poses[1].rotation.y * original_rot.y
+            + pose.bone_poses[1].rotation.z * original_rot.z;
         assert!(dot.abs() < 0.999, "rotation should have changed");
     }
 
@@ -960,7 +940,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[2].scale = Vector3::new(2.0, 2.0, 2.0);
+        pose.bone_poses[2].scale = Vec3::new(2.0, 2.0, 2.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -968,7 +948,7 @@ mod constraint_solver_tests {
             ConstraintType::Scale(ScaleConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Vector3::new(1.0, 1.0, 1.0),
+                offset: Vec3::new(1.0, 1.0, 1.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -990,7 +970,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(4, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[3].translation = Vector3::new(1.0, 1.0, 0.0);
+        pose.bone_poses[3].translation = Vec3::new(1.0, 1.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -999,7 +979,7 @@ mod constraint_solver_tests {
                 chain_length: 2,
                 target_bone: 3,
                 effector_bone: 2,
-                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_vector: Some(Vec3::new(0.0, 0.0, 1.0)),
                 pole_target: None,
                 twist: 0.0,
                 enabled: true,
@@ -1012,10 +992,10 @@ mod constraint_solver_tests {
 
         let rot_changed = {
             let rest = create_rest_pose(&skeleton);
-            let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
-                + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
-                + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
-                + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+            let dot = pose.bone_poses[0].rotation.w * rest.bone_poses[0].rotation.w
+                + pose.bone_poses[0].rotation.x * rest.bone_poses[0].rotation.x
+                + pose.bone_poses[0].rotation.y * rest.bone_poses[0].rotation.y
+                + pose.bone_poses[0].rotation.z * rest.bone_poses[0].rotation.z;
             dot.abs() < 0.9999
         };
         assert!(rot_changed, "IK should have modified bone rotations");
@@ -1026,7 +1006,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(4, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[3].translation = Vector3::new(0.0, 100.0, 0.0);
+        pose.bone_poses[3].translation = Vec3::new(0.0, 100.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -1035,7 +1015,7 @@ mod constraint_solver_tests {
                 chain_length: 2,
                 target_bone: 3,
                 effector_bone: 2,
-                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_vector: Some(Vec3::new(0.0, 0.0, 1.0)),
                 pole_target: None,
                 twist: 0.0,
                 enabled: true,
@@ -1047,10 +1027,10 @@ mod constraint_solver_tests {
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
         let rest = create_rest_pose(&skeleton);
-        let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
-            + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
-            + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
-            + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+        let dot = pose.bone_poses[0].rotation.w * rest.bone_poses[0].rotation.w
+            + pose.bone_poses[0].rotation.x * rest.bone_poses[0].rotation.x
+            + pose.bone_poses[0].rotation.y * rest.bone_poses[0].rotation.y
+            + pose.bone_poses[0].rotation.z * rest.bone_poses[0].rotation.z;
         assert!(
             dot.abs() > 0.9,
             "unreachable target should still produce valid (near-rest) pose"
@@ -1060,14 +1040,14 @@ mod constraint_solver_tests {
 
 mod transform_tests {
     use super::*;
-    use cgmath::{assert_relative_eq, Quaternion, Vector3};
+    use glam::{Quat, Vec3};
 
     #[test]
     fn test_transform_default() {
         let transform = Transform::default();
 
-        assert_eq!(transform.translation, Vector3::new(0.0, 0.0, 0.0));
-        assert_eq!(transform.scale, Vector3::new(1.0, 1.0, 1.0));
+        assert_eq!(transform.translation, Vec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.scale, Vec3::new(1.0, 1.0, 1.0));
     }
 
     #[test]
@@ -1078,9 +1058,9 @@ mod transform_tests {
         for i in 0..4 {
             for j in 0..4 {
                 if i == j {
-                    assert_relative_eq!(matrix[i][j], 1.0, epsilon = 0.0001);
+                    assert!((matrix.col(i)[j] - 1.0).abs() < 0.0001);
                 } else {
-                    assert_relative_eq!(matrix[i][j], 0.0, epsilon = 0.0001);
+                    assert!((matrix.col(i)[j] - 0.0).abs() < 0.0001);
                 }
             }
         }
@@ -1089,29 +1069,29 @@ mod transform_tests {
     #[test]
     fn test_transform_to_matrix_translation() {
         let transform = Transform {
-            translation: Vector3::new(10.0, 20.0, 30.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            scale: Vector3::new(1.0, 1.0, 1.0),
+            translation: Vec3::new(10.0, 20.0, 30.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
         };
         let matrix = transform.to_matrix();
 
-        assert_relative_eq!(matrix[3][0], 10.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[3][1], 20.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[3][2], 30.0, epsilon = 0.0001);
+        assert!((matrix.col(3)[0] - 10.0).abs() < 0.0001);
+        assert!((matrix.col(3)[1] - 20.0).abs() < 0.0001);
+        assert!((matrix.col(3)[2] - 30.0).abs() < 0.0001);
     }
 
     #[test]
     fn test_transform_to_matrix_scale() {
         let transform = Transform {
-            translation: Vector3::new(0.0, 0.0, 0.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            scale: Vector3::new(2.0, 3.0, 4.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            scale: Vec3::new(2.0, 3.0, 4.0),
         };
         let matrix = transform.to_matrix();
 
-        assert_relative_eq!(matrix[0][0], 2.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[1][1], 3.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[2][2], 4.0, epsilon = 0.0001);
+        assert!((matrix.col(0)[0] - 2.0).abs() < 0.0001);
+        assert!((matrix.col(1)[1] - 3.0).abs() < 0.0001);
+        assert!((matrix.col(2)[2] - 4.0).abs() < 0.0001);
     }
 }
 

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{Matrix3, SquareMatrix};
+use glam::{Mat3, Vec3};
 use thyllore_anim_core::spring_bone::{ColliderShape, JointForce, VrmJointForce};
 use thyllore_importer_core::gltf::spring_bone_extension::parse_vrmc_spring_bone;
 
@@ -33,7 +33,8 @@ fn bones() -> Vec<BoneInput> {
 }
 
 fn centimetre_frames() -> Vec<BoneRestFrame> {
-    let frame = BoneRestFrame::new(Matrix3::from_value(METRES_PER_BONE_UNIT)).expect("regular");
+    let frame = BoneRestFrame::new(Mat3::from_diagonal(Vec3::splat(METRES_PER_BONE_UNIT)))
+        .expect("regular");
     vec![frame; BONE_NAMES.len()]
 }
 

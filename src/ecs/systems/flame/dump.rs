@@ -1,3 +1,4 @@
+use glam::Mat4;
 use std::io::Write;
 
 use serde_json::{json, Value};
@@ -64,10 +65,10 @@ pub fn build_effect_json(
         "contour_wiggle_amp": effect.contour.wiggle_amp
     });
     value["rotation"] = json!([
-        effect.rotation.s,
-        effect.rotation.v.x,
-        effect.rotation.v.y,
-        effect.rotation.v.z
+        effect.rotation.w,
+        effect.rotation.x,
+        effect.rotation.y,
+        effect.rotation.z
     ]);
     value["time_scale"] = json!(effect.time_scale);
     value["time_offset"] = json!(effect.time_offset);
@@ -150,17 +151,14 @@ pub fn build_effect_json(
     value
 }
 
-fn matrix4_to_array(m: &cgmath::Matrix4<f32>) -> [f32; 16] {
-    [
-        m[0][0], m[0][1], m[0][2], m[0][3], m[1][0], m[1][1], m[1][2], m[1][3], m[2][0], m[2][1],
-        m[2][2], m[2][3], m[3][0], m[3][1], m[3][2], m[3][3],
-    ]
+fn matrix4_to_array(m: &Mat4) -> [f32; 16] {
+    m.to_cols_array()
 }
 
 pub fn build_ubo_json(ubo: &FlameUBO) -> serde_json::Value {
     json!({
-        "model": matrix4_to_array(&ubo.model),
-        "inverse_model": matrix4_to_array(&ubo.inverse_model),
+        "model": matrix4_to_array(&ubo.model.to_mat4()),
+        "inverse_model": matrix4_to_array(&ubo.inverse_model.to_mat4()),
         "height_primitive_coefficients": ubo.height_primitive_coefficients,
         "radial_coefficients": ubo.radial_coefficients,
         "height_coefficients": ubo.height_coefficients,
@@ -341,7 +339,7 @@ pub fn build_wall_probe_camera_json(camera: &crate::ecs::resource::Camera) -> Va
         "yaw_degrees": camera.yaw.to_degrees(),
         "pitch_degrees": camera.pitch.to_degrees(),
         "distance": camera.distance,
-        "fov_y_degrees": camera.fov_y.0,
+        "fov_y_degrees": camera.fov_y.to_degrees(),
         "near_plane": camera.near_plane,
         "position": [position.x, position.y, position.z],
         "forward": [forward.x, forward.y, forward.z],
@@ -599,14 +597,14 @@ pub fn write_texture_fit_provenance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{Vector3, Vector4};
+    use glam::{Quat, Vec2, Vec3};
 
     fn sample_effect() -> FlameEffect {
         use thyllore_effect_core::{
             FlameColor, FlameEdge, FlameEnvelope, FlameNoise, FlameWarp, FlameWind,
         };
         FlameEffect {
-            position: Vector3::new(1.0, 2.0, 3.0),
+            position: Vec3::new(1.0, 2.0, 3.0),
             height: 1.0,
             radius: 0.5,
             sigma_t: 0.1,
@@ -631,7 +629,7 @@ mod tests {
             coefficients: thyllore_effect_core::fit_flame_coefficients(
                 &thyllore_effect_core::FlameProfile::default(),
             ),
-            light_position_world: Vector3::new(2.0, 3.0, 2.0),
+            light_position_world: Vec3::new(2.0, 3.0, 2.0),
             self_shadow_strength: 0.5,
             warp: FlameWarp {
                 amp: 0.25,
@@ -648,7 +646,7 @@ mod tests {
                 ..FlameEdge::default()
             },
             wind: FlameWind {
-                direction: cgmath::Vector2::new(0.0, 0.0),
+                direction: Vec2::new(0.0, 0.0),
                 bend_amount: 0.0,
                 bend_power: 1.7,
             },
@@ -658,7 +656,7 @@ mod tests {
                 tail: 1.6,
             },
             radial_sharpness: 4.0,
-            rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             ..FlameEffect::default()
         }
     }
@@ -673,7 +671,7 @@ mod tests {
             yaw: 30.0f32.to_radians(),
             pitch: (-16.0f32).to_radians(),
             distance: 1.15,
-            pivot: cgmath::Vector3::new(0.0, 1.15, 0.0),
+            pivot: Vec3::new(0.0, 1.15, 0.0),
             ..crate::ecs::resource::Camera::default()
         };
         let settings = crate::ecs::resource::FlameRenderSettings::default();

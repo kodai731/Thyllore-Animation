@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use thyllore_math_core::{Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]

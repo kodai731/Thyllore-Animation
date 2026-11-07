@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::debugview::flame_history_dump::decode_rgba16f;
 use crate::ecs::component::WaterTorusEffect;
@@ -35,13 +35,13 @@ impl BatchCapture for WaterProbeCapture {
 
         let proj_data = ctx.world.resource::<ProjectionData>();
         let inv_view_proj = inverse_view_proj_f64(proj_data.proj, proj_data.view);
-        let inv_view = proj_data.view.invert().unwrap_or_else(Matrix4::identity);
-        let camera_pos = Vector3::new(inv_view[3][0], inv_view[3][1], inv_view[3][2]);
+        let inv_view = proj_data.view.try_inverse().unwrap_or(Mat4::IDENTITY);
+        let camera_pos = Vec3::new(inv_view.col(3)[0], inv_view.col(3)[1], inv_view.col(3)[2]);
         drop(proj_data);
 
         let inverse_model = thyllore_effect_core::build_water_model_matrix(&effect)
-            .invert()
-            .unwrap_or_else(Matrix4::identity);
+            .try_inverse()
+            .unwrap_or(Mat4::IDENTITY);
         let root = probe_root_of(ctx);
         let report = compute_water_probe_report(
             &f32_data,

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::SquareMatrix;
+use glam::Mat4;
 use std::rc::Rc;
 use thyllore_math_core::AffineRows3x4;
 use vulkanalia::prelude::v1_0::*;
@@ -143,7 +143,7 @@ impl RayTracingData {
         rrdevice: &RRDevice,
         rrcommand_pool: &Rc<RRCommandPool>,
         meshes: &[MeshBuffer],
-        mesh_transforms: &[cgmath::Matrix4<f32>],
+        mesh_transforms: &[Mat4],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         log!("Building acceleration structures...");
@@ -188,7 +188,7 @@ impl RayTracingData {
             let model = mesh_transforms
                 .get(mesh_index)
                 .copied()
-                .unwrap_or_else(cgmath::Matrix4::identity);
+                .unwrap_or(Mat4::IDENTITY);
             blas.transform = vk::TransformMatrixKHR {
                 matrix: AffineRows3x4::from_mat4(model).rows,
             };

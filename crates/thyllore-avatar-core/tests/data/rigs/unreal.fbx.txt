@@ -33,7 +33,7 @@ Objects:  {
   Model: 1001, "Model::pelvis", "LimbNode" {
     Properties70:  {
       P: "Lcl Translation", "Lcl Translation", "", "A",0.000000000,100.000000000,0.000000000
-      P: "Lcl Rotation", "Lcl Rotation", "", "A",90.000000000,0.000000000,90.000000000
+      P: "Lcl Rotation", "Lcl Rotation", "", "A",90.000000000,-0.000000000,90.000000000
     }
   }
   NodeAttribute: 11001, "NodeAttribute::", "LimbNode" {

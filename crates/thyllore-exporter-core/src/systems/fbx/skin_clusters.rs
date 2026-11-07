@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use thyllore_anim_core::Skeleton;
 use thyllore_file_format_core::fbx::components::ClusterInfo;
@@ -33,14 +33,14 @@ pub fn clusters_from_skin_data(skin: &SkinData, skeleton: &Skeleton) -> Vec<Clus
         };
 
         let inverse_bind_pose = bone.inverse_bind_pose;
-        let transform_link = match inverse_bind_pose.invert() {
+        let transform_link = match inverse_bind_pose.try_inverse() {
             Some(inv) => inv,
             None => continue,
         };
 
         clusters.push(ClusterInfo {
             bone_name: bone.name.clone(),
-            transform: Matrix4::identity(),
+            transform: Mat4::IDENTITY,
             transform_link,
             inverse_bind_pose,
             vertex_indices: vertex_indices.into_iter().collect(),
@@ -53,9 +53,10 @@ pub fn clusters_from_skin_data(skin: &SkinData, skeleton: &Skeleton) -> Vec<Clus
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Matrix4, SquareMatrix};
+    use glam::Mat4;
 
     use super::*;
+    use glam::{UVec4, Vec3, Vec4};
 
     fn make_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -68,24 +69,24 @@ mod tests {
         SkinData {
             skeleton_id: 0,
             bone_indices: vec![
-                cgmath::Vector4::new(0, 1, 0, 0),
-                cgmath::Vector4::new(0, 1, 0, 0),
-                cgmath::Vector4::new(0, 0, 0, 0),
+                UVec4::new(0, 1, 0, 0),
+                UVec4::new(0, 1, 0, 0),
+                UVec4::new(0, 0, 0, 0),
             ],
             bone_weights: vec![
-                cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-                cgmath::Vector4::new(0.5, 0.5, 0.0, 0.0),
-                cgmath::Vector4::new(0.0, 0.0, 0.0, 0.0),
+                Vec4::new(1.0, 0.0, 0.0, 0.0),
+                Vec4::new(0.5, 0.5, 0.0, 0.0),
+                Vec4::new(0.0, 0.0, 0.0, 0.0),
             ],
             base_positions: vec![
-                cgmath::Vector3::new(0.0, 0.0, 0.0),
-                cgmath::Vector3::new(1.0, 0.0, 0.0),
-                cgmath::Vector3::new(2.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, 0.0),
             ],
             base_normals: vec![
-                cgmath::Vector3::new(0.0, 1.0, 0.0),
-                cgmath::Vector3::new(0.0, 1.0, 0.0),
-                cgmath::Vector3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
             ],
         }
     }
@@ -118,14 +119,14 @@ mod tests {
 
         for cluster in &clusters {
             let product = cluster.transform_link * cluster.inverse_bind_pose;
-            let identity: Matrix4<f32> = Matrix4::identity();
+            let identity: Mat4 = Mat4::IDENTITY;
             for r in 0..4 {
                 for c in 0..4 {
                     let expected = if r == c { 1.0 } else { 0.0 };
                     assert!(
-                        (product[r][c] - expected).abs() < 1e-5,
+                        (product.col(r)[c] - expected).abs() < 1e-5,
                         "transform_link * inverse_bind_pose not identity at [{},{}]: got {} expected {}",
-                        r, c, product[r][c], expected
+                        r, c, product.col(r)[c], expected
                     );
                 }
             }

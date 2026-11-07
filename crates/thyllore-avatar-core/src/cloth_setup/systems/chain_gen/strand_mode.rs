@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{fit_principal_axis, world_y_axis};
 
 use super::frame::progress_of;
@@ -7,12 +7,11 @@ use crate::cloth_setup::components::chain_gen::{ChainGenInput, StrandMode};
 pub const MIN_STRAND_UV_CORRELATION: f32 = 0.8;
 
 pub fn uv_strand_correlation(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     tex_coords: &[[f32; 2]],
     members: &[u32],
 ) -> Option<f32> {
-    let strand_positions: Vec<Vector3<f32>> =
-        members.iter().map(|&v| positions[v as usize]).collect();
+    let strand_positions: Vec<Vec3> = members.iter().map(|&v| positions[v as usize]).collect();
     let principal_axis = fit_principal_axis(&strand_positions)?;
 
     let n = members.len() as f32;

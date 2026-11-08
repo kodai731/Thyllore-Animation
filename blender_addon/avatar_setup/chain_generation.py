@@ -23,6 +23,7 @@ from ..common.chain_bones import (
     output_to_blender,
     settings_from_properties,
 )
+from ..common.chain_migration import rename_legacy_chains
 from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.spring_properties import (
     generated_chain_bones,
@@ -54,7 +55,6 @@ from .chain_inputs import (
     submesh_triangles,
     vertex_group_weights,
 )
-from .chain_migration import rename_legacy_chains
 from .collider_operators import default_fit_settings, fit_body_colliders
 from .operators import armature_fit_bones, bound_meshes, target_armature
 from .properties import CHAIN_GEN_UI_PARAMS

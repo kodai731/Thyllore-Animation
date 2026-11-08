@@ -55,6 +55,7 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;
     m.add_function(wrap_pyfunction!(collider::has_fitted_body_colliders, m)?)?;
     m.add_function(wrap_pyfunction!(collider::assign_collider_groups, m)?)?;
+    m.add_function(wrap_pyfunction!(submesh::submesh_roles, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::guess_submesh_role, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::find_hidden_triangles, m)?)?;
     m.add_function(wrap_pyfunction!(submesh::hidden_mask_defaults, m)?)?;

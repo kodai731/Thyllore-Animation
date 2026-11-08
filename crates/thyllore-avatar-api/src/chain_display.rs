@@ -1,3 +1,4 @@
+use strum::VariantArray;
 use thyllore_anim_core::spring_bone::RootAttachment;
 
 /// A root attachment as the addon shows it: its sidecar name, its label, its description and the
@@ -34,8 +35,9 @@ pub fn parse_attachment(name: &str) -> anyhow::Result<RootAttachment> {
 }
 
 pub fn root_attachments() -> anyhow::Result<Vec<RootAttachmentEntry>> {
-    RootAttachment::ALL
-        .into_iter()
+    RootAttachment::VARIANTS
+        .iter()
+        .copied()
         .map(|attachment| {
             Ok(RootAttachmentEntry {
                 name: sidecar_name(attachment)?,
@@ -53,7 +55,7 @@ mod tests {
 
     #[test]
     fn sidecar_names_round_trip() {
-        for attachment in RootAttachment::ALL {
+        for attachment in RootAttachment::VARIANTS.iter().copied() {
             let name = sidecar_name(attachment).unwrap();
             assert_eq!(parse_attachment(&name).unwrap(), attachment);
         }
@@ -67,6 +69,6 @@ mod tests {
         palettes.push(chain_bone_palette(None));
         palettes.sort_unstable();
         palettes.dedup();
-        assert_eq!(palettes.len(), RootAttachment::ALL.len() + 1);
+        assert_eq!(palettes.len(), RootAttachment::VARIANTS.len() + 1);
     }
 }

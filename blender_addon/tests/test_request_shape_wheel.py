@@ -6,7 +6,7 @@ import pytest
 SPRING = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
 IDENTITY = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
 BONES = [
-    {"name": "Hips", "parent": None, "rest_position": [0.0, 0.0, 0.0], "rest_frame": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "bind_matrix": IDENTITY},
+    {"name": "Hips", "parent": None, "rest_position": [0.0, 0.0, 0.0], "bind_matrix": IDENTITY},
 ]
 TRIANGLE = {
     "positions": [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],

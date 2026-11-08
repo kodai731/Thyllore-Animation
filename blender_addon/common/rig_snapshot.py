@@ -36,7 +36,7 @@ def rest_matrices(arm) -> list[list[list[float]]]:
 
 
 def bone_specs(arm, armature_world, rest_rows, scale_length: float) -> list[dict]:
-    """The wheel's bone specs (name, parent, rest position, rest frame, bind matrix) of ``arm.data.bones``
+    """The wheel's bone specs (name, parent, rest position, bind matrix) of ``arm.data.bones``
     from matrices already read."""
     bones = arm.data.bones
     return avatar_api.bone_specs({
@@ -56,7 +56,7 @@ def read_bones(context, arm) -> list[dict]:
 
 @dataclass
 class RigSnapshot:
-    """What every wheel call reads from one rig: ``bones`` carry ``rest_frame`` and ``bind_matrix``,
+    """What every wheel call reads from one rig: ``bones`` carry ``bind_matrix`` (rest frame in metres),
     ``rest_matrices`` are the bones' ``matrix_local`` rows, ``skins`` are read on first use."""
 
     arm: object

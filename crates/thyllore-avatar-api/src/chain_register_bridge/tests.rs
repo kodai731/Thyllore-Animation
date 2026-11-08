@@ -13,7 +13,6 @@ fn fit_bone(name: &str, parent: Option<usize>, head: [f32; 3]) -> BoneSpec {
         name: name.to_string(),
         parent,
         rest_position: head,
-        rest_frame: None,
         bind_matrix: Some(bind_matrix),
     }
 }

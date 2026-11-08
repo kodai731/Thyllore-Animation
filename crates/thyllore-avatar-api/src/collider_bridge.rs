@@ -1,4 +1,4 @@
-use glam::{Mat4, UVec4, Vec3, Vec4};
+use glam::{UVec4, Vec3, Vec4};
 use thyllore_anim_core::spring_bone::{
     replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams, SpringChainId,
     SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
@@ -6,12 +6,11 @@ use thyllore_anim_core::spring_bone::{
 use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
-    SidecarSpring,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
 };
 use thyllore_model_core::{Skeleton, SkinData};
 
-use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
+use crate::avatar_setup_bridge::{bone_inputs, rest_frames, BoneSpec};
 use crate::param_rows::{apply_scalar_settings, param_rows, ParamRow};
 use crate::spring_edit_bridge::skeleton_from_bones;
 
@@ -22,15 +21,6 @@ pub struct FitSkin {
     /// The skin surface; only the garment coverage of the chain generation reads it
     #[serde(default)]
     pub triangles: Vec<[u32; 3]>,
-}
-
-/// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.
-pub(crate) fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
-    let bind_matrices = bones
-        .iter()
-        .map(BoneSpec::bind_global)
-        .collect::<anyhow::Result<Vec<Mat4>>>()?;
-    rest_frames_from_globals(&bind_matrices, &bone_inputs(bones), 1.0)
 }
 
 /// The skeleton with every bone's inverse bind pose, as the skin fit needs it.

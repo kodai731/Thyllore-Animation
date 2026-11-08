@@ -9,11 +9,10 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
-use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
+use crate::avatar_setup_bridge::{bone_inputs, rest_frames, BoneSpec};
 use crate::chain_gen_bridge::CapsuleOut;
-use crate::collider_bridge::{
-    rest_frames, skeleton_with_bind_poses, skin_data_from_fit_skin, FitSkin,
-};
+use crate::collider_bridge::{skeleton_with_bind_poses, skin_data_from_fit_skin, FitSkin};
+use thyllore_avatar_core::vrchat::sidecar_spring::BoneRestFrame;
 
 #[derive(Clone, serde::Deserialize)]
 pub struct GeneratedChainIn {
@@ -68,7 +67,12 @@ pub fn register_generated_chains(
     });
 
     let root_collider = match &request.head_capsule {
-        Some(capsule) => Some(head_capsule_collider(capsule, root, &request.bones)?),
+        Some(capsule) => Some(head_capsule_collider(
+            capsule,
+            root,
+            &request.bones,
+            &frames[root as usize],
+        )?),
         None => fit_root_collider(&skeleton, root, &request.skins),
     };
     let chains: Vec<SpringChain> = request
@@ -112,10 +116,12 @@ fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {
         .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", name))
 }
 
+/// The head capsule comes in model metres; the collider lives in the root bone's local units.
 fn head_capsule_collider(
     capsule: &CapsuleOut,
     root: BoneId,
     bones: &[BoneSpec],
+    root_frame: &BoneRestFrame,
 ) -> anyhow::Result<FittedCapsule> {
     let model_to_root_local = bones[root as usize]
         .bind_global()?
@@ -126,7 +132,7 @@ fn head_capsule_collider(
         bone_id: root,
         head: to_local(capsule.bottom),
         tail: to_local(capsule.top),
-        radius: capsule.radius,
+        radius: root_frame.length_to_local(capsule.radius),
     })
 }
 

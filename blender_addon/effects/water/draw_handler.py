@@ -47,12 +47,6 @@ def _load_shader():
     return _shader
 
 
-def blender_window_to_engine_projection(window_matrix, near):
-    import thyllore_effect_core as fx
-
-    return fx.engine_projection_from_window([tuple(row) for row in window_matrix], near)
-
-
 def blender_view_to_engine_view(view_matrix):
     inv = coordinates.mat4_inverse(view_matrix)
     if inv is None:
@@ -151,7 +145,7 @@ def viewport_frame(context):
     region_data = context.region_data
     view_matrix = list(region_data.view_matrix)
     window_matrix = list(region_data.window_matrix)
-    proj = blender_window_to_engine_projection(window_matrix, VIEWPORT_NEAR)
+    proj = coordinates.blender_window_to_engine_projection(window_matrix, VIEWPORT_NEAR)
     view, camera_pos = blender_view_to_engine_view(view_matrix)
     return view, proj, camera_pos, window_matrix, region.width, region.height
 

@@ -53,13 +53,14 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     spring_key = repr(spring)
     armature_world = matrix_rows(arm.matrix_world)
     rest_rows = rest_matrices(arm)
-    rest_key = repr(armature_world) + repr(rest_rows)
+    scale_length = context.scene.unit_settings.scale_length
+    bone_names = [bone.name for bone in arm.data.bones]
+    rest_key = repr((armature_world, rest_rows, bone_names, scale_length))
 
     cached = _previews.get(arm.name)
     if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
-    scale_length = context.scene.unit_settings.scale_length
     preview = avatar_api.SpringPreview({
         "spring": spring,
         "bones": bone_specs(arm, armature_world, rest_rows, scale_length),

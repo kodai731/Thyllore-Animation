@@ -4,7 +4,6 @@ use super::*;
 use crate::blender_space::column_major;
 
 const HIPS_SWAY: &str = include_str!("../../../../assets/templates/hips_sway.anim.ron");
-const IDENTITY_FRAME: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 const IDENTITY_ROWS: MatrixRows = [
     [1.0, 0.0, 0.0, 0.0],
     [0.0, 1.0, 0.0, 0.0],
@@ -39,8 +38,7 @@ fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneSpec 
         name: name.to_string(),
         parent,
         rest_position,
-        rest_frame: Some(IDENTITY_FRAME),
-        bind_matrix: None,
+        bind_matrix: Some(IDENTITY_ROWS),
     }
 }
 
@@ -112,13 +110,13 @@ fn clip_bake_bridge_rejects_a_rig_without_feet() {
 }
 
 #[test]
-fn clip_bake_bridge_rejects_a_bone_without_rest_frame() {
+fn clip_bake_bridge_rejects_a_bone_without_bind_matrix() {
     let mut bones = tpose_bones("");
-    bones[0].rest_frame = None;
+    bones[0].bind_matrix = None;
 
     let error = bake_clip_file(&request(bones)).unwrap_err();
 
-    assert!(error.to_string().contains("rest_frame"), "{error}");
+    assert!(error.to_string().contains("bind_matrix"), "{error}");
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
+use strum::VariantArray;
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 use crate::chain_display::{
@@ -24,8 +25,9 @@ struct ChainRoleEntry {
 
 #[pyfunction]
 pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-    let entries: Vec<ChainRoleEntry> = SubmeshRole::ALL
-        .into_iter()
+    let entries: Vec<ChainRoleEntry> = SubmeshRole::VARIANTS
+        .iter()
+        .copied()
         .filter_map(|role| {
             let root = default_root_of_submesh(role)?;
             Some(ChainRoleEntry {

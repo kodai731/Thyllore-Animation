@@ -7,7 +7,6 @@ fn spec(name: &str, parent: Option<usize>) -> BoneSpec {
         name: name.to_string(),
         parent,
         rest_position: [0.0, 0.0, 0.0],
-        rest_frame: None,
         bind_matrix: None,
     }
 }

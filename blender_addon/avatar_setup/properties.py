@@ -30,6 +30,9 @@ SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
 RAMP_END_PARAM_NAMES: tuple[str, ...] = tuple(name for name in SPRING_JOINT_PARAM_NAMES if name != "hit_radius")
 CHAIN_GEN_UI_PARAMS: list[dict] = avatar_api.chain_gen_ui_params() if _AVATAR_API_AVAILABLE else []
 ATTACHMENT_ENUM_ITEMS = attachment_enum_items(avatar_api.root_attachments() if _AVATAR_API_AVAILABLE else [])
+SUBMESH_ROLE_ITEMS: list[tuple[str, str, str]] = (
+    [(entry["name"], entry["label"], "") for entry in avatar_api.submesh_roles()] if _AVATAR_API_AVAILABLE else []
+)
 
 configure_force_params({
     model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
@@ -249,13 +252,7 @@ class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
     material: bpy.props.StringProperty(name="Material")
     role: bpy.props.EnumProperty(
         name="Role",
-        items=[
-            ("skin", "Skin", ""),
-            ("garment", "Garment", ""),
-            ("hair", "Hair", ""),
-            ("accessory", "Accessory", ""),
-        ],
-        default="skin",
+        items=SUBMESH_ROLE_ITEMS,
         update=_mark_role_as_user,
     )
     source: bpy.props.EnumProperty(

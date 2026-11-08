@@ -24,7 +24,7 @@ from ..common.chain_bones import (
     settings_from_properties,
 )
 from ..common.chain_migration import rename_legacy_chains
-from ..common.rig_snapshot import RigSnapshot, read_rig
+from ..common.rig_snapshot import RigSnapshot, read_bones
 from ..common.spring_properties import (
     generated_chain_bones,
     generated_chain_joints,
@@ -42,7 +42,7 @@ from .chain_bone_edit import (
     write_weights,
 )
 from .chain_inputs import (
-    _chain_roles,
+    CHAIN_ROOT_ROLES,
     body_collider_inputs,
     engine_point,
     given_chains,
@@ -92,7 +92,7 @@ def _read_run(rig: RigSnapshot, obj, submesh_row, material: str) -> GenerationRu
     generation = settings.chain_generation
     role = submesh_row.role
     scale_length = rig.scale_length
-    root_role = _chain_roles()[role] if not generation.root_bone.strip() else ""
+    root_role = CHAIN_ROOT_ROLES[role] if not generation.root_bone.strip() else ""
     root_name = avatar_api.resolve_root_bone({"bones": rig.bones, "root_bone": root_role or generation.root_bone.strip()})
     fitted_note = _ensure_body_colliders(rig, settings)
 
@@ -150,7 +150,7 @@ def _generate(arm, run: GenerationRun, material_index: int) -> dict:
 def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:
     """The rig is read again: the chain bones just added must be in the bone list the wheel registers on."""
     settings = arm.data.thyllore_spring
-    bones = read_rig(context, arm).bones
+    bones = read_bones(context, arm)
     spring = avatar_api.register_generated_chains({
         "spring": avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones}),
         "bones": bones,

@@ -1,6 +1,8 @@
 use super::SubmeshSelector;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::VariantArray,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum RootAttachment {
     Cap,
@@ -8,8 +10,6 @@ pub enum RootAttachment {
 }
 
 impl RootAttachment {
-    pub const ALL: [RootAttachment; 2] = [RootAttachment::Cap, RootAttachment::Ring];
-
     pub fn label(self) -> &'static str {
         match self {
             RootAttachment::Cap => "Cap",

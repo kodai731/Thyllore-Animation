@@ -126,13 +126,16 @@ def engine_metres_to_blender(p, scale_length):
 
 
 def engine_projection(fovy_rad, aspect, near):
-    f = 1.0 / math.tan(fovy_rad / 2.0)
-    return [
-        [f / aspect, 0.0, 0.0, 0.0],
-        [0.0, -f, 0.0, 0.0],
-        [0.0, 0.0, 0.0, near],
-        [0.0, 0.0, -1.0, 0.0],
-    ]
+    import thyllore_effect_core as fx
+
+    return fx.engine_projection(fovy_rad, aspect, near)
+
+
+def blender_window_to_engine_projection(window_matrix, near):
+    """The engine projection of a viewport from Blender's ``region_data.window_matrix``."""
+    import thyllore_effect_core as fx
+
+    return fx.engine_projection_from_window([tuple(row) for row in window_matrix], near)
 
 
 def z_pass_to_engine_depth(z_eye, near):

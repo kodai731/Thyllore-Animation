@@ -44,7 +44,7 @@ pub struct BakedClip {
     pub bone_rotations: Vec<BoneRotationTrack>,
 }
 
-/// `bones` carry `rest_frame`; `armature_world` and `rest_matrices` (`Bone.matrix_local` per bone)
+/// `bones` carry `bind_matrix`; `armature_world` and `rest_matrices` (`Bone.matrix_local` per bone)
 /// are the Blender matrices the baked poses are written through.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -181,21 +181,18 @@ fn retarget_skeleton(bones: &[BoneSpec]) -> anyhow::Result<RetargetSkeleton> {
     let bones = bones
         .iter()
         .map(|bone| {
-            let rows = bone
-                .rest_frame
-                .ok_or_else(|| anyhow::anyhow!("bone {:?} has no rest_frame", bone.name))?;
             Ok(RetargetBone {
                 parent: bone.parent,
                 world_position: bone.rest_position.into(),
-                world_rotation: rotation_of_rest_frame(rows),
+                world_rotation: rotation_of_rest_frame(&bone.bind_global()?),
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(RetargetSkeleton { bones })
 }
 
-fn rotation_of_rest_frame(rows: [[f32; 3]; 3]) -> Quat {
-    let frame = Mat3::from_cols_array_2d(&rows).transpose();
+fn rotation_of_rest_frame(bind: &Mat4) -> Quat {
+    let frame = Mat3::from_mat4(*bind);
     Quat::from_mat3(&Mat3::from_cols(
         frame.x_axis.normalize(),
         frame.y_axis.normalize(),

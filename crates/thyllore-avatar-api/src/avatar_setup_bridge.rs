@@ -69,10 +69,8 @@ pub struct BoneSpec {
     pub name: String,
     pub parent: Option<usize>,
     pub rest_position: [f32; 3],
-    /// Row-major bone-local to model-space (engine axes, metres) matrix of the rest pose
-    #[serde(default)]
-    pub rest_frame: Option<[[f32; 3]; 3]>,
-    /// Row-major bone-local to model-space rest transform with its translation, as the engine binds skins
+    /// Row-major bone-local to model-space (engine axes, metres) rest transform, as the engine binds
+    /// skins; absent for a bone no skin is bound to
     #[serde(default)]
     pub bind_matrix: Option<MatrixRows>,
 }
@@ -86,15 +84,13 @@ impl BoneSpec {
     }
 }
 
-fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
+/// The sidecar frame of each bone: the axes of its bind matrix, whose lengths are metres per bone unit.
+pub(crate) fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
     bones
         .iter()
         .map(|bone| {
-            let rows = bone
-                .rest_frame
-                .ok_or_else(|| anyhow::anyhow!("bone {:?} has no rest_frame", bone.name))?;
-            BoneRestFrame::from_rows(rows)
-                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular rest_frame", bone.name))
+            BoneRestFrame::from_global_transform(&bone.bind_global()?, 1.0)
+                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular bind_matrix", bone.name))
         })
         .collect()
 }
@@ -419,6 +415,12 @@ pub fn infer_humanoid_mapping(request: &InferHumanoidMappingRequest) -> Humanoid
 
 #[cfg(test)]
 mod tests {
+    const IDENTITY_ROWS: MatrixRows = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
     use super::*;
 
     use crate::param_rows::ParamDefault;
@@ -455,21 +457,18 @@ mod tests {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
                 bind_matrix: None,
             },
             BoneSpec {
                 name: "Spine".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.1, 0.0],
-                rest_frame: None,
                 bind_matrix: None,
             },
             BoneSpec {
                 name: "Head".into(),
                 parent: Some(1),
                 rest_position: [0.0, 1.2, 0.0],
-                rest_frame: None,
                 bind_matrix: None,
             },
         ];
@@ -488,21 +487,18 @@ mod tests {
                     name: "Bone0".into(),
                     parent: None,
                     rest_position: [0.0, 1.0, 0.0],
-                    rest_frame: None,
                     bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone1".into(),
                     parent: Some(0),
                     rest_position: [0.0, 1.1, 0.0],
-                    rest_frame: None,
                     bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone2".into(),
                     parent: Some(1),
                     rest_position: [0.0, 1.2, 0.0],
-                    rest_frame: None,
                     bind_matrix: None,
                 },
             ],
@@ -581,7 +577,6 @@ mod tests {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
                 bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
@@ -631,7 +626,6 @@ mod tests {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
                 bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
@@ -703,15 +697,18 @@ mod tests {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 0.0, 0.0],
-                rest_frame: Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
-                bind_matrix: None,
+                bind_matrix: Some(IDENTITY_ROWS),
             },
             BoneSpec {
                 name: "Head".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: Some([[0.0, -2.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 2.0]]),
-                bind_matrix: None,
+                bind_matrix: Some([
+                    [0.0, -2.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0, 1.0],
+                    [0.0, 0.0, 2.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]),
             },
         ]
     }
@@ -754,15 +751,15 @@ mod tests {
     }
 
     #[test]
-    fn colliders_need_a_rest_frame_on_every_bone() {
+    fn colliders_need_a_bind_matrix_on_every_bone() {
         let mut bones = framed_bones();
-        bones[1].rest_frame = None;
+        bones[1].bind_matrix = None;
         let error = spring_colliders_to_local(&SpringCollidersRequest {
             spring: model_space_spring(),
             bones,
         })
         .unwrap_err();
-        assert!(error.to_string().contains("rest_frame"));
+        assert!(error.to_string().contains("bind_matrix"));
     }
 
     #[test]

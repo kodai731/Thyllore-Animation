@@ -59,7 +59,7 @@ WHEELS_DIR = Path(__file__).resolve().parent.parent / "wheels"
 
 @pytest.fixture(scope="module")
 def avatar_api(tmp_path_factory):
-    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
+    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"), key=lambda path: path.stat().st_mtime)
     if not wheels:
         pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
 

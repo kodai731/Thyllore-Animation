@@ -1,12 +1,34 @@
 use glam::Vec3;
+use strum::VariantArray;
 
 use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    guess_submesh_role as core_guess_submesh_role, SubmeshKey,
+    guess_submesh_role as core_guess_submesh_role, SubmeshKey, SubmeshRole,
 };
 use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
     find_hidden_triangle_indices, merge_mask_meshes,
 };
+
+/// A submesh role as the addon lists it: its sidecar name and its label.
+#[derive(serde::Serialize)]
+pub struct SubmeshRoleEntry {
+    pub name: String,
+    pub label: &'static str,
+}
+
+pub fn submesh_roles() -> anyhow::Result<Vec<SubmeshRoleEntry>> {
+    SubmeshRole::VARIANTS
+        .iter()
+        .copied()
+        .map(|role| match serde_json::to_value(role)? {
+            serde_json::Value::String(name) => Ok(SubmeshRoleEntry {
+                name,
+                label: role.label(),
+            }),
+            other => anyhow::bail!("submesh role serializes to {other}, not a string"),
+        })
+        .collect()
+}
 
 #[derive(serde::Deserialize)]
 pub struct MaskMeshInput {

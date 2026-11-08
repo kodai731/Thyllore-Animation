@@ -19,26 +19,19 @@ from ..common.rig_snapshot import bound_meshes
 VERTEX_GROUP_NAMES = VertexGroupNames(avatar_api) if avatar_api is not None else None
 
 
-def _chain_roles() -> dict[str, str]:
-    """{role: default_root} from the wheel's chain_roles(); nothing can grow chains without the wheel."""
-    if avatar_api is None:
-        return {}
-    return {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()}
-
-
-def generatable_roles() -> set[str]:
-    """The submesh roles that can grow chain bones."""
-    return set(_chain_roles().keys())
+CHAIN_ROOT_ROLES: dict[str, str] = (
+    {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()} if avatar_api is not None else {}
+)
+GENERATABLE_ROLES: frozenset[str] = frozenset(CHAIN_ROOT_ROLES)
 
 
 def generatable_submeshes(arm) -> list[tuple[object, object]]:
     """(mesh object, role item) pairs whose submesh role can grow chain bones."""
-    roles = generatable_roles()
     return [
         (mesh_obj, item)
         for mesh_obj in bound_meshes(arm)
         for item in mesh_obj.thyllore_submesh.roles
-        if item.role in roles
+        if item.role in GENERATABLE_ROLES
     ]
 
 
@@ -56,7 +49,7 @@ def resolve_submesh(arm, mesh_name: str, material: str):
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
     role_item = next((item for item in obj.thyllore_submesh.roles if item.material == material), None)
-    if role_item is None or role_item.role not in generatable_roles():
+    if role_item is None or role_item.role not in GENERATABLE_ROLES:
         raise ValueError(f"{material!r} on {obj.name!r} is not a hair or garment submesh")
     material_index = _material_slot_index(obj, material)
     if material_index is None:

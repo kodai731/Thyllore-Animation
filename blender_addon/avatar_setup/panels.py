@@ -10,7 +10,7 @@ from bpy.types import Panel, UIList
 
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
-from .chain_inputs import generatable_roles, generatable_submeshes
+from .chain_inputs import GENERATABLE_ROLES, generatable_submeshes
 from ..common.rig_snapshot import bound_meshes
 from .operators import target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain, simulated_joints
@@ -360,7 +360,7 @@ class THYLLORE_UL_SubmeshRoles(UIList):
         row.prop(item, "material", text="", emboss=False)
         row.prop(item, "role", text="")
         row.prop(item, "source", text="")
-        if item.role in generatable_roles():
+        if item.role in GENERATABLE_ROLES:
             row.prop(item, "attachment", text="")
 
 

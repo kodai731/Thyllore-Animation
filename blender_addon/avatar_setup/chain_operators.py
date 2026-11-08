@@ -18,9 +18,9 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.logged_report import report
-from .chain_inputs import generatable_roles
+from .chain_inputs import GENERATABLE_ROLES
 from .chain_reset import remove_generated_chains
-from ..common.rig_snapshot import bound_meshes, read_rig
+from ..common.rig_snapshot import bound_meshes, read_bones
 from .operators import target_armature
 
 
@@ -59,7 +59,7 @@ class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
 
         try:
             sidecar = spring_settings_to_edit(settings)
-            bones = read_rig(context, arm).bones
+            bones = read_bones(context, arm)
             output = avatar_api.use_existing_bones_as_springs({"spring": sidecar, "bones": bones, "root_bone": self.root_bone, "min_joints": self.min_joints})
         except ValueError as e:
             report(self, "ERROR", f"use_existing_bones_as_springs failed: {e}")
@@ -79,7 +79,7 @@ def generatable_roles_of_active_mesh(context, arm) -> list:
     obj = context.active_object
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         return []
-    return [item for item in obj.thyllore_submesh.roles if item.role in generatable_roles()]
+    return [item for item in obj.thyllore_submesh.roles if item.role in GENERATABLE_ROLES]
 
 
 class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):

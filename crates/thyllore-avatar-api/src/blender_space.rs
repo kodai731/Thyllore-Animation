@@ -23,7 +23,12 @@ pub fn engine_frame(armature_world: &MatrixRows) -> Mat4 {
 
 /// `engine_frame` with its three upper rows in metres: the root frame the spring preview propagates.
 pub fn engine_frame_metres(armature_world: &MatrixRows, scale_length: f32) -> Mat4 {
-    let mut frame = rows(engine_frame(armature_world));
+    metres(engine_frame(armature_world), scale_length)
+}
+
+/// A transform in scene units with its three upper rows in metres.
+fn metres(transform: Mat4, scale_length: f32) -> Mat4 {
+    let mut frame = rows(transform);
     for row in frame.iter_mut().take(3) {
         for value in row.iter_mut() {
             *value *= scale_length;
@@ -108,7 +113,8 @@ pub struct BoneSpecsRequest {
 
 /// The armature's world matrix carries the Z-up to Y-up conversion the FBX exporter and importer
 /// place on it, so a bone's frame is converted on its output side only; conjugating it would rotate
-/// the bone's own axes a second time.
+/// the bone's own axes a second time. The bind matrix is in metres throughout, as the engine's rest
+/// globals are.
 pub fn bone_specs(request: &BoneSpecsRequest) -> anyhow::Result<Vec<BoneSpec>> {
     if request.rest_matrices.len() != request.names.len()
         || request.parents.len() != request.names.len()
@@ -128,15 +134,11 @@ pub fn bone_specs(request: &BoneSpecsRequest) -> anyhow::Result<Vec<BoneSpec>> {
         .zip(&request.rest_matrices)
         .map(|((name, parent), rest_matrix)| {
             let engine = BLENDER_TO_ENGINE * armature_world * column_major(rest_matrix);
-            let translation_metres = engine.w_axis.truncate() * request.scale_length;
-            let rest_frame = Mat3::from_mat4(engine) * request.scale_length;
-            let mut bind_matrix = engine;
-            bind_matrix.w_axis = translation_metres.extend(1.0);
+            let bind_matrix = metres(engine, request.scale_length);
             BoneSpec {
                 name: name.clone(),
                 parent: *parent,
-                rest_position: translation_metres.into(),
-                rest_frame: Some(rest_frame.transpose().to_cols_array_2d()),
+                rest_position: bind_matrix.w_axis.truncate().into(),
                 bind_matrix: Some(rows(bind_matrix)),
             }
         })
@@ -260,11 +262,12 @@ mod tests {
     }
 
     #[test]
-    fn scale_length_scales_the_translation_and_the_rest_frame_only() {
+    fn scale_length_puts_the_whole_bind_matrix_in_metres() {
         let spec = specs_of(IDENTITY, translation(0.0, 0.0, 2.0), 0.01);
         let bind = spec.bind_matrix.unwrap();
         assert!((bind[1][3] - 0.02).abs() < 1e-6);
-        assert_eq!(bind[1][2], 1.0);
-        assert_eq!(spec.rest_frame.unwrap()[1][2], 0.01);
+        assert_eq!(bind[1][2], 0.01);
+        assert_eq!(bind[3], [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(spec.rest_position, [0.0, 0.02, 0.0]);
     }
 }

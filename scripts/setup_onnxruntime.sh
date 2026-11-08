@@ -9,27 +9,13 @@ ORT_DIR="${ORT_DIR:-$REPO_ROOT/vendor/onnxruntime}"
 ASSET="onnxruntime-linux-x64-${ORT_VERSION}.tgz"
 ORT_DYLIB="$ORT_DIR/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so"
 
-# The browser download URL intermittently drops the connection or answers 504; the release API
-# serves the same asset reliably, so it is tried first when gh has a token.
-download_asset() {
-    local dir="$1"
-    if [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]] && command -v gh >/dev/null 2>&1; then
-        echo "downloading $ASSET from the microsoft/onnxruntime v${ORT_VERSION} release through gh"
-        if GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}" gh release download "v${ORT_VERSION}" --repo microsoft/onnxruntime --pattern "$ASSET" --dir "$dir"; then
-            return 0
-        fi
-        echo "gh release download failed, falling back to curl" >&2
-    fi
-    local url="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/${ASSET}"
-    echo "downloading $url"
-    curl -fsSL --retry 5 --retry-delay 15 --retry-all-errors -o "$dir/$ASSET" "$url"
-}
+source "$REPO_ROOT/scripts/lib/github_release.sh"
 
 if [[ -f "$ORT_DYLIB" ]]; then
     echo "ONNX Runtime $ORT_VERSION already at $ORT_DYLIB"
 else
     TMP="$(mktemp -d)"
-    download_asset "$TMP"
+    download_github_release_asset microsoft/onnxruntime "v${ORT_VERSION}" "$ASSET" "$TMP"
     mkdir -p "$ORT_DIR"
     tar -xzf "$TMP/$ASSET" -C "$ORT_DIR"
     rm -rf "$TMP"

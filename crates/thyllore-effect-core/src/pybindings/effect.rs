@@ -182,6 +182,16 @@ fn rows_of(matrix: Mat4) -> [[f32; 4]; 4] {
     matrix.transpose().to_cols_array_2d()
 }
 
+/// The engine's projection (row-major): Vulkan clip space, reversed infinite depth.
+#[pyfunction]
+pub fn engine_projection(fovy_radians: f32, aspect: f32, near: f32) -> [[f32; 4]; 4] {
+    rows_of(thyllore_math_core::perspective_infinite_reverse(
+        fovy_radians,
+        aspect,
+        near,
+    ))
+}
+
 /// The engine's projection (row-major) for a viewport whose Blender `window_matrix` is given as rows.
 #[pyfunction]
 pub fn engine_projection_from_window(window_matrix: [[f32; 4]; 4], near: f32) -> [[f32; 4]; 4] {

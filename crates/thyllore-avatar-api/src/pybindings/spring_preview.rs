@@ -1,10 +1,8 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use crate::spring_preview_bridge::{MatrixRows, SpringPreview};
+use crate::spring_preview_bridge::{MatrixRows, SpringPreview, SpringPreviewRequest};
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
-
-use super::avatar_setup::bones_from_py;
 
 #[pyclass(name = "SpringPreview", module = "thyllore_avatar_api")]
 pub struct PySpringPreview {
@@ -14,16 +12,10 @@ pub struct PySpringPreview {
 #[pymethods]
 impl PySpringPreview {
     #[new]
-    fn new(
-        spring: &Bound<PyAny>,
-        bones: &Bound<PyAny>,
-        rest_locals: Vec<MatrixRows>,
-    ) -> PyResult<Self> {
-        let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-            depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-        let bone_inputs = bones_from_py(bones)?;
-        let inner =
-            SpringPreview::new(&spring, &bone_inputs, &rest_locals).map_err(anyhow_to_pyerr)?;
+    fn new(request: &Bound<PyAny>) -> PyResult<Self> {
+        let request: SpringPreviewRequest =
+            depythonize(request).map_err(depythonize_error_to_pyerr)?;
+        let inner = SpringPreview::from_request(&request).map_err(anyhow_to_pyerr)?;
         Ok(Self { inner })
     }
 

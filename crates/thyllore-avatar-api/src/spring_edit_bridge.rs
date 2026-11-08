@@ -1,4 +1,4 @@
-use crate::avatar_setup_bridge::BoneSpec;
+use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
@@ -16,10 +16,6 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
     SidecarSpring,
 };
 use thyllore_model_core::{BoneId, Skeleton};
-
-fn bones_from_spec(specs: &[BoneSpec]) -> Vec<BoneInput> {
-    specs.iter().cloned().map(Into::into).collect()
-}
 
 pub fn skeleton_from_bones(bones: &[BoneInput]) -> Skeleton {
     let mut skeleton = Skeleton::new("spring_edit");
@@ -46,10 +42,18 @@ fn resolve_root_bone(
         .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", root_name))
 }
 
-pub fn resolve_root_bone_name(bones: &[BoneInput], root_name: &str) -> anyhow::Result<String> {
-    let skeleton = skeleton_from_bones(bones);
-    let (mapping, _) = infer_mapping(bones);
-    let resolved_id = resolve_root_bone(&skeleton, &mapping, root_name)?;
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolveRootBoneRequest {
+    pub bones: Vec<BoneSpec>,
+    pub root_bone: String,
+}
+
+pub fn resolve_root_bone_name(request: &ResolveRootBoneRequest) -> anyhow::Result<String> {
+    let bones = bone_inputs(&request.bones);
+    let skeleton = skeleton_from_bones(&bones);
+    let (mapping, _) = infer_mapping(&bones);
+    let resolved_id = resolve_root_bone(&skeleton, &mapping, &request.root_bone)?;
     Ok(bones[resolved_id as usize].name.clone())
 }
 
@@ -72,7 +76,7 @@ fn default_min_joints() -> u32 {
 pub fn use_existing_bones_as_springs(
     request: &UseExistingBonesAsSpringsRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    let bones = bones_from_spec(&request.bones);
+    let bones = bone_inputs(&request.bones);
     let mut setup = spring_setup_from_sidecar(
         &request.spring,
         &bones,
@@ -173,7 +177,7 @@ pub struct ApplyRampRequest {
 }
 
 pub fn apply_ramp_to_chains(request: &ApplyRampRequest) -> anyhow::Result<SidecarSpring> {
-    let bones = bones_from_spec(&request.bones);
+    let bones = bone_inputs(&request.bones);
     let mut setup = spring_setup_from_sidecar(
         &request.spring,
         &bones,
@@ -237,7 +241,7 @@ pub struct ChainsInScopeRequest {
 }
 
 pub fn chains_in_scope(request: &ChainsInScopeRequest) -> anyhow::Result<Vec<String>> {
-    let bones = bones_from_spec(&request.bones);
+    let bones = bone_inputs(&request.bones);
     let setup = spring_setup_from_sidecar(
         &request.spring,
         &bones,
@@ -267,7 +271,7 @@ pub struct ChainsUnderBoneRequest {
 }
 
 pub fn chains_under_bone(request: &ChainsUnderBoneRequest) -> anyhow::Result<Vec<String>> {
-    let bones = bones_from_spec(&request.bones);
+    let bones = bone_inputs(&request.bones);
     let setup = spring_setup_from_sidecar(
         &request.spring,
         &bones,
@@ -298,7 +302,7 @@ pub struct ChainsWithRadiusRequest {
 
 /// Chains whose joint hit radii the Blender gizmo draws: those holding the active bone.
 pub fn chains_with_radius(request: &ChainsWithRadiusRequest) -> anyhow::Result<Vec<String>> {
-    let bones = bones_from_spec(&request.bones);
+    let bones = bone_inputs(&request.bones);
     let setup = spring_setup_from_sidecar(
         &request.spring,
         &bones,

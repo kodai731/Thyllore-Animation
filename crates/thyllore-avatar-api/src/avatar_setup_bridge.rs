@@ -85,20 +85,25 @@ fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
         .collect()
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpringCollidersRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+}
+
 /// The spring with its colliders moved from the sidecar's model space into each bone's rest frame.
 pub fn spring_colliders_to_local(
-    spring: &SidecarSpring,
-    bones: &[BoneSpec],
+    request: &SpringCollidersRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    map_spring_colliders(spring, bones, ColliderSpace::BoneLocal)
+    map_spring_colliders(&request.spring, &request.bones, ColliderSpace::BoneLocal)
 }
 
 /// The inverse of `spring_colliders_to_local`: colliders given in bone rest frames, written in model space.
 pub fn spring_colliders_to_model(
-    spring: &SidecarSpring,
-    bones: &[BoneSpec],
+    request: &SpringCollidersRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    map_spring_colliders(spring, bones, ColliderSpace::Model)
+    map_spring_colliders(&request.spring, &request.bones, ColliderSpace::Model)
 }
 
 fn map_spring_colliders(
@@ -119,6 +124,10 @@ impl From<BoneSpec> for BoneInput {
             rest_position: spec.rest_position,
         }
     }
+}
+
+pub(crate) fn bone_inputs(specs: &[BoneSpec]) -> Vec<BoneInput> {
+    specs.iter().cloned().map(Into::into).collect()
 }
 
 #[derive(serde::Deserialize)]
@@ -374,9 +383,16 @@ pub struct HumanoidMappingOut {
     pub unresolved: Vec<String>,
 }
 
-pub fn infer_humanoid_mapping(bones: &[BoneInput]) -> HumanoidMappingOut {
-    let (mapping, unresolved) = infer_mapping(bones);
-    let map = build_hybrid_bone_map(&mapping, bones);
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InferHumanoidMappingRequest {
+    pub bones: Vec<BoneSpec>,
+}
+
+pub fn infer_humanoid_mapping(request: &InferHumanoidMappingRequest) -> HumanoidMappingOut {
+    let bones = bone_inputs(&request.bones);
+    let (mapping, unresolved) = infer_mapping(&bones);
+    let map = build_hybrid_bone_map(&mapping, &bones);
     let unresolved_names: Vec<String> = unresolved
         .iter()
         .map(|u| u.role.unity_name().to_string())
@@ -420,24 +436,27 @@ mod tests {
 
     #[test]
     fn avatar_setup_bridge_infer_humanoid_mapping_resolves_hips() {
-        let bones: Vec<BoneInput> = vec![
-            BoneInput {
+        let bones = vec![
+            BoneSpec {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
+                rest_frame: None,
             },
-            BoneInput {
+            BoneSpec {
                 name: "Spine".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.1, 0.0],
+                rest_frame: None,
             },
-            BoneInput {
+            BoneSpec {
                 name: "Head".into(),
                 parent: Some(1),
                 rest_position: [0.0, 1.2, 0.0],
+                rest_frame: None,
             },
         ];
-        let result = infer_humanoid_mapping(&bones);
+        let result = infer_humanoid_mapping(&InferHumanoidMappingRequest { bones });
         assert!(
             result.mapping.contains_key("Hips"),
             "Hips should be resolved"
@@ -691,14 +710,22 @@ mod tests {
     #[test]
     fn colliders_round_trip_between_model_space_and_bone_frames() {
         let bones = framed_bones();
-        let local = spring_colliders_to_local(&model_space_spring(), &bones).unwrap();
+        let local = spring_colliders_to_local(&SpringCollidersRequest {
+            spring: model_space_spring(),
+            bones: bones.clone(),
+        })
+        .unwrap();
         let collider = &local.colliders[0];
         assert!((collider.offset[0] - 1.0).abs() < 1e-5 && collider.offset[1].abs() < 1e-5);
         assert!((collider.radius - 0.5).abs() < 1e-5);
         let tail = collider.tail.unwrap();
         assert!((tail[1] - 2.0).abs() < 1e-5 && tail[0].abs() < 1e-5);
 
-        let model = spring_colliders_to_model(&local, &bones).unwrap();
+        let model = spring_colliders_to_model(&SpringCollidersRequest {
+            spring: local,
+            bones,
+        })
+        .unwrap();
         assert_eq!(model, model_space_spring());
     }
 
@@ -706,7 +733,11 @@ mod tests {
     fn colliders_need_a_rest_frame_on_every_bone() {
         let mut bones = framed_bones();
         bones[1].rest_frame = None;
-        let error = spring_colliders_to_local(&model_space_spring(), &bones).unwrap_err();
+        let error = spring_colliders_to_local(&SpringCollidersRequest {
+            spring: model_space_spring(),
+            bones,
+        })
+        .unwrap_err();
         assert!(error.to_string().contains("rest_frame"));
     }
 

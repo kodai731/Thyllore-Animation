@@ -44,14 +44,14 @@ def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
         raise ValueError("No skin mesh found (no bound mesh has role 'skin')")
 
     bones = armature_fit_bones(context, arm)
-    sidecar = avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
+    sidecar = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones})
     scale_length = context.scene.unit_settings.scale_length
     skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
     output = avatar_api.fit_body_colliders({
         "spring": sidecar, "bones": bones, "skins": skins, "settings": fit_settings,
     })
 
-    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(output, bones))
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local({"spring": output, "bones": bones}))
     return len(output.get("colliders", []))
 
 

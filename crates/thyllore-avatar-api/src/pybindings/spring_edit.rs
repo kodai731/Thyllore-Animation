@@ -1,14 +1,13 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use super::avatar_setup::bones_from_py;
 use crate::chain_register_bridge::{self, RegisterGeneratedChainsRequest};
 use crate::spring_edit_bridge::{
     apply_ramp_to_chains, chains_in_scope as bridge_chains_in_scope,
     chains_under_bone as bridge_chains_under_bone, chains_with_radius as bridge_chains_with_radius,
     resolve_root_bone_name, use_existing_bones_as_springs as bridge_use_existing_bones_as_springs,
     ApplyRampRequest, ChainsInScopeRequest, ChainsUnderBoneRequest, ChainsWithRadiusRequest,
-    UseExistingBonesAsSpringsRequest,
+    ResolveRootBoneRequest, UseExistingBonesAsSpringsRequest,
 };
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
@@ -96,8 +95,9 @@ struct SpringGizmoStyle {
 }
 
 #[pyfunction]
-pub fn resolve_root_bone(bones: &Bound<PyAny>, root_bone: &str) -> PyResult<String> {
-    let bone_inputs = bones_from_py(bones)?;
-    resolve_root_bone_name(&bone_inputs, root_bone)
+pub fn resolve_root_bone(request: &Bound<PyAny>) -> PyResult<String> {
+    let request: ResolveRootBoneRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    resolve_root_bone_name(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }

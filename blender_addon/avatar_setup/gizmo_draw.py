@@ -42,7 +42,7 @@ def _radius_segments(chains, arm, scale_length):
             if pb is not None:
                 head = tuple(arm.matrix_world @ pb.head)
                 radius = joint.hit_radius / scale_length
-                segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
+                segments.extend(avatar_api.wire_sphere_segments({"center": head, "radius": radius, "segments": circle_segments}))
     return segments
 
 
@@ -80,9 +80,9 @@ def _collider_segments(colliders, arm):
         if collider.shape == "capsule" and collider.has_tail:
             tail = Vector(collider.tail)
             tail_world = tuple(world_matrix @ tail)
-            segments.extend(avatar_api.wire_capsule_segments(head, tail_world, radius, circle_segments))
+            segments.extend(avatar_api.wire_capsule_segments({"head": head, "tail": tail_world, "radius": radius, "segments": circle_segments}))
         else:
-            segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
+            segments.extend(avatar_api.wire_sphere_segments({"center": head, "radius": radius, "segments": circle_segments}))
     return segments
 
 

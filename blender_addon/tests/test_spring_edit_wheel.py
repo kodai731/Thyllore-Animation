@@ -30,12 +30,17 @@ def _chains_with_radius(**extra) -> dict:
     return {"spring": SPRING, "bones": BONES, "mode": "none", **extra}
 
 
+def _resolve_root_bone(**extra) -> dict:
+    return {"bones": BONES, "root_bone": "Hips", **extra}
+
+
 CASES = [
     ("use_existing_bones_as_springs", _use_existing_bones_as_springs),
     ("apply_ramp", _apply_ramp),
     ("chains_in_scope", _chains_in_scope),
     ("chains_under_bone", _chains_under_bone),
     ("chains_with_radius", _chains_with_radius),
+    ("resolve_root_bone", _resolve_root_bone),
 ]
 
 

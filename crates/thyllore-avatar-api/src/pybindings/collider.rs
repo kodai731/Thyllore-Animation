@@ -5,9 +5,8 @@ use crate::collider_bridge::{
     assign_collider_groups as bridge_assign_collider_groups, capsule_fit_params,
     fit_body_colliders as bridge_fit_body_colliders,
     has_fitted_body_colliders as bridge_has_fitted_body_colliders, AssignColliderGroupsRequest,
-    FitBodyCollidersRequest, FitBone,
+    FitBodyCollidersRequest, HasFittedBodyCollidersRequest,
 };
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
@@ -31,12 +30,11 @@ pub fn fit_body_colliders<'py>(
 }
 
 #[pyfunction]
-#[pyo3(signature = (spring, bones))]
-pub fn has_fitted_body_colliders(spring: &Bound<PyAny>, bones: &Bound<PyAny>) -> PyResult<bool> {
-    let spring: SidecarSpring = depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-    let bones: Vec<FitBone> = depythonize(bones).map_err(depythonize_error_to_pyerr)?;
+pub fn has_fitted_body_colliders(request: &Bound<PyAny>) -> PyResult<bool> {
+    let request: HasFittedBodyCollidersRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
 
-    bridge_has_fitted_body_colliders(&spring, &bones)
+    bridge_has_fitted_body_colliders(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 

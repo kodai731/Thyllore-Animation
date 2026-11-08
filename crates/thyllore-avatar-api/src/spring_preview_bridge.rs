@@ -13,6 +13,7 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
     spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
 };
 
+use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
 use crate::spring_edit_bridge::skeleton_from_bones;
 
 /// A row-major 4x4 as the addon sends it; the engine stores matrices column-major.
@@ -40,6 +41,14 @@ pub struct JointTail {
 /// transform converted to engine axes and metres, so the propagated globals are in engine space.
 /// The chain joints' own matrices are ignored: the swing written back into them is solver output,
 /// not animation, so they always start from their rest locals.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpringPreviewRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub rest_locals: Vec<MatrixRows>,
+}
+
 pub struct SpringPreview {
     setup: SpringBoneSetup,
     skeleton: Skeleton,
@@ -48,6 +57,14 @@ pub struct SpringPreview {
 }
 
 impl SpringPreview {
+    pub fn from_request(request: &SpringPreviewRequest) -> anyhow::Result<Self> {
+        Self::new(
+            &request.spring,
+            &bone_inputs(&request.bones),
+            &request.rest_locals,
+        )
+    }
+
     pub fn new(
         spring: &SidecarSpring,
         bones: &[BoneInput],

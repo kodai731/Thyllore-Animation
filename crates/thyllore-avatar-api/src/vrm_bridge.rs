@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use glam::Vec3;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 use thyllore_avatar_core::vrm::{
@@ -10,14 +9,21 @@ use thyllore_avatar_core::vrm::{
 };
 use thyllore_exporter_core::systems::gltf::write_vrm;
 
-use crate::avatar_setup_bridge::sidecar_read;
+use crate::avatar_setup_bridge::{bone_inputs, sidecar_read, BoneSpec};
 
 /// The T-pose warnings of the rig the VRM would carry: the inferred humanoid mapping with the
 /// user's role overrides (Unity role name to bone name) on top.
-pub fn vrm_t_pose_warnings(
-    bones: &[BoneInput],
-    humanoid_overrides: &BTreeMap<String, String>,
-) -> anyhow::Result<Vec<String>> {
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VrmTPoseWarningsRequest {
+    pub bones: Vec<BoneSpec>,
+    #[serde(default)]
+    pub humanoid_overrides: BTreeMap<String, String>,
+}
+
+pub fn vrm_t_pose_warnings(request: &VrmTPoseWarningsRequest) -> anyhow::Result<Vec<String>> {
+    let bones = &bone_inputs(&request.bones);
+    let humanoid_overrides = &request.humanoid_overrides;
     let (mut mapping, _) = infer_mapping(bones);
     for (role_name, bone_name) in humanoid_overrides {
         let role = HumanoidRole::from_unity_name(role_name)
@@ -177,9 +183,16 @@ mod tests {
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VrmRestClearanceWarningsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+}
+
 /// One warning per collider the VRM file shrinks because a joint rests inside it.
-pub fn vrm_rest_clearance_warnings(spring: &SidecarSpring, bones: &[BoneInput]) -> Vec<String> {
-    vrm_rest_clearance(spring, bones)
+pub fn vrm_rest_clearance_warnings(request: &VrmRestClearanceWarningsRequest) -> Vec<String> {
+    vrm_rest_clearance(&request.spring, &bone_inputs(&request.bones))
         .shrinks
         .iter()
         .map(|shrink| {

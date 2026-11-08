@@ -132,13 +132,20 @@ pub fn fit_body_colliders(request: &FitBodyCollidersRequest) -> anyhow::Result<S
     Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
 }
 
-pub fn has_fitted_body_colliders(
-    spring: &SidecarSpring,
-    bones: &[FitBone],
-) -> anyhow::Result<bool> {
-    let bone_inputs = to_bone_inputs(bones);
-    let frames = rest_frames(bones)?;
-    Ok(spring_setup_from_sidecar(spring, &bone_inputs, &frames).has_fitted_body_colliders())
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HasFittedBodyCollidersRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<FitBone>,
+}
+
+pub fn has_fitted_body_colliders(request: &HasFittedBodyCollidersRequest) -> anyhow::Result<bool> {
+    let bone_inputs = to_bone_inputs(&request.bones);
+    let frames = rest_frames(&request.bones)?;
+    Ok(
+        spring_setup_from_sidecar(&request.spring, &bone_inputs, &frames)
+            .has_fitted_body_colliders(),
+    )
 }
 
 #[derive(Clone, serde::Deserialize)]

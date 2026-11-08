@@ -81,7 +81,7 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
-    preview = avatar_api.SpringPreview(spring, armature_bone_specs(context, arm), rest_locals)
+    preview = avatar_api.SpringPreview({"spring": spring, "bones": armature_bone_specs(context, arm), "rest_locals": rest_locals})
     cached = _ArmaturePreview(preview, spring_key, rest_key)
     _previews[arm.name] = cached
     return cached

@@ -81,7 +81,7 @@ class GenerationRun:
 
 
 def _ensure_body_colliders(context, arm, settings, fit_bones) -> str:
-    if avatar_api.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
+    if avatar_api.has_fitted_body_colliders({"spring": spring_settings_to_edit(settings), "bones": fit_bones}):
         return ""
     return f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
 
@@ -93,7 +93,7 @@ def _read_run(context, arm, obj, submesh_row, material: str) -> GenerationRun:
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
     root_role = _chain_roles()[role] if not generation.root_bone.strip() else ""
-    root_name = avatar_api.resolve_root_bone(fit_bones, root_role or generation.root_bone.strip())
+    root_name = avatar_api.resolve_root_bone({"bones": fit_bones, "root_bone": root_role or generation.root_bone.strip()})
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
     origin = {"mesh": obj.name, "material": material}
@@ -151,7 +151,7 @@ def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict
     settings = arm.data.thyllore_spring
     bones = armature_fit_bones(context, arm)
     spring = avatar_api.register_generated_chains({
-        "spring": avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+        "spring": avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones}),
         "bones": bones,
         "skins": run.skins,
         "root_bone": run.root_name,
@@ -160,7 +160,7 @@ def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict
         "chains": new_chains,
         "head_capsule": head_capsule,
     })
-    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(spring, bones))
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local({"spring": spring, "bones": bones}))
 
 
 def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:

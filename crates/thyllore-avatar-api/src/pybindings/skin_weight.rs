@@ -17,6 +17,27 @@ struct SurfaceIn {
     weights: Vec<Vec<f32>>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TransferSkinWeightsRequest {
+    source: SurfaceIn,
+    target: SurfaceIn,
+    max_distance: f32,
+    max_angle_deg: f32,
+    #[serde(default = "default_max_iterations")]
+    max_iterations: usize,
+    #[serde(default = "default_tolerance")]
+    tolerance: f64,
+}
+
+fn default_max_iterations() -> usize {
+    100
+}
+
+fn default_tolerance() -> f64 {
+    1e-6
+}
+
 fn to_vectors(points: &[[f32; 3]]) -> Vec<Vec3> {
     points.iter().copied().map(Vec3::from).collect()
 }
@@ -24,17 +45,10 @@ fn to_vectors(points: &[[f32; 3]]) -> Vec<Vec3> {
 /// The weights of every target vertex transferred from the skinned source surface; both surfaces
 /// are in the same space and `weights` is one row per source vertex.
 #[pyfunction]
-#[pyo3(signature = (source, target, max_distance, max_angle_deg, max_iterations = 100, tolerance = 1e-6))]
-pub fn transfer_skin_weights(
-    source: &Bound<PyAny>,
-    target: &Bound<PyAny>,
-    max_distance: f32,
-    max_angle_deg: f32,
-    max_iterations: usize,
-    tolerance: f64,
-) -> PyResult<Vec<Vec<f32>>> {
-    let source: SurfaceIn = depythonize(source).map_err(depythonize_error_to_pyerr)?;
-    let target: SurfaceIn = depythonize(target).map_err(depythonize_error_to_pyerr)?;
+pub fn transfer_skin_weights(request: &Bound<PyAny>) -> PyResult<Vec<Vec<f32>>> {
+    let request: TransferSkinWeightsRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
+    let (source, target) = (&request.source, &request.target);
     let (source_positions, source_normals) =
         (to_vectors(&source.positions), to_vectors(&source.normals));
     let (target_positions, target_normals) =
@@ -53,10 +67,10 @@ pub fn transfer_skin_weights(
             triangles: &target.triangles,
         },
         &WeightTransferParams {
-            max_distance,
-            max_angle_deg,
-            max_iterations,
-            tolerance,
+            max_distance: request.max_distance,
+            max_angle_deg: request.max_angle_deg,
+            max_iterations: request.max_iterations,
+            tolerance: request.tolerance,
         },
     )
     .map_err(anyhow_to_pyerr)

@@ -404,19 +404,23 @@ fn spring_edit_bridge_resolves_humanoid_role_on_prefixed_bones() {
 
 #[test]
 fn spring_edit_bridge_resolve_root_bone_name_maps_role_to_prefixed_bone() {
-    let bones: Vec<BoneInput> = vec![
-        bone("mixamorig:Hips", None),
-        bone("mixamorig:Spine", Some(0)),
-        bone("mixamorig:Neck", Some(1)),
-        bone("mixamorig:Head", Some(2)),
+    let bones: Vec<BoneSpec> = vec![
+        spec("mixamorig:Hips", None),
+        spec("mixamorig:Spine", Some(0)),
+        spec("mixamorig:Neck", Some(1)),
+        spec("mixamorig:Head", Some(2)),
     ];
+    let request = |root_bone: &str| ResolveRootBoneRequest {
+        bones: bones.clone(),
+        root_bone: root_bone.to_string(),
+    };
 
-    let resolved = resolve_root_bone_name(&bones, "Head").unwrap();
+    let resolved = resolve_root_bone_name(&request("Head")).unwrap();
     assert_eq!(resolved, "mixamorig:Head");
 
-    let resolved = resolve_root_bone_name(&bones, "mixamorig:Hips").unwrap();
+    let resolved = resolve_root_bone_name(&request("mixamorig:Hips")).unwrap();
     assert_eq!(resolved, "mixamorig:Hips");
 
-    let err = resolve_root_bone_name(&bones, "Unknown").unwrap_err();
+    let err = resolve_root_bone_name(&request("Unknown")).unwrap_err();
     assert!(err.to_string().contains("not found"));
 }

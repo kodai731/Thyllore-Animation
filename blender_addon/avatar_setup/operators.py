@@ -162,7 +162,7 @@ def _sidecar_build_input(context, arm, meshes):
     bones = armature_bone_specs(context, arm)
     settings = arm.data.thyllore_spring
 
-    spring = avatar_api.spring_colliders_to_model(spring_settings_to_sidecar(settings), bones)
+    spring = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_sidecar(settings), "bones": bones})
 
     all_roles = []
     all_hidden = []
@@ -228,7 +228,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
 
         try:
             sidecar = avatar_api.sidecar_read(text)
-            spring = avatar_api.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
+            spring = avatar_api.spring_colliders_to_local({"spring": sidecar["spring"], "bones": armature_bone_specs(context, arm)})
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"Invalid sidecar file: {e}")
             return {"CANCELLED"}
@@ -313,7 +313,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             report(self, "ERROR", f"Cannot write sidecar file: {e}")
             return {"CANCELLED"}
 
-        result = avatar_api.infer_humanoid_mapping(sidecar_input["bones"])
+        result = avatar_api.infer_humanoid_mapping({"bones": sidecar_input["bones"]})
         unresolved = result.get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
@@ -381,11 +381,11 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
             report(self, "ERROR", f"Sidecar build failed: {e}")
             return {"CANCELLED"}
 
-        for warning in avatar_api.vrm_t_pose_warnings(sidecar_input["bones"], sidecar_input["humanoid_overrides"]):
+        for warning in avatar_api.vrm_t_pose_warnings({"bones": sidecar_input["bones"], "humanoid_overrides": sidecar_input["humanoid_overrides"]}):
             report(self, "WARNING", warning)
-        for warning in avatar_api.vrm_rest_clearance_warnings(sidecar_input["spring"], sidecar_input["bones"]):
+        for warning in avatar_api.vrm_rest_clearance_warnings({"spring": sidecar_input["spring"], "bones": sidecar_input["bones"]}):
             report(self, "WARNING", warning)
-        unresolved = avatar_api.infer_humanoid_mapping(sidecar_input["bones"]).get("unresolved", [])
+        unresolved = avatar_api.infer_humanoid_mapping({"bones": sidecar_input["bones"]}).get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
 

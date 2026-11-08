@@ -35,13 +35,7 @@ pub struct JointTail {
     pub position: [f32; 3],
 }
 
-/// The engine's spring solver driven from Blender one frame at a time.
-///
-/// The matrices are Blender's armature-space bone matrices (`Bone.matrix_local` at rest,
-/// `PoseBone.matrix` animated) with the armature object's world matrix; the preview turns them into
-/// parent-relative locals whose roots carry the armature's frame in engine axes and metres, so the
-/// propagated globals are in engine space. The chain joints' own matrices are ignored: the swing
-/// written back into them is solver output, not animation, so they always start from their rest locals.
+/// The engine's spring solver driven from Blender one frame at a time; `rest_matrices` are the bones' `matrix_local` rows.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpringPreviewRequest {

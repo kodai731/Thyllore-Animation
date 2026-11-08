@@ -415,13 +415,9 @@ pub fn infer_humanoid_mapping(request: &InferHumanoidMappingRequest) -> Humanoid
 
 #[cfg(test)]
 mod tests {
-    const IDENTITY_ROWS: MatrixRows = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
     use super::*;
+
+    use crate::blender_space::rows;
 
     use crate::param_rows::ParamDefault;
     use thyllore_avatar_core::vrchat::sidecar::SidecarBlink;
@@ -697,7 +693,7 @@ mod tests {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 0.0, 0.0],
-                bind_matrix: Some(IDENTITY_ROWS),
+                bind_matrix: Some(rows(Mat4::IDENTITY)),
             },
             BoneSpec {
                 name: "Head".into(),

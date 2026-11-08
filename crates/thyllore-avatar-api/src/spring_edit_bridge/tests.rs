@@ -23,14 +23,6 @@ fn test_specs() -> Vec<BoneSpec> {
     ]
 }
 
-fn bone(name: &str, parent: Option<usize>) -> BoneInput {
-    BoneInput {
-        name: name.to_string(),
-        parent,
-        rest_position: [0.0, 0.0, 0.0],
-    }
-}
-
 fn ramp_input(shape: &str) -> RampInput {
     RampInput {
         root: JointValues {

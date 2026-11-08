@@ -20,7 +20,7 @@ from ..common.spring_properties import (
 )
 from ..common.logged_report import report
 from .operators import target_armature
-from .ramp_operators import active_bone_name
+from .ramp_operators import active_bone_name, chains_from_bone
 
 CAPSULE_FIT_UI_PARAMS = avatar_api.capsule_fit_ui_params() if _AVATAR_API_AVAILABLE else []
 
@@ -198,7 +198,11 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
 
         spring = spring_settings_to_edit(settings)
         bones = read_bones(context, arm)
-        chains = avatar_api.chains_under_bone({"spring": spring, "bones": bones, "bone_name": bone_name})
+        try:
+            chains = chains_from_bone(settings, spring, bones, bone_name, "subtree")
+        except ValueError as e:
+            report(self, "ERROR", str(e))
+            return {"CANCELLED"}
 
         if not chains:
             report(self, "WARNING", f"No chains found for bone '{bone_name}'")

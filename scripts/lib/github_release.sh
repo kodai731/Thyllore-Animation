@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by the setup scripts: downloads one asset of a GitHub release.
-# The browser download URL (github.com/.../releases/download/...) intermittently answers 504 or drops
-# the connection; the release API serves the same asset reliably, so it is tried first when gh has a token.
+# Downloads one asset of a GitHub release, trying the release API first because the browser URL intermittently answers 504.
 
 download_github_release_asset() {
     local repo="$1" tag="$2" asset="$3" dir="$4"

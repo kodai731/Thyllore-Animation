@@ -69,6 +69,27 @@ pub fn vrm_write(request: &VrmWriteRequest) -> anyhow::Result<Vec<u8>> {
     )
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VrmRestClearanceWarningsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+}
+
+/// One warning per collider the VRM file shrinks because a joint rests inside it.
+pub fn vrm_rest_clearance_warnings(request: &VrmRestClearanceWarningsRequest) -> Vec<String> {
+    vrm_rest_clearance(&request.spring, &bone_inputs(&request.bones))
+        .shrinks
+        .iter()
+        .map(|shrink| {
+            format!(
+                "Collider {} shrinks from {:.3} m to {:.3} m in the VRM: joint {} of chain {} rests inside it",
+                shrink.collider, shrink.from_m, shrink.to_m, shrink.bone, shrink.chain
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -181,25 +202,4 @@ mod tests {
             "expected unknown field error, got: {err}"
         );
     }
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct VrmRestClearanceWarningsRequest {
-    pub spring: SidecarSpring,
-    pub bones: Vec<BoneSpec>,
-}
-
-/// One warning per collider the VRM file shrinks because a joint rests inside it.
-pub fn vrm_rest_clearance_warnings(request: &VrmRestClearanceWarningsRequest) -> Vec<String> {
-    vrm_rest_clearance(&request.spring, &bone_inputs(&request.bones))
-        .shrinks
-        .iter()
-        .map(|shrink| {
-            format!(
-                "Collider {} shrinks from {:.3} m to {:.3} m in the VRM: joint {} of chain {} rests inside it",
-                shrink.collider, shrink.from_m, shrink.to_m, shrink.bone, shrink.chain
-            )
-        })
-        .collect()
 }

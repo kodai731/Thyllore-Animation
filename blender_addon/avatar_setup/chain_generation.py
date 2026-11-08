@@ -24,7 +24,7 @@ from ..common.chain_bones import (
     settings_from_properties,
 )
 from ..common.chain_migration import rename_legacy_chains
-from ..common.rig_snapshot import RigSnapshot, read_bones
+from ..common.rig_snapshot import RigSnapshot, read_bones, read_rig
 from ..common.spring_properties import (
     generated_chain_bones,
     generated_chain_joints,

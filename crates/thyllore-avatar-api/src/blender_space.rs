@@ -111,10 +111,7 @@ pub struct BoneSpecsRequest {
     pub scale_length: f32,
 }
 
-/// The armature's world matrix carries the Z-up to Y-up conversion the FBX exporter and importer
-/// place on it, so a bone's frame is converted on its output side only; conjugating it would rotate
-/// the bone's own axes a second time. The bind matrix is in metres throughout, as the engine's rest
-/// globals are.
+/// The bind matrix is `BLENDER_TO_ENGINE * armature_world * matrix_local` in metres; the Z-up to Y-up conversion sits on the armature, so it is never conjugated onto the bone.
 pub fn bone_specs(request: &BoneSpecsRequest) -> anyhow::Result<Vec<BoneSpec>> {
     if request.rest_matrices.len() != request.names.len()
         || request.parents.len() != request.names.len()
@@ -157,12 +154,9 @@ fn invert3(rows: &MatrixRows, what: &str) -> anyhow::Result<Mat3> {
 mod tests {
     use super::*;
 
-    const IDENTITY: MatrixRows = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
+    fn identity() -> MatrixRows {
+        rows(Mat4::IDENTITY)
+    }
 
     fn translation(x: f32, y: f32, z: f32) -> MatrixRows {
         rows(Mat4::from_translation(Vec3::new(x, y, z)))
@@ -181,7 +175,7 @@ mod tests {
 
     #[test]
     fn root_local_carries_the_root_frame() {
-        let root_frame = engine_frame_metres(&IDENTITY, 0.01);
+        let root_frame = engine_frame_metres(&identity(), 0.01);
         let locals =
             parent_relative_locals(root_frame, &[None], &[translation(0.0, 0.0, 1.0)]).unwrap();
         let origin = locals[0].transform_point3(Vec3::ZERO);
@@ -194,7 +188,7 @@ mod tests {
     #[test]
     fn bone_local_offset_undoes_the_axis_swap_and_the_unit() {
         let offset =
-            bone_local_offset(&IDENTITY, &IDENTITY, Vec3::new(0.0, 0.02, 0.0), 0.01).unwrap();
+            bone_local_offset(&identity(), &identity(), Vec3::new(0.0, 0.02, 0.0), 0.01).unwrap();
         assert!(
             offset.abs_diff_eq(Vec3::new(0.0, 0.0, 2.0), 1e-6),
             "{offset:?}"
@@ -255,7 +249,7 @@ mod tests {
 
     #[test]
     fn a_native_armature_gets_the_axis_conversion_once() {
-        let spec = specs_of(IDENTITY, translation(0.0, 0.0, 2.0), 1.0);
+        let spec = specs_of(identity(), translation(0.0, 0.0, 2.0), 1.0);
         let expected = BLENDER_TO_ENGINE * Mat4::from_translation(Vec3::new(0.0, 0.0, 2.0));
         assert!(column_major(&spec.bind_matrix.unwrap()).abs_diff_eq(expected, 1e-6));
         assert_eq!(spec.rest_position, [0.0, 2.0, 0.0]);
@@ -263,7 +257,7 @@ mod tests {
 
     #[test]
     fn scale_length_puts_the_whole_bind_matrix_in_metres() {
-        let spec = specs_of(IDENTITY, translation(0.0, 0.0, 2.0), 0.01);
+        let spec = specs_of(identity(), translation(0.0, 0.0, 2.0), 0.01);
         let bind = spec.bind_matrix.unwrap();
         assert!((bind[1][3] - 0.02).abs() < 1e-6);
         assert_eq!(bind[1][2], 0.01);

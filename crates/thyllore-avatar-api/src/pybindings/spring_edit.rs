@@ -1,9 +1,7 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
-use super::chain_gen::pythonize_value;
-use super::error::anyhow_to_value_error;
+use super::avatar_setup::bones_from_py;
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::chain_register_bridge::{
     register_generated_chains as bridge_register_generated_chains, GeneratedChainIn,
@@ -16,6 +14,7 @@ use crate::spring_edit_bridge::{
     resolve_root_bone_name, use_existing_bones_as_springs as bridge_use_existing_bones_as_springs,
     RampInput,
 };
+use thyllore_ml_api::python::{anyhow_to_value_error, depythonize_error_to_pyerr, pythonize_value};
 
 /// Registers every run of existing non-humanoid bones under `root_bone` with at least `min_joints` bones as a spring chain; adds no bones.
 #[pyfunction]

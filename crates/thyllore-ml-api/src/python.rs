@@ -18,3 +18,7 @@ pub fn pythonize_value<'py, T: serde::Serialize>(
 pub fn depythonize_error_to_pyerr(error: pythonize::PythonizeError) -> PyErr {
     PyValueError::new_err(error.to_string())
 }
+
+pub fn anyhow_to_value_error(err: anyhow::Error) -> PyErr {
+    PyValueError::new_err(format!("{:#}", err))
+}

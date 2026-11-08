@@ -256,7 +256,7 @@ class THYLLORE_PT_AvatarSetupDebug(Panel):
 
     @classmethod
     def poll(cls, context):
-        return _debuglog.is_debug_enabled()
+        return _debuglog.is_debug_build()
 
     def draw(self, context):
         from .. import debug_rpc

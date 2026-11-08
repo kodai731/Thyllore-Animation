@@ -10,9 +10,11 @@ repository = "https://github.com/kodai731/Thyllore-Animation"
 [features]
 default = []
 python = ["dep:pyo3", "dep:pythonize", "dep:anyhow"]
+debug-log = ["dep:chrono"]
 
 [dependencies]
 anyhow = { version = "1", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"], optional = true }
 pythonize = { version = "0.29", optional = true }
 serde = "1"

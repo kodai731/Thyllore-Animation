@@ -14,9 +14,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3", "dep:numpy", "dep:pythonize", "thyllore-ml-api/python"]
-# Debug-only: compiles the addon file-logging output methods. Production wheels
-# omit this feature, so the log functions are absent from the build entirely.
-debug-log = []
+debug-log = ["thyllore-ml-api/debug-log"]
 
 [dependencies]
 thyllore-ml-api = { path = "../thyllore-ml-api" }
@@ -35,7 +33,6 @@ ureq = { version = "2", features = ["json"] }
 ndarray = "0.16"
 ndarray-npy = { version = "0.9", default-features = false }
 obfstr = "0.4"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"], optional = true }
 numpy = { version = "0.29", optional = true }

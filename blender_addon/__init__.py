@@ -30,7 +30,7 @@ _bootstrap.insert_wheels_to_sys_path()
 
 # Expected ABI marker -- must match crates/thyllore-ml-api/src/lib.rs::ABI_MARKER.
 # Bump in lockstep with that constant when the L2 trait has breaking changes.
-EXPECTED_ABI_MARKER: int = 5
+EXPECTED_ABI_MARKER: int = 6
 
 
 # Skip importing bpy-dependent modules during pure-package consumption (e.g.,
@@ -149,7 +149,7 @@ if _BPY_AVAILABLE:
             feedback_message.register()
         if _TELEMETRY_AVAILABLE:
             telemetry.register()
-        if _debuglog.is_debug_enabled():
+        if _debuglog.is_debug_build():
             from . import debug_rpc  # noqa: E402
             from .common import viewport_recording  # noqa: E402
 
@@ -166,7 +166,7 @@ if _BPY_AVAILABLE:
             telemetry.unregister()
         if _FEEDBACK_MESSAGE_AVAILABLE and not _REGISTERED_ABI_FAILURE:
             feedback_message.unregister()
-        if _debuglog.is_debug_enabled() and not _REGISTERED_ABI_FAILURE:
+        if _debuglog.is_debug_build() and not _REGISTERED_ABI_FAILURE:
             from . import debug_rpc  # noqa: E402
             from .common import viewport_recording  # noqa: E402
 

@@ -63,8 +63,7 @@ pub fn vrm_write<'py>(
     meta: &Bound<PyAny>,
     metres_per_gltf_unit: f32,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let meta: VrmMeta =
-        depythonize(meta).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let meta: VrmMeta = depythonize(meta).map_err(depythonize_error_to_pyerr)?;
     let vrm = bridge_vrm_write(glb, sidecar_json, &meta, metres_per_gltf_unit)
         .map_err(anyhow_to_pyerr)?;
     Ok(PyBytes::new(py, &vrm))

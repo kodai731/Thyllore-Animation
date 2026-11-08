@@ -1,7 +1,4 @@
-//! File-based debug logging for the Blender addon, compiled only under the
-//! `debug-log` feature. Production wheels build without this feature, so the
-//! whole module — and the PyO3 functions that wrap it — are omitted from the
-//! binary. The Python `_debuglog.py` caller discovers their absence and no-ops.
+//! File-based debug logging for the Blender addons, compiled only under the `debug-log` feature.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -28,3 +25,31 @@ pub fn log_line(message: &str) {
         let _ = file.flush();
     }
 }
+
+#[cfg(feature = "python")]
+mod python {
+    use pyo3::exceptions::PyOSError;
+    use pyo3::prelude::*;
+
+    /// Open (create/append) the addon debug log at `path`.
+    #[pyfunction]
+    fn debug_log_init(path: &str) -> PyResult<()> {
+        super::init(path).map_err(|e| PyOSError::new_err(e.to_string()))
+    }
+
+    /// Append one timestamped line to the addon debug log.
+    #[pyfunction]
+    fn debug_log(message: &str) {
+        super::log_line(message);
+    }
+
+    /// Add `debug_log_init` / `debug_log` to a wheel module.
+    pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
+        m.add_function(wrap_pyfunction!(debug_log_init, m)?)?;
+        m.add_function(wrap_pyfunction!(debug_log, m)?)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "python")]
+pub use python::register;

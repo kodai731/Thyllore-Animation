@@ -4140,6 +4140,7 @@ name = "thyllore-ml-api"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "pyo3",
  "pythonize",
  "serde",
@@ -4151,7 +4152,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "chrono",
  "ed25519-dalek",
  "flate2",
  "ndarray 0.16.1",

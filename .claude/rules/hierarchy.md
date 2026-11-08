@@ -122,7 +122,7 @@ but not `World`, it belongs in `thyllore-vulkan-core` (generic only; effect-spec
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin
 (`crate-type = ["cdylib", "rlib"]`, `python` feature, abi3-py310):
 
-- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback, debug log) and
+- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback) and
   `thyllore-avatar-api` → the avatar setup addon (chain generation, spring edit and preview, colliders,
   clip bake, submesh roles, skin weight transfer, VRM export). Both live in `blender_addon/`; `scripts/collect_wheels.{sh,ps1}`
   builds both wheels (`--crate` picks one) and `scripts/build_blender_addon.{sh,ps1}` packages one product
@@ -131,9 +131,10 @@ Some crates are also shipped standalone as Python wheels for the Blender addons,
   the avatar setup ZIP excludes the copilot operators, so one Blender never registers the shared property
   groups twice (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
   A wheel crate is named after what it serves; avatar setup code never goes back into `thyllore-ml-core`.
-  `thyllore-ml-api` holds the ABI marker both wheels export and the addon checks, plus the PyO3 helpers
-  both wheels share (`python` feature); changing the marker requires a coordinated wheel rebuild and
-  end-user reinstall.
+  `thyllore-ml-api` holds the ABI marker both wheels export and the addon checks, the PyO3 helpers
+  both wheels share (`python` feature) and the addon file logger (`debug-log` feature, forwarded by both
+  wheel crates so a debug build of either product logs); changing the marker requires a coordinated wheel
+  rebuild and end-user reinstall.
 - `thyllore-effect-core` → the flame and water addons (`blender_addon/effects/<effect>/`, release workflows
   `blender_<effect>_addon_release.yml`). One crate serves every effect; the addon imports the analytic
   core and presets from it so the Blender preview and the engine share the same math.

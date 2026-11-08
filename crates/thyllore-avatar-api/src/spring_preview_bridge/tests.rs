@@ -19,6 +19,7 @@ fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneSpec 
         parent,
         rest_position,
         rest_frame: None,
+        bind_matrix: None,
     }
 }
 

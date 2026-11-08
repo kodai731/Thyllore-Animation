@@ -24,7 +24,8 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.logged_report import report
-from .operators import armature_bone_specs, target_armature
+from ..common.rig_snapshot import read_rig
+from .operators import target_armature
 
 
 def active_bone_name(context):
@@ -87,7 +88,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         form = context.window_manager.thyllore_ramp
 
         spring = spring_settings_to_edit(settings)
-        bones = armature_bone_specs(context, arm)
+        bones = read_rig(context, arm).bones
 
         try:
             names = target_chain_names(context, arm, settings, spring, bones, form.scope)

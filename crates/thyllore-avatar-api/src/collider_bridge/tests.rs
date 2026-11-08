@@ -1,11 +1,7 @@
 use super::*;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
 
-fn fit_bones_to_specs(fit_bones: &[FitBone]) -> Vec<BoneSpec> {
-    fit_bones.iter().map(|fb| fb.bone.clone()).collect()
-}
-
-fn make_bones() -> Vec<FitBone> {
+fn make_bones() -> Vec<BoneSpec> {
     let identity = [
         [1.0, 0.0, 0.0, 0.0],
         [0.0, 1.0, 0.0, 0.0],
@@ -13,65 +9,53 @@ fn make_bones() -> Vec<FitBone> {
         [0.0, 0.0, 0.0, 1.0],
     ];
     vec![
-        FitBone {
-            bone: BoneSpec {
-                name: "Hips".into(),
-                parent: None,
-                rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Hips".into(),
+            parent: None,
+            rest_position: [0.0, 1.0, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Spine".into(),
-                parent: Some(0),
-                rest_position: [0.0, 1.1, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Spine".into(),
+            parent: Some(0),
+            rest_position: [0.0, 1.1, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Chest".into(),
-                parent: Some(1),
-                rest_position: [0.0, 1.2, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Chest".into(),
+            parent: Some(1),
+            rest_position: [0.0, 1.2, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "UpperChest".into(),
-                parent: Some(2),
-                rest_position: [0.0, 1.25, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "UpperChest".into(),
+            parent: Some(2),
+            rest_position: [0.0, 1.25, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Neck".into(),
-                parent: Some(3),
-                rest_position: [0.0, 1.3, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Neck".into(),
+            parent: Some(3),
+            rest_position: [0.0, 1.3, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Head".into(),
-                parent: Some(4),
-                rest_position: [0.0, 1.4, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Head".into(),
+            parent: Some(4),
+            rest_position: [0.0, 1.4, 0.0],
+            rest_frame: None,
+            bind_matrix: Some(identity),
         },
     ]
 }
 
-fn make_cylinder_skin(bones: &[FitBone]) -> Vec<FitSkin> {
-    let spine_idx = bones.iter().position(|b| b.bone.name == "Spine").unwrap();
+fn make_cylinder_skin(bones: &[BoneSpec]) -> Vec<FitSkin> {
+    let spine_idx = bones.iter().position(|b| b.name == "Spine").unwrap();
     let mut positions = Vec::new();
     let mut influences = Vec::new();
     let radius = 0.1;
@@ -215,7 +199,7 @@ fn collider_bridge_assign_collider_groups_replaces() {
 
     let result = assign_collider_groups(&AssignColliderGroupsRequest {
         spring,
-        bones: fit_bones_to_specs(&bones),
+        bones: bones.clone(),
         chain_names: vec!["Spine".to_string()],
         group_names: vec!["New".to_string()],
     })
@@ -254,7 +238,7 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
 
     let err = assign_collider_groups(&AssignColliderGroupsRequest {
         spring,
-        bones: fit_bones_to_specs(&bones),
+        bones: bones.clone(),
         chain_names: vec!["Spine".to_string()],
         group_names: vec!["Unknown".to_string()],
     })
@@ -270,7 +254,7 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
 #[test]
 fn collider_bridge_fit_high_bone_index_head() {
     let bones = make_bones();
-    let head_idx = bones.iter().position(|b| b.bone.name == "Head").unwrap();
+    let head_idx = bones.iter().position(|b| b.name == "Head").unwrap();
     assert!(head_idx >= 5);
 
     let mut positions = Vec::new();
@@ -310,4 +294,18 @@ fn collider_bridge_fit_high_bone_index_head() {
         "fit should produce a collider on Head (bone index {})",
         head_idx
     );
+}
+
+#[test]
+fn collider_bridge_reports_a_bone_without_bind_matrix() {
+    let mut bones = make_bones();
+    bones[1].bind_matrix = None;
+
+    let error = has_fitted_body_colliders(&HasFittedBodyCollidersRequest {
+        spring: SidecarSpring::default(),
+        bones,
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("bind_matrix"), "{error}");
 }

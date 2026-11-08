@@ -24,7 +24,7 @@ from ..common.chain_bones import (
     settings_from_properties,
 )
 from ..common.chain_migration import rename_legacy_chains
-from ..common.skin_input import skin_input, skin_role_meshes
+from ..common.rig_snapshot import RigSnapshot, read_rig
 from ..common.spring_properties import (
     generated_chain_bones,
     generated_chain_joints,
@@ -56,7 +56,7 @@ from .chain_inputs import (
     vertex_group_weights,
 )
 from .collider_operators import default_fit_settings, fit_body_colliders
-from .operators import armature_fit_bones, bound_meshes, target_armature
+from .operators import target_armature
 from .properties import CHAIN_GEN_UI_PARAMS
 
 
@@ -69,7 +69,7 @@ class GenerationRun:
     attachment: str | None
     target: str
     scale_length: float
-    fit_bones: list
+    bones: list
     root_name: str
     root_role: str
     registered: dict
@@ -80,21 +80,21 @@ class GenerationRun:
     fitted_note: str = ""
 
 
-def _ensure_body_colliders(context, arm, settings, fit_bones) -> str:
-    if avatar_api.has_fitted_body_colliders({"spring": spring_settings_to_edit(settings), "bones": fit_bones}):
+def _ensure_body_colliders(rig: RigSnapshot, settings) -> str:
+    if avatar_api.has_fitted_body_colliders({"spring": spring_settings_to_edit(settings), "bones": rig.bones}):
         return ""
-    return f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
+    return f", fitted {fit_body_colliders(rig, default_fit_settings())} body colliders first"
 
 
-def _read_run(context, arm, obj, submesh_row, material: str) -> GenerationRun:
+def _read_run(rig: RigSnapshot, obj, submesh_row, material: str) -> GenerationRun:
+    arm = rig.arm
     settings = arm.data.thyllore_spring
     generation = settings.chain_generation
     role = submesh_row.role
-    scale_length = context.scene.unit_settings.scale_length
-    fit_bones = armature_fit_bones(context, arm)
+    scale_length = rig.scale_length
     root_role = _chain_roles()[role] if not generation.root_bone.strip() else ""
-    root_name = avatar_api.resolve_root_bone({"bones": fit_bones, "root_bone": root_role or generation.root_bone.strip()})
-    fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
+    root_name = avatar_api.resolve_root_bone({"bones": rig.bones, "root_bone": root_role or generation.root_bone.strip()})
+    fitted_note = _ensure_body_colliders(rig, settings)
 
     origin = {"mesh": obj.name, "material": material}
     target = f"{obj.name}/{material}"
@@ -111,22 +111,22 @@ def _read_run(context, arm, obj, submesh_row, material: str) -> GenerationRun:
         attachment=attachment_to_sidecar(submesh_row),
         target=target,
         scale_length=scale_length,
-        fit_bones=fit_bones,
+        bones=rig.bones,
         root_name=root_name,
         root_role=root_role,
         registered=registered,
         marked=marked_covered_vertices(obj),
         given=given,
         read_back=read_back,
-        skins=[skin_input(skin_obj, arm, scale_length) for skin_obj in skin_role_meshes(bound_meshes(arm))],
+        skins=rig.skins,
         fitted_note=fitted_note,
     )
 
 
-def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
+def _generate(arm, run: GenerationRun, material_index: int) -> dict:
     settings = arm.data.thyllore_spring
     mesh = run.obj.data
-    body_bones = armature_fit_bones(context, arm)
+    body_bones = run.bones
     request = {
         "positions": [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
         "triangles": submesh_triangles(mesh, material_index),
@@ -148,8 +148,9 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
 
 
 def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:
+    """The rig is read again: the chain bones just added must be in the bone list the wheel registers on."""
     settings = arm.data.thyllore_spring
-    bones = armature_fit_bones(context, arm)
+    bones = read_rig(context, arm).bones
     spring = avatar_api.register_generated_chains({
         "spring": avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones}),
         "bones": bones,
@@ -234,8 +235,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         previous_active = context.active_object
         try:
             obj, submesh_row, material_index = resolve_submesh(arm, self.mesh, self.material)
-            run = _read_run(context, arm, obj, submesh_row, self.material)
-            output = _generate(context, arm, run, material_index)
+            run = _read_run(read_rig(context, arm), obj, submesh_row, self.material)
+            output = _generate(arm, run, material_index)
             support = output.get("support")
             if support is not None and not arm.data.thyllore_spring.chain_generation.root_bone.strip():
                 run.root_name = arm.data.bones[support["bone"]].name

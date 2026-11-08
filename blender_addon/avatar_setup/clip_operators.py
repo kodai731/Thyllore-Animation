@@ -19,7 +19,8 @@ except ImportError:
 
 from .. import _debuglog
 from ..common.logged_report import report
-from .operators import armature_bone_specs, matrix_rows, target_armature
+from ..common.rig_snapshot import read_rig
+from .operators import target_armature
 
 
 def scene_fps(scene) -> int:
@@ -48,13 +49,14 @@ def _write_frame(arm, baked: dict, frame_index: int, frame: int) -> None:
 def bake_clip_onto_armature(context, arm, clip_text: str) -> dict:
     """Bake clip_text onto arm as an action named after the clip; returns the wheel's baked clip."""
     scene = context.scene
+    rig = read_rig(context, arm)
     baked = avatar_api.bake_clip_file({
-        "bones": armature_bone_specs(context, arm),
+        "bones": rig.bones,
         "clip_ron": clip_text,
         "fps": scene_fps(scene),
-        "armature_world": matrix_rows(arm.matrix_world),
-        "rest_matrices": [matrix_rows(bone.matrix_local) for bone in arm.data.bones],
-        "scale_length": scene.unit_settings.scale_length,
+        "armature_world": rig.armature_world,
+        "rest_matrices": rig.rest_matrices,
+        "scale_length": rig.scale_length,
     })
 
     _replace_action(arm, baked["name"])

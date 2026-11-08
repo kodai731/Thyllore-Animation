@@ -12,7 +12,8 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from ..common.logged_report import report
-from .operators import bound_meshes, target_armature
+from ..common.rig_snapshot import bound_meshes
+from .operators import target_armature
 from .submesh_roles import refresh_submesh_roles
 
 

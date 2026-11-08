@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
+use crate::blender_space::{column_major, MatrixRows};
 use crate::param_rows::{param_rows, ParamRow};
+use glam::Mat4;
 use thyllore_anim_core::spring_bone::{
     RestRelativeJointForce, SpringForceModel, SpringJointParam, VrmJointForce,
     REST_RELATIVE_JOINT_FORCE_SCALAR_PARAMS, REST_RELATIVE_JOINT_FORCE_UI_PARAMS,
@@ -70,6 +72,18 @@ pub struct BoneSpec {
     /// Row-major bone-local to model-space (engine axes, metres) matrix of the rest pose
     #[serde(default)]
     pub rest_frame: Option<[[f32; 3]; 3]>,
+    /// Row-major bone-local to model-space rest transform with its translation, as the engine binds skins
+    #[serde(default)]
+    pub bind_matrix: Option<MatrixRows>,
+}
+
+impl BoneSpec {
+    pub fn bind_global(&self) -> anyhow::Result<Mat4> {
+        let rows = self
+            .bind_matrix
+            .ok_or_else(|| anyhow::anyhow!("bone {:?} has no bind_matrix", self.name))?;
+        Ok(column_major(&rows))
+    }
 }
 
 fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
@@ -442,18 +456,21 @@ mod tests {
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
                 rest_frame: None,
+                bind_matrix: None,
             },
             BoneSpec {
                 name: "Spine".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.1, 0.0],
                 rest_frame: None,
+                bind_matrix: None,
             },
             BoneSpec {
                 name: "Head".into(),
                 parent: Some(1),
                 rest_position: [0.0, 1.2, 0.0],
                 rest_frame: None,
+                bind_matrix: None,
             },
         ];
         let result = infer_humanoid_mapping(&InferHumanoidMappingRequest { bones });
@@ -472,18 +489,21 @@ mod tests {
                     parent: None,
                     rest_position: [0.0, 1.0, 0.0],
                     rest_frame: None,
+                    bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone1".into(),
                     parent: Some(0),
                     rest_position: [0.0, 1.1, 0.0],
                     rest_frame: None,
+                    bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone2".into(),
                     parent: Some(1),
                     rest_position: [0.0, 1.2, 0.0],
                     rest_frame: None,
+                    bind_matrix: None,
                 },
             ],
             humanoid_overrides: BTreeMap::new(),
@@ -562,6 +582,7 @@ mod tests {
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
                 rest_frame: None,
+                bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
@@ -611,6 +632,7 @@ mod tests {
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
                 rest_frame: None,
+                bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
@@ -682,12 +704,14 @@ mod tests {
                 parent: None,
                 rest_position: [0.0, 0.0, 0.0],
                 rest_frame: Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+                bind_matrix: None,
             },
             BoneSpec {
                 name: "Head".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.0, 0.0],
                 rest_frame: Some([[0.0, -2.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 2.0]]),
+                bind_matrix: None,
             },
         ]
     }

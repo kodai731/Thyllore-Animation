@@ -10,8 +10,8 @@ try:
 except ImportError:
     avatar_api = None  # type: ignore
 
-from ..common.chain_bones import COVERED_GROUP, chain_of_membership_group, membership_group_name
-from .operators import matrix_rows
+from ..common.chain_bones import COVERED_GROUP, membership_group_name
+from ..common.rig_snapshot import matrix_rows
 
 
 def _armature_local_pairs(arm, specs) -> list[tuple[Vector, Vector]]:

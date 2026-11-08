@@ -17,8 +17,8 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from .. import _debuglog
+from ..common.rig_snapshot import matrix_rows, read_rig
 from ..common.spring_properties import spring_settings_to_edit
-from .operators import armature_bone_specs, matrix_rows
 
 _previews: dict[str, "_ArmaturePreview"] = {}
 
@@ -38,14 +38,6 @@ def invalidate_preview(armature_name: str) -> None:
     _previews.pop(armature_name, None)
 
 
-def _rest_request(arm, scale_length: float) -> dict:
-    return {
-        "armature_world": matrix_rows(arm.matrix_world),
-        "rest_matrices": [matrix_rows(bone.matrix_local) for bone in arm.data.bones],
-        "scale_length": scale_length,
-    }
-
-
 def _pose_request(arm) -> dict:
     return {
         "armature_world": matrix_rows(arm.matrix_world),
@@ -57,14 +49,20 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     settings = arm.data.thyllore_spring
     spring = spring_settings_to_edit(settings)
     spring_key = repr(spring)
-    rest = _rest_request(arm, context.scene.unit_settings.scale_length)
-    rest_key = repr([bone.name for bone in arm.data.bones]) + repr(rest)
+    rig = read_rig(context, arm)
+    rest_key = repr(rig.bones) + repr(rig.armature_world) + repr(rig.rest_matrices)
 
     cached = _previews.get(arm.name)
     if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
-    preview = avatar_api.SpringPreview({"spring": spring, "bones": armature_bone_specs(context, arm), **rest})
+    preview = avatar_api.SpringPreview({
+        "spring": spring,
+        "bones": rig.bones,
+        "armature_world": rig.armature_world,
+        "rest_matrices": rig.rest_matrices,
+        "scale_length": rig.scale_length,
+    })
     cached = _ArmaturePreview(preview, spring_key, rest_key)
     _previews[arm.name] = cached
     return cached

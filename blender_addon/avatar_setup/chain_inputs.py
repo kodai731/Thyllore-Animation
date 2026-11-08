@@ -14,16 +14,21 @@ from ..common.chain_bones import COVERED_GROUP, given_chains_from_groups, group_
 from ..common.skin_input import collider_inputs
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_edit
 from ..common.submesh_mask import material_triangles
-from .operators import bound_meshes
+from ..common.rig_snapshot import bound_meshes
 
 def _chain_roles() -> dict[str, str]:
     """{role: default_root} from the wheel's chain_roles()."""
     return {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()}
 
 
+def generatable_roles() -> set[str]:
+    """The submesh roles that can grow chain bones."""
+    return set(_chain_roles().keys())
+
+
 def generatable_submeshes(arm) -> list[tuple[object, object]]:
     """(mesh object, role item) pairs whose submesh role can grow chain bones."""
-    roles = set(_chain_roles().keys())
+    roles = generatable_roles()
     return [
         (mesh_obj, item)
         for mesh_obj in bound_meshes(arm)
@@ -46,7 +51,7 @@ def resolve_submesh(arm, mesh_name: str, material: str):
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
     role_item = next((item for item in obj.thyllore_submesh.roles if item.material == material), None)
-    if role_item is None or role_item.role not in set(_chain_roles().keys()):
+    if role_item is None or role_item.role not in generatable_roles():
         raise ValueError(f"{material!r} on {obj.name!r} is not a hair or garment submesh")
     material_index = _material_slot_index(obj, material)
     if material_index is None:
@@ -83,9 +88,9 @@ def submesh_tex_coords(mesh) -> list[tuple[float, float]]:
     return vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
 
-def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
+def humanoid_bone_indices(arm, settings, bones) -> dict[str, int]:
     """Unity role name to armature bone index, the inferred mapping with the user's overrides on top."""
-    roles = dict(avatar_api.infer_humanoid_mapping({"bones": fit_bones}).get("mapping", {}))
+    roles = dict(avatar_api.infer_humanoid_mapping({"bones": bones}).get("mapping", {}))
     roles.update(humanoid_overrides_to_dict(settings))
     indices = {}
     for role, bone_name in roles.items():
@@ -95,8 +100,8 @@ def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
     return indices
 
 
-def body_collider_inputs(arm, settings, fit_bones) -> list[dict]:
-    model_spring = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": fit_bones})
+def body_collider_inputs(arm, settings, bones) -> list[dict]:
+    model_spring = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones})
     bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
     return collider_inputs(model_spring["colliders"], bone_index)
 

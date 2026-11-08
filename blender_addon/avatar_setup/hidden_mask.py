@@ -14,7 +14,7 @@ except ImportError:
 from .. import _debuglog
 from ..common.mesh_data import mesh_arrays
 from ..common.submesh_mask import mask_mesh_input, to_loop_triangle_indices
-from .operators import bound_meshes
+from ..common.rig_snapshot import bound_meshes
 
 
 def armature_object(armature_data):

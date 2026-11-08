@@ -52,6 +52,23 @@ def test_avatar_setup_does_not_import_numeric_libraries() -> None:
     assert not offenders, "numeric library import found:\n" + "\n".join(offenders)
 
 
+RIG_READERS = ("bone_rest_frame(", "bone_bind_matrix(", "skin_input(", "avatar_sidecar import bone_specs")
+RIG_READER_HOME = COMMON_DIR / "rig_snapshot.py"
+RIG_READER_DEFINITIONS = {"avatar_sidecar.py", "bone_frames.py", "skin_input.py"}
+
+
+def test_rig_is_read_only_by_the_snapshot() -> None:
+    """Bone specs, rest frames, bind matrices and skin surfaces are built in one place; operators take a RigSnapshot."""
+    offenders = []
+    for path in _python_files():
+        if path == RIG_READER_HOME or path.name in RIG_READER_DEFINITIONS:
+            continue
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if any(reader in line for reader in RIG_READERS):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+    assert not offenders, "rig read outside rig_snapshot.py:\n" + "\n".join(offenders)
+
+
 def test_no_matrix_inversions() -> None:
     """mathutils may build Matrix/Vector and multiply them; composing with .inverted() belongs in the wheel."""
     offenders = []

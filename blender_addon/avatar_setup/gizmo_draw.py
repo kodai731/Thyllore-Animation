@@ -20,7 +20,8 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from ..common.spring_properties import spring_settings_to_edit
-from .operators import armature_bone_specs, target_armature
+from ..common.rig_snapshot import read_rig
+from .operators import target_armature
 
 _handle: int | None = None
 ACTIVE_ALPHA = 1.0
@@ -48,7 +49,7 @@ def _radius_segments(chains, arm, scale_length):
 
 def _highlighted_chain_names(context, arm, settings) -> set[str]:
     """Names of the chains holding the active bone."""
-    bones = armature_bone_specs(context, arm)
+    bones = read_rig(context, arm).bones
     spring = spring_settings_to_edit(settings)
     return set(avatar_api.chains_with_radius({"spring": spring, "bones": bones, "active": _active_bone_index(arm), "mode": "all"}))
 

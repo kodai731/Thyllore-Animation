@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
     RootAttachment, SpringChain, SpringJointParam, SpringSpace,
@@ -9,9 +9,10 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
+use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::collider_bridge::{
-    rest_frames, skeleton_from_fit_bones, skin_data_from_fit_skin, to_bone_inputs, FitBone, FitSkin,
+    rest_frames, skeleton_with_bind_poses, skin_data_from_fit_skin, FitSkin,
 };
 
 #[derive(Clone, serde::Deserialize)]
@@ -32,7 +33,7 @@ pub struct GeneratedJointIn {
 #[serde(deny_unknown_fields)]
 pub struct RegisterGeneratedChainsRequest {
     pub spring: SidecarSpring,
-    pub bones: Vec<FitBone>,
+    pub bones: Vec<BoneSpec>,
     pub skins: Vec<FitSkin>,
     pub root_bone: String,
     pub target: String,
@@ -51,8 +52,8 @@ pub fn register_generated_chains(
 ) -> anyhow::Result<SidecarSpring> {
     let target: SubmeshSelector = request.target.parse().map_err(anyhow::Error::msg)?;
     let attachment = request.attachment;
-    let skeleton = skeleton_from_fit_bones(&request.bones)?;
-    let bone_inputs = to_bone_inputs(&request.bones);
+    let skeleton = skeleton_with_bind_poses(&request.bones)?;
+    let bone_inputs = bone_inputs(&request.bones);
     let root = bone_id(&skeleton, &request.root_bone)?;
 
     let frames = rest_frames(&request.bones)?;
@@ -114,10 +115,10 @@ fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {
 fn head_capsule_collider(
     capsule: &CapsuleOut,
     root: BoneId,
-    bones: &[FitBone],
+    bones: &[BoneSpec],
 ) -> anyhow::Result<FittedCapsule> {
-    let root_global = Mat4::from_cols_array_2d(&bones[root as usize].bind_matrix).transpose();
-    let model_to_root_local = root_global
+    let model_to_root_local = bones[root as usize]
+        .bind_global()?
         .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("bind matrix of the root bone is singular"))?;
     let to_local = |p: [f32; 3]| (model_to_root_local * Vec3::from(p).extend(1.0)).truncate();

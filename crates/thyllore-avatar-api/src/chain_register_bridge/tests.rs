@@ -2,25 +2,23 @@ use super::*;
 use crate::avatar_setup_bridge::BoneSpec;
 use thyllore_anim_core::spring_bone::{ColliderShape, FITTED_BODY_GROUP_NAME};
 
-fn fit_bone(name: &str, parent: Option<usize>, head: [f32; 3]) -> FitBone {
+fn fit_bone(name: &str, parent: Option<usize>, head: [f32; 3]) -> BoneSpec {
     let mut bind_matrix = [[0.0; 4]; 4];
     for (i, row) in bind_matrix.iter_mut().enumerate() {
         row[i] = 1.0;
         row[3] = head[i.min(2)];
     }
     bind_matrix[3] = [0.0, 0.0, 0.0, 1.0];
-    FitBone {
-        bone: BoneSpec {
-            name: name.to_string(),
-            parent,
-            rest_position: head,
-            rest_frame: None,
-        },
-        bind_matrix,
+    BoneSpec {
+        name: name.to_string(),
+        parent,
+        rest_position: head,
+        rest_frame: None,
+        bind_matrix: Some(bind_matrix),
     }
 }
 
-fn bones() -> Vec<FitBone> {
+fn bones() -> Vec<BoneSpec> {
     vec![
         fit_bone("Hips", None, [0.0, 1.0, 0.0]),
         fit_bone("Head", Some(0), [0.0, 1.5, 0.0]),
@@ -82,7 +80,7 @@ fn head_capsule_becomes_a_fitted_body_collider_on_the_root_in_bone_space() {
     assert_eq!(spring.colliders.len(), 1);
     let collider = &spring.colliders[0];
     assert_eq!(collider.bone, "Head");
-    let bone_inputs = to_bone_inputs(&bones());
+    let bone_inputs = bone_inputs(&bones());
     let setup = spring_setup_from_sidecar(&spring, &bone_inputs, &rest_frames(&bones()).unwrap());
     match setup.colliders[0].shape {
         ColliderShape::Capsule { radius, tail } => {

@@ -1,10 +1,8 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use crate::spring_preview_bridge::{MatrixRows, SpringPreview};
+use crate::spring_preview_bridge::{PoseRequest, SpringPreview, SpringPreviewRequest, StepRequest};
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
-
-use super::avatar_setup::bones_from_py;
 
 #[pyclass(name = "SpringPreview", module = "thyllore_avatar_api")]
 pub struct PySpringPreview {
@@ -14,33 +12,25 @@ pub struct PySpringPreview {
 #[pymethods]
 impl PySpringPreview {
     #[new]
-    fn new(
-        spring: &Bound<PyAny>,
-        bones: &Bound<PyAny>,
-        rest_locals: Vec<MatrixRows>,
-    ) -> PyResult<Self> {
-        let spring: thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring =
-            depythonize(spring).map_err(depythonize_error_to_pyerr)?;
-        let bone_inputs = bones_from_py(bones)?;
-        let inner =
-            SpringPreview::new(&spring, &bone_inputs, &rest_locals).map_err(anyhow_to_pyerr)?;
+    fn new(request: &Bound<PyAny>) -> PyResult<Self> {
+        let request: SpringPreviewRequest =
+            depythonize(request).map_err(depythonize_error_to_pyerr)?;
+        let inner = SpringPreview::new(&request).map_err(anyhow_to_pyerr)?;
         Ok(Self { inner })
     }
 
-    fn reset(&mut self, animated_locals: Vec<MatrixRows>) -> PyResult<()> {
-        self.inner.reset(&animated_locals).map_err(anyhow_to_pyerr)
+    fn reset(&mut self, request: &Bound<PyAny>) -> PyResult<()> {
+        let request: PoseRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
+        self.inner.reset(&request).map_err(anyhow_to_pyerr)
     }
 
     fn step<'py>(
         &mut self,
         py: Python<'py>,
-        animated_locals: Vec<MatrixRows>,
-        dt: f32,
+        request: &Bound<PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rotations = self
-            .inner
-            .step(&animated_locals, dt)
-            .map_err(anyhow_to_pyerr)?;
+        let request: StepRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
+        let rotations = self.inner.step(&request).map_err(anyhow_to_pyerr)?;
         pythonize_value(py, &rotations)
     }
 

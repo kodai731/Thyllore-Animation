@@ -50,7 +50,7 @@ pub fn pack_wind_ubo(
 ) -> PyResult<Vec<u8>> {
     let effect: WindTornadoEffect = build_effect_from_params(py, params, time, position, rotation)?;
     let mut ubo = build_wind_ubo(&effect, WindShadowSlot(0));
-    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj);
+    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj).into();
     Ok(gpu_block_bytes(&ubo))
 }
 

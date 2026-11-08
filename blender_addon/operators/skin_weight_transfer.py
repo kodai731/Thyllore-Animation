@@ -81,14 +81,14 @@ class THYLLORE_OT_TransferSkinWeights(bpy.types.Operator):
             if target_obj == source_obj or target_obj.type != "MESH":
                 continue
             try:
-                weights = avatar_api.transfer_skin_weights(
-                    source,
-                    world_surface(target_obj),
-                    max_distance,
-                    self.max_angle_deg,
-                    self.max_iterations,
-                    self.tolerance,
-                )
+                weights = avatar_api.transfer_skin_weights({
+                    "source": source,
+                    "target": world_surface(target_obj),
+                    "max_distance": max_distance,
+                    "max_angle_deg": self.max_angle_deg,
+                    "max_iterations": self.max_iterations,
+                    "tolerance": self.tolerance,
+                })
             except ValueError as e:
                 self.report({"ERROR"}, f"transfer_skin_weights failed: {e}")
                 return {"CANCELLED"}

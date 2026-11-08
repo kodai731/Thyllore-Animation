@@ -14,7 +14,7 @@ except ImportError:
 from .. import _debuglog
 from ..common.mesh_data import mesh_arrays
 from ..common.submesh_mask import mask_mesh_input, to_loop_triangle_indices
-from .operators import bound_meshes
+from ..common.rig_snapshot import bound_meshes
 
 
 def armature_object(armature_data):
@@ -60,7 +60,7 @@ def apply_hidden_mask(arm, params: dict, scale_length: float) -> int:
         body_input, loop_indices = mask_mesh_input(*mesh_arrays(mesh_obj), material_index, scale_length)
         if not loop_indices:
             continue
-        hidden_local = avatar_api.find_hidden_triangles(body_input, garment_inputs, params)
+        hidden_local = avatar_api.find_hidden_triangles({"body": body_input, "garments": garment_inputs, "params": params})
         loop_hidden = to_loop_triangle_indices(hidden_local, loop_indices)
         if not loop_hidden:
             continue

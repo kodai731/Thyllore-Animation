@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
+use crate::blender_space::{column_major, MatrixRows};
 use crate::param_rows::{param_rows, ParamRow};
+use glam::Mat4;
 use thyllore_anim_core::spring_bone::{
     RestRelativeJointForce, SpringForceModel, SpringJointParam, VrmJointForce,
     REST_RELATIVE_JOINT_FORCE_SCALAR_PARAMS, REST_RELATIVE_JOINT_FORCE_UI_PARAMS,
@@ -62,43 +64,56 @@ pub fn spring_joint_force_params() -> Vec<ForceModelParams> {
         .collect()
 }
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BoneSpec {
     pub name: String,
     pub parent: Option<usize>,
     pub rest_position: [f32; 3],
-    /// Row-major bone-local to model-space (engine axes, metres) matrix of the rest pose
+    /// Row-major bone-local to model-space (engine axes, metres) rest transform, as the engine binds
+    /// skins; absent for a bone no skin is bound to
     #[serde(default)]
-    pub rest_frame: Option<[[f32; 3]; 3]>,
+    pub bind_matrix: Option<MatrixRows>,
 }
 
-fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
+impl BoneSpec {
+    pub fn bind_global(&self) -> anyhow::Result<Mat4> {
+        let rows = self
+            .bind_matrix
+            .ok_or_else(|| anyhow::anyhow!("bone {:?} has no bind_matrix", self.name))?;
+        Ok(column_major(&rows))
+    }
+}
+
+/// The sidecar frame of each bone: the axes of its bind matrix, whose lengths are metres per bone unit.
+pub(crate) fn rest_frames(bones: &[BoneSpec]) -> anyhow::Result<Vec<BoneRestFrame>> {
     bones
         .iter()
         .map(|bone| {
-            let rows = bone
-                .rest_frame
-                .ok_or_else(|| anyhow::anyhow!("bone {:?} has no rest_frame", bone.name))?;
-            BoneRestFrame::from_rows(rows)
-                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular rest_frame", bone.name))
+            BoneRestFrame::from_global_transform(&bone.bind_global()?, 1.0)
+                .ok_or_else(|| anyhow::anyhow!("bone {:?} has a singular bind_matrix", bone.name))
         })
         .collect()
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpringCollidersRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+}
+
 /// The spring with its colliders moved from the sidecar's model space into each bone's rest frame.
 pub fn spring_colliders_to_local(
-    spring: &SidecarSpring,
-    bones: &[BoneSpec],
+    request: &SpringCollidersRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    map_spring_colliders(spring, bones, ColliderSpace::BoneLocal)
+    map_spring_colliders(&request.spring, &request.bones, ColliderSpace::BoneLocal)
 }
 
 /// The inverse of `spring_colliders_to_local`: colliders given in bone rest frames, written in model space.
 pub fn spring_colliders_to_model(
-    spring: &SidecarSpring,
-    bones: &[BoneSpec],
+    request: &SpringCollidersRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    map_spring_colliders(spring, bones, ColliderSpace::Model)
+    map_spring_colliders(&request.spring, &request.bones, ColliderSpace::Model)
 }
 
 fn map_spring_colliders(
@@ -119,6 +134,10 @@ impl From<BoneSpec> for BoneInput {
             rest_position: spec.rest_position,
         }
     }
+}
+
+pub(crate) fn bone_inputs(specs: &[BoneSpec]) -> Vec<BoneInput> {
+    specs.iter().cloned().map(Into::into).collect()
 }
 
 #[derive(serde::Deserialize)]
@@ -374,9 +393,16 @@ pub struct HumanoidMappingOut {
     pub unresolved: Vec<String>,
 }
 
-pub fn infer_humanoid_mapping(bones: &[BoneInput]) -> HumanoidMappingOut {
-    let (mapping, unresolved) = infer_mapping(bones);
-    let map = build_hybrid_bone_map(&mapping, bones);
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InferHumanoidMappingRequest {
+    pub bones: Vec<BoneSpec>,
+}
+
+pub fn infer_humanoid_mapping(request: &InferHumanoidMappingRequest) -> HumanoidMappingOut {
+    let bones = bone_inputs(&request.bones);
+    let (mapping, unresolved) = infer_mapping(&bones);
+    let map = build_hybrid_bone_map(&mapping, &bones);
     let unresolved_names: Vec<String> = unresolved
         .iter()
         .map(|u| u.role.unity_name().to_string())
@@ -390,6 +416,8 @@ pub fn infer_humanoid_mapping(bones: &[BoneInput]) -> HumanoidMappingOut {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::blender_space::rows;
 
     use crate::param_rows::ParamDefault;
     use thyllore_avatar_core::vrchat::sidecar::SidecarBlink;
@@ -420,24 +448,27 @@ mod tests {
 
     #[test]
     fn avatar_setup_bridge_infer_humanoid_mapping_resolves_hips() {
-        let bones: Vec<BoneInput> = vec![
-            BoneInput {
+        let bones = vec![
+            BoneSpec {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
+                bind_matrix: None,
             },
-            BoneInput {
+            BoneSpec {
                 name: "Spine".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.1, 0.0],
+                bind_matrix: None,
             },
-            BoneInput {
+            BoneSpec {
                 name: "Head".into(),
                 parent: Some(1),
                 rest_position: [0.0, 1.2, 0.0],
+                bind_matrix: None,
             },
         ];
-        let result = infer_humanoid_mapping(&bones);
+        let result = infer_humanoid_mapping(&InferHumanoidMappingRequest { bones });
         assert!(
             result.mapping.contains_key("Hips"),
             "Hips should be resolved"
@@ -452,19 +483,19 @@ mod tests {
                     name: "Bone0".into(),
                     parent: None,
                     rest_position: [0.0, 1.0, 0.0],
-                    rest_frame: None,
+                    bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone1".into(),
                     parent: Some(0),
                     rest_position: [0.0, 1.1, 0.0],
-                    rest_frame: None,
+                    bind_matrix: None,
                 },
                 BoneSpec {
                     name: "Bone2".into(),
                     parent: Some(1),
                     rest_position: [0.0, 1.2, 0.0],
-                    rest_frame: None,
+                    bind_matrix: None,
                 },
             ],
             humanoid_overrides: BTreeMap::new(),
@@ -542,7 +573,7 @@ mod tests {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
+                bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
@@ -591,7 +622,7 @@ mod tests {
                 name: "Bone0".into(),
                 parent: None,
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
+                bind_matrix: None,
             }],
             humanoid_overrides: BTreeMap::new(),
             spring: SidecarSpring {
@@ -662,13 +693,18 @@ mod tests {
                 name: "Hips".into(),
                 parent: None,
                 rest_position: [0.0, 0.0, 0.0],
-                rest_frame: Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+                bind_matrix: Some(rows(Mat4::IDENTITY)),
             },
             BoneSpec {
                 name: "Head".into(),
                 parent: Some(0),
                 rest_position: [0.0, 1.0, 0.0],
-                rest_frame: Some([[0.0, -2.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 2.0]]),
+                bind_matrix: Some([
+                    [0.0, -2.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0, 1.0],
+                    [0.0, 0.0, 2.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]),
             },
         ]
     }
@@ -691,23 +727,35 @@ mod tests {
     #[test]
     fn colliders_round_trip_between_model_space_and_bone_frames() {
         let bones = framed_bones();
-        let local = spring_colliders_to_local(&model_space_spring(), &bones).unwrap();
+        let local = spring_colliders_to_local(&SpringCollidersRequest {
+            spring: model_space_spring(),
+            bones: bones.clone(),
+        })
+        .unwrap();
         let collider = &local.colliders[0];
         assert!((collider.offset[0] - 1.0).abs() < 1e-5 && collider.offset[1].abs() < 1e-5);
         assert!((collider.radius - 0.5).abs() < 1e-5);
         let tail = collider.tail.unwrap();
         assert!((tail[1] - 2.0).abs() < 1e-5 && tail[0].abs() < 1e-5);
 
-        let model = spring_colliders_to_model(&local, &bones).unwrap();
+        let model = spring_colliders_to_model(&SpringCollidersRequest {
+            spring: local,
+            bones,
+        })
+        .unwrap();
         assert_eq!(model, model_space_spring());
     }
 
     #[test]
-    fn colliders_need_a_rest_frame_on_every_bone() {
+    fn colliders_need_a_bind_matrix_on_every_bone() {
         let mut bones = framed_bones();
-        bones[1].rest_frame = None;
-        let error = spring_colliders_to_local(&model_space_spring(), &bones).unwrap_err();
-        assert!(error.to_string().contains("rest_frame"));
+        bones[1].bind_matrix = None;
+        let error = spring_colliders_to_local(&SpringCollidersRequest {
+            spring: model_space_spring(),
+            bones,
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("bind_matrix"));
     }
 
     #[test]

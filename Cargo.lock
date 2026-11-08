@@ -3543,6 +3543,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3799,6 +3809,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3911,6 +3942,7 @@ dependencies = [
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "thyllore-math-core",
  "thyllore-model-core",
  "thyllore-scene-core",
@@ -3978,7 +4010,9 @@ dependencies = [
  "pythonize",
  "ron",
  "serde",
+ "serde_bytes",
  "serde_json",
+ "strum",
  "thyllore-anim-core",
  "thyllore-avatar-core",
  "thyllore-exporter-core",
@@ -3997,6 +4031,7 @@ dependencies = [
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "tempfile",
  "thyllore-anim-core",
  "thyllore-importer-core",

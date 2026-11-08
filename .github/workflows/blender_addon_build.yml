@@ -105,6 +105,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -171,6 +173,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -198,6 +202,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -238,6 +244,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -250,15 +258,9 @@ jobs:
           pip install "maturin>=1.5"
 
       - name: Download ONNX Runtime (bundled into the ZIP for wheel import)
-        run: |
-          ORT_VERSION=1.23.2
-          ORT_DIR=vendor/onnxruntime
-          mkdir -p "$ORT_DIR"
-          curl -L --fail --retry 3 --retry-delay 2 \
-              -o "$ORT_DIR/ort.tgz" \
-              "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz"
-          tar -xzf "$ORT_DIR/ort.tgz" -C "$ORT_DIR"
-          rm -f "$ORT_DIR/ort.tgz"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/setup_onnxruntime.sh
 
       - name: Collect vendored wheels
         run: bash scripts/collect_wheels.sh --crate thyllore-ml-core

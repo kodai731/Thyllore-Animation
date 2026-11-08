@@ -1,48 +1,25 @@
 """generate_chains from the wheel: bone specs, weights, settings table and the Blender-space conversion."""
 from __future__ import annotations
 
-import math
-import sys
-import zipfile
 from pathlib import Path
+
+import math
 
 import pytest
 
 from blender_addon.common.chain_bones import (
+    VertexGroupNames,
     bone_specs,
-    chain_of_membership_group,
     given_chains_from_groups,
     group_vertices,
     group_weights,
     joints_from_bones,
-    membership_group_name,
     mismatched_vertices,
     output_of_new_chains,
     output_to_blender,
     vertex_tex_coords,
 )
 from blender_addon.common.coordinates import blender_to_engine_point, engine_to_blender_point
-
-WHEELS_DIR = Path(__file__).resolve().parents[1] / "wheels"
-
-
-@pytest.fixture(scope="module")
-def avatar_api(tmp_path_factory):
-    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
-    if not wheels:
-        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
-
-    extract_dir = tmp_path_factory.mktemp("avatar_api_wheel")
-    with zipfile.ZipFile(wheels[-1]) as archive:
-        archive.extractall(extract_dir)
-
-    sys.path.insert(0, str(extract_dir))
-    try:
-        import thyllore_avatar_api
-
-        yield thyllore_avatar_api
-    finally:
-        sys.path.remove(str(extract_dir))
 
 
 HEAD_POSITIONS = [(0.2, 0.1, 0.0), (-0.2, 0.1, 0.0), (0.0, 0.1, 0.2), (0.0, 0.1, -0.2)]
@@ -54,6 +31,19 @@ def _head_skins(positions=HEAD_POSITIONS) -> list[dict]:
 
 
 HEAD = _head_skins()
+
+
+def _generate(avatar_api, positions, triangles, target, settings, **inputs):
+    """Build the GenerateChainsRequest dict and call avatar_api.generate_chains."""
+    request = {
+        "positions": positions,
+        "triangles": triangles,
+        "root_position": (0.0, 0.0, 0.0),
+        "target": target,
+        "settings": settings,
+        **inputs,
+    }
+    return avatar_api.generate_chains(request)
 
 
 def _strand_mesh(azimuths, levels, top, bottom, flare):
@@ -92,18 +82,24 @@ def test_settings_table_lists_defaults(avatar_api):
     assert params[0]["label"] == "Joint Count"
 
 
+def test_chain_roles_lists_generatable_roles_with_their_default_root(avatar_api):
+    roles = avatar_api.chain_roles()
+
+    assert len(roles) == 2
+    assert roles[0] == {"role": "garment", "default_root": "Hips"}
+    assert roles[1] == {"role": "hair", "default_root": "Head"}
+
+
 def test_unknown_setting_is_rejected(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
 
     with pytest.raises(Exception, match="unknown chain generation setting"):
-        avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joints": 4})
+        _generate(avatar_api, positions, triangles, "strip/hair", {"joints": 4})
 
 
 def test_bone_specs_chain_joints_root_to_tip(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
-    output = avatar_api.generate_chains(
-        positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joint_count": 4, "column_count": 1}, HEAD, attachment="cap"
-    )
+    output = _generate(avatar_api, positions, triangles, "strip/hair", {"joint_count": 4, "column_count": 1}, skins=HEAD, attachment="cap")
 
     specs = bone_specs(output, "Head")
 
@@ -130,7 +126,7 @@ def test_bone_specs_chain_joints_root_to_tip(avatar_api):
 
 def test_group_weights_sum_to_one_per_vertex(avatar_api):
     positions, triangles = _strand_mesh((0.5, 3.5), 9, -0.05, -0.45, 0.01)
-    output = avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joint_count": 4}, HEAD, attachment="cap")
+    output = _generate(avatar_api, positions, triangles, "strip/hair", {"joint_count": 4}, skins=HEAD, attachment="cap")
 
     totals: dict[int, float] = {}
     for influences in group_weights(output, "Head").values():
@@ -146,14 +142,14 @@ def test_blender_space_input_converted_at_the_boundary_matches_engine_input(avat
     positions_blender = [engine_to_blender_point(p) for p in positions_engine]
     settings = {"joint_count": 4}
 
-    engine = avatar_api.generate_chains(positions_engine, triangles, (0.0, 0.0, 0.0), "strip/hair", settings, HEAD, attachment="cap")
-    converted = avatar_api.generate_chains(
+    engine = _generate(avatar_api, positions_engine, triangles, "strip/hair", settings, skins=HEAD, attachment="cap")
+    converted = _generate(
+        avatar_api,
         [blender_to_engine_point(p) for p in positions_blender],
         triangles,
-        blender_to_engine_point((0.0, 0.0, 0.0)),
         "strip/hair",
         settings,
-        _head_skins([blender_to_engine_point(engine_to_blender_point(p)) for p in HEAD_POSITIONS]),
+        skins=_head_skins([blender_to_engine_point(engine_to_blender_point(p)) for p in HEAD_POSITIONS]),
         attachment="cap",
     )
 
@@ -167,7 +163,7 @@ def test_blender_space_input_converted_at_the_boundary_matches_engine_input(avat
 
 def test_output_to_blender_converts_heads_and_tails(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
-    output = avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD, attachment="cap")
+    output = _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD, attachment="cap")
 
     blender = output_to_blender(output)
 
@@ -217,15 +213,15 @@ def test_generate_chains_with_tex_coords(avatar_api):
     positions, triangles = _strand_mesh((0.0, 2.1, 4.2), 5, top, bottom, 0.0)
     tex_coords = [(0.0, (p[1] - bottom) / (top - bottom)) for p in positions]
 
-    output = avatar_api.generate_chains(
+    output = _generate(
+        avatar_api,
         positions,
         triangles,
-        (0.0, 0.0, 0.0),
         "strip/hair",
         {"joint_count": 4},
-        HEAD,
-        ROOT_BONE,
-        tex_coords,
+        skins=HEAD,
+        root_bone=ROOT_BONE,
+        tex_coords=tex_coords,
         attachment="cap",
     )
 
@@ -237,9 +233,7 @@ def test_generate_chains_with_tex_coords(avatar_api):
 def test_generate_chains_reports_the_attachment_it_used(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
 
-    output = avatar_api.generate_chains(
-        positions, triangles, (0.0, 0.0, 0.0), "strip/skirt", {"column_count": 1}, None, attachment="ring"
-    )
+    output = _generate(avatar_api, positions, triangles, "strip/skirt", {"column_count": 1}, attachment="ring")
 
     assert output["attachment"] == "ring"
 
@@ -254,13 +248,13 @@ def _fit_bones(names_parents_heads):
 
 def test_generate_chains_measures_joint_radii_and_fits_a_head_capsule(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
-    output = avatar_api.generate_chains(
+    output = _generate(
+        avatar_api,
         positions,
         triangles,
-        (0.0, 0.0, 0.0),
         "strip/hair",
         {"column_count": 1},
-        HEAD,
+        skins=HEAD,
         humanoid_bones={"Head": ROOT_BONE},
         bones=[{"name": "Head", "parent": None, "rest_position": [0.0, 0.0, 0.0]}],
     )
@@ -275,13 +269,13 @@ def test_generate_chains_measures_joint_radii_and_fits_a_head_capsule(avatar_api
 
 def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
-    output = avatar_api.generate_chains(
+    output = _generate(
+        avatar_api,
         positions,
         triangles,
-        (0.0, 0.0, 0.0),
         "strip/hair",
         {"column_count": 1},
-        HEAD,
+        skins=HEAD,
         humanoid_bones={"Head": ROOT_BONE},
         bones=[{"name": "Head", "parent": None, "rest_position": [0.0, 0.0, 0.0]}],
     )
@@ -294,9 +288,11 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
     )
     empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
 
-    spring = avatar_api.register_generated_chains(
-        empty, bones, [], "Head", "strip/hair", "cap", output["chains"], output["head_capsule"]
-    )
+    spring = avatar_api.register_generated_chains({
+        "spring": empty, "bones": bones, "skins": [], "root_bone": "Head",
+        "target": "strip/hair", "attachment": "cap", "chains": output["chains"],
+        "head_capsule": output["head_capsule"],
+    })
 
     assert [c["name"] for c in spring["chains"]] == [c["name"] for c in output["chains"]]
     assert [c["bone"] for c in spring["colliders"]] == ["Head"]
@@ -310,11 +306,24 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
         simulated = chain["joints"][:-1]
         assert [j["hit_radius"] for j in simulated] == [j["hit_radius"] for j in generated["joints"]]
 
-    again = avatar_api.register_generated_chains(
-        spring, bones, [], "Head", "strip/hair", "cap", output["chains"], output["head_capsule"]
-    )
+    again = avatar_api.register_generated_chains({
+        "spring": spring, "bones": bones, "skins": [], "root_bone": "Head",
+        "target": "strip/hair", "attachment": "cap", "chains": output["chains"],
+        "head_capsule": output["head_capsule"],
+    })
     assert len(again["chains"]) == len(spring["chains"])
     assert len(again["colliders"]) == 1
+
+
+def test_register_generated_chains_rejects_unknown_attachment(avatar_api):
+    empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
+    bones = _fit_bones([("Head", None, (0.0, 0.0, 0.0))])
+
+    with pytest.raises(ValueError):
+        avatar_api.register_generated_chains({
+            "spring": empty, "bones": bones, "skins": [], "root_bone": "Head",
+            "target": "strip/hair", "attachment": "band", "chains": [],
+        })
 
 
 def test_group_weights_resolves_root_and_skin_bone_targets():
@@ -344,16 +353,13 @@ def test_generate_chains_marked_covered_vertices_leave_the_chain(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
     marked = [v for v, p in enumerate(positions) if p[1] > -0.25]
 
-    output = avatar_api.generate_chains(
+    output = _generate(
+        avatar_api,
         positions,
         triangles,
-        (0.0, 0.0, 0.0),
         "strip/skirt",
         {"joint_count": 2, "column_count": 1},
-        None,
-        0,
-        [],
-        marked,
+        covered_vertices=marked,
     )
 
     assert sorted(output["covered"]) == marked
@@ -393,19 +399,18 @@ def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(avata
         {"name": "LeftArm", "parent": 0, "rest_position": [0.0, -0.2, 0.0]},
     ]
 
-    output = avatar_api.generate_chains(
+    output = _generate(
+        avatar_api,
         positions,
         triangles,
-        (0.0, 0.0, 0.0),
         "dress/top",
         {"joint_count": 3, "column_count": 1, "garment_fit_gap": 0.015},
-        None,
-        0,
-        [],
-        [],
-        [pelvis, arm],
-        {"Hips": 3, "LeftUpperArm": 4},
-        bones,
+        skins=[],
+        root_bone=0,
+        tex_coords=[],
+        body_colliders=[pelvis, arm],
+        humanoid_bones={"Hips": 3, "LeftUpperArm": 4},
+        bones=bones,
     )
 
     support = output["support"]
@@ -419,27 +424,30 @@ def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(avata
             assert entry["influences"] == [({"bone": 3}, 1.0)]
 
 
-def test_membership_group_name_round_trips_and_rejects_other_groups():
-    assert chain_of_membership_group(membership_group_name("strip_hair_03")) == "strip_hair_03"
-    assert chain_of_membership_group("strip_hair_03_00") is None
-    assert chain_of_membership_group("thyllore_covered") is None
+def test_vertex_group_names_round_trip_and_reject_other_groups(avatar_api):
+    names = VertexGroupNames(avatar_api)
+    assert names.chain_of(names.membership("strip_hair_03")) == "strip_hair_03"
+    assert names.chain_of("strip_hair_03_00") is None
+    assert names.chain_of(names.covered) is None
 
 
-def test_membership_group_prefix_is_built_and_parsed_in_chain_bones_only():
+def test_vertex_group_names_are_spelled_in_the_wheel_only(avatar_api):
     addon_root = Path(__file__).resolve().parents[1]
+    literals = (*avatar_api.vertex_group_names().values(), avatar_api.membership_vertex_group(""))
     offenders = [
         path.relative_to(addon_root)
         for path in addon_root.rglob("*.py")
-        if "tests" not in path.parts and "thyllore_chain_" in path.read_text() and path.name != "chain_bones.py"
+        if "tests" not in path.parts and any(literal in path.read_text() for literal in literals)
     ]
     assert offenders == []
 
 
-def test_given_chains_from_groups_lists_weighted_membership_groups_only():
+def test_given_chains_from_groups_lists_weighted_membership_groups_only(avatar_api):
+    names = VertexGroupNames(avatar_api)
     pairs = [(0, [(0, 1.0)]), (1, [(0, 1.0), (2, 0.0)]), (2, [(1, 1.0)]), (3, [(2, 1.0)])]
-    groups = [("thyllore_chain_strip_hair_00", 0), ("Head", 1), ("thyllore_chain_strip_hair_01", 2), ("thyllore_chain_strip_hair_02", 3)]
+    groups = [(names.membership("strip_hair_00"), 0), ("Head", 1), (names.membership("strip_hair_01"), 2), (names.membership("strip_hair_02"), 3)]
 
-    assert given_chains_from_groups(pairs, groups) == [
+    assert given_chains_from_groups(pairs, groups, names) == [
         {"name": "strip_hair_00", "vertices": [0, 1]},
         {"name": "strip_hair_01", "vertices": [3]},
     ]
@@ -447,7 +455,7 @@ def test_given_chains_from_groups_lists_weighted_membership_groups_only():
 
 def test_generate_chains_with_given_memberships_skips_the_split(avatar_api):
     positions, triangles = _strand_mesh((0.5, 3.5), 9, -0.05, -0.45, 0.01)
-    automatic = avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joint_count": 4}, HEAD, attachment="cap")
+    automatic = _generate(avatar_api, positions, triangles, "strip/hair", {"joint_count": 4}, skins=HEAD, attachment="cap")
     assert len(automatic["chains"]) == 2
     members = [chain["vertices"] for chain in automatic["chains"]]
     given = [
@@ -455,9 +463,7 @@ def test_generate_chains_with_given_memberships_skips_the_split(avatar_api):
         {"name": "other_mesh_00", "vertices": members[1]},
     ]
 
-    output = avatar_api.generate_chains(
-        positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joint_count": 4}, HEAD, given_chains=given, attachment="cap"
-    )
+    output = _generate(avatar_api, positions, triangles, "strip/hair", {"joint_count": 4}, skins=HEAD, given_chains=given, attachment="cap")
 
     assert [chain["name"] for chain in output["chains"]] == ["strip_hair_07"]
     assert output["chains"][0]["vertices"] == sorted(members[0] + members[1])
@@ -495,15 +501,15 @@ def test_legacy_chain_renames_map_role_prefixed_names_of_this_submesh(avatar_api
 def test_generate_chains_root_role_sets_the_attachment_without_a_humanoid_mapping(avatar_api):
     positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
 
-    by_role = avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD, root_role="Head")
-    unmapped = avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD)
+    by_role = _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD, root_role="Head")
+    unmapped = _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD)
 
     assert by_role["attachment"] == "cap"
     assert by_role["head_capsule"] is not None
     assert unmapped["attachment"] == "ring"
     assert unmapped["head_capsule"] is None
     with pytest.raises(ValueError):
-        avatar_api.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD, root_role="Tail")
+        _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD, root_role="Tail")
 
 
 def test_generate_chains_with_given_joints_places_the_bones_there(avatar_api):
@@ -511,9 +517,7 @@ def test_generate_chains_with_given_joints_places_the_bones_there(avatar_api):
     heads_then_tail = [(0.1, -0.05, 0.0), (0.1, -0.2, 0.0), (0.1, -0.45, 0.0)]
     given = [{"name": "strip_hair_00", "vertices": list(range(len(positions))), "joints": heads_then_tail}]
 
-    output = avatar_api.generate_chains(
-        positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"joint_count": 4}, HEAD, given_chains=given, attachment="cap"
-    )
+    output = _generate(avatar_api, positions, triangles, "strip/hair", {"joint_count": 4}, skins=HEAD, given_chains=given, attachment="cap")
 
     chain = output["chains"][0]
     placed = [tuple(joint["head"]) for joint in chain["joints"]] + [tuple(chain["tail"])]
@@ -540,3 +544,20 @@ def test_mismatched_vertices_follow_the_membership_rules():
 
     assert mismatched_vertices(chains, weights, group_names, set()) == {1, 2, 5, 7}
     assert mismatched_vertices(chains, weights, group_names, {"b"}) == {1, 2, 4, 5, 7}
+
+
+def test_generate_chains_rejects_an_unknown_request_key(avatar_api):
+    positions = [(0.0, -0.1, 0.0), (0.0, -0.3, 0.0)]
+    triangles = [[0, 1, 0]]
+    request = {
+        "positions": positions,
+        "triangles": triangles,
+        "root_position": (0.0, 0.0, 0.0),
+        "target": "strip/hair",
+        "settings": {"joint_count": 2},
+        "skins": [{"positions": positions, "influences": [[(0, 1.0)], [(0, 1.0)]]}],
+        "root_bone": 0,
+        "given_chain": [],  # misspelled key — should be "given_chains"
+    }
+    with pytest.raises(Exception):
+        avatar_api.generate_chains(request)

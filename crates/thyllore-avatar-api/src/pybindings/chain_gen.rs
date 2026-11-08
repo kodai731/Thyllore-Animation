@@ -1,32 +1,86 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use pythonize::depythonize;
-use std::collections::BTreeMap;
-use thyllore_ml_api::python::{
-    anyhow_to_pyerr, anyhow_to_value_error, depythonize_error_to_pyerr, pythonize_value,
-};
+use strum::VariantArray;
+use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
-use crate::avatar_setup_bridge::BoneSpec;
-use crate::chain_gen_bridge::{
-    body_colliders as body_colliders_from_inputs, chain_gen_params,
-    legacy_chain_renames as legacy_chain_renames_of, parse_attachment, role_bones, run_chain_gen,
-    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, BodyColliderIn,
-    ChainRootIn, GivenChainIn, SkinAttachment,
+use crate::chain_display::{
+    chain_bone_palette as chain_bone_palette_of, parse_attachment,
+    root_attachments as root_attachments_of,
 };
-use crate::collider_bridge::FitSkin;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use crate::chain_gen_bridge::{
+    chain_gen_params, chain_of_vertex_group as chain_of_vertex_group_of,
+    generate_chains as generate_chains_from_request,
+    legacy_chain_renames as legacy_chain_renames_of,
+    membership_vertex_group as membership_vertex_group_of,
+    submesh_chain_names as submesh_chain_names_of, GenerateChainsRequest, VERTEX_GROUP_NAMES,
+};
+use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
+
+#[derive(serde::Serialize)]
+struct ChainRoleEntry {
+    role: SubmeshRole,
+    default_root: &'static str,
+}
+
+#[pyfunction]
+pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let entries: Vec<ChainRoleEntry> = SubmeshRole::VARIANTS
+        .iter()
+        .copied()
+        .filter_map(|role| {
+            let root = default_root_of_submesh(role)?;
+            Some(ChainRoleEntry {
+                role,
+                default_root: root.unity_name(),
+            })
+        })
+        .collect();
+    pythonize_value(py, &entries)
+}
+
+/// The root attachments a submesh row can choose: `name` (the sidecar value), `label`,
+/// `description` and `bone_palette` (the Blender bone color theme number of its chains).
+#[pyfunction]
+pub fn root_attachments(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let entries = root_attachments_of().map_err(anyhow_to_pyerr)?;
+    pythonize_value(py, &entries)
+}
+
+/// The Blender bone color theme number of a chain generated with `attachment`; `None` is a chain
+/// authored by hand.
+#[pyfunction]
+pub fn chain_bone_palette(attachment: Option<&str>) -> PyResult<u8> {
+    let attachment = attachment
+        .map(parse_attachment)
+        .transpose()
+        .map_err(anyhow_to_pyerr)?;
+    Ok(chain_bone_palette_of(attachment))
+}
+
+/// The vertex groups the addon writes beside the bone weights: `covered`; the membership groups are
+/// spelled by `membership_vertex_group`.
+#[pyfunction]
+pub fn vertex_group_names(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    pythonize_value(py, &VERTEX_GROUP_NAMES)
+}
+
+/// The vertex group that holds the vertices the user assigned to the chain.
+#[pyfunction]
+pub fn membership_vertex_group(chain_name: &str) -> String {
+    membership_vertex_group_of(chain_name)
+}
+
+/// The chain a membership group belongs to; `None` for any other vertex group.
+#[pyfunction]
+pub fn chain_of_vertex_group(group_name: &str) -> Option<String> {
+    chain_of_vertex_group_of(group_name).map(str::to_string)
+}
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.
 #[pyfunction]
 pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &chain_gen_params())
-}
-
-pub(super) fn settings_pairs(settings: &Bound<PyDict>) -> PyResult<Vec<(String, f32)>> {
-    settings
-        .iter()
-        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<f32>()?)))
-        .collect::<PyResult<_>>()
 }
 
 /// The names among `candidates` that belong to a chain generated on the submesh `target`
@@ -46,18 +100,6 @@ pub fn legacy_chain_renames(
     legacy_chain_renames_of(target, &candidates).map_err(anyhow_to_pyerr)
 }
 
-fn parse_root_role(root_role: Option<&str>) -> PyResult<Option<HumanoidRole>> {
-    root_role
-        .map(|name| {
-            HumanoidRole::from_unity_name(name).ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "root_role must be a humanoid role name such as Head or Hips, got \"{name}\""
-                ))
-            })
-        })
-        .transpose()
-}
-
 /// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the
 /// FitSkin dicts (positions, influences, triangles) and `root_bone` the index of the bone the chains hang
 /// from; `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
@@ -71,76 +113,14 @@ fn parse_root_role(root_role: Option<&str>) -> PyResult<Option<HumanoidRole>> {
 /// the root was chosen by, when it was; a root given as a bone takes its role from `humanoid_bones`.
 /// `attachment` is `"cap"` or `"ring"`; absent, it follows the root role.
 #[pyfunction]
-#[pyo3(signature = (positions, triangles, root_position, target, settings, skins = None, root_bone = 0, tex_coords = Vec::new(), covered_vertices = Vec::new(), body_colliders = None, humanoid_bones = BTreeMap::new(), bones = None, given_chains = None, *, root_role = None, attachment = None))]
-#[allow(clippy::too_many_arguments)]
 pub fn generate_chains<'py>(
     py: Python<'py>,
-    positions: Vec<[f32; 3]>,
-    triangles: Vec<[u32; 3]>,
-    root_position: [f32; 3],
-    target: &str,
-    settings: &Bound<'py, PyDict>,
-    skins: Option<&Bound<'py, PyAny>>,
-    root_bone: usize,
-    tex_coords: Vec<[f32; 2]>,
-    covered_vertices: Vec<u32>,
-    body_colliders: Option<&Bound<'py, PyAny>>,
-    humanoid_bones: BTreeMap<String, usize>,
-    bones: Option<&Bound<'py, PyAny>>,
-    given_chains: Option<&Bound<'py, PyAny>>,
-    root_role: Option<&str>,
-    attachment: Option<&str>,
+    request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let pairs = settings_pairs(settings)?;
-    let settings = settings_from_pairs(&pairs).map_err(anyhow_to_pyerr)?;
-    let skins: Vec<FitSkin> = match skins {
-        Some(skins) => depythonize(skins).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let collider_inputs: Vec<BodyColliderIn> = match body_colliders {
-        Some(colliders) => depythonize(colliders).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let bone_specs: Vec<BoneSpec> = match bones {
-        Some(bones) => depythonize(bones).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let given: Vec<GivenChainIn> = match given_chains {
-        Some(given) => depythonize(given).map_err(depythonize_error_to_pyerr)?,
-        None => Vec::new(),
-    };
-    let roles = role_bones(&humanoid_bones, &bone_specs);
-    let colliders = body_colliders_from_inputs(&collider_inputs, &roles, &bone_specs);
-
-    let chain_root = ChainRootIn {
-        bone: root_bone,
-        role: parse_root_role(root_role)?,
-        attachment: attachment
-            .map(parse_attachment)
-            .transpose()
-            .map_err(anyhow_to_value_error)?,
-    };
-
+    let request: GenerateChainsRequest =
+        depythonize(request).map_err(depythonize_error_to_pyerr)?;
     let output = py
-        .detach(|| {
-            run_chain_gen(
-                &positions,
-                &triangles,
-                root_position,
-                target,
-                settings,
-                SkinAttachment {
-                    skins: &skins,
-                    body_colliders: &colliders,
-                    roles: &roles,
-                    covered_vertices: &covered_vertices,
-                },
-                chain_root,
-                &tex_coords,
-                &given,
-            )
-        })
+        .detach(|| generate_chains_from_request(&request))
         .map_err(anyhow_to_pyerr)?;
-
     pythonize_value(py, &output)
 }

@@ -1,4 +1,4 @@
-"""Tests for avatar_sidecar module: bone_specs, submesh_to_sidecar, write_submesh_sidecar."""
+"""Tests for avatar_sidecar module: submesh_to_sidecar, write_submesh_sidecar."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 
 from blender_addon.common.avatar_sidecar import (
-    bone_specs,
     submesh_to_sidecar,
     write_submesh_sidecar,
 )
@@ -35,36 +34,6 @@ def _hidden_item_factory(material, triangles):
 
 
 IDENTITY_LOOPS = {"matA": [0, 1, 2, 3], "matB": [0, 1, 2, 3]}
-
-
-def test_bone_specs_blender_to_engine():
-    """bone_specs converts Blender (0,0,1)*2 to engine (0,2,0)."""
-    names = ["root", "child"]
-    parent_indices = [None, 0]
-    world_heads = [(0.0, 0.0, 0.0), (0.0, 0.0, 2.0)]
-    scale_length = 1.0
-
-    specs = bone_specs(names, parent_indices, world_heads, scale_length)
-
-    assert len(specs) == 2
-    assert specs[0]["name"] == "root"
-    assert specs[0]["parent"] is None
-    assert specs[0]["rest_position"] == [0.0, 0.0, 0.0]
-    assert specs[1]["name"] == "child"
-    assert specs[1]["parent"] == 0
-    assert specs[1]["rest_position"] == [0.0, 2.0, 0.0]
-
-
-def test_bone_specs_scale_length():
-    """bone_specs applies scale_length to convert to meters."""
-    names = ["root", "child"]
-    parent_indices = [None, 0]
-    world_heads = [(0.0, 0.0, 0.0), (0.0, 0.0, 2.0)]
-    scale_length = 0.5
-
-    specs = bone_specs(names, parent_indices, world_heads, scale_length)
-
-    assert specs[1]["rest_position"] == [0.0, 1.0, 0.0]
 
 
 def test_submesh_to_sidecar():

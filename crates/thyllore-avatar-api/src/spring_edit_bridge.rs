@@ -1,3 +1,4 @@
+use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_chain, apply_ramp, chains_in_scope as anim_chains_in_scope,
@@ -41,33 +42,56 @@ fn resolve_root_bone(
         .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", root_name))
 }
 
-pub fn resolve_root_bone_name(bones: &[BoneInput], root_name: &str) -> anyhow::Result<String> {
-    let skeleton = skeleton_from_bones(bones);
-    let (mapping, _) = infer_mapping(bones);
-    let resolved_id = resolve_root_bone(&skeleton, &mapping, root_name)?;
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolveRootBoneRequest {
+    pub bones: Vec<BoneSpec>,
+    pub root_bone: String,
+}
+
+pub fn resolve_root_bone_name(request: &ResolveRootBoneRequest) -> anyhow::Result<String> {
+    let bones = bone_inputs(&request.bones);
+    let skeleton = skeleton_from_bones(&bones);
+    let (mapping, _) = infer_mapping(&bones);
+    let resolved_id = resolve_root_bone(&skeleton, &mapping, &request.root_bone)?;
     Ok(bones[resolved_id as usize].name.clone())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UseExistingBonesAsSpringsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub root_bone: String,
+    #[serde(default = "default_min_joints")]
+    pub min_joints: u32,
+}
+
+fn default_min_joints() -> u32 {
+    2
 }
 
 /// Every run of non-humanoid bones under `root_name` becomes a chain; a run that already heads a
 /// chain is kept. The humanoid bones are inferred from the bone names, as the collider fit does.
 pub fn use_existing_bones_as_springs(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    root_name: &str,
-    min_joints: u32,
+    request: &UseExistingBonesAsSpringsRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    let mut setup =
-        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
-    let skeleton = skeleton_from_bones(bones);
-    let (mapping, _) = infer_mapping(bones);
-    let root = resolve_root_bone(&skeleton, &mapping, root_name)?;
+    let bones = bone_inputs(&request.bones);
+    let mut setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    );
+    let skeleton = skeleton_from_bones(&bones);
+    let (mapping, _) = infer_mapping(&bones);
+    let root = resolve_root_bone(&skeleton, &mapping, &request.root_bone)?;
 
-    let chains = find_chains_under(&skeleton, &mapping, root, min_joints as usize);
+    let chains = find_chains_under(&skeleton, &mapping, root, request.min_joints as usize);
     if chains.is_empty() {
         anyhow::bail!(
             "no bone runs of at least {} joints under \"{}\"",
-            min_joints,
-            root_name
+            request.min_joints,
+            request.root_bone
         );
     }
 
@@ -87,7 +111,7 @@ pub fn use_existing_bones_as_springs(
 
     Ok(build_sidecar_spring(
         &setup,
-        bones,
+        &bones,
         &BoneRestFrame::identity_for(bones.len()),
     ))
 }
@@ -143,22 +167,30 @@ fn to_chain_ramp(ramp: &RampInput) -> anyhow::Result<ChainRamp> {
     })
 }
 
-pub fn apply_ramp_to_chains(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    chain_names: &[String],
-    ramp: &RampInput,
-) -> anyhow::Result<SidecarSpring> {
-    let mut setup =
-        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ApplyRampRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub chain_names: Vec<String>,
+    pub ramp: RampInput,
+}
 
-    if chain_names.is_empty() {
+pub fn apply_ramp_to_chains(request: &ApplyRampRequest) -> anyhow::Result<SidecarSpring> {
+    let bones = bone_inputs(&request.bones);
+    let mut setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    );
+
+    if request.chain_names.is_empty() {
         anyhow::bail!("chain_names must not be empty");
     }
 
-    let chain_ramp = to_chain_ramp(ramp)?;
+    let chain_ramp = to_chain_ramp(&request.ramp)?;
 
-    for chain_name in chain_names {
+    for chain_name in &request.chain_names {
         let chain_idx = setup
             .chains
             .iter()
@@ -173,18 +205,9 @@ pub fn apply_ramp_to_chains(
 
     Ok(build_sidecar_spring(
         &setup,
-        bones,
+        &bones,
         &BoneRestFrame::identity_for(bones.len()),
     ))
-}
-
-fn parse_scope(scope: &str) -> anyhow::Result<RampScope> {
-    match scope {
-        "this_chain" => Ok(RampScope::ThisChain),
-        "sibling_chains" => Ok(RampScope::SiblingChains),
-        "all_chains" => Ok(RampScope::AllChains),
-        other => anyhow::bail!("unknown scope \"{}\"", other),
-    }
 }
 
 fn chain_names_of(setup: &SpringBoneSetup, ids: &[SpringChainId]) -> Vec<String> {
@@ -199,63 +222,84 @@ fn chain_names_of(setup: &SpringBoneSetup, ids: &[SpringChainId]) -> Vec<String>
         .collect()
 }
 
-pub fn chains_in_scope(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    chain_name: &str,
-    scope: &str,
-) -> anyhow::Result<Vec<String>> {
-    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
-    let skeleton = skeleton_from_bones(bones);
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChainsInScopeRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub chain_name: String,
+    pub scope: RampScope,
+}
+
+pub fn chains_in_scope(request: &ChainsInScopeRequest) -> anyhow::Result<Vec<String>> {
+    let bones = bone_inputs(&request.bones);
+    let setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    );
+    let skeleton = skeleton_from_bones(&bones);
 
     let chain_id = setup
         .chains
         .iter()
-        .find(|c| c.name == chain_name)
+        .find(|c| c.name == request.chain_name)
         .map(|c| c.id)
-        .ok_or_else(|| anyhow::anyhow!("chain \"{}\" not found", chain_name))?;
+        .ok_or_else(|| anyhow::anyhow!("chain \"{}\" not found", request.chain_name))?;
 
-    let scope = parse_scope(scope)?;
-    let ids = anim_chains_in_scope(&setup, &skeleton, chain_id, scope);
+    let ids = anim_chains_in_scope(&setup, &skeleton, chain_id, request.scope);
 
     Ok(chain_names_of(&setup, &ids))
 }
 
-pub fn chains_under_bone(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    bone_name: &str,
-) -> anyhow::Result<Vec<String>> {
-    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
-    let skeleton = skeleton_from_bones(bones);
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChainsUnderBoneRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub bone_name: String,
+}
+
+pub fn chains_under_bone(request: &ChainsUnderBoneRequest) -> anyhow::Result<Vec<String>> {
+    let bones = bone_inputs(&request.bones);
+    let setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    );
+    let skeleton = skeleton_from_bones(&bones);
 
     let bone_id = skeleton
         .bone_name_to_id
-        .get(bone_name)
+        .get(&request.bone_name)
         .copied()
-        .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", bone_name))?;
+        .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", request.bone_name))?;
 
     let ids = anim_chains_under_bone(&setup, &skeleton, bone_id);
 
     Ok(chain_names_of(&setup, &ids))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChainsWithRadiusRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    #[serde(default)]
+    pub active: Option<usize>,
+    pub mode: SpringChainGizmoMode,
+}
+
 /// Chains whose joint hit radii the Blender gizmo draws: those holding the active bone.
-pub fn chains_with_radius(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    active: Option<usize>,
-    mode: &str,
-) -> anyhow::Result<Vec<String>> {
-    let setup = spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
+pub fn chains_with_radius(request: &ChainsWithRadiusRequest) -> anyhow::Result<Vec<String>> {
+    let bones = bone_inputs(&request.bones);
+    let setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bones,
+        &BoneRestFrame::identity_for(bones.len()),
+    );
 
-    let gizmo_mode = match mode {
-        "all" => SpringChainGizmoMode::All,
-        "none" => SpringChainGizmoMode::None,
-        other => anyhow::bail!("unknown mode \"{}\"", other),
-    };
-
-    let ids = anim_chains_with_radius(&setup, active, gizmo_mode);
+    let ids = anim_chains_with_radius(&setup, request.active, request.mode);
     Ok(chain_names_of(&setup, &ids))
 }
 

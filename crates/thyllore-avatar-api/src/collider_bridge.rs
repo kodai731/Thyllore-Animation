@@ -1,27 +1,18 @@
-use glam::{Mat4, UVec4, Vec3, Vec4};
+use glam::{UVec4, Vec3, Vec4};
 use thyllore_anim_core::spring_bone::{
     replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams, SpringChainId,
     SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
 };
 use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
-    build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
-    SidecarSpring,
+    build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
 };
 use thyllore_model_core::{Skeleton, SkinData};
 
-use crate::avatar_setup_bridge::BoneSpec;
-use crate::param_rows::{apply_scalar_pairs, param_rows, ParamRow};
+use crate::avatar_setup_bridge::{bone_inputs, rest_frames, BoneSpec};
+use crate::param_rows::{apply_scalar_settings, param_rows, ParamRow};
 use crate::spring_edit_bridge::skeleton_from_bones;
-
-#[derive(Clone, serde::Deserialize)]
-pub struct FitBone {
-    #[serde(flatten)]
-    pub bone: BoneSpec,
-    pub bind_matrix: [[f32; 4]; 4],
-}
 
 #[derive(Clone, serde::Deserialize)]
 pub struct FitSkin {
@@ -32,25 +23,13 @@ pub struct FitSkin {
     pub triangles: Vec<[u32; 3]>,
 }
 
-/// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.
-pub(crate) fn rest_frames(bones: &[FitBone]) -> anyhow::Result<Vec<BoneRestFrame>> {
-    let bind_matrices: Vec<Mat4> = bones
-        .iter()
-        .map(|fit_bone| Mat4::from_cols_array_2d(&fit_bone.bind_matrix).transpose())
-        .collect();
-    rest_frames_from_globals(&bind_matrices, &to_bone_inputs(bones), 1.0)
-}
+/// The skeleton with every bone's inverse bind pose, as the skin fit needs it.
+pub(crate) fn skeleton_with_bind_poses(bones: &[BoneSpec]) -> anyhow::Result<Skeleton> {
+    let mut skeleton = skeleton_from_bones(&bone_inputs(bones));
 
-pub(crate) fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skeleton> {
-    let mut skeleton = skeleton_from_bones(&to_bone_inputs(bones));
-
-    for (skeleton_bone, fit_bone) in skeleton.bones.iter_mut().zip(bones) {
-        let bind_matrix = Mat4::from_cols_array_2d(&fit_bone.bind_matrix).transpose();
-        skeleton_bone.inverse_bind_pose = bind_matrix.try_inverse().ok_or_else(|| {
-            anyhow::anyhow!(
-                "bind matrix for bone \"{}\" is not invertible",
-                fit_bone.bone.name
-            )
+    for (skeleton_bone, bone) in skeleton.bones.iter_mut().zip(bones) {
+        skeleton_bone.inverse_bind_pose = bone.bind_global()?.try_inverse().ok_or_else(|| {
+            anyhow::anyhow!("bind matrix for bone \"{}\" is not invertible", bone.name)
         })?;
     }
 
@@ -90,58 +69,73 @@ pub(crate) fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
     }
 }
 
-pub(crate) fn to_bone_inputs(bones: &[FitBone]) -> Vec<BoneInput> {
-    bones
-        .iter()
-        .map(|fit_bone| fit_bone.bone.clone().into())
-        .collect()
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FitBodyCollidersRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub skins: Vec<FitSkin>,
+    pub settings: std::collections::BTreeMap<String, f32>,
 }
 
-pub fn fit_body_colliders(
-    spring: &SidecarSpring,
-    bones: &[FitBone],
-    skins: &[FitSkin],
-    settings: &[(String, f32)],
-) -> anyhow::Result<SidecarSpring> {
+pub fn fit_body_colliders(request: &FitBodyCollidersRequest) -> anyhow::Result<SidecarSpring> {
     let mut params = CapsuleFitParams::default();
-    apply_scalar_pairs(&mut params, &CAPSULE_FIT_SCALAR_PARAMS, settings)?;
+    apply_scalar_settings(&mut params, &CAPSULE_FIT_SCALAR_PARAMS, &request.settings)?;
 
-    let skeleton = skeleton_from_fit_bones(bones)?;
-    let bone_inputs = to_bone_inputs(bones);
+    let skeleton = skeleton_with_bind_poses(&request.bones)?;
+    let bone_inputs = bone_inputs(&request.bones);
 
-    let owned: Vec<SkinData> = skins.iter().map(skin_data_from_fit_skin).collect();
+    let owned: Vec<SkinData> = request.skins.iter().map(skin_data_from_fit_skin).collect();
     let skin_data: Vec<&SkinData> = owned.iter().collect();
 
     let (mapping, _) = infer_mapping(&bone_inputs);
     let fitted = fit_body_capsules(&skin_data, &skeleton, &mapping, &params);
     anyhow::ensure!(!fitted.is_empty(), "fit produced no body colliders");
 
-    let frames = rest_frames(bones)?;
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
+    let frames = rest_frames(&request.bones)?;
+    let mut setup = spring_setup_from_sidecar(&request.spring, &bone_inputs, &frames);
     replace_fitted_body_colliders(&mut setup, &fitted);
 
     Ok(build_sidecar_spring(&setup, &bone_inputs, &frames))
 }
 
-pub fn has_fitted_body_colliders(
-    spring: &SidecarSpring,
-    bones: &[FitBone],
-) -> anyhow::Result<bool> {
-    let bone_inputs = to_bone_inputs(bones);
-    let frames = rest_frames(bones)?;
-    Ok(spring_setup_from_sidecar(spring, &bone_inputs, &frames).has_fitted_body_colliders())
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HasFittedBodyCollidersRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+}
+
+pub fn has_fitted_body_colliders(request: &HasFittedBodyCollidersRequest) -> anyhow::Result<bool> {
+    let bone_inputs = bone_inputs(&request.bones);
+    let frames = rest_frames(&request.bones)?;
+    Ok(
+        spring_setup_from_sidecar(&request.spring, &bone_inputs, &frames)
+            .has_fitted_body_colliders(),
+    )
+}
+
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignColliderGroupsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub chain_names: Vec<String>,
+    pub group_names: Vec<String>,
 }
 
 pub fn assign_collider_groups(
-    spring: &SidecarSpring,
-    bones: &[BoneInput],
-    chain_names: &[String],
-    group_names: &[String],
+    request: &AssignColliderGroupsRequest,
 ) -> anyhow::Result<SidecarSpring> {
-    let mut setup =
-        spring_setup_from_sidecar(spring, bones, &BoneRestFrame::identity_for(bones.len()));
+    let bone_inputs = bone_inputs(&request.bones);
+    let mut setup = spring_setup_from_sidecar(
+        &request.spring,
+        &bone_inputs,
+        &BoneRestFrame::identity_for(bone_inputs.len()),
+    );
 
-    let chain_ids: Vec<SpringChainId> = chain_names
+    let chain_ids: Vec<SpringChainId> = request
+        .chain_names
         .iter()
         .map(|name| {
             setup
@@ -153,7 +147,8 @@ pub fn assign_collider_groups(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let group_ids: Vec<SpringColliderGroupId> = group_names
+    let group_ids: Vec<SpringColliderGroupId> = request
+        .group_names
         .iter()
         .map(|name| {
             setup
@@ -169,8 +164,8 @@ pub fn assign_collider_groups(
 
     Ok(build_sidecar_spring(
         &setup,
-        bones,
-        &BoneRestFrame::identity_for(bones.len()),
+        &bone_inputs,
+        &BoneRestFrame::identity_for(bone_inputs.len()),
     ))
 }
 

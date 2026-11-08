@@ -1,4 +1,5 @@
 mod avatar_setup;
+mod blender_space;
 mod chain_gen;
 mod clip_bake;
 mod collider;

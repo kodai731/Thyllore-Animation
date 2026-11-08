@@ -68,7 +68,7 @@ def write_wind_debug_dump(context, out_dir: str) -> str:
 
     view_matrix = list(region_data.view_matrix)
     window_matrix = list(region_data.window_matrix)
-    proj = draw_handler.blender_window_to_engine_projection(window_matrix, draw_handler.VIEWPORT_NEAR)
+    proj = coordinates.blender_window_to_engine_projection(window_matrix, draw_handler.VIEWPORT_NEAR)
     view, camera_pos = draw_handler.blender_view_to_engine_view(view_matrix)
     light_pos = draw_handler.find_light_position(scene)
     scene_time = draw_handler.scene_time_seconds(scene)

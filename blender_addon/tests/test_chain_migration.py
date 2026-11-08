@@ -4,7 +4,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from blender_addon.common.chain_migration import rename_bone_references, rename_legacy_chains
-from blender_addon.tests.test_chain_bones_wheel import avatar_api  # noqa: F401
 from blender_addon.tests.test_spring_properties import FakeCollection
 
 

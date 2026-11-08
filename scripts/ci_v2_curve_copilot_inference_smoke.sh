@@ -8,10 +8,7 @@ if [[ -d "$HOME/.cargo/bin" && ":$PATH:" != *":$HOME/.cargo/bin:"* ]]; then
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-ORT_VERSION="1.23.2"
-ORT_VENDOR_DIR="$REPO_ROOT/vendor/onnxruntime"
-ORT_DYLIB="$ORT_VENDOR_DIR/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so"
-ORT_URL="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz"
+ORT_VERSION="${ORT_VERSION:-1.23.2}"
 
 HF_REPO="kodai731/thyllore-curve-copilot"
 HF_REVISION="${THYLLORE_HF_REVISION:-main}"
@@ -23,16 +20,8 @@ MODEL_PATH="$MODEL_DIR/${HF_MODEL_FILENAME}"
 write_step() { printf "\n==> %s\n" "$1"; }
 
 ensure_onnxruntime() {
-    if [[ -f "$ORT_DYLIB" ]]; then
-        write_step "ONNX Runtime present: $ORT_DYLIB"
-        return
-    fi
-    write_step "Downloading ONNX Runtime ${ORT_VERSION}"
-    mkdir -p "$ORT_VENDOR_DIR"
-    local archive="$ORT_VENDOR_DIR/ort.tgz"
-    curl -L --fail --retry 3 --retry-delay 2 -o "$archive" "$ORT_URL"
-    tar -xzf "$archive" -C "$ORT_VENDOR_DIR"
-    rm -f "$archive"
+    write_step "Ensuring ONNX Runtime ${ORT_VERSION}"
+    ORT_VERSION="$ORT_VERSION" bash "$REPO_ROOT/scripts/setup_onnxruntime.sh"
 }
 
 download_model() {

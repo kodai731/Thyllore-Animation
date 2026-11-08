@@ -23,14 +23,59 @@ use crate::avatar_setup_bridge::BoneSpec;
 use crate::collider_bridge::FitSkin;
 use crate::param_rows::{param_rows, ParamRow};
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GenerateChainsRequest {
+    pub positions: Vec<[f32; 3]>,
+    pub triangles: Vec<[u32; 3]>,
+    pub root_position: [f32; 3],
+    pub target: String,
+    pub settings: BTreeMap<String, f32>,
+    #[serde(default)]
+    pub skins: Vec<FitSkin>,
+    #[serde(default)]
+    pub root_bone: usize,
+    #[serde(default)]
+    pub tex_coords: Vec<[f32; 2]>,
+    #[serde(default)]
+    pub covered_vertices: Vec<u32>,
+    #[serde(default)]
+    pub body_colliders: Vec<BodyColliderIn>,
+    #[serde(default)]
+    pub humanoid_bones: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub bones: Vec<BoneSpec>,
+    #[serde(default)]
+    pub given_chains: Vec<GivenChainIn>,
+    #[serde(default)]
+    pub root_role: Option<HumanoidRole>,
+    #[serde(default)]
+    pub attachment: Option<RootAttachment>,
+}
+
+/// The vertex groups the addon writes on a submesh beside its bone weights: the measured garment
+/// coverage, and one membership group per chain, spelled by `membership_vertex_group`.
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct VertexGroupNames {
+    pub covered: &'static str,
+    #[serde(skip)]
+    pub membership_prefix: &'static str,
+}
+
+pub const VERTEX_GROUP_NAMES: VertexGroupNames = VertexGroupNames {
+    covered: "thyllore_covered",
+    membership_prefix: "thyllore_chain_",
+};
+
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
     pub chains: Vec<ChainOut>,
     pub weights: Vec<WeightOut>,
     /// The capsule a hair role fits around the head, in the same space as the positions
     pub head_capsule: Option<CapsuleOut>,
-    /// The garment vertices the body covers, marked or found from the supported rings
-    pub covered: Vec<u32>,
+    /// The garment vertices the body covers, marked or found from the supported rings; a Cap root
+    /// covers nothing
+    pub covered: Option<Vec<u32>>,
     /// The ring a garment hangs from and the bone that supports it, when the body supports one
     pub support: Option<SupportOut>,
     pub attachment: RootAttachment,
@@ -146,15 +191,49 @@ pub fn chain_gen_params() -> Vec<ParamRow> {
     )
 }
 
-pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSettings> {
-    let mut settings = ChainGenSettings::default();
-    apply_setting_assignments(&mut settings, pairs)?;
-    Ok(settings)
+pub fn settings_from_map(settings: &BTreeMap<String, f32>) -> anyhow::Result<ChainGenSettings> {
+    let assignments: Vec<(String, f32)> = settings
+        .iter()
+        .map(|(name, value)| (name.clone(), *value))
+        .collect();
+    let mut resolved = ChainGenSettings::default();
+    apply_setting_assignments(&mut resolved, &assignments)?;
+    Ok(resolved)
 }
 
-pub fn parse_attachment(s: &str) -> anyhow::Result<RootAttachment> {
-    serde_json::from_value::<RootAttachment>(serde_json::Value::String(s.to_owned()))
-        .map_err(|_| anyhow::anyhow!("attachment must be \"cap\" or \"ring\", got \"{s}\""))
+/// The chain a membership vertex group holds the assigned vertices of; any other group is none.
+pub fn chain_of_vertex_group(group_name: &str) -> Option<&str> {
+    group_name.strip_prefix(VERTEX_GROUP_NAMES.membership_prefix)
+}
+
+pub fn membership_vertex_group(chain_name: &str) -> String {
+    format!("{}{chain_name}", VERTEX_GROUP_NAMES.membership_prefix)
+}
+
+pub fn generate_chains(request: &GenerateChainsRequest) -> anyhow::Result<ChainGenOutput> {
+    let settings = settings_from_map(&request.settings)?;
+    let roles = role_bones(&request.humanoid_bones, &request.bones);
+    let colliders = body_colliders(&request.body_colliders, &roles, &request.bones);
+    run_chain_gen(
+        &request.positions,
+        &request.triangles,
+        request.root_position,
+        &request.target,
+        settings,
+        SkinAttachment {
+            skins: &request.skins,
+            body_colliders: &colliders,
+            roles: &roles,
+            covered_vertices: &request.covered_vertices,
+        },
+        ChainRootIn {
+            bone: request.root_bone,
+            role: request.root_role,
+            attachment: request.attachment,
+        },
+        &request.tex_coords,
+        &request.given_chains,
+    )
 }
 
 fn vector3_to_array(v: Vec3) -> [f32; 3] {
@@ -383,7 +462,10 @@ pub fn run_chain_gen(
         chains,
         weights,
         head_capsule,
-        covered: placement.covered.iter().map(|c| c.vertex).collect(),
+        covered: match resolved_attachment {
+            RootAttachment::Cap => None,
+            RootAttachment::Ring => Some(placement.covered.iter().map(|c| c.vertex).collect()),
+        },
         support: placement.support.map(|support| SupportOut {
             boundary_height: support.boundary_height,
             bone: support.bone,
@@ -405,9 +487,11 @@ mod tests {
             [0.0, -1.0, 0.0],
         ];
         let triangles: [[u32; 3]; 2] = [[0, 1, 2], [1, 3, 2]];
-        let settings =
-            settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
-                .unwrap();
+        let settings = settings_from_map(&BTreeMap::from([
+            ("joint_count".to_string(), 2.0),
+            ("column_count".to_string(), 1.0),
+        ]))
+        .unwrap();
         let head = FitSkin {
             positions: vec![
                 [0.2, 0.1, 0.0],
@@ -532,7 +616,7 @@ mod tests {
 
     #[test]
     fn unknown_setting_is_rejected() {
-        assert!(settings_from_pairs(&[("joints".into(), 2.0)]).is_err());
+        assert!(settings_from_map(&BTreeMap::from([("joints".to_string(), 2.0)])).is_err());
     }
 
     #[test]

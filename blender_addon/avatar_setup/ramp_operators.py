@@ -24,7 +24,8 @@ from ..common.spring_properties import (
     write_sidecar_spring,
 )
 from ..common.logged_report import report
-from .operators import armature_bone_specs, target_armature
+from ..common.rig_snapshot import read_bones
+from .operators import target_armature
 
 
 def active_bone_name(context):
@@ -47,6 +48,14 @@ def active_submesh_origin(context, arm):
     return {"mesh": obj.name, "material": material.name if material is not None else ""}
 
 
+def chains_from_bone(settings, spring, bones, bone_name: str, scope: str) -> list[str]:
+    """A chain joint selects its own chain's scope; any other bone selects the chains below it."""
+    chain = chain_with_joint(settings, bone_name)
+    if chain is not None:
+        return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
+    return avatar_api.chains_under_bone({"spring": spring, "bones": bones, "bone_name": bone_name})
+
+
 def target_chain_names(context, arm, settings, spring, bones, scope):
     """The chains the ramp applies to, from what is selected: the submesh the chains were generated on,
     a bone, or the entry selected in the Chains list."""
@@ -59,14 +68,11 @@ def target_chain_names(context, arm, settings, spring, bones, scope):
 
     bone_name = active_bone_name(context)
     if bone_name is not None:
-        chain = chain_with_joint(settings, bone_name)
-        if chain is not None:
-            return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
-        return avatar_api.chains_under_bone(spring, bones, bone_name)
+        return chains_from_bone(settings, spring, bones, bone_name, scope)
 
     chain = active_chain(settings)
     if chain is not None:
-        return avatar_api.chains_in_scope(spring, bones, chain.name, scope)
+        return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
     raise ValueError("Select the submesh the chains were generated on, a bone, or a chain in the list")
 
 
@@ -87,7 +93,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         form = context.window_manager.thyllore_ramp
 
         spring = spring_settings_to_edit(settings)
-        bones = armature_bone_specs(context, arm)
+        bones = read_bones(context, arm)
 
         try:
             names = target_chain_names(context, arm, settings, spring, bones, form.scope)
@@ -100,12 +106,12 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = avatar_api.apply_ramp(
-                spring,
-                bones,
-                names,
-                ramp_values(form),
-            )
+            output = avatar_api.apply_ramp({
+                "spring": spring,
+                "bones": bones,
+                "chain_names": names,
+                "ramp": ramp_values(form),
+            })
         except ValueError as e:
             report(self, "ERROR", f"apply_ramp failed: {e}")
             return {"CANCELLED"}

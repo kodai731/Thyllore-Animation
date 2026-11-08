@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from blender_addon.common.chain_bone_display import (
     CHAIN_COLLECTION_NAME,
     apply_chain_bone_display,
@@ -35,6 +37,11 @@ class FakeCollections:
 
     def remove(self, collection):
         del self.items[collection.name]
+
+
+@pytest.fixture(autouse=True)
+def _wheel(avatar_api, monkeypatch):
+    monkeypatch.setattr("blender_addon.common.chain_bone_display.avatar_api", avatar_api)
 
 
 def _bone(name):
@@ -86,11 +93,16 @@ def test_remove_chain_collections_drops_only_the_named_chains():
     assert set(arm.data.collections.items) == {CHAIN_COLLECTION_NAME, "b"}
 
 
-def test_apply_chain_display_names_collections_after_the_chains():
+def test_apply_chain_display_names_collections_after_the_chains(avatar_api):
     chain = SimpleNamespace(name="skirt", origin_attachment="ring", tail="", joints=[SimpleNamespace(bone="skirt_00")])
-    arm = _armature(["skirt_00"], [chain])
+    authored = SimpleNamespace(name="tail", origin_attachment="", tail="", joints=[SimpleNamespace(bone="tail_00")])
+    arm = _armature(["skirt_00", "tail_00"], [chain, authored])
 
     apply_chain_display(arm)
 
     assert arm.data.collections.items["skirt"].bones == ["skirt_00"]
-    assert arm.data.bones.get("skirt_00").color.palette == "THEME04"
+    ring_palette = f"THEME{avatar_api.chain_bone_palette('ring'):02d}"
+    authored_palette = f"THEME{avatar_api.chain_bone_palette(None):02d}"
+    assert arm.data.bones.get("skirt_00").color.palette == ring_palette
+    assert arm.data.bones.get("tail_00").color.palette == authored_palette
+    assert ring_palette != authored_palette

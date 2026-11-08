@@ -15,43 +15,14 @@ except ImportError:
     avatar_api = None  # type: ignore
     _AVATAR_API_AVAILABLE = False
 
-from ..common.avatar_sidecar import bone_specs, submesh_to_sidecar, write_submesh_sidecar
-from ..common.bone_frames import bone_bind_matrix, bone_rest_frame
+from ..common.avatar_sidecar import submesh_to_sidecar, write_submesh_sidecar
 from ..common.chain_bone_display import apply_chain_display
+from ..common.rig_snapshot import RigSnapshot, read_rig
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_sidecar, write_sidecar_spring
 from ..common.vrm_export import VRM_META_DEFAULT_VERSION, default_author, default_copyright, vrm_meta_to_dict
 from ..common.armature import armature_of
 from ..common.logged_report import report
 from ..common.mesh_data import material_loop_indices_of
-
-
-def bound_meshes(arm) -> list:
-    """Collect mesh objects that reference arm via an ARMATURE modifier."""
-    meshes = []
-    for obj in bpy.data.objects:
-        if obj.type != "MESH":
-            continue
-        for mod in obj.modifiers:
-            if mod.type == "ARMATURE" and mod.object is arm:
-                meshes.append(obj)
-                break
-    return meshes
-
-
-def _collect_bone_data(arm):
-    """Collect bone names, parent indices, and world-space head positions from arm.data.bones."""
-    bones = arm.data.bones
-    names = []
-    parent_indices = []
-    world_heads = []
-    for bone in bones:
-        names.append(bone.name)
-        if bone.parent is not None:
-            parent_indices.append(bones.find(bone.parent.name))
-        else:
-            parent_indices.append(None)
-        world_heads.append(tuple(arm.matrix_world @ bone.head_local))
-    return names, parent_indices, world_heads
 
 
 def target_armature(context):
@@ -94,32 +65,6 @@ class THYLLORE_OT_ResetVrmMeta(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def _matrix_rows(matrix):
-    return [[matrix[i][j] for j in range(4)] for i in range(4)]
-
-
-def armature_bone_specs(context, arm):
-    """Collect bone data from arm and build bone specs with context scale_length and rest frames."""
-    names, parent_indices, world_heads = _collect_bone_data(arm)
-    scale_length = context.scene.unit_settings.scale_length
-    armature_rows = _matrix_rows(arm.matrix_world)
-    rest_frames = [
-        bone_rest_frame(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
-        for bone in arm.data.bones
-    ]
-    return bone_specs(names, parent_indices, world_heads, scale_length, rest_frames)
-
-
-def armature_fit_bones(context, arm):
-    """Collect bone data from arm and build bone specs with bind_matrix for collider fit."""
-    specs = armature_bone_specs(context, arm)
-    scale_length = context.scene.unit_settings.scale_length
-    armature_rows = _matrix_rows(arm.matrix_world)
-    for spec, bone in zip(specs, arm.data.bones):
-        spec["bind_matrix"] = bone_bind_matrix(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
-    return specs
-
-
 def _select_only(context, objects):
     """Deselect everything and select only the given objects."""
     for o in bpy.data.objects:
@@ -154,15 +99,16 @@ def _mesh_counts(meshes):
     return triangle_count, material_names, morph_mesh_count
 
 
-def _sidecar_build_input(context, arm, meshes):
-    """Build the input dict for avatar_api.sidecar_build from arm and meshes.
+def _sidecar_build_input(rig: RigSnapshot):
+    """Build the input dict for avatar_api.sidecar_build from the rig.
 
     The sidecar the rig was imported from (``thyllore_spring.sidecar_json``) is passed as the base so the
     fields the addon does not edit survive the round trip."""
-    bones = armature_bone_specs(context, arm)
-    settings = arm.data.thyllore_spring
+    bones = rig.bones
+    meshes = rig.meshes
+    settings = rig.arm.data.thyllore_spring
 
-    spring = avatar_api.spring_colliders_to_model(spring_settings_to_sidecar(settings), bones)
+    spring = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_sidecar(settings), "bones": bones})
 
     all_roles = []
     all_hidden = []
@@ -226,9 +172,10 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
             report(self, "ERROR", f"Cannot read file: {e}")
             return {"CANCELLED"}
 
+        rig = read_rig(context, arm)
         try:
             sidecar = avatar_api.sidecar_read(text)
-            spring = avatar_api.spring_colliders_to_local(sidecar["spring"], armature_bone_specs(context, arm))
+            spring = avatar_api.spring_colliders_to_local({"spring": sidecar["spring"], "bones": rig.bones})
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"Invalid sidecar file: {e}")
             return {"CANCELLED"}
@@ -238,8 +185,7 @@ class THYLLORE_OT_ImportAvatarSidecar(bpy.types.Operator, ImportHelper):
         write_sidecar_spring(settings, spring)
         apply_chain_display(arm)
 
-        meshes = bound_meshes(arm)
-        for mesh_obj in meshes:
+        for mesh_obj in rig.meshes:
             write_submesh_sidecar(
                 mesh_obj.thyllore_submesh,
                 mesh_obj.name,
@@ -274,12 +220,13 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             return {"CANCELLED"}
 
         arm = target_armature(context)
-        meshes = bound_meshes(arm)
+        rig = read_rig(context, arm)
+        meshes = rig.meshes
 
         selected_before = frozenset(o for o in context.selected_objects)
         active_before = context.view_layer.objects.active
 
-        sidecar_input = _sidecar_build_input(context, arm, meshes)
+        sidecar_input = _sidecar_build_input(rig)
 
         try:
             json_text = avatar_api.sidecar_build(sidecar_input)
@@ -313,7 +260,7 @@ class THYLLORE_OT_ExportForUnity(bpy.types.Operator, ExportHelper):
             report(self, "ERROR", f"Cannot write sidecar file: {e}")
             return {"CANCELLED"}
 
-        result = avatar_api.infer_humanoid_mapping(sidecar_input["bones"])
+        result = avatar_api.infer_humanoid_mapping({"bones": sidecar_input["bones"]})
         unresolved = result.get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
@@ -368,34 +315,35 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         arm = target_armature(context)
-        meshes = bound_meshes(arm)
+        rig = read_rig(context, arm)
+        meshes = rig.meshes
         meta = vrm_meta_to_dict(arm.data.thyllore_vrm, fallback_author=default_author())
         if not meta["authors"]:
             report(self, "ERROR", "VRM meta needs at least one author")
             return {"CANCELLED"}
 
-        sidecar_input = _sidecar_build_input(context, arm, meshes)
+        sidecar_input = _sidecar_build_input(rig)
         try:
             json_text = avatar_api.sidecar_build(sidecar_input)
         except ValueError as e:
             report(self, "ERROR", f"Sidecar build failed: {e}")
             return {"CANCELLED"}
 
-        for warning in avatar_api.vrm_t_pose_warnings(sidecar_input["bones"], sidecar_input["humanoid_overrides"]):
+        for warning in avatar_api.vrm_t_pose_warnings({"bones": sidecar_input["bones"], "humanoid_overrides": sidecar_input["humanoid_overrides"]}):
             report(self, "WARNING", warning)
-        for warning in avatar_api.vrm_rest_clearance_warnings(sidecar_input["spring"], sidecar_input["bones"]):
+        for warning in avatar_api.vrm_rest_clearance_warnings({"spring": sidecar_input["spring"], "bones": sidecar_input["bones"]}):
             report(self, "WARNING", warning)
-        unresolved = avatar_api.infer_humanoid_mapping(sidecar_input["bones"]).get("unresolved", [])
+        unresolved = avatar_api.infer_humanoid_mapping({"bones": sidecar_input["bones"]}).get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")
 
-        scale_length = context.scene.unit_settings.scale_length
+        scale_length = rig.scale_length
         if abs(scale_length - 1.0) > 1e-6:
             report(self, "WARNING", f"Unit scale {scale_length:g}: the VRM keeps Blender units, VRM expects metres")
 
         glb = _export_selection_glb(context, arm, meshes)
         try:
-            vrm = avatar_api.vrm_write(glb, json_text, meta, scale_length)
+            vrm = avatar_api.vrm_write({"glb": glb, "sidecar_json": json_text, "meta": meta, "metres_per_gltf_unit": scale_length})
         except (RuntimeError, ValueError) as e:
             report(self, "ERROR", f"VRM write failed: {e}")
             return {"CANCELLED"}

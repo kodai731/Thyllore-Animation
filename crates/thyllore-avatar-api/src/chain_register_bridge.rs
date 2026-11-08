@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
     RootAttachment, SpringChain, SpringJointParam, SpringSpace,
@@ -9,10 +9,10 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
 
+use crate::avatar_setup_bridge::{bone_inputs, rest_frames, BoneSpec};
 use crate::chain_gen_bridge::CapsuleOut;
-use crate::collider_bridge::{
-    rest_frames, skeleton_from_fit_bones, skin_data_from_fit_skin, to_bone_inputs, FitBone, FitSkin,
-};
+use crate::collider_bridge::{skeleton_with_bind_poses, skin_data_from_fit_skin, FitSkin};
+use thyllore_avatar_core::vrchat::sidecar_spring::BoneRestFrame;
 
 #[derive(Clone, serde::Deserialize)]
 pub struct GeneratedChainIn {
@@ -28,11 +28,17 @@ pub struct GeneratedJointIn {
     pub hit_radius: f32,
 }
 
-pub struct RegisterRequest<'a> {
-    pub root_name: &'a str,
-    pub target: &'a str,
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegisterGeneratedChainsRequest {
+    pub spring: SidecarSpring,
+    pub bones: Vec<BoneSpec>,
+    pub skins: Vec<FitSkin>,
+    pub root_bone: String,
+    pub target: String,
     pub attachment: RootAttachment,
-    pub chains: &'a [GeneratedChainIn],
+    pub chains: Vec<GeneratedChainIn>,
+    #[serde(default)]
     pub head_capsule: Option<CapsuleOut>,
 }
 
@@ -41,19 +47,16 @@ pub struct RegisterRequest<'a> {
 /// values), the root collider (the head capsule, or a capsule fitted to the skin on the root bone)
 /// joins the fitted body group, and every registered chain is bound to that group.
 pub fn register_generated_chains(
-    spring: &SidecarSpring,
-    bones: &[FitBone],
-    skins: &[FitSkin],
-    request: &RegisterRequest<'_>,
+    request: &RegisterGeneratedChainsRequest,
 ) -> anyhow::Result<SidecarSpring> {
     let target: SubmeshSelector = request.target.parse().map_err(anyhow::Error::msg)?;
     let attachment = request.attachment;
-    let skeleton = skeleton_from_fit_bones(bones)?;
-    let bone_inputs = to_bone_inputs(bones);
-    let root = bone_id(&skeleton, request.root_name)?;
+    let skeleton = skeleton_with_bind_poses(&request.bones)?;
+    let bone_inputs = bone_inputs(&request.bones);
+    let root = bone_id(&skeleton, &request.root_bone)?;
 
-    let frames = rest_frames(bones)?;
-    let mut setup = spring_setup_from_sidecar(spring, &bone_inputs, &frames);
+    let frames = rest_frames(&request.bones)?;
+    let mut setup = spring_setup_from_sidecar(&request.spring, &bone_inputs, &frames);
     let replaced: Vec<&str> = request
         .chains
         .iter()
@@ -63,9 +66,14 @@ pub fn register_generated_chains(
         !(chain.origin.is_generated_on(&target) && replaced.contains(&chain.name.as_str()))
     });
 
-    let root_collider = match request.head_capsule {
-        Some(capsule) => Some(head_capsule_collider(&capsule, root, bones)?),
-        None => fit_root_collider(&skeleton, root, skins),
+    let root_collider = match &request.head_capsule {
+        Some(capsule) => Some(head_capsule_collider(
+            capsule,
+            root,
+            &request.bones,
+            &frames[root as usize],
+        )?),
+        None => fit_root_collider(&skeleton, root, &request.skins),
     };
     let chains: Vec<SpringChain> = request
         .chains
@@ -108,13 +116,15 @@ fn bone_id(skeleton: &Skeleton, name: &str) -> anyhow::Result<BoneId> {
         .ok_or_else(|| anyhow::anyhow!("bone \"{}\" not found", name))
 }
 
+/// The head capsule comes in model metres; the collider lives in the root bone's local units.
 fn head_capsule_collider(
     capsule: &CapsuleOut,
     root: BoneId,
-    bones: &[FitBone],
+    bones: &[BoneSpec],
+    root_frame: &BoneRestFrame,
 ) -> anyhow::Result<FittedCapsule> {
-    let root_global = Mat4::from_cols_array_2d(&bones[root as usize].bind_matrix).transpose();
-    let model_to_root_local = root_global
+    let model_to_root_local = bones[root as usize]
+        .bind_global()?
         .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("bind matrix of the root bone is singular"))?;
     let to_local = |p: [f32; 3]| (model_to_root_local * Vec3::from(p).extend(1.0)).truncate();
@@ -122,7 +132,7 @@ fn head_capsule_collider(
         bone_id: root,
         head: to_local(capsule.bottom),
         tail: to_local(capsule.top),
-        radius: capsule.radius,
+        radius: root_frame.length_to_local(capsule.radius),
     })
 }
 

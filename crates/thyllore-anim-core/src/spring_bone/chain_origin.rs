@@ -1,12 +1,28 @@
 use super::SubmeshSelector;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::VariantArray,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum RootAttachment {
-    /// The root sits on the top of a closed surface, such as the head.
     Cap,
-    /// The root is a ring at the top edge of the mesh, such as a skirt or a sleeve.
     Ring,
+}
+
+impl RootAttachment {
+    pub fn label(self) -> &'static str {
+        match self {
+            RootAttachment::Cap => "Cap",
+            RootAttachment::Ring => "Ring",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            RootAttachment::Cap => "Root on the top of a closed surface, such as the head",
+            RootAttachment::Ring => "Root ring at the mesh top edge, such as a skirt or sleeve",
+        }
+    }
 }
 
 /// Where a spring chain came from: hand-authored, or generated on a submesh by the chain generator.

@@ -1,35 +1,29 @@
 """Pure Python helpers for sidecar export/import (bpy-independent)."""
 from __future__ import annotations
 
-from .coordinates import blender_to_engine_metres
+AUTO_ATTACHMENT = "AUTO"
 
-ATTACHMENT_TO_SIDECAR = {"AUTO": None, "CAP": "cap", "RING": "ring"}
-ATTACHMENT_FROM_SIDECAR = {sidecar: enum for enum, sidecar in ATTACHMENT_TO_SIDECAR.items() if sidecar}
+
+def attachment_identifier(sidecar_name: str) -> str:
+    """The Blender enum identifier of a root attachment's sidecar name."""
+    return sidecar_name.upper()
+
+
+def attachment_enum_items(root_attachments: list[dict]) -> list[tuple[str, str, str]]:
+    """The submesh row's attachment choices: Auto, then every attachment the wheel lists."""
+    return [(AUTO_ATTACHMENT, "Auto", "The default attachment of the root role")] + [
+        (attachment_identifier(entry["name"]), entry["label"], entry["description"]) for entry in root_attachments
+    ]
 
 
 def attachment_to_sidecar(item) -> str | None:
-    """The ``cap`` / ``ring`` a submesh row chose, None for Auto."""
-    return ATTACHMENT_TO_SIDECAR[getattr(item, "attachment", "AUTO")]
+    """The attachment a submesh row chose as its sidecar name, None for Auto."""
+    identifier = getattr(item, "attachment", AUTO_ATTACHMENT)
+    return None if identifier == AUTO_ATTACHMENT else identifier.lower()
 
 
-def bone_specs(names, parent_indices, world_heads, scale_length, rest_frames=None):
-    """Build bone spec list from names, parent indices, world-space head positions and, when
-    given, the per-bone rest frames (``bone_frames.bone_rest_frame``).
-
-    Root bones have parent_index None (passed through as None); children have their
-    parent's index in the bone list."""
-    specs = []
-    frames = rest_frames if rest_frames is not None else [None] * len(names)
-    for name, parent_index, world_head, rest_frame in zip(names, parent_indices, world_heads, frames):
-        spec = {
-            "name": name,
-            "parent": parent_index,
-            "rest_position": list(blender_to_engine_metres(world_head, scale_length)),
-        }
-        if rest_frame is not None:
-            spec["rest_frame"] = rest_frame
-        specs.append(spec)
-    return specs
+def attachment_from_sidecar(sidecar_name: str | None) -> str:
+    return AUTO_ATTACHMENT if sidecar_name is None else attachment_identifier(sidecar_name)
 
 
 def submesh_to_sidecar(mesh_name, submesh, material_loop_indices):
@@ -69,7 +63,7 @@ def write_submesh_sidecar(submesh, mesh_name, roles, hidden, material_loop_indic
         item = submesh.roles.add()
         item.material = entry["material"]
         item.role = entry["role"]
-        item.attachment = ATTACHMENT_FROM_SIDECAR.get(entry.get("attachment"), "AUTO")
+        item.attachment = attachment_from_sidecar(entry.get("attachment"))
     submesh.hidden_triangles.clear()
     for entry in hidden:
         if entry["mesh"] != mesh_name:

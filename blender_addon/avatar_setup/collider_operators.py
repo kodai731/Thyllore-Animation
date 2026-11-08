@@ -12,15 +12,15 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bones import settings_from_properties
-from ..common.skin_input import skin_input, skin_role_meshes
 from ..common.effect_properties import build_param_properties
+from ..common.rig_snapshot import RigSnapshot, read_bones, read_rig
 from ..common.spring_properties import (
     spring_settings_to_edit,
     write_sidecar_spring,
 )
 from ..common.logged_report import report
-from .operators import armature_bone_specs, armature_fit_bones, bound_meshes, target_armature
-from .ramp_operators import active_bone_name, target_chain_names
+from .operators import target_armature
+from .ramp_operators import active_bone_name, chains_from_bone
 
 CAPSULE_FIT_UI_PARAMS = avatar_api.capsule_fit_ui_params() if _AVATAR_API_AVAILABLE else []
 
@@ -36,20 +36,19 @@ def default_fit_settings() -> dict[str, float]:
     return {param["name"]: float(param["default"]) for param in CAPSULE_FIT_UI_PARAMS}
 
 
-def fit_body_colliders(context, arm, fit_settings: dict[str, float]) -> int:
+def fit_body_colliders(rig: RigSnapshot, fit_settings: dict[str, float]) -> int:
     """Replace the rig's fitted body colliders from its skin meshes; returns the collider count."""
-    settings = arm.data.thyllore_spring
-    skin_meshes = skin_role_meshes(bound_meshes(arm))
-    if not skin_meshes:
+    settings = rig.arm.data.thyllore_spring
+    if not rig.skins:
         raise ValueError("No skin mesh found (no bound mesh has role 'skin')")
 
-    bones = armature_fit_bones(context, arm)
-    sidecar = avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones)
-    scale_length = context.scene.unit_settings.scale_length
-    skins = [skin_input(mesh_obj, arm, scale_length) for mesh_obj in skin_meshes]
-    output = avatar_api.fit_body_colliders(sidecar, bones, skins, fit_settings)
+    bones = rig.bones
+    sidecar = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones})
+    output = avatar_api.fit_body_colliders({
+        "spring": sidecar, "bones": bones, "skins": rig.skins, "settings": fit_settings,
+    })
 
-    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(output, bones))
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local({"spring": output, "bones": bones}))
     return len(output.get("colliders", []))
 
 
@@ -70,7 +69,7 @@ class THYLLORE_OT_FitBodyColliders(bpy.types.Operator):
         arm = target_armature(context)
         try:
             collider_count = fit_body_colliders(
-                context, arm, settings_from_properties(CAPSULE_FIT_UI_PARAMS, self)
+                read_rig(context, arm), settings_from_properties(CAPSULE_FIT_UI_PARAMS, self)
             )
         except ValueError as e:
             report(self, "ERROR", f"fit_body_colliders failed: {e}")
@@ -198,10 +197,9 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             return {"CANCELLED"}
 
         spring = spring_settings_to_edit(settings)
-        bones = armature_bone_specs(context, arm)
-
+        bones = read_bones(context, arm)
         try:
-            chains = target_chain_names(settings, spring, bones, bone_name, "subtree")
+            chains = chains_from_bone(settings, spring, bones, bone_name, "subtree")
         except ValueError as e:
             report(self, "ERROR", str(e))
             return {"CANCELLED"}
@@ -216,7 +214,9 @@ class THYLLORE_OT_ApplyColliderGroups(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = avatar_api.assign_collider_groups(spring, bones, chains, groups)
+            output = avatar_api.assign_collider_groups({
+                "spring": spring, "bones": bones, "chain_names": chains, "group_names": groups,
+            })
         except ValueError as e:
             report(self, "ERROR", f"assign_collider_groups failed: {e}")
             return {"CANCELLED"}

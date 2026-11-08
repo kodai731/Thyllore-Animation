@@ -12,10 +12,10 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bone_display import remove_chain_collections
-from ..common.chain_bones import chain_of_membership_group
 from ..common.chain_migration import rename_legacy_chains
 from ..common.spring_properties import generated_chain_bones, remove_chains_generated_on
 from .chain_bone_edit import remove_bones, remove_vertex_groups
+from .chain_inputs import VERTEX_GROUP_NAMES
 from .chain_inputs import resolve_submesh
 from .operators import target_armature
 
@@ -35,7 +35,7 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
 
 
 def _membership_groups_of_submesh(obj, target: str) -> list[str]:
-    chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
+    chains = {VERTEX_GROUP_NAMES.chain_of(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
     return [chains[name] for name in avatar_api.submesh_chain_names(target, list(chains))]
 

@@ -20,7 +20,8 @@ from ..common.spring_properties import (
 from ..common.logged_report import report
 from .chain_inputs import GENERATABLE_ROLES
 from .chain_reset import remove_generated_chains
-from .operators import armature_bone_specs, bound_meshes, target_armature
+from ..common.rig_snapshot import bound_meshes, read_bones
+from .operators import target_armature
 
 
 class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
@@ -58,8 +59,8 @@ class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
 
         try:
             sidecar = spring_settings_to_edit(settings)
-            bones = armature_bone_specs(context, arm)
-            output = avatar_api.use_existing_bones_as_springs(sidecar, bones, self.root_bone, self.min_joints)
+            bones = read_bones(context, arm)
+            output = avatar_api.use_existing_bones_as_springs({"spring": sidecar, "bones": bones, "root_bone": self.root_bone, "min_joints": self.min_joints})
         except ValueError as e:
             report(self, "ERROR", f"use_existing_bones_as_springs failed: {e}")
             return {"CANCELLED"}

@@ -11,7 +11,8 @@ from bpy.types import Panel, UIList
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
 from .chain_inputs import GENERATABLE_ROLES, generatable_submeshes
-from .operators import bound_meshes, target_armature
+from ..common.rig_snapshot import bound_meshes
+from .operators import target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain, simulated_joints
 from ..common.vrm_export import meta_fields_of_kind
 from .properties import CHAIN_GEN_UI_PARAMS, HIDDEN_MASK_DEFAULTS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES

@@ -1,7 +1,7 @@
 use super::*;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
 
-fn make_bones() -> Vec<FitBone> {
+fn make_bones() -> Vec<BoneSpec> {
     let identity = [
         [1.0, 0.0, 0.0, 0.0],
         [0.0, 1.0, 0.0, 0.0],
@@ -9,65 +9,47 @@ fn make_bones() -> Vec<FitBone> {
         [0.0, 0.0, 0.0, 1.0],
     ];
     vec![
-        FitBone {
-            bone: BoneSpec {
-                name: "Hips".into(),
-                parent: None,
-                rest_position: [0.0, 1.0, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Hips".into(),
+            parent: None,
+            rest_position: [0.0, 1.0, 0.0],
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Spine".into(),
-                parent: Some(0),
-                rest_position: [0.0, 1.1, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Spine".into(),
+            parent: Some(0),
+            rest_position: [0.0, 1.1, 0.0],
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Chest".into(),
-                parent: Some(1),
-                rest_position: [0.0, 1.2, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Chest".into(),
+            parent: Some(1),
+            rest_position: [0.0, 1.2, 0.0],
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "UpperChest".into(),
-                parent: Some(2),
-                rest_position: [0.0, 1.25, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "UpperChest".into(),
+            parent: Some(2),
+            rest_position: [0.0, 1.25, 0.0],
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Neck".into(),
-                parent: Some(3),
-                rest_position: [0.0, 1.3, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Neck".into(),
+            parent: Some(3),
+            rest_position: [0.0, 1.3, 0.0],
+            bind_matrix: Some(identity),
         },
-        FitBone {
-            bone: BoneSpec {
-                name: "Head".into(),
-                parent: Some(4),
-                rest_position: [0.0, 1.4, 0.0],
-                rest_frame: None,
-            },
-            bind_matrix: identity,
+        BoneSpec {
+            name: "Head".into(),
+            parent: Some(4),
+            rest_position: [0.0, 1.4, 0.0],
+            bind_matrix: Some(identity),
         },
     ]
 }
 
-fn make_cylinder_skin(bones: &[FitBone]) -> Vec<FitSkin> {
-    let spine_idx = bones.iter().position(|b| b.bone.name == "Spine").unwrap();
+fn make_cylinder_skin(bones: &[BoneSpec]) -> Vec<FitSkin> {
+    let spine_idx = bones.iter().position(|b| b.name == "Spine").unwrap();
     let mut positions = Vec::new();
     let mut influences = Vec::new();
     let radius = 0.1;
@@ -100,7 +82,13 @@ fn collider_bridge_fit_produces_collider_on_spine() {
     let skins = make_cylinder_skin(&bones);
     let spring = empty_spring();
 
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     assert!(
         !result.colliders.is_empty(),
@@ -137,7 +125,13 @@ fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
     let bones = make_bones();
     let skins = make_cylinder_skin(&bones);
 
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     let fitted_group = result
         .collider_groups
@@ -196,14 +190,13 @@ fn collider_bridge_assign_collider_groups_replaces() {
     );
 
     let bones = make_bones();
-    let bone_inputs = to_bone_inputs(&bones);
 
-    let result = assign_collider_groups(
-        &spring,
-        &bone_inputs,
-        &["Spine".to_string()],
-        &["New".to_string()],
-    )
+    let result = assign_collider_groups(&AssignColliderGroupsRequest {
+        spring,
+        bones: bones.clone(),
+        chain_names: vec!["Spine".to_string()],
+        group_names: vec!["New".to_string()],
+    })
     .unwrap();
 
     let chain = &result.chains[0];
@@ -236,14 +229,13 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
         },
     );
     let bones = make_bones();
-    let bone_inputs = to_bone_inputs(&bones);
 
-    let err = assign_collider_groups(
-        &spring,
-        &bone_inputs,
-        &["Spine".to_string()],
-        &["Unknown".to_string()],
-    )
+    let err = assign_collider_groups(&AssignColliderGroupsRequest {
+        spring,
+        bones: bones.clone(),
+        chain_names: vec!["Spine".to_string()],
+        group_names: vec!["Unknown".to_string()],
+    })
     .unwrap_err();
 
     assert!(
@@ -256,7 +248,7 @@ fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
 #[test]
 fn collider_bridge_fit_high_bone_index_head() {
     let bones = make_bones();
-    let head_idx = bones.iter().position(|b| b.bone.name == "Head").unwrap();
+    let head_idx = bones.iter().position(|b| b.name == "Head").unwrap();
     assert!(head_idx >= 5);
 
     let mut positions = Vec::new();
@@ -280,7 +272,13 @@ fn collider_bridge_fit_high_bone_index_head() {
     }];
 
     let spring = empty_spring();
-    let result = fit_body_colliders(&spring, &bones, &skins, &[]).unwrap();
+    let result = fit_body_colliders(&FitBodyCollidersRequest {
+        spring,
+        bones,
+        skins,
+        settings: std::collections::BTreeMap::new(),
+    })
+    .unwrap();
 
     assert!(
         result
@@ -290,4 +288,18 @@ fn collider_bridge_fit_high_bone_index_head() {
         "fit should produce a collider on Head (bone index {})",
         head_idx
     );
+}
+
+#[test]
+fn collider_bridge_reports_a_bone_without_bind_matrix() {
+    let mut bones = make_bones();
+    bones[1].bind_matrix = None;
+
+    let error = has_fitted_body_colliders(&HasFittedBodyCollidersRequest {
+        spring: SidecarSpring::default(),
+        bones,
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("bind_matrix"), "{error}");
 }

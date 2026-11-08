@@ -30,25 +30,15 @@ pub fn perspective(fovy_radians: f32, aspect: f32, near: f32, far: f32) -> Mat4 
 
 /// Vulkan clip space with reversed depth: near maps to 1, infinity to 0.
 pub fn perspective_infinite_reverse(fovy_radians: f32, aspect: f32, near: f32) -> Mat4 {
-    let f = 1.0 / (fovy_radians / 2.0).tan();
+    let focal_y = 1.0 / (fovy_radians / 2.0).tan();
+    perspective_infinite_reverse_focal(focal_y / aspect, focal_y, near)
+}
 
+/// `perspective_infinite_reverse` from the focal terms of a projection (`[0][0]`, `[1][1]` of an
+/// OpenGL-style matrix such as Blender's `window_matrix`), the one layout every engine view uses.
+pub fn perspective_infinite_reverse_focal(focal_x: f32, focal_y: f32, near: f32) -> Mat4 {
     Mat4::from_cols_array(&[
-        f / aspect,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -f,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -1.0,
-        0.0,
-        0.0,
-        near,
-        0.0,
+        focal_x, 0.0, 0.0, 0.0, 0.0, -focal_y, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, near, 0.0,
     ])
 }
 

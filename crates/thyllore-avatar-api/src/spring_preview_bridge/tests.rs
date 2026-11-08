@@ -1,45 +1,77 @@
 use glam::{Quat, Vec3};
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
 
 use super::*;
-use crate::spring_edit_bridge::use_existing_bones_as_springs;
+use crate::avatar_setup_bridge::BoneSpec;
+use crate::blender_space::column_major;
+use crate::spring_edit_bridge::{use_existing_bones_as_springs, UseExistingBonesAsSpringsRequest};
 
-fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneInput {
-    BoneInput {
+const IDENTITY_ROWS: MatrixRows = [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+];
+
+fn bone(name: &str, parent: Option<usize>, rest_position: [f32; 3]) -> BoneSpec {
+    BoneSpec {
         name: name.to_string(),
         parent,
         rest_position,
+        bind_matrix: None,
     }
 }
 
-/// Head at the origin with a three-bone strand hanging straight down the -Y axis.
-fn hanging_strand() -> (Vec<BoneInput>, Vec<MatrixRows>, SidecarSpring) {
+/// Head at the origin with a three-bone strand hanging straight down Blender's -Z axis, the
+/// engine's -Y once the armature frame turns the axes.
+fn hanging_strand() -> (SpringPreviewRequest, Vec<MatrixRows>) {
     let bones = vec![
         bone("Head", None, [0.0, 0.0, 0.0]),
         bone("hair_a", Some(0), [0.0, -0.1, 0.0]),
         bone("hair_a.001", Some(1), [0.0, -0.2, 0.0]),
         bone("hair_a.002", Some(2), [0.0, -0.3, 0.0]),
     ];
-    let rest_locals = vec![
-        translation_rows(Vec3::new(0.0, 0.0, 0.0)),
-        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
-        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
-        translation_rows(Vec3::new(0.0, -0.1, 0.0)),
-    ];
-    let spring =
-        use_existing_bones_as_springs(&SidecarSpring::default(), &bones, "Head", 2).unwrap();
-    (bones, rest_locals, spring)
+    let rest_matrices: Vec<MatrixRows> = (0..4)
+        .map(|index| translation_rows(Vec3::new(0.0, 0.0, -0.1 * index as f32)))
+        .collect();
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
+        spring: SidecarSpring::default(),
+        bones: bones.clone(),
+        root_bone: "Head".to_string(),
+        min_joints: 2,
+    })
+    .unwrap();
+    let request = SpringPreviewRequest {
+        spring,
+        bones,
+        armature_world: IDENTITY_ROWS,
+        rest_matrices: rest_matrices.clone(),
+        scale_length: 1.0,
+    };
+    (request, rest_matrices)
+}
+
+fn pose(pose_matrices: &[MatrixRows]) -> PoseRequest {
+    PoseRequest {
+        armature_world: IDENTITY_ROWS,
+        pose_matrices: pose_matrices.to_vec(),
+    }
 }
 
 fn step_frames(
     preview: &mut SpringPreview,
-    locals: &[MatrixRows],
+    pose_matrices: &[MatrixRows],
     frames: usize,
 ) -> Vec<JointPose> {
     let mut last = Vec::new();
     for _ in 0..frames {
-        last = preview.step(locals, 1.0 / 30.0).unwrap();
+        last = preview
+            .step(&StepRequest {
+                armature_world: IDENTITY_ROWS,
+                pose_matrices: pose_matrices.to_vec(),
+                dt: 1.0 / 30.0,
+            })
+            .unwrap();
     }
     last
 }
@@ -50,10 +82,10 @@ fn angle_degrees(rotation: [f32; 4]) -> f32 {
 
 #[test]
 fn spring_preview_strand_at_rest_under_gravity_stays_still() {
-    let (bones, rest_locals, spring) = hanging_strand();
-    let mut preview = SpringPreview::new(&spring, &bones, &rest_locals).unwrap();
+    let (request, rest_matrices) = hanging_strand();
+    let mut preview = SpringPreview::new(&request).unwrap();
 
-    let rotations = step_frames(&mut preview, &rest_locals, 30);
+    let rotations = step_frames(&mut preview, &rest_matrices, 30);
 
     assert_eq!(rotations.len(), 3);
     for rotation in &rotations {
@@ -68,13 +100,15 @@ fn spring_preview_strand_at_rest_under_gravity_stays_still() {
 
 #[test]
 fn spring_preview_strand_lags_behind_a_turned_head() {
-    let (bones, rest_locals, spring) = hanging_strand();
-    let mut preview = SpringPreview::new(&spring, &bones, &rest_locals).unwrap();
-    preview.reset(&rest_locals).unwrap();
+    let (request, rest_matrices) = hanging_strand();
+    let mut preview = SpringPreview::new(&request).unwrap();
+    preview.reset(&pose(&rest_matrices)).unwrap();
 
-    let mut turned = rest_locals.clone();
-    let head = Mat4::from_quat(Quat::from_rotation_z(f32::to_radians(60.0)));
-    turned[0] = head.transpose().to_cols_array_2d();
+    let head = Mat4::from_quat(Quat::from_rotation_y(f32::to_radians(-60.0)));
+    let turned: Vec<MatrixRows> = rest_matrices
+        .iter()
+        .map(|matrix| rows(head * column_major(matrix)))
+        .collect();
     let rotations = step_frames(&mut preview, &turned, 1);
     let root_angle = angle_degrees(rotations[0].rotation);
     assert!(
@@ -100,9 +134,17 @@ fn spring_preview_strand_lags_behind_a_turned_head() {
 
 #[test]
 fn spring_preview_rejects_a_matrix_count_mismatch() {
-    let (bones, rest_locals, spring) = hanging_strand();
-    assert!(SpringPreview::new(&spring, &bones, &rest_locals[..2]).is_err());
+    let (mut request, rest_matrices) = hanging_strand();
+    request.rest_matrices.truncate(2);
+    assert!(SpringPreview::new(&request).is_err());
 
-    let mut preview = SpringPreview::new(&spring, &bones, &rest_locals).unwrap();
-    assert!(preview.step(&rest_locals[..3], 1.0 / 30.0).is_err());
+    request.rest_matrices = rest_matrices.clone();
+    let mut preview = SpringPreview::new(&request).unwrap();
+    assert!(preview
+        .step(&StepRequest {
+            armature_world: IDENTITY_ROWS,
+            pose_matrices: rest_matrices[..3].to_vec(),
+            dt: 1.0 / 30.0,
+        })
+        .is_err());
 }

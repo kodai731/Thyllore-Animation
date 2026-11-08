@@ -1,12 +1,34 @@
 use glam::Vec3;
+use strum::VariantArray;
 
 use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    guess_submesh_role as core_guess_submesh_role, SubmeshKey,
+    guess_submesh_role as core_guess_submesh_role, SubmeshKey, SubmeshRole,
 };
 use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
     find_hidden_triangle_indices, merge_mask_meshes,
 };
+
+/// A submesh role as the addon lists it: its sidecar name and its label.
+#[derive(serde::Serialize)]
+pub struct SubmeshRoleEntry {
+    pub name: String,
+    pub label: &'static str,
+}
+
+pub fn submesh_roles() -> anyhow::Result<Vec<SubmeshRoleEntry>> {
+    SubmeshRole::VARIANTS
+        .iter()
+        .copied()
+        .map(|role| match serde_json::to_value(role)? {
+            serde_json::Value::String(name) => Ok(SubmeshRoleEntry {
+                name,
+                label: role.label(),
+            }),
+            other => anyhow::bail!("submesh role serializes to {other}, not a string"),
+        })
+        .collect()
+}
 
 #[derive(serde::Deserialize)]
 pub struct MaskMeshInput {
@@ -35,15 +57,19 @@ pub fn guess_submesh_role(mesh: &str, material: &str) -> String {
     }
 }
 
-pub fn find_hidden_triangles(
-    body: &MaskMeshInput,
-    garments: &[MaskMeshInput],
-    params: &HiddenMaskParams,
-) -> Vec<u32> {
-    let body_mesh = to_mask_mesh(body);
-    let garment_meshes: Vec<MaskMesh> = garments.iter().map(to_mask_mesh).collect();
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FindHiddenTrianglesRequest {
+    pub body: MaskMeshInput,
+    pub garments: Vec<MaskMeshInput>,
+    pub params: HiddenMaskParams,
+}
+
+pub fn find_hidden_triangles(request: &FindHiddenTrianglesRequest) -> Vec<u32> {
+    let body_mesh = to_mask_mesh(&request.body);
+    let garment_meshes: Vec<MaskMesh> = request.garments.iter().map(to_mask_mesh).collect();
     let merged_garment = merge_mask_meshes(&garment_meshes);
-    find_hidden_triangle_indices(&body_mesh, &merged_garment, params)
+    find_hidden_triangle_indices(&body_mesh, &merged_garment, &request.params)
 }
 
 pub fn hidden_mask_defaults() -> HiddenMaskParams {
@@ -97,7 +123,13 @@ mod tests {
             hidden_ratio: 0.6,
         };
 
-        let hidden = find_hidden_triangles(&body, &garments, &params);
+        let request = FindHiddenTrianglesRequest {
+            body,
+            garments,
+            params,
+        };
+
+        let hidden = find_hidden_triangles(&request);
         assert_eq!(hidden, vec![0, 1], "both body triangles should be hidden");
     }
 
@@ -116,10 +148,38 @@ mod tests {
             hidden_ratio: 0.6,
         };
 
-        let hidden = find_hidden_triangles(&body, &[], &params);
+        let request = FindHiddenTrianglesRequest {
+            body,
+            garments: vec![],
+            params,
+        };
+
+        let hidden = find_hidden_triangles(&request);
         assert!(
             hidden.is_empty(),
             "no triangles should be hidden with empty garments"
         );
+    }
+
+    #[test]
+    fn submesh_bridge_find_hidden_triangles_request_rejects_unknown_field() {
+        let json = serde_json::json!({
+            "body": {
+                "positions": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+                "normals": [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+                "triangles": [[0, 1, 2]]
+            },
+            "garments": [],
+            "params": {
+                "cover_distance": 0.1,
+                "cone_angle_deg": 30.0,
+                "ray_count": 5,
+                "hidden_ratio": 0.6
+            },
+            "unknown_field": true
+        });
+
+        let result = serde_json::from_value::<FindHiddenTrianglesRequest>(json);
+        assert!(result.is_err(), "should reject unknown field");
     }
 }

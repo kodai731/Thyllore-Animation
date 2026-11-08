@@ -16,7 +16,7 @@ except ImportError:
     avatar_api = None  # type: ignore
     _AVATAR_API_AVAILABLE = False
 
-from .operators import bound_meshes
+from ..common.rig_snapshot import bound_meshes
 
 
 def material_names(mesh_obj) -> list[str]:

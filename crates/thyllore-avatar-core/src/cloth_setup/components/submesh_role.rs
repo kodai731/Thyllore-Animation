@@ -6,7 +6,17 @@ pub use thyllore_anim_core::spring_bone::{SubmeshKey, SubmeshSelector};
 /// What the avatar setup does with a submesh: skin is hidden under garments and fit by colliders,
 /// garment and hair grow spring chains, an accessory takes part in neither.
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::VariantArray,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum SubmeshRole {
@@ -14,6 +24,17 @@ pub enum SubmeshRole {
     Garment,
     Hair,
     Accessory,
+}
+
+impl SubmeshRole {
+    pub fn label(self) -> &'static str {
+        match self {
+            SubmeshRole::Skin => "Skin",
+            SubmeshRole::Garment => "Garment",
+            SubmeshRole::Hair => "Hair",
+            SubmeshRole::Accessory => "Accessory",
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]

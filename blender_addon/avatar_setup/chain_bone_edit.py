@@ -10,8 +10,8 @@ try:
 except ImportError:
     avatar_api = None  # type: ignore
 
-from ..common.chain_bones import COVERED_GROUP, membership_group_name
 from ..common.rig_snapshot import matrix_rows
+from .chain_inputs import VERTEX_GROUP_NAMES
 
 
 def _armature_local_pairs(arm, specs) -> list[tuple[Vector, Vector]]:
@@ -94,13 +94,13 @@ def write_membership_groups(obj, chains: list[dict], given: list[dict]) -> None:
     given_names = {chain["name"] for chain in given}
     for chain in chains:
         if chain["name"] not in given_names:
-            _replace_group(obj, membership_group_name(chain["name"]), chain["vertices"])
+            _replace_group(obj, VERTEX_GROUP_NAMES.membership(chain["name"]), chain["vertices"])
 
 
 def write_covered_group(obj, covered: list[int], marked: list[int]) -> None:
     """Record the measured coverage so the user can repaint it; a painted group is the input and stays as it is."""
     if not marked:
-        _replace_group(obj, COVERED_GROUP, covered)
+        _replace_group(obj, VERTEX_GROUP_NAMES.covered, covered)
 
 
 def update_hit_radii(settings, chains: list[dict], read_back: set[str]) -> int:

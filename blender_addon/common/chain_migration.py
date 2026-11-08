@@ -7,15 +7,16 @@ try:
 except ImportError:
     avatar_api = None  # type: ignore
 
-from .chain_bones import chain_of_membership_group, membership_group_name
+from .chain_bones import VertexGroupNames
 from .spring_properties import generated_chain_bones
 
 
 def rename_legacy_chains(arm, obj, settings, origin: dict, target: str) -> int:
     """Rename the legacy chains of the submesh: the registered chains with their bones, every stored bone
     reference, their membership groups and bone collections; returns the number of chains renamed."""
+    names = VertexGroupNames(avatar_api.vertex_group_names())
     registered = generated_chain_bones(settings, origin)
-    membership = _membership_groups(obj)
+    membership = _membership_groups(obj, names)
     candidates = sorted(set(registered) | set(membership))
     renames = dict(avatar_api.legacy_chain_renames(target, candidates))
 
@@ -23,7 +24,7 @@ def rename_legacy_chains(arm, obj, settings, origin: dict, target: str) -> int:
         bone_renames = {bone: new_name + bone[len(old_name) :] for bone in registered.get(old_name, [])}
         _rename_bones(arm, bone_renames)
         rename_bone_references(settings, bone_renames)
-        _rename_vertex_group(obj, membership_group_name(old_name), membership_group_name(new_name))
+        _rename_vertex_group(obj, names.membership(old_name), names.membership(new_name))
         _rename_bone_collection(arm.data, old_name, new_name)
         for chain in settings.chains:
             if chain.name == old_name:
@@ -43,8 +44,8 @@ def rename_bone_references(settings, bone_renames: dict[str, str]) -> None:
         collider.bone = bone_renames.get(collider.bone, collider.bone)
 
 
-def _membership_groups(obj) -> list[str]:
-    chains = (chain_of_membership_group(vg.name) for vg in obj.vertex_groups)
+def _membership_groups(obj, names: VertexGroupNames) -> list[str]:
+    chains = (names.chain_of(vg.name) for vg in obj.vertex_groups)
     return [chain for chain in chains if chain is not None]
 
 

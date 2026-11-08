@@ -8,13 +8,12 @@ import math
 import pytest
 
 from blender_addon.common.chain_bones import (
+    VertexGroupNames,
     bone_specs,
-    chain_of_membership_group,
     given_chains_from_groups,
     group_vertices,
     group_weights,
     joints_from_bones,
-    membership_group_name,
     mismatched_vertices,
     output_of_new_chains,
     output_to_blender,
@@ -425,27 +424,30 @@ def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(avata
             assert entry["influences"] == [({"bone": 3}, 1.0)]
 
 
-def test_membership_group_name_round_trips_and_rejects_other_groups():
-    assert chain_of_membership_group(membership_group_name("strip_hair_03")) == "strip_hair_03"
-    assert chain_of_membership_group("strip_hair_03_00") is None
-    assert chain_of_membership_group("thyllore_covered") is None
+def test_vertex_group_names_round_trip_and_reject_other_groups(avatar_api):
+    names = VertexGroupNames(avatar_api.vertex_group_names())
+    assert names.chain_of(names.membership("strip_hair_03")) == "strip_hair_03"
+    assert names.chain_of("strip_hair_03_00") is None
+    assert names.chain_of(names.covered) is None
 
 
-def test_membership_group_prefix_is_built_and_parsed_in_chain_bones_only():
+def test_vertex_group_names_are_spelled_in_the_wheel_only(avatar_api):
     addon_root = Path(__file__).resolve().parents[1]
+    literals = tuple(avatar_api.vertex_group_names().values())
     offenders = [
         path.relative_to(addon_root)
         for path in addon_root.rglob("*.py")
-        if "tests" not in path.parts and "thyllore_chain_" in path.read_text() and path.name != "chain_bones.py"
+        if "tests" not in path.parts and any(literal in path.read_text() for literal in literals)
     ]
     assert offenders == []
 
 
-def test_given_chains_from_groups_lists_weighted_membership_groups_only():
+def test_given_chains_from_groups_lists_weighted_membership_groups_only(avatar_api):
+    names = VertexGroupNames(avatar_api.vertex_group_names())
     pairs = [(0, [(0, 1.0)]), (1, [(0, 1.0), (2, 0.0)]), (2, [(1, 1.0)]), (3, [(2, 1.0)])]
-    groups = [("thyllore_chain_strip_hair_00", 0), ("Head", 1), ("thyllore_chain_strip_hair_01", 2), ("thyllore_chain_strip_hair_02", 3)]
+    groups = [(names.membership("strip_hair_00"), 0), ("Head", 1), (names.membership("strip_hair_01"), 2), (names.membership("strip_hair_02"), 3)]
 
-    assert given_chains_from_groups(pairs, groups) == [
+    assert given_chains_from_groups(pairs, groups, names) == [
         {"name": "strip_hair_00", "vertices": [0, 1]},
         {"name": "strip_hair_01", "vertices": [3]},
     ]

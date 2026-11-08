@@ -53,6 +53,19 @@ pub struct GenerateChainsRequest {
     pub attachment: Option<RootAttachment>,
 }
 
+/// The vertex groups the addon writes on a submesh beside its bone weights: the measured garment
+/// coverage, and one membership group per chain named `<membership_prefix><chain>`.
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct VertexGroupNames {
+    pub covered: &'static str,
+    pub membership_prefix: &'static str,
+}
+
+pub const VERTEX_GROUP_NAMES: VertexGroupNames = VertexGroupNames {
+    covered: "thyllore_covered",
+    membership_prefix: "thyllore_chain_",
+};
+
 #[derive(serde::Serialize)]
 pub struct ChainGenOutput {
     pub chains: Vec<ChainOut>,

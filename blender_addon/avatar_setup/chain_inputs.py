@@ -10,11 +10,14 @@ except ImportError:
     avatar_api = None  # type: ignore
 
 from ..common import coordinates
-from ..common.chain_bones import COVERED_GROUP, given_chains_from_groups, group_vertices, joints_from_bones, vertex_tex_coords
+from ..common.chain_bones import VertexGroupNames, given_chains_from_groups, group_vertices, joints_from_bones, vertex_tex_coords
 from ..common.skin_input import collider_inputs
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_edit
 from ..common.submesh_mask import material_triangles
 from ..common.rig_snapshot import bound_meshes
+
+VERTEX_GROUP_NAMES = VertexGroupNames(avatar_api.vertex_group_names()) if avatar_api is not None else None
+
 
 def _chain_roles() -> dict[str, str]:
     """{role: default_root} from the wheel's chain_roles()."""
@@ -112,7 +115,7 @@ def vertex_group_weights(obj):
 
 def marked_covered_vertices(obj) -> list[int]:
     """The vertices of the covered group, or none when the group does not exist (the coverage is then measured)."""
-    group = obj.vertex_groups.get(COVERED_GROUP)
+    group = obj.vertex_groups.get(VERTEX_GROUP_NAMES.covered)
     if group is None:
         return []
     return group_vertices(vertex_group_weights(obj), group.index)
@@ -130,7 +133,7 @@ def given_chains(obj, arm, registered: dict[str, list[str]], scale_length: float
     """The chains whose vertices the user assigned in membership groups, with the joints of the chains whose
     bones exist on the armature; none when the split is computed."""
     groups = [(vg.name, vg.index) for vg in obj.vertex_groups]
-    given = given_chains_from_groups(vertex_group_weights(obj), groups)
+    given = given_chains_from_groups(vertex_group_weights(obj), groups, VERTEX_GROUP_NAMES)
     for chain in given:
         bones = _chain_bones(arm, registered, chain["name"])
         if bones:

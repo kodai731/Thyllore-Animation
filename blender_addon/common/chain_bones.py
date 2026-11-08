@@ -8,22 +8,25 @@ from __future__ import annotations
 
 from .coordinates import engine_metres_to_blender
 
-COVERED_GROUP = "thyllore_covered"
-MEMBERSHIP_GROUP_PREFIX = "thyllore_chain_"
-
 VertexGroupWeights = list[tuple[int, list[tuple[int, float]]]]
 
 
-def membership_group_name(chain_name: str) -> str:
-    """The vertex group that holds the vertices the user assigned to the chain."""
-    return MEMBERSHIP_GROUP_PREFIX + chain_name
+class VertexGroupNames:
+    """The wheel's ``vertex_group_names()``: the covered group and the prefix of the chain membership groups."""
 
+    def __init__(self, names: dict):
+        self.covered: str = names["covered"]
+        self._membership_prefix: str = names["membership_prefix"]
 
-def chain_of_membership_group(group_name: str) -> str | None:
-    """The chain a membership group belongs to, or ``None`` for any other vertex group."""
-    if not group_name.startswith(MEMBERSHIP_GROUP_PREFIX):
-        return None
-    return group_name[len(MEMBERSHIP_GROUP_PREFIX) :]
+    def membership(self, chain_name: str) -> str:
+        """The vertex group that holds the vertices the user assigned to the chain."""
+        return self._membership_prefix + chain_name
+
+    def chain_of(self, group_name: str) -> str | None:
+        """The chain a membership group belongs to, or ``None`` for any other vertex group."""
+        if not group_name.startswith(self._membership_prefix):
+            return None
+        return group_name[len(self._membership_prefix) :]
 
 
 def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[int]:
@@ -35,11 +38,13 @@ def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[
     ]
 
 
-def given_chains_from_groups(vertex_groups: VertexGroupWeights, groups: list[tuple[str, int]]) -> list[dict]:
+def given_chains_from_groups(
+    vertex_groups: VertexGroupWeights, groups: list[tuple[str, int]], names: VertexGroupNames
+) -> list[dict]:
     """The ``{name, vertices}`` of every membership group with a weighted vertex; ``groups`` is ``[(name, index), ...]``."""
     given = []
     for group_name, group_index in groups:
-        chain = chain_of_membership_group(group_name)
+        chain = names.chain_of(group_name)
         if chain is None:
             continue
         vertices = group_vertices(vertex_groups, group_index)

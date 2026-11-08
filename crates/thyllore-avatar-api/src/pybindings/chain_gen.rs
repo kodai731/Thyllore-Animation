@@ -6,7 +6,7 @@ use crate::chain_gen_bridge::{
     body_colliders as body_colliders_from_inputs, chain_gen_params,
     legacy_chain_renames as legacy_chain_renames_of, role_bones, run_chain_gen,
     settings_from_pairs, submesh_chain_names as submesh_chain_names_of, ChainRootIn,
-    GenerateChainsRequest, SkinAttachment,
+    GenerateChainsRequest, SkinAttachment, VERTEX_GROUP_NAMES,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
@@ -30,6 +30,12 @@ pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
         })
         .collect();
     pythonize_value(py, &entries)
+}
+
+/// The vertex groups the addon writes beside the bone weights: `covered` and `membership_prefix`.
+#[pyfunction]
+pub fn vertex_group_names(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    pythonize_value(py, &VERTEX_GROUP_NAMES)
 }
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.

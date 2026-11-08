@@ -1,4 +1,5 @@
 use crate::ecs::component::CapsuleFitParams;
+use thyllore_avatar_core::cloth_setup::components::chain_gen::RootAttachment;
 use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -12,7 +13,7 @@ use crate::ecs::systems::{
     compute_hidden_triangles, export_unity_avatar, fit_body_colliders, invalidate_humanoid_rig,
     open_avatar_setup, save_humanoid_mapping, save_material_textures, select_submesh_entity,
     set_avatar_rank_platform, set_chain_gen_settings, set_humanoid_role, set_material_texture,
-    set_submesh_role, use_existing_bones_as_springs,
+    set_submesh_attachment, set_submesh_role, use_existing_bones_as_springs,
 };
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
@@ -45,6 +46,10 @@ pub enum AvatarSetupEvent {
     SetSubmeshRole {
         key: SubmeshKey,
         role: SubmeshRole,
+    },
+    SetSubmeshAttachment {
+        key: SubmeshKey,
+        attachment: Option<RootAttachment>,
     },
     SelectSubmesh {
         key: SubmeshKey,
@@ -94,6 +99,9 @@ impl UiCommand for AvatarSetupEvent {
             }
             AvatarSetupEvent::SaveMaterialTextures => save_material_textures(world),
             AvatarSetupEvent::SetSubmeshRole { key, role } => set_submesh_role(world, key, role),
+            AvatarSetupEvent::SetSubmeshAttachment { key, attachment } => {
+                set_submesh_attachment(world, key, attachment)
+            }
             AvatarSetupEvent::SelectSubmesh { key } => {
                 select_submesh_entity(world, assets, graphics, &key)
             }

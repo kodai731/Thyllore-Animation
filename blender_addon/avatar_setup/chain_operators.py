@@ -107,7 +107,7 @@ class THYLLORE_OT_RemoveSpringChain(bpy.types.Operator):
         chain_count = 0
         joint_count = 0
         for item in roles:
-            chains, joints = remove_generated_chains(context, arm, obj, item.material, item.role)
+            chains, joints = remove_generated_chains(context, arm, obj, item.material)
             chain_count += chains
             joint_count += joints
 

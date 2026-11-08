@@ -3,6 +3,7 @@ use pythonize::depythonize;
 
 use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
 use super::chain_gen::pythonize_value;
+use super::error::anyhow_to_value_error;
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::chain_register_bridge::{
     register_generated_chains as bridge_register_generated_chains, GeneratedChainIn,
@@ -38,7 +39,7 @@ pub fn use_existing_bones_as_springs<'py>(
 /// capsule (or a capsule fitted to the skin on the root bone) in the fitted body group, and the
 /// chains bound to that group. `bones` carry `bind_matrix` like the collider fit.
 #[pyfunction]
-#[pyo3(signature = (spring, bones, skins, root_bone, target, role, chains, head_capsule = None))]
+#[pyo3(signature = (spring, bones, skins, root_bone, target, attachment, chains, head_capsule = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn register_generated_chains<'py>(
     py: Python<'py>,
@@ -47,7 +48,7 @@ pub fn register_generated_chains<'py>(
     skins: &Bound<PyAny>,
     root_bone: &str,
     target: &str,
-    role: &str,
+    attachment: &str,
     chains: &Bound<PyAny>,
     head_capsule: Option<&Bound<PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -59,10 +60,12 @@ pub fn register_generated_chains<'py>(
     let head_capsule: Option<CapsuleOut> = head_capsule
         .map(|capsule| depythonize(capsule).map_err(depythonize_error_to_pyerr))
         .transpose()?;
+    let attachment =
+        crate::chain_gen_bridge::parse_attachment(attachment).map_err(anyhow_to_value_error)?;
     let request = RegisterRequest {
         root_name: root_bone,
         target,
-        role,
+        attachment,
         chains: &chains,
         head_capsule,
     };

@@ -18,12 +18,14 @@ fn make_skeleton() -> Skeleton {
 }
 
 fn make_chain() -> Vec<GeneratedChain> {
-    use crate::cloth_setup::components::chain_gen::ChainRole;
+    use crate::cloth_setup::components::chain_gen::RootAttachment;
     use crate::cloth_setup::components::chain_gen::{joint_name, ChainGenParams, ChainGenSettings};
     use crate::cloth_setup::components::submesh_role::SubmeshSelector;
+    use crate::humanoid::components::role::HumanoidRole;
 
     let params = ChainGenParams {
-        role: ChainRole::Hair,
+        root: Some(HumanoidRole::Head),
+        attachment: RootAttachment::Cap,
         target: SubmeshSelector::Mesh("test".to_string()),
         settings: ChainGenSettings::default(),
     };
@@ -70,7 +72,7 @@ fn test_bone_count_and_parent_chain() {
     assert_eq!(bone_ids.len(), 1);
     assert_eq!(bone_ids[0].joints.len(), 2);
     let end = skeleton.get_bone(bone_ids[0].end).unwrap();
-    assert_eq!(end.name, "hair_test_00_01_end");
+    assert_eq!(end.name, "test_00_01_end");
     assert_eq!(end.parent_id, Some(bone_ids[0].joints[1]));
 
     let joint0_id = bone_ids[0].joints[0];

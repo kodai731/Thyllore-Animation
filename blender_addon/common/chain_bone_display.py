@@ -1,10 +1,10 @@
-"""Blender-side display of spring chain bones: one bone collection per chain, stick shape and role color.
+"""Blender-side display of spring chain bones: one bone collection per chain, stick shape and attachment color.
 
 Child collections are found through ``collections_all``; ``collections`` lists the root level only."""
 
 CHAIN_COLLECTION_NAME = "Thyllore Chains"
 CHAIN_BONE_DISPLAY_TYPE = "STICK"
-ROLE_PALETTES = {"hair": "THEME01", "garment": "THEME04", "accessory": "THEME05"}
+ATTACHMENT_PALETTES = {"cap": "THEME01", "ring": "THEME04"}
 DEFAULT_PALETTE = "THEME06"
 
 
@@ -25,10 +25,10 @@ def chain_collection(armature_data, chain_name: str):
     return collection
 
 
-def apply_chain_bone_display(arm, chain_name: str, bone_names: list[str], role: str) -> None:
-    """Put the bones in the chain's collection, draw them as sticks and color them by role."""
+def apply_chain_bone_display(arm, chain_name: str, bone_names: list[str], attachment: str) -> None:
+    """Put the bones in the chain's collection, draw them as sticks and color them by attachment."""
     collection = chain_collection(arm.data, chain_name)
-    palette = ROLE_PALETTES.get(role, DEFAULT_PALETTE)
+    palette = ATTACHMENT_PALETTES.get(attachment, DEFAULT_PALETTE)
     for bone_name in bone_names:
         bone = arm.data.bones.get(bone_name)
         if bone is None:
@@ -50,4 +50,4 @@ def apply_chain_display(arm) -> None:
     """Apply the chain bone display to every joint of every chain on the armature."""
     for chain in arm.data.thyllore_spring.chains:
         chain_bones = [joint.bone for joint in chain.joints] + ([chain.tail] if chain.tail else [])
-        apply_chain_bone_display(arm, chain.name, chain_bones, chain.origin_role)
+        apply_chain_bone_display(arm, chain.name, chain_bones, chain.origin_attachment)

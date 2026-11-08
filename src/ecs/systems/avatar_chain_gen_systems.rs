@@ -24,8 +24,8 @@ use thyllore_anim_core::spring_bone::{
     SpringJointParam,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{
-    chain_name, chain_role_of_submesh, BodyCollider, ChainGenInput, ChainGenParams, ChainGenReport,
-    ChainGenRequest, ChainGenSettings, ChainPlacement, ChainRole, ChainWeightRecord,
+    chain_name, default_root_of_submesh, BodyCollider, ChainGenInput, ChainGenParams,
+    ChainGenReport, ChainGenRequest, ChainGenSettings, ChainPlacement, ChainWeightRecord,
     GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
     RootBandRecord, StrandPlacement, VertexInfluences,
 };
@@ -33,9 +33,9 @@ use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, Su
 use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
     append_chain_bones, write_chain_weights, ChainBoneIds,
 };
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::hair_head_capsule;
+use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    component_labels, compute_chain_weights, hair_root_band, place_chains_with_strands,
+    cap_root_band, component_labels, compute_chain_weights, place_chains_with_strands,
     root_attachment_positions, RootBand,
 };
 use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
@@ -59,7 +59,7 @@ fn generate_chain_bones(
     graphics: &mut GraphicsResources,
     request: &ChainGenRequest,
 ) -> anyhow::Result<GeneratedChainBones> {
-    let (submeshes, role) = resolve_target(world, assets, graphics, &request.target)?;
+    let submeshes = resolve_target(world, assets, graphics, &request.target)?;
     let geometry = merge_submesh_geometry(graphics, submeshes)?;
 
     let root = find_root_bone(world, request.root)?;
@@ -97,14 +97,15 @@ fn generate_chain_bones(
         given_chains: &[],
     };
     let params = ChainGenParams {
-        role,
+        root: Some(request.root),
+        attachment: request.attachment,
         target: request.target.clone(),
         settings: request.settings.clone(),
     };
     let model_to_root_local = root_global
         .try_inverse()
         .ok_or_else(|| anyhow::anyhow!("global transform of the root bone is singular"))?;
-    let head_capsule = hair_head_capsule(&input, &params);
+    let head_capsule = root_head_capsule(&input, &params);
     let root_collider = match head_capsule {
         Some(capsule) => Some(head_capsule_collider(&capsule, root, model_to_root_local)),
         None => body_collider,
@@ -146,7 +147,7 @@ fn generate_chain_bones(
             influences: &influences,
             input: &input,
             strands,
-            root_band: hair_root_band(&input, &params),
+            root_band: cap_root_band(&input, &params),
             head_capsule,
             component_labels: &component_labels(&input),
         },
@@ -179,7 +180,7 @@ fn generate_chain_bones(
                 .collect(),
             origin: ChainOrigin::Generated {
                 target: request.target.clone(),
-                role,
+                attachment: params.attachment,
             },
             ..SpringChain::default()
         })
@@ -197,7 +198,7 @@ fn resolve_target(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     target: &SubmeshSelector,
-) -> anyhow::Result<(Vec<(SubmeshKey, usize)>, ChainRole)> {
+) -> anyhow::Result<Vec<(SubmeshKey, usize)>> {
     let node_assets = world.resource::<NodeAssets>();
     let pairs = collect_submesh_meshes(assets, graphics, &node_assets.nodes);
     let matching: Vec<(SubmeshKey, usize)> = pairs
@@ -219,13 +220,13 @@ fn resolve_target(
 
     let state = world.resource::<AvatarSetupState>();
     let mut selected = Vec::new();
-    let mut role: Option<ChainRole> = None;
+    let mut shared_root: Option<HumanoidRole> = None;
     for (key, mesh_index) in matching {
         let submesh_role = *state.submesh_roles.get(&key).ok_or_else(|| {
             anyhow::anyhow!("submesh role not set: {}/{}", key.mesh, key.material)
         })?;
-        let part_role = match (chain_role_of_submesh(submesh_role), target) {
-            (Some(chain_role), _) => chain_role,
+        let default_root = match (default_root_of_submesh(submesh_role), target) {
+            (Some(root), _) => root,
             (None, SubmeshSelector::Mesh(_)) => continue,
             (None, SubmeshSelector::Submesh(_)) => anyhow::bail!(
                 "submesh role {:?} is not Hair or Garment: {}/{}",
@@ -234,20 +235,22 @@ fn resolve_target(
                 key.material
             ),
         };
-        match role {
-            Some(previous) if previous != part_role => anyhow::bail!(
-                "submeshes of {} mix hair and garment roles; select one submesh",
-                target
-            ),
-            _ => role = Some(part_role),
+        if let Some(previous) = shared_root.filter(|previous| *previous != default_root) {
+            anyhow::bail!(
+                "submeshes of {} hang from different roots ({} and {}); select one submesh",
+                target,
+                previous.unity_name(),
+                default_root.unity_name()
+            );
         }
+        shared_root = Some(default_root);
         selected.push((key, mesh_index));
     }
 
-    let Some(role) = role else {
+    if selected.is_empty() {
         anyhow::bail!("no hair or garment submesh in {}", target);
-    };
-    Ok((selected, role))
+    }
+    Ok(selected)
 }
 
 fn influences_of_part(

@@ -24,9 +24,9 @@ fn test_woman1_edit_ramp_sibling_chains() {
     let skeleton = &model.skeletons[0];
 
     let bones: Vec<BoneInput> = skeleton_to_bone_inputs(skeleton);
+    let frames = BoneRestFrame::identity_for(bones.len());
 
     let sidecar = read_sidecar_json(sidecar_path).expect("read sidecar");
-    let frames = BoneRestFrame::identity_for(bones.len());
     let setup = spring_setup_from_sidecar(&sidecar.spring, &bones, &frames);
 
     let scope_chains = chains_in_scope(

@@ -37,7 +37,7 @@ fn request<'a>(
     RegisterRequest {
         root_name: "Head",
         target: "Hair_back/Hair",
-        role: "hair",
+        attachment: RootAttachment::Cap,
         chains,
         head_capsule,
     }

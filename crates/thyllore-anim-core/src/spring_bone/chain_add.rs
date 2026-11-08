@@ -105,7 +105,7 @@ pub fn add_generated_chains(
 mod tests {
     use super::*;
     use crate::spring_bone::{
-        ChainOrigin, ChainRole, ColliderShape, SpringForceModel, SubmeshSelector,
+        ChainOrigin, ColliderShape, RootAttachment, SpringForceModel, SubmeshSelector,
     };
     use glam::Vec3;
 
@@ -228,7 +228,7 @@ mod tests {
                 enabled: true,
                 origin: ChainOrigin::Generated {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
-                    role: ChainRole::Hair,
+                    attachment: RootAttachment::Cap,
                 },
                 rest_clearance: RestClearance::Tolerated,
             },
@@ -246,7 +246,7 @@ mod tests {
                 enabled: true,
                 origin: ChainOrigin::Generated {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
-                    role: ChainRole::Hair,
+                    attachment: RootAttachment::Cap,
                 },
                 rest_clearance: RestClearance::Tolerated,
             },

@@ -116,7 +116,7 @@ def _make_settings(chains_data, colliders_data, groups_data, collision_mode="vrm
         origin = cd.get("origin") or {}
         item.origin_mesh = origin.get("mesh", "")
         item.origin_material = origin.get("material", "")
-        item.origin_role = origin.get("role", "")
+        item.origin_attachment = origin.get("attachment", "")
         for jd in cd["joints"]:
             j = item.joints.add()
             j.bone = jd["bone"]
@@ -466,7 +466,7 @@ def test_generated_origin_round_trips_and_authored_is_none():
                 "collider_groups": [],
                 "joints": [{"bone": "hair_hair_back_00_00", "force": _vrm_force(1.0, 1.0), "drag_force": 0.5, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.05}],
                 "tail": None,
-                "origin": {"mesh": "Hair_back", "material": "Hair", "role": "hair"},
+                "origin": {"mesh": "Hair_back", "material": "Hair", "attachment": "cap"},
             },
             {
                 "name": "authored",
@@ -481,15 +481,34 @@ def test_generated_origin_round_trips_and_authored_is_none():
     write_sidecar_spring(settings, spring)
     out = spring_settings_to_sidecar(settings)
 
-    assert out["chains"][0]["origin"] == {"mesh": "Hair_back", "material": "Hair", "role": "hair"}
+    assert out["chains"][0]["origin"] == {"mesh": "Hair_back", "material": "Hair", "attachment": "cap"}
     assert out["chains"][1]["origin"] is None
+
+
+def test_legacy_origin_role_is_emitted_until_the_attachment_is_written():
+    """A chain saved by an older addon keeps ``origin_role`` as a custom property; the sidecar carries it as
+    ``role`` so the wheel maps it to the attachment, and never an empty ``attachment``."""
+    settings = _make_settings([], [], [])
+    legacy = settings.chains.add()
+    legacy.name = "hair_hair_back_00"
+    legacy.center = ""
+    legacy.enabled = True
+    legacy.tail = ""
+    legacy.origin_mesh = "Hair_back"
+    legacy.origin_material = "Hair"
+    legacy.origin_attachment = ""
+    legacy.get = lambda key, default="": {"origin_role": "hair"}.get(key, default)
+
+    out = spring_settings_to_sidecar(settings)
+
+    assert out["chains"][0]["origin"] == {"mesh": "Hair_back", "material": "Hair", "role": "hair"}
 
 
 def test_generated_chains_are_replaced_per_submesh():
     """remove_chains_generated_on drops only the chains generated on that submesh and names their bones."""
     settings = _make_settings(TEST_CHAINS, [], [])
-    back = {"mesh": "Hair_back", "material": "Hair", "role": "hair"}
-    side = {"mesh": "Hair_side", "material": "Hair", "role": "hair"}
+    back = {"mesh": "Hair_back", "material": "Hair", "attachment": "cap"}
+    side = {"mesh": "Hair_side", "material": "Hair", "attachment": "cap"}
 
     def joint(bone):
         return {"bone": bone, "force": _vrm_force(1.0, 0.0), "drag_force": 0.4, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
@@ -521,10 +540,10 @@ def _settings_with_generated_chains():
     settings = _make_settings([], [], [])
     spring = spring_settings_to_sidecar(settings)
     for name, origin in (
-        ("hair_hair_back_00", {"mesh": "Hair_back", "material": "Hair", "role": "hair"}),
-        ("hair_hair_back_01", {"mesh": "Hair_back", "material": "Hair", "role": "hair"}),
-        ("hair_hair_back_fringe_00", {"mesh": "Hair_back", "material": "Fringe", "role": "hair"}),
-        ("hair_hair_side_00", {"mesh": "Hair_side", "material": "Hair", "role": "hair"}),
+        ("hair_hair_back_00", {"mesh": "Hair_back", "material": "Hair", "attachment": "cap"}),
+        ("hair_hair_back_01", {"mesh": "Hair_back", "material": "Hair", "attachment": "cap"}),
+        ("hair_hair_back_fringe_00", {"mesh": "Hair_back", "material": "Fringe", "attachment": "cap"}),
+        ("hair_hair_side_00", {"mesh": "Hair_side", "material": "Hair", "attachment": "cap"}),
     ):
         joint = {"bone": f"{name}_00", "force": _vrm_force(1.0, 0.0), "drag_force": 0.4, "gravity_dir": (0.0, -1.0, 0.0), "hit_radius": 0.01}
         spring["chains"].append({"name": name, "center": None, "tail": None, "collider_groups": [], "origin": origin, "joints": [joint]})

@@ -85,6 +85,24 @@ def test_submesh_to_sidecar():
     assert hidden[0] == {"mesh": "meshA", "material": "matA", "triangles": [0, 1, 2]}
 
 
+def test_submesh_attachment_round_trips_and_auto_is_omitted():
+    """A Cap / Ring row writes ``attachment`` and reads it back; an Auto row writes no key."""
+    roles_in = [
+        {"mesh": "meshA", "material": "hair", "role": "hair", "attachment": "ring"},
+        {"mesh": "meshA", "material": "skirt", "role": "garment"},
+    ]
+    submesh = SimpleNamespace(
+        roles=FakeCollection(lambda: SimpleNamespace(material="", role="", attachment="AUTO")),
+        hidden_triangles=FakeCollection(),
+    )
+
+    write_submesh_sidecar(submesh, "meshA", roles_in, [], IDENTITY_LOOPS)
+    roles_out, _ = submesh_to_sidecar("meshA", submesh, IDENTITY_LOOPS)
+
+    assert [item.attachment for item in submesh.roles] == ["RING", "AUTO"]
+    assert roles_out == roles_in
+
+
 def test_submesh_to_sidecar_empty_triangles_skipped():
     """submesh_to_sidecar skips hidden triangle entries with empty triangles list."""
     roles_collection = FakeCollection(lambda: SimpleNamespace(material="matA", role="shell"))

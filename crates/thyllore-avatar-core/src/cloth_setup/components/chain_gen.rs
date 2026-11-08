@@ -7,7 +7,7 @@ use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 use super::submesh_role::{SubmeshRole, SubmeshSelector};
 use crate::humanoid::components::role::HumanoidRole;
 
-pub use thyllore_anim_core::spring_bone::ChainRole;
+pub use thyllore_anim_core::spring_bone::RootAttachment;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChainGenOwner {
@@ -113,24 +113,33 @@ pub static CHAIN_GEN_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
 
 #[derive(Debug, Clone)]
 pub struct ChainGenParams {
-    pub role: ChainRole,
+    pub root: Option<HumanoidRole>,
+    pub attachment: RootAttachment,
     pub target: SubmeshSelector,
     pub settings: ChainGenSettings,
 }
 
-pub fn chain_role_of_submesh(role: SubmeshRole) -> Option<ChainRole> {
+pub fn default_root_of_submesh(role: SubmeshRole) -> Option<HumanoidRole> {
     match role {
-        SubmeshRole::Hair => Some(ChainRole::Hair),
-        SubmeshRole::Garment => Some(ChainRole::Garment),
+        SubmeshRole::Hair => Some(HumanoidRole::Head),
+        SubmeshRole::Garment => Some(HumanoidRole::Hips),
         SubmeshRole::Skin | SubmeshRole::Accessory => None,
     }
 }
 
-pub fn chain_root_role(role: ChainRole) -> HumanoidRole {
-    match role {
-        ChainRole::Hair => HumanoidRole::Head,
-        ChainRole::Garment => HumanoidRole::Hips,
+pub fn default_attachment(root: HumanoidRole) -> RootAttachment {
+    if root == HumanoidRole::Head {
+        RootAttachment::Cap
+    } else {
+        RootAttachment::Ring
     }
+}
+
+pub fn attachment_or_default(
+    root: Option<HumanoidRole>,
+    attachment: Option<RootAttachment>,
+) -> RootAttachment {
+    attachment.unwrap_or_else(|| root.map_or(RootAttachment::Ring, default_attachment))
 }
 
 /// The submesh part of a generated bone name: lower case, one `_` between runs of other characters.
@@ -219,21 +228,17 @@ pub struct GeneratedChain {
     pub vertices: Vec<u32>,
 }
 
-fn chain_name_prefix(params: &ChainGenParams) -> String {
-    format!(
-        "{}_{}_",
-        params.role.bone_prefix(),
-        submesh_label(&params.target)
-    )
+fn chain_name_prefix(target: &SubmeshSelector) -> String {
+    format!("{}_", submesh_label(target))
 }
 
 pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
-    format!("{}{:02}", chain_name_prefix(params), column)
+    format!("{}{:02}", chain_name_prefix(&params.target), column)
 }
 
 /// The column of a chain name of this submesh; `None` for a name of another submesh.
-pub fn chain_column(params: &ChainGenParams, name: &str) -> Option<usize> {
-    name.strip_prefix(&chain_name_prefix(params))?.parse().ok()
+pub fn chain_column(target: &SubmeshSelector, name: &str) -> Option<usize> {
+    name.strip_prefix(&chain_name_prefix(target))?.parse().ok()
 }
 
 pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
@@ -361,6 +366,7 @@ pub struct ChainGenReport {
 pub struct ChainGenRequest {
     pub target: SubmeshSelector,
     pub root: HumanoidRole,
+    pub attachment: RootAttachment,
     pub settings: ChainGenSettings,
 }
 
@@ -379,31 +385,30 @@ mod tests {
     #[test]
     fn joint_names_differ_between_submeshes_and_follow_the_chain_name() {
         let params = |target: &str| ChainGenParams {
-            role: ChainRole::Hair,
+            root: Some(HumanoidRole::Head),
+            attachment: RootAttachment::Cap,
             target: target.parse().unwrap(),
             settings: ChainGenSettings::default(),
         };
-        assert_eq!(
-            joint_name(&params("Hair_back"), 3, 1),
-            "hair_hair_back_03_01"
-        );
-        assert_eq!(
-            joint_name(&params("Hair_side"), 3, 1),
-            "hair_hair_side_03_01"
-        );
-        assert_eq!(chain_name(&params("Hair_side"), 3), "hair_hair_side_03");
+        assert_eq!(joint_name(&params("Hair_back"), 3, 1), "hair_back_03_01");
+        assert_eq!(joint_name(&params("Hair_side"), 3, 1), "hair_side_03_01");
+        assert_eq!(chain_name(&params("Hair_side"), 3), "hair_side_03");
     }
 
     #[test]
     fn chain_column_inverts_chain_name_for_this_submesh_only() {
         let params = ChainGenParams {
-            role: ChainRole::Hair,
+            root: Some(HumanoidRole::Head),
+            attachment: RootAttachment::Cap,
             target: "Hair_side".parse().unwrap(),
             settings: ChainGenSettings::default(),
         };
-        assert_eq!(chain_column(&params, &chain_name(&params, 3)), Some(3));
-        assert_eq!(chain_column(&params, "hair_hair_back_03"), None);
-        assert_eq!(chain_column(&params, "hair_hair_side_"), None);
+        assert_eq!(
+            chain_column(&params.target, &chain_name(&params, 3)),
+            Some(3)
+        );
+        assert_eq!(chain_column(&params.target, "hair_back_03"), None);
+        assert_eq!(chain_column(&params.target, "hair_side_"), None);
     }
 
     #[test]

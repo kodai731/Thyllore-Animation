@@ -215,7 +215,7 @@ fn chain_origin_from_sidecar(origin: &Option<SidecarChainOrigin>) -> ChainOrigin
         None => ChainOrigin::Authored,
         Some(origin) => ChainOrigin::Generated {
             target: SubmeshSelector::from_parts(&origin.mesh, origin.material.as_deref()),
-            role: origin.role,
+            attachment: origin.attachment,
         },
     }
 }

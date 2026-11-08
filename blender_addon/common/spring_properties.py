@@ -63,15 +63,26 @@ def _chain_to_sidecar(chain) -> dict:
 
 
 def _chain_origin_to_sidecar(chain) -> dict | None:
-    """The submesh a generated chain came from, or None for an authored chain."""
+    """The submesh a generated chain came from, or None for an authored chain; a chain saved before the
+    attachment existed still carries its role, which the wheel maps to the attachment."""
     mesh = getattr(chain, "origin_mesh", "")
     if not mesh:
         return None
-    return {
-        "mesh": mesh,
-        "material": chain.origin_material,
-        "role": chain.origin_role,
-    }
+    origin = {"mesh": mesh, "material": chain.origin_material}
+    if chain.origin_attachment:
+        origin["attachment"] = chain.origin_attachment
+    elif legacy_role := _legacy_origin_role(chain):
+        origin["role"] = legacy_role
+    return origin
+
+
+def _legacy_origin_role(chain) -> str:
+    """The ``origin_role`` a chain item kept from an older addon, stored as a custom property once the
+    declared property was replaced by ``origin_attachment``."""
+    custom_properties = getattr(chain, "get", None)
+    if custom_properties is None:
+        return ""
+    return custom_properties("origin_role", "") or ""
 
 
 def _joint_to_sidecar(joint) -> dict:
@@ -124,7 +135,7 @@ def _write_chains(chains, spring_chains: list[dict]) -> None:
         origin = chain.get("origin") or {}
         item.origin_mesh = origin.get("mesh", "")
         item.origin_material = origin.get("material", "")
-        item.origin_role = origin.get("role", "")
+        item.origin_attachment = origin.get("attachment", "")
         for joint in chain["joints"]:
             _write_joint(item.joints, joint)
         for group_name in chain.get("collider_groups", []):

@@ -5,6 +5,10 @@ pub fn anyhow_to_pyerr(err: anyhow::Error) -> PyErr {
     PyRuntimeError::new_err(format!("{:#}", err))
 }
 
+pub fn anyhow_to_value_error(err: anyhow::Error) -> PyErr {
+    PyValueError::new_err(format!("{:#}", err))
+}
+
 pub fn shape_mismatch(field: &str, expected: usize, actual: usize) -> PyErr {
     PyValueError::new_err(format!(
         "{} shape mismatch: expected {} elements, got {}",

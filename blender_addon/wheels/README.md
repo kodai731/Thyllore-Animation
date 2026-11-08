@@ -29,7 +29,7 @@ with the host's glibc, e.g., Ubuntu 22 = `manylinux_2_35`, Ubuntu 24 =
 
 ## Supply-chain integrity
 
-The build trusts the `maturin build` output for `thyllore_ml_core`.
+The build trusts the `maturin build` output for both wheels.
 `HASHES.txt` is emitted locally by `collect_wheels` for debugging, but it is
 gitignored.
 

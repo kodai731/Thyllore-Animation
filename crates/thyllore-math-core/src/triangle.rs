@@ -1,12 +1,7 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// The point of triangle `abc` closest to `p`. Ericson, Real-Time Collision Detection 5.1.5.
-pub fn closest_point_on_triangle(
-    p: Vector3<f32>,
-    a: Vector3<f32>,
-    b: Vector3<f32>,
-    c: Vector3<f32>,
-) -> Vector3<f32> {
+pub fn closest_point_on_triangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
     let ab = b - a;
     let ac = c - a;
     let ap = p - a;
@@ -53,63 +48,58 @@ pub fn closest_point_on_triangle(
 
 /// The barycentric coordinates of `p` in triangle `abc` as `(u, v, w)` with `p = u a + v b + w c`; a
 /// degenerate triangle gives `(1, 0, 0)`.
-pub fn barycentric_coordinates(
-    p: Vector3<f32>,
-    a: Vector3<f32>,
-    b: Vector3<f32>,
-    c: Vector3<f32>,
-) -> Vector3<f32> {
+pub fn barycentric_coordinates(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
     let ab = b - a;
     let ac = c - a;
     let normal = ab.cross(ac);
     let denominator = normal.dot(normal);
     if denominator <= 1e-12 {
-        return Vector3::new(1.0, 0.0, 0.0);
+        return Vec3::new(1.0, 0.0, 0.0);
     }
     let v = (p - a).cross(ac).dot(normal) / denominator;
     let w = ab.cross(p - a).dot(normal) / denominator;
-    Vector3::new(1.0 - v - w, v, w)
+    Vec3::new(1.0 - v - w, v, w)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn triangle() -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    fn triangle() -> (Vec3, Vec3, Vec3) {
         (
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
         )
     }
 
     #[test]
     fn interior_point_projects_onto_the_plane() {
         let (a, b, c) = triangle();
-        let closest = closest_point_on_triangle(Vector3::new(0.25, 0.25, 2.0), a, b, c);
-        assert!((closest - Vector3::new(0.25, 0.25, 0.0)).magnitude() < 1e-6);
+        let closest = closest_point_on_triangle(Vec3::new(0.25, 0.25, 2.0), a, b, c);
+        assert!((closest - Vec3::new(0.25, 0.25, 0.0)).length() < 1e-6);
     }
 
     #[test]
     fn points_beyond_a_corner_or_an_edge_land_on_it() {
         let (a, b, c) = triangle();
-        let corner = closest_point_on_triangle(Vector3::new(-1.0, -1.0, 0.5), a, b, c);
-        assert!((corner - a).magnitude() < 1e-6);
-        let edge = closest_point_on_triangle(Vector3::new(0.5, -1.0, 0.0), a, b, c);
-        assert!((edge - Vector3::new(0.5, 0.0, 0.0)).magnitude() < 1e-6);
-        let hypotenuse = closest_point_on_triangle(Vector3::new(1.0, 1.0, 0.0), a, b, c);
-        assert!((hypotenuse - Vector3::new(0.5, 0.5, 0.0)).magnitude() < 1e-6);
+        let corner = closest_point_on_triangle(Vec3::new(-1.0, -1.0, 0.5), a, b, c);
+        assert!((corner - a).length() < 1e-6);
+        let edge = closest_point_on_triangle(Vec3::new(0.5, -1.0, 0.0), a, b, c);
+        assert!((edge - Vec3::new(0.5, 0.0, 0.0)).length() < 1e-6);
+        let hypotenuse = closest_point_on_triangle(Vec3::new(1.0, 1.0, 0.0), a, b, c);
+        assert!((hypotenuse - Vec3::new(0.5, 0.5, 0.0)).length() < 1e-6);
     }
 
     #[test]
     fn barycentric_coordinates_of_a_corner_an_edge_midpoint_and_the_centroid() {
         let (a, b, c) = (
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(2.0, 0.0, 0.0),
-            Vector3::new(0.0, 2.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 0.0),
+            Vec3::new(0.0, 2.0, 0.0),
         );
-        let near = |p: Vector3<f32>, expected: [f32; 3]| {
-            (barycentric_coordinates(p, a, b, c) - Vector3::from(expected)).magnitude() < 1e-6
+        let near = |p: Vec3, expected: [f32; 3]| {
+            (barycentric_coordinates(p, a, b, c) - Vec3::from(expected)).length() < 1e-6
         };
         assert!(near(a, [1.0, 0.0, 0.0]));
         assert!(near((a + b) / 2.0, [0.5, 0.5, 0.0]));

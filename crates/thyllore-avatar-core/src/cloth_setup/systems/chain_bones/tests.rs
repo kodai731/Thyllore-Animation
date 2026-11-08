@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::cloth_setup::components::chain_gen::GeneratedJoint;
 
@@ -10,8 +10,8 @@ fn make_skeleton() -> Skeleton {
     let mut skeleton = Skeleton::new("test");
     let root = skeleton.add_bone("root", None);
     if let Some(bone) = skeleton.get_bone_mut(root) {
-        bone.inverse_bind_pose = Matrix4::from_translation(Vector3::new(0.0, 1.5, 0.0))
-            .invert()
+        bone.inverse_bind_pose = Mat4::from_translation(Vec3::new(0.0, 1.5, 0.0))
+            .try_inverse()
             .unwrap();
     }
     skeleton
@@ -32,11 +32,11 @@ fn make_chain() -> Vec<GeneratedChain> {
     let joints = vec![
         GeneratedJoint {
             name: joint_name(&params, 0, 0),
-            head: Vector3::new(0.0, 1.4, 0.0),
+            head: Vec3::new(0.0, 1.4, 0.0),
         },
         GeneratedJoint {
             name: joint_name(&params, 0, 1),
-            head: Vector3::new(0.0, 1.3, 0.0),
+            head: Vec3::new(0.0, 1.3, 0.0),
         },
     ];
     let tail = joints.last().unwrap().head;
@@ -49,14 +49,14 @@ fn make_chain() -> Vec<GeneratedChain> {
     }]
 }
 
-fn make_skin(positions: &[Vector3<f32>]) -> SkinData {
+fn make_skin(positions: &[Vec3]) -> SkinData {
     let count = positions.len();
     SkinData {
         skeleton_id: 0,
-        bone_indices: vec![cgmath::Vector4::new(0, 0, 0, 0); count],
-        bone_weights: vec![cgmath::Vector4::new(0.0, 0.0, 0.0, 0.0); count],
+        bone_indices: vec![UVec4::new(0, 0, 0, 0); count],
+        bone_weights: vec![Vec4::new(0.0, 0.0, 0.0, 0.0); count],
         base_positions: positions.to_vec(),
-        base_normals: vec![Vector3::new(0.0, 1.0, 0.0); count],
+        base_normals: vec![Vec3::new(0.0, 1.0, 0.0); count],
     }
 }
 
@@ -68,12 +68,15 @@ fn test_bone_count_and_parent_chain() {
 
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
-    assert_eq!(skeleton.bone_count(), 3);
+    assert_eq!(skeleton.bone_count(), 4);
     assert_eq!(bone_ids.len(), 1);
-    assert_eq!(bone_ids[0].len(), 2);
+    assert_eq!(bone_ids[0].joints.len(), 2);
+    let end = skeleton.get_bone(bone_ids[0].end).unwrap();
+    assert_eq!(end.name, "test_00_01_end");
+    assert_eq!(end.parent_id, Some(bone_ids[0].joints[1]));
 
-    let joint0_id = bone_ids[0][0];
-    let joint1_id = bone_ids[0][1];
+    let joint0_id = bone_ids[0].joints[0];
+    let joint1_id = bone_ids[0].joints[1];
 
     let bone0 = skeleton.get_bone(joint0_id).unwrap();
     assert_eq!(bone0.parent_id, Some(root));
@@ -92,7 +95,7 @@ fn test_rest_pose_skinning_identity() {
 
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
-    let positions = vec![Vector3::new(0.0, 1.4, 0.0), Vector3::new(0.0, 1.3, 0.0)];
+    let positions = vec![Vec3::new(0.0, 1.4, 0.0), Vec3::new(0.0, 1.3, 0.0)];
     let mut skin = make_skin(&positions);
 
     let influences = vec![
@@ -108,14 +111,14 @@ fn test_rest_pose_skinning_identity() {
 
     write_chain_weights(&mut skin, root, &bone_ids, &influences);
 
-    let global_transforms: Vec<Matrix4<f32>> = skeleton
+    let global_transforms: Vec<Mat4> = skeleton
         .bones
         .iter()
-        .map(|b| b.inverse_bind_pose.invert().unwrap())
+        .map(|b| b.inverse_bind_pose.try_inverse().unwrap())
         .collect();
 
-    let mut out_positions = vec![Vector3::new(0.0, 0.0, 0.0); positions.len()];
-    let mut out_normals = vec![Vector3::new(0.0, 0.0, 0.0); positions.len()];
+    let mut out_positions = vec![Vec3::new(0.0, 0.0, 0.0); positions.len()];
+    let mut out_normals = vec![Vec3::new(0.0, 0.0, 0.0); positions.len()];
 
     apply_skinning(
         &skin,
@@ -126,7 +129,7 @@ fn test_rest_pose_skinning_identity() {
     );
 
     for (i, (expected, actual)) in positions.iter().zip(out_positions.iter()).enumerate() {
-        let diff = (expected - *actual).magnitude();
+        let diff = (expected - *actual).length();
         assert!(
             diff < 1e-5,
             "vertex {}: expected {:?}, got {:?}",
@@ -145,7 +148,7 @@ fn test_weights_left_padded_and_sum_to_one() {
 
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
-    let positions = vec![Vector3::new(0.0, 1.35, 0.0)];
+    let positions = vec![Vec3::new(0.0, 1.35, 0.0)];
     let mut skin = make_skin(&positions);
 
     let influences = vec![VertexInfluences {
@@ -161,8 +164,8 @@ fn test_weights_left_padded_and_sum_to_one() {
     let indices = skin.bone_indices[0];
     let weights = skin.bone_weights[0];
 
-    assert_eq!(indices.x, bone_ids[0][0]);
-    assert_eq!(indices.y, bone_ids[0][1]);
+    assert_eq!(indices.x, bone_ids[0].joints[0]);
+    assert_eq!(indices.y, bone_ids[0].joints[1]);
     assert_eq!(indices.z, 0);
     assert_eq!(indices.w, 0);
 
@@ -181,10 +184,10 @@ fn test_inverse_bind_pose_translation_matches_joint_head() {
     let bone_ids = append_chain_bones(&mut skeleton, root, &chains).unwrap();
 
     for (k, joint) in chains[0].joints.iter().enumerate() {
-        let bone = skeleton.get_bone(bone_ids[0][k]).unwrap();
-        let b_j = bone.inverse_bind_pose.invert().unwrap();
-        let translation = Vector3::new(b_j.w.x, b_j.w.y, b_j.w.z);
-        let diff = (joint.head - translation).magnitude();
+        let bone = skeleton.get_bone(bone_ids[0].joints[k]).unwrap();
+        let b_j = bone.inverse_bind_pose.try_inverse().unwrap();
+        let translation = Vec3::new(b_j.w_axis.x, b_j.w_axis.y, b_j.w_axis.z);
+        let diff = (joint.head - translation).length();
         assert!(
             diff < 1e-5,
             "bone {} inverse_bind_pose^-1 translation {:?} != joint head {:?}",
@@ -207,14 +210,14 @@ fn test_joint1_local_transform_translation_is_head1_minus_head0() {
     let joint1 = chains[0].joints[1].head;
     let expected_diff = joint1 - joint0;
 
-    let bone1 = skeleton.get_bone(bone_ids[0][1]).unwrap();
-    let actual_translation = Vector3::new(
-        bone1.local_transform.w.x,
-        bone1.local_transform.w.y,
-        bone1.local_transform.w.z,
+    let bone1 = skeleton.get_bone(bone_ids[0].joints[1]).unwrap();
+    let actual_translation = Vec3::new(
+        bone1.local_transform.w_axis.x,
+        bone1.local_transform.w_axis.y,
+        bone1.local_transform.w_axis.z,
     );
 
-    let diff = (expected_diff - actual_translation).magnitude();
+    let diff = (expected_diff - actual_translation).length();
     assert!(
         diff < 1e-5,
         "joint1 local_transform translation {:?} != head1 - head0 {:?}",

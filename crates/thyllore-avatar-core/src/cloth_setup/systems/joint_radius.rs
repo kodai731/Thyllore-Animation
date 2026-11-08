@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::{distance_to_segment, median};
 
 use crate::cloth_setup::components::chain_gen::{
@@ -9,7 +9,7 @@ use crate::cloth_setup::components::chain_gen::{
 /// segment; a joint that dominates no vertex (a root the rigid band owns) takes the thickness of
 /// the nearest joint toward the tip, then toward the root.
 pub fn joint_half_thicknesses(
-    positions: &[Vector3<f32>],
+    positions: &[Vec3],
     chains: &[GeneratedChain],
     influences: &[VertexInfluences],
 ) -> Vec<Vec<f32>> {
@@ -61,7 +61,7 @@ fn dominant_joint(vertex_influences: &VertexInfluences) -> Option<(usize, usize)
     }
 }
 
-fn joint_segment(chain: &GeneratedChain, joint: usize) -> (Vector3<f32>, Vector3<f32>) {
+fn joint_segment(chain: &GeneratedChain, joint: usize) -> (Vec3, Vec3) {
     let head = chain.joints[joint].head;
     let tail = chain
         .joints
@@ -83,10 +83,10 @@ mod tests {
                 .enumerate()
                 .map(|(index, &y)| GeneratedJoint {
                     name: format!("j{index}"),
-                    head: Vector3::new(0.0, y, 0.0),
+                    head: Vec3::new(0.0, y, 0.0),
                 })
                 .collect(),
-            tail: Vector3::new(0.0, heads[heads.len() - 1] - 1.0, 0.0),
+            tail: Vec3::new(0.0, heads[heads.len() - 1] - 1.0, 0.0),
             vertices: Vec::new(),
         }
     }
@@ -105,10 +105,10 @@ mod tests {
     fn half_thickness_is_the_median_offset_from_the_bone() {
         let chain = chain_along_y(&[2.0, 1.0]);
         let positions = vec![
-            Vector3::new(0.02, 1.5, 0.0),
-            Vector3::new(-0.02, 1.7, 0.0),
-            Vector3::new(0.05, 1.2, 0.0),
-            Vector3::new(0.01, 0.5, 0.0),
+            Vec3::new(0.02, 1.5, 0.0),
+            Vec3::new(-0.02, 1.7, 0.0),
+            Vec3::new(0.05, 1.2, 0.0),
+            Vec3::new(0.01, 0.5, 0.0),
         ];
         let influences = vec![
             influence(0, 0, 0.9),
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn a_root_without_dominated_vertices_takes_the_thickness_of_the_next_joint() {
         let chain = chain_along_y(&[3.0, 2.0, 1.0]);
-        let positions = vec![Vector3::new(0.03, 1.5, 0.0), Vector3::new(0.05, 0.5, 0.0)];
+        let positions = vec![Vec3::new(0.03, 1.5, 0.0), Vec3::new(0.05, 0.5, 0.0)];
         let influences = vec![influence(0, 1, 0.9), influence(1, 2, 0.9)];
 
         let radii = joint_half_thicknesses(&positions, &[chain], &influences);
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn a_tip_without_dominated_vertices_takes_the_thickness_toward_the_root() {
         let chain = chain_along_y(&[3.0, 2.0, 1.0]);
-        let positions = vec![Vector3::new(0.03, 2.5, 0.0)];
+        let positions = vec![Vec3::new(0.03, 2.5, 0.0)];
         let influences = vec![influence(0, 0, 0.9)];
 
         let radii = joint_half_thicknesses(&positions, &[chain], &influences);
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn a_chain_without_any_dominated_vertex_stays_at_zero() {
         let chain = chain_along_y(&[2.0, 1.0]);
-        let positions = vec![Vector3::new(0.03, 1.5, 0.0)];
+        let positions = vec![Vec3::new(0.03, 1.5, 0.0)];
         let influences = vec![influence(0, 0, 0.3)];
 
         let radii = joint_half_thicknesses(&positions, &[chain], &influences);

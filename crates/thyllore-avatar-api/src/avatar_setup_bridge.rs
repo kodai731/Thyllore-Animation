@@ -7,6 +7,7 @@ use thyllore_anim_core::spring_bone::{
     SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS, VRM_JOINT_FORCE_SCALAR_PARAMS,
     VRM_JOINT_FORCE_UI_PARAMS,
 };
+use thyllore_avatar_core::cloth_setup::components::chain_gen::RootAttachment;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
@@ -272,6 +273,7 @@ pub fn sidecar_build(input: &SidecarBuildInput) -> anyhow::Result<String> {
         spring: &normalized_spring,
         materials: &input.materials,
         submesh_roles: &submesh_role_map(&input.submesh_roles),
+        submesh_attachments: &submesh_attachment_map(&input.submesh_roles),
         hidden_triangles: &hidden_triangle_map(&input.hidden_triangles),
         stats: &stats,
     });
@@ -313,6 +315,21 @@ fn submesh_role_map(roles: &[SidecarSubmeshRole]) -> BTreeMap<SubmeshKey, Submes
         );
     }
     map
+}
+
+fn submesh_attachment_map(roles: &[SidecarSubmeshRole]) -> BTreeMap<SubmeshKey, RootAttachment> {
+    roles
+        .iter()
+        .filter_map(|entry| {
+            Some((
+                SubmeshKey {
+                    mesh: entry.mesh.clone(),
+                    material: entry.material.clone(),
+                },
+                entry.attachment?,
+            ))
+        })
+        .collect()
 }
 
 fn hidden_triangle_map(hidden: &[SidecarHiddenTriangles]) -> BTreeMap<SubmeshKey, Vec<u32>> {

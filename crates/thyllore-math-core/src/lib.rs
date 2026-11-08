@@ -85,9 +85,3 @@ pub use triangle_bvh::*;
 pub use vector::*;
 pub use winding::*;
 pub use wire_shape::*;
-
-pub use cgmath::Quaternion;
-pub use cgmath::Rad;
-pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
-pub use cgmath::{prelude::*, Vector3};
-pub use cgmath::{vec2, vec3, vec4};

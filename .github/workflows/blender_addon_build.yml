@@ -119,7 +119,7 @@ jobs:
       - name: Collect vendored wheels
         shell: pwsh
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1 -Crate thyllore-ml-core
 
       - name: Download curve_copilot ONNX (dummy all-zero weights from HF -- CI test build only, never production weights)
         id: model
@@ -210,7 +210,7 @@ jobs:
           pip install "maturin>=1.5" "pytest>=8.0"
 
       - name: Collect vendored wheels
-        run: bash scripts/collect_wheels.sh
+        run: bash scripts/collect_wheels.sh --crate thyllore-ml-core
 
       - name: Layer 1 - capability derivation from BUILD_MODE
         run: python -m pytest blender_addon/tests/test_capabilities.py -v
@@ -261,7 +261,7 @@ jobs:
           rm -f "$ORT_DIR/ort.tgz"
 
       - name: Collect vendored wheels
-        run: bash scripts/collect_wheels.sh
+        run: bash scripts/collect_wheels.sh --crate thyllore-ml-core
 
       - name: Download curve_copilot ONNX (dummy all-zero weights -- enables the ctx64 operator check)
         id: model

@@ -3,9 +3,10 @@ use pythonize::depythonize;
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 use crate::chain_gen_bridge::{
-    body_colliders as body_colliders_from_inputs, chain_gen_params, role_bones, run_chain_gen,
-    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, GenerateChainsRequest,
-    SkinAttachment,
+    body_colliders as body_colliders_from_inputs, chain_gen_params,
+    legacy_chain_renames as legacy_chain_renames_of, role_bones, run_chain_gen,
+    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, ChainRootIn,
+    GenerateChainsRequest, SkinAttachment,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
@@ -44,6 +45,16 @@ pub fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Ve
     submesh_chain_names_of(target, &candidates).map_err(anyhow_to_pyerr)
 }
 
+/// `(old name, new name)` for the candidates that name a chain of the submesh `target` under the
+/// legacy `<role>_<label>_<column>` scheme; renaming them keeps the chains a regenerate reads back.
+#[pyfunction]
+pub fn legacy_chain_renames(
+    target: &str,
+    candidates: Vec<String>,
+) -> PyResult<Vec<(String, String)>> {
+    legacy_chain_renames_of(target, &candidates).map_err(anyhow_to_pyerr)
+}
+
 /// Positions, the root position and the skins are engine coordinates (Y-up, metres); `skins` are the
 /// FitSkin dicts (positions, influences, triangles) and `root_bone` the index of the bone the chains hang
 /// from; `target` is `<mesh>/<material>` and names the chains; `settings` maps setting names to values;
@@ -53,7 +64,9 @@ pub fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Ve
 /// index, head, tail, radius), `humanoid_bones` maps Unity role names to bone indices and `bones` are
 /// the bone specs; together they give the torso volume the garment can rest on. `given_chains` are the
 /// chains the user assigned as `{name, vertices, joints?}` dicts (`joints` are the joint heads followed by the
-/// chain tail); the chains named for this submesh replace the split.
+/// chain tail); the chains named for this submesh replace the split. `root_role` is the Unity role name
+/// the root was chosen by, when it was; a root given as a bone takes its role from `humanoid_bones`.
+/// `attachment` is `"cap"` or `"ring"`; absent, it follows the root role.
 #[pyfunction]
 pub fn generate_chains<'py>(
     py: Python<'py>,
@@ -73,6 +86,12 @@ pub fn generate_chains<'py>(
     let roles = role_bones(&request.humanoid_bones, &request.bones);
     let colliders = body_colliders_from_inputs(&request.body_colliders, &roles, &request.bones);
 
+    let chain_root = ChainRootIn {
+        bone: request.root_bone,
+        role: request.root_role,
+        attachment: request.attachment,
+    };
+
     let output = py
         .detach(|| {
             run_chain_gen(
@@ -85,10 +104,9 @@ pub fn generate_chains<'py>(
                     skins: &request.skins,
                     body_colliders: &colliders,
                     roles: &roles,
-                    root_bone: request.root_bone,
                     covered_vertices: &request.covered_vertices,
                 },
-                request.attachment,
+                chain_root,
                 &request.tex_coords,
                 &request.given_chains,
             )

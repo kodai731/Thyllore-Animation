@@ -1,7 +1,7 @@
 use anyhow::Result;
-use cgmath::Vector3;
+use glam::{Quat, Vec2, Vec3};
 
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use crate::animation::{BoneId, Skeleton, SkeletonId};
 use crate::ecs::component::LineMesh;
@@ -162,10 +162,10 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     pointer.imgui_wants_pointer = imgui_wants_mouse;
 }
 
-fn compute_viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
+fn compute_viewport_local_mouse_pos(ctx: &EcsContext) -> Vec2 {
     let mouse_pos = ctx.world.resource::<MouseInput>().position;
     let viewport_pos = ctx.world.resource::<ViewportInput>().position;
-    cgmath::Vector2::new(
+    Vec2::new(
         mouse_pos[0] - viewport_pos[0],
         mouse_pos[1] - viewport_pos[1],
     )
@@ -242,15 +242,11 @@ fn reset_light_gizmo_drag(ctx: &mut EcsContext) {
     gizmo.selectable.is_selected = false;
     gizmo.selectable.selected_axis = GizmoAxis::None;
     gizmo.draggable.drag_axis = GizmoAxis::None;
-    gizmo.draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
+    gizmo.draggable.initial_position = Vec3::new(0.0, 0.0, 0.0);
 }
 
-fn update_light_gizmo_position(
-    ctx: &mut EcsContext,
-    mouse_pos: cgmath::Vector2<f32>,
-) -> Result<()> {
+fn update_light_gizmo_position(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<()> {
     use crate::math::coordinate_system::perspective_infinite_reverse;
-    use cgmath::InnerSpace;
 
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
@@ -260,11 +256,10 @@ fn update_light_gizmo_position(
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+    let view = crate::math::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size =
-        cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
@@ -367,10 +362,9 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
     Ok(bone_hit)
 }
 
-fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vector3<f32>, Vector3<f32>) {
+fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vec3, Vec3) {
     let mouse_pos = compute_viewport_local_mouse_pos(ctx);
-    let screen_size =
-        cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
 
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
@@ -380,7 +374,7 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vector3<f32>, Vector3<f32>) {
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+    let view = crate::math::view(camera_pos, camera_dir, camera_up);
     let aspect = screen_size.x / screen_size.y;
     let proj =
         crate::math::coordinate_system::perspective_infinite_reverse(fov_y, aspect, near_plane);
@@ -576,10 +570,10 @@ fn build_pick_ray(
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+    let view = crate::math::view(camera_pos, camera_dir, camera_up);
     let proj = perspective_infinite_reverse(fov_y, width as f32 / height as f32, near_plane);
-    let pixel_center = cgmath::Vector2::new(px as f32 + 0.5, py as f32 + 0.5);
-    let screen_size = cgmath::Vector2::new(width as f32, height as f32);
+    let pixel_center = Vec2::new(px as f32 + 0.5, py as f32 + 0.5);
+    let screen_size = Vec2::new(width as f32, height as f32);
 
     let (origin, direction) = screen_to_world_ray(pixel_center, screen_size, view, proj);
     crate::ecs::resource::PickRay { origin, direction }
@@ -633,10 +627,7 @@ fn process_transform_gizmo_interaction(ctx: &mut EcsContext) -> Result<bool> {
     Ok(false)
 }
 
-fn try_select_transform_gizmo_handle(
-    ctx: &mut EcsContext,
-    mouse_pos: cgmath::Vector2<f32>,
-) -> bool {
+fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: Vec2) -> bool {
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
     let camera_dir = crate::ecs::compute_camera_direction(&camera);
@@ -694,12 +685,11 @@ fn try_select_transform_gizmo_handle(
     let (plane_point, plane_normal) =
         transform_gizmo_systems::transform_gizmo_compute_drag_plane(handle, gizmo_pos, camera_dir);
 
-    let view_mat = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+    let view_mat = crate::math::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
     let proj =
         crate::math::coordinate_system::perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size =
-        cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
     let initial_hit =
         crate::math::ray_plane_intersection(ray_origin, ray_direction, plane_point, plane_normal)
@@ -725,10 +715,7 @@ fn try_select_transform_gizmo_handle(
     true
 }
 
-fn process_transform_gizmo_drag(
-    ctx: &mut EcsContext,
-    mouse_pos: cgmath::Vector2<f32>,
-) -> Result<()> {
+fn process_transform_gizmo_drag(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<()> {
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
     let camera_dir = crate::ecs::compute_camera_direction(&camera);
@@ -841,7 +828,7 @@ fn process_transform_gizmo_drag(
     Ok(())
 }
 
-fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f32>) {
+fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vec3) {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
@@ -865,7 +852,7 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
     } else {
         1.0
     };
-    let skeleton_pos = Vector3::new(
+    let skeleton_pos = Vec3::new(
         new_pos.x * inv_scale,
         new_pos.y * inv_scale,
         new_pos.z * inv_scale,
@@ -881,12 +868,7 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
     }
 }
 
-fn apply_bone_rotation(
-    ctx: &mut EcsContext,
-    bone_id: u32,
-    gizmo_pos: Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-) {
+fn apply_bone_rotation(ctx: &mut EcsContext, bone_id: u32, gizmo_pos: Vec3, rotation: Quat) {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
@@ -910,7 +892,7 @@ fn apply_bone_rotation(
     } else {
         1.0
     };
-    let skeleton_gizmo_pos = Vector3::new(
+    let skeleton_gizmo_pos = Vec3::new(
         gizmo_pos.x * inv_scale,
         gizmo_pos.y * inv_scale,
         gizmo_pos.z * inv_scale,
@@ -931,7 +913,7 @@ fn apply_bone_rotation(
     }
 }
 
-fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
+fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vec3) {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
@@ -960,13 +942,13 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
 }
 
 /// The gizmo hands over a world position; a child entity stores it relative to its parent.
-fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vector3<f32>) {
+fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vec3) {
     let parent_global = ctx
         .world
         .get_component::<Parent>(entity)
         .and_then(|parent| ctx.world.get_component::<GlobalTransform>(parent.0))
         .map(|global| global.0);
-    let local_pos = match parent_global.and_then(|global| global.invert()) {
+    let local_pos = match parent_global.and_then(|global| global.try_inverse()) {
         Some(inverse) => (inverse * new_pos.extend(1.0)).truncate(),
         None => new_pos,
     };
@@ -975,13 +957,13 @@ fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vecto
     }
 }
 
-fn apply_entity_rotation(ctx: &mut EcsContext, entity: Entity, rotation: cgmath::Quaternion<f32>) {
+fn apply_entity_rotation(ctx: &mut EcsContext, entity: Entity, rotation: Quat) {
     if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
         transform.rotation = rotation * transform.rotation;
     }
 }
 
-fn apply_entity_scale(ctx: &mut EcsContext, entity: Entity, scale: Vector3<f32>) {
+fn apply_entity_scale(ctx: &mut EcsContext, entity: Entity, scale: Vec3) {
     if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
         transform.scale = scale;
     }
@@ -1045,7 +1027,7 @@ fn sync_transform_gizmo_to_entity(ctx: &mut EcsContext) {
         .get_component::<GlobalTransform>(transform_entity)
         .map(|gt| {
             let m = gt.0;
-            Vector3::new(m[3][0], m[3][1], m[3][2])
+            Vec3::new(m.col(3)[0], m.col(3)[1], m.col(3)[2])
         });
 
     let Some(pos) = world_pos else {
@@ -1104,7 +1086,7 @@ fn sync_curve_editor_bone(ctx: &mut EcsContext, new_active_bone: Option<BoneId>)
     }
 }
 
-fn find_animated_entity_transform(world: &crate::ecs::World) -> Option<Matrix4<f32>> {
+fn find_animated_entity_transform(world: &crate::ecs::World) -> Option<Mat4> {
     use crate::ecs::world::{Animator, GlobalTransform};
 
     let (entity, _) = world.iter_components::<Animator>().next()?;
@@ -1113,10 +1095,7 @@ fn find_animated_entity_transform(world: &crate::ecs::World) -> Option<Matrix4<f
         .map(|gt| gt.0)
 }
 
-fn compute_animation_globals(
-    ctx: &EcsContext,
-    skeleton_id: SkeletonId,
-) -> Option<Vec<Matrix4<f32>>> {
+fn compute_animation_globals(ctx: &EcsContext, skeleton_id: SkeletonId) -> Option<Vec<Mat4>> {
     let skeleton = ctx.assets.get_skeleton_by_skeleton_id(skeleton_id)?;
 
     let timeline = ctx.world.resource::<TimelineState>();
@@ -1178,7 +1157,7 @@ fn apply_camera_focus_pick(ctx: &EcsContext, readback: &mut ObjectIdReadback) {
     let Some(position) = readback.last_read_world_position else {
         return;
     };
-    let focus = Vector3::new(position[0], position[1], position[2]);
+    let focus = Vec3::new(position[0], position[1], position[2]);
 
     let mut camera = ctx.camera_mut();
     match readback.purpose {
@@ -1234,6 +1213,6 @@ mod tests {
         let gizmo = ctx.transform_gizmo();
         assert!(gizmo.visible);
         assert_eq!(gizmo.target_entity, Some(probe));
-        assert_eq!(gizmo.position.position, Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(gizmo.position.position, Vec3::new(1.0, 2.0, 3.0));
     }
 }

@@ -82,16 +82,18 @@ fn test_named_actions_reject_empty_values() {
     assert!(capture_expression_parse("capture_expression=")
         .expect("prefix matches")
         .is_err());
-    assert!(add_spring_chains_under_parse("add_spring_chains_under= ")
-        .expect("prefix matches")
-        .is_err());
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=0")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs= ")
             .expect("prefix matches")
             .is_err()
     );
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=3")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=0")
+            .expect("prefix matches")
+            .is_err()
+    );
+    assert!(
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=3")
             .expect("prefix matches")
             .is_ok()
     );
@@ -236,6 +238,28 @@ fn test_generate_chain_bones_parses_submesh_root_and_settings() {
     let whole_mesh =
         generate_chain_bones_parse("generate_chain_bones=garment,Spine").expect("prefix matches");
     assert!(whole_mesh.is_ok());
+}
+
+#[test]
+fn test_generate_chain_bones_takes_the_attachment_among_the_settings() {
+    let ring_on_head = generate_chain_bones_parse(
+        "generate_chain_bones=hair/strands,Head,joint_count=3,attachment=ring",
+    )
+    .expect("prefix matches")
+    .expect("spec is valid");
+    assert_eq!(ring_on_head.name(), "generate_chain_bones");
+
+    for spec in [
+        "generate_chain_bones=hair/strands,Head,attachment=hat",
+        "generate_chain_bones=hair/strands,Head,attachment=cap,attachment=ring",
+    ] {
+        assert!(
+            generate_chain_bones_parse(spec)
+                .expect("prefix matches")
+                .is_err(),
+            "{spec}"
+        );
+    }
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use cgmath::{Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, UVec4, Vec3, Vec4};
 use thyllore_anim_core::spring_bone::{
     replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams, SpringChainId,
     SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
@@ -34,9 +34,9 @@ pub struct FitSkin {
 
 /// The sidecar frame of each bone: the bind matrix's axes, whose lengths are already metres.
 pub(crate) fn rest_frames(bones: &[FitBone]) -> anyhow::Result<Vec<BoneRestFrame>> {
-    let bind_matrices: Vec<Matrix4<f32>> = bones
+    let bind_matrices: Vec<Mat4> = bones
         .iter()
-        .map(|fit_bone| Matrix4::from(fit_bone.bind_matrix).transpose())
+        .map(|fit_bone| Mat4::from_cols_array_2d(&fit_bone.bind_matrix).transpose())
         .collect();
     rest_frames_from_globals(&bind_matrices, &to_bone_inputs(bones), 1.0)
 }
@@ -45,8 +45,8 @@ pub(crate) fn skeleton_from_fit_bones(bones: &[FitBone]) -> anyhow::Result<Skele
     let mut skeleton = skeleton_from_bones(&to_bone_inputs(bones));
 
     for (skeleton_bone, fit_bone) in skeleton.bones.iter_mut().zip(bones) {
-        let bind_matrix = Matrix4::from(fit_bone.bind_matrix).transpose();
-        skeleton_bone.inverse_bind_pose = bind_matrix.invert().ok_or_else(|| {
+        let bind_matrix = Mat4::from_cols_array_2d(&fit_bone.bind_matrix).transpose();
+        skeleton_bone.inverse_bind_pose = bind_matrix.try_inverse().ok_or_else(|| {
             anyhow::anyhow!(
                 "bind matrix for bone \"{}\" is not invertible",
                 fit_bone.bone.name
@@ -69,17 +69,17 @@ pub(crate) fn skin_data_from_fit_skin(fit_skin: &FitSkin) -> SkinData {
             indices[slot] = *bone_index as u32;
             weights[slot] = *weight;
         }
-        bone_indices.push(Vector4::new(indices[0], indices[1], indices[2], indices[3]));
-        bone_weights.push(Vector4::new(weights[0], weights[1], weights[2], weights[3]));
+        bone_indices.push(UVec4::new(indices[0], indices[1], indices[2], indices[3]));
+        bone_weights.push(Vec4::new(weights[0], weights[1], weights[2], weights[3]));
     }
 
-    let base_positions: Vec<Vector3<f32>> = fit_skin
+    let base_positions: Vec<Vec3> = fit_skin
         .positions
         .iter()
-        .map(|p| Vector3::new(p[0], p[1], p[2]))
+        .map(|p| Vec3::new(p[0], p[1], p[2]))
         .collect();
 
-    let base_normals = vec![Vector3::new(0.0, 0.0, 0.0); count];
+    let base_normals = vec![Vec3::new(0.0, 0.0, 0.0); count];
 
     SkinData {
         skeleton_id: 0,

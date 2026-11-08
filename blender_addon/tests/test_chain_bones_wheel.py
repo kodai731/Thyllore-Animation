@@ -109,15 +109,19 @@ def test_bone_specs_chain_joints_root_to_tip(avatar_api):
         "strip_hair_00_01",
         "strip_hair_00_02",
         "strip_hair_00_03",
+        "strip_hair_00_03_end",
     ]
     assert [parent for _, parent, _, _ in specs] == [
         "Head",
         "strip_hair_00_00",
         "strip_hair_00_01",
         "strip_hair_00_02",
+        "strip_hair_00_03",
     ]
     for (_, _, _, tail), (_, _, next_head, _) in zip(specs, specs[1:]):
         assert tail == next_head
+    assert specs[-1][2] == tuple(output["chains"][0]["tail"])
+    assert specs[-1][2] != specs[-1][3]
     assert specs[0][2][1] > specs[-1][2][1]
 
 
@@ -277,9 +281,11 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
         bones=[{"name": "Head", "parent": None, "rest_position": [0.0, 0.0, 0.0]}],
     )
     joint_names = [joint["name"] for chain in output["chains"] for joint in chain["joints"]]
+    end_names = [chain["end_bone"] for chain in output["chains"]]
     bones = _fit_bones(
         [("Hips", None, (0.0, -1.0, 0.0)), ("Head", 0, (0.0, 0.0, 0.0))]
         + [(name, 1 + i, (0.0, -0.1 * (i + 1), 0.0)) for i, name in enumerate(joint_names)]
+        + [(name, 1 + len(joint_names), (0.0, -0.1 * (len(joint_names) + 1), 0.0)) for name in end_names]
     )
     empty = {"collision_mode": "vrm_compatible", "colliders": [], "collider_groups": [], "chains": []}
 
@@ -296,7 +302,10 @@ def test_register_generated_chains_binds_the_head_capsule_to_every_chain(avatar_
     for chain, generated in zip(spring["chains"], output["chains"]):
         assert chain["collider_groups"] == ["Fitted Body"]
         assert chain["origin"] == {"mesh": "strip", "material": "hair", "attachment": "cap"}
-        assert [j["hit_radius"] for j in chain["joints"]] == [j["hit_radius"] for j in generated["joints"]]
+        assert chain["tail"] == generated["end_bone"]
+        assert chain["joints"][-1]["bone"] == generated["end_bone"]
+        simulated = chain["joints"][:-1]
+        assert [j["hit_radius"] for j in simulated] == [j["hit_radius"] for j in generated["joints"]]
 
     again = avatar_api.register_generated_chains({
         "spring": spring, "bones": bones, "skins": [], "root_bone": "Head",
@@ -476,6 +485,29 @@ def test_submesh_chain_names_keeps_this_submesh_only(avatar_api):
     names = ["strip_hair_00", "strip_hair_12", "other_hair_00", "strip_hair_00_01"]
 
     assert avatar_api.submesh_chain_names("strip/hair", names) == ["strip_hair_00", "strip_hair_12"]
+
+
+def test_legacy_chain_renames_map_role_prefixed_names_of_this_submesh(avatar_api):
+    names = ["hair_strip_hair_00", "garment_strip_hair_03", "hair_other_hair_00", "strip_hair_01"]
+
+    assert avatar_api.legacy_chain_renames("strip/hair", names) == [
+        ("hair_strip_hair_00", "strip_hair_00"),
+        ("garment_strip_hair_03", "strip_hair_03"),
+    ]
+
+
+def test_generate_chains_root_role_sets_the_attachment_without_a_humanoid_mapping(avatar_api):
+    positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
+
+    by_role = _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD, root_role="Head")
+    unmapped = _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD)
+
+    assert by_role["attachment"] == "cap"
+    assert by_role["head_capsule"] is not None
+    assert unmapped["attachment"] == "ring"
+    assert unmapped["head_capsule"] is None
+    with pytest.raises(ValueError):
+        _generate(avatar_api, positions, triangles, "strip/hair", {"column_count": 1}, skins=HEAD, root_role="Tail")
 
 
 def test_generate_chains_with_given_joints_places_the_bones_there(avatar_api):

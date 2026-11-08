@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use anyhow::Result;
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::{BoneId, BoneLocalPose, SkeletonId};
 use crate::ecs::resource::gizmo::BoneSelectionState;
@@ -19,7 +19,7 @@ use crate::ecs::{
 
 pub struct AnimationUpdates {
     pub updated_meshes: Vec<usize>,
-    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
 pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {

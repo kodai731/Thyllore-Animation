@@ -126,17 +126,19 @@ $UnshippedRelPaths = @(
 )
 $CurveCopilotOnlyRelPaths = @(
     "operators/curve_copilot.py",
-    "operators/skin_weight_transfer.py",
     "_ghost_overlay.py",
     "modal"
 )
 $AvatarSetupOnlyRelPaths = @(
-    "avatar_setup"
+    "avatar_setup",
+    "operators/skin_weight_transfer.py"
 )
+$IncludeOnnxRuntime = $true
 switch ($Product) {
     "avatar-setup" {
         $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
         $IncludeOnnxModel = $false
+        $IncludeOnnxRuntime = $false
     }
     "curve-copilot" {
         $UnshippedRelPaths += $AvatarSetupOnlyRelPaths
@@ -319,7 +321,9 @@ if ($IncludeOnnxModel) {
 if (-not $OnnxruntimeLib) {
     $OnnxruntimeLib = $PlatformConfig.OrtLibDefault
 }
-if ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
+if (-not $IncludeOnnxRuntime) {
+    Write-Host "[build_blender_addon] ONNX Runtime not bundled: $Product has no in-process inference" -ForegroundColor Cyan
+} elseif ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
     $LibDir = Join-Path $StageDir "lib"
     New-Item -ItemType Directory -Path $LibDir -Force | Out-Null
     $OrtItem = Get-Item $OnnxruntimeLib

@@ -20,7 +20,7 @@ Options:
   --wheels-dir PATH              Output directory (default: blender_addon/wheels)
   --skip-maturin                 Skip building wheels via maturin
   --crate <name>                 Build only this crate (default: build all crates)
-  --debug-log                    Build thyllore-ml-core wheel with the debug-log feature
+  --debug-log                    Build with the debug-log feature (crates that declare it)
   -h, --help                     Show this help
 EOF
 }
@@ -36,17 +36,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$CRATE" == "thyllore-effect-core" && "$DEBUG_LOG" -eq 1 ]]; then
-    echo "error: --crate thyllore-effect-core cannot be combined with --debug-log" >&2
-    echo "       The debug-log feature is specific to thyllore-ml-core." >&2
-    exit 1
-fi
-
-if [[ "$CRATE" == "thyllore-avatar-api" && "$DEBUG_LOG" -eq 1 ]]; then
-    echo "error: --crate thyllore-avatar-api cannot be combined with --debug-log" >&2
-    echo "       The debug-log feature is specific to thyllore-ml-core." >&2
-    exit 1
-fi
+crate_declares_debug_log() {
+    grep -Eq '^debug-log\s*=' "$REPO_ROOT/crates/$1/Cargo.toml"
+}
 
 HOST_PYTHON="${PYTHON:-python3}"
 if ! command -v "$HOST_PYTHON" >/dev/null 2>&1; then
@@ -84,7 +76,11 @@ if [[ "$SKIP_MATURIN" -eq 0 ]]; then
     fi
 
     for crate in "${CRATES[@]}"; do
-        if [[ "$crate" == "thyllore-ml-core" && "$DEBUG_LOG" -eq 1 ]]; then
+        if [[ "$DEBUG_LOG" -eq 1 ]]; then
+            if ! crate_declares_debug_log "$crate"; then
+                echo "error: --crate $crate cannot be combined with --debug-log (no debug-log feature in its Cargo.toml)" >&2
+                exit 1
+            fi
             MATURIN_FEATURES="python,debug-log"
             echo "[collect_wheels] Building $crate DEBUG wheel (features: $MATURIN_FEATURES)"
         else

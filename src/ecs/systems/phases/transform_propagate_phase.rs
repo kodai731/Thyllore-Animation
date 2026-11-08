@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::SkeletonId;
 use crate::ecs::resource::gizmo::BoneGizmoData;
@@ -14,7 +14,7 @@ pub const TRANSFORM_PROPAGATE_PHASE: &str = "transform_propagate";
 
 pub fn run_transform_propagate_phase(
     ctx: &mut FrameContext,
-    bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 ) {
     let mut sub: HashMap<String, f32> = HashMap::new();
 
@@ -61,9 +61,8 @@ fn skeleton_gizmos_are_stale(world: &crate::ecs::World) -> bool {
     has_cached_skeleton && !has_animated_entity
 }
 
-fn find_skin_entity_transform(world: &crate::ecs::World) -> Matrix4<f32> {
+fn find_skin_entity_transform(world: &crate::ecs::World) -> Mat4 {
     use crate::ecs::world::{Animator, GlobalTransform};
-    use cgmath::SquareMatrix;
 
     world
         .iter_components::<Animator>()
@@ -73,13 +72,10 @@ fn find_skin_entity_transform(world: &crate::ecs::World) -> Matrix4<f32> {
                 .get_component::<GlobalTransform>(entity)
                 .map(|gt| gt.0)
         })
-        .unwrap_or_else(Matrix4::identity)
+        .unwrap_or(Mat4::IDENTITY)
 }
 
-fn apply_entity_transform(
-    bone_transforms: &[Matrix4<f32>],
-    entity_transform: &Matrix4<f32>,
-) -> Vec<Matrix4<f32>> {
+fn apply_entity_transform(bone_transforms: &[Mat4], entity_transform: &Mat4) -> Vec<Mat4> {
     bone_transforms
         .iter()
         .map(|bt| entity_transform * bt)
@@ -93,14 +89,14 @@ mod tests {
     use crate::ecs::resource::FrameClock;
     use crate::ecs::sync_motion_paths;
     use crate::ecs::world::{Animator, GlobalTransform, Transform};
-    use cgmath::{SquareMatrix, Vector3};
+    use glam::Vec3;
 
-    fn create_world_with_animated_entity(translation: Vector3<f32>) -> crate::ecs::World {
+    fn create_world_with_animated_entity(translation: Vec3) -> crate::ecs::World {
         let mut world = crate::ecs::World::new();
 
         let mut transform = Transform::default();
         transform.translation = translation;
-        let global_matrix = Matrix4::from_translation(translation);
+        let global_matrix = Mat4::from_translation(translation);
 
         let parent = world
             .entity()
@@ -127,13 +123,13 @@ mod tests {
         let mut bone_gizmo = BoneGizmoData::default();
         bone_gizmo.visible = true;
         bone_gizmo.cached_skeleton_id = Some(1);
-        bone_gizmo.cached_global_transforms = vec![Matrix4::identity()];
+        bone_gizmo.cached_global_transforms = vec![Mat4::IDENTITY];
         world.insert_resource(bone_gizmo);
     }
 
     #[test]
     fn skeleton_gizmos_stay_while_animated_entity_exists() {
-        let mut world = create_world_with_animated_entity(Vector3::new(0.0, 0.0, 0.0));
+        let mut world = create_world_with_animated_entity(Vec3::new(0.0, 0.0, 0.0));
         insert_bone_gizmo_with_cached_skeleton(&mut world);
 
         assert!(!skeleton_gizmos_are_stale(&world));
@@ -141,7 +137,7 @@ mod tests {
 
     #[test]
     fn skeleton_gizmos_clear_after_animated_entity_is_despawned() {
-        let mut world = create_world_with_animated_entity(Vector3::new(0.0, 0.0, 0.0));
+        let mut world = create_world_with_animated_entity(Vec3::new(0.0, 0.0, 0.0));
         insert_bone_gizmo_with_cached_skeleton(&mut world);
         let animated: Vec<u64> = world
             .iter_components::<Animator>()
@@ -162,15 +158,15 @@ mod tests {
 
     #[test]
     fn find_skin_entity_transform_returns_entity_transform_for_animated_mesh() {
-        let offset = Vector3::new(5.0, 3.0, -2.0);
+        let offset = Vec3::new(5.0, 3.0, -2.0);
         let world = create_world_with_animated_entity(offset);
 
         let result = find_skin_entity_transform(&world);
 
-        let expected = Matrix4::from_translation(offset);
+        let expected = Mat4::from_translation(offset);
         assert_ne!(
             result,
-            Matrix4::identity(),
+            Mat4::IDENTITY,
             "BUG: find_skin_entity_transform returns identity even though animated mesh entity exists with non-identity GlobalTransform"
         );
         assert_eq!(
@@ -181,23 +177,23 @@ mod tests {
 
     #[test]
     fn apply_entity_transform_includes_entity_offset() {
-        let offset = Vector3::new(10.0, 0.0, 0.0);
+        let offset = Vec3::new(10.0, 0.0, 0.0);
         let world = create_world_with_animated_entity(offset);
 
         let bone_transforms = vec![
-            Matrix4::identity(),
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
+            Mat4::IDENTITY,
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
         ];
 
         let entity_transform = find_skin_entity_transform(&world);
         let result = apply_entity_transform(&bone_transforms, &entity_transform);
 
-        let expected_bone0 = Matrix4::from_translation(offset);
-        let expected_bone1 = Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0));
+        let expected_bone0 = Mat4::from_translation(offset);
+        let expected_bone1 = Mat4::from_translation(Vec3::new(10.0, 1.0, 0.0));
 
         assert_ne!(
             result[0],
-            Matrix4::identity(),
+            Mat4::IDENTITY,
             "BUG: bone[0] at origin should be offset by entity transform (10,0,0), but got identity"
         );
         assert_eq!(
@@ -217,7 +213,7 @@ mod tests {
         world.resource_mut::<FrameClock>().frame = 15;
 
         let path = MotionPath {
-            center: Vector3::new(1.0, 2.0, 3.0),
+            center: Vec3::new(1.0, 2.0, 3.0),
             radius: 5.0,
             angular_speed: 1.0,
             phase_offset: 0.0,
@@ -225,7 +221,7 @@ mod tests {
         };
         let entity = world.spawn();
         world.insert_component(entity, path.clone());
-        world.insert_component(entity, GlobalTransform(Matrix4::identity()));
+        world.insert_component(entity, GlobalTransform(Mat4::IDENTITY));
 
         sync_motion_paths(&mut world);
         transform_propagation_system(&mut world);
@@ -233,6 +229,6 @@ mod tests {
         let frame_time = world.resource::<FrameClock>().fixed_time_seconds().unwrap();
         let expected_position = motion_path_position(&path, frame_time);
         let global = world.get_component::<GlobalTransform>(entity).unwrap().0;
-        assert_eq!(global.w.truncate(), expected_position);
+        assert_eq!(global.w_axis.truncate(), expected_position);
     }
 }

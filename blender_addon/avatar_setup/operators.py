@@ -383,6 +383,8 @@ class THYLLORE_OT_ExportVrm(bpy.types.Operator, ExportHelper):
 
         for warning in avatar_api.vrm_t_pose_warnings(sidecar_input["bones"], sidecar_input["humanoid_overrides"]):
             report(self, "WARNING", warning)
+        for warning in avatar_api.vrm_rest_clearance_warnings(sidecar_input["spring"], sidecar_input["bones"]):
+            report(self, "WARNING", warning)
         unresolved = avatar_api.infer_humanoid_mapping(sidecar_input["bones"]).get("unresolved", [])
         if unresolved:
             report(self, "WARNING", f"Humanoid mapping unresolved: {len(unresolved)} roles")

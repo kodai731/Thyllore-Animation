@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::ecs::component::{ColorVertex, LineMesh, SpringBoneSetup, SpringChain, SpringChainId};
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
@@ -22,7 +22,7 @@ pub struct SpringGizmoSelection {
 pub fn build_spring_bone_gizmo_mesh(
     setup: &SpringBoneSetup,
     shown: &SpringGizmoSelection,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     mesh: &mut LineMesh,
@@ -61,7 +61,7 @@ pub fn build_spring_bone_gizmo_mesh(
         }
 
         let placed = world_collider(collider, &global_transforms[bone_idx]);
-        let to_display = |point: Vector3<f32>| (point * mesh_scale).into();
+        let to_display = |point: Vec3| (point * mesh_scale).into();
         let center = to_display(placed.center);
         let radius = placed.radius * mesh_scale;
 

@@ -221,12 +221,13 @@ pub fn collider_rows(view: &ColliderView) -> Vec<UiRow<ColliderView>> {
 mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use glam::Vec3;
 
     fn make_sphere_collider_view(bone_id: BoneId) -> ColliderView {
         let collider = SpringColliderDef {
             id: 0,
             bone_id,
-            offset: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            offset: Vec3::new(0.0, 0.0, 0.0),
             shape: ColliderShape::default_sphere(),
         };
         ColliderView {
@@ -242,7 +243,7 @@ mod tests {
         let collider = SpringColliderDef {
             id: 0,
             bone_id,
-            offset: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            offset: Vec3::new(0.0, 0.0, 0.0),
             shape: ColliderShape::default_capsule(),
         };
         ColliderView {
@@ -303,7 +304,7 @@ mod tests {
         let collider = SpringColliderDef {
             id: 1,
             bone_id: 5,
-            offset: cgmath::Vector3::new(0.2, -0.3, 0.4),
+            offset: Vec3::new(0.2, -0.3, 0.4),
             shape: ColliderShape::Sphere { radius: 0.25 },
         };
         let fields = ColliderFields::from_collider(&collider);
@@ -326,10 +327,10 @@ mod tests {
         let collider = SpringColliderDef {
             id: 1,
             bone_id: 5,
-            offset: cgmath::Vector3::new(0.2, -0.3, 0.4),
+            offset: Vec3::new(0.2, -0.3, 0.4),
             shape: ColliderShape::Capsule {
                 radius: 0.25,
-                tail: cgmath::Vector3::new(0.0, 0.35, 0.0),
+                tail: Vec3::new(0.0, 0.35, 0.0),
             },
         };
         let fields = ColliderFields::from_collider(&collider);

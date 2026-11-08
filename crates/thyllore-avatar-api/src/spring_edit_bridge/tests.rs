@@ -65,14 +65,14 @@ fn vrm_stiffness_of(joint: &SidecarSpringJoint) -> f32 {
 
 #[test]
 fn spring_edit_bridge_builds_two_chains_under_head() {
-    let request = AddChainsUnderBoneRequest {
+    let request = UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
         min_joints: 1,
     };
 
-    let result = add_chains_under_bone(&request).unwrap();
+    let result = use_existing_bones_as_springs(&request).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 
@@ -98,24 +98,24 @@ fn spring_edit_bridge_builds_two_chains_under_head() {
 
 #[test]
 fn spring_edit_bridge_idempotent_call_does_not_duplicate_chains() {
-    let first_request = AddChainsUnderBoneRequest {
+    let first_request = UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
         min_joints: 1,
     };
-    let first = add_chains_under_bone(&first_request).unwrap();
+    let first = use_existing_bones_as_springs(&first_request).unwrap();
     assert_eq!(first.chains.len(), 2);
 
     let first_names: Vec<_> = first.chains.iter().map(|c| c.name.clone()).collect();
 
-    let second_request = AddChainsUnderBoneRequest {
+    let second_request = UseExistingBonesAsSpringsRequest {
         spring: first,
         bones: test_specs(),
         root_bone: "Head".to_string(),
         min_joints: 1,
     };
-    let second = add_chains_under_bone(&second_request).unwrap();
+    let second = use_existing_bones_as_springs(&second_request).unwrap();
 
     assert_eq!(second.chains.len(), 2);
 
@@ -125,21 +125,21 @@ fn spring_edit_bridge_idempotent_call_does_not_duplicate_chains() {
 
 #[test]
 fn spring_edit_bridge_unknown_root_or_short_runs_return_error() {
-    let bad_root = AddChainsUnderBoneRequest {
+    let bad_root = UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "nonexistent".to_string(),
         min_joints: 1,
     };
-    assert!(add_chains_under_bone(&bad_root).is_err());
+    assert!(use_existing_bones_as_springs(&bad_root).is_err());
 
-    let too_short = AddChainsUnderBoneRequest {
+    let too_short = UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
         min_joints: 4,
     };
-    assert!(add_chains_under_bone(&too_short).is_err());
+    assert!(use_existing_bones_as_springs(&too_short).is_err());
 }
 
 fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
@@ -155,7 +155,7 @@ fn with_vrm_joints(mut spring: SidecarSpring) -> SidecarSpring {
 #[test]
 fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
     let spring = with_vrm_joints(
-        add_chains_under_bone(&AddChainsUnderBoneRequest {
+        use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
             spring: SidecarSpring::default(),
             bones: test_specs(),
             root_bone: "Head".to_string(),
@@ -183,7 +183,7 @@ fn spring_edit_bridge_ramp_rigid_fraction_holds_the_root_joints() {
 #[test]
 fn spring_edit_bridge_ramp_linear_interpolation() {
     let spring = with_vrm_joints(
-        add_chains_under_bone(&AddChainsUnderBoneRequest {
+        use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
             spring: SidecarSpring::default(),
             bones: test_specs(),
             root_bone: "Head".to_string(),
@@ -212,7 +212,7 @@ fn spring_edit_bridge_ramp_linear_interpolation() {
 #[test]
 fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
     let spring = with_vrm_joints(
-        add_chains_under_bone(&AddChainsUnderBoneRequest {
+        use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
             spring: SidecarSpring::default(),
             bones: test_specs(),
             root_bone: "Head".to_string(),
@@ -241,7 +241,7 @@ fn spring_edit_bridge_ramp_of_another_force_model_is_an_error() {
 
 #[test]
 fn spring_edit_bridge_chains_under_bone_head() {
-    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
@@ -263,7 +263,7 @@ fn spring_edit_bridge_chains_under_bone_head() {
 
 #[test]
 fn spring_edit_bridge_chains_in_scope_sibling_chains() {
-    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
@@ -284,7 +284,7 @@ fn spring_edit_bridge_chains_in_scope_sibling_chains() {
 
 #[test]
 fn spring_edit_bridge_unknown_shape_returns_error() {
-    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
@@ -306,7 +306,7 @@ fn spring_edit_bridge_unknown_shape_returns_error() {
 
 #[test]
 fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
-    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
@@ -341,7 +341,7 @@ fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
 
 #[test]
 fn spring_edit_bridge_chains_with_radius_unknown_mode_returns_error() {
-    let spring = add_chains_under_bone(&AddChainsUnderBoneRequest {
+    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones: test_specs(),
         root_bone: "Head".to_string(),
@@ -372,13 +372,13 @@ fn spring_edit_bridge_resolves_humanoid_role_on_prefixed_bones() {
         spec("hair_b.002", Some(7)),
     ];
 
-    let request = AddChainsUnderBoneRequest {
+    let request = UseExistingBonesAsSpringsRequest {
         spring: SidecarSpring::default(),
         bones,
         root_bone: "Head".to_string(),
         min_joints: 1,
     };
-    let result = add_chains_under_bone(&request).unwrap();
+    let result = use_existing_bones_as_springs(&request).unwrap();
 
     assert_eq!(result.chains.len(), 2);
 

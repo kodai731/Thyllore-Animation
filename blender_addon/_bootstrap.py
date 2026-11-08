@@ -147,7 +147,7 @@ def insert_wheels_to_sys_path() -> None:
 
     conflict_modules: List[str] = [
         m
-        for m in ("grpc", "google.protobuf", "thyllore_ml_core")
+        for m in ("grpc", "google.protobuf", "thyllore_ml_core", "thyllore_avatar_api")
         if _is_already_imported(m)
     ]
     if conflict_modules:

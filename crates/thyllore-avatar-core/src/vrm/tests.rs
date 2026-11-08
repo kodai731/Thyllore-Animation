@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{Matrix3, SquareMatrix};
+use glam::{Mat3, Vec3};
 use thyllore_anim_core::spring_bone::{ColliderShape, JointForce, VrmJointForce};
 use thyllore_importer_core::gltf::spring_bone_extension::parse_vrmc_spring_bone;
 
@@ -33,7 +33,8 @@ fn bones() -> Vec<BoneInput> {
 }
 
 fn centimetre_frames() -> Vec<BoneRestFrame> {
-    let frame = BoneRestFrame::new(Matrix3::from_value(METRES_PER_BONE_UNIT)).expect("regular");
+    let frame = BoneRestFrame::new(Mat3::from_diagonal(Vec3::splat(METRES_PER_BONE_UNIT)))
+        .expect("regular");
     vec![frame; BONE_NAMES.len()]
 }
 
@@ -239,6 +240,85 @@ fn rest_relative_joints_carry_strand_relative_stiffness_and_no_gravity() {
         assert_eq!(joint["gravityPower"], 0.0);
         assert!((joint["hitRadius"].as_f64().unwrap() - 2.0).abs() < 1e-5);
     }
+}
+
+fn vrm_hair_spring() -> SidecarSpring {
+    let vrm = SidecarJointForce::Vrm {
+        stiffness: 1.0,
+        gravity_power: 0.0,
+    };
+    let mut spring = spring();
+    for joint in &mut spring.chains[0].joints {
+        joint.force = vrm;
+    }
+    spring
+}
+
+fn vrm_hair_extensions() -> VrmExtensions {
+    let sidecar = AvatarSidecar {
+        spring: vrm_hair_spring(),
+        ..sidecar()
+    };
+    let bones = bones();
+    let frames = centimetre_frames();
+    let node_of_bone = node_of_bone();
+    let meta = VrmMeta::new("test avatar", "tester");
+    build_vrm_extensions(VrmInput {
+        sidecar: &sidecar,
+        bones: &bones,
+        frames: &frames,
+        node_of_bone: &node_of_bone,
+        meta: &meta,
+    })
+    .expect("extensions build")
+}
+
+#[test]
+fn rest_clearance_projects_a_vrm_root_joint_resting_inside_the_head_collider() {
+    let clearance = vrm_rest_clearance(&vrm_hair_spring(), &bones());
+
+    assert_eq!(clearance.hit_radius("hair", "Hair1"), Some(0.0));
+    assert!((clearance.hit_radius("hair", "Hair2").unwrap() - 0.02).abs() < 1e-6);
+    assert_eq!(clearance.shrinks.len(), 1, "{:?}", clearance.shrinks);
+    let shrink = &clearance.shrinks[0];
+    assert_eq!(
+        (
+            shrink.collider.as_str(),
+            shrink.chain.as_str(),
+            shrink.bone.as_str()
+        ),
+        ("Head#0", "hair", "Hair1")
+    );
+    assert!((shrink.from_m - 0.08).abs() < 1e-6);
+    assert!((shrink.to_m - 0.06).abs() < 1e-5, "{shrink:?}");
+}
+
+#[test]
+fn rest_relative_joints_keep_their_tolerance_out_of_the_projection() {
+    let clearance = vrm_rest_clearance(&spring(), &bones());
+
+    assert!((clearance.hit_radius("hair", "Hair1").unwrap() - 0.02).abs() < 1e-6);
+    assert!(clearance.shrinks.is_empty());
+}
+
+#[test]
+fn the_vrm_file_carries_the_projected_hit_radius_and_collider_radius() {
+    let extensions = vrm_hair_extensions();
+    let spring_bone = extensions.get(VRMC_SPRING_BONE).expect("VRMC_springBone");
+
+    let joints = spring_bone["springs"][0]["joints"]
+        .as_array()
+        .expect("joints");
+    assert_eq!(joints[0]["hitRadius"], 0.0);
+    assert!((joints[1]["hitRadius"].as_f64().unwrap() - 2.0).abs() < 1e-5);
+    let head_radius = spring_bone["colliders"][0]["shape"]["sphere"]["radius"]
+        .as_f64()
+        .unwrap();
+    assert!((head_radius - 6.0).abs() < 1e-4, "{head_radius}");
+    let hips_radius = spring_bone["colliders"][1]["shape"]["capsule"]["radius"]
+        .as_f64()
+        .unwrap();
+    assert!((hips_radius - 4.0).abs() < 1e-5, "{hips_radius}");
 }
 
 #[test]

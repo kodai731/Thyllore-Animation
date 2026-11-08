@@ -1,10 +1,9 @@
 #![cfg(test)]
+use glam::DMat3;
 use std::fs;
 use std::io::Write;
 
 mod support;
-
-use cgmath::{Matrix3, SquareMatrix};
 
 use support::fbx_ascii::write_rig_fbx;
 use support::rig_convention::rig_convention;
@@ -86,46 +85,46 @@ fn test_skin_roundtrip_all_conventions() {
                 );
             }
 
-            let bind_world = cluster.inverse_bind_pose.invert().unwrap();
+            let bind_world = cluster.inverse_bind_pose.try_inverse().unwrap();
 
             let scale = convention.unit_scale_factor / 100.0;
             let expected_pos_x = (bone_node.world_position.x * scale) as f32;
             let expected_pos_y = (bone_node.world_position.y * scale) as f32;
             let expected_pos_z = (bone_node.world_position.z * scale) as f32;
-            let expected_rotation = Matrix3::from(bone_node.world_rotation);
+            let expected_rotation = DMat3::from_quat(bone_node.world_rotation);
 
             assert!(
-                (bind_world[3][0] - expected_pos_x).abs() < 1e-4,
+                (bind_world.col(3)[0] - expected_pos_x).abs() < 1e-4,
                 "convention {}: cluster {} inverse_bind_pose^-1 translation x {:.6} != world {:.6}",
                 convention_id,
                 ci,
-                bind_world[3][0],
+                bind_world.col(3)[0],
                 expected_pos_x
             );
             assert!(
-                (bind_world[3][1] - expected_pos_y).abs() < 1e-4,
+                (bind_world.col(3)[1] - expected_pos_y).abs() < 1e-4,
                 "convention {}: cluster {} inverse_bind_pose^-1 translation y {:.6} != world {:.6}",
                 convention_id,
                 ci,
-                bind_world[3][1],
+                bind_world.col(3)[1],
                 expected_pos_y
             );
             assert!(
-                (bind_world[3][2] - expected_pos_z).abs() < 1e-4,
+                (bind_world.col(3)[2] - expected_pos_z).abs() < 1e-4,
                 "convention {}: cluster {} inverse_bind_pose^-1 translation z {:.6} != world {:.6}",
                 convention_id,
                 ci,
-                bind_world[3][2],
+                bind_world.col(3)[2],
                 expected_pos_z
             );
 
             for c in 0..3 {
                 for r in 0..3 {
-                    let expected = expected_rotation[c][r] as f32;
+                    let expected = expected_rotation.col(c)[r] as f32;
                     assert!(
-                        (bind_world[c][r] - expected).abs() < 1e-4,
+                        (bind_world.col(c)[r] - expected).abs() < 1e-4,
                         "convention {}: cluster {} inverse_bind_pose^-1 rotation [{},{}] {:.6} != world {:.6}",
-                        convention_id, ci, c, r, bind_world[c][r], expected
+                        convention_id, ci, c, r, bind_world.col(c)[r], expected
                     );
                 }
             }

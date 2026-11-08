@@ -3,15 +3,39 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::image::{create_image_3d, create_image_view_3d};
+use crate::resource::GpuResource;
+use crate::types::Instance;
+
+#[derive(Clone, Copy, Debug)]
+pub enum VolumeUsage {
+    StorageSampled,
+    TransferDstSampled,
+    TransferSrc,
+    None,
+}
+
+impl VolumeUsage {
+    pub(crate) fn to_flags(self) -> vk::ImageUsageFlags {
+        match self {
+            VolumeUsage::StorageSampled => {
+                vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED
+            }
+            VolumeUsage::TransferDstSampled => {
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED
+            }
+            VolumeUsage::TransferSrc => vk::ImageUsageFlags::TRANSFER_SRC,
+            VolumeUsage::None => vk::ImageUsageFlags::empty(),
+        }
+    }
+}
 
 /// A 3D image with its view and a linear clamp-to-edge sampler.
 #[derive(Clone, Debug, Default)]
 pub struct VolumeImage {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub extent: vk::Extent3D,
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
 }
 
 unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
@@ -31,19 +55,25 @@ unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(0.0);
-    Ok(rrdevice.device.create_sampler(&info, None)?)
+    Ok(rrdevice.device().create_sampler(&info, None)?)
 }
 
 impl VolumeImage {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        extent: vk::Extent3D,
-        format: vk::Format,
-        usage: vk::ImageUsageFlags,
+        extent: crate::types::Extent3D,
+        format: crate::types::Format,
+        usage: VolumeUsage,
     ) -> Result<Self> {
-        let (image, memory) = create_image_3d(instance, rrdevice, extent, format, usage)?;
-        let view = create_image_view_3d(rrdevice, image, format)?;
+        let (image, memory) = create_image_3d(
+            instance,
+            rrdevice,
+            extent.raw(),
+            format.raw(),
+            usage.to_flags(),
+        )?;
+        let view = create_image_view_3d(rrdevice, image, format.raw())?;
         let sampler = create_linear_clamp_sampler(rrdevice)?;
 
         Ok(Self {
@@ -51,11 +81,18 @@ impl VolumeImage {
             memory,
             view,
             sampler,
-            extent,
         })
     }
 
-    pub fn subresource_range(&self) -> vk::ImageSubresourceRange {
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
+
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
+    pub(crate) fn subresource_range(&self) -> vk::ImageSubresourceRange {
         vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,
             base_mip_level: 0,
@@ -65,7 +102,7 @@ impl VolumeImage {
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.sampler != vk::Sampler::null() {
             device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
@@ -82,5 +119,18 @@ impl VolumeImage {
             device.free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
+    }
+}
+
+impl GpuResource for VolumeImage {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device());
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.sampler.is_destroyed()
+            && self.view.is_destroyed()
+            && self.image.is_destroyed()
+            && self.memory.is_destroyed()
     }
 }

@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::vrm::{t_pose_warnings, VrmMeta, T_POSE_TOLERANCE_DEG};
+use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+use thyllore_avatar_core::vrm::{
+    t_pose_warnings, vrm_rest_clearance, VrmMeta, T_POSE_TOLERANCE_DEG,
+};
 use thyllore_exporter_core::systems::gltf::write_vrm;
 
 use crate::avatar_setup_bridge::sidecar_read;
@@ -27,9 +30,9 @@ pub fn vrm_t_pose_warnings(
             })?;
         mapping.by_role.insert(role, bone);
     }
-    let heads: Vec<Vector3<f32>> = bones
+    let heads: Vec<Vec3> = bones
         .iter()
-        .map(|bone| Vector3::from(bone.rest_position))
+        .map(|bone| Vec3::from(bone.rest_position))
         .collect();
     Ok(t_pose_warnings(&mapping, &heads, T_POSE_TOLERANCE_DEG))
 }
@@ -172,4 +175,18 @@ mod tests {
             "expected unknown field error, got: {err}"
         );
     }
+}
+
+/// One warning per collider the VRM file shrinks because a joint rests inside it.
+pub fn vrm_rest_clearance_warnings(spring: &SidecarSpring, bones: &[BoneInput]) -> Vec<String> {
+    vrm_rest_clearance(spring, bones)
+        .shrinks
+        .iter()
+        .map(|shrink| {
+            format!(
+                "Collider {} shrinks from {:.3} m to {:.3} m in the VRM: joint {} of chain {} rests inside it",
+                shrink.collider, shrink.from_m, shrink.to_m, shrink.bone, shrink.chain
+            )
+        })
+        .collect()
 }

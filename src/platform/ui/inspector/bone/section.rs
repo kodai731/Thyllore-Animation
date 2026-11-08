@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 use crate::animation::{Bone, BoneId, Skeleton};
 use crate::asset::AssetStorage;
@@ -15,7 +15,7 @@ pub struct BoneView {
     pub parent_name: String,
     pub offset: [f32; 3],
     pub child_name: String,
-    pub child_offset: Vector3<f32>,
+    pub child_offset: Vec3,
 }
 
 pub fn bone_section(assets: &AssetStorage, bone_id: BoneId) -> Box<dyn FormSection> {
@@ -51,18 +51,18 @@ fn read_bone_view(skeleton: &Skeleton, bone_id: BoneId) -> Option<BoneView> {
         bone_id,
         name: bone.name.clone(),
         parent_name,
-        offset: bone.local_transform.w.truncate().into(),
+        offset: bone.local_transform.w_axis.truncate().into(),
         child_name: default_child_name(skeleton, bone),
         child_offset: default_child_offset(bone),
     })
 }
 
-fn default_child_offset(bone: &Bone) -> Vector3<f32> {
-    let own_offset = bone.local_transform.w.truncate();
-    if own_offset.magnitude2() > 0.0 {
+fn default_child_offset(bone: &Bone) -> Vec3 {
+    let own_offset = bone.local_transform.w_axis.truncate();
+    if own_offset.length_squared() > 0.0 {
         own_offset
     } else {
-        Vector3::new(0.0, 0.1, 0.0)
+        Vec3::new(0.0, 0.1, 0.0)
     }
 }
 
@@ -130,7 +130,7 @@ mod tests {
             parent_name: "head".to_string(),
             offset: [0.0, 0.1, 0.0],
             child_name: "hair_01_01".to_string(),
-            child_offset: Vector3::new(0.0, 0.1, 0.0),
+            child_offset: Vec3::new(0.0, 0.1, 0.0),
         }
     }
 

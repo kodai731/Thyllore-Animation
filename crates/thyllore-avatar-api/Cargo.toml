@@ -14,6 +14,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3", "dep:pythonize", "thyllore-ml-api/python"]
+debug-log = ["thyllore-ml-api/debug-log"]
 
 [dependencies]
 thyllore-ml-api = { path = "../thyllore-ml-api" }
@@ -24,7 +25,7 @@ thyllore-exporter-core = { path = "../thyllore-exporter-core" }
 thyllore-scene-core = { path = "../thyllore-scene-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }
 anyhow = "1"
-cgmath = "0.18"
+glam = "0.34"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"

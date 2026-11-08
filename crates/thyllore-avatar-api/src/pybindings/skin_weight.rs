@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use pyo3::prelude::*;
 use pythonize::depythonize;
 use thyllore_math_core::{
@@ -17,8 +17,8 @@ struct SurfaceIn {
     weights: Vec<Vec<f32>>,
 }
 
-fn to_vectors(points: &[[f32; 3]]) -> Vec<Vector3<f32>> {
-    points.iter().copied().map(Vector3::from).collect()
+fn to_vectors(points: &[[f32; 3]]) -> Vec<Vec3> {
+    points.iter().copied().map(Vec3::from).collect()
 }
 
 /// The weights of every target vertex transferred from the skinned source surface; both surfaces

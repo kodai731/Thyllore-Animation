@@ -10,11 +10,11 @@ from bpy.types import Panel, UIList
 
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
-from .chain_inputs import generatable_submeshes
+from .chain_inputs import GENERATABLE_ROLES, generatable_submeshes
 from .operators import bound_meshes, target_armature
-from ..common.spring_properties import FORCE_PARAM_NAMES
+from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain, simulated_joints
 from ..common.vrm_export import meta_fields_of_kind
-from .properties import CHAIN_GEN_UI_PARAMS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
+from .properties import CHAIN_GEN_UI_PARAMS, HIDDEN_MASK_DEFAULTS, RAMP_END_PARAM_NAMES, SPRING_JOINT_PARAM_NAMES
 from .ramp_operators import active_bone_name
 
 
@@ -30,10 +30,16 @@ def _draw_labelled_prop(layout, owner, name) -> None:
     split.column(align=True).prop(owner, name, text="")
 
 
+def _draw_list_when_filled(layout, list_type, owner, collection_name, index_name) -> None:
+    """A UIList only when it has rows; an empty list is a blank box that says nothing."""
+    if len(getattr(owner, collection_name)) == 0:
+        return
+    layout.template_list(list_type, "", owner, collection_name, owner, index_name)
+
+
 def _draw_joint_params(layout, joint, shared_names=SPRING_JOINT_PARAM_NAMES) -> None:
-    """The force model, the magnitudes of that model, then the shared parameters listed."""
+    """The magnitudes of the joint's force model, then the shared parameters listed."""
     column = layout.column(align=True)
-    _draw_labelled_prop(column, joint, "force_model")
     for name in FORCE_PARAM_NAMES.get(joint.force_model, ()):
         _draw_labelled_prop(column, joint, name)
     for name in shared_names:
@@ -104,26 +110,24 @@ class THYLLORE_PT_AvatarSetupChains(Panel):
 
     @staticmethod
     def _draw_chain_list(layout, arm):
-        layout.operator("thyllore.add_chains_under_bone")
+        layout.operator("thyllore.use_existing_bones_as_springs")
         layout.operator("thyllore.remove_spring_chain")
         settings = arm.data.thyllore_spring
-        layout.template_list(
-            "THYLLORE_UL_SpringChains", "", settings, "chains", settings, "active_chain_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_SpringChains", settings, "chains", "active_chain_index"
         )
 
     @staticmethod
     def _draw_joints(layout, context, arm):
         settings = arm.data.thyllore_spring
-        index = settings.active_chain_index
-        chains = settings.chains
-        if index < 0 or index >= len(chains):
+        chain = active_chain(settings)
+        if chain is None:
             return
-        chain = chains[index]
         if not SPRING_JOINT_PARAM_NAMES:
             return
 
         active_name = active_bone_name(context)
-        joints = sorted(chain.joints, key=lambda joint: joint.bone != active_name)
+        joints = sorted(simulated_joints(chain), key=lambda joint: joint.bone != active_name)
 
         for joint in joints:
             box = layout.box()
@@ -182,7 +186,6 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
         layout.label(text="Defaults for what no chain group or bone decides yet", icon="INFO")
         column = layout.column(align=True)
         _draw_labelled_prop(column, generation, "root_bone")
-        _draw_labelled_prop(column, generation, "attachment")
         for param in CHAIN_GEN_UI_PARAMS:
             _draw_labelled_prop(column, generation, param["name"])
 
@@ -253,7 +256,7 @@ class THYLLORE_PT_AvatarSetupDebug(Panel):
 
     @classmethod
     def poll(cls, context):
-        return _debuglog.is_debug_enabled()
+        return _debuglog.is_debug_build()
 
     def draw(self, context):
         from .. import debug_rpc
@@ -303,14 +306,14 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
     def _draw_colliders(layout, context, arm):
         settings = arm.data.thyllore_spring
         layout.operator("thyllore.fit_body_colliders")
-        layout.template_list(
-            "THYLLORE_UL_SpringColliders", "", settings, "colliders", settings, "active_collider_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_SpringColliders", settings, "colliders", "active_collider_index"
         )
         row = layout.row(align=True)
-        op = row.operator("thyllore.add_collider")
+        op = row.operator("thyllore.add_collider", text="Add Sphere", icon="SPHERE")
         op.shape = "sphere"
         op.radius = 0.05
-        op = row.operator("thyllore.add_collider")
+        op = row.operator("thyllore.add_collider", text="Add Capsule", icon="META_CAPSULE")
         op.shape = "capsule"
         op.radius = 0.05
         layout.operator("thyllore.remove_collider")
@@ -334,8 +337,8 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
     @staticmethod
     def _draw_groups(layout, context, arm):
         settings = arm.data.thyllore_spring
-        layout.template_list(
-            "THYLLORE_UL_ColliderGroups", "", settings, "collider_groups", settings, "active_group_index"
+        _draw_list_when_filled(
+            layout, "THYLLORE_UL_ColliderGroups", settings, "collider_groups", "active_group_index"
         )
         layout.operator("thyllore.apply_collider_groups")
 
@@ -349,17 +352,19 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
 
 
 class THYLLORE_UL_SubmeshRoles(UIList):
-    """UIList for submesh roles: material, role, source."""
+    """UIList for submesh roles: material, role, source, and the root attachment of a submesh that grows chains."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, prop_name):
         row = layout.row(align=True)
         row.prop(item, "material", text="", emboss=False)
         row.prop(item, "role", text="")
         row.prop(item, "source", text="")
+        if item.role in GENERATABLE_ROLES:
+            row.prop(item, "attachment", text="")
 
 
 class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
-    """Submeshes sub-panel: one role list per bound mesh, guess/hide buttons, hidden triangle counts."""
+    """Submeshes sub-panel: one role list per bound mesh, the guess button, the hidden skin toggle and its parameters."""
 
     bl_label = "Submeshes"
     bl_idname = "THYLLORE_PT_avatar_setup_submeshes"
@@ -380,7 +385,12 @@ class THYLLORE_PT_AvatarSetupSubmeshes(Panel):
         for mesh_obj in meshes:
             self._draw_mesh_roles(layout, mesh_obj)
         layout.operator("thyllore.guess_submesh_roles")
-        layout.operator("thyllore.hide_covered_skin")
+
+        mask = arm.data.thyllore_hidden_mask
+        layout.prop(mask, "enabled", toggle=True)
+        column = layout.column(align=True)
+        for name in HIDDEN_MASK_DEFAULTS:
+            column.prop(mask, name)
 
     @staticmethod
     def _draw_mesh_roles(layout, mesh_obj) -> None:

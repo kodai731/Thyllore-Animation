@@ -7,7 +7,7 @@ use vulkanalia::vk::DeviceV1_2;
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_spirv_reflect::GpuBlock;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -71,15 +71,15 @@ impl<T: GpuBlock> UniformBuffer<T> {
         })
     }
 
-    pub fn handle(&self) -> vk::Buffer {
-        self.buffer
+    pub fn handle(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.buffer)
     }
 
-    pub fn block_size(&self) -> vk::DeviceSize {
+    pub(crate) fn block_size(&self) -> vk::DeviceSize {
         T::SIZE as vk::DeviceSize
     }
 
-    pub fn slot_offset(&self, slot: usize) -> Result<vk::DeviceSize> {
+    pub fn slot_offset(&self, slot: usize) -> Result<crate::types::DeviceSize> {
         if slot >= self.slot_count {
             return Err(anyhow!(
                 "{} slot {slot} is out of range (slot count {})",
@@ -93,10 +93,11 @@ impl<T: GpuBlock> UniformBuffer<T> {
     /// Device address of one slot, for shaders that reach the block through a buffer reference.
     pub unsafe fn slot_address(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         slot: usize,
-    ) -> Result<vk::DeviceAddress> {
-        let base = device
+    ) -> Result<crate::types::DeviceAddress> {
+        let base = rrdevice
+            .device()
             .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
         Ok(base + self.slot_offset(slot)?)
     }
@@ -104,26 +105,32 @@ impl<T: GpuBlock> UniformBuffer<T> {
     pub unsafe fn write_slot(&self, rrdevice: &RRDevice, slot: usize, value: &T) -> Result<()> {
         let offset = self.slot_offset(slot)?;
         let bytes = value.as_bytes();
-        let mapped = rrdevice.device.map_memory(
+        let mapped = rrdevice.device().map_memory(
             self.memory,
             offset,
             bytes.len() as vk::DeviceSize,
             vk::MemoryMapFlags::empty(),
         )?;
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), mapped.cast::<u8>(), bytes.len());
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
         Ok(())
     }
 
     /// Transfers inside the command buffer so frames in flight never race on one slot.
     pub unsafe fn record_update(
         &self,
-        device: &vulkanalia::Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
         value: &T,
-        reader_stage: vk::PipelineStageFlags,
+        reader_stages: &[crate::renderer::ShaderStage],
     ) -> Result<()> {
+        let cmd = cmd.raw();
+        let reader_stage = reader_stages
+            .iter()
+            .fold(vk::PipelineStageFlags::empty(), |stages, &stage| {
+                stages | vk::PipelineStageFlags::from(stage)
+            });
         if self.placement != Placement::DeviceUpdated {
             return Err(anyhow!(
                 "{} uniform buffer is {:?}; record_update needs Placement::DeviceUpdated",
@@ -134,7 +141,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         let offset = self.slot_offset(slot)?;
 
         self.record_barrier(
-            device,
+            rrdevice,
             cmd,
             offset,
             (reader_stage, vk::AccessFlags::UNIFORM_READ),
@@ -143,9 +150,11 @@ impl<T: GpuBlock> UniformBuffer<T> {
                 vk::AccessFlags::TRANSFER_WRITE,
             ),
         );
-        device.cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
+        rrdevice
+            .device()
+            .cmd_update_buffer(cmd, self.buffer, offset, value.as_bytes());
         self.record_barrier(
-            device,
+            rrdevice,
             cmd,
             offset,
             (
@@ -159,7 +168,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
 
     unsafe fn record_barrier(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         offset: vk::DeviceSize,
         (src_stage, src_access): (vk::PipelineStageFlags, vk::AccessFlags),
@@ -174,7 +183,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
             .offset(offset)
             .size(self.block_size())
             .build();
-        device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             src_stage,
             dst_stage,
@@ -185,7 +194,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         );
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.buffer != vk::Buffer::null() {
             device.destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
@@ -199,7 +208,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
 
 impl<T: GpuBlock> GpuResource for UniformBuffer<T> {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

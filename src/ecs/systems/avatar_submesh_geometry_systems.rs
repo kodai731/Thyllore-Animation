@@ -1,4 +1,5 @@
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use glam::Vec3;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 
 /// One submesh inside the merged vertex range.
@@ -18,7 +19,7 @@ impl SubmeshPart {
 /// The skin vertices and triangles of several submeshes concatenated into one index space.
 pub(crate) struct MergedSubmeshGeometry {
     pub(crate) parts: Vec<SubmeshPart>,
-    pub(crate) positions: Vec<cgmath::Vector3<f32>>,
+    pub(crate) positions: Vec<Vec3>,
     pub(crate) triangles: Vec<[u32; 3]>,
     pub(crate) tex_coords: Vec<[f32; 2]>,
     pub(crate) skeleton_id: crate::animation::SkeletonId,
@@ -44,7 +45,7 @@ pub(crate) fn merge_submesh_geometry(
     submeshes: Vec<(SubmeshKey, usize)>,
 ) -> anyhow::Result<MergedSubmeshGeometry> {
     let mut parts = Vec::new();
-    let mut positions: Vec<cgmath::Vector3<f32>> = Vec::new();
+    let mut positions: Vec<Vec3> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
     let mut submesh_uvs: Vec<Option<Vec<[f32; 2]>>> = Vec::new();
     let mut skeleton_id = None;
@@ -111,7 +112,7 @@ pub(crate) fn merge_submesh_geometry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_math_core::{Vec2, Vec3};
+    use glam::{Vec2, Vec3};
     use thyllore_model_core::mesh::Vertex;
 
     fn vertex_with_uv(u: f32, v: f32) -> Vertex {

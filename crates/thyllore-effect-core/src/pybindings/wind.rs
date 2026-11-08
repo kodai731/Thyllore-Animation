@@ -7,7 +7,7 @@ use crate::wind::{
     WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
 };
 use crate::WindParameterOwner;
-use cgmath::Vector4;
+use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -72,7 +72,7 @@ pub fn wind_bounds_corners(
     Ok(wind_local_bounds_corners(&ubo)
         .iter()
         .map(|corner| {
-            let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+            let world = model * Vec4::new(corner.x, corner.y, corner.z, 1.0);
             [world.x, world.y, world.z]
         })
         .collect())

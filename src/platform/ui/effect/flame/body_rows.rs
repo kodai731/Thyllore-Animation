@@ -78,7 +78,7 @@ fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
         rows.push(UiRow::Slider {
             label: "Ring Speed",
             min: 0.0,
-            max: 6.28,
+            max: std::f32::consts::TAU,
             format: "%.2f",
             get: |view| view.effect.emitter.ring_angular_speed,
             set: |view, value| {

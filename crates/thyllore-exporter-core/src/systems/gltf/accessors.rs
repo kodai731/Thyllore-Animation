@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::Quaternion;
+use glam::Quat;
 use gltf::json::accessor::{ComponentType, GenericComponentType, Type};
 use gltf::json::validation::{Checked, USize64};
 use gltf::json::{self, Index};
@@ -160,8 +160,8 @@ pub(crate) fn build_bone_to_node_map(
     map
 }
 
-pub(crate) fn quaternion_to_gltf_array(q: Quaternion<f32>) -> [f32; 4] {
-    [q.v.x, q.v.y, q.v.z, q.s]
+pub(crate) fn quaternion_to_gltf_array(q: Quat) -> [f32; 4] {
+    [q.x, q.y, q.z, q.w]
 }
 
 pub(crate) fn compute_min_max_scalar(data: &[f32]) -> (f32, f32) {

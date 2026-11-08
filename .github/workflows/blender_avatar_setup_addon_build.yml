@@ -30,7 +30,7 @@ on:
       - 'blender_addon/**'
       - '!blender_addon/effects/**'
       - 'crates/thyllore-ml-api/**'
-      - 'crates/thyllore-ml-core/**'
+      - 'crates/thyllore-avatar-api/**'
       - 'crates/thyllore-avatar-core/**'
       - 'crates/thyllore-exporter-core/**'
       - 'crates/thyllore-model-core/**'
@@ -48,7 +48,7 @@ on:
       - 'blender_addon/**'
       - '!blender_addon/effects/**'
       - 'crates/thyllore-ml-api/**'
-      - 'crates/thyllore-ml-core/**'
+      - 'crates/thyllore-avatar-api/**'
       - 'crates/thyllore-avatar-core/**'
       - 'crates/thyllore-exporter-core/**'
       - 'crates/thyllore-model-core/**'
@@ -121,7 +121,7 @@ jobs:
           pip install "maturin>=1.5" "pytest>=8.0"
 
       - name: Collect vendored wheels
-        run: bash scripts/collect_wheels.sh
+        run: bash scripts/collect_wheels.sh --crate thyllore-avatar-api
 
       - name: Run addon tests (gRPC parity and build-mode boundary have their own workflows)
         working-directory: blender_addon
@@ -163,7 +163,7 @@ jobs:
       - name: Collect vendored wheels
         shell: pwsh
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1 -Crate thyllore-avatar-api
 
       - name: Build Avatar Setup ZIP
         id: build

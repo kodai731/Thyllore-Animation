@@ -3,7 +3,10 @@ use crate::{BoneId, Skeleton};
 use super::chain_origin::ChainOrigin;
 use super::collider_fit::{ensure_fitted_collider, fitted_collider_exists_on, FittedCapsule};
 use super::space::SpringSpace;
-use super::{ColliderGroupOrigin, SpringBoneSetup, SpringChain, SpringChainId, SpringJointParam};
+use super::{
+    ColliderGroupOrigin, RestClearance, SpringBoneSetup, SpringChain, SpringChainId,
+    SpringJointParam,
+};
 
 fn build_chain_joints(
     root_bone_id: BoneId,
@@ -57,6 +60,7 @@ pub fn add_chain(
         tail_bone_id: None,
         enabled: true,
         origin: ChainOrigin::Authored,
+        rest_clearance: RestClearance::Tolerated,
     };
     setup.chains.push(chain);
 
@@ -103,6 +107,7 @@ mod tests {
     use crate::spring_bone::{
         ChainOrigin, ColliderShape, RootAttachment, SpringForceModel, SubmeshSelector,
     };
+    use glam::Vec3;
 
     fn make_linear_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -165,15 +170,15 @@ mod tests {
         let mut setup = SpringBoneSetup::default();
         let skin_fit = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, -0.05, 0.0),
-            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            head: Vec3::new(0.0, -0.05, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
             radius: 0.09,
         };
         ensure_fitted_collider(&mut setup, &skin_fit);
         let estimate = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, 0.1, 0.0),
-            tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
+            head: Vec3::new(0.0, 0.1, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
             radius: 0.1,
         };
 
@@ -203,8 +208,8 @@ mod tests {
         let mut setup = SpringBoneSetup::default();
         let root_collider = FittedCapsule {
             bone_id: 0,
-            head: cgmath::Vector3::new(0.0, 0.0, 0.0),
-            tail: cgmath::Vector3::new(0.0, 1.0, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.1,
         };
 
@@ -225,6 +230,7 @@ mod tests {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
                     attachment: RootAttachment::Cap,
                 },
+                rest_clearance: RestClearance::Tolerated,
             },
             SpringChain {
                 id: 98,
@@ -242,6 +248,7 @@ mod tests {
                     target: SubmeshSelector::Mesh("mesh".to_string()),
                     attachment: RootAttachment::Cap,
                 },
+                rest_clearance: RestClearance::Tolerated,
             },
         ];
 

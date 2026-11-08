@@ -63,15 +63,26 @@ def _chain_to_sidecar(chain) -> dict:
 
 
 def _chain_origin_to_sidecar(chain) -> dict | None:
-    """The submesh a generated chain came from, or None for an authored chain."""
+    """The submesh a generated chain came from, or None for an authored chain; a chain saved before the
+    attachment existed still carries its role, which the wheel maps to the attachment."""
     mesh = getattr(chain, "origin_mesh", "")
     if not mesh:
         return None
-    return {
-        "mesh": mesh,
-        "material": chain.origin_material,
-        "attachment": chain.origin_attachment,
-    }
+    origin = {"mesh": mesh, "material": chain.origin_material}
+    if chain.origin_attachment:
+        origin["attachment"] = chain.origin_attachment
+    elif legacy_role := _legacy_origin_role(chain):
+        origin["role"] = legacy_role
+    return origin
+
+
+def _legacy_origin_role(chain) -> str:
+    """The ``origin_role`` a chain item kept from an older addon, stored as a custom property once the
+    declared property was replaced by ``origin_attachment``."""
+    custom_properties = getattr(chain, "get", None)
+    if custom_properties is None:
+        return ""
+    return custom_properties("origin_role", "") or ""
 
 
 def _joint_to_sidecar(joint) -> dict:
@@ -274,10 +285,27 @@ def active_chain(settings):
     return None
 
 
+def simulated_joints(chain) -> list:
+    """The joints the engine simulates: the VRM tail joint listed last (the chain's ``tail`` bone) is not one."""
+    joints = list(chain.joints)
+    if joints and chain.tail and joints[-1].bone == chain.tail:
+        return joints[:-1]
+    return joints
+
+
 def generated_chain_bones(settings, origin: dict) -> dict[str, list[str]]:
-    """The joint bone names, root to tip, of every chain generated on ``origin``, by chain name."""
+    """Every bone of every chain generated on ``origin``, root to tip then the tail bone, by chain name."""
     return {
         chain.name: [joint.bone for joint in chain.joints]
+        for chain in settings.chains
+        if same_origin(chain, origin)
+    }
+
+
+def generated_chain_joints(settings, origin: dict) -> dict[str, list[str]]:
+    """The simulated joint bones, root to tip, of every chain generated on ``origin``, by chain name."""
+    return {
+        chain.name: [joint.bone for joint in simulated_joints(chain)]
         for chain in settings.chains
         if same_origin(chain, origin)
     }

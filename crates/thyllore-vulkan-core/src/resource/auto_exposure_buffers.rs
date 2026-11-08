@@ -4,6 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 
 const HISTOGRAM_BIN_COUNT: u32 = 256;
@@ -19,17 +20,27 @@ pub struct AutoExposureReadback {
 
 #[derive(Clone, Debug, Default)]
 pub struct AutoExposureBuffers {
-    pub histogram_buffer: vk::Buffer,
-    pub histogram_buffer_memory: vk::DeviceMemory,
-    pub luminance_buffer: vk::Buffer,
-    pub luminance_buffer_memory: vk::DeviceMemory,
-    pub readback_buffers: [vk::Buffer; 2],
-    pub readback_memories: [vk::DeviceMemory; 2],
+    pub(crate) histogram_buffer: vk::Buffer,
+    pub(crate) histogram_buffer_memory: vk::DeviceMemory,
+    pub(crate) luminance_buffer: vk::Buffer,
+    pub(crate) luminance_buffer_memory: vk::DeviceMemory,
+    pub(crate) readback_buffers: [vk::Buffer; 2],
+    pub(crate) readback_memories: [vk::DeviceMemory; 2],
     pub width: u32,
     pub height: u32,
 }
 
 impl AutoExposureBuffers {
+    #[inline]
+    pub fn histogram_buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.histogram_buffer)
+    }
+
+    #[inline]
+    pub fn luminance_buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.luminance_buffer)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -52,7 +63,7 @@ impl AutoExposureBuffers {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        Self::zero_luminance_buffer(&rrdevice.device, luminance_buffer_memory)?;
+        Self::zero_luminance_buffer(&rrdevice.device(), luminance_buffer_memory)?;
 
         let mut readback_buffers = [vk::Buffer::null(); 2];
         let mut readback_memories = [vk::DeviceMemory::null(); 2];
@@ -65,7 +76,7 @@ impl AutoExposureBuffers {
                 vk::BufferUsageFlags::TRANSFER_DST,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
-            Self::zero_readback_buffer(&rrdevice.device, mem)?;
+            Self::zero_readback_buffer(&rrdevice.device(), mem)?;
             readback_buffers[i] = buf;
             readback_memories[i] = mem;
         }
@@ -118,11 +129,51 @@ impl AutoExposureBuffers {
         Ok(())
     }
 
+    pub unsafe fn record_luminance_readback(
+        &self,
+        rrdevice: &RRDevice,
+        command_buffer: crate::types::CommandBuffer,
+        slot: usize,
+    ) {
+        let command_buffer = command_buffer.raw();
+        let barrier = vk::BufferMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .buffer(self.luminance_buffer)
+            .offset(0)
+            .size(LUMINANCE_BUFFER_SIZE)
+            .build();
+
+        rrdevice.device().cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[barrier],
+            &[] as &[vk::ImageMemoryBarrier],
+        );
+
+        rrdevice.device().cmd_copy_buffer(
+            command_buffer,
+            self.luminance_buffer,
+            self.readback_buffers[slot],
+            &[vk::BufferCopy::builder()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(LUMINANCE_BUFFER_SIZE)
+                .build()],
+        );
+    }
+
     pub unsafe fn read_luminance(
         &self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         slot: usize,
     ) -> Option<AutoExposureReadback> {
+        let device = &rrdevice.device();
         let data = device
             .map_memory(
                 self.readback_memories[slot],
@@ -153,14 +204,14 @@ impl AutoExposureBuffers {
             return Ok(());
         }
 
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         let new_buf = Self::new(instance, rrdevice, new_width, new_height)?;
         *self = new_buf;
 
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.histogram_buffer != vk::Buffer::null() {
             device.destroy_buffer(self.histogram_buffer, None);
             self.histogram_buffer = vk::Buffer::null();
@@ -204,7 +255,7 @@ impl Drop for AutoExposureBuffers {
 
 impl GpuResource for AutoExposureBuffers {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

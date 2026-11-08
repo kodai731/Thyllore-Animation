@@ -1,6 +1,6 @@
-"""Blender property groups for avatar setup (spring bones, submesh roles).
+"""Blender property groups for avatar setup (spring bones, submesh roles, hidden skin mask).
 
-Registered on ``bpy.types.Armature`` (spring) and ``bpy.types.Object`` (submesh).
+Registered on ``bpy.types.Armature`` (spring, hidden mask) and ``bpy.types.Object`` (submesh).
 """
 from __future__ import annotations
 
@@ -72,17 +72,6 @@ class THYLLORE_PG_ChainGeneration(bpy.types.PropertyGroup):
         description="Bone the generated chains hang from (a role name such as Head is resolved); empty hangs hair from the head and a garment from the bone that supports it",
         default="",
     )
-    attachment: bpy.props.EnumProperty(
-        name="Attachment",
-        description="How the root attaches to the mesh",
-        items=[
-            ("AUTO", "Auto", "Cap for a Head root, Ring otherwise"),
-            ("CAP", "Cap", "Root on the top of a closed surface, such as the head"),
-            ("RING", "Ring", "Root ring at the mesh top edge, such as a skirt or sleeve"),
-        ],
-        default="AUTO",
-    )
-
     __annotations__.update(_chain_generation_annotations())
 
 
@@ -272,6 +261,16 @@ class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
         items=[("guessed", "Guessed", ""), ("user", "User", "")],
         default="guessed",
     )
+    attachment: bpy.props.EnumProperty(
+        name="Attachment",
+        description="How the root of the chains generated on this submesh attaches to the mesh",
+        items=[
+            ("AUTO", "Auto", "Cap for a Head root, Ring otherwise"),
+            ("CAP", "Cap", "Root on the top of a closed surface, such as the head"),
+            ("RING", "Ring", "Root ring at the mesh top edge, such as a skirt or sleeve"),
+        ],
+        default="AUTO",
+    )
 
 
 class THYLLORE_PG_HiddenTriangles(bpy.types.PropertyGroup):
@@ -286,6 +285,86 @@ class THYLLORE_PG_SubmeshSettings(bpy.types.PropertyGroup):
     roles: bpy.props.CollectionProperty(type=THYLLORE_PG_SubmeshRole)
     hidden_triangles: bpy.props.CollectionProperty(type=THYLLORE_PG_HiddenTriangles)
     active_role_index: bpy.props.IntProperty(name="Active Role Index", default=-1)
+
+
+HIDDEN_MASK_DEFAULTS: dict = avatar_api.hidden_mask_defaults() if _AVATAR_API_AVAILABLE else {}
+
+
+def _hidden_mask_enabled(settings) -> bool:
+    from .hidden_mask import armature_object, is_hidden_mask_applied
+
+    arm = armature_object(settings.id_data)
+    return arm is not None and is_hidden_mask_applied(arm)
+
+
+def _set_hidden_mask_enabled(settings, enabled: bool) -> None:
+    from .hidden_mask import apply_hidden_mask, armature_object, clear_hidden_mask
+
+    arm = armature_object(settings.id_data)
+    if arm is None:
+        return
+    if enabled:
+        apply_hidden_mask(arm, settings.params(), bpy.context.scene.unit_settings.scale_length)
+    else:
+        clear_hidden_mask(arm)
+
+
+def _reapply_hidden_mask(settings, _context) -> None:
+    if settings.enabled:
+        _set_hidden_mask_enabled(settings, True)
+
+
+def _hidden_mask_annotations() -> dict[str, object]:
+    return {
+        "cover_distance": bpy.props.FloatProperty(
+            name="Cover Distance",
+            description="Distance along the normal within which a garment counts as covering the skin",
+            default=HIDDEN_MASK_DEFAULTS.get("cover_distance", 0.05),
+            min=0.0,
+            update=_reapply_hidden_mask,
+        ),
+        "cone_angle_deg": bpy.props.FloatProperty(
+            name="Cone Angle (deg)",
+            description="Spread of the rays cast around the vertex normal",
+            default=HIDDEN_MASK_DEFAULTS.get("cone_angle_deg", 120.0),
+            min=0.0,
+            max=180.0,
+            update=_reapply_hidden_mask,
+        ),
+        "ray_count": bpy.props.IntProperty(
+            name="Ray Count",
+            description="Rays cast per skin vertex",
+            default=HIDDEN_MASK_DEFAULTS.get("ray_count", 8),
+            min=1,
+            update=_reapply_hidden_mask,
+        ),
+        "hidden_ratio": bpy.props.FloatProperty(
+            name="Hidden Ratio",
+            description="Share of the rays that must hit a garment for the vertex to be hidden",
+            default=HIDDEN_MASK_DEFAULTS.get("hidden_ratio", 0.5),
+            min=0.0,
+            max=1.0,
+            update=_reapply_hidden_mask,
+        ),
+    }
+
+
+class THYLLORE_PG_HiddenMask(bpy.types.PropertyGroup):
+    """Hidden skin mask settings stored on the armature (bpy.types.Armature.thyllore_hidden_mask).
+
+    ``enabled`` reads and writes the hidden triangle lists of the bound meshes, which are the state."""
+
+    __annotations__ = _hidden_mask_annotations()
+
+    enabled: bpy.props.BoolProperty(
+        name="Hide Covered Skin",
+        description="Hide the skin triangles covered by garment materials; off shows them again",
+        get=_hidden_mask_enabled,
+        set=_set_hidden_mask_enabled,
+    )
+
+    def params(self) -> dict:
+        return {name: getattr(self, name) for name in HIDDEN_MASK_DEFAULTS}
 
 
 class THYLLORE_PG_RampForm(bpy.types.PropertyGroup):
@@ -328,6 +407,7 @@ CLASSES = (
     THYLLORE_PG_SubmeshRole,
     THYLLORE_PG_HiddenTriangles,
     THYLLORE_PG_SubmeshSettings,
+    THYLLORE_PG_HiddenMask,
     THYLLORE_PG_RampForm,
     THYLLORE_PG_VrmMeta,
 )
@@ -344,6 +424,7 @@ def register() -> None:
         type=THYLLORE_PG_SubmeshSettings
     )
     bpy.types.Armature.thyllore_vrm = bpy.props.PointerProperty(type=THYLLORE_PG_VrmMeta)
+    bpy.types.Armature.thyllore_hidden_mask = bpy.props.PointerProperty(type=THYLLORE_PG_HiddenMask)
     bpy.types.WindowManager.thyllore_ramp = bpy.props.PointerProperty(
         type=THYLLORE_PG_RampForm
     )
@@ -351,6 +432,7 @@ def register() -> None:
 
 def unregister() -> None:
     del bpy.types.WindowManager.thyllore_ramp
+    del bpy.types.Armature.thyllore_hidden_mask
     del bpy.types.Armature.thyllore_vrm
     del bpy.types.Object.thyllore_submesh
     del bpy.types.Armature.thyllore_spring

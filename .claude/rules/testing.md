@@ -67,8 +67,8 @@ GitHub Actions workflows.
 the GitHub Actions wheel build locally:
 
 ```bash
-scripts/collect_wheels.sh                 # production wheel (no debug-log)
-scripts/collect_wheels.sh --debug-log     # debug wheel (addon file logging)
+scripts/collect_wheels.sh                                   # production wheels (no debug-log)
+scripts/collect_wheels.sh --crate thyllore-ml-core --debug-log    # debug wheel (addon file logging), or --crate thyllore-avatar-api
 ```
 
 This runs the same maturin invocation CI does and surfaces compile errors

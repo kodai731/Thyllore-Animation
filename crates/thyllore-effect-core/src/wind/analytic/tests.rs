@@ -14,7 +14,7 @@ use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
 };
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use std::f32::consts::PI;
 use thyllore_math_core::POLY_TERMS;
 
@@ -26,8 +26,8 @@ fn params() -> WindShellParams {
 
 fn midpoint_optical_depth(
     params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> f64 {
@@ -55,14 +55,14 @@ fn evolving_params() -> WindShellParams {
     WindShellParams::from_effect(&effect)
 }
 
-fn assert_closed_form_matches_reference(origin: Vector3<f32>, direction: Vector3<f32>) {
+fn assert_closed_form_matches_reference(origin: Vec3, direction: Vec3) {
     assert_closed_form_matches_reference_for(params(), origin, direction);
 }
 
 fn assert_closed_form_matches_reference_for(
     params: WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
 ) {
     let direction = direction.normalize();
     let mut t_near = 0.0;
@@ -206,52 +206,40 @@ fn eddy_rotation_matches_rankine_angular_velocity() {
 
 #[test]
 fn horizontal_ray_through_the_wall_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference(
-        Vector3::new(-5.0, 0.8, 0.05),
-        Vector3::new(1.0, 0.0, 0.0),
-    );
+    assert_closed_form_matches_reference(Vec3::new(-5.0, 0.8, 0.05), Vec3::new(1.0, 0.0, 0.0));
 }
 
 #[test]
 fn oblique_ray_crossing_the_top_fade_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference(
-        Vector3::new(-3.0, 0.2, 0.3),
-        Vector3::new(1.0, 0.55, -0.1),
-    );
+    assert_closed_form_matches_reference(Vec3::new(-3.0, 0.2, 0.3), Vec3::new(1.0, 0.55, -0.1));
 }
 
 #[test]
 fn ray_through_the_axis_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference(
-        Vector3::new(-4.0, 1.0, 0.0),
-        Vector3::new(1.0, 0.02, 0.0),
-    );
+    assert_closed_form_matches_reference(Vec3::new(-4.0, 1.0, 0.0), Vec3::new(1.0, 0.02, 0.0));
 }
 
 #[test]
 fn ray_starting_inside_the_wall_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference(Vector3::new(0.4, 0.5, 0.0), Vector3::new(0.3, 0.2, 1.0));
+    assert_closed_form_matches_reference(Vec3::new(0.4, 0.5, 0.0), Vec3::new(0.3, 0.2, 1.0));
 }
 
 #[test]
 fn near_axial_ray_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference(
-        Vector3::new(0.42, -1.0, 0.0),
-        Vector3::new(0.001, 1.0, 0.0),
-    );
+    assert_closed_form_matches_reference(Vec3::new(0.42, -1.0, 0.0), Vec3::new(0.001, 1.0, 0.0));
 }
 
 #[test]
 fn rising_and_spreading_wall_matches_the_midpoint_reference() {
     assert_closed_form_matches_reference_for(
         evolving_params(),
-        Vector3::new(-3.0, 0.2, 0.3),
-        Vector3::new(1.0, 0.35, -0.1),
+        Vec3::new(-3.0, 0.2, 0.3),
+        Vec3::new(1.0, 0.35, -0.1),
     );
     assert_closed_form_matches_reference_for(
         evolving_params(),
-        Vector3::new(-5.0, 0.5, 0.05),
-        Vector3::new(1.0, 0.0, 0.0),
+        Vec3::new(-5.0, 0.5, 0.05),
+        Vec3::new(1.0, 0.0, 0.0),
     );
 }
 
@@ -269,8 +257,8 @@ fn streaked_params() -> WindShellParams {
 
 fn streaked_midpoint_optical_depth(
     params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> f64 {
@@ -287,8 +275,8 @@ fn streaked_midpoint_optical_depth(
 #[test]
 fn streaked_wall_matches_the_midpoint_reference() {
     let params = streaked_params();
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -318,7 +306,7 @@ fn wall_evolution_moves_the_top_and_dims_the_wall() {
     assert_eq!(
         wind_density_at(
             &evolving,
-            Vector3::new(0.35, evolving.h_top * still.height + 0.1, 0.0)
+            Vec3::new(0.35, evolving.h_top * still.height + 0.1, 0.0)
         ),
         0.0
     );
@@ -327,8 +315,8 @@ fn wall_evolution_moves_the_top_and_dims_the_wall() {
 #[test]
 fn ray_missing_the_envelope_has_no_optical_depth() {
     let params = params();
-    let origin = Vector3::new(-5.0, 0.5, 5.0);
-    let direction = Vector3::new(1.0, 0.0, 0.0);
+    let origin = Vec3::new(-5.0, 0.5, 5.0);
+    let direction = Vec3::new(1.0, 0.0, 0.0);
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(!clamp_ray_to_wind_cone(
@@ -343,18 +331,18 @@ fn ray_missing_the_envelope_has_no_optical_depth() {
 #[test]
 fn density_vanishes_outside_the_height_slab_and_the_shell_supports() {
     let params = params();
-    assert_eq!(wind_density_at(&params, Vector3::new(0.35, -0.1, 0.0)), 0.0);
-    assert_eq!(wind_density_at(&params, Vector3::new(0.35, 2.1, 0.0)), 0.0);
-    assert_eq!(wind_density_at(&params, Vector3::new(3.0, 1.0, 0.0)), 0.0);
-    assert!(wind_density_at(&params, Vector3::new(0.35, 0.5, 0.0)) > 0.0);
-    assert_eq!(wind_density_at(&params, Vector3::new(0.0, 0.5, 0.0)), 0.0);
+    assert_eq!(wind_density_at(&params, Vec3::new(0.35, -0.1, 0.0)), 0.0);
+    assert_eq!(wind_density_at(&params, Vec3::new(0.35, 2.1, 0.0)), 0.0);
+    assert_eq!(wind_density_at(&params, Vec3::new(3.0, 1.0, 0.0)), 0.0);
+    assert!(wind_density_at(&params, Vec3::new(0.35, 0.5, 0.0)) > 0.0);
+    assert_eq!(wind_density_at(&params, Vec3::new(0.0, 0.5, 0.0)), 0.0);
 }
 
 #[test]
 fn knots_are_sorted_and_bracketed() {
     let params = params();
-    let origin = Vector3::new(-3.0, 0.2, 0.3);
-    let direction = Vector3::new(1.0, 0.55, -0.1).normalize();
+    let origin = Vec3::new(-3.0, 0.2, 0.3);
+    let direction = Vec3::new(1.0, 0.55, -0.1).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
@@ -387,7 +375,7 @@ fn total_mass(params: &WindShellParams, q_max: f32) -> f64 {
         for i in 0..n_q {
             let q = (i as f32 + 0.5) * dq;
             let r = q.sqrt();
-            let rho = wind_density_at(params, Vector3::new(r, h, 0.0));
+            let rho = wind_density_at(params, Vec3::new(r, h, 0.0));
             mass += rho as f64;
         }
     }
@@ -542,8 +530,8 @@ fn eddy_sigma_averages_to_one_over_the_wall() {
 
 fn eddy_midpoint_optical_depth(
     params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> f64 {
@@ -564,8 +552,8 @@ fn eddy_midpoint_optical_depth(
 #[test]
 fn eddy_modulated_wall_matches_the_midpoint_reference() {
     let params = eddy_params_with_amplitude(0.5);
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -588,8 +576,8 @@ fn eddy_modulated_wall_matches_the_midpoint_reference() {
 #[test]
 fn zero_eddy_amplitude_keeps_the_streak_only_path() {
     let params = eddy_params_with_amplitude(0.0);
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -655,8 +643,8 @@ fn eroded_eddy_reaches_zero_density_below_the_noise_floor() {
 #[test]
 fn eroded_eddy_wall_matches_the_midpoint_reference() {
     let params = eroded_eddy_params(0.4);
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -697,8 +685,8 @@ fn puff_ray_crossing_multiple_puffs_matches_midpoint_reference() {
     let params = puff_params();
     assert!(params.puff_count > 0, "puff_count should be > 0");
 
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -739,8 +727,8 @@ fn puff_count_zero_yields_same_results_as_default() {
     let zero_puff_params = WindShellParams::from_effect(&zero_puff_effect);
     assert_eq!(zero_puff_params.puff_count, 0);
 
-    let origin = Vector3::new(-5.0, 0.8, 0.05);
-    let direction = Vector3::new(1.0, 0.0, 0.0);
+    let origin = Vec3::new(-5.0, 0.8, 0.05);
+    let direction = Vec3::new(1.0, 0.0, 0.0);
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&default_params, origin, direction, &mut t_near, &mut t_far);
@@ -756,8 +744,8 @@ fn puff_count_zero_yields_same_results_as_default() {
 #[test]
 fn puff_knot_count_does_not_exceed_wind_max_knots() {
     let params = puff_params();
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
@@ -791,8 +779,8 @@ fn large_puff_count_72_matches_midpoint_reference() {
     let params = WindShellParams::from_effect(&effect);
     assert_eq!(params.puff_count, 72, "should have 12*6=72 puffs");
 
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -867,8 +855,8 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
     let params = WindShellParams::from_effect(&effect);
     assert_eq!(params.puff_count, 72, "should have 12*6=72 puffs");
 
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(
@@ -951,7 +939,7 @@ fn shell_only_params() -> WindShellParams {
     WindShellParams::from_effect(&effect)
 }
 
-fn wall_envelope_density(params: &WindShellParams, local: Vector3<f32>) -> f32 {
+fn wall_envelope_density(params: &WindShellParams, local: Vec3) -> f32 {
     let h = local.y / params.height;
     let q = local.x * local.x + local.z * local.z;
     let u = (q - params.wall_radius_sq(h)) / params.wall_width_q;
@@ -962,8 +950,8 @@ fn wall_envelope_density(params: &WindShellParams, local: Vector3<f32>) -> f32 {
 #[test]
 fn shadow_optical_depth_keeps_only_the_wall_and_envelope() {
     let params = shell_only_params();
-    let origin = Vector3::new(-5.0, 0.5, 0.25);
-    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let origin = Vec3::new(-5.0, 0.5, 0.25);
+    let direction = Vec3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     assert!(clamp_ray_to_wind_cone(
@@ -1098,14 +1086,13 @@ fn slang_c_abi_matches_rust_bitwise_over_a_ray_grid() {
 
     for row in 0..12 {
         for column in 0..10 {
-            let origin = Vector3::new(
+            let origin = Vec3::new(
                 -5.0 + row as f32 * 0.4,
                 0.1 + column as f32 * 0.18,
                 -0.5 + (row + column) as f32 * 0.05,
             );
             let direction =
-                Vector3::new(1.0, (row as f32 - 5.0) * 0.02, (column as f32 - 5.0) * 0.02)
-                    .normalize();
+                Vec3::new(1.0, (row as f32 - 5.0) * 0.02, (column as f32 - 5.0) * 0.02).normalize();
 
             let mut t_near = 0.0f32;
             let mut t_far = 1e4f32;

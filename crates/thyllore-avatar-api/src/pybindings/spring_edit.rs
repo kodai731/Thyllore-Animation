@@ -4,23 +4,23 @@ use pythonize::depythonize;
 use super::avatar_setup::bones_from_py;
 use crate::chain_register_bridge::{self, RegisterGeneratedChainsRequest};
 use crate::spring_edit_bridge::{
-    add_chains_under_bone as bridge_add_chains_under_bone, apply_ramp_to_chains,
-    chains_in_scope as bridge_chains_in_scope, chains_under_bone as bridge_chains_under_bone,
-    chains_with_radius as bridge_chains_with_radius, resolve_root_bone_name,
-    AddChainsUnderBoneRequest, ApplyRampRequest, ChainsInScopeRequest, ChainsUnderBoneRequest,
-    ChainsWithRadiusRequest,
+    apply_ramp_to_chains, chains_in_scope as bridge_chains_in_scope,
+    chains_under_bone as bridge_chains_under_bone, chains_with_radius as bridge_chains_with_radius,
+    resolve_root_bone_name, use_existing_bones_as_springs as bridge_use_existing_bones_as_springs,
+    ApplyRampRequest, ChainsInScopeRequest, ChainsUnderBoneRequest, ChainsWithRadiusRequest,
+    UseExistingBonesAsSpringsRequest,
 };
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
-/// Adds a chain for every run of non-humanoid bones under `root_bone` with at least `min_joints` bones.
+/// Registers every run of existing non-humanoid bones under `root_bone` with at least `min_joints` bones as a spring chain; adds no bones.
 #[pyfunction]
-pub fn add_chains_under_bone<'py>(
+pub fn use_existing_bones_as_springs<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let request: AddChainsUnderBoneRequest =
+    let request: UseExistingBonesAsSpringsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
-    let output = bridge_add_chains_under_bone(&request)
+    let output = bridge_use_existing_bones_as_springs(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
     pythonize_value(py, &output)
 }

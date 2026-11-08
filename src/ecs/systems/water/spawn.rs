@@ -5,6 +5,7 @@ use crate::ecs::resource::{HierarchyState, WaterHistorySnapshotState, WaterRende
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
@@ -24,7 +25,7 @@ fn water_entities(world: &World) -> Vec<Entity> {
 
 fn spawn_water_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
     let effect = WaterTorusEffect {
-        position: cgmath::Vector3::new(0.0, -0.5, 2.5 * ordinal as f32),
+        position: Vec3::new(0.0, -0.5, 2.5 * ordinal as f32),
         ..WaterTorusEffect::default()
     };
     spawn_water_with_clip(

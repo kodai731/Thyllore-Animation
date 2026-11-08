@@ -11,6 +11,19 @@ use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use thyllore_spirv_reflect::{GpuBlock, ShaderBinding};
 
+#[derive(Clone, Copy, Debug)]
+pub enum DescriptorKind {
+    UniformBufferDynamic,
+}
+
+impl DescriptorKind {
+    fn to_vk(self) -> vk::DescriptorType {
+        match self {
+            DescriptorKind::UniformBufferDynamic => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+        }
+    }
+}
+
 fn load_reflections(files: &[ShaderFile]) -> Result<Vec<ShaderReflection>> {
     let mut reflections = Vec::with_capacity(files.len());
     for file in files {
@@ -43,7 +56,7 @@ pub fn verify_pass_layouts(pass: &PassShaders, layouts: &[ReflectedSetLayout]) -
             )
         })?;
         let mismatches: Vec<String> = table
-            .verify_layout(set, layout.bindings())
+            .verify_bindings(set, layout.bindings())
             .into_iter()
             .filter(|mismatch| !matches!(mismatch, LayoutMismatch::UnusedInShaders { .. }))
             .map(|mismatch| format!("{mismatch:?}"))
@@ -62,7 +75,7 @@ pub fn verify_pass_layouts(pass: &PassShaders, layouts: &[ReflectedSetLayout]) -
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DescriptorTypeOverride {
     pub binding: u32,
-    pub descriptor_type: vk::DescriptorType,
+    pub(crate) descriptor_type: vk::DescriptorType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,11 +112,11 @@ impl ReflectedLayoutSpec {
     pub fn with_override(
         mut self,
         binding: ShaderBinding,
-        descriptor_type: vk::DescriptorType,
+        descriptor_kind: DescriptorKind,
     ) -> Self {
         self.overrides.push(DescriptorTypeOverride {
             binding: binding.binding,
-            descriptor_type,
+            descriptor_type: descriptor_kind.to_vk(),
         });
         self
     }
@@ -152,12 +165,16 @@ impl ReflectedLayoutSpec {
         Ok(DescriptorSetTable::from_reflections(&reflections)?)
     }
 
-    pub fn resolve_bindings(&self) -> Result<Vec<vk::DescriptorSetLayoutBinding>> {
-        ReflectedSetLayout::resolve_bindings(
+    pub fn resolve_bindings(&self) -> Result<Vec<crate::types::DescriptorSetLayoutBinding>> {
+        let bindings = ReflectedSetLayout::resolve_bindings(
             &self.reflect_table()?,
             self.set_index()?,
             &self.overrides,
-        )
+        )?;
+        Ok(bindings
+            .into_iter()
+            .map(crate::types::DescriptorSetLayoutBinding)
+            .collect())
     }
 }
 
@@ -177,13 +194,13 @@ fn reflected_block_sizes(table: &DescriptorSetTable, set: u32) -> Vec<(u32, u32)
 
 #[derive(Clone, Debug, Default)]
 pub struct ReflectedSetLayout {
-    pub handle: vk::DescriptorSetLayout,
+    pub(crate) handle: vk::DescriptorSetLayout,
     bindings: Vec<vk::DescriptorSetLayoutBinding>,
     block_sizes: Vec<(u32, u32)>,
 }
 
 impl ReflectedSetLayout {
-    pub fn resolve_bindings(
+    pub(crate) fn resolve_bindings(
         table: &DescriptorSetTable,
         set: u32,
         overrides: &[DescriptorTypeOverride],
@@ -225,7 +242,9 @@ impl ReflectedSetLayout {
         let block_sizes = reflected_block_sizes(&table, set);
 
         let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
-        let handle = rrdevice.device.create_descriptor_set_layout(&info, None)?;
+        let handle = rrdevice
+            .device()
+            .create_descriptor_set_layout(&info, None)?;
         Ok(Self {
             handle,
             bindings,
@@ -233,7 +252,7 @@ impl ReflectedSetLayout {
         })
     }
 
-    pub fn bindings(&self) -> &[vk::DescriptorSetLayoutBinding] {
+    pub(crate) fn bindings(&self) -> &[vk::DescriptorSetLayoutBinding] {
         &self.bindings
     }
 
@@ -245,7 +264,7 @@ impl ReflectedSetLayout {
             .ok_or_else(|| anyhow!("descriptor set layout binding {binding} is not a buffer block"))
     }
 
-    pub fn descriptor_type(&self, binding: u32) -> Result<vk::DescriptorType> {
+    pub(crate) fn descriptor_type(&self, binding: u32) -> Result<vk::DescriptorType> {
         self.bindings
             .iter()
             .find(|entry| entry.binding == binding)
@@ -253,7 +272,7 @@ impl ReflectedSetLayout {
             .ok_or_else(|| anyhow!("descriptor set layout has no binding {binding}"))
     }
 
-    pub unsafe fn allocate_sets(
+    pub(crate) unsafe fn allocate_sets(
         &self,
         rrdevice: &RRDevice,
         count: usize,
@@ -262,13 +281,27 @@ impl ReflectedSetLayout {
         rrdevice.allocate_descriptor_sets(self.handle, &signature, count)
     }
 
-    pub unsafe fn allocate_set(&self, rrdevice: &RRDevice) -> Result<vk::DescriptorSet> {
+    pub(crate) unsafe fn allocate_set(&self, rrdevice: &RRDevice) -> Result<vk::DescriptorSet> {
         self.allocate_sets(rrdevice, 1)?
             .pop()
             .ok_or_else(|| anyhow!("descriptor allocator returned no set"))
     }
 
-    pub fn writer(&self, dst_set: vk::DescriptorSet) -> DescriptorSetWriter<'_> {
+    pub unsafe fn allocate_descriptor_set(
+        &self,
+        rrdevice: &RRDevice,
+    ) -> Result<crate::types::DescriptorSet> {
+        Ok(crate::types::DescriptorSet(self.allocate_set(rrdevice)?))
+    }
+
+    pub fn descriptor_writer(
+        &self,
+        dst_set: crate::types::DescriptorSet,
+    ) -> DescriptorSetWriter<'_> {
+        self.writer(dst_set.raw())
+    }
+
+    pub(crate) fn writer(&self, dst_set: vk::DescriptorSet) -> DescriptorSetWriter<'_> {
         DescriptorSetWriter {
             layout: self,
             dst_set,
@@ -280,23 +313,15 @@ impl ReflectedSetLayout {
     }
 
     /// The caller guarantees no pending command buffer binds the set, as for `vkFreeDescriptorSets`.
-    pub fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
+    pub(crate) fn release_set(&self, rrdevice: &RRDevice, set: vk::DescriptorSet) {
         rrdevice.release_descriptor_sets(self.handle, [set]);
-    }
-
-    pub fn release_sets(
-        &self,
-        rrdevice: &RRDevice,
-        sets: impl IntoIterator<Item = vk::DescriptorSet>,
-    ) {
-        rrdevice.release_descriptor_sets(self.handle, sets);
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.handle != vk::DescriptorSetLayout::null() {
             rrdevice.forget_descriptor_layout(self.handle);
             rrdevice
-                .device
+                .device()
                 .destroy_descriptor_set_layout(self.handle, None);
             self.handle = vk::DescriptorSetLayout::null();
         }
@@ -338,7 +363,7 @@ impl DescriptorSetWriter<'_> {
         Ok(descriptor_type)
     }
 
-    pub fn buffer(
+    pub(crate) fn buffer(
         mut self,
         binding: ShaderBinding,
         buffer: vk::Buffer,
@@ -361,6 +386,24 @@ impl DescriptorSetWriter<'_> {
         Ok(self)
     }
 
+    pub fn buffer_range(
+        self,
+        binding: ShaderBinding,
+        buffer: crate::types::Buffer,
+        offset: u64,
+        range: u64,
+    ) -> Result<Self> {
+        self.buffer(binding, buffer.raw(), offset, range)
+    }
+
+    pub fn whole_buffer(
+        self,
+        binding: ShaderBinding,
+        buffer: crate::types::Buffer,
+    ) -> Result<Self> {
+        self.buffer(binding, buffer.raw(), 0, vk::WHOLE_SIZE as u64)
+    }
+
     pub fn uniform<T: GpuBlock>(
         self,
         binding: ShaderBinding,
@@ -369,7 +412,12 @@ impl DescriptorSetWriter<'_> {
     ) -> Result<Self> {
         self.check_block_covers::<T>(binding)?;
         let offset = uniform.slot_offset(slot)?;
-        self.buffer(binding, uniform.handle(), offset, uniform.block_size())
+        self.buffer(
+            binding,
+            uniform.handle().raw(),
+            offset,
+            uniform.block_size(),
+        )
     }
 
     pub fn uniform_dynamic<T: GpuBlock>(
@@ -378,7 +426,7 @@ impl DescriptorSetWriter<'_> {
         uniform: &UniformBuffer<T>,
     ) -> Result<Self> {
         self.check_block_covers::<T>(binding)?;
-        self.buffer(binding, uniform.handle(), 0, uniform.block_size())
+        self.buffer(binding, uniform.handle().raw(), 0, uniform.block_size())
     }
 
     fn check_block_covers<T: GpuBlock>(&self, binding: ShaderBinding) -> Result<()> {
@@ -394,7 +442,7 @@ impl DescriptorSetWriter<'_> {
         Ok(())
     }
 
-    pub fn image(
+    pub(crate) fn image(
         mut self,
         binding: ShaderBinding,
         image_view: vk::ImageView,
@@ -417,13 +465,69 @@ impl DescriptorSetWriter<'_> {
         Ok(self)
     }
 
+    pub fn sampled_image(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            sampler.raw(),
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        )
+    }
+
+    pub fn storage_image(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            vk::Sampler::null(),
+            vk::ImageLayout::GENERAL,
+        )
+    }
+
+    pub fn sampled_storage_image(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            sampler.raw(),
+            vk::ImageLayout::GENERAL,
+        )
+    }
+
+    pub fn sampled_depth(
+        self,
+        binding: ShaderBinding,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
+    ) -> Result<Self> {
+        self.image(
+            binding,
+            image_view.raw(),
+            sampler.raw(),
+            vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+        )
+    }
+
     pub fn acceleration_structure(
         mut self,
         binding: ShaderBinding,
-        acceleration_structure: vk::AccelerationStructureKHR,
+        acceleration_structure: crate::types::AccelerationStructure,
     ) -> Result<Self> {
         let descriptor_type = self.resolve_descriptor_type(binding)?;
-        self.acceleration_structures.push(acceleration_structure);
+        self.acceleration_structures
+            .push(acceleration_structure.raw());
         self.entries.push(WriteEntry {
             binding: binding.binding,
             descriptor_type,
@@ -472,7 +576,7 @@ impl DescriptorSetWriter<'_> {
             .collect();
 
         rrdevice
-            .device
+            .device()
             .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
     }
 }
@@ -484,5 +588,12 @@ impl GpuResource for ReflectedSetLayout {
 
     fn is_destroyed(&self) -> bool {
         self.handle == vk::DescriptorSetLayout::null()
+    }
+}
+
+impl ReflectedSetLayout {
+    #[inline]
+    pub fn handle(&self) -> crate::types::DescriptorSetLayout {
+        crate::types::DescriptorSetLayout(self.handle)
     }
 }

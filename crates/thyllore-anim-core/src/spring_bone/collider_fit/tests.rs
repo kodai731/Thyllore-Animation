@@ -1,44 +1,43 @@
 use super::*;
-use crate::spring_bone::{ColliderGroupOrigin, SpringChain, SpringColliderGroup, SpringJointParam};
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use crate::spring_bone::{
+    ColliderGroupOrigin, RestClearance, SpringChain, SpringColliderGroup, SpringJointParam,
+};
+use glam::{Mat4, UVec4, Vec4};
 
-fn make_cylinder_points(radius: f32, length: f32, samples: usize) -> Vec<Vector3<f32>> {
+fn make_cylinder_points(radius: f32, length: f32, samples: usize) -> Vec<Vec3> {
     let mut points = Vec::new();
     for i in 0..samples {
         let angle = 2.0 * std::f32::consts::PI * (i as f32) / (samples as f32);
         let x = length * 0.5;
         let y = radius * angle.cos();
         let z = radius * angle.sin();
-        points.push(Vector3::new(x, y, z));
+        points.push(Vec3::new(x, y, z));
     }
     for i in 0..samples {
         let angle = 2.0 * std::f32::consts::PI * (i as f32) / (samples as f32);
         let x = -length * 0.5;
         let y = radius * angle.cos();
         let z = radius * angle.sin();
-        points.push(Vector3::new(x, y, z));
+        points.push(Vec3::new(x, y, z));
     }
     points
 }
 
-fn make_test_skin(
-    local_points: &[Vector3<f32>],
-    inverse_bind_pose: Matrix4<f32>,
-) -> (SkinData, Skeleton) {
-    let bind_pose = inverse_bind_pose.invert().unwrap();
-    let world_positions: Vec<Vector3<f32>> = local_points
+fn make_test_skin(local_points: &[Vec3], inverse_bind_pose: Mat4) -> (SkinData, Skeleton) {
+    let bind_pose = inverse_bind_pose.try_inverse().unwrap();
+    let world_positions: Vec<Vec3> = local_points
         .iter()
         .map(|p| {
-            let transformed = bind_pose * Vector4::new(p.x, p.y, p.z, 1.0);
-            Vector3::new(transformed.x, transformed.y, transformed.z)
+            let transformed = bind_pose * Vec4::new(p.x, p.y, p.z, 1.0);
+            Vec3::new(transformed.x, transformed.y, transformed.z)
         })
         .collect();
     make_test_skin_from_world(&world_positions, inverse_bind_pose)
 }
 
 fn make_test_skin_from_world(
-    world_positions: &[Vector3<f32>],
-    inverse_bind_pose: Matrix4<f32>,
+    world_positions: &[Vec3],
+    inverse_bind_pose: Mat4,
 ) -> (SkinData, Skeleton) {
     let mut skeleton = Skeleton::new("test");
     let b0 = skeleton.add_bone("bone0", None);
@@ -49,7 +48,7 @@ fn make_test_skin_from_world(
         name: "bone0".to_string(),
         parent_id: None,
         children: vec![_b1],
-        local_transform: Matrix4::identity(),
+        local_transform: Mat4::IDENTITY,
         inverse_bind_pose,
         node_index: None,
     };
@@ -57,10 +56,9 @@ fn make_test_skin_from_world(
     let mut skin = SkinData::default();
     for p in world_positions {
         skin.base_positions.push(*p);
-        skin.bone_indices.push(cgmath::Vector4::new(b0, 0, 0, 0));
-        skin.bone_weights
-            .push(cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0));
-        skin.base_normals.push(Vector3::new(0.0, 0.0, 1.0));
+        skin.bone_indices.push(UVec4::new(b0, 0, 0, 0));
+        skin.bone_weights.push(Vec4::new(1.0, 0.0, 0.0, 0.0));
+        skin.base_normals.push(Vec3::new(0.0, 0.0, 1.0));
     }
 
     (skin, skeleton)
@@ -69,7 +67,7 @@ fn make_test_skin_from_world(
 #[test]
 fn test_cylinder_fit() {
     let local_points = make_cylinder_points(0.5, 2.0, 32);
-    let identity = Matrix4::identity();
+    let identity = Mat4::IDENTITY;
     let (skin, skeleton) = make_test_skin(&local_points, identity);
 
     let params = CapsuleFitParams {
@@ -92,10 +90,10 @@ fn test_cylinder_fit() {
 
 #[test]
 fn a_skin_patch_beside_the_bone_is_not_a_capsule() {
-    let patch: Vec<Vector3<f32>> = (0..16)
-        .map(|i| Vector3::new(0.9 + 0.01 * (i % 4) as f32, 0.05 * (i / 4) as f32, 0.0))
+    let patch: Vec<Vec3> = (0..16)
+        .map(|i| Vec3::new(0.9 + 0.01 * (i % 4) as f32, 0.05 * (i / 4) as f32, 0.0))
         .collect();
-    let (skin, skeleton) = make_test_skin(&patch, Matrix4::identity());
+    let (skin, skeleton) = make_test_skin(&patch, Mat4::IDENTITY);
     let params = CapsuleFitParams {
         min_weight: 0.1,
         radius_percentile: 0.9,
@@ -110,7 +108,7 @@ fn a_skin_patch_beside_the_bone_is_not_a_capsule() {
 #[test]
 fn test_unassigned_bone_not_output() {
     let local_points = make_cylinder_points(0.5, 2.0, 8);
-    let identity = Matrix4::identity();
+    let identity = Mat4::IDENTITY;
     let (skin, skeleton) = make_test_skin(&local_points, identity);
 
     let params = CapsuleFitParams {
@@ -130,7 +128,7 @@ fn test_unassigned_bone_not_output() {
 #[test]
 fn test_inverse_bind_pose_translation() {
     let world_positions = make_cylinder_points(0.5, 2.0, 32);
-    let inverse_bind_pose = Matrix4::from_translation(Vector3::new(-1.0, 0.0, 0.0));
+    let inverse_bind_pose = Mat4::from_translation(Vec3::new(-1.0, 0.0, 0.0));
     let (skin, skeleton) = make_test_skin_from_world(&world_positions, inverse_bind_pose);
 
     let params = CapsuleFitParams {
@@ -151,7 +149,7 @@ fn test_inverse_bind_pose_translation() {
 #[test]
 fn test_radius_scale() {
     let local_points = make_cylinder_points(0.5, 2.0, 32);
-    let identity = Matrix4::identity();
+    let identity = Mat4::IDENTITY;
     let (skin, skeleton) = make_test_skin(&local_points, identity);
 
     let params = CapsuleFitParams {
@@ -171,7 +169,7 @@ fn test_radius_scale() {
 #[test]
 fn test_two_skin_split() {
     let full_points = make_cylinder_points(0.5, 2.0, 32);
-    let identity = Matrix4::identity();
+    let identity = Mat4::IDENTITY;
     let (skin_full, skeleton) = make_test_skin(&full_points, identity);
 
     let params = CapsuleFitParams {
@@ -185,10 +183,8 @@ fn test_two_skin_split() {
     assert_eq!(capsules_full.len(), 1);
     let cap_full = &capsules_full[0];
 
-    let left_points: Vec<Vector3<f32>> =
-        full_points.iter().filter(|p| p.x < 0.0).cloned().collect();
-    let right_points: Vec<Vector3<f32>> =
-        full_points.iter().filter(|p| p.x >= 0.0).cloned().collect();
+    let left_points: Vec<Vec3> = full_points.iter().filter(|p| p.x < 0.0).cloned().collect();
+    let right_points: Vec<Vec3> = full_points.iter().filter(|p| p.x >= 0.0).cloned().collect();
 
     let (skin_left, _) = make_test_skin(&left_points, identity);
     let (skin_right, _) = make_test_skin(&right_points, identity);
@@ -232,20 +228,21 @@ fn test_replace_fitted_body_colliders_basic() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 
     let capsules = vec![
         FittedCapsule {
             bone_id: 0,
-            head: Vector3::new(0.0, 0.0, 0.0),
-            tail: Vector3::new(0.0, 1.0, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.1,
         },
         FittedCapsule {
             bone_id: 1,
-            head: Vector3::new(0.0, 1.0, 0.0),
-            tail: Vector3::new(0.0, 2.0, 0.0),
+            head: Vec3::new(0.0, 1.0, 0.0),
+            tail: Vec3::new(0.0, 2.0, 0.0),
             radius: 0.08,
         },
     ];
@@ -276,20 +273,21 @@ fn test_replace_fitted_body_colliders_idempotent() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 
     let capsules = vec![
         FittedCapsule {
             bone_id: 0,
-            head: Vector3::new(0.0, 0.0, 0.0),
-            tail: Vector3::new(0.0, 1.0, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
+            tail: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.1,
         },
         FittedCapsule {
             bone_id: 1,
-            head: Vector3::new(0.0, 1.0, 0.0),
-            tail: Vector3::new(0.0, 2.0, 0.0),
+            head: Vec3::new(0.0, 1.0, 0.0),
+            tail: Vec3::new(0.0, 2.0, 0.0),
             radius: 0.08,
         },
     ];
@@ -321,13 +319,14 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     });
     setup.next_chain_id = 1;
 
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 2,
-        offset: Vector3::new(1.0, 0.0, 0.0),
+        offset: Vec3::new(1.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.2 },
     });
     setup.next_collider_id = 1;
@@ -342,8 +341,8 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
 
     let capsules = vec![FittedCapsule {
         bone_id: 0,
-        head: Vector3::new(0.0, 0.0, 0.0),
-        tail: Vector3::new(0.0, 1.0, 0.0),
+        head: Vec3::new(0.0, 0.0, 0.0),
+        tail: Vec3::new(0.0, 1.0, 0.0),
         radius: 0.1,
     }];
 
@@ -371,8 +370,8 @@ fn test_replace_fitted_body_colliders_preserves_other_groups() {
 fn capsule_on(bone_id: BoneId, radius: f32) -> FittedCapsule {
     FittedCapsule {
         bone_id,
-        head: Vector3::new(0.0, 0.0, 0.0),
-        tail: Vector3::new(0.0, 1.0, 0.0),
+        head: Vec3::new(0.0, 0.0, 0.0),
+        tail: Vec3::new(0.0, 1.0, 0.0),
         radius,
     }
 }
@@ -434,7 +433,7 @@ fn replace_fitted_body_colliders_keeps_an_authored_group_with_the_fitted_name() 
     setup.colliders.push(SpringColliderDef {
         id: 0,
         bone_id: 2,
-        offset: Vector3::new(1.0, 0.0, 0.0),
+        offset: Vec3::new(1.0, 0.0, 0.0),
         shape: ColliderShape::Sphere { radius: 0.2 },
     });
     setup.next_collider_id = 1;

@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
     [string]$WheelsDir = "blender_addon/wheels",
-    [switch]$SkipMaturin
+    [switch]$SkipMaturin,
+    # Build only this crate (default: every wheel crate)
+    [string]$Crate = "",
+    # Build with the debug-log feature (crates that declare it)
+    [switch]$DebugLog
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,26 +14,45 @@ $AbsWheels = Join-Path $RepoRoot $WheelsDir
 
 New-Item -ItemType Directory -Path $AbsWheels -Force | Out-Null
 
-if (-not $SkipMaturin) {
-    $Crates = @("crates/thyllore-ml-core", "crates/thyllore-avatar-api")
+function Test-CrateDeclaresDebugLog([string]$CrateName) {
+    $manifest = Get-Content (Join-Path $RepoRoot "crates/$CrateName/Cargo.toml") -Raw
+    return $manifest -match '(?m)^debug-log\s*='
+}
 
-    foreach ($cratePath in $Crates) {
-        $crateName = Split-Path $cratePath -Leaf
-        Write-Host "[collect_wheels] Building $crateName wheel via maturin..." -ForegroundColor Cyan
+if (-not $SkipMaturin) {
+    $PrevErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & python -m pip install --quiet maturin *>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "maturin install failed"
+        }
+    } finally {
+        $ErrorActionPreference = $PrevErrorAction
+    }
+
+    $Crates = if ($Crate) { @($Crate) } else { @("thyllore-ml-core", "thyllore-avatar-api") }
+
+    foreach ($crateName in $Crates) {
+        if ($DebugLog) {
+            if (-not (Test-CrateDeclaresDebugLog $crateName)) {
+                throw "-Crate $crateName cannot be combined with -DebugLog (no debug-log feature in its Cargo.toml)"
+            }
+            $Features = "python,debug-log"
+            Write-Host "[collect_wheels] Building $crateName DEBUG wheel (features: $Features)" -ForegroundColor Cyan
+        } else {
+            $Features = "python"
+            Write-Host "[collect_wheels] Building $crateName wheel via maturin..." -ForegroundColor Cyan
+        }
         $PrevErrorAction = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
         try {
-            & python -m pip install --quiet maturin *>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "maturin install failed"
-            }
-
-            Push-Location (Join-Path $RepoRoot $cratePath)
+            Push-Location (Join-Path $RepoRoot "crates/$crateName")
             $PrevRustFlags = $env:RUSTFLAGS
             try {
                 $RemapFlag = "--remap-path-prefix=$HOME=."
                 $env:RUSTFLAGS = if ($PrevRustFlags) { "$PrevRustFlags $RemapFlag" } else { $RemapFlag }
-                & maturin build --release --features python --out $AbsWheels *>&1 | Out-Null
+                & maturin build --release --features $Features --out $AbsWheels *>&1 | Out-Null
                 if ($LASTEXITCODE -ne 0) {
                     throw "maturin build failed"
                 }

@@ -1,8 +1,8 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
-    shared_force_model, ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce,
-    SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
-    SpringColliderId, SpringCollisionMode, SpringJointParam, SubmeshSelector,
+    ChainOrigin, ColliderGroupOrigin, ColliderShape, JointForce, RestClearance, SpringBoneSetup,
+    SpringChain, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId, SpringColliderId,
+    SpringCollisionMode, SpringJointParam, SubmeshSelector,
 };
 use thyllore_anim_core::BoneId;
 
@@ -21,6 +21,15 @@ pub fn spring_setup_from_sidecar(
     bones: &[BoneInput],
     frames: &[BoneRestFrame],
 ) -> SpringBoneSetup {
+    spring_setup_with_collider_ids(spring, bones, frames).0
+}
+
+/// The setup with the engine id each sidecar collider received, by sidecar name.
+pub fn spring_setup_with_collider_ids(
+    spring: &SidecarSpring,
+    bones: &[BoneInput],
+    frames: &[BoneRestFrame],
+) -> (SpringBoneSetup, Vec<(String, SpringColliderId)>) {
     let mut setup = SpringBoneSetup {
         collision_mode: from_sidecar_collision_mode(&spring.collision_mode),
         ..Default::default()
@@ -36,9 +45,7 @@ pub fn spring_setup_from_sidecar(
     for chain in &spring.chains {
         import_chain(&mut setup, chain, bones, &group_ids_by_name);
     }
-    setup.new_joint_force_model =
-        shared_force_model(setup.chains.iter().flat_map(|chain| &chain.joints)).unwrap_or_default();
-    setup
+    (setup, collider_ids_by_name)
 }
 
 fn from_sidecar_collision_mode(mode: &SidecarCollisionMode) -> SpringCollisionMode {
@@ -81,7 +88,7 @@ fn import_colliders(
         setup.colliders.push(SpringColliderDef {
             id,
             bone_id,
-            offset: frame.to_local(Vector3::from(collider.offset)),
+            offset: frame.to_local(Vec3::from(collider.offset)),
             shape: collider_shape(collider, frame),
         });
         ids_by_name.push((collider.name.clone(), id));
@@ -113,7 +120,7 @@ fn collider_shape(collider: &SidecarCollider, frame: &BoneRestFrame) -> Collider
     match (&collider.shape, collider.tail) {
         (SidecarColliderShape::Capsule, Some(tail)) => ColliderShape::Capsule {
             radius,
-            tail: frame.to_local(Vector3::from(tail)),
+            tail: frame.to_local(Vec3::from(tail)),
         },
         (SidecarColliderShape::Capsule, None) | (SidecarColliderShape::Sphere, _) => {
             ColliderShape::Sphere { radius }
@@ -159,7 +166,7 @@ fn import_chain(
                 bone_id: bone_id_of(bones, &joint.bone)?,
                 force: JointForce::from(joint.force),
                 drag_force: joint.drag_force,
-                gravity_dir: Vector3::from(joint.gravity_dir),
+                gravity_dir: Vec3::from(joint.gravity_dir),
                 hit_radius: joint.hit_radius,
             })
         })
@@ -189,6 +196,7 @@ fn import_chain(
             .and_then(|name| bone_id_of(bones, name)),
         enabled: chain.enabled,
         origin: chain_origin_from_sidecar(&chain.origin),
+        rest_clearance: RestClearance::Tolerated,
     });
 }
 

@@ -2,14 +2,15 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use anyhow::Result;
-use cgmath::Vector4;
+use glam::Vec4;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
-use crate::vulkan::Instance;
+use crate::resource::image::Rgba8Texture;
+use crate::types::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 
 #[derive(Clone, Debug)]
@@ -17,18 +18,18 @@ pub struct MeshBuffer {
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
     pub vertex_data: VertexData,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
     pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub render_to_gbuffer: bool,
     pub object_index: usize,
     pub skin_data: Option<SkinData>,
     pub skeleton_id: Option<SkeletonId>,
     pub node_index: Option<usize>,
     pub base_vertices: Vec<Vertex>,
-    pub base_colors: Option<Vec<Vector4<f32>>>,
+    pub base_colors: Option<Vec<Vec4>>,
     pub morph: MeshMorph,
 }
 
@@ -56,6 +57,26 @@ impl Default for MeshBuffer {
 }
 
 impl MeshBuffer {
+    pub fn with_texture(texture: &Rgba8Texture) -> Self {
+        let mut mesh = Self::default();
+        mesh.image = texture.image;
+        mesh.image_memory = texture.memory;
+        mesh.mip_level = texture.mip_levels;
+        mesh.image_view = texture.view;
+        mesh.sampler = texture.sampler;
+        mesh
+    }
+
+    #[inline]
+    pub fn image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.image_view)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub unsafe fn upload_vertices(
         &mut self,
         instance: &Instance,
@@ -75,21 +96,21 @@ impl MeshBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
         self.vertex_buffer.destroy(rrdevice);
         self.index_buffer.destroy(rrdevice);
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }

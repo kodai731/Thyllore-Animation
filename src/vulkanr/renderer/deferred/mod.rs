@@ -10,7 +10,6 @@ mod scissor;
 mod tonemap_pass;
 
 pub use composite_pass::*;
-pub use gbuffer::create_gbuffer_framebuffer;
 pub use gbuffer_pass::*;
 pub use nodes::register_core_passes;
 pub use onion_skin_pass::*;

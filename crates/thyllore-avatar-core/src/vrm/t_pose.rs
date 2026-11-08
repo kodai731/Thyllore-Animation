@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::role::HumanoidRole;
@@ -38,7 +38,7 @@ const T_POSE_LIMBS: [(HumanoidRole, HumanoidRole, LimbDirection); 4] = [
 /// warning each; `rest_heads` are the bones' rest heads in engine axes (Y up).
 pub fn t_pose_warnings(
     mapping: &HumanoidMapping,
-    rest_heads: &[Vector3<f32>],
+    rest_heads: &[Vec3],
     tolerance_deg: f32,
 ) -> Vec<String> {
     let head_of = |role| mapping.bone_of(role).and_then(|bone| rest_heads.get(bone));
@@ -46,7 +46,7 @@ pub fn t_pose_warnings(
         .iter()
         .filter_map(|&(root_role, tip_role, expected)| {
             let direction = *head_of(tip_role)? - *head_of(root_role)?;
-            let length = direction.magnitude();
+            let length = direction.length();
             if length < 1e-6 {
                 return None;
             }
@@ -96,13 +96,13 @@ mod tests {
         mapping
     }
 
-    fn heads(left_hand_y: f32, left_foot: Vector3<f32>) -> Vec<Vector3<f32>> {
+    fn heads(left_hand_y: f32, left_foot: Vec3) -> Vec<Vec3> {
         vec![
-            Vector3::new(0.2, 1.4, 0.0),
-            Vector3::new(0.7, left_hand_y, 0.0),
-            Vector3::new(-0.2, 1.4, 0.0),
-            Vector3::new(-0.7, 1.4, 0.0),
-            Vector3::new(0.1, 0.9, 0.0),
+            Vec3::new(0.2, 1.4, 0.0),
+            Vec3::new(0.7, left_hand_y, 0.0),
+            Vec3::new(-0.2, 1.4, 0.0),
+            Vec3::new(-0.7, 1.4, 0.0),
+            Vec3::new(0.1, 0.9, 0.0),
             left_foot,
         ]
     }
@@ -111,7 +111,7 @@ mod tests {
     fn level_arms_and_straight_legs_pass() {
         let warnings = t_pose_warnings(
             &mapping(),
-            &heads(1.4, Vector3::new(0.1, 0.1, 0.0)),
+            &heads(1.4, Vec3::new(0.1, 0.1, 0.0)),
             T_POSE_TOLERANCE_DEG,
         );
         assert!(warnings.is_empty());
@@ -121,7 +121,7 @@ mod tests {
     fn an_a_pose_arm_warns() {
         let warnings = t_pose_warnings(
             &mapping(),
-            &heads(1.0, Vector3::new(0.1, 0.1, 0.0)),
+            &heads(1.0, Vec3::new(0.1, 0.1, 0.0)),
             T_POSE_TOLERANCE_DEG,
         );
         assert_eq!(warnings.len(), 1);
@@ -132,7 +132,7 @@ mod tests {
     fn a_bent_leg_warns() {
         let warnings = t_pose_warnings(
             &mapping(),
-            &heads(1.4, Vector3::new(0.5, 0.3, 0.0)),
+            &heads(1.4, Vec3::new(0.5, 0.3, 0.0)),
             T_POSE_TOLERANCE_DEG,
         );
         assert_eq!(warnings.len(), 1);
@@ -143,7 +143,7 @@ mod tests {
     fn unmapped_limbs_are_skipped() {
         let warnings = t_pose_warnings(
             &HumanoidMapping::default(),
-            &heads(1.0, Vector3::new(0.5, 0.3, 0.0)),
+            &heads(1.0, Vec3::new(0.5, 0.3, 0.0)),
             T_POSE_TOLERANCE_DEG,
         );
         assert!(warnings.is_empty());

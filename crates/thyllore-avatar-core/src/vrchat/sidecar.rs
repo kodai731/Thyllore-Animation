@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::cloth_setup::components::chain_gen::RootAttachment;
 use crate::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
 use crate::expression::components::preset::ExpressionLibrary;
 use crate::humanoid::components::mapping::HumanoidMapping;
@@ -36,6 +37,9 @@ pub struct SidecarSubmeshRole {
     pub mesh: String,
     pub material: String,
     pub role: SubmeshRole,
+    /// The root attachment the user chose for the chains of this submesh; absent follows the root
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<RootAttachment>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -69,6 +73,7 @@ pub struct SidecarInput<'a> {
     pub spring: &'a SidecarSpring,
     pub materials: &'a BTreeMap<String, String>,
     pub submesh_roles: &'a BTreeMap<SubmeshKey, SubmeshRole>,
+    pub submesh_attachments: &'a BTreeMap<SubmeshKey, RootAttachment>,
     pub hidden_triangles: &'a BTreeMap<SubmeshKey, Vec<u32>>,
     pub stats: &'a AvatarStats,
 }
@@ -89,7 +94,7 @@ pub fn build_sidecar(input: SidecarInput<'_>) -> AvatarSidecar {
         expressions,
         spring: input.spring.clone(),
         materials: input.materials.clone(),
-        submesh_roles: build_submesh_roles(input.submesh_roles),
+        submesh_roles: build_submesh_roles(input.submesh_roles, input.submesh_attachments),
         hidden_triangles: build_hidden_triangles(input.hidden_triangles),
         stats: input.stats.clone(),
     }
@@ -143,13 +148,17 @@ fn build_expressions(library: &ExpressionLibrary) -> Vec<SidecarExpression> {
         .collect()
 }
 
-fn build_submesh_roles(roles: &BTreeMap<SubmeshKey, SubmeshRole>) -> Vec<SidecarSubmeshRole> {
+fn build_submesh_roles(
+    roles: &BTreeMap<SubmeshKey, SubmeshRole>,
+    attachments: &BTreeMap<SubmeshKey, RootAttachment>,
+) -> Vec<SidecarSubmeshRole> {
     roles
         .iter()
         .map(|(key, role)| SidecarSubmeshRole {
             mesh: key.mesh.clone(),
             material: key.material.clone(),
             role: *role,
+            attachment: attachments.get(key).copied(),
         })
         .collect()
 }
@@ -275,6 +284,7 @@ mod tests {
             spring: &SidecarSpring::default(),
             materials: &materials,
             submesh_roles: &BTreeMap::new(),
+            submesh_attachments: &BTreeMap::new(),
             hidden_triangles: &BTreeMap::new(),
             stats: &stats,
         };
@@ -350,6 +360,13 @@ mod tests {
             },
             SubmeshRole::Skin,
         );
+        let hair = SubmeshKey {
+            mesh: "Hair".to_string(),
+            material: "Strands".to_string(),
+        };
+        roles.insert(hair.clone(), SubmeshRole::Hair);
+        let mut attachments = BTreeMap::new();
+        attachments.insert(hair, RootAttachment::Ring);
 
         let sidecar = AvatarSidecar {
             schema: SIDECAR_SCHEMA_VERSION,
@@ -364,17 +381,23 @@ mod tests {
             expressions: vec![],
             spring: SidecarSpring::default(),
             materials: BTreeMap::new(),
-            submesh_roles: build_submesh_roles(&roles),
+            submesh_roles: build_submesh_roles(&roles, &attachments),
             hidden_triangles: vec![],
             stats: AvatarStats::default(),
         };
 
         let value: serde_json::Value = serde_json::to_value(&sidecar).unwrap();
         let array = value["submesh_roles"].as_array().unwrap();
-        assert_eq!(array.len(), 1);
+        assert_eq!(array.len(), 2);
         assert_eq!(array[0]["mesh"], "Body");
         assert_eq!(array[0]["material"], "Skin");
         assert_eq!(array[0]["role"], "skin");
+        assert!(array[0].get("attachment").is_none());
+        assert_eq!(array[1]["role"], "hair");
+        assert_eq!(array[1]["attachment"], "ring");
+
+        let parsed: AvatarSidecar = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed.submesh_roles, sidecar.submesh_roles);
     }
 
     #[test]

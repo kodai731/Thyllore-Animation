@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{InnerSpace, Matrix, Matrix3, Quaternion};
+use glam::{Mat3, Quat};
 use thyllore_anim_core::editable::{
     clip_remap_bone_ids, AnimationClipFile, EditableAnimationClip, ANIMATION_FORMAT_VERSION,
 };
@@ -65,10 +65,7 @@ pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip
         .iter()
         .map(|(&index, rotations)| BoneRotationTrack {
             bone: request.bones[index].name.clone(),
-            rotations: rotations
-                .iter()
-                .map(|q| [q.s, q.v.x, q.v.y, q.v.z])
-                .collect(),
+            rotations: rotations.iter().map(|q| [q.w, q.x, q.y, q.z]).collect(),
         })
         .collect();
 
@@ -139,12 +136,12 @@ fn retarget_skeleton(bones: &[BoneSpec]) -> anyhow::Result<RetargetSkeleton> {
     Ok(RetargetSkeleton { bones })
 }
 
-fn rotation_of_rest_frame(rows: [[f32; 3]; 3]) -> Quaternion<f32> {
-    let frame = Matrix3::from(rows).transpose();
-    Quaternion::from(Matrix3::from_cols(
-        frame.x.normalize(),
-        frame.y.normalize(),
-        frame.z.normalize(),
+fn rotation_of_rest_frame(rows: [[f32; 3]; 3]) -> Quat {
+    let frame = Mat3::from_cols_array_2d(&rows).transpose();
+    Quat::from_mat3(&Mat3::from_cols(
+        frame.x_axis.normalize(),
+        frame.y_axis.normalize(),
+        frame.z_axis.normalize(),
     ))
 }
 

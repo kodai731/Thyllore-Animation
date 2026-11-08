@@ -27,7 +27,6 @@ pub mod math;
 pub mod ml;
 pub mod paths;
 pub mod platform;
-pub mod render;
 pub mod scene;
 pub mod scratch;
 pub mod vulkanr;

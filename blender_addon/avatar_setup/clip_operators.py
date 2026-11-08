@@ -128,14 +128,14 @@ OPERATORS = (THYLLORE_OT_LoadEngineClip,)
 
 def register() -> None:
     """Debug builds only: addon users have no engine clips to load."""
-    if not _debuglog.is_debug_enabled():
+    if not _debuglog.is_debug_build():
         return
     for cls in OPERATORS:
         bpy.utils.register_class(cls)
 
 
 def unregister() -> None:
-    if not _debuglog.is_debug_enabled():
+    if not _debuglog.is_debug_build():
         return
     for cls in reversed(OPERATORS):
         bpy.utils.unregister_class(cls)

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::sync::LazyLock;
 
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
 use crate::animation::{BoneId, ConstraintId, ConstraintType};
@@ -119,11 +119,11 @@ impl ConstraintFields {
     }
 }
 
-fn displayed_pole_vector(pole_vector: Option<Vector3<f32>>) -> [f32; 3] {
+fn displayed_pole_vector(pole_vector: Option<Vec3>) -> [f32; 3] {
     pole_vector.map_or(DEFAULT_POLE_VECTOR, Into::into)
 }
 
-fn displayed_rotation_offset(offset: Quaternion<f32>) -> [f32; 3] {
+fn displayed_rotation_offset(offset: Quat) -> [f32; 3] {
     quaternion_to_euler_degrees(&offset).into()
 }
 
@@ -256,7 +256,6 @@ pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::InnerSpace;
 
     use super::*;
     use crate::animation::{
@@ -292,14 +291,14 @@ mod tests {
     #[test]
     fn ik_round_trip_keeps_pole_vector() {
         let constraint = ConstraintType::Ik(IkConstraintData {
-            pole_vector: Some(Vector3::new(1.0, 2.0, 3.0)),
+            pole_vector: Some(Vec3::new(1.0, 2.0, 3.0)),
             ..Default::default()
         });
 
         let ConstraintType::Ik(data) = round_trip(&constraint) else {
             panic!("round trip changed the constraint kind");
         };
-        assert_eq!(data.pole_vector, Some(Vector3::new(1.0, 2.0, 3.0)));
+        assert_eq!(data.pole_vector, Some(Vec3::new(1.0, 2.0, 3.0)));
     }
 
     #[test]
@@ -316,15 +315,15 @@ mod tests {
         let ConstraintType::Ik(data) = constraint else {
             panic!("apply_to changed the constraint kind");
         };
-        assert_eq!(data.pole_vector, Some(Vector3::new(1.0, 0.0, 0.0)));
+        assert_eq!(data.pole_vector, Some(Vec3::new(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn aim_round_trip_keeps_axes() {
         let constraint = ConstraintType::Aim(AimConstraintData {
             weight: 0.6,
-            aim_axis: Vector3::new(1.0, 0.0, 0.0),
-            up_axis: Vector3::new(0.0, 0.0, 1.0),
+            aim_axis: Vec3::new(1.0, 0.0, 0.0),
+            up_axis: Vec3::new(0.0, 0.0, 1.0),
             ..Default::default()
         });
 
@@ -332,15 +331,15 @@ mod tests {
             panic!("round trip changed the constraint kind");
         };
         assert_eq!(data.weight, 0.6);
-        assert_eq!(data.aim_axis, Vector3::new(1.0, 0.0, 0.0));
-        assert_eq!(data.up_axis, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(data.aim_axis, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(data.up_axis, Vec3::new(0.0, 0.0, 1.0));
     }
 
     #[test]
     fn position_round_trip_keeps_offset() {
         let constraint = ConstraintType::Position(PositionConstraintData {
             weight: 0.4,
-            offset: Vector3::new(1.0, -2.0, 3.0),
+            offset: Vec3::new(1.0, -2.0, 3.0),
             ..Default::default()
         });
 
@@ -348,25 +347,25 @@ mod tests {
             panic!("round trip changed the constraint kind");
         };
         assert_eq!(data.weight, 0.4);
-        assert_eq!(data.offset, Vector3::new(1.0, -2.0, 3.0));
+        assert_eq!(data.offset, Vec3::new(1.0, -2.0, 3.0));
     }
 
     #[test]
     fn scale_round_trip_keeps_offset() {
         let constraint = ConstraintType::Scale(ScaleConstraintData {
-            offset: Vector3::new(2.0, 3.0, 4.0),
+            offset: Vec3::new(2.0, 3.0, 4.0),
             ..Default::default()
         });
 
         let ConstraintType::Scale(data) = round_trip(&constraint) else {
             panic!("round trip changed the constraint kind");
         };
-        assert_eq!(data.offset, Vector3::new(2.0, 3.0, 4.0));
+        assert_eq!(data.offset, Vec3::new(2.0, 3.0, 4.0));
     }
 
     #[test]
     fn rotation_round_trip_keeps_quaternion() {
-        let offset = euler_degrees_to_quaternion(&Vector3::new(10.0, 20.0, 30.0));
+        let offset = euler_degrees_to_quaternion(&Vec3::new(10.0, 20.0, 30.0));
         let constraint = ConstraintType::Rotation(RotationConstraintData {
             weight: 0.7,
             offset,
@@ -392,6 +391,6 @@ mod tests {
             panic!("apply_to changed the constraint kind");
         };
         let displayed = quaternion_to_euler_degrees(&data.offset);
-        assert!((displayed - Vector3::new(0.0, 45.0, 0.0)).magnitude() < 1e-3);
+        assert!((displayed - Vec3::new(0.0, 45.0, 0.0)).length() < 1e-3);
     }
 }

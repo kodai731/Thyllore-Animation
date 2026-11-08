@@ -44,6 +44,7 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(spring_edit::spring_gizmo_style, m)?)?;
     m.add_function(wrap_pyfunction!(gizmo::wire_sphere_segments, m)?)?;
     m.add_function(wrap_pyfunction!(gizmo::wire_capsule_segments, m)?)?;
+    m.add_function(wrap_pyfunction!(blender_space::armature_local_points, m)?)?;
     m.add_function(wrap_pyfunction!(collider::capsule_fit_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;
     m.add_function(wrap_pyfunction!(collider::has_fitted_body_colliders, m)?)?;

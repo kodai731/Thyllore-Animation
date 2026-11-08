@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use glam::{Mat3, Quat};
+use glam::{Mat3, Mat4, Quat};
 use thyllore_anim_core::editable::{
     clip_remap_bone_ids, AnimationClipFile, EditableAnimationClip, ANIMATION_FORMAT_VERSION,
 };
@@ -17,12 +17,18 @@ use thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context
 use thyllore_model_core::BoneId;
 
 use crate::avatar_setup_bridge::BoneSpec;
+use crate::blender_space::{
+    axis_lengths, bone_local_offset, engine_frame_rotation, invert, parent_relative_locals, rows,
+    MatrixRows,
+};
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct BoneRotationTrack {
     pub bone: String,
     /// Parent-relative rotation per frame as (w, x, y, z); a root bone's is its engine model-space rotation.
     pub rotations: Vec<[f32; 4]>,
+    /// The rotation written over the bone's rest local, one `PoseBone.matrix_basis` per frame.
+    pub bases: Vec<MatrixRows>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -33,20 +39,37 @@ pub struct BakedClip {
     pub hips_bone: String,
     /// Engine model-space offset of the hips in metres, one per frame.
     pub hips_offsets: Vec<[f32; 3]>,
+    /// The same offsets as the hips bone's `PoseBone.location`, one per frame.
+    pub hips_locations: Vec<[f32; 3]>,
     pub bone_rotations: Vec<BoneRotationTrack>,
 }
 
+/// `bones` carry `rest_frame`; `armature_world` and `rest_matrices` (`Bone.matrix_local` per bone)
+/// are the Blender matrices the baked poses are written through.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BakeClipFileRequest {
     pub bones: Vec<BoneSpec>,
     pub clip_ron: String,
     pub fps: u32,
+    pub armature_world: MatrixRows,
+    pub rest_matrices: Vec<MatrixRows>,
+    pub scale_length: f32,
 }
 
 /// Bakes a humanoid standard-space clip file onto the rig the way the engine plays a template:
 /// role-named tracks bind to the inferred humanoid bones, then every frame is retargeted.
 pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip> {
+    let rest_locals = parent_relative_locals(
+        Mat4::IDENTITY,
+        &request
+            .bones
+            .iter()
+            .map(|bone| bone.parent)
+            .collect::<Vec<_>>(),
+        &request.rest_matrices,
+    )?;
+    let root_rotation_inverse = engine_frame_rotation(&request.armature_world).inverse();
     let mut clip = parse_clip(&request.clip_ron)?;
     let inputs: Vec<BoneInput> = request.bones.iter().cloned().map(Into::into).collect();
     let (mapping, _) = infer_mapping(&inputs);
@@ -63,11 +86,35 @@ pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip
     let bone_rotations = baked
         .bone_rotations
         .iter()
-        .map(|(&index, rotations)| BoneRotationTrack {
-            bone: request.bones[index].name.clone(),
-            rotations: rotations.iter().map(|q| [q.w, q.x, q.y, q.z]).collect(),
+        .map(|(&index, rotations)| {
+            let bone = &request.bones[index];
+            let in_blender_axes = |q: &Quat| match bone.parent {
+                None => root_rotation_inverse * *q,
+                Some(_) => *q,
+            };
+            Ok(BoneRotationTrack {
+                bone: bone.name.clone(),
+                rotations: rotations.iter().map(|q| [q.w, q.x, q.y, q.z]).collect(),
+                bases: rotations
+                    .iter()
+                    .map(|q| basis_of_rotation(&rest_locals[index], in_blender_axes(q), &bone.name))
+                    .collect::<anyhow::Result<_>>()?,
+            })
         })
-        .collect();
+        .collect::<anyhow::Result<_>>()?;
+    let hips_locations = baked
+        .hips_offsets
+        .iter()
+        .map(|offset| {
+            bone_local_offset(
+                &request.armature_world,
+                &request.rest_matrices[hips_index],
+                *offset,
+                request.scale_length,
+            )
+            .map(Into::into)
+        })
+        .collect::<anyhow::Result<_>>()?;
 
     Ok(BakedClip {
         name: clip.name,
@@ -75,8 +122,19 @@ pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip
         frame_times: baked.frame_times,
         hips_bone: request.bones[hips_index].name.clone(),
         hips_offsets: baked.hips_offsets.iter().map(|v| [v.x, v.y, v.z]).collect(),
+        hips_locations,
         bone_rotations,
     })
+}
+
+/// The rest local with its rotation replaced, relative to the rest local: Blender's `matrix_basis`.
+fn basis_of_rotation(rest_local: &Mat4, rotation: Quat, bone: &str) -> anyhow::Result<MatrixRows> {
+    let translation = Mat4::from_translation(rest_local.w_axis.truncate());
+    let scale = Mat4::from_scale(axis_lengths(*rest_local));
+    let rest_inverse = invert(rest_local, || format!("rest local of bone \"{bone}\""))?;
+    Ok(rows(
+        rest_inverse * translation * Mat4::from_quat(rotation) * scale,
+    ))
 }
 
 fn parse_clip(clip_ron: &str) -> anyhow::Result<EditableAnimationClip> {

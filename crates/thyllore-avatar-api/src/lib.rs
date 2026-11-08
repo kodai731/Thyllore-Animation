@@ -1,4 +1,5 @@
 pub mod avatar_setup_bridge;
+pub mod blender_space;
 pub mod chain_gen_bridge;
 pub mod chain_register_bridge;
 pub mod clip_bake_bridge;

@@ -94,7 +94,7 @@ class THYLLORE_OT_ResetVrmMeta(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def _matrix_rows(matrix):
+def matrix_rows(matrix):
     return [[matrix[i][j] for j in range(4)] for i in range(4)]
 
 
@@ -102,9 +102,9 @@ def armature_bone_specs(context, arm):
     """Collect bone data from arm and build bone specs with context scale_length and rest frames."""
     names, parent_indices, world_heads = _collect_bone_data(arm)
     scale_length = context.scene.unit_settings.scale_length
-    armature_rows = _matrix_rows(arm.matrix_world)
+    armature_rows = matrix_rows(arm.matrix_world)
     rest_frames = [
-        bone_rest_frame(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
+        bone_rest_frame(armature_rows, matrix_rows(bone.matrix_local), scale_length)
         for bone in arm.data.bones
     ]
     return bone_specs(names, parent_indices, world_heads, scale_length, rest_frames)
@@ -114,9 +114,9 @@ def armature_fit_bones(context, arm):
     """Collect bone data from arm and build bone specs with bind_matrix for collider fit."""
     specs = armature_bone_specs(context, arm)
     scale_length = context.scene.unit_settings.scale_length
-    armature_rows = _matrix_rows(arm.matrix_world)
+    armature_rows = matrix_rows(arm.matrix_world)
     for spec, bone in zip(specs, arm.data.bones):
-        spec["bind_matrix"] = bone_bind_matrix(armature_rows, _matrix_rows(bone.matrix_local), scale_length)
+        spec["bind_matrix"] = bone_bind_matrix(armature_rows, matrix_rows(bone.matrix_local), scale_length)
     return specs
 
 

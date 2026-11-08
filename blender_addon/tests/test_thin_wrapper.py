@@ -1,8 +1,8 @@
 """Computation lives in the crates; blender_addon/ only reads and writes bpy.
 
 No Python numeric library (numpy, math) may be imported in avatar_setup/ or common/,
-and no .inverted() matrix inversions may creep into those directories — they belong
-in the wheel.
+and no .inverted() matrix inversion may appear in those directories: composing matrices
+belongs in the wheel.
 """
 from __future__ import annotations
 
@@ -13,12 +13,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 AVATAR_SETUP_DIR = REPO_ROOT / "blender_addon" / "avatar_setup"
 COMMON_DIR = REPO_ROOT / "blender_addon" / "common"
 EXEMPT_FILES = {"coordinates.py", "effect_properties.py"}
-
-INVERTED_ALLOWANCES: dict[str, int] = {
-    "clip_operators.py": 4,
-    "spring_preview.py": 2,
-    "chain_bone_edit.py": 1,
-}
 
 
 def _python_files():
@@ -58,16 +52,11 @@ def test_avatar_setup_does_not_import_numeric_libraries() -> None:
     assert not offenders, "numeric library import found:\n" + "\n".join(offenders)
 
 
-def test_matrix_inversions_do_not_grow() -> None:
-    """mathutils may build Matrix/Vector and multiply them, but composing with .inverted()
-    belongs in the wheel. Each file's .inverted() count must not exceed its allowance."""
+def test_no_matrix_inversions() -> None:
+    """mathutils may build Matrix/Vector and multiply them; composing with .inverted() belongs in the wheel."""
     offenders = []
     for path in _python_files():
-        text = path.read_text(encoding="utf-8")
-        count = text.count(".inverted()")
-        allowed = INVERTED_ALLOWANCES.get(path.name, 0)
-        if count > allowed:
-            offenders.append(
-                f"{path.relative_to(REPO_ROOT)}: {count} .inverted() calls (allowed {allowed})"
-            )
-    assert not offenders, "matrix inversions grew:\n" + "\n".join(offenders)
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if ".inverted()" in line:
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+    assert not offenders, "matrix inversion found:\n" + "\n".join(offenders)

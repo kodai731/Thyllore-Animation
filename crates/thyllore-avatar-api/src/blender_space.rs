@@ -1,0 +1,183 @@
+use glam::{Mat3, Mat4, Quat, Vec3};
+use thyllore_math_core::{engine_to_blender_point, BLENDER_TO_ENGINE};
+
+/// A row-major 4x4 as the addon sends it; the engine stores matrices column-major.
+pub type MatrixRows = [[f32; 4]; 4];
+
+pub fn column_major(rows: &MatrixRows) -> Mat4 {
+    Mat4::from_cols_array_2d(rows).transpose()
+}
+
+pub fn rows(matrix: Mat4) -> MatrixRows {
+    matrix.transpose().to_cols_array_2d()
+}
+
+/// The armature's world frame with its axes turned to engine axes; its own local axes stay.
+pub fn engine_frame(armature_world: &MatrixRows) -> Mat4 {
+    BLENDER_TO_ENGINE * column_major(armature_world)
+}
+
+/// `engine_frame` with its three upper rows in metres: the root frame the spring preview propagates.
+pub fn engine_frame_metres(armature_world: &MatrixRows, scale_length: f32) -> Mat4 {
+    let mut frame = rows(engine_frame(armature_world));
+    for row in frame.iter_mut().take(3) {
+        for value in row.iter_mut() {
+            *value *= scale_length;
+        }
+    }
+    column_major(&frame)
+}
+
+/// The rotation of the armature's engine frame, its axes normalized.
+pub fn engine_frame_rotation(armature_world: &MatrixRows) -> Quat {
+    let frame = Mat3::from_mat4(engine_frame(armature_world));
+    Quat::from_mat3(&Mat3::from_cols(
+        frame.x_axis.normalize(),
+        frame.y_axis.normalize(),
+        frame.z_axis.normalize(),
+    ))
+}
+
+/// Parent-relative locals of armature-space matrices (`Bone.matrix_local`, `PoseBone.matrix`);
+/// a root bone's local is `root_frame` applied to its matrix.
+pub fn parent_relative_locals(
+    root_frame: Mat4,
+    parents: &[Option<usize>],
+    matrices: &[MatrixRows],
+) -> anyhow::Result<Vec<Mat4>> {
+    if matrices.len() != parents.len() {
+        anyhow::bail!(
+            "expected one matrix per bone ({}), got {}",
+            parents.len(),
+            matrices.len()
+        );
+    }
+    let globals: Vec<Mat4> = matrices.iter().map(column_major).collect();
+    parents
+        .iter()
+        .zip(&globals)
+        .enumerate()
+        .map(|(index, (parent, global))| match parent {
+            None => Ok(root_frame * *global),
+            Some(parent) => {
+                let parent_global = globals.get(*parent).ok_or_else(|| {
+                    anyhow::anyhow!("bone {index} names parent {parent} outside the bone list")
+                })?;
+                Ok(invert(parent_global, || format!("matrix of bone {parent}"))? * *global)
+            }
+        })
+        .collect()
+}
+
+/// An engine offset in metres as a translation of the bone's `PoseBone.location`: Blender axes,
+/// scene units, then into the armature's and the bone's own axes.
+pub fn bone_local_offset(
+    armature_world: &MatrixRows,
+    bone_rest_matrix: &MatrixRows,
+    offset_metres: Vec3,
+    scale_length: f32,
+) -> anyhow::Result<Vec3> {
+    let world_delta = engine_to_blender_point(offset_metres) / scale_length;
+    let armature_delta = invert3(armature_world, "armature world matrix")? * world_delta;
+    Ok(invert3(bone_rest_matrix, "bone rest matrix")? * armature_delta)
+}
+
+/// `Bone.matrix_local`-space points of Blender world points.
+pub fn armature_local_points(
+    armature_world: &MatrixRows,
+    world_points: &[[f32; 3]],
+) -> anyhow::Result<Vec<[f32; 3]>> {
+    let to_armature = invert(&column_major(armature_world), || {
+        "armature world matrix".to_string()
+    })?;
+    Ok(world_points
+        .iter()
+        .map(|point| to_armature.transform_point3(Vec3::from(*point)).into())
+        .collect())
+}
+
+/// The length of each axis of a rest matrix: Blender's `Matrix.to_scale()`.
+pub fn axis_lengths(matrix: Mat4) -> Vec3 {
+    Vec3::new(
+        matrix.x_axis.truncate().length(),
+        matrix.y_axis.truncate().length(),
+        matrix.z_axis.truncate().length(),
+    )
+}
+
+pub fn invert(matrix: &Mat4, what: impl FnOnce() -> String) -> anyhow::Result<Mat4> {
+    if matrix.determinant().abs() < f32::EPSILON {
+        anyhow::bail!("{} is not invertible", what());
+    }
+    Ok(matrix.inverse())
+}
+
+fn invert3(rows: &MatrixRows, what: &str) -> anyhow::Result<Mat3> {
+    let matrix = Mat3::from_mat4(column_major(rows));
+    if matrix.determinant().abs() < f32::EPSILON {
+        anyhow::bail!("{what} is not invertible");
+    }
+    Ok(matrix.inverse())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const IDENTITY: MatrixRows = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+
+    fn translation(x: f32, y: f32, z: f32) -> MatrixRows {
+        rows(Mat4::from_translation(Vec3::new(x, y, z)))
+    }
+
+    #[test]
+    fn child_local_is_its_matrix_relative_to_the_parent() {
+        let locals = parent_relative_locals(
+            Mat4::IDENTITY,
+            &[None, Some(0)],
+            &[translation(0.0, 0.0, 1.0), translation(0.0, 0.0, 1.5)],
+        )
+        .unwrap();
+        assert!(locals[1].abs_diff_eq(Mat4::from_translation(Vec3::new(0.0, 0.0, 0.5)), 1e-6));
+    }
+
+    #[test]
+    fn root_local_carries_the_root_frame() {
+        let root_frame = engine_frame_metres(&IDENTITY, 0.01);
+        let locals =
+            parent_relative_locals(root_frame, &[None], &[translation(0.0, 0.0, 1.0)]).unwrap();
+        let origin = locals[0].transform_point3(Vec3::ZERO);
+        assert!(
+            origin.abs_diff_eq(Vec3::new(0.0, 0.01, 0.0), 1e-6),
+            "{origin:?}"
+        );
+    }
+
+    #[test]
+    fn bone_local_offset_undoes_the_axis_swap_and_the_unit() {
+        let offset =
+            bone_local_offset(&IDENTITY, &IDENTITY, Vec3::new(0.0, 0.02, 0.0), 0.01).unwrap();
+        assert!(
+            offset.abs_diff_eq(Vec3::new(0.0, 0.0, 2.0), 1e-6),
+            "{offset:?}"
+        );
+    }
+
+    #[test]
+    fn armature_local_points_undo_the_armature_transform() {
+        let points =
+            armature_local_points(&translation(1.0, 0.0, 0.0), &[[1.5, 0.0, 0.0]]).unwrap();
+        assert_eq!(points, vec![[0.5, 0.0, 0.0]]);
+    }
+
+    #[test]
+    fn a_singular_armature_matrix_is_reported() {
+        let flat = rows(Mat4::from_scale(Vec3::new(1.0, 1.0, 0.0)));
+        assert!(armature_local_points(&flat, &[]).is_err());
+    }
+}

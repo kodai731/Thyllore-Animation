@@ -1,12 +1,13 @@
 """Bake an engine humanoid clip (.anim.ron) onto the active rig (thyllore.load_engine_clip).
 
-The wheel retargets the clip the way the engine plays a template; every frame then lands in the
-armature's action, so the swing preview and the timeline see the same motion as the engine."""
+The wheel retargets the clip the way the engine plays a template and hands back every frame as
+``matrix_basis`` and hips ``location``; they land in the armature's action, so the swing preview and
+the timeline see the same motion as the engine."""
 from __future__ import annotations
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from mathutils import Matrix, Quaternion, Vector
+from mathutils import Matrix, Vector
 
 try:
     import thyllore_avatar_api as avatar_api  # type: ignore
@@ -17,10 +18,8 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from .. import _debuglog
-from ..common.coordinates import blender_frame_to_engine_matrix, engine_metres_to_blender
 from ..common.logged_report import report
-from .operators import armature_bone_specs, target_armature
-from .spring_preview import matrix_rows, rest_relative_to_parent
+from .operators import armature_bone_specs, matrix_rows, target_armature
 
 
 def scene_fps(scene) -> int:
@@ -35,54 +34,36 @@ def _replace_action(arm, name: str):
     animation_data.action = None
 
 
-def _hips_location(arm, bone, offset_metres, scale_length: float) -> Vector:
-    world_delta = Vector(engine_metres_to_blender(offset_metres, scale_length))
-    armature_delta = arm.matrix_world.to_3x3().inverted() @ world_delta
-    return bone.matrix_local.to_3x3().inverted() @ armature_delta
-
-
-def _write_rotation(arm, bone, rotation: Quaternion) -> None:
-    """Replace the rotation of the bone's rest-relative local and keep its translation and scale."""
-    rest_local = rest_relative_to_parent(bone)
-    translation = Matrix.Translation(rest_local.to_translation())
-    scale = Matrix.Diagonal(rest_local.to_scale()).to_4x4()
-    arm.pose.bones[bone.name].matrix_basis = rest_local.inverted() @ translation @ rotation.to_matrix().to_4x4() @ scale
-
-
-def _write_frame(arm, baked: dict, frame_index: int, frame: int, root_rotation_inv: Quaternion, scale_length: float) -> None:
+def _write_frame(arm, baked: dict, frame_index: int, frame: int) -> None:
     for track in baked["bone_rotations"]:
-        bone = arm.data.bones[track["bone"]]
-        rotation = Quaternion(track["rotations"][frame_index])
-        if bone.parent is None:
-            rotation = root_rotation_inv @ rotation
-        _write_rotation(arm, bone, rotation)
-        arm.pose.bones[bone.name].keyframe_insert("rotation_quaternion", frame=frame)
+        pose_bone = arm.pose.bones[track["bone"]]
+        pose_bone.matrix_basis = Matrix(track["bases"][frame_index])
+        pose_bone.keyframe_insert("rotation_quaternion", frame=frame)
 
-    hips = arm.data.bones[baked["hips_bone"]]
-    hips_pose = arm.pose.bones[hips.name]
-    hips_pose.location = _hips_location(arm, hips, baked["hips_offsets"][frame_index], scale_length)
+    hips_pose = arm.pose.bones[baked["hips_bone"]]
+    hips_pose.location = Vector(baked["hips_locations"][frame_index])
     hips_pose.keyframe_insert("location", frame=frame)
 
 
 def bake_clip_onto_armature(context, arm, clip_text: str) -> dict:
     """Bake clip_text onto arm as an action named after the clip; returns the wheel's baked clip."""
     scene = context.scene
-    scale_length = scene.unit_settings.scale_length
     baked = avatar_api.bake_clip_file({
         "bones": armature_bone_specs(context, arm),
         "clip_ron": clip_text,
         "fps": scene_fps(scene),
+        "armature_world": matrix_rows(arm.matrix_world),
+        "rest_matrices": [matrix_rows(bone.matrix_local) for bone in arm.data.bones],
+        "scale_length": scene.unit_settings.scale_length,
     })
 
     _replace_action(arm, baked["name"])
     for track in baked["bone_rotations"]:
         arm.pose.bones[track["bone"]].rotation_mode = "QUATERNION"
 
-    root_frame = Matrix(blender_frame_to_engine_matrix(matrix_rows(arm.matrix_world)))
-    root_rotation_inv = root_frame.to_3x3().normalized().to_quaternion().inverted()
     first_frame = scene.frame_start
     for frame_index in range(len(baked["frame_times"])):
-        _write_frame(arm, baked, frame_index, first_frame + frame_index, root_rotation_inv, scale_length)
+        _write_frame(arm, baked, frame_index, first_frame + frame_index)
 
     arm.animation_data.action.name = baked["name"]
     scene.frame_end = first_frame + len(baked["frame_times"]) - 1

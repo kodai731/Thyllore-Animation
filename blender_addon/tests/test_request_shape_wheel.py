@@ -36,7 +36,11 @@ def _wire_capsule() -> dict:
 
 
 def _spring_preview() -> dict:
-    return {"spring": SPRING, "bones": BONES, "rest_locals": [IDENTITY]}
+    return {"spring": SPRING, "bones": BONES, "armature_world": IDENTITY, "rest_matrices": [IDENTITY], "scale_length": 1.0}
+
+
+def _armature_local_points() -> dict:
+    return {"armature_world": IDENTITY, "points": [(1.0, 2.0, 3.0)]}
 
 
 CASES = [
@@ -50,6 +54,7 @@ CASES = [
     ("wire_sphere_segments", _wire_sphere),
     ("wire_capsule_segments", _wire_capsule),
     ("SpringPreview", _spring_preview),
+    ("armature_local_points", _armature_local_points),
 ]
 
 

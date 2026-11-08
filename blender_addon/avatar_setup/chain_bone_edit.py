@@ -5,7 +5,22 @@ from mathutils import Vector
 
 import bpy
 
+try:
+    import thyllore_avatar_api as avatar_api  # type: ignore
+except ImportError:
+    avatar_api = None  # type: ignore
+
 from ..common.chain_bones import COVERED_GROUP, chain_of_membership_group, membership_group_name
+from .operators import matrix_rows
+
+
+def _armature_local_pairs(arm, specs) -> list[tuple[Vector, Vector]]:
+    """(head, tail) of every spec in the armature's space, where edit bones are placed."""
+    points = avatar_api.armature_local_points({
+        "armature_world": matrix_rows(arm.matrix_world),
+        "points": [point for _, _, head, tail in specs for point in (head, tail)],
+    })
+    return [(Vector(points[i]), Vector(points[i + 1])) for i in range(0, len(points), 2)]
 
 
 def add_bones(context, arm, specs):
@@ -13,15 +28,15 @@ def add_bones(context, arm, specs):
     for name, *_ in specs:
         if name in arm.data.bones:
             raise ValueError(f"Bone {name!r} already exists; reset the chain generation to replace it")
-    to_armature = arm.matrix_world.inverted()
+    placements = _armature_local_pairs(arm, specs)
     context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="EDIT")
     try:
         edit_bones = arm.data.edit_bones
-        for name, parent_name, head, tail in specs:
+        for (name, parent_name, _, _), (head, tail) in zip(specs, placements):
             bone = edit_bones.new(name)
-            bone.head = to_armature @ Vector(head)
-            bone.tail = to_armature @ Vector(tail)
+            bone.head = head
+            bone.tail = tail
             bone.parent = edit_bones[parent_name]
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")

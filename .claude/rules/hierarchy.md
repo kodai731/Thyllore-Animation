@@ -79,8 +79,8 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   for torso bones whose skin was removed). `body_fit::fit_body_capsules` is the one sequence that turns skins
   into a rig's body colliders (skin fit, body roles, the head along its bone centred on the skull's
   extents, torso fallback); the ml-core bridge and the engine's
-  `fit_body_colliders` only call it and write the result, so the addon and the engine cannot diverge. `cloth_setup/systems/chain_gen/` only decides which role gets
-  one (`hair_head_capsule`); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
+  `fit_body_colliders` only call it and write the result, so the addon and the engine cannot diverge. `cloth_setup/systems/chain_gen/` only decides which root gets
+  one (`root_head_capsule`, a Head root); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
   screen-space scale) lives in `thyllore-math-core`.
 - `thyllore-avatar-core/src/vrm/` projects the avatar sidecar onto VRM 1.0: `vrm_magnitudes` (joint force →
   stiffness / gravity), `build_vrm_extensions` (`VRMC_vrm`, `VRMC_springBone`, the vendor `THYLLORE_avatar`

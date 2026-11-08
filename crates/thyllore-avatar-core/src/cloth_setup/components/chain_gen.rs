@@ -139,13 +139,7 @@ pub fn attachment_or_default(
     root: Option<HumanoidRole>,
     attachment: Option<RootAttachment>,
 ) -> RootAttachment {
-    if let Some(a) = attachment {
-        a
-    } else if let Some(root) = root {
-        default_attachment(root)
-    } else {
-        RootAttachment::Ring
-    }
+    attachment.unwrap_or_else(|| root.map_or(RootAttachment::Ring, default_attachment))
 }
 
 /// The submesh part of a generated bone name: lower case, one `_` between runs of other characters.
@@ -234,17 +228,17 @@ pub struct GeneratedChain {
     pub vertices: Vec<u32>,
 }
 
-fn chain_name_prefix(params: &ChainGenParams) -> String {
-    format!("{}_", submesh_label(&params.target))
+fn chain_name_prefix(target: &SubmeshSelector) -> String {
+    format!("{}_", submesh_label(target))
 }
 
 pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
-    format!("{}{:02}", chain_name_prefix(params), column)
+    format!("{}{:02}", chain_name_prefix(&params.target), column)
 }
 
 /// The column of a chain name of this submesh; `None` for a name of another submesh.
-pub fn chain_column(params: &ChainGenParams, name: &str) -> Option<usize> {
-    name.strip_prefix(&chain_name_prefix(params))?.parse().ok()
+pub fn chain_column(target: &SubmeshSelector, name: &str) -> Option<usize> {
+    name.strip_prefix(&chain_name_prefix(target))?.parse().ok()
 }
 
 pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
@@ -409,9 +403,12 @@ mod tests {
             target: "Hair_side".parse().unwrap(),
             settings: ChainGenSettings::default(),
         };
-        assert_eq!(chain_column(&params, &chain_name(&params, 3)), Some(3));
-        assert_eq!(chain_column(&params, "hair_back_03"), None);
-        assert_eq!(chain_column(&params, "hair_side_"), None);
+        assert_eq!(
+            chain_column(&params.target, &chain_name(&params, 3)),
+            Some(3)
+        );
+        assert_eq!(chain_column(&params.target, "hair_back_03"), None);
+        assert_eq!(chain_column(&params.target, "hair_side_"), None);
     }
 
     #[test]

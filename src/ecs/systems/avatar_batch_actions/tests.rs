@@ -241,6 +241,28 @@ fn test_generate_chain_bones_parses_submesh_root_and_settings() {
 }
 
 #[test]
+fn test_generate_chain_bones_takes_the_attachment_among_the_settings() {
+    let ring_on_head = generate_chain_bones_parse(
+        "generate_chain_bones=hair/strands,Head,joint_count=3,attachment=ring",
+    )
+    .expect("prefix matches")
+    .expect("spec is valid");
+    assert_eq!(ring_on_head.name(), "generate_chain_bones");
+
+    for spec in [
+        "generate_chain_bones=hair/strands,Head,attachment=hat",
+        "generate_chain_bones=hair/strands,Head,attachment=cap,attachment=ring",
+    ] {
+        assert!(
+            generate_chain_bones_parse(spec)
+                .expect("prefix matches")
+                .is_err(),
+            "{spec}"
+        );
+    }
+}
+
+#[test]
 fn test_generate_chain_bones_rejects_malformed_specs() {
     for spec in [
         "generate_chain_bones=garment/cloth,,joint_count=3",

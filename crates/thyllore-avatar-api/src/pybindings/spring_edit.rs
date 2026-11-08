@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 use pythonize::depythonize;
 
-use super::avatar_setup::bones_from_py;
+use super::avatar_setup::{bones_from_py, depythonize_error_to_pyerr};
+use super::chain_gen::pythonize_value;
+use super::error::anyhow_to_value_error;
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::chain_register_bridge::{
     register_generated_chains as bridge_register_generated_chains, GeneratedChainIn,
@@ -14,7 +16,6 @@ use crate::spring_edit_bridge::{
     resolve_root_bone_name, use_existing_bones_as_springs as bridge_use_existing_bones_as_springs,
     RampInput,
 };
-use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 /// Registers every run of existing non-humanoid bones under `root_bone` with at least `min_joints` bones as a spring chain; adds no bones.
 #[pyfunction]
@@ -59,8 +60,8 @@ pub fn register_generated_chains<'py>(
     let head_capsule: Option<CapsuleOut> = head_capsule
         .map(|capsule| depythonize(capsule).map_err(depythonize_error_to_pyerr))
         .transpose()?;
-    let attachment = crate::chain_gen_bridge::parse_attachment(attachment)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
+    let attachment =
+        crate::chain_gen_bridge::parse_attachment(attachment).map_err(anyhow_to_value_error)?;
     let request = RegisterRequest {
         root_name: root_bone,
         target,

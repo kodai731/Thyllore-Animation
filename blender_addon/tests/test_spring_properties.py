@@ -485,6 +485,25 @@ def test_generated_origin_round_trips_and_authored_is_none():
     assert out["chains"][1]["origin"] is None
 
 
+def test_legacy_origin_role_is_emitted_until_the_attachment_is_written():
+    """A chain saved by an older addon keeps ``origin_role`` as a custom property; the sidecar carries it as
+    ``role`` so the wheel maps it to the attachment, and never an empty ``attachment``."""
+    settings = _make_settings([], [], [])
+    legacy = settings.chains.add()
+    legacy.name = "hair_hair_back_00"
+    legacy.center = ""
+    legacy.enabled = True
+    legacy.tail = ""
+    legacy.origin_mesh = "Hair_back"
+    legacy.origin_material = "Hair"
+    legacy.origin_attachment = ""
+    legacy.get = lambda key, default="": {"origin_role": "hair"}.get(key, default)
+
+    out = spring_settings_to_sidecar(settings)
+
+    assert out["chains"][0]["origin"] == {"mesh": "Hair_back", "material": "Hair", "role": "hair"}
+
+
 def test_generated_chains_are_replaced_per_submesh():
     """remove_chains_generated_on drops only the chains generated on that submesh and names their bones."""
     settings = _make_settings(TEST_CHAINS, [], [])

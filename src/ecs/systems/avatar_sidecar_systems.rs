@@ -16,8 +16,28 @@ use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
 use thyllore_avatar_core::vrchat::sidecar::{
     build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,
-    AvatarSidecar, SidecarInput,
+    AvatarSidecar, SidecarInput, SidecarSubmeshRole,
 };
+
+/// The sidecar's role and attachment of a submesh the loaded model has; another submesh is ignored.
+fn restore_submesh_role(state: &mut AvatarSetupState, role: &SidecarSubmeshRole) {
+    let key = SubmeshKey {
+        mesh: role.mesh.clone(),
+        material: role.material.clone(),
+    };
+    let Some(assigned) = state.submesh_roles.get_mut(&key) else {
+        return;
+    };
+    *assigned = role.role;
+    match role.attachment {
+        Some(attachment) => {
+            state.submesh_attachments.insert(key, attachment);
+        }
+        None => {
+            state.submesh_attachments.remove(&key);
+        }
+    }
+}
 use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
     SidecarSpring,
@@ -64,13 +84,7 @@ pub(crate) fn apply_avatar_sidecar(
     {
         let mut state = world.resource_mut::<AvatarSetupState>();
         for role in &sidecar.submesh_roles {
-            let key = SubmeshKey {
-                mesh: role.mesh.clone(),
-                material: role.material.clone(),
-            };
-            if let Some(assigned) = state.submesh_roles.get_mut(&key) {
-                *assigned = role.role;
-            }
+            restore_submesh_role(&mut state, role);
         }
     }
     restore_hidden_triangles(world, assets, graphics, &sidecar.hidden_triangles);
@@ -192,6 +206,7 @@ fn build_avatar_sidecar(
         materials: &materials,
         stats: &state.stats,
         submesh_roles: &state.submesh_roles,
+        submesh_attachments: &state.submesh_attachments,
         hidden_triangles: &state.hidden_triangles,
     }))
 }

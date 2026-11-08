@@ -4,15 +4,16 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_avatar_api as avatar_api  # type: ignore
+    import thyllore_ml_core as tml  # type: ignore
 
-    _AVATAR_API_AVAILABLE = True
+    _TML_AVAILABLE = True
 except ImportError:
-    avatar_api = None  # type: ignore
-    _AVATAR_API_AVAILABLE = False
+    tml = None  # type: ignore
+    _TML_AVAILABLE = False
 
 from ..common.chain_bone_display import remove_chain_collections
 from ..common.chain_bones import chain_of_membership_group
+from ..common.chain_migration import rename_legacy_chains
 from ..common.spring_properties import generated_chain_bones, remove_chains_generated_on
 from .chain_bone_edit import remove_bones, remove_vertex_groups
 from .chain_inputs import resolve_submesh
@@ -33,10 +34,10 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
             group.remove(every_vertex)
 
 
-def _membership_groups_of_submesh(obj, role: str, target: str) -> list[str]:
+def _membership_groups_of_submesh(obj, target: str) -> list[str]:
     chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
-    return [chains[name] for name in avatar_api.submesh_chain_names(target, list(chains))]
+    return [chains[name] for name in tml.submesh_chain_names(target, list(chains))]
 
 
 def remove_generated_chains(context, arm, obj, material: str) -> tuple[int, int]:
@@ -67,17 +68,19 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
+        return _TML_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
         try:
-            obj, role, _ = resolve_submesh(arm, self.mesh, self.material)
+            obj, _, _ = resolve_submesh(arm, self.mesh, self.material)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         settings = arm.data.thyllore_spring
         origin = {"mesh": obj.name, "material": self.material}
+        target = f"{obj.name}/{self.material}"
+        rename_legacy_chains(arm, obj, settings, origin, target)
 
         if self.stage == "weight":
             chain_bones = generated_chain_bones(settings, origin)
@@ -89,7 +92,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
         _, joint_count = remove_generated_chains(context, arm, obj, self.material)
         note = f"Removed {joint_count} chain bones"
         if self.stage == "assign":
-            groups = _membership_groups_of_submesh(obj, role, f"{obj.name}/{self.material}")
+            groups = _membership_groups_of_submesh(obj, target)
             remove_vertex_groups(obj, groups)
             note += f" and {len(groups)} chain assignments"
         self.report({"INFO"}, note)

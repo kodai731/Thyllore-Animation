@@ -6,6 +6,7 @@ use thyllore_avatar_core::cloth_setup::components::chain_gen::{
     ChainGenParams, ChainGenSettings, GeneratedChain, GivenChain, InfluenceTarget, RootAttachment,
     SkinSurface, VertexInfluences, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
+use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
 use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
     apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
@@ -182,14 +183,22 @@ fn skin_surface_from_fit_skin(skin: &FitSkin) -> SkinSurface {
 }
 
 /// The skin meshes and body colliders the chains attach to, the humanoid roles that tell limb skin
-/// from torso skin, the bone the chains hang from (a bone-list index) and the garment vertices the
-/// user marked as covered.
+/// from torso skin, and the garment vertices the user marked as covered.
 pub struct SkinAttachment<'a> {
     pub skins: &'a [FitSkin],
     pub body_colliders: &'a [BodyCollider],
     pub roles: &'a [RoleBone],
-    pub root_bone: usize,
     pub covered_vertices: &'a [u32],
+}
+
+/// The bone the chains hang from (a bone-list index), its humanoid role when the caller chose the
+/// root by role, and the attachment the caller chose; a missing role is the bone's role in the
+/// humanoid mapping and a missing attachment follows the role.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ChainRootIn {
+    pub bone: usize,
+    pub role: Option<HumanoidRole>,
+    pub attachment: Option<RootAttachment>,
 }
 
 /// A chain the user assigned on the target, named with its chain name; `joints` are its joint heads followed
@@ -204,12 +213,12 @@ pub struct GivenChainIn {
 
 /// The given chains that belong to this submesh, by column; a chain named for another submesh of the
 /// same mesh is left out.
-pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<GivenChain> {
+pub fn given_chains(given: &[GivenChainIn], target: &SubmeshSelector) -> Vec<GivenChain> {
     given
         .iter()
         .filter_map(|chain| {
             Some(GivenChain {
-                column: chain_column(params, &chain.name)?,
+                column: chain_column(target, &chain.name)?,
                 vertices: chain.vertices.clone(),
                 joints: chain.joints.as_deref().map(to_vectors),
             })
@@ -219,16 +228,40 @@ pub fn given_chains(given: &[GivenChainIn], params: &ChainGenParams) -> Vec<Give
 
 /// The names among `candidates` that `generate_chains` would give a chain of the submesh `target`.
 pub fn submesh_chain_names(target: &str, candidates: &[String]) -> anyhow::Result<Vec<String>> {
+    let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
+    Ok(candidates
+        .iter()
+        .filter(|name| chain_column(&target, name).is_some())
+        .cloned()
+        .collect())
+}
+
+/// The role words chain names of the submesh `target` once started with, before the chain name was the
+/// submesh label alone.
+const LEGACY_CHAIN_NAME_ROLES: [&str; 2] = ["hair", "garment"];
+
+/// `(old name, new name)` for every candidate named for the submesh `target` under the legacy
+/// `<role>_<label>_<column>` scheme; the new name is the one `generate_chains` gives that column now.
+pub fn legacy_chain_renames(
+    target: &str,
+    candidates: &[String],
+) -> anyhow::Result<Vec<(String, String)>> {
+    let target: SubmeshSelector = target.parse().map_err(anyhow::Error::msg)?;
     let params = ChainGenParams {
         root: None,
         attachment: RootAttachment::Ring,
-        target: target.parse().map_err(anyhow::Error::msg)?,
+        target,
         settings: ChainGenSettings::default(),
     };
     Ok(candidates
         .iter()
-        .filter(|name| chain_column(&params, name).is_some())
-        .cloned()
+        .filter_map(|name| {
+            let column = LEGACY_CHAIN_NAME_ROLES.iter().find_map(|role| {
+                let unprefixed = name.strip_prefix(role)?.strip_prefix('_')?;
+                chain_column(&params.target, unprefixed)
+            })?;
+            Some((name.clone(), chain_name(&params, column)))
+        })
         .collect())
 }
 
@@ -307,26 +340,28 @@ pub fn run_chain_gen(
     target: &str,
     settings: ChainGenSettings,
     skin_attachment: SkinAttachment,
-    attachment: Option<RootAttachment>,
+    chain_root: ChainRootIn,
     tex_coords: &[[f32; 2]],
     given: &[GivenChainIn],
 ) -> anyhow::Result<ChainGenOutput> {
-    let root = role_of_bone(skin_attachment.roles, skin_attachment.root_bone as BoneId);
-    let resolved_attachment = attachment_or_default(root, attachment);
+    let root = chain_root
+        .role
+        .or_else(|| role_of_bone(skin_attachment.roles, chain_root.bone as BoneId));
+    let resolved_attachment = attachment_or_default(root, chain_root.attachment);
     let params = ChainGenParams {
         root,
         attachment: resolved_attachment,
         target: target.parse().map_err(anyhow::Error::msg)?,
         settings,
     };
-    let given_chains = given_chains(given, &params);
+    let given_chains = given_chains(given, &params.target);
     let positions_vec = to_vectors(positions);
     let skins = attachment_surfaces(&skin_attachment);
     let input = ChainGenInput {
         positions: &positions_vec,
         triangles,
         root_position: Vec3::from(root_position),
-        root_bone: skin_attachment.root_bone as BoneId,
+        root_bone: chain_root.bone as BoneId,
         skins: &skins,
         tex_coords,
         covered_vertices: skin_attachment.covered_vertices,
@@ -362,8 +397,7 @@ mod tests {
     use super::*;
     use crate::param_rows::ParamDefault;
 
-    #[test]
-    fn straight_strand_single_chain() {
+    fn run_straight_strand(roles: &[RoleBone], chain_root: ChainRootIn) -> ChainGenOutput {
         let positions: [[f32; 3]; 4] = [
             [0.0, -0.1, 0.0],
             [-0.5, -0.5, 0.0],
@@ -374,7 +408,6 @@ mod tests {
         let settings =
             settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
                 .unwrap();
-
         let head = FitSkin {
             positions: vec![
                 [0.2, 0.1, 0.0],
@@ -386,7 +419,7 @@ mod tests {
             triangles: Vec::new(),
         };
 
-        let output = run_chain_gen(
+        run_chain_gen(
             &positions,
             &triangles,
             [0.0, 0.0, 0.0],
@@ -395,19 +428,34 @@ mod tests {
             SkinAttachment {
                 skins: std::slice::from_ref(&head),
                 body_colliders: &[],
-                roles: &[RoleBone {
-                    role: HumanoidRole::Head,
-                    bone: 0,
-                    head: [0.0, 0.0, 0.0].into(),
-                }],
-                root_bone: 0,
+                roles,
                 covered_vertices: &[],
             },
-            Some(RootAttachment::Cap),
+            chain_root,
             &[],
             &[],
         )
-        .expect("chain generation should succeed");
+        .expect("chain generation should succeed")
+    }
+
+    fn head_role_bone() -> RoleBone {
+        RoleBone {
+            role: HumanoidRole::Head,
+            bone: 0,
+            head: [0.0, 0.0, 0.0].into(),
+        }
+    }
+
+    #[test]
+    fn straight_strand_single_chain() {
+        let output = run_straight_strand(
+            &[head_role_bone()],
+            ChainRootIn {
+                bone: 0,
+                role: None,
+                attachment: Some(RootAttachment::Cap),
+            },
+        );
 
         assert_eq!(output.chains.len(), 1, "should have exactly 1 chain");
         let chain = &output.chains[0];
@@ -431,6 +479,55 @@ mod tests {
                 weight.vertex
             );
         }
+    }
+
+    #[test]
+    fn root_role_chosen_by_the_caller_needs_no_humanoid_mapping() {
+        let unmapped = run_straight_strand(
+            &[],
+            ChainRootIn {
+                bone: 0,
+                role: Some(HumanoidRole::Head),
+                attachment: None,
+            },
+        );
+        assert_eq!(unmapped.attachment, RootAttachment::Cap);
+        assert!(unmapped.head_capsule.is_some());
+
+        let mapped = run_straight_strand(&[head_role_bone()], ChainRootIn::default());
+        assert_eq!(mapped.attachment, RootAttachment::Cap);
+        assert!(mapped.head_capsule.is_some());
+
+        let unknown_root = run_straight_strand(&[], ChainRootIn::default());
+        assert_eq!(unknown_root.attachment, RootAttachment::Ring);
+        assert!(unknown_root.head_capsule.is_none());
+    }
+
+    #[test]
+    fn legacy_chain_renames_drop_the_role_word_of_this_submesh_only() {
+        let names: Vec<String> = [
+            "hair_strip_hair_00",
+            "garment_strip_hair_07",
+            "hair_other_hair_01",
+            "strip_hair_02",
+            "hair_strip_hair_00_01",
+        ]
+        .map(String::from)
+        .to_vec();
+
+        assert_eq!(
+            legacy_chain_renames("strip/hair", &names).unwrap(),
+            vec![
+                (
+                    "hair_strip_hair_00".to_string(),
+                    "strip_hair_00".to_string()
+                ),
+                (
+                    "garment_strip_hair_07".to_string(),
+                    "strip_hair_07".to_string()
+                ),
+            ]
+        );
     }
 
     #[test]

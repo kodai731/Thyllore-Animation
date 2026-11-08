@@ -38,7 +38,8 @@ def _material_slot_index(obj, material_name: str) -> int | None:
 
 
 def resolve_submesh(arm, mesh_name: str, material: str):
-    """The mesh object, its chain role and its material slot for a hair or garment submesh of the rig."""
+    """The mesh object, its submesh row (role and attachment) and its material slot for a hair or garment
+    submesh of the rig."""
     obj = bpy.data.objects.get(mesh_name)
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
@@ -48,7 +49,7 @@ def resolve_submesh(arm, mesh_name: str, material: str):
     material_index = _material_slot_index(obj, material)
     if material_index is None:
         raise ValueError(f"{obj.name!r} has no material slot {material!r}")
-    return obj, role_item.role, material_index
+    return obj, role_item, material_index
 
 
 def engine_point(obj, local_point, scale_length: float) -> list[float]:

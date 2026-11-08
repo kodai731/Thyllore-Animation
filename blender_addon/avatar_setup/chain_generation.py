@@ -13,6 +13,7 @@ except ImportError:
     tml = None  # type: ignore
     _TML_AVAILABLE = False
 
+from ..common.avatar_sidecar import attachment_to_sidecar
 from ..common.chain_bone_display import apply_chain_bone_display, remove_chain_collections
 from ..common.chain_bones import (
     bone_specs,
@@ -65,6 +66,7 @@ class GenerationRun:
 
     obj: object
     role: str
+    attachment: str | None
     target: str
     scale_length: float
     fit_bones: list
@@ -84,9 +86,10 @@ def _ensure_body_colliders(context, arm, settings, fit_bones) -> str:
     return f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
 
 
-def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
+def _read_run(context, arm, obj, submesh_row, material: str) -> GenerationRun:
     settings = arm.data.thyllore_spring
     generation = settings.chain_generation
+    role = submesh_row.role
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
     root_role = DEFAULT_ROOT_BY_ROLE[role] if not generation.root_bone.strip() else ""
@@ -105,6 +108,7 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     return GenerationRun(
         obj=obj,
         role=role,
+        attachment=attachment_to_sidecar(submesh_row),
         target=target,
         scale_length=scale_length,
         fit_bones=fit_bones,
@@ -123,7 +127,6 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
     settings = arm.data.thyllore_spring
     mesh = run.obj.data
     body_bones = armature_fit_bones(context, arm)
-    attachment = {"AUTO": None, "CAP": "cap", "RING": "ring"}[settings.chain_generation.attachment]
     return tml.generate_chains(
         [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
         submesh_triangles(mesh, material_index),
@@ -139,7 +142,7 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
         body_bones,
         run.given,
         root_role=run.root_role or None,
-        attachment=attachment,
+        attachment=run.attachment,
     )
 
 
@@ -229,8 +232,8 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         arm = target_armature(context)
         previous_active = context.active_object
         try:
-            obj, role, material_index = resolve_submesh(arm, self.mesh, self.material)
-            run = _read_run(context, arm, obj, role, self.material)
+            obj, submesh_row, material_index = resolve_submesh(arm, self.mesh, self.material)
+            run = _read_run(context, arm, obj, submesh_row, self.material)
             output = _generate(context, arm, run, material_index)
             support = output.get("support")
             if support is not None and not arm.data.thyllore_spring.chain_generation.root_bone.strip():

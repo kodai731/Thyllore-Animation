@@ -10,7 +10,7 @@ from bpy.types import Panel, UIList
 
 from .. import _debuglog
 from ..panels.main_panel import _CATEGORY
-from .chain_inputs import generatable_submeshes
+from .chain_inputs import GENERATABLE_ROLES, generatable_submeshes
 from .operators import bound_meshes, target_armature
 from ..common.spring_properties import FORCE_PARAM_NAMES, active_chain, simulated_joints
 from ..common.vrm_export import meta_fields_of_kind
@@ -186,7 +186,6 @@ class THYLLORE_PT_AvatarSetupChainGeneration(Panel):
         layout.label(text="Defaults for what no chain group or bone decides yet", icon="INFO")
         column = layout.column(align=True)
         _draw_labelled_prop(column, generation, "root_bone")
-        _draw_labelled_prop(column, generation, "attachment")
         for param in CHAIN_GEN_UI_PARAMS:
             _draw_labelled_prop(column, generation, param["name"])
 
@@ -353,13 +352,15 @@ class THYLLORE_PT_AvatarSetupColliders(Panel):
 
 
 class THYLLORE_UL_SubmeshRoles(UIList):
-    """UIList for submesh roles: material, role, source."""
+    """UIList for submesh roles: material, role, source, and the root attachment of a submesh that grows chains."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, prop_name):
         row = layout.row(align=True)
         row.prop(item, "material", text="", emboss=False)
         row.prop(item, "role", text="")
         row.prop(item, "source", text="")
+        if item.role in GENERATABLE_ROLES:
+            row.prop(item, "attachment", text="")
 
 
 class THYLLORE_PT_AvatarSetupSubmeshes(Panel):

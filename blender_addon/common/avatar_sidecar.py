@@ -3,6 +3,14 @@ from __future__ import annotations
 
 from .coordinates import blender_to_engine_metres
 
+ATTACHMENT_TO_SIDECAR = {"AUTO": None, "CAP": "cap", "RING": "ring"}
+ATTACHMENT_FROM_SIDECAR = {sidecar: enum for enum, sidecar in ATTACHMENT_TO_SIDECAR.items() if sidecar}
+
+
+def attachment_to_sidecar(item) -> str | None:
+    """The ``cap`` / ``ring`` a submesh row chose, None for Auto."""
+    return ATTACHMENT_TO_SIDECAR[getattr(item, "attachment", "AUTO")]
+
 
 def bone_specs(names, parent_indices, world_heads, scale_length, rest_frames=None):
     """Build bone spec list from names, parent indices, world-space head positions and, when
@@ -32,7 +40,11 @@ def submesh_to_sidecar(mesh_name, submesh, material_loop_indices):
     ``submesh_mask.material_loop_indices``). A material without a mapping is skipped."""
     roles = []
     for item in submesh.roles:
-        roles.append({"mesh": mesh_name, "material": item.material, "role": item.role})
+        entry = {"mesh": mesh_name, "material": item.material, "role": item.role}
+        attachment = attachment_to_sidecar(item)
+        if attachment is not None:
+            entry["attachment"] = attachment
+        roles.append(entry)
     hidden = []
     for item in submesh.hidden_triangles:
         loop_indices = material_loop_indices.get(item.material)
@@ -57,6 +69,7 @@ def write_submesh_sidecar(submesh, mesh_name, roles, hidden, material_loop_indic
         item = submesh.roles.add()
         item.material = entry["material"]
         item.role = entry["role"]
+        item.attachment = ATTACHMENT_FROM_SIDECAR.get(entry.get("attachment"), "AUTO")
     submesh.hidden_triangles.clear()
     for entry in hidden:
         if entry["mesh"] != mesh_name:

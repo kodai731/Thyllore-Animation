@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.logged_report import report
 from .operators import bound_meshes, target_armature
@@ -25,7 +25,7 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -44,7 +44,7 @@ class THYLLORE_OT_GuessSubmeshRoles(bpy.types.Operator):
             for item in mesh_obj.thyllore_submesh.roles:
                 if item.source == "user":
                     continue
-                item.role = tml.guess_submesh_role(mesh_obj.name, item.material)
+                item.role = avatar_api.guess_submesh_role(mesh_obj.name, item.material)
                 item.source = "guessed"
                 count += 1
 

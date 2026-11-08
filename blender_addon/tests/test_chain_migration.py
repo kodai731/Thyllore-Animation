@@ -4,7 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from blender_addon.common.chain_migration import rename_bone_references, rename_legacy_chains
-from blender_addon.tests.test_chain_bones_wheel import tml  # noqa: F401
+from blender_addon.tests.test_chain_bones_wheel import avatar_api  # noqa: F401
 from blender_addon.tests.test_spring_properties import FakeCollection
 
 
@@ -39,8 +39,8 @@ def _settings(chains, colliders):
     return settings
 
 
-def test_rename_legacy_chains_moves_bones_groups_and_collider_references(tml, monkeypatch):
-    monkeypatch.setattr("blender_addon.common.chain_migration.tml", tml)
+def test_rename_legacy_chains_moves_bones_groups_and_collider_references(avatar_api, monkeypatch):
+    monkeypatch.setattr("blender_addon.common.chain_migration.avatar_api", avatar_api)
     origin = {"mesh": "strip", "material": "hair"}
     bones = ["hair_strip_hair_00_00", "hair_strip_hair_00_01", "hair_strip_hair_00_01_end"]
     settings = _settings([("hair_strip_hair_00", origin, bones), ("strip_hair_01", origin, ["strip_hair_01_00"])], [bones[1]])

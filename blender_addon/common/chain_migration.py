@@ -3,9 +3,9 @@ them now, so a regenerate or a reset reads their assignment and bones back inste
 from __future__ import annotations
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 except ImportError:
-    tml = None  # type: ignore
+    avatar_api = None  # type: ignore
 
 from .chain_bones import chain_of_membership_group, membership_group_name
 from .spring_properties import generated_chain_bones
@@ -17,7 +17,7 @@ def rename_legacy_chains(arm, obj, settings, origin: dict, target: str) -> int:
     registered = generated_chain_bones(settings, origin)
     membership = _membership_groups(obj)
     candidates = sorted(set(registered) | set(membership))
-    renames = dict(tml.legacy_chain_renames(target, candidates))
+    renames = dict(avatar_api.legacy_chain_renames(target, candidates))
 
     for old_name, new_name in renames.items():
         bone_renames = {bone: new_name + bone[len(old_name) :] for bone in registered.get(old_name, [])}

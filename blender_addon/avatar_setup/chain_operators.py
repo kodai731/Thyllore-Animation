@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bone_display import apply_chain_display
 from ..common.spring_properties import (
@@ -40,7 +40,7 @@ class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def invoke(self, context, event):
         active = getattr(context, "active_bone", None)
@@ -49,8 +49,8 @@ class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
         return self.execute(context)
 
     def execute(self, context):
-        if not _TML_AVAILABLE:
-            report(self, "ERROR", "thyllore_ml_core not available")
+        if not _AVATAR_API_AVAILABLE:
+            report(self, "ERROR", "thyllore_avatar_api not available")
             return {"CANCELLED"}
 
         arm = target_armature(context)
@@ -59,7 +59,7 @@ class THYLLORE_OT_UseExistingBonesAsSprings(bpy.types.Operator):
         try:
             sidecar = spring_settings_to_edit(settings)
             bones = armature_bone_specs(context, arm)
-            output = tml.use_existing_bones_as_springs(sidecar, bones, self.root_bone, self.min_joints)
+            output = avatar_api.use_existing_bones_as_springs(sidecar, bones, self.root_bone, self.min_joints)
         except ValueError as e:
             report(self, "ERROR", f"use_existing_bones_as_springs failed: {e}")
             return {"CANCELLED"}

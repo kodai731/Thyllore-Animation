@@ -116,3 +116,4 @@ fixtures/
 .config/
 build/docker_gui_cache/
 build/docker_gui/
+build/blender_addon_stage_*/

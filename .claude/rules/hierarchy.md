@@ -78,7 +78,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   on top of math-core's `widest_cross_section`) and from the skeleton (`torso_volume`: pelvis and spine capsules
   for torso bones whose skin was removed). `body_fit::fit_body_capsules` is the one sequence that turns skins
   into a rig's body colliders (skin fit, body roles, the head along its bone centred on the skull's
-  extents, torso fallback); the ml-core bridge and the engine's
+  extents, torso fallback); the avatar-api bridge and the engine's
   `fit_body_colliders` only call it and write the result, so the addon and the engine cannot diverge. `cloth_setup/systems/chain_gen/` only decides which root gets
   one (`root_head_capsule`, a Head root); generic point-cloud geometry (tangent frames, cone fans, cross-sections,
   screen-space scale) lives in `thyllore-math-core`.
@@ -122,14 +122,19 @@ but not `World`, it belongs in `thyllore-vulkan-core` (generic only; effect-spec
 Some crates are also shipped standalone as Python wheels for the Blender addons, built with maturin
 (`crate-type = ["cdylib", "rlib"]`, `python` feature, abi3-py310):
 
-- `thyllore-ml-core` → the curve copilot and avatar setup addons (`blender_addon/`, wheels collected by
-  `scripts/collect_wheels.{sh,ps1}`, packaged by `scripts/build_blender_addon.{sh,ps1}` with
-  `--product curve-copilot | avatar-setup`). The two products are disjoint ZIPs with their own extension
-  ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`, the avatar setup ZIP excludes the
-  copilot operators, so one Blender never registers the shared property groups twice
-  (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
-  `thyllore-ml-api` is the ABI marker shared between that wheel and the addon; changing it requires a
-  coordinated wheel rebuild and end-user reinstall.
+- `thyllore-ml-core` → the curve copilot addon (ONNX inference, feedback) and
+  `thyllore-avatar-api` → the avatar setup addon (chain generation, spring edit and preview, colliders,
+  clip bake, submesh roles, skin weight transfer, VRM export). Both live in `blender_addon/`; `scripts/collect_wheels.{sh,ps1}`
+  builds both wheels (`--crate` picks one) and `scripts/build_blender_addon.{sh,ps1}` packages one product
+  with `--product curve-copilot | avatar-setup`, keeping only that product's wheel. The two products are
+  disjoint ZIPs with their own extension ids: the curve copilot ZIP excludes `blender_addon/avatar_setup/`,
+  the avatar setup ZIP excludes the copilot operators, so one Blender never registers the shared property
+  groups twice (`blender_avatar_setup_addon_build.yml` builds, validates and installs the avatar setup ZIP).
+  A wheel crate is named after what it serves; avatar setup code never goes back into `thyllore-ml-core`.
+  `thyllore-ml-api` holds the ABI marker both wheels export and the addon checks, the PyO3 helpers
+  both wheels share (`python` feature) and the addon file logger (`debug-log` feature, forwarded by both
+  wheel crates so a debug build of either product logs); changing the marker requires a coordinated wheel
+  rebuild and end-user reinstall.
 - `thyllore-effect-core` → the flame and water addons (`blender_addon/effects/<effect>/`, release workflows
   `blender_<effect>_addon_release.yml`). One crate serves every effect; the addon imports the analytic
   core and presets from it so the Blender preview and the engine share the same math.

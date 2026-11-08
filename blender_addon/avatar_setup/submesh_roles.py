@@ -9,12 +9,12 @@ import bpy
 from bpy.app.handlers import persistent
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from .operators import bound_meshes
 
@@ -26,7 +26,7 @@ def material_names(mesh_obj) -> list[str]:
 def add_guessed_role(submesh, mesh_name: str, material: str) -> None:
     item = submesh.roles.add()
     item.material = material
-    item.role = tml.guess_submesh_role(mesh_name, material)
+    item.role = avatar_api.guess_submesh_role(mesh_name, material)
     item.source = "guessed"
 
 
@@ -56,7 +56,7 @@ def bound_mesh_objects():
 
 @persistent
 def refresh_all_submesh_roles(*_args) -> None:
-    if not _TML_AVAILABLE:
+    if not _AVATAR_API_AVAILABLE:
         return
     for mesh_obj in bound_mesh_objects():
         refresh_submesh_roles(mesh_obj)

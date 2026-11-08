@@ -8,6 +8,7 @@ BUILD_MODE="A"
 VERSION="0.0.1"
 OUTPUT_DIR="dist"
 INCLUDE_ONNX_MODEL=0
+INCLUDE_ONNX_RUNTIME=1
 ONNX_SOURCE_PATH="${THYLLORE_CURVE_COPILOT_ONNX:-ml/model/curve_copilot.onnx}"
 ONNXRUNTIME_LIB_PATH=""
 DEBUG_BUILD=0
@@ -192,17 +193,18 @@ UNSHIPPED_REL_PATHS=(
 
 CURVE_COPILOT_ONLY_REL_PATHS=(
     "operators/curve_copilot.py"
-    "operators/skin_weight_transfer.py"
     "_ghost_overlay.py"
     "modal"
 )
 AVATAR_SETUP_ONLY_REL_PATHS=(
     "avatar_setup"
+    "operators/skin_weight_transfer.py"
 )
 case "$PRODUCT" in
     avatar-setup)
         UNSHIPPED_REL_PATHS+=("${CURVE_COPILOT_ONLY_REL_PATHS[@]}")
         INCLUDE_ONNX_MODEL=0
+        INCLUDE_ONNX_RUNTIME=0
         ;;
     curve-copilot)
         UNSHIPPED_REL_PATHS+=("${AVATAR_SETUP_ONLY_REL_PATHS[@]}")
@@ -232,7 +234,10 @@ if [[ ! -d "$WHEELS_DIR" ]]; then
     exit 1
 fi
 
-ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core")
+case "$PRODUCT" in
+    curve-copilot)  ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core") ;;
+    avatar-setup)   ALLOWED_WHEEL_PREFIXES=("thyllore_avatar_api") ;;
+esac
 
 wheel_matches_platform() {
     local name="$1"
@@ -397,7 +402,9 @@ fi
 if [[ -z "$ONNXRUNTIME_LIB_PATH" ]]; then
     ONNXRUNTIME_LIB_PATH="$ORT_LIB_DEFAULT"
 fi
-if [[ -n "$ONNXRUNTIME_LIB_PATH" && -f "$ONNXRUNTIME_LIB_PATH" ]]; then
+if [[ "$INCLUDE_ONNX_RUNTIME" -eq 0 ]]; then
+    echo "[build_blender_addon] ONNX Runtime not bundled: $PRODUCT has no in-process inference"
+elif [[ -n "$ONNXRUNTIME_LIB_PATH" && -f "$ONNXRUNTIME_LIB_PATH" ]]; then
     mkdir -p "$STAGE_DIR/lib"
     cp -L -f "$ONNXRUNTIME_LIB_PATH" "$STAGE_DIR/lib/$ORT_LIB_DEST_NAME"
     echo "[build_blender_addon] Bundled ONNX Runtime: $ONNXRUNTIME_LIB_PATH -> lib/$ORT_LIB_DEST_NAME"

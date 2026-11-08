@@ -5,9 +5,9 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 except ImportError:
-    tml = None  # type: ignore
+    avatar_api = None  # type: ignore
 
 from ..common import coordinates
 from ..common.chain_bones import COVERED_GROUP, given_chains_from_groups, group_vertices, joints_from_bones, vertex_tex_coords
@@ -83,7 +83,7 @@ def submesh_tex_coords(mesh) -> list[tuple[float, float]]:
 
 def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
     """Unity role name to armature bone index, the inferred mapping with the user's overrides on top."""
-    roles = dict(tml.infer_humanoid_mapping(fit_bones).get("mapping", {}))
+    roles = dict(avatar_api.infer_humanoid_mapping(fit_bones).get("mapping", {}))
     roles.update(humanoid_overrides_to_dict(settings))
     indices = {}
     for role, bone_name in roles.items():
@@ -94,7 +94,7 @@ def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
 
 
 def body_collider_inputs(arm, settings, fit_bones) -> list[dict]:
-    model_spring = tml.spring_colliders_to_model(spring_settings_to_edit(settings), fit_bones)
+    model_spring = avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), fit_bones)
     bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
     return collider_inputs(model_spring["colliders"], bone_index)
 

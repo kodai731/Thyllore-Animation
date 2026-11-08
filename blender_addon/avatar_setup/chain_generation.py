@@ -6,12 +6,12 @@ from dataclasses import dataclass
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.avatar_sidecar import attachment_to_sidecar
 from ..common.chain_bone_display import apply_chain_bone_display, remove_chain_collections
@@ -81,7 +81,7 @@ class GenerationRun:
 
 
 def _ensure_body_colliders(context, arm, settings, fit_bones) -> str:
-    if tml.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
+    if avatar_api.has_fitted_body_colliders(spring_settings_to_edit(settings), fit_bones):
         return ""
     return f", fitted {fit_body_colliders(context, arm, default_fit_settings())} body colliders first"
 
@@ -93,7 +93,7 @@ def _read_run(context, arm, obj, submesh_row, material: str) -> GenerationRun:
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
     root_role = DEFAULT_ROOT_BY_ROLE[role] if not generation.root_bone.strip() else ""
-    root_name = tml.resolve_root_bone(fit_bones, root_role or generation.root_bone.strip())
+    root_name = avatar_api.resolve_root_bone(fit_bones, root_role or generation.root_bone.strip())
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
     origin = {"mesh": obj.name, "material": material}
@@ -127,7 +127,7 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
     settings = arm.data.thyllore_spring
     mesh = run.obj.data
     body_bones = armature_fit_bones(context, arm)
-    return tml.generate_chains(
+    return avatar_api.generate_chains(
         [engine_point(run.obj, v.co, run.scale_length) for v in mesh.vertices],
         submesh_triangles(mesh, material_index),
         root_engine_position(arm, run.root_name, run.scale_length),
@@ -149,8 +149,8 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
 def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict], head_capsule, attachment: str) -> None:
     settings = arm.data.thyllore_spring
     bones = armature_fit_bones(context, arm)
-    spring = tml.register_generated_chains(
-        tml.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
+    spring = avatar_api.register_generated_chains(
+        avatar_api.spring_colliders_to_model(spring_settings_to_edit(settings), bones),
         bones,
         run.skins,
         run.root_name,
@@ -159,7 +159,7 @@ def _register_new_chains(context, arm, run: GenerationRun, new_chains: list[dict
         new_chains,
         head_capsule,
     )
-    write_sidecar_spring(settings, tml.spring_colliders_to_local(spring, bones))
+    write_sidecar_spring(settings, avatar_api.spring_colliders_to_local(spring, bones))
 
 
 def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
@@ -226,7 +226,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)

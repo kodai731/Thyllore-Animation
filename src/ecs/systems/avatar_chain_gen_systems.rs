@@ -220,12 +220,13 @@ fn resolve_target(
 
     let state = world.resource::<AvatarSetupState>();
     let mut selected = Vec::new();
+    let mut shared_root: Option<HumanoidRole> = None;
     for (key, mesh_index) in matching {
         let submesh_role = *state.submesh_roles.get(&key).ok_or_else(|| {
             anyhow::anyhow!("submesh role not set: {}/{}", key.mesh, key.material)
         })?;
-        match (default_root_of_submesh(submesh_role), target) {
-            (Some(_), _) => selected.push((key, mesh_index)),
+        let default_root = match (default_root_of_submesh(submesh_role), target) {
+            (Some(root), _) => root,
             (None, SubmeshSelector::Mesh(_)) => continue,
             (None, SubmeshSelector::Submesh(_)) => anyhow::bail!(
                 "submesh role {:?} is not Hair or Garment: {}/{}",
@@ -233,7 +234,17 @@ fn resolve_target(
                 key.mesh,
                 key.material
             ),
+        };
+        if let Some(previous) = shared_root.filter(|previous| *previous != default_root) {
+            anyhow::bail!(
+                "submeshes of {} hang from different roots ({} and {}); select one submesh",
+                target,
+                previous.unity_name(),
+                default_root.unity_name()
+            );
         }
+        shared_root = Some(default_root);
+        selected.push((key, mesh_index));
     }
 
     if selected.is_empty() {

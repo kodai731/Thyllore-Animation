@@ -53,6 +53,7 @@ from .chain_inputs import (
     submesh_triangles,
     vertex_group_weights,
 )
+from .chain_migration import rename_legacy_chains
 from .collider_operators import default_fit_settings, fit_body_colliders
 from .operators import armature_fit_bones, bound_meshes, target_armature
 from .properties import CHAIN_GEN_UI_PARAMS
@@ -68,6 +69,7 @@ class GenerationRun:
     scale_length: float
     fit_bones: list
     root_name: str
+    root_role: str
     registered: dict
     marked: list
     given: list
@@ -87,10 +89,13 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     generation = settings.chain_generation
     scale_length = context.scene.unit_settings.scale_length
     fit_bones = armature_fit_bones(context, arm)
-    root_name = tml.resolve_root_bone(fit_bones, generation.root_bone.strip() or DEFAULT_ROOT_BY_ROLE[role])
+    root_role = DEFAULT_ROOT_BY_ROLE[role] if not generation.root_bone.strip() else ""
+    root_name = tml.resolve_root_bone(fit_bones, root_role or generation.root_bone.strip())
     fitted_note = _ensure_body_colliders(context, arm, settings, fit_bones)
 
     origin = {"mesh": obj.name, "material": material}
+    target = f"{obj.name}/{material}"
+    rename_legacy_chains(arm, obj, settings, origin, target)
     registered = generated_chain_bones(settings, origin)
     registered_joints = generated_chain_joints(settings, origin)
     given = given_chains(obj, arm, registered_joints, scale_length)
@@ -100,10 +105,11 @@ def _read_run(context, arm, obj, role: str, material: str) -> GenerationRun:
     return GenerationRun(
         obj=obj,
         role=role,
-        target=f"{obj.name}/{material}",
+        target=target,
         scale_length=scale_length,
         fit_bones=fit_bones,
         root_name=root_name,
+        root_role=root_role,
         registered=registered,
         marked=marked_covered_vertices(obj),
         given=given,
@@ -132,6 +138,7 @@ def _generate(context, arm, run: GenerationRun, material_index: int) -> dict:
         humanoid_bone_indices(arm, settings, body_bones),
         body_bones,
         run.given,
+        root_role=run.root_role or None,
         attachment=attachment,
     )
 
@@ -178,7 +185,7 @@ def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
     write_weights(obj, groups, rewritten, {bone.name for bone in arm.data.bones})
     write_membership_groups(obj, output["chains"], run.given)
     rethickened = update_hit_radii(settings, output["chains"], run.read_back)
-    if run.role == "garment":
+    if output["attachment"] == "ring":
         write_covered_group(obj, output["covered"], run.marked)
     for chain in output["chains"]:
         chain_bones = [joint["name"] for joint in chain["joints"]] + [chain["end_bone"]]

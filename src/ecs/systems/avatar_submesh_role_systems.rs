@@ -80,6 +80,9 @@ pub fn refresh_submesh_roles(
 ) {
     let keys = collect_submesh_keys(assets, graphics, nodes);
     state.submesh_roles = refresh_roles_for_keys(&state.submesh_roles, &keys);
+    state
+        .submesh_attachments
+        .retain(|key, _| state.submesh_roles.contains_key(key));
 }
 
 pub fn set_submesh_role(world: &mut World, key: SubmeshKey, role: SubmeshRole) {
@@ -260,6 +263,31 @@ mod tests {
         assert_eq!(
             state.submesh_roles[&key("Body", "")],
             SubmeshRole::Accessory
+        );
+    }
+
+    #[test]
+    fn test_refresh_submesh_roles_drops_attachments_of_missing_submeshes() {
+        let mut assets = AssetStorage::default();
+        assets.add_mesh(make_mesh_asset("Hair"));
+        let graphics = GraphicsResources::default();
+        let mut state = AvatarSetupState::default();
+        state
+            .submesh_attachments
+            .insert(key("Hair", ""), RootAttachment::Ring);
+        state
+            .submesh_attachments
+            .insert(key("OldSkirt", ""), RootAttachment::Ring);
+
+        refresh_submesh_roles(&mut state, &assets, &graphics, &[]);
+
+        assert_eq!(
+            state
+                .submesh_attachments
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![key("Hair", "")]
         );
     }
 

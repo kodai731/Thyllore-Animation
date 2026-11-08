@@ -483,6 +483,29 @@ def test_submesh_chain_names_keeps_this_submesh_only(tml):
     assert tml.submesh_chain_names("strip/hair", names) == ["strip_hair_00", "strip_hair_12"]
 
 
+def test_legacy_chain_renames_map_role_prefixed_names_of_this_submesh(tml):
+    names = ["hair_strip_hair_00", "garment_strip_hair_03", "hair_other_hair_00", "strip_hair_01"]
+
+    assert tml.legacy_chain_renames("strip/hair", names) == [
+        ("hair_strip_hair_00", "strip_hair_00"),
+        ("garment_strip_hair_03", "strip_hair_03"),
+    ]
+
+
+def test_generate_chains_root_role_sets_the_attachment_without_a_humanoid_mapping(tml):
+    positions, triangles = _strand_mesh((0.0,), 5, -0.1, -0.5, 0.0)
+
+    by_role = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD, root_role="Head")
+    unmapped = tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD)
+
+    assert by_role["attachment"] == "cap"
+    assert by_role["head_capsule"] is not None
+    assert unmapped["attachment"] == "ring"
+    assert unmapped["head_capsule"] is None
+    with pytest.raises(ValueError):
+        tml.generate_chains(positions, triangles, (0.0, 0.0, 0.0), "strip/hair", {"column_count": 1}, HEAD, root_role="Tail")
+
+
 def test_generate_chains_with_given_joints_places_the_bones_there(tml):
     positions, triangles = _strand_mesh((0.5,), 9, -0.05, -0.45, 0.01)
     heads_then_tail = [(0.1, -0.05, 0.0), (0.1, -0.2, 0.0), (0.1, -0.45, 0.0)]

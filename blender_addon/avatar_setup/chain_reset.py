@@ -33,7 +33,7 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
             group.remove(every_vertex)
 
 
-def _membership_groups_of_submesh(obj, role: str, target: str) -> list[str]:
+def _membership_groups_of_submesh(obj, target: str) -> list[str]:
     chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
     return [chains[name] for name in tml.submesh_chain_names(target, list(chains))]
@@ -72,7 +72,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         try:
-            obj, role, _ = resolve_submesh(arm, self.mesh, self.material)
+            obj, _, _ = resolve_submesh(arm, self.mesh, self.material)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
@@ -89,7 +89,7 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
         _, joint_count = remove_generated_chains(context, arm, obj, self.material)
         note = f"Removed {joint_count} chain bones"
         if self.stage == "assign":
-            groups = _membership_groups_of_submesh(obj, role, f"{obj.name}/{self.material}")
+            groups = _membership_groups_of_submesh(obj, f"{obj.name}/{self.material}")
             remove_vertex_groups(obj, groups)
             note += f" and {len(groups)} chain assignments"
         self.report({"INFO"}, note)

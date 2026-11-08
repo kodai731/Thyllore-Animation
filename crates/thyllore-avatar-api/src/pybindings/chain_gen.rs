@@ -2,6 +2,10 @@ use pyo3::prelude::*;
 use pythonize::depythonize;
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
+use crate::chain_display::{
+    chain_bone_palette as chain_bone_palette_of, parse_attachment,
+    root_attachments as root_attachments_of,
+};
 use crate::chain_gen_bridge::{
     chain_gen_params, chain_of_vertex_group as chain_of_vertex_group_of,
     generate_chains as generate_chains_from_request,
@@ -31,6 +35,25 @@ pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
         })
         .collect();
     pythonize_value(py, &entries)
+}
+
+/// The root attachments a submesh row can choose: `name` (the sidecar value), `label`,
+/// `description` and `bone_palette` (the Blender bone color theme number of its chains).
+#[pyfunction]
+pub fn root_attachments(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let entries = root_attachments_of().map_err(anyhow_to_pyerr)?;
+    pythonize_value(py, &entries)
+}
+
+/// The Blender bone color theme number of a chain generated with `attachment`; `None` is a chain
+/// authored by hand.
+#[pyfunction]
+pub fn chain_bone_palette(attachment: Option<&str>) -> PyResult<u8> {
+    let attachment = attachment
+        .map(parse_attachment)
+        .transpose()
+        .map_err(anyhow_to_pyerr)?;
+    Ok(chain_bone_palette_of(attachment))
 }
 
 /// The vertex groups the addon writes beside the bone weights: `covered`; the membership groups are

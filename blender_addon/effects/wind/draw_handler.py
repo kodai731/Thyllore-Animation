@@ -1,4 +1,3 @@
-import math
 import time
 import traceback
 
@@ -83,11 +82,9 @@ def _shadow_bake_layout():
 
 
 def blender_window_to_engine_projection(window_matrix, near):
-    f_y = window_matrix[1][1]
-    f_x = window_matrix[0][0]
-    fovy = 2.0 * math.atan(1.0 / f_y)
-    aspect = f_y / f_x
-    return coordinates.engine_projection(fovy, aspect, near)
+    import thyllore_effect_core as fx
+
+    return fx.engine_projection_from_window([tuple(row) for row in window_matrix], near)
 
 
 def blender_view_to_engine_view(view_matrix):

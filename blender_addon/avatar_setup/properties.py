@@ -16,6 +16,7 @@ except ImportError:
     avatar_api = None  # type: ignore
     _AVATAR_API_AVAILABLE = False
 
+from ..common.avatar_sidecar import AUTO_ATTACHMENT, attachment_enum_items
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
 from ..common.vrm_export import VRM_META_DEFAULT_VERSION, VRM_META_FIELDS
@@ -28,6 +29,7 @@ SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
 )
 RAMP_END_PARAM_NAMES: tuple[str, ...] = tuple(name for name in SPRING_JOINT_PARAM_NAMES if name != "hit_radius")
 CHAIN_GEN_UI_PARAMS: list[dict] = avatar_api.chain_gen_ui_params() if _AVATAR_API_AVAILABLE else []
+ATTACHMENT_ENUM_ITEMS = attachment_enum_items(avatar_api.root_attachments() if _AVATAR_API_AVAILABLE else [])
 
 configure_force_params({
     model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
@@ -264,12 +266,8 @@ class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
     attachment: bpy.props.EnumProperty(
         name="Attachment",
         description="How the root of the chains generated on this submesh attaches to the mesh",
-        items=[
-            ("AUTO", "Auto", "Cap for a Head root, Ring otherwise"),
-            ("CAP", "Cap", "Root on the top of a closed surface, such as the head"),
-            ("RING", "Ring", "Root ring at the mesh top edge, such as a skirt or sleeve"),
-        ],
-        default="AUTO",
+        items=ATTACHMENT_ENUM_ITEMS,
+        default=AUTO_ATTACHMENT,
     )
 
 

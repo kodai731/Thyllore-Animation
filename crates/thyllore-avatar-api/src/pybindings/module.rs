@@ -11,6 +11,8 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_roles, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::root_attachments, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::chain_bone_palette, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::vertex_group_names, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::membership_vertex_group, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_of_vertex_group, m)?)?;

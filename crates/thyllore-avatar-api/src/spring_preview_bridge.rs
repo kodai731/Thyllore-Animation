@@ -13,8 +13,9 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 };
 
 use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
-use crate::blender_space::{engine_frame_metres, invert, parent_relative_locals, rows};
+use crate::blender_space::{engine_frame_metres, parent_relative_locals, rows};
 use crate::spring_edit_bridge::skeleton_from_bones;
+use thyllore_math_core::invert;
 
 pub use crate::blender_space::MatrixRows;
 

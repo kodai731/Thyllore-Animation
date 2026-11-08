@@ -54,9 +54,10 @@ pub use constants::*;
 pub use coordinate_system::{
     blender_to_engine_point, blender_to_engine_quaternion, blender_to_engine_rows,
     engine_to_blender_point, engine_to_blender_quaternion, get_camera_axes_from_view, perspective,
-    ray_plane_intersection, ray_to_line_segment_distance, ray_to_point_distance,
-    ray_to_triangle_barycentric, ray_to_triangle_intersection, screen_to_world_ray, view,
-    world_to_screen, world_y_axis, world_y_down, BLENDER_TO_ENGINE, ENGINE_TO_BLENDER,
+    perspective_infinite_reverse, perspective_infinite_reverse_focal, ray_plane_intersection,
+    ray_to_line_segment_distance, ray_to_point_distance, ray_to_triangle_barycentric,
+    ray_to_triangle_intersection, screen_to_world_ray, view, world_to_screen, world_y_axis,
+    world_y_down, BLENDER_TO_ENGINE, ENGINE_TO_BLENDER,
 };
 pub use cross_section::*;
 pub use erf_moments::*;

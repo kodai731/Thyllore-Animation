@@ -18,9 +18,9 @@ use thyllore_model_core::BoneId;
 
 use crate::avatar_setup_bridge::BoneSpec;
 use crate::blender_space::{
-    axis_lengths, bone_local_offset, engine_frame_rotation, invert, parent_relative_locals, rows,
-    MatrixRows,
+    bone_local_offset, engine_frame_rotation, parent_relative_locals, rows, MatrixRows,
 };
+use thyllore_math_core::{axis_lengths, invert};
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct BoneRotationTrack {

@@ -2,7 +2,7 @@ use crate::flame::{
     apply_flame_preset, build_flame_ubo, refresh_flame_coefficients, FlameBaked, FlameEffect,
     FlameTemporalAccum,
 };
-use glam::{Quat, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -352,6 +352,45 @@ fn blender_to_engine_matrix_matches_the_math_core_constant() {
     let engine_up = [rows[1][0], rows[1][1], rows[1][2]];
     assert_eq!(engine_up, [0.0, 0.0, 1.0], "engine y comes from Blender z");
     assert_eq!(rows[2][1], -1.0, "engine z is minus Blender y");
+}
+
+#[test]
+fn engine_projection_from_window_matches_the_engine_perspective() {
+    let fovy = 60f32.to_radians();
+    let aspect = 16.0 / 9.0;
+    let focal_y = 1.0 / (fovy / 2.0).tan();
+    let window = [
+        [focal_y / aspect, 0.0, 0.0, 0.0],
+        [0.0, focal_y, 0.0, 0.0],
+        [0.0, 0.0, -1.0002, -0.20002],
+        [0.0, 0.0, -1.0, 0.0],
+    ];
+    let rows = super::effect::engine_projection_from_window(window, 0.1);
+    let expected = thyllore_math_core::perspective_infinite_reverse(fovy, aspect, 0.1);
+    let actual = glam::Mat4::from_cols_array_2d(&rows).transpose();
+    assert!(
+        actual.abs_diff_eq(expected, 1e-5),
+        "{actual:?} vs {expected:?}"
+    );
+}
+
+#[test]
+fn object_local_points_undo_the_object_world_matrix() {
+    let world = [
+        [1.0, 0.0, 0.0, 2.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    let local = super::effect::object_local_points(world, vec![[3.0, 1.0, 0.0]]).unwrap();
+    assert_eq!(local, vec![[1.0, 1.0, 0.0]]);
+    let flat = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    assert!(super::effect::object_local_points(flat, vec![]).is_err());
 }
 
 #[test]

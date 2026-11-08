@@ -73,8 +73,9 @@ pub struct ChainGenOutput {
     pub weights: Vec<WeightOut>,
     /// The capsule a hair role fits around the head, in the same space as the positions
     pub head_capsule: Option<CapsuleOut>,
-    /// The garment vertices the body covers, marked or found from the supported rings
-    pub covered: Vec<u32>,
+    /// The garment vertices the body covers, marked or found from the supported rings; a Cap root
+    /// covers nothing
+    pub covered: Option<Vec<u32>>,
     /// The ring a garment hangs from and the bone that supports it, when the body supports one
     pub support: Option<SupportOut>,
     pub attachment: RootAttachment,
@@ -461,7 +462,10 @@ pub fn run_chain_gen(
         chains,
         weights,
         head_capsule,
-        covered: placement.covered.iter().map(|c| c.vertex).collect(),
+        covered: match resolved_attachment {
+            RootAttachment::Cap => None,
+            RootAttachment::Ring => Some(placement.covered.iter().map(|c| c.vertex).collect()),
+        },
         support: placement.support.map(|support| SupportOut {
             boundary_height: support.boundary_height,
             bone: support.bone,

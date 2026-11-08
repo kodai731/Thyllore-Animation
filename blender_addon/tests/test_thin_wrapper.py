@@ -1,8 +1,8 @@
 """Computation lives in the crates; blender_addon/ only reads and writes bpy.
 
-No Python numeric library (numpy, math) may be imported in avatar_setup/ or common/,
-and no .inverted() matrix inversion may appear in those directories: composing matrices
-belongs in the wheel.
+No Python numeric library (numpy, math) may be imported under blender_addon/, and no
+.inverted() matrix inversion may appear there: composing matrices belongs in the wheel.
+Tests, developer tools and the vendored wheels are outside the rule.
 """
 from __future__ import annotations
 
@@ -10,24 +10,21 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AVATAR_SETUP_DIR = REPO_ROOT / "blender_addon" / "avatar_setup"
-COMMON_DIR = REPO_ROOT / "blender_addon" / "common"
+ADDON_DIR = REPO_ROOT / "blender_addon"
+COMMON_DIR = ADDON_DIR / "common"
 EXEMPT_FILES = {"coordinates.py", "effect_properties.py"}
+SKIPPED_PARTS = {"__pycache__", "tests", "tools", "wheels-extracted"}
 
 
 def _python_files():
-    """Yield every *.py under avatar_setup/ and common/, skipping __pycache__."""
-    for directory in (AVATAR_SETUP_DIR, COMMON_DIR):
-        if not directory.exists():
-            continue
-        for path in directory.rglob("*.py"):
-            if "__pycache__" in path.parts:
-                continue
+    """Yield every addon *.py: not the tests, the developer tools or the vendored wheels."""
+    for path in ADDON_DIR.rglob("*.py"):
+        if SKIPPED_PARTS.isdisjoint(path.parts):
             yield path
 
 
-def test_avatar_setup_does_not_import_numeric_libraries() -> None:
-    """Every *.py under avatar_setup/ and common/ must not import numpy or math.
+def test_addon_does_not_import_numeric_libraries() -> None:
+    """Every addon *.py must not import numpy or math.
 
     Exempt exactly coordinates.py and effect_properties.py.
     """
@@ -77,3 +74,16 @@ def test_no_matrix_inversions() -> None:
             if ".inverted()" in line:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
     assert not offenders, "matrix inversion found:\n" + "\n".join(offenders)
+
+
+def test_root_attachment_names_are_spelled_in_the_wheel_only(avatar_api) -> None:
+    """The sidecar attachment values come from root_attachments(); Python derives its enum identifiers from them."""
+    names = [entry["name"] for entry in avatar_api.root_attachments()]
+    assert names
+    quoted = [re.compile(rf"""["']{re.escape(name)}["']""") for name in names]
+    offenders = []
+    for path in _python_files():
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if any(pattern.search(line) for pattern in quoted):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+    assert not offenders, "root attachment literal found:\n" + "\n".join(offenders)

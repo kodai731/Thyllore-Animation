@@ -190,7 +190,7 @@ def _apply_output(context, arm, run: GenerationRun, output: dict) -> dict:
     write_weights(obj, groups, rewritten, {bone.name for bone in arm.data.bones})
     write_membership_groups(obj, output["chains"], run.given)
     rethickened = update_hit_radii(settings, output["chains"], run.read_back)
-    if output["attachment"] == "ring":
+    if output["covered"] is not None:
         write_covered_group(obj, output["covered"], run.marked)
     for chain in output["chains"]:
         chain_bones = [joint["name"] for joint in chain["joints"]] + [chain["end_bone"]]

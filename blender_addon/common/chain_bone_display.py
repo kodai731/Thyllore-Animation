@@ -1,11 +1,20 @@
 """Blender-side display of spring chain bones: one bone collection per chain, stick shape and attachment color.
 
 Child collections are found through ``collections_all``; ``collections`` lists the root level only."""
+from __future__ import annotations
+
+try:
+    import thyllore_avatar_api as avatar_api  # type: ignore
+except ImportError:
+    avatar_api = None  # type: ignore
 
 CHAIN_COLLECTION_NAME = "Thyllore Chains"
 CHAIN_BONE_DISPLAY_TYPE = "STICK"
-ATTACHMENT_PALETTES = {"cap": "THEME01", "ring": "THEME04"}
-DEFAULT_PALETTE = "THEME06"
+
+
+def bone_palette(attachment: str | None) -> str:
+    """The Blender bone color theme of a chain generated with ``attachment``; empty or None is an authored chain."""
+    return f"THEME{avatar_api.chain_bone_palette(attachment or None):02d}"
 
 
 def chain_bone_collection(armature_data):
@@ -25,10 +34,10 @@ def chain_collection(armature_data, chain_name: str):
     return collection
 
 
-def apply_chain_bone_display(arm, chain_name: str, bone_names: list[str], attachment: str) -> None:
+def apply_chain_bone_display(arm, chain_name: str, bone_names: list[str], attachment: str | None) -> None:
     """Put the bones in the chain's collection, draw them as sticks and color them by attachment."""
     collection = chain_collection(arm.data, chain_name)
-    palette = ATTACHMENT_PALETTES.get(attachment, DEFAULT_PALETTE)
+    palette = bone_palette(attachment)
     for bone_name in bone_names:
         bone = arm.data.bones.get(bone_name)
         if bone is None:

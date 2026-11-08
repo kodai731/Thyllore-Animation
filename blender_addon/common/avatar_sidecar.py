@@ -1,13 +1,29 @@
 """Pure Python helpers for sidecar export/import (bpy-independent)."""
 from __future__ import annotations
 
-ATTACHMENT_TO_SIDECAR = {"AUTO": None, "CAP": "cap", "RING": "ring"}
-ATTACHMENT_FROM_SIDECAR = {sidecar: enum for enum, sidecar in ATTACHMENT_TO_SIDECAR.items() if sidecar}
+AUTO_ATTACHMENT = "AUTO"
+
+
+def attachment_identifier(sidecar_name: str) -> str:
+    """The Blender enum identifier of a root attachment's sidecar name."""
+    return sidecar_name.upper()
+
+
+def attachment_enum_items(root_attachments: list[dict]) -> list[tuple[str, str, str]]:
+    """The submesh row's attachment choices: Auto, then every attachment the wheel lists."""
+    return [(AUTO_ATTACHMENT, "Auto", "The default attachment of the root role")] + [
+        (attachment_identifier(entry["name"]), entry["label"], entry["description"]) for entry in root_attachments
+    ]
 
 
 def attachment_to_sidecar(item) -> str | None:
-    """The ``cap`` / ``ring`` a submesh row chose, None for Auto."""
-    return ATTACHMENT_TO_SIDECAR[getattr(item, "attachment", "AUTO")]
+    """The attachment a submesh row chose as its sidecar name, None for Auto."""
+    identifier = getattr(item, "attachment", AUTO_ATTACHMENT)
+    return None if identifier == AUTO_ATTACHMENT else identifier.lower()
+
+
+def attachment_from_sidecar(sidecar_name: str | None) -> str:
+    return AUTO_ATTACHMENT if sidecar_name is None else attachment_identifier(sidecar_name)
 
 
 def submesh_to_sidecar(mesh_name, submesh, material_loop_indices):
@@ -47,7 +63,7 @@ def write_submesh_sidecar(submesh, mesh_name, roles, hidden, material_loop_indic
         item = submesh.roles.add()
         item.material = entry["material"]
         item.role = entry["role"]
-        item.attachment = ATTACHMENT_FROM_SIDECAR.get(entry.get("attachment"), "AUTO")
+        item.attachment = attachment_from_sidecar(entry.get("attachment"))
     submesh.hidden_triangles.clear()
     for entry in hidden:
         if entry["mesh"] != mesh_name:

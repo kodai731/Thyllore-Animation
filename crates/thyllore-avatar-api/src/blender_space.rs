@@ -1,5 +1,7 @@
 use glam::{Mat3, Mat4, Quat, Vec3};
-use thyllore_math_core::{engine_to_blender_point, BLENDER_TO_ENGINE};
+use thyllore_math_core::{
+    engine_to_blender_point, invert, is_well_conditioned, world_to_local_points, BLENDER_TO_ENGINE,
+};
 
 use crate::avatar_setup_bridge::BoneSpec;
 
@@ -89,22 +91,7 @@ pub fn armature_local_points(
     armature_world: &MatrixRows,
     world_points: &[[f32; 3]],
 ) -> anyhow::Result<Vec<[f32; 3]>> {
-    let to_armature = invert(&column_major(armature_world), || {
-        "armature world matrix".to_string()
-    })?;
-    Ok(world_points
-        .iter()
-        .map(|point| to_armature.transform_point3(Vec3::from(*point)).into())
-        .collect())
-}
-
-/// The length of each axis of a rest matrix: Blender's `Matrix.to_scale()`.
-pub fn axis_lengths(matrix: Mat4) -> Vec3 {
-    Vec3::new(
-        matrix.x_axis.truncate().length(),
-        matrix.y_axis.truncate().length(),
-        matrix.z_axis.truncate().length(),
-    )
+    world_to_local_points(&column_major(armature_world), world_points)
 }
 
 /// The bones of a Blender armature as the wheel's `BoneSpec`s: `rest_matrices` are the bones'
@@ -156,22 +143,9 @@ pub fn bone_specs(request: &BoneSpecsRequest) -> anyhow::Result<Vec<BoneSpec>> {
         .collect())
 }
 
-fn is_well_conditioned(determinant: f32, axis_lengths: Vec3) -> bool {
-    let volume = axis_lengths.x * axis_lengths.y * axis_lengths.z;
-    determinant.abs() > f32::EPSILON * volume
-}
-
-/// Singular means flat relative to the matrix's own scale: a uniformly small armature stays invertible.
-pub fn invert(matrix: &Mat4, what: impl FnOnce() -> String) -> anyhow::Result<Mat4> {
-    if !is_well_conditioned(matrix.determinant(), axis_lengths(*matrix)) {
-        anyhow::bail!("{} is not invertible", what());
-    }
-    Ok(matrix.inverse())
-}
-
 fn invert3(rows: &MatrixRows, what: &str) -> anyhow::Result<Mat3> {
     let matrix = column_major(rows);
-    if !is_well_conditioned(matrix.determinant(), axis_lengths(matrix)) {
+    if !is_well_conditioned(matrix) {
         anyhow::bail!("{what} is not invertible");
     }
     Ok(Mat3::from_mat4(matrix).inverse())

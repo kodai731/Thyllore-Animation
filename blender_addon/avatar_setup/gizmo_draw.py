@@ -20,7 +20,7 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from ..common.spring_properties import spring_settings_to_edit
-from ..common.rig_snapshot import read_rig
+from ..common.rig_snapshot import read_bones
 from .operators import target_armature
 
 _handle: int | None = None
@@ -43,13 +43,13 @@ def _radius_segments(chains, arm, scale_length):
             if pb is not None:
                 head = tuple(arm.matrix_world @ pb.head)
                 radius = joint.hit_radius / scale_length
-                segments.extend(avatar_api.wire_sphere_segments({"center": head, "radius": radius, "segments": circle_segments}))
+                segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 
 def _highlighted_chain_names(context, arm, settings) -> set[str]:
     """Names of the chains holding the active bone."""
-    bones = read_rig(context, arm).bones
+    bones = read_bones(context, arm)
     spring = spring_settings_to_edit(settings)
     return set(avatar_api.chains_with_radius({"spring": spring, "bones": bones, "active": _active_bone_index(arm), "mode": "all"}))
 
@@ -81,9 +81,9 @@ def _collider_segments(colliders, arm):
         if collider.shape == "capsule" and collider.has_tail:
             tail = Vector(collider.tail)
             tail_world = tuple(world_matrix @ tail)
-            segments.extend(avatar_api.wire_capsule_segments({"head": head, "tail": tail_world, "radius": radius, "segments": circle_segments}))
+            segments.extend(avatar_api.wire_capsule_segments(head, tail_world, radius, circle_segments))
         else:
-            segments.extend(avatar_api.wire_sphere_segments({"center": head, "radius": radius, "segments": circle_segments}))
+            segments.extend(avatar_api.wire_sphere_segments(head, radius, circle_segments))
     return segments
 
 

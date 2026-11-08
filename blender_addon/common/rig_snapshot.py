@@ -6,8 +6,11 @@ from functools import cached_property
 
 import bpy
 
-from .avatar_sidecar import bone_specs
-from .bone_frames import bone_bind_matrix, bone_rest_frame
+try:
+    import thyllore_avatar_api as avatar_api  # type: ignore
+except ImportError:
+    avatar_api = None  # type: ignore
+
 from .skin_input import skin_input, skin_role_meshes
 
 
@@ -28,17 +31,27 @@ def bound_meshes(arm) -> list:
     return meshes
 
 
-def _bone_table(arm):
-    """Names, parent indices and world-space heads of ``arm.data.bones``."""
+def rest_matrices(arm) -> list[list[list[float]]]:
+    return [matrix_rows(bone.matrix_local) for bone in arm.data.bones]
+
+
+def bone_specs(arm, armature_world, rest_rows, scale_length: float) -> list[dict]:
+    """The wheel's bone specs (name, parent, rest position, rest frame, bind matrix) of ``arm.data.bones``
+    from matrices already read."""
     bones = arm.data.bones
-    names = []
-    parent_indices = []
-    world_heads = []
-    for bone in bones:
-        names.append(bone.name)
-        parent_indices.append(None if bone.parent is None else bones.find(bone.parent.name))
-        world_heads.append(tuple(arm.matrix_world @ bone.head_local))
-    return names, parent_indices, world_heads
+    return avatar_api.bone_specs({
+        "names": [bone.name for bone in bones],
+        "parents": [None if bone.parent is None else bones.find(bone.parent.name) for bone in bones],
+        "armature_world": armature_world,
+        "rest_matrices": rest_rows,
+        "scale_length": scale_length,
+    })
+
+
+def read_bones(context, arm) -> list[dict]:
+    """The bone specs alone, for callers that never touch the bound meshes (overlays, previews)."""
+    scale_length = context.scene.unit_settings.scale_length
+    return bone_specs(arm, matrix_rows(arm.matrix_world), rest_matrices(arm), scale_length)
 
 
 @dataclass
@@ -61,19 +74,13 @@ class RigSnapshot:
 def read_rig(context, arm) -> RigSnapshot:
     scale_length = context.scene.unit_settings.scale_length
     armature_world = matrix_rows(arm.matrix_world)
-    rest_matrices = [matrix_rows(bone.matrix_local) for bone in arm.data.bones]
-
-    names, parent_indices, world_heads = _bone_table(arm)
-    rest_frames = [bone_rest_frame(armature_world, rows, scale_length) for rows in rest_matrices]
-    bones = bone_specs(names, parent_indices, world_heads, scale_length, rest_frames)
-    for spec, rows in zip(bones, rest_matrices):
-        spec["bind_matrix"] = bone_bind_matrix(armature_world, rows, scale_length)
+    rest_rows = rest_matrices(arm)
 
     return RigSnapshot(
         arm=arm,
         scale_length=scale_length,
         armature_world=armature_world,
-        rest_matrices=rest_matrices,
-        bones=bones,
+        rest_matrices=rest_rows,
+        bones=bone_specs(arm, armature_world, rest_rows, scale_length),
         meshes=bound_meshes(arm),
     )

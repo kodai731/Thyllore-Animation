@@ -1,41 +1,16 @@
 """bake_clip_file from the wheel: a role-named template lands on the inferred humanoid bones."""
 from __future__ import annotations
 
-import sys
-import zipfile
 from pathlib import Path
 
 import pytest
 
-from blender_addon.common.avatar_sidecar import bone_specs
-from blender_addon.common.bone_frames import bone_rest_frame
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WHEELS_DIR = REPO_ROOT / "blender_addon" / "wheels"
 HIPS_SWAY = REPO_ROOT / "assets" / "templates" / "hips_sway.anim.ron"
 IDENTITY_ROWS = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
 
 
-@pytest.fixture(scope="module")
-def avatar_api(tmp_path_factory):
-    wheels = sorted(WHEELS_DIR.glob("thyllore_avatar_api-*.whl"))
-    if not wheels:
-        pytest.skip("thyllore_avatar_api wheel not built (run scripts/collect_wheels.sh)")
-
-    extract_dir = tmp_path_factory.mktemp("avatar_api_wheel")
-    with zipfile.ZipFile(wheels[-1]) as archive:
-        archive.extractall(extract_dir)
-
-    sys.path.insert(0, str(extract_dir))
-    try:
-        import thyllore_avatar_api
-
-        yield thyllore_avatar_api
-    finally:
-        sys.path.remove(str(extract_dir))
-
-
-def tpose_specs(prefix: str, scale_length: float):
+def tpose_specs(avatar_api, prefix: str, scale_length: float):
     heads_z_up = [
         ("Hips", None, (0.0, 0.0, 1.0)),
         ("Spine", 0, (0.0, 0.0, 1.1)),
@@ -51,15 +26,21 @@ def tpose_specs(prefix: str, scale_length: float):
         ("RightLowerLeg", 10, (-0.1, 0.0, 0.5)),
         ("RightFoot", 11, (-0.1, 0.0, 0.0)),
     ]
-    names = [prefix + role for role, _, _ in heads_z_up]
-    parents = [parent for _, parent, _ in heads_z_up]
-    heads = [head for _, _, head in heads_z_up]
-    rest_frames = [bone_rest_frame(IDENTITY_ROWS, IDENTITY_ROWS, scale_length) for _ in heads_z_up]
-    return bone_specs(names, parents, heads, scale_length, rest_frames)
+    return avatar_api.bone_specs({
+        "names": [prefix + role for role, _, _ in heads_z_up],
+        "parents": [parent for _, parent, _ in heads_z_up],
+        "armature_world": IDENTITY_ROWS,
+        "rest_matrices": [_translated(head) for _, _, head in heads_z_up],
+        "scale_length": scale_length,
+    })
 
 
-def bake_request(prefix: str, scale_length: float, **extra) -> dict:
-    specs = tpose_specs(prefix, scale_length)
+def _translated(head) -> list[list[float]]:
+    return [[1.0, 0.0, 0.0, head[0]], [0.0, 1.0, 0.0, head[1]], [0.0, 0.0, 1.0, head[2]], [0.0, 0.0, 0.0, 1.0]]
+
+
+def bake_request(avatar_api, prefix: str, scale_length: float, **extra) -> dict:
+    specs = tpose_specs(avatar_api, prefix, scale_length)
     return {
         "bones": specs,
         "clip_ron": HIPS_SWAY.read_text(encoding="utf-8"),
@@ -72,7 +53,7 @@ def bake_request(prefix: str, scale_length: float, **extra) -> dict:
 
 
 def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
-    baked = avatar_api.bake_clip_file(bake_request("mixamorig:", 1.0))
+    baked = avatar_api.bake_clip_file(bake_request(avatar_api, "mixamorig:", 1.0))
 
     assert baked["name"] == "hips_sway"
     assert baked["hips_bone"] == "mixamorig:Hips"
@@ -85,14 +66,14 @@ def test_bake_clip_file_sways_prefixed_hips_by_the_hips_height(avatar_api):
 
 
 def test_bake_clip_file_scales_the_sway_with_the_scene_unit(avatar_api):
-    baked = avatar_api.bake_clip_file(bake_request("", 0.01))
+    baked = avatar_api.bake_clip_file(bake_request(avatar_api, "", 0.01))
 
     assert abs(baked["hips_offsets"][1][0]) == pytest.approx(0.0015, abs=1e-6)
     assert abs(baked["hips_locations"][1][0]) == pytest.approx(0.15, abs=1e-5)
 
 
 def test_bake_clip_file_reports_a_rig_without_feet(avatar_api):
-    request = bake_request("", 1.0)
+    request = bake_request(avatar_api, "", 1.0)
     request["bones"] = request["bones"][:7]
     request["rest_matrices"] = request["rest_matrices"][:7]
 
@@ -102,4 +83,4 @@ def test_bake_clip_file_reports_a_rig_without_feet(avatar_api):
 
 def test_bake_clip_file_rejects_an_unknown_request_key(avatar_api):
     with pytest.raises(ValueError, match="unknown field"):
-        avatar_api.bake_clip_file(bake_request("", 1.0, unknown_key="should fail"))
+        avatar_api.bake_clip_file(bake_request(avatar_api, "", 1.0, unknown_key="should fail"))

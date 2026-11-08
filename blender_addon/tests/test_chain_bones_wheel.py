@@ -425,7 +425,7 @@ def test_generate_chains_hangs_a_flared_dress_from_the_supporting_collider(avata
 
 
 def test_vertex_group_names_round_trip_and_reject_other_groups(avatar_api):
-    names = VertexGroupNames(avatar_api.vertex_group_names())
+    names = VertexGroupNames(avatar_api)
     assert names.chain_of(names.membership("strip_hair_03")) == "strip_hair_03"
     assert names.chain_of("strip_hair_03_00") is None
     assert names.chain_of(names.covered) is None
@@ -433,7 +433,7 @@ def test_vertex_group_names_round_trip_and_reject_other_groups(avatar_api):
 
 def test_vertex_group_names_are_spelled_in_the_wheel_only(avatar_api):
     addon_root = Path(__file__).resolve().parents[1]
-    literals = tuple(avatar_api.vertex_group_names().values())
+    literals = (*avatar_api.vertex_group_names().values(), avatar_api.membership_vertex_group(""))
     offenders = [
         path.relative_to(addon_root)
         for path in addon_root.rglob("*.py")
@@ -443,7 +443,7 @@ def test_vertex_group_names_are_spelled_in_the_wheel_only(avatar_api):
 
 
 def test_given_chains_from_groups_lists_weighted_membership_groups_only(avatar_api):
-    names = VertexGroupNames(avatar_api.vertex_group_names())
+    names = VertexGroupNames(avatar_api)
     pairs = [(0, [(0, 1.0)]), (1, [(0, 1.0), (2, 0.0)]), (2, [(1, 1.0)]), (3, [(2, 1.0)])]
     groups = [(names.membership("strip_hair_00"), 0), ("Head", 1), (names.membership("strip_hair_01"), 2), (names.membership("strip_hair_02"), 3)]
 

@@ -12,6 +12,8 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(chain_gen::generate_chains, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_roles, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::vertex_group_names, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::membership_vertex_group, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_gen::chain_of_vertex_group, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::chain_gen_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::submesh_chain_names, m)?)?;
     m.add_function(wrap_pyfunction!(chain_gen::legacy_chain_renames, m)?)?;
@@ -46,6 +48,7 @@ fn thyllore_avatar_api(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gizmo::wire_sphere_segments, m)?)?;
     m.add_function(wrap_pyfunction!(gizmo::wire_capsule_segments, m)?)?;
     m.add_function(wrap_pyfunction!(blender_space::armature_local_points, m)?)?;
+    m.add_function(wrap_pyfunction!(blender_space::bone_specs, m)?)?;
     m.add_function(wrap_pyfunction!(collider::capsule_fit_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(collider::fit_body_colliders, m)?)?;
     m.add_function(wrap_pyfunction!(collider::has_fitted_body_colliders, m)?)?;

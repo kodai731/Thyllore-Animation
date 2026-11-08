@@ -12,21 +12,13 @@ VertexGroupWeights = list[tuple[int, list[tuple[int, float]]]]
 
 
 class VertexGroupNames:
-    """The wheel's ``vertex_group_names()``: the covered group and the prefix of the chain membership groups."""
+    """The vertex groups the wheel names: the covered group, the membership group of a chain and the chain a
+    membership group belongs to (``None`` for any other vertex group)."""
 
-    def __init__(self, names: dict):
-        self.covered: str = names["covered"]
-        self._membership_prefix: str = names["membership_prefix"]
-
-    def membership(self, chain_name: str) -> str:
-        """The vertex group that holds the vertices the user assigned to the chain."""
-        return self._membership_prefix + chain_name
-
-    def chain_of(self, group_name: str) -> str | None:
-        """The chain a membership group belongs to, or ``None`` for any other vertex group."""
-        if not group_name.startswith(self._membership_prefix):
-            return None
-        return group_name[len(self._membership_prefix) :]
+    def __init__(self, avatar_api):
+        self.covered: str = avatar_api.vertex_group_names()["covered"]
+        self.membership = avatar_api.membership_vertex_group
+        self.chain_of = avatar_api.chain_of_vertex_group
 
 
 def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[int]:

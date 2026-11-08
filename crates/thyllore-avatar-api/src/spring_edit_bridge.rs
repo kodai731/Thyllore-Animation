@@ -210,15 +210,6 @@ pub fn apply_ramp_to_chains(request: &ApplyRampRequest) -> anyhow::Result<Sideca
     ))
 }
 
-fn parse_scope(scope: &str) -> anyhow::Result<RampScope> {
-    match scope {
-        "this_chain" => Ok(RampScope::ThisChain),
-        "sibling_chains" => Ok(RampScope::SiblingChains),
-        "all_chains" => Ok(RampScope::AllChains),
-        other => anyhow::bail!("unknown scope \"{}\"", other),
-    }
-}
-
 fn chain_names_of(setup: &SpringBoneSetup, ids: &[SpringChainId]) -> Vec<String> {
     ids.iter()
         .filter_map(|id| {
@@ -237,7 +228,7 @@ pub struct ChainsInScopeRequest {
     pub spring: SidecarSpring,
     pub bones: Vec<BoneSpec>,
     pub chain_name: String,
-    pub scope: String,
+    pub scope: RampScope,
 }
 
 pub fn chains_in_scope(request: &ChainsInScopeRequest) -> anyhow::Result<Vec<String>> {
@@ -256,8 +247,7 @@ pub fn chains_in_scope(request: &ChainsInScopeRequest) -> anyhow::Result<Vec<Str
         .map(|c| c.id)
         .ok_or_else(|| anyhow::anyhow!("chain \"{}\" not found", request.chain_name))?;
 
-    let scope = parse_scope(&request.scope)?;
-    let ids = anim_chains_in_scope(&setup, &skeleton, chain_id, scope);
+    let ids = anim_chains_in_scope(&setup, &skeleton, chain_id, request.scope);
 
     Ok(chain_names_of(&setup, &ids))
 }
@@ -297,7 +287,7 @@ pub struct ChainsWithRadiusRequest {
     pub bones: Vec<BoneSpec>,
     #[serde(default)]
     pub active: Option<usize>,
-    pub mode: String,
+    pub mode: SpringChainGizmoMode,
 }
 
 /// Chains whose joint hit radii the Blender gizmo draws: those holding the active bone.
@@ -309,13 +299,7 @@ pub fn chains_with_radius(request: &ChainsWithRadiusRequest) -> anyhow::Result<V
         &BoneRestFrame::identity_for(bones.len()),
     );
 
-    let gizmo_mode = match request.mode.as_str() {
-        "all" => SpringChainGizmoMode::All,
-        "none" => SpringChainGizmoMode::None,
-        other => anyhow::bail!("unknown mode \"{}\"", other),
-    };
-
-    let ids = anim_chains_with_radius(&setup, request.active, gizmo_mode);
+    let ids = anim_chains_with_radius(&setup, request.active, request.mode);
     Ok(chain_names_of(&setup, &ids))
 }
 

@@ -52,9 +52,9 @@ def test_avatar_setup_does_not_import_numeric_libraries() -> None:
     assert not offenders, "numeric library import found:\n" + "\n".join(offenders)
 
 
-RIG_READERS = ("bone_rest_frame(", "bone_bind_matrix(", "skin_input(", "avatar_sidecar import bone_specs")
+RIG_READERS = ("avatar_api.bone_specs(", "matrix_local", "skin_input(")
 RIG_READER_HOME = COMMON_DIR / "rig_snapshot.py"
-RIG_READER_DEFINITIONS = {"avatar_sidecar.py", "bone_frames.py", "skin_input.py"}
+RIG_READER_DEFINITIONS = {"skin_input.py"}
 
 
 def test_rig_is_read_only_by_the_snapshot() -> None:

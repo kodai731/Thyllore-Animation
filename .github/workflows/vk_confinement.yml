@@ -42,6 +42,8 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
       - name: check
         run: cargo check -p thyllore-animation --lib --no-default-features

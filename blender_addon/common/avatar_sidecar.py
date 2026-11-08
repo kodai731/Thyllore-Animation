@@ -1,8 +1,6 @@
 """Pure Python helpers for sidecar export/import (bpy-independent)."""
 from __future__ import annotations
 
-from .coordinates import blender_to_engine_metres
-
 ATTACHMENT_TO_SIDECAR = {"AUTO": None, "CAP": "cap", "RING": "ring"}
 ATTACHMENT_FROM_SIDECAR = {sidecar: enum for enum, sidecar in ATTACHMENT_TO_SIDECAR.items() if sidecar}
 
@@ -10,26 +8,6 @@ ATTACHMENT_FROM_SIDECAR = {sidecar: enum for enum, sidecar in ATTACHMENT_TO_SIDE
 def attachment_to_sidecar(item) -> str | None:
     """The ``cap`` / ``ring`` a submesh row chose, None for Auto."""
     return ATTACHMENT_TO_SIDECAR[getattr(item, "attachment", "AUTO")]
-
-
-def bone_specs(names, parent_indices, world_heads, scale_length, rest_frames=None):
-    """Build bone spec list from names, parent indices, world-space head positions and, when
-    given, the per-bone rest frames (``bone_frames.bone_rest_frame``).
-
-    Root bones have parent_index None (passed through as None); children have their
-    parent's index in the bone list."""
-    specs = []
-    frames = rest_frames if rest_frames is not None else [None] * len(names)
-    for name, parent_index, world_head, rest_frame in zip(names, parent_indices, world_heads, frames):
-        spec = {
-            "name": name,
-            "parent": parent_index,
-            "rest_position": list(blender_to_engine_metres(world_head, scale_length)),
-        }
-        if rest_frame is not None:
-            spec["rest_frame"] = rest_frame
-        specs.append(spec)
-    return specs
 
 
 def submesh_to_sidecar(mesh_name, submesh, material_loop_indices):

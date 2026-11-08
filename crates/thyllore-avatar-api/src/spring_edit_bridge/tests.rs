@@ -276,7 +276,7 @@ fn spring_edit_bridge_chains_in_scope_sibling_chains() {
         spring,
         bones: test_specs(),
         chain_name: "Chain_0".to_string(),
-        scope: "sibling_chains".to_string(),
+        scope: RampScope::SiblingChains,
     };
     let result = chains_in_scope(&request).unwrap();
 
@@ -319,7 +319,7 @@ fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
         spring: spring.clone(),
         bones: test_specs(),
         active: None,
-        mode: "all".to_string(),
+        mode: SpringChainGizmoMode::All,
     };
     assert!(chains_with_radius(&request_none).unwrap().is_empty());
 
@@ -327,7 +327,7 @@ fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
         spring: spring.clone(),
         bones: test_specs(),
         active: Some(2),
-        mode: "all".to_string(),
+        mode: SpringChainGizmoMode::All,
     };
     assert_eq!(chains_with_radius(&request_some).unwrap().len(), 1);
 
@@ -335,28 +335,9 @@ fn spring_edit_bridge_chains_with_radius_follow_the_active_joint() {
         spring,
         bones: test_specs(),
         active: Some(2),
-        mode: "none".to_string(),
+        mode: SpringChainGizmoMode::None,
     };
     assert!(chains_with_radius(&request_mode_none).unwrap().is_empty());
-}
-
-#[test]
-fn spring_edit_bridge_chains_with_radius_unknown_mode_returns_error() {
-    let spring = use_existing_bones_as_springs(&UseExistingBonesAsSpringsRequest {
-        spring: SidecarSpring::default(),
-        bones: test_specs(),
-        root_bone: "Head".to_string(),
-        min_joints: 1,
-    })
-    .unwrap();
-
-    let request = ChainsWithRadiusRequest {
-        spring,
-        bones: test_specs(),
-        active: None,
-        mode: "unknown".to_string(),
-    };
-    assert!(chains_with_radius(&request).is_err());
 }
 
 #[test]

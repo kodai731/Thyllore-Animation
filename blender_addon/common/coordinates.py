@@ -125,12 +125,6 @@ def engine_metres_to_blender(p, scale_length):
     return tuple(c / scale_length for c in engine_to_blender_point(p))
 
 
-def blender_frame_to_engine_metres(m, scale_length):
-    """A world-space frame whose axes and origin become engine vectors in metres (an armature's root frame)."""
-    engine = blender_frame_to_engine_matrix(m)
-    return [[value * scale_length for value in engine[i]] for i in range(3)] + [list(engine[3])]
-
-
 def engine_projection(fovy_rad, aspect, near):
     f = 1.0 / math.tan(fovy_rad / 2.0)
     return [

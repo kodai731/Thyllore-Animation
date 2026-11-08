@@ -1,6 +1,8 @@
 use glam::{Mat3, Mat4, Quat, Vec3};
 use thyllore_math_core::{engine_to_blender_point, BLENDER_TO_ENGINE};
 
+use crate::avatar_setup_bridge::BoneSpec;
+
 /// A row-major 4x4 as the addon sends it; the engine stores matrices column-major.
 pub type MatrixRows = [[f32; 4]; 4];
 
@@ -105,19 +107,74 @@ pub fn axis_lengths(matrix: Mat4) -> Vec3 {
     )
 }
 
+/// The bones of a Blender armature as the wheel's `BoneSpec`s: `rest_matrices` are the bones'
+/// `matrix_local` rows, `parents` their indices in the same list.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoneSpecsRequest {
+    pub names: Vec<String>,
+    pub parents: Vec<Option<usize>>,
+    pub armature_world: MatrixRows,
+    pub rest_matrices: Vec<MatrixRows>,
+    pub scale_length: f32,
+}
+
+/// The armature's world matrix carries the Z-up to Y-up conversion the FBX exporter and importer
+/// place on it, so a bone's frame is converted on its output side only; conjugating it would rotate
+/// the bone's own axes a second time.
+pub fn bone_specs(request: &BoneSpecsRequest) -> anyhow::Result<Vec<BoneSpec>> {
+    if request.rest_matrices.len() != request.names.len()
+        || request.parents.len() != request.names.len()
+    {
+        anyhow::bail!(
+            "expected one parent and one rest matrix per bone ({}), got {} and {}",
+            request.names.len(),
+            request.parents.len(),
+            request.rest_matrices.len()
+        );
+    }
+    let armature_world = column_major(&request.armature_world);
+    Ok(request
+        .names
+        .iter()
+        .zip(&request.parents)
+        .zip(&request.rest_matrices)
+        .map(|((name, parent), rest_matrix)| {
+            let engine = BLENDER_TO_ENGINE * armature_world * column_major(rest_matrix);
+            let translation_metres = engine.w_axis.truncate() * request.scale_length;
+            let rest_frame = Mat3::from_mat4(engine) * request.scale_length;
+            let mut bind_matrix = engine;
+            bind_matrix.w_axis = translation_metres.extend(1.0);
+            BoneSpec {
+                name: name.clone(),
+                parent: *parent,
+                rest_position: translation_metres.into(),
+                rest_frame: Some(rest_frame.transpose().to_cols_array_2d()),
+                bind_matrix: Some(rows(bind_matrix)),
+            }
+        })
+        .collect())
+}
+
+fn is_well_conditioned(determinant: f32, axis_lengths: Vec3) -> bool {
+    let volume = axis_lengths.x * axis_lengths.y * axis_lengths.z;
+    determinant.abs() > f32::EPSILON * volume
+}
+
+/// Singular means flat relative to the matrix's own scale: a uniformly small armature stays invertible.
 pub fn invert(matrix: &Mat4, what: impl FnOnce() -> String) -> anyhow::Result<Mat4> {
-    if matrix.determinant().abs() < f32::EPSILON {
+    if !is_well_conditioned(matrix.determinant(), axis_lengths(*matrix)) {
         anyhow::bail!("{} is not invertible", what());
     }
     Ok(matrix.inverse())
 }
 
 fn invert3(rows: &MatrixRows, what: &str) -> anyhow::Result<Mat3> {
-    let matrix = Mat3::from_mat4(column_major(rows));
-    if matrix.determinant().abs() < f32::EPSILON {
+    let matrix = column_major(rows);
+    if !is_well_conditioned(matrix.determinant(), axis_lengths(matrix)) {
         anyhow::bail!("{what} is not invertible");
     }
-    Ok(matrix.inverse())
+    Ok(Mat3::from_mat4(matrix).inverse())
 }
 
 #[cfg(test)]
@@ -179,5 +236,61 @@ mod tests {
     fn a_singular_armature_matrix_is_reported() {
         let flat = rows(Mat4::from_scale(Vec3::new(1.0, 1.0, 0.0)));
         assert!(armature_local_points(&flat, &[]).is_err());
+    }
+
+    #[test]
+    fn a_uniformly_small_armature_stays_invertible() {
+        let tiny = rows(Mat4::from_scale(Vec3::splat(0.001)));
+        let points = armature_local_points(&tiny, &[[0.001, 0.0, 0.0]]).unwrap();
+        assert!(
+            Vec3::from(points[0]).abs_diff_eq(Vec3::X, 1e-4),
+            "{points:?}"
+        );
+        assert!(bone_local_offset(&tiny, &tiny, Vec3::Y, 1.0).is_ok());
+    }
+
+    fn rotation_x_90() -> MatrixRows {
+        rows(Mat4::from_rotation_x(std::f32::consts::FRAC_PI_2))
+    }
+
+    fn specs_of(
+        armature_world: MatrixRows,
+        rest_matrix: MatrixRows,
+        scale_length: f32,
+    ) -> BoneSpec {
+        let mut specs = bone_specs(&BoneSpecsRequest {
+            names: vec!["Hips".into()],
+            parents: vec![None],
+            armature_world,
+            rest_matrices: vec![rest_matrix],
+            scale_length,
+        })
+        .unwrap();
+        specs.remove(0)
+    }
+
+    #[test]
+    fn an_fbx_import_armature_keeps_the_bone_axes() {
+        let spec = specs_of(rotation_x_90(), translation(0.0, 1.55, -0.03), 1.0);
+        let bind = column_major(&spec.bind_matrix.unwrap());
+        assert!(Mat3::from_mat4(bind).abs_diff_eq(Mat3::IDENTITY, 1e-6));
+        assert!(Vec3::from(spec.rest_position).abs_diff_eq(Vec3::new(0.0, 1.55, -0.03), 1e-6));
+    }
+
+    #[test]
+    fn a_native_armature_gets_the_axis_conversion_once() {
+        let spec = specs_of(IDENTITY, translation(0.0, 0.0, 2.0), 1.0);
+        let expected = BLENDER_TO_ENGINE * Mat4::from_translation(Vec3::new(0.0, 0.0, 2.0));
+        assert!(column_major(&spec.bind_matrix.unwrap()).abs_diff_eq(expected, 1e-6));
+        assert_eq!(spec.rest_position, [0.0, 2.0, 0.0]);
+    }
+
+    #[test]
+    fn scale_length_scales_the_translation_and_the_rest_frame_only() {
+        let spec = specs_of(IDENTITY, translation(0.0, 0.0, 2.0), 0.01);
+        let bind = spec.bind_matrix.unwrap();
+        assert!((bind[1][3] - 0.02).abs() < 1e-6);
+        assert_eq!(bind[1][2], 1.0);
+        assert_eq!(spec.rest_frame.unwrap()[1][2], 0.01);
     }
 }

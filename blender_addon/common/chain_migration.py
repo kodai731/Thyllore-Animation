@@ -14,7 +14,7 @@ from .spring_properties import generated_chain_bones
 def rename_legacy_chains(arm, obj, settings, origin: dict, target: str) -> int:
     """Rename the legacy chains of the submesh: the registered chains with their bones, every stored bone
     reference, their membership groups and bone collections; returns the number of chains renamed."""
-    names = VertexGroupNames(avatar_api.vertex_group_names())
+    names = VertexGroupNames(avatar_api)
     registered = generated_chain_bones(settings, origin)
     membership = _membership_groups(obj, names)
     candidates = sorted(set(registered) | set(membership))

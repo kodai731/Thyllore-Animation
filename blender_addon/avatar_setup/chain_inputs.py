@@ -16,11 +16,13 @@ from ..common.spring_properties import humanoid_overrides_to_dict, spring_settin
 from ..common.submesh_mask import material_triangles
 from ..common.rig_snapshot import bound_meshes
 
-VERTEX_GROUP_NAMES = VertexGroupNames(avatar_api.vertex_group_names()) if avatar_api is not None else None
+VERTEX_GROUP_NAMES = VertexGroupNames(avatar_api) if avatar_api is not None else None
 
 
 def _chain_roles() -> dict[str, str]:
-    """{role: default_root} from the wheel's chain_roles()."""
+    """{role: default_root} from the wheel's chain_roles(); nothing can grow chains without the wheel."""
+    if avatar_api is None:
+        return {}
     return {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()}
 
 

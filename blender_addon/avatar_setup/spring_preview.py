@@ -17,7 +17,7 @@ except ImportError:
     _AVATAR_API_AVAILABLE = False
 
 from .. import _debuglog
-from ..common.rig_snapshot import matrix_rows, read_rig
+from ..common.rig_snapshot import bone_specs, matrix_rows, rest_matrices
 from ..common.spring_properties import spring_settings_to_edit
 
 _previews: dict[str, "_ArmaturePreview"] = {}
@@ -46,22 +46,26 @@ def _pose_request(arm) -> dict:
 
 
 def _preview_for(arm, context) -> _ArmaturePreview | None:
+    """The preview of the armature, rebuilt only when the spring settings or the rest pose changed; the bone
+    specs derive from the rest pose, so they are read only on a rebuild."""
     settings = arm.data.thyllore_spring
     spring = spring_settings_to_edit(settings)
     spring_key = repr(spring)
-    rig = read_rig(context, arm)
-    rest_key = repr(rig.bones) + repr(rig.armature_world) + repr(rig.rest_matrices)
+    armature_world = matrix_rows(arm.matrix_world)
+    rest_rows = rest_matrices(arm)
+    rest_key = repr(armature_world) + repr(rest_rows)
 
     cached = _previews.get(arm.name)
     if cached is not None and cached.matches(spring_key, rest_key):
         return cached
 
+    scale_length = context.scene.unit_settings.scale_length
     preview = avatar_api.SpringPreview({
         "spring": spring,
-        "bones": rig.bones,
-        "armature_world": rig.armature_world,
-        "rest_matrices": rig.rest_matrices,
-        "scale_length": rig.scale_length,
+        "bones": bone_specs(arm, armature_world, rest_rows, scale_length),
+        "armature_world": armature_world,
+        "rest_matrices": rest_rows,
+        "scale_length": scale_length,
     })
     cached = _ArmaturePreview(preview, spring_key, rest_key)
     _previews[arm.name] = cached

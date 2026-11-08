@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-pub const ABI_MARKER: u32 = 6;
+pub const ABI_MARKER: u32 = 7;
 
 #[cfg(feature = "debug-log")]
 pub mod debug_log;

@@ -27,20 +27,16 @@ def _transfer_skin_weights() -> dict:
     return {"source": {**TRIANGLE, "weights": [[1.0], [1.0], [1.0]]}, "target": TRIANGLE, "max_distance": 1.0, "max_angle_deg": 90.0}
 
 
-def _wire_sphere() -> dict:
-    return {"center": (0.0, 0.0, 0.0), "radius": 1.0, "segments": 8}
-
-
-def _wire_capsule() -> dict:
-    return {"head": (0.0, 0.0, 0.0), "tail": (0.0, 1.0, 0.0), "radius": 1.0, "segments": 8}
-
-
 def _spring_preview() -> dict:
     return {"spring": SPRING, "bones": BONES, "armature_world": IDENTITY, "rest_matrices": [IDENTITY], "scale_length": 1.0}
 
 
 def _armature_local_points() -> dict:
     return {"armature_world": IDENTITY, "points": [(1.0, 2.0, 3.0)]}
+
+
+def _bone_specs() -> dict:
+    return {"names": ["Hips"], "parents": [None], "armature_world": IDENTITY, "rest_matrices": [IDENTITY], "scale_length": 1.0}
 
 
 CASES = [
@@ -51,10 +47,9 @@ CASES = [
     ("infer_humanoid_mapping", _bones),
     ("vrm_t_pose_warnings", _bones),
     ("transfer_skin_weights", _transfer_skin_weights),
-    ("wire_sphere_segments", _wire_sphere),
-    ("wire_capsule_segments", _wire_capsule),
     ("SpringPreview", _spring_preview),
     ("armature_local_points", _armature_local_points),
+    ("bone_specs", _bone_specs),
 ]
 
 
@@ -71,6 +66,6 @@ def test_clean_request_is_accepted(avatar_api, entry_point, builder):
     getattr(avatar_api, entry_point)(builder())
 
 
-def test_wire_sphere_request_draws_three_circles(avatar_api):
-    segments = avatar_api.wire_sphere_segments(_wire_sphere())
-    assert len(segments) == 3 * 8
+def test_wire_shapes_take_plain_arguments_for_the_draw_handler(avatar_api):
+    assert len(avatar_api.wire_sphere_segments((0.0, 0.0, 0.0), 1.0, 8)) == 3 * 8
+    assert len(avatar_api.wire_capsule_segments((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), 1.0, 8)) > 3 * 8

@@ -105,6 +105,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -171,6 +173,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -198,6 +202,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -238,6 +244,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 

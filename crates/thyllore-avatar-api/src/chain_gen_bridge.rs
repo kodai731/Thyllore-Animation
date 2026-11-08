@@ -54,10 +54,11 @@ pub struct GenerateChainsRequest {
 }
 
 /// The vertex groups the addon writes on a submesh beside its bone weights: the measured garment
-/// coverage, and one membership group per chain named `<membership_prefix><chain>`.
+/// coverage, and one membership group per chain, spelled by `membership_vertex_group`.
 #[derive(Clone, Copy, serde::Serialize)]
 pub struct VertexGroupNames {
     pub covered: &'static str,
+    #[serde(skip)]
     pub membership_prefix: &'static str,
 }
 
@@ -189,10 +190,49 @@ pub fn chain_gen_params() -> Vec<ParamRow> {
     )
 }
 
-pub fn settings_from_pairs(pairs: &[(String, f32)]) -> anyhow::Result<ChainGenSettings> {
-    let mut settings = ChainGenSettings::default();
-    apply_setting_assignments(&mut settings, pairs)?;
-    Ok(settings)
+pub fn settings_from_map(settings: &BTreeMap<String, f32>) -> anyhow::Result<ChainGenSettings> {
+    let assignments: Vec<(String, f32)> = settings
+        .iter()
+        .map(|(name, value)| (name.clone(), *value))
+        .collect();
+    let mut resolved = ChainGenSettings::default();
+    apply_setting_assignments(&mut resolved, &assignments)?;
+    Ok(resolved)
+}
+
+/// The chain a membership vertex group holds the assigned vertices of; any other group is none.
+pub fn chain_of_vertex_group(group_name: &str) -> Option<&str> {
+    group_name.strip_prefix(VERTEX_GROUP_NAMES.membership_prefix)
+}
+
+pub fn membership_vertex_group(chain_name: &str) -> String {
+    format!("{}{chain_name}", VERTEX_GROUP_NAMES.membership_prefix)
+}
+
+pub fn generate_chains(request: &GenerateChainsRequest) -> anyhow::Result<ChainGenOutput> {
+    let settings = settings_from_map(&request.settings)?;
+    let roles = role_bones(&request.humanoid_bones, &request.bones);
+    let colliders = body_colliders(&request.body_colliders, &roles, &request.bones);
+    run_chain_gen(
+        &request.positions,
+        &request.triangles,
+        request.root_position,
+        &request.target,
+        settings,
+        SkinAttachment {
+            skins: &request.skins,
+            body_colliders: &colliders,
+            roles: &roles,
+            covered_vertices: &request.covered_vertices,
+        },
+        ChainRootIn {
+            bone: request.root_bone,
+            role: request.root_role,
+            attachment: request.attachment,
+        },
+        &request.tex_coords,
+        &request.given_chains,
+    )
 }
 
 fn vector3_to_array(v: Vec3) -> [f32; 3] {
@@ -443,9 +483,11 @@ mod tests {
             [0.0, -1.0, 0.0],
         ];
         let triangles: [[u32; 3]; 2] = [[0, 1, 2], [1, 3, 2]];
-        let settings =
-            settings_from_pairs(&[("joint_count".into(), 2.0), ("column_count".into(), 1.0)])
-                .unwrap();
+        let settings = settings_from_map(&BTreeMap::from([
+            ("joint_count".to_string(), 2.0),
+            ("column_count".to_string(), 1.0),
+        ]))
+        .unwrap();
         let head = FitSkin {
             positions: vec![
                 [0.2, 0.1, 0.0],
@@ -570,7 +612,7 @@ mod tests {
 
     #[test]
     fn unknown_setting_is_rejected() {
-        assert!(settings_from_pairs(&[("joints".into(), 2.0)]).is_err());
+        assert!(settings_from_map(&BTreeMap::from([("joints".to_string(), 2.0)])).is_err());
     }
 
     #[test]

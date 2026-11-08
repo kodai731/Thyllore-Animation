@@ -3,10 +3,11 @@ use pythonize::depythonize;
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 use crate::chain_gen_bridge::{
-    body_colliders as body_colliders_from_inputs, chain_gen_params,
-    legacy_chain_renames as legacy_chain_renames_of, role_bones, run_chain_gen,
-    settings_from_pairs, submesh_chain_names as submesh_chain_names_of, ChainRootIn,
-    GenerateChainsRequest, SkinAttachment, VERTEX_GROUP_NAMES,
+    chain_gen_params, chain_of_vertex_group as chain_of_vertex_group_of,
+    generate_chains as generate_chains_from_request,
+    legacy_chain_renames as legacy_chain_renames_of,
+    membership_vertex_group as membership_vertex_group_of,
+    submesh_chain_names as submesh_chain_names_of, GenerateChainsRequest, VERTEX_GROUP_NAMES,
 };
 use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
@@ -32,10 +33,23 @@ pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &entries)
 }
 
-/// The vertex groups the addon writes beside the bone weights: `covered` and `membership_prefix`.
+/// The vertex groups the addon writes beside the bone weights: `covered`; the membership groups are
+/// spelled by `membership_vertex_group`.
 #[pyfunction]
 pub fn vertex_group_names(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &VERTEX_GROUP_NAMES)
+}
+
+/// The vertex group that holds the vertices the user assigned to the chain.
+#[pyfunction]
+pub fn membership_vertex_group(chain_name: &str) -> String {
+    membership_vertex_group_of(chain_name)
+}
+
+/// The chain a membership group belongs to; `None` for any other vertex group.
+#[pyfunction]
+pub fn chain_of_vertex_group(group_name: &str) -> Option<String> {
+    chain_of_vertex_group_of(group_name).map(str::to_string)
 }
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.
@@ -80,44 +94,8 @@ pub fn generate_chains<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let request: GenerateChainsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
-
-    let settings = settings_from_pairs(
-        &request
-            .settings
-            .iter()
-            .map(|(k, v)| (k.clone(), *v))
-            .collect::<Vec<_>>(),
-    )
-    .map_err(anyhow_to_pyerr)?;
-    let roles = role_bones(&request.humanoid_bones, &request.bones);
-    let colliders = body_colliders_from_inputs(&request.body_colliders, &roles, &request.bones);
-
-    let chain_root = ChainRootIn {
-        bone: request.root_bone,
-        role: request.root_role,
-        attachment: request.attachment,
-    };
-
     let output = py
-        .detach(|| {
-            run_chain_gen(
-                &request.positions,
-                &request.triangles,
-                request.root_position,
-                &request.target,
-                settings,
-                SkinAttachment {
-                    skins: &request.skins,
-                    body_colliders: &colliders,
-                    roles: &roles,
-                    covered_vertices: &request.covered_vertices,
-                },
-                chain_root,
-                &request.tex_coords,
-                &request.given_chains,
-            )
-        })
+        .detach(|| generate_chains_from_request(&request))
         .map_err(anyhow_to_pyerr)?;
-
     pythonize_value(py, &output)
 }

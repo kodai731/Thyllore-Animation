@@ -64,7 +64,7 @@ pub fn spring_joint_force_params() -> Vec<ForceModelParams> {
         .collect()
 }
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BoneSpec {
     pub name: String,
     pub parent: Option<usize>,

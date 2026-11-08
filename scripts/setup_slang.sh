@@ -21,13 +21,27 @@ case "$(uname -s)-$(uname -m)" in
     *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 2 ;;
 esac
 
+# The browser download URL (github.com/.../releases/download/...) intermittently answers 504 with an
+# HTML body; the release API serves the same asset reliably, so it is tried first when gh has a token.
+download_asset() {
+    local dir="$1"
+    if [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]] && command -v gh >/dev/null 2>&1; then
+        echo "downloading $ASSET from the shader-slang/slang v${SLANG_VERSION} release through gh"
+        if GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}" gh release download "v${SLANG_VERSION}" --repo shader-slang/slang --pattern "$ASSET" --dir "$dir"; then
+            return 0
+        fi
+        echo "gh release download failed, falling back to curl" >&2
+    fi
+    local url="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${ASSET}"
+    echo "downloading $url"
+    curl -fsSL --retry 5 --retry-delay 15 --retry-all-errors -o "$dir/$ASSET" "$url"
+}
+
 if [[ -x "$SLANG_ROOT/bin/slangc" ]] && "$SLANG_ROOT/bin/slangc" -v 2>&1 | grep -q "$SLANG_VERSION"; then
     echo "slangc $SLANG_VERSION already at $SLANG_ROOT"
 else
-    URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${ASSET}"
     TMP="$(mktemp -d)"
-    echo "downloading $URL"
-    curl -sSL -o "$TMP/$ASSET" "$URL"
+    download_asset "$TMP"
     rm -rf "$SLANG_ROOT"
     mkdir -p "$SLANG_ROOT"
     case "$ASSET" in

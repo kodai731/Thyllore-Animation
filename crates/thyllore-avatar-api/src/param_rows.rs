@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use thyllore_scene_core::{find_scalar_param, ScalarParam, UiKind, UiParam};
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -63,13 +65,13 @@ pub fn param_rows<T: 'static>(
         .collect()
 }
 
-pub fn apply_scalar_pairs<T: 'static>(
+pub fn apply_scalar_settings<T: 'static>(
     target: &mut T,
     scalar_params: &[ScalarParam<T>],
-    pairs: &[(String, f32)],
+    settings: &BTreeMap<String, f32>,
 ) -> anyhow::Result<()> {
     let valid_names: Vec<&str> = scalar_params.iter().map(|p| p.name).collect();
-    for (name, value) in pairs {
+    for (name, value) in settings {
         let scalar = scalar_params
             .iter()
             .find(|p| p.name == name || p.renamed_from.contains(&name.as_str()))
@@ -139,12 +141,12 @@ mod tests {
     }
 
     #[test]
-    fn apply_scalar_pairs_unknown_name_is_err() {
+    fn apply_scalar_settings_unknown_name_is_err() {
         let mut target = SpringJointParam::default();
-        let err = apply_scalar_pairs(
+        let err = apply_scalar_settings(
             &mut target,
             &SPRING_JOINT_SCALAR_PARAMS,
-            &[("unknown".into(), 1.0)],
+            &BTreeMap::from([("unknown".to_string(), 1.0)]),
         )
         .unwrap_err();
         let msg = err.to_string();

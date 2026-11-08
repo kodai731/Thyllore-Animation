@@ -12,7 +12,7 @@ use thyllore_avatar_core::vrchat::sidecar_spring::{
 use thyllore_model_core::{Skeleton, SkinData};
 
 use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
-use crate::param_rows::{apply_scalar_pairs, param_rows, ParamRow};
+use crate::param_rows::{apply_scalar_settings, param_rows, ParamRow};
 use crate::spring_edit_bridge::skeleton_from_bones;
 
 #[derive(Clone, serde::Deserialize)]
@@ -90,12 +90,7 @@ pub struct FitBodyCollidersRequest {
 
 pub fn fit_body_colliders(request: &FitBodyCollidersRequest) -> anyhow::Result<SidecarSpring> {
     let mut params = CapsuleFitParams::default();
-    let pairs: Vec<(String, f32)> = request
-        .settings
-        .iter()
-        .map(|(k, v)| (k.clone(), *v))
-        .collect();
-    apply_scalar_pairs(&mut params, &CAPSULE_FIT_SCALAR_PARAMS, &pairs)?;
+    apply_scalar_settings(&mut params, &CAPSULE_FIT_SCALAR_PARAMS, &request.settings)?;
 
     let skeleton = skeleton_with_bind_poses(&request.bones)?;
     let bone_inputs = bone_inputs(&request.bones);

@@ -10,7 +10,8 @@ pub const COLOR_INACTIVE_ALPHA: f32 = 0.35;
 pub const CIRCLE_SEGMENTS: u32 = 16;
 pub const CHAIN_RADIUS_SEGMENTS: u32 = 8;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SpringChainGizmoMode {
     #[default]
     Selected,

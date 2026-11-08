@@ -86,6 +86,16 @@ def _ensure_body_colliders(rig: RigSnapshot, settings) -> str:
     return f", fitted {fit_body_colliders(rig, default_fit_settings())} body colliders first"
 
 
+def _submesh_origin(obj, material: str) -> tuple[dict, str]:
+    return {"mesh": obj.name, "material": material}, f"{obj.name}/{material}"
+
+
+def _migrate_legacy_chains(arm, obj, material: str) -> None:
+    """Runs before the rig is read so the snapshot holds the renamed bones and collider references."""
+    origin, target = _submesh_origin(obj, material)
+    rename_legacy_chains(arm, obj, arm.data.thyllore_spring, origin, target)
+
+
 def _read_run(rig: RigSnapshot, obj, submesh_row, material: str) -> GenerationRun:
     arm = rig.arm
     settings = arm.data.thyllore_spring
@@ -96,9 +106,7 @@ def _read_run(rig: RigSnapshot, obj, submesh_row, material: str) -> GenerationRu
     root_name = avatar_api.resolve_root_bone({"bones": rig.bones, "root_bone": root_role or generation.root_bone.strip()})
     fitted_note = _ensure_body_colliders(rig, settings)
 
-    origin = {"mesh": obj.name, "material": material}
-    target = f"{obj.name}/{material}"
-    rename_legacy_chains(arm, obj, settings, origin, target)
+    origin, target = _submesh_origin(obj, material)
     registered = generated_chain_bones(settings, origin)
     registered_joints = generated_chain_joints(settings, origin)
     given = given_chains(obj, arm, registered_joints, scale_length)
@@ -235,6 +243,7 @@ class THYLLORE_OT_GenerateChainBones(bpy.types.Operator):
         previous_active = context.active_object
         try:
             obj, submesh_row, material_index = resolve_submesh(arm, self.mesh, self.material)
+            _migrate_legacy_chains(arm, obj, self.material)
             run = _read_run(read_rig(context, arm), obj, submesh_row, self.material)
             output = _generate(arm, run, material_index)
             support = output.get("support")

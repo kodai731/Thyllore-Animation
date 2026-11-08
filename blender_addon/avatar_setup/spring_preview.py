@@ -54,8 +54,8 @@ def _preview_for(arm, context) -> _ArmaturePreview | None:
     armature_world = matrix_rows(arm.matrix_world)
     rest_rows = rest_matrices(arm)
     scale_length = context.scene.unit_settings.scale_length
-    bone_names = [bone.name for bone in arm.data.bones]
-    rest_key = repr((armature_world, rest_rows, bone_names, scale_length))
+    bone_hierarchy = [(bone.name, bone.parent.name if bone.parent else None) for bone in arm.data.bones]
+    rest_key = repr((armature_world, rest_rows, bone_hierarchy, scale_length))
 
     cached = _previews.get(arm.name)
     if cached is not None and cached.matches(spring_key, rest_key):

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use anyhow::{anyhow, Result};
 
 use super::{caches, cleanup, clips, entities, gpu, initial_pose, nodes};
@@ -7,27 +5,26 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::GlbSource;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
+use crate::ecs::GpuSceneContext;
 use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
 use crate::loader::fbx::FbxModel;
 use crate::loader::ModelLoadResult;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::swapchain::RRSwapchain;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::types::Instance;
+
+/// Who registers the clips a model brings: the load itself, or the scene restore that follows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClipRegistration {
+    FromModel,
+    DeferredToScene,
+}
 
 pub unsafe fn load_model_from_file_system(
     path: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
+    gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
-    scene_will_provide_clips: bool,
+    clip_registration: ClipRegistration,
 ) -> Result<()> {
     log!("=== Loading model from path: {} ===", path);
 
@@ -35,15 +32,11 @@ pub unsafe fn load_model_from_file_system(
     replace_scene_model(
         &load_result,
         path,
-        instance,
-        device,
-        command_pool,
+        gpu,
         swapchain,
-        graphics,
-        raytracing,
         world,
         assets,
-        scene_will_provide_clips,
+        clip_registration,
         fbx_model,
     )?;
 
@@ -55,29 +48,21 @@ pub unsafe fn load_model_from_file_system(
 pub unsafe fn load_model_from_file_system_with_result(
     load_result: &ModelLoadResult,
     model_name: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
+    gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
-    scene_will_provide_clips: bool,
+    clip_registration: ClipRegistration,
     fbx_model: Option<FbxModel>,
 ) -> Result<Entity> {
     let parent_entity = replace_scene_model(
         load_result,
         model_name,
-        instance,
-        device,
-        command_pool,
+        gpu,
         swapchain,
-        graphics,
-        raytracing,
         world,
         assets,
-        scene_will_provide_clips,
+        clip_registration,
         fbx_model,
     )?;
 
@@ -87,30 +72,16 @@ pub unsafe fn load_model_from_file_system_with_result(
 
 pub unsafe fn load_model_additive(
     path: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
+    gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
     let (load_result, _fbx_model) = read_model_file(path)?;
     let part_name = entities::model_display_name(path, "part");
 
-    let parent_entity = append_model_to_scene(
-        &load_result,
-        &part_name,
-        instance,
-        device,
-        command_pool,
-        swapchain,
-        graphics,
-        raytracing,
-        world,
-        assets,
-    )?;
+    let parent_entity =
+        append_model_to_scene(&load_result, &part_name, gpu, swapchain, world, assets)?;
     world.insert_component(parent_entity, GlbSource::FilePath(path.to_string()));
 
     Ok(())
@@ -119,43 +90,31 @@ pub unsafe fn load_model_additive(
 pub(crate) unsafe fn append_model_to_scene(
     load_result: &ModelLoadResult,
     part_name: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
+    gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<Entity> {
-    let mesh_index_offset = graphics.meshes.len();
+    let mesh_index_offset = gpu.graphics.meshes.len();
     gpu::upload_model_meshes(
         load_result,
         part_name,
-        instance,
-        device,
-        command_pool,
+        gpu.instance,
+        gpu.device,
+        gpu.command_pool,
         swapchain,
-        graphics,
+        gpu.graphics,
     )?;
-    rebuild_scene_acceleration(
-        instance,
-        device,
-        command_pool,
-        graphics,
-        raytracing,
-        world,
-        assets,
-    )?;
+    rebuild_scene_acceleration(gpu, world, assets)?;
 
     let parent_entity = entities::spawn_model_part_entity(part_name, world);
     entities::spawn_mesh_entities(
         &entities::mesh_entity_names(part_name, &load_result.meshes, mesh_index_offset),
-        graphics,
+        gpu.graphics,
         world,
         assets,
         parent_entity,
-        mesh_index_offset..graphics.meshes.len(),
+        mesh_index_offset..gpu.graphics.meshes.len(),
     );
 
     log!(
@@ -187,50 +146,44 @@ unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Option<FbxMode
 unsafe fn replace_scene_model(
     load_result: &ModelLoadResult,
     model_name: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
+    gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
-    scene_will_provide_clips: bool,
+    clip_registration: ClipRegistration,
     fbx_model: Option<FbxModel>,
 ) -> Result<Entity> {
-    cleanup::reset_scene_model(device, graphics, raytracing, world, assets)?;
-    caches::insert_model_caches(world, model_name, fbx_model, graphics.meshes.len());
+    cleanup::reset_scene_model(gpu.device, gpu.graphics, gpu.raytracing, world, assets)?;
+    caches::insert_model_caches(world, model_name, fbx_model, gpu.graphics.meshes.len());
     clips::register_imported_animation(world, load_result, assets);
     nodes::replace_node_assets(world, assets, load_result);
 
     gpu::upload_model_meshes(
         load_result,
         model_name,
-        instance,
-        device,
-        command_pool,
+        gpu.instance,
+        gpu.device,
+        gpu.command_pool,
         swapchain,
-        graphics,
+        gpu.graphics,
     )?;
-    let posed_meshes = initial_pose::apply_initial_pose(world, assets, graphics, load_result);
-    gpu::upload_posed_meshes(instance, device, command_pool, graphics, &posed_meshes);
-    rebuild_scene_acceleration(
-        instance,
-        device,
-        command_pool,
-        graphics,
-        raytracing,
-        world,
-        assets,
-    )?;
+    let posed_meshes = initial_pose::apply_initial_pose(world, assets, gpu.graphics, load_result);
+    gpu::upload_posed_meshes(
+        gpu.instance,
+        gpu.device,
+        gpu.command_pool,
+        gpu.graphics,
+        &posed_meshes,
+    );
+    rebuild_scene_acceleration(gpu, world, assets)?;
 
     let parent_entity = entities::spawn_model_entities(
         model_name,
-        graphics,
+        gpu.graphics,
         world,
         assets,
         load_result,
-        scene_will_provide_clips,
+        clip_registration,
     );
     if is_model_file_path(model_name) {
         world.insert_component(parent_entity, GlbSource::FilePath(model_name.to_string()));

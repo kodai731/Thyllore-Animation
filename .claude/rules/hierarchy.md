@@ -169,9 +169,11 @@ record and report, frame schedule (`world/frame.rs`)), and the ECS core (world, 
 
 No file here declares `impl App`, takes `&mut App` or imports `crate::app`. A system that needs
 GPU resources as well as `World` takes `FrameContext` or a smaller context struct (`raytracing_systems.rs`:
-per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload and rebuild with a few
-`World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
-only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`.
+per-frame TLAS refresh from `GlobalTransform` over `FrameContext`; `GpuSceneContext` for a rebuild outside
+the frame loop: `rebuild_scene_acceleration` and the model load in `systems/model_load_systems/`, which
+`src/app/` reaches through `AppData::scene_parts`). The `src/app/` side of a load is only the wiring that
+fetches the command pool and swapchain and passes the context; if the work exists only for debugging (debug
+primitive spawn / delete) it lives in `src/debugview/`.
 
 `src/ecs/resource/` groups its files by domain:
 
@@ -511,14 +513,18 @@ a step that needs the presented image goes at its end, never into `render.rs` or
 imgui buffers), `command.rs` (`apply_queued_commands`: the one place that executes the commands queued in
 the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
-`EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
-texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
-`caches.rs` / `nodes.rs` / `clips.rs` / `entities.rs` `World` and `AssetStorage` registration,
-`initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
-`upload_mesh_vertices` in `thyllore-vulkan-core`; every `World` resource the load touches is inserted
-once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `raytracing/`
-(acceleration structure rebuild), `render_context.rs`, `post_process/`,
-`features/` (see below), `color_test_quad.rs`.
+`EffectContext` and runs the effect hooks), `command_recording.rs`, `scene_model.rs` (the `App` entry
+points of a model load: wait idle, fetch the command pool and swapchain, split `AppData` with
+`scene_parts`, call `src/ecs/systems/model_load_systems/`; every `World` resource the load touches is
+inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
+`features/` (see below), `color_test_quad.rs`. Model loading itself (`load.rs` entry points and load
+order, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
+`entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
+`src/ecs/systems/model_load_systems/`; texture file resolution is `thyllore-importer-core`
+(`resolve_mesh_texture`); the acceleration structure build is `RayTracingData::build_acceleration_structures`
+in `thyllore-vulkan-core`, called by `raytracing_systems.rs::rebuild_scene_acceleration` for startup and
+every rebuild; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
+`upload_mesh_vertices` in `thyllore-vulkan-core`.
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
@@ -600,7 +606,8 @@ per-feature `AddPass`).
 - `src/app/render.rs` — the frame driver: begin and end of a frame, swapchain-level concerns, the resize
   fan-out, auto exposure readback. Acquire / submit / present and draw recording go through core functions;
   no direct Vulkan calls. It names no effect and no model format; per-frame TLAS refresh is
-  `src/ecs/systems/raytracing_systems.rs`, model loading is `scene_model.rs`.
+  `src/ecs/systems/raytracing_systems.rs`, model loading is `src/ecs/systems/model_load_systems/`
+  entered from `scene_model.rs`.
 
 Frame contexts, innermost to outermost: the crate-level immutable render context (device, resources,
 pipelines, image index) → the app render context (mutable GPU resources, builds the backend) → the app frame

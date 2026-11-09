@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 
 use crate::app::{App, AppData};
-use crate::ecs::systems::model_load_systems::load_model_from_file_system;
+use crate::ecs::systems::model_load_systems::{load_model_from_file_system, ClipRegistration};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::{CommandState, SwapchainState};
 use crate::vulkanr::device::RRDevice;
@@ -25,26 +25,23 @@ impl App {
         rrcommand_pool: &Rc<RRCommandPool>,
         rrswapchain: &RRSwapchain,
         model_path: &str,
-        scene_will_provide_clips: bool,
+        clip_registration: ClipRegistration,
     ) -> Result<()> {
         rrdevice.wait_idle()?;
 
-        if let Some(ref mut gpu) = data.onion_skin_gpu {
-            gpu.destroy(rrdevice);
+        if let Some(ref mut onion_skin) = data.onion_skin_gpu {
+            onion_skin.destroy(rrdevice);
         }
         data.onion_skin_gpu = None;
 
+        let (mut gpu, world, assets) = data.scene_parts(instance, rrdevice, rrcommand_pool);
         load_model_from_file_system(
             model_path,
-            instance,
-            rrdevice,
-            rrcommand_pool,
+            &mut gpu,
             rrswapchain,
-            &mut data.graphics_resources,
-            &mut data.raytracing,
-            &mut data.ecs_world,
-            &mut data.ecs_assets,
-            scene_will_provide_clips,
+            world,
+            assets,
+            clip_registration,
         )
     }
 
@@ -62,7 +59,7 @@ impl App {
             &command_pool,
             &swapchain,
             path,
-            false,
+            ClipRegistration::FromModel,
         ) {
             Ok(_) => {
                 {
@@ -97,18 +94,18 @@ impl App {
                     &scene_entities,
                 );
 
-                let has_procedural_primitives =
-                    !crate::hooks::gpu_primitive::collect_all(&self.data.ecs_world).is_empty();
-                if has_procedural_primitives {
+                let procedural_primitives =
+                    crate::hooks::gpu_primitive::collect_all(&self.data.ecs_world);
+                if !procedural_primitives.is_empty() {
                     let command_pool = self.resource::<CommandState>().pool.clone();
-                    crate::ecs::systems::rebuild_scene_acceleration(
-                        &self.instance,
-                        &self.rrdevice,
-                        &command_pool,
-                        &self.data.graphics_resources,
-                        &mut self.data.raytracing,
-                        &self.data.ecs_world,
-                        &self.data.ecs_assets,
+                    let (mut gpu, world, assets) =
+                        self.data
+                            .scene_parts(&self.instance, &self.rrdevice, &command_pool);
+                    crate::ecs::systems::rebuild_scene_acceleration_with_primitives(
+                        &mut gpu,
+                        world,
+                        assets,
+                        &procedural_primitives,
                     )?;
                 }
 
@@ -135,18 +132,17 @@ impl App {
         let load_result = crate::loader::ModelLoadResult::from_gltf(gltf_result);
 
         let (command_pool, swapchain) = self.prepare_model_reload()?;
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
         match crate::ecs::systems::model_load_systems::load_model_from_file_system_with_result(
             &load_result,
             crate::scene::ModelReference::GENERATED_MESH,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
+            &mut gpu,
             &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
-            false,
+            world,
+            assets,
+            ClipRegistration::FromModel,
             None,
         ) {
             Ok(parent_entity) => {
@@ -201,15 +197,10 @@ impl App {
         self.rrdevice.wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        crate::ecs::systems::rebuild_scene_acceleration(
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &self.data.ecs_world,
-            &self.data.ecs_assets,
-        )?;
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
+        crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
         msg_info!("Model added: {}", path);
         Ok(())

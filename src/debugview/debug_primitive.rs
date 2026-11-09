@@ -40,17 +40,16 @@ impl App {
                 "Floor",
             ),
         };
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
         let parent_entity = crate::ecs::systems::model_load_systems::append_model_to_scene(
             &load_result,
             part_name,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
+            &mut gpu,
             &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
+            world,
+            assets,
         )?;
 
         self.data.ecs_world.insert_component(
@@ -123,15 +122,10 @@ impl App {
         }
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        crate::ecs::systems::rebuild_scene_acceleration(
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &self.data.ecs_world,
-            &self.data.ecs_assets,
-        )?;
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
+        crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
         log!("Deleted {} entities with GPU cleanup", entities.len());
         Ok(())

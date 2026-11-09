@@ -11,4 +11,4 @@ pub use clips::build_initial_clip_schedule;
 pub(crate) use load::append_model_to_scene;
 #[cfg(feature = "auto-rig")]
 pub use load::load_model_from_file_system_with_result;
-pub use load::{load_model_additive, load_model_from_file_system};
+pub use load::{load_model_additive, load_model_from_file_system, ClipRegistration};

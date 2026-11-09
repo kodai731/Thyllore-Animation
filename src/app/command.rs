@@ -327,15 +327,8 @@ unsafe fn apply_model_scale_command(
             mesh_index,
         )?;
     }
-    crate::ecs::systems::rebuild_scene_acceleration(
-        &app.instance,
-        &app.rrdevice,
-        &pool,
-        &app.data.graphics_resources,
-        &mut app.data.raytracing,
-        &app.data.ecs_world,
-        &app.data.ecs_assets,
-    )?;
+    let (mut gpu, world, assets) = app.data.scene_parts(&app.instance, &app.rrdevice, &pool);
+    crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
     match history {
         ScaleHistory::Record => app
@@ -379,15 +372,8 @@ unsafe fn apply_hidden_triangles(
         )?;
     }
 
-    crate::ecs::systems::rebuild_scene_acceleration(
-        &app.instance,
-        &app.rrdevice,
-        &pool,
-        &app.data.graphics_resources,
-        &mut app.data.raytracing,
-        &app.data.ecs_world,
-        &app.data.ecs_assets,
-    )?;
+    let (mut gpu, world, assets) = app.data.scene_parts(&app.instance, &app.rrdevice, &pool);
+    crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
     msg_info!(
         "Applied hidden triangles to {} meshes ({} triangles hidden)",

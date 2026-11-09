@@ -4,6 +4,7 @@ use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
+use crate::ecs::systems::model_load_systems::ClipRegistration;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers_for_every_slot,
@@ -852,7 +853,7 @@ impl App {
         rrswapchain: &RRSwapchain,
         data: &mut AppData,
         model_path: &str,
-        has_scene: bool,
+        clip_registration: ClipRegistration,
     ) {
         if let Err(e) = Self::load_model_from_path_with_resources(
             instance,
@@ -861,7 +862,7 @@ impl App {
             rrcommand_pool,
             rrswapchain,
             model_path,
-            has_scene,
+            clip_registration,
         ) {
             eprintln!("Failed to load model: {:?}", e);
             log_error!("Failed to load model: {:?}", e);

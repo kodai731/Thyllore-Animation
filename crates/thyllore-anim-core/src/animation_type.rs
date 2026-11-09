@@ -11,14 +11,24 @@ impl Default for AnimationType {
     }
 }
 
+/// What an imported model brings that decides how it animates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImportedAnimationTraits {
+    pub has_skinned_meshes: bool,
+    pub has_clips: bool,
+}
+
 /// How an imported model animates: skinned meshes play skeletal clips, otherwise clips move nodes.
-pub fn classify_imported_animation(has_skinned_meshes: bool, has_clips: bool) -> AnimationType {
-    if has_skinned_meshes {
-        AnimationType::Skeletal
-    } else if has_clips {
-        AnimationType::Node
-    } else {
-        AnimationType::None
+pub fn classify_imported_animation(traits: ImportedAnimationTraits) -> AnimationType {
+    match traits {
+        ImportedAnimationTraits {
+            has_skinned_meshes: true,
+            ..
+        } => AnimationType::Skeletal,
+        ImportedAnimationTraits {
+            has_clips: true, ..
+        } => AnimationType::Node,
+        ImportedAnimationTraits { .. } => AnimationType::None,
     }
 }
 
@@ -26,23 +36,18 @@ pub fn classify_imported_animation(has_skinned_meshes: bool, has_clips: bool) ->
 mod tests {
     use super::*;
 
+    fn classify(has_skinned_meshes: bool, has_clips: bool) -> AnimationType {
+        classify_imported_animation(ImportedAnimationTraits {
+            has_skinned_meshes,
+            has_clips,
+        })
+    }
+
     #[test]
     fn skinning_decides_skeletal_before_clips_decide_node() {
-        assert_eq!(
-            classify_imported_animation(true, false),
-            AnimationType::Skeletal
-        );
-        assert_eq!(
-            classify_imported_animation(true, true),
-            AnimationType::Skeletal
-        );
-        assert_eq!(
-            classify_imported_animation(false, true),
-            AnimationType::Node
-        );
-        assert_eq!(
-            classify_imported_animation(false, false),
-            AnimationType::None
-        );
+        assert_eq!(classify(true, false), AnimationType::Skeletal);
+        assert_eq!(classify(true, true), AnimationType::Skeletal);
+        assert_eq!(classify(false, true), AnimationType::Node);
+        assert_eq!(classify(false, false), AnimationType::None);
     }
 }

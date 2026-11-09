@@ -1,6 +1,5 @@
-use crate::animation::editable::{
-    is_user_clip_selected, select_kept_clip_id, EditableAnimationClip, SourceClipId,
-};
+use super::load::ClipRegistration;
+use crate::animation::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
@@ -49,9 +48,9 @@ pub(super) fn register_loaded_clips(
     world: &mut World,
     assets: &mut AssetStorage,
     loaded_clips: &[AnimationClip],
-    scene_will_provide_clips: bool,
+    clip_registration: ClipRegistration,
 ) -> Option<SourceClipId> {
-    if scene_will_provide_clips {
+    if clip_registration == ClipRegistration::DeferredToScene {
         return None;
     }
 
@@ -69,13 +68,13 @@ pub(super) fn register_loaded_clips(
 
 fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
     let kept_clip_id = {
-        let loaded_ids: Vec<SourceClipId> = world
-            .resource::<ClipLibrary>()
-            .all_clip_ids()
-            .copied()
-            .collect();
+        let library = world.resource::<ClipLibrary>();
         let selected = world.resource::<TimelineState>().current_clip_id;
-        select_kept_clip_id(selected, &loaded_ids)?
+        select_kept_clip_id(
+            selected,
+            |id| library.get(id).is_some(),
+            library.all_clip_ids().copied(),
+        )?
     };
 
     let clip_duration = world
@@ -256,11 +255,7 @@ pub fn keeps_selected_user_clip(world: &World) -> bool {
     ) else {
         return false;
     };
-    is_user_clip_selected(
-        timeline.current_clip_id,
-        |id| library.get(id).is_some(),
-        |id| library.model_clip_ids.contains(&id),
-    )
+    library.is_user_clip_selected(timeline.current_clip_id)
 }
 
 #[cfg(test)]
@@ -340,7 +335,8 @@ mod tests {
             clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+        let first_clip_id =
+            register_loaded_clips(&mut world, &mut assets, &[], ClipRegistration::FromModel);
 
         assert_eq!(first_clip_id, Some(user_source_id));
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
@@ -384,7 +380,8 @@ mod tests {
             skeleton: Skeleton::default(),
         });
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+        let first_clip_id =
+            register_loaded_clips(&mut world, &mut assets, &[], ClipRegistration::FromModel);
 
         assert!(first_clip_id.is_some());
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);

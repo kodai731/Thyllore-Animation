@@ -9,7 +9,6 @@ paths:
   - "src/ecs/systems/pose_*"
   - "src/ecs/systems/phases/animation_phase.rs"
   - "src/ecs/systems/model_load_systems/**"
-  - "src/app/scene_model.rs"
 ---
 
 # Animation System
@@ -44,7 +43,7 @@ This project supports three types of animation:
 | `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
-| `src/ecs/systems/model_load_systems/`, `src/app/scene_model.rs` | Load a model into `AssetStorage` and GPU meshes |
+| `src/ecs/systems/model_load_systems/`           | Load a model into `AssetStorage` and GPU meshes |
 
 ## Transform Calculation Basics
 

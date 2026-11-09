@@ -15,7 +15,7 @@ mod pass_targets;
 pub mod post_process;
 pub mod render;
 pub mod render_context;
-pub mod scene_model;
+pub mod scene_rebuild;
 pub mod update;
 pub mod viewport;
 

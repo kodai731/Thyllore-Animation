@@ -513,10 +513,10 @@ a step that needs the presented image goes at its end, never into `render.rs` or
 imgui buffers), `command.rs` (`apply_queued_commands`: the one place that executes the commands queued in
 the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
-`EffectContext` and runs the effect hooks), `command_recording.rs`, `scene_model.rs` (the `App` entry
-points of a model load: wait idle, fetch the command pool and swapchain, split `AppData` with
-`scene_parts`, call `src/ecs/systems/model_load_systems/`; every `World` resource the load touches is
-inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
+`EffectContext` and runs the effect hooks), `command_recording.rs`, `scene_rebuild.rs` (`App::rebuild_scene`: the one
+place that waits idle, fetches the command pool and swapchain, splits `AppData` with `scene_parts` and
+runs a scene rebuild closure such as `src/ecs/systems/model_load_systems/`; every `World` resource the
+load touches is inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
 `features/` (see below), `color_test_quad.rs`. Model loading itself (`load.rs` entry points and load
 order, `reload.rs` scene-keeping replace and generated mesh load, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
 `entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
@@ -607,7 +607,7 @@ per-feature `AddPass`).
   fan-out, auto exposure readback. Acquire / submit / present and draw recording go through core functions;
   no direct Vulkan calls. It names no effect and no model format; per-frame TLAS refresh is
   `src/ecs/systems/raytracing_systems.rs`, model loading is `src/ecs/systems/model_load_systems/`
-  entered from `scene_model.rs`.
+  entered from `command.rs` through `App::rebuild_scene`.
 
 Frame contexts, innermost to outermost: the crate-level immutable render context (device, resources,
 pipelines, image index) → the app render context (mutable GPU resources, builds the backend) → the app frame

@@ -1,7 +1,7 @@
 ---
 paths:
   - "src/ecs/systems/model_load_systems/**"
-  - "src/app/scene_model.rs"
+  - "src/app/scene_rebuild.rs"
   - "src/app/init/instance.rs"
   - "crates/thyllore-importer-core/**"
 ---
@@ -13,8 +13,8 @@ paths:
 - The FBX scene data both the importer and the exporter use (`FbxModel`, `FbxData`, `BoneNode`, ...) lives in
   `crates/thyllore-file-format-core`; `thyllore-exporter-core` depends on that crate and names
   `thyllore-importer-core` only in tests, never the other way round.
-- `App::load_model(path)` (`src/app/scene_model.rs`) is the runtime entry
-  point; `src/ecs/systems/model_load_systems/` turns the importer result into `AssetStorage` entries, GPU meshes and acceleration
+- `SceneLoadCommand::LoadModel` (`src/app/command.rs`) runs `load_model_keeping_scene` through
+  `App::rebuild_scene` (`src/app/scene_rebuild.rs`); `src/ecs/systems/model_load_systems/` turns the importer result into `AssetStorage` entries, GPU meshes and acceleration
   structures, then runs `ModelLoadHooks` (`src/hooks/model_load.rs`) without naming a domain.
 - What does not need `World` or Vulkan lives in the crates: the mesh texture choice
   (`thyllore_importer_core::resolve_mesh_texture`), the clip kept across a load

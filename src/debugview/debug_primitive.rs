@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
-use crate::vulkanr::context::{CommandState, SwapchainState};
+use crate::vulkanr::context::CommandState;
 use anyhow::Result;
 use glam::Vec3;
 
@@ -16,11 +16,6 @@ impl App {
         position: Vec3,
     ) -> Result<()> {
         log!("Spawning debug primitive: {:?}", kind);
-        self.rrdevice.wait_idle()?;
-
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-
         let (load_result, part_name) = match kind {
             DebugPrimitiveKind::Cube => (
                 thyllore_importer_core::primitive::build_cube_model(1.0),
@@ -40,17 +35,16 @@ impl App {
                 "Floor",
             ),
         };
-        let (mut gpu, world, assets) =
-            self.data
-                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
-        let parent_entity = crate::ecs::systems::model_load_systems::append_model_to_scene(
-            &load_result,
-            part_name,
-            &mut gpu,
-            &swapchain,
-            world,
-            assets,
-        )?;
+        let parent_entity = self.rebuild_scene(|gpu, swapchain, world, assets| {
+            crate::ecs::systems::model_load_systems::append_model_to_scene(
+                &load_result,
+                part_name,
+                gpu,
+                swapchain,
+                world,
+                assets,
+            )
+        })?;
 
         self.data.ecs_world.insert_component(
             parent_entity,

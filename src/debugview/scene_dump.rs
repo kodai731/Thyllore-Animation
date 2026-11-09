@@ -1,47 +1,6 @@
-use std::rc::Rc;
-
-use anyhow::Result;
-
 use crate::app::App;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::context::{CommandState, SwapchainState};
-use crate::vulkanr::swapchain::RRSwapchain;
 
 impl App {
-    unsafe fn prepare_model_reload(&mut self) -> Result<(Rc<RRCommandPool>, RRSwapchain)> {
-        self.rrdevice.wait_idle()?;
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-        Ok((command_pool, swapchain))
-    }
-
-    pub unsafe fn load_model(&mut self, path: &str) -> Result<()> {
-        let (command_pool, swapchain) = self.prepare_model_reload()?;
-        let (mut gpu, world, assets) =
-            self.data
-                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
-        match crate::ecs::systems::model_load_systems::load_model_keeping_scene(
-            path, &mut gpu, &swapchain, world, assets,
-        ) {
-            Ok(()) => msg_info!("Model loaded: {}", path),
-            Err(e) => msg_error!("Failed to load model: {:?}", e),
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "auto-rig")]
-    pub unsafe fn load_model_from_glb(&mut self, glb_data: &[u8]) -> Result<()> {
-        let (command_pool, swapchain) = self.prepare_model_reload()?;
-        let (mut gpu, world, assets) =
-            self.data
-                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
-        crate::ecs::systems::model_load_systems::load_generated_mesh(
-            glb_data, &mut gpu, &swapchain, world, assets,
-        )?;
-        msg_info!("Generated mesh loaded successfully");
-        Ok(())
-    }
-
     pub fn dump_debug_info(&self) {
         log!("========== DUMP DEBUG INFORMATION ==========");
 

@@ -44,49 +44,6 @@ pub unsafe fn load_model_from_file_system(
     Ok(())
 }
 
-#[cfg(feature = "auto-rig")]
-pub unsafe fn load_model_from_file_system_with_result(
-    load_result: &ModelLoadResult,
-    model_name: &str,
-    gpu: &mut GpuSceneContext,
-    swapchain: &RRSwapchain,
-    world: &mut World,
-    assets: &mut AssetStorage,
-    clip_registration: ClipRegistration,
-    fbx_model: Option<FbxModel>,
-) -> Result<Entity> {
-    let parent_entity = replace_scene_model(
-        load_result,
-        model_name,
-        gpu,
-        swapchain,
-        world,
-        assets,
-        clip_registration,
-        fbx_model,
-    )?;
-
-    log!("=== Model loaded successfully ===");
-    Ok(parent_entity)
-}
-
-pub unsafe fn load_model_additive(
-    path: &str,
-    gpu: &mut GpuSceneContext,
-    swapchain: &RRSwapchain,
-    world: &mut World,
-    assets: &mut AssetStorage,
-) -> Result<()> {
-    let (load_result, _fbx_model) = read_model_file(path)?;
-    let part_name = entities::model_display_name(path, "part");
-
-    let parent_entity =
-        append_model_to_scene(&load_result, &part_name, gpu, swapchain, world, assets)?;
-    world.insert_component(parent_entity, GlbSource::FilePath(path.to_string()));
-
-    Ok(())
-}
-
 pub(crate) unsafe fn append_model_to_scene(
     load_result: &ModelLoadResult,
     part_name: &str,
@@ -127,7 +84,7 @@ pub(crate) unsafe fn append_model_to_scene(
     Ok(parent_entity)
 }
 
-unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
+pub(super) unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
     let path_lower = path.to_lowercase();
 
     if path_lower.ends_with(".fbx") {
@@ -143,7 +100,7 @@ unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Option<FbxMode
     }
 }
 
-unsafe fn replace_scene_model(
+pub(super) unsafe fn replace_scene_model(
     load_result: &ModelLoadResult,
     model_name: &str,
     gpu: &mut GpuSceneContext,
@@ -153,7 +110,7 @@ unsafe fn replace_scene_model(
     clip_registration: ClipRegistration,
     fbx_model: Option<FbxModel>,
 ) -> Result<Entity> {
-    cleanup::reset_scene_model(gpu.device, gpu.graphics, gpu.raytracing, world, assets)?;
+    cleanup::reset_scene_model(gpu, world, assets)?;
     caches::insert_model_caches(world, model_name, fbx_model, gpu.graphics.meshes.len());
     clips::register_imported_animation(world, load_result, assets);
     nodes::replace_node_assets(world, assets, load_result);

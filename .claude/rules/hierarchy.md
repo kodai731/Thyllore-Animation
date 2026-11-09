@@ -518,7 +518,7 @@ points of a model load: wait idle, fetch the command pool and swapchain, split `
 `scene_parts`, call `src/ecs/systems/model_load_systems/`; every `World` resource the load touches is
 inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
 `features/` (see below), `color_test_quad.rs`. Model loading itself (`load.rs` entry points and load
-order, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
+order, `reload.rs` scene-keeping replace and generated mesh load, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
 `entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
 `src/ecs/systems/model_load_systems/`; texture file resolution is `thyllore-importer-core`
 (`resolve_mesh_texture`); the acceleration structure build is `RayTracingData::build_acceleration_structures`

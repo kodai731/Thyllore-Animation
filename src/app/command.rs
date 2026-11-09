@@ -47,12 +47,6 @@ unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
             }
         }
 
-        SceneLoadCommand::LoadModelAdditive { path } => {
-            if let Err(e) = app.load_model_additive(&path) {
-                log_error!("Failed to add model: {:?}", e);
-            }
-        }
-
         #[cfg(feature = "auto-rig")]
         SceneLoadCommand::LoadModelFromMemory { glb_data, source } => {
             match app.load_model_from_glb(&glb_data) {

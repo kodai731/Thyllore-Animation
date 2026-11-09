@@ -53,6 +53,7 @@ impl AppData {
             command_pool,
             graphics: &mut self.graphics_resources,
             raytracing: &mut self.raytracing,
+            onion_skin: &mut self.onion_skin_gpu,
         };
         (gpu, &mut self.ecs_world, &mut self.ecs_assets)
     }

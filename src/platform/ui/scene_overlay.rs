@@ -161,20 +161,6 @@ fn build_file_buttons(ui: &imgui::Ui, ecs_world: &World) {
     }
 
     ui.same_line();
-    if icon_button(ui, Icon::Plus, "Add GLB", ButtonState::Normal) {
-        if let Some(paths) = rfd::FileDialog::new()
-            .add_filter("GLB Files", &["glb"])
-            .pick_files()
-        {
-            for path in paths {
-                let path_str = path.to_string_lossy().to_string();
-                log!("Adding GLB file: {}", path_str);
-                ecs_world.send_command(CameraEvent::LoadModelAdditive { path: path_str });
-            }
-        }
-    }
-
-    ui.same_line();
     if icon_button(ui, Icon::Camera, "Screenshot", ButtonState::Normal) {
         ecs_world.send_command(CameraEvent::TakeScreenshot);
     }

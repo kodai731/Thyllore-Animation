@@ -29,6 +29,7 @@ pub struct GpuSceneContext<'a> {
     pub command_pool: &'a Rc<RRCommandPool>,
     pub graphics: &'a mut GraphicsResources,
     pub raytracing: &'a mut RayTracingData,
+    pub onion_skin: &'a mut Option<OnionSkinGpuState>,
 }
 
 pub struct FrameContext<'a> {

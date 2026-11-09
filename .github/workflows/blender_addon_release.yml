@@ -124,6 +124,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -138,7 +140,7 @@ jobs:
       - name: Collect vendored wheels
         shell: pwsh
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/collect_wheels.ps1 -Crate thyllore-ml-core
 
       - name: Download ONNX Runtime ${{ env.ORT_VERSION }}
         id: ort

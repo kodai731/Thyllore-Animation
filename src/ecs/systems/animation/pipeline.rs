@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use crate::animation::{BoneId, BoneLocalPose, Skeleton, SkeletonId, SkeletonPose};
 use crate::asset::AssetStorage;
@@ -73,12 +73,9 @@ fn apply_blended_animations(
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
     pose_apply_cache: &mut PoseApplyCache,
     sub: &mut HashMap<String, f32>,
-) -> (
-    Vec<usize>,
-    Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
-) {
+) -> (Vec<usize>, Option<(SkeletonId, Vec<Mat4>, AnimationType)>) {
     let mut updated = Vec::new();
-    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)> = None;
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)> = None;
 
     let shared_constraints = find_shared_constraints(entities, world);
 
@@ -102,8 +99,7 @@ fn apply_blended_animations(
         spring_result: &spring_result,
         pose_overrides,
     };
-    let mut evaluated_globals: HashMap<(Entity, SkeletonId), Option<Vec<Matrix4<f32>>>> =
-        HashMap::new();
+    let mut evaluated_globals: HashMap<(Entity, SkeletonId), Option<Vec<Mat4>>> = HashMap::new();
 
     for info in entities {
         let Some(skeleton) = assets.get_skeleton_by_skeleton_id(info.skeleton_id) else {
@@ -111,7 +107,7 @@ fn apply_blended_animations(
         };
 
         let key = (info.entity, info.skeleton_id);
-        let globals: &Option<Vec<Matrix4<f32>>> = if evaluated_globals.contains_key(&key) {
+        let globals: &Option<Vec<Mat4>> = if evaluated_globals.contains_key(&key) {
             evaluated_globals.get(&key).unwrap()
         } else {
             let t = Instant::now();
@@ -194,7 +190,7 @@ fn apply_blended_animations(
 struct SharedPoseInputs<'a> {
     assets: &'a AssetStorage,
     constraints: &'a Option<ConstraintSet>,
-    spring_result: &'a Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)>,
+    spring_result: &'a Option<(SkeletonId, Vec<Mat4>, SkeletonPose)>,
     pose_overrides: &'a HashMap<BoneId, BoneLocalPose>,
 }
 
@@ -203,7 +199,7 @@ fn evaluate_skeleton_globals(
     skeleton: &Skeleton,
     nodes: &mut [NodeData],
     inputs: &SharedPoseInputs,
-) -> Option<Vec<Matrix4<f32>>> {
+) -> Option<Vec<Mat4>> {
     let spring_result = inputs
         .spring_result
         .as_ref()
@@ -233,7 +229,7 @@ fn evaluate_skeleton_globals(
 }
 
 #[inline]
-fn should_skip_skinned(cache: &PoseApplyCache, mesh_idx: usize, globals: &[Matrix4<f32>]) -> bool {
+fn should_skip_skinned(cache: &PoseApplyCache, mesh_idx: usize, globals: &[Mat4]) -> bool {
     if let Some(cached) = cache.skinned_cache.get(&mesh_idx) {
         if cached == &globals {
             return true;
@@ -243,11 +239,7 @@ fn should_skip_skinned(cache: &PoseApplyCache, mesh_idx: usize, globals: &[Matri
 }
 
 #[inline]
-fn should_skip_node(
-    cache: &PoseApplyCache,
-    mesh_idx: usize,
-    current_value: (Matrix4<f32>, f32),
-) -> bool {
+fn should_skip_node(cache: &PoseApplyCache, mesh_idx: usize, current_value: (Mat4, f32)) -> bool {
     if let Some(cached) = cache.node_cache.get(&mesh_idx) {
         if cached == &current_value {
             return true;
@@ -260,24 +252,22 @@ fn should_skip_node(
 mod tests {
     use super::*;
     use crate::ecs::resource::PoseApplyCache;
-    use cgmath::SquareMatrix;
+    use glam::Vec3;
 
-    fn identity_matrices(count: usize) -> Vec<Matrix4<f32>> {
-        (0..count).map(|_| Matrix4::identity()).collect()
+    fn identity_matrices(count: usize) -> Vec<Mat4> {
+        (0..count).map(|_| Mat4::IDENTITY).collect()
     }
 
-    fn translated_matrices(offset: f32, count: usize) -> Vec<Matrix4<f32>> {
+    fn translated_matrices(offset: f32, count: usize) -> Vec<Mat4> {
         (0..count)
-            .map(|i| {
-                Matrix4::from_translation(cgmath::Vector3::new(offset * (i as f32 + 1.0), 0.0, 0.0))
-            })
+            .map(|i| Mat4::from_translation(Vec3::new(offset * (i as f32 + 1.0), 0.0, 0.0)))
             .collect()
     }
 
     #[test]
     fn test_should_skip_skinned_same_globals() {
         let mut cache = PoseApplyCache::default();
-        let globals: Vec<Matrix4<f32>> = identity_matrices(4);
+        let globals: Vec<Mat4> = identity_matrices(4);
         cache.skinned_cache.insert(0, globals.clone());
 
         assert!(should_skip_skinned(&cache, 0, &globals));
@@ -286,8 +276,8 @@ mod tests {
     #[test]
     fn test_should_skip_skinned_different_globals() {
         let mut cache = PoseApplyCache::default();
-        let cached_globals: Vec<Matrix4<f32>> = identity_matrices(4);
-        let new_globals: Vec<Matrix4<f32>> = translated_matrices(1.0, 4);
+        let cached_globals: Vec<Mat4> = identity_matrices(4);
+        let new_globals: Vec<Mat4> = translated_matrices(1.0, 4);
         cache.skinned_cache.insert(0, cached_globals);
 
         assert!(!should_skip_skinned(&cache, 0, &new_globals));
@@ -296,7 +286,7 @@ mod tests {
     #[test]
     fn test_should_skip_skinned_uncached_mesh() {
         let cache = PoseApplyCache::default();
-        let globals: Vec<Matrix4<f32>> = identity_matrices(4);
+        let globals: Vec<Mat4> = identity_matrices(4);
 
         assert!(!should_skip_skinned(&cache, 0, &globals));
     }
@@ -304,7 +294,7 @@ mod tests {
     #[test]
     fn test_should_skip_node_same_value() {
         let mut cache = PoseApplyCache::default();
-        let value: (Matrix4<f32>, f32) = (Matrix4::identity(), 1.0);
+        let value: (Mat4, f32) = (Mat4::IDENTITY, 1.0);
         cache.node_cache.insert(0, value);
 
         assert!(should_skip_node(&cache, 0, value));
@@ -313,11 +303,8 @@ mod tests {
     #[test]
     fn test_should_skip_node_different_value() {
         let mut cache = PoseApplyCache::default();
-        let cached_value: (Matrix4<f32>, f32) = (Matrix4::identity(), 1.0);
-        let new_value: (Matrix4<f32>, f32) = (
-            Matrix4::from_translation(cgmath::Vector3::new(1.0, 0.0, 0.0)),
-            1.0,
-        );
+        let cached_value: (Mat4, f32) = (Mat4::IDENTITY, 1.0);
+        let new_value: (Mat4, f32) = (Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0)), 1.0);
         cache.node_cache.insert(0, cached_value);
 
         assert!(!should_skip_node(&cache, 0, new_value));
@@ -326,7 +313,7 @@ mod tests {
     #[test]
     fn test_should_skip_node_uncached_mesh() {
         let cache = PoseApplyCache::default();
-        let value: (Matrix4<f32>, f32) = (Matrix4::identity(), 1.0);
+        let value: (Mat4, f32) = (Mat4::IDENTITY, 1.0);
 
         assert!(!should_skip_node(&cache, 0, value));
     }

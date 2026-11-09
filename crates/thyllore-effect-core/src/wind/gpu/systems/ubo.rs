@@ -1,7 +1,8 @@
 use crate::gpu_pack::UboPack;
 use crate::wind::analytic::{wind_shadow_radial_extent, WindShellParams, WIND_MAX_PUFFS};
 use crate::wind::{build_wind_model_matrix, WindTornadoEffect, WindUBO};
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
+use thyllore_math_core::GpuMat4;
 
 /// Instance slot of the baked shadow volume, packed along its radius axis.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -9,12 +10,12 @@ pub struct WindShadowSlot(pub u32);
 
 pub fn build_wind_ubo(effect: &WindTornadoEffect, shadow_slot: WindShadowSlot) -> WindUBO {
     let model = build_wind_model_matrix(effect);
-    let inverse_model = model.invert().unwrap_or(Matrix4::identity());
+    let inverse_model = model.try_inverse().unwrap_or(Mat4::IDENTITY);
     let params = WindShellParams::from_effect(effect);
 
     let mut ubo = WindUBO {
-        model,
-        inverse_model,
+        model: model.into(),
+        inverse_model: inverse_model.into(),
         shape: [0.0; 4],
         wall: [0.0; 4],
         optics: [0.0; 4],
@@ -26,7 +27,7 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect, shadow_slot: WindShadowSlot) -
         eddy2: [0.0; 4],
         puff_params: [0.0; 4],
         puffs: [[0.0; 4]; WIND_MAX_PUFFS],
-        inv_view_proj: Matrix4::identity(),
+        inv_view_proj: GpuMat4::IDENTITY,
     };
 
     effect.pack(&mut ubo);

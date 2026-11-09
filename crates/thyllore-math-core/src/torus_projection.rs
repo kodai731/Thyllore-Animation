@@ -1,19 +1,19 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TorusProjection {
-    pub point: Vector3<f32>,
-    pub normal: Vector3<f32>,
+    pub point: Vec3,
+    pub normal: Vec3,
     pub u: f32,
     pub v: f32,
 }
 
-pub fn project_to_torus(p: Vector3<f32>, major_radius: f32, r: f32) -> TorusProjection {
-    let q = Vector3::new(p.x, 0.0, p.z);
-    let q_mag = q.magnitude();
+pub fn project_to_torus(p: Vec3, major_radius: f32, r: f32) -> TorusProjection {
+    let q = Vec3::new(p.x, 0.0, p.z);
+    let q_mag = q.length();
 
     let q_normalized = if q_mag < 1e-6 {
-        Vector3::new(1.0, 0.0, 0.0)
+        Vec3::new(1.0, 0.0, 0.0)
     } else {
         q / q_mag
     };
@@ -32,21 +32,21 @@ pub fn project_to_torus(p: Vector3<f32>, major_radius: f32, r: f32) -> TorusProj
     }
 }
 
-pub fn torus_surface_point(u: f32, v: f32, major_radius: f32, r: f32) -> Vector3<f32> {
+pub fn torus_surface_point(u: f32, v: f32, major_radius: f32, r: f32) -> Vec3 {
     let cos_v = v.cos();
     let sin_v = v.sin();
     let cos_u = u.cos();
     let sin_u = u.sin();
 
     let radius = major_radius + r * cos_v;
-    Vector3::new(radius * cos_u, r * sin_v, radius * sin_u)
+    Vec3::new(radius * cos_u, r * sin_v, radius * sin_u)
 }
 
-pub fn torus_surface_normal(u: f32, v: f32) -> Vector3<f32> {
+pub fn torus_surface_normal(u: f32, v: f32) -> Vec3 {
     let cos_v = v.cos();
     let sin_v = v.sin();
     let cos_u = u.cos();
     let sin_u = u.sin();
 
-    Vector3::new(cos_v * cos_u, sin_v, cos_v * sin_u)
+    Vec3::new(cos_v * cos_u, sin_v, cos_v * sin_u)
 }

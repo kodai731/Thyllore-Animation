@@ -1,17 +1,14 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
-use thyllore_vulkan_core::raytracing::{
-    BlasGeometry, GpuPrimitive, RRAccelerationStructure, RRBLAS,
-};
+use thyllore_vulkan_core::raytracing::{GpuPrimitive, RRAccelerationStructure, RRBLAS};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
@@ -21,17 +18,17 @@ use crate::ecs::FrameContext;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::vulkan::Instance;
+use thyllore_vulkan_core::types::Instance;
 
-pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
-    let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world
+pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Mat4> {
+    let indexed_transforms: Vec<(usize, Mat4)> = world
         .iter_components::<MeshRef>()
         .filter_map(|(entity, mesh_ref)| {
             let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
             let model_matrix = world
                 .get_component::<GlobalTransform>(entity)
                 .map(|global_transform| global_transform.0)
-                .unwrap_or_else(Matrix4::identity);
+                .unwrap_or(Mat4::IDENTITY);
             Some((mesh_asset.graphics_mesh_index, model_matrix))
         })
         .collect();
@@ -42,7 +39,7 @@ pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matr
         .max()
         .unwrap_or(0);
 
-    let mut transforms = vec![Matrix4::identity(); transform_count];
+    let mut transforms = vec![Mat4::IDENTITY; transform_count];
     for (index, model_matrix) in indexed_transforms {
         transforms[index] = model_matrix;
     }
@@ -85,7 +82,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         let model = mesh_transforms
             .get(mesh_index)
             .copied()
-            .unwrap_or_else(Matrix4::identity);
+            .unwrap_or(Mat4::IDENTITY);
         needs_update |= apply_instance_transform(blas, &model);
     }
     for (blas, primitive) in acceleration_structure
@@ -139,12 +136,12 @@ unsafe fn rebuild_acceleration_structures(
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
     procedural_primitives: &[GpuPrimitive<'static>],
-    mesh_transforms: &[cgmath::Matrix4<f32>],
+    mesh_transforms: &[Mat4],
 ) -> Result<()> {
     log!("Rebuilding acceleration structures...");
     if let Some(mut previous) = raytracing.acceleration_structure.take() {
-        device.device.device_wait_idle()?;
-        previous.destroy(&device.device);
+        device.wait_idle()?;
+        previous.destroy(device);
     }
 
     let mut acceleration_structure = RRAccelerationStructure::new();
@@ -156,11 +153,11 @@ unsafe fn rebuild_acceleration_structures(
         .filter(|mesh| mesh.render_to_gbuffer)
         .map(|mesh| {
             (
-                &mesh.vertex_buffer.buffer,
+                mesh.vertex_buffer.buffer(),
                 mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &mesh.index_buffer.buffer,
-                mesh.vertex_data.indices.len() as u32,
+                mesh.index_buffer.buffer(),
+                mesh.index_buffer.indices,
             )
         })
         .collect();
@@ -174,34 +171,30 @@ unsafe fn rebuild_acceleration_structures(
             instance,
             device,
             command_pool.as_ref(),
-            &mesh.vertex_buffer.buffer,
+            &mesh.vertex_buffer.buffer(),
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
-            &mesh.index_buffer.buffer,
-            mesh.vertex_data.indices.len() as u32,
+            &mesh.index_buffer.buffer(),
+            mesh.index_buffer.indices,
         )?;
 
         let model = mesh_transforms
             .get(mesh_index)
             .copied()
-            .unwrap_or_else(cgmath::Matrix4::identity);
-        blas.transform = vk::TransformMatrixKHR {
-            matrix: AffineRows3x4::from_mat4(model).rows,
-        };
+            .unwrap_or(Mat4::IDENTITY);
+        blas.set_transform_rows(AffineRows3x4::from_mat4(model).rows);
 
         acceleration_structure.blas_list.push(blas);
         log!("Created BLAS for mesh");
     }
 
     for primitive in procedural_primitives {
-        if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
-            let blas = RRAccelerationStructure::create_procedural_blas(
-                instance,
-                device,
-                command_pool.as_ref(),
-                &primitive.model,
-                *aabb,
-            )?;
+        if let Some(blas) = RRAccelerationStructure::create_procedural_blas(
+            instance,
+            device,
+            command_pool.as_ref(),
+            primitive,
+        )? {
             acceleration_structure.procedural_blas.push(blas);
         }
     }
@@ -233,16 +226,31 @@ unsafe fn rebuild_acceleration_structures(
     Ok(())
 }
 
-fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
+fn apply_instance_transform(blas: &mut RRBLAS, model: &Mat4) -> bool {
     let matrix = [
-        [model[0][0], model[1][0], model[2][0], model[3][0]],
-        [model[0][1], model[1][1], model[2][1], model[3][1]],
-        [model[0][2], model[1][2], model[2][2], model[3][2]],
+        [
+            model.col(0)[0],
+            model.col(1)[0],
+            model.col(2)[0],
+            model.col(3)[0],
+        ],
+        [
+            model.col(0)[1],
+            model.col(1)[1],
+            model.col(2)[1],
+            model.col(3)[1],
+        ],
+        [
+            model.col(0)[2],
+            model.col(1)[2],
+            model.col(2)[2],
+            model.col(3)[2],
+        ],
     ];
-    if blas.transform.matrix == matrix {
+    if blas.transform().matrix() == matrix {
         return false;
     }
-    blas.transform.matrix = matrix;
+    blas.set_transform_rows(matrix);
     true
 }
 
@@ -280,7 +288,7 @@ pub unsafe fn ensure_effect_trace_pipeline(
         instance,
         rrdevice,
         &EFFECT_TRACE,
-        &[effect_trace_descriptor.layout.handle],
+        &[effect_trace_descriptor.layout.handle()],
         &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;

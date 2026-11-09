@@ -1,7 +1,7 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::animation::editable::EaseType;
-use crate::animation::{normalize_quat, slerp, BoneLocalPose, SkeletonPose};
+use crate::animation::{normalize_quat, BoneLocalPose, SkeletonPose};
 
 pub fn blend_poses_override(
     base: &SkeletonPose,
@@ -17,7 +17,7 @@ pub fn blend_poses_override(
 
         result.bone_poses[i] = BoneLocalPose {
             translation: lerp_vec3(b.translation, o.translation, weight),
-            rotation: slerp(b.rotation, o.rotation, weight),
+            rotation: b.rotation.slerp(o.rotation, weight),
             scale: lerp_vec3(b.scale, o.scale, weight),
         };
     }
@@ -37,7 +37,7 @@ pub fn blend_poses_additive(
         .min(additive.bone_poses.len())
         .min(rest.bone_poses.len());
     let mut result = base.clone();
-    let identity = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    let identity = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
 
     for i in 0..bone_count {
         let b = &base.bone_poses[i];
@@ -45,13 +45,13 @@ pub fn blend_poses_additive(
         let r = &rest.bone_poses[i];
 
         let delta_t = (a.translation - r.translation) * weight;
-        let inv_rest_r = conjugate_quat(r.rotation);
-        let delta_r = slerp(identity, quat_mul(inv_rest_r, a.rotation), weight);
+        let inv_rest_r = r.rotation.conjugate();
+        let delta_r = identity.slerp(inv_rest_r * a.rotation, weight);
         let delta_s = (a.scale - r.scale) * weight;
 
         result.bone_poses[i] = BoneLocalPose {
             translation: b.translation + delta_t,
-            rotation: normalize_quat(quat_mul(b.rotation, delta_r)),
+            rotation: normalize_quat(b.rotation * delta_r),
             scale: b.scale + delta_s,
         };
     }
@@ -122,23 +122,10 @@ pub fn compute_local_time(
     }
 }
 
-fn lerp_vec3(a: Vector3<f32>, b: Vector3<f32>, t: f32) -> Vector3<f32> {
-    Vector3::new(
+fn lerp_vec3(a: Vec3, b: Vec3, t: f32) -> Vec3 {
+    Vec3::new(
         a.x + (b.x - a.x) * t,
         a.y + (b.y - a.y) * t,
         a.z + (b.z - a.z) * t,
-    )
-}
-
-fn conjugate_quat(q: Quaternion<f32>) -> Quaternion<f32> {
-    Quaternion::new(q.s, -q.v.x, -q.v.y, -q.v.z)
-}
-
-fn quat_mul(a: Quaternion<f32>, b: Quaternion<f32>) -> Quaternion<f32> {
-    Quaternion::new(
-        a.s * b.s - a.v.x * b.v.x - a.v.y * b.v.y - a.v.z * b.v.z,
-        a.s * b.v.x + a.v.x * b.s + a.v.y * b.v.z - a.v.z * b.v.y,
-        a.s * b.v.y - a.v.x * b.v.z + a.v.y * b.s + a.v.z * b.v.x,
-        a.s * b.v.z + a.v.x * b.v.y - a.v.y * b.v.x + a.v.z * b.s,
     )
 }

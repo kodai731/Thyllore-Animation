@@ -6,6 +6,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::world::World;
+use glam::Vec3;
 
 use super::anim_edits::batch_apply_anim_edits;
 use super::batch_action::BatchAction;
@@ -69,7 +70,7 @@ fn apply_camera_pose(world: &mut World, pose: BatchCameraPose) {
     camera.pitch = pose.pitch_degrees.to_radians();
     camera.distance = pose.distance;
     if let Some(pivot) = pose.pivot {
-        camera.pivot = cgmath::Vector3::new(pivot[0], pivot[1], pivot[2]);
+        camera.pivot = Vec3::new(pivot[0], pivot[1], pivot[2]);
     }
 }
 

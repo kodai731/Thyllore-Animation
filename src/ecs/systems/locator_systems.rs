@@ -13,7 +13,7 @@ pub fn follow_locator_transforms(world: &mut World) {
         };
         if let Some(locator) = world.get_component_mut::<Locator>(entity) {
             locator.position = translation.into();
-            locator.rotation = [rotation.s, rotation.v.x, rotation.v.y, rotation.v.z];
+            locator.rotation = [rotation.w, rotation.x, rotation.y, rotation.z];
         }
     }
 }

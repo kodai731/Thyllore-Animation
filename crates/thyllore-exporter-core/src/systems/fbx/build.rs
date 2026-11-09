@@ -2,7 +2,7 @@ use std::path::Path;
 
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::Skeleton;
-use thyllore_file_format_core::fbx::FbxModel;
+use thyllore_file_format_core::fbx::{FbxAxesInfo, FbxModel};
 
 use super::blend_shape::build_blend_shape_exports;
 use super::connections::{
@@ -86,7 +86,7 @@ pub(crate) fn build_full_export_data(
     let anim_data = FbxExportData {
         clip_name,
         duration_ktime,
-        axes: fbx_model.axes.clone(),
+        axes: FbxAxesInfo::default(),
         fps: fbx_model.fps,
         bones,
         stack_uid,

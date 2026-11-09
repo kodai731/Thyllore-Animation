@@ -2,7 +2,7 @@ use crate::flame::{
     apply_flame_preset, build_flame_ubo, refresh_flame_coefficients, FlameBaked, FlameEffect,
     FlameTemporalAccum,
 };
-use cgmath::{Quaternion, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -25,8 +25,8 @@ fn test_round_trip_bit_identity() {
         let mut effect = FlameEffect::default();
         apply_flame_preset(&mut effect, "campfire");
         effect.time = 1.5;
-        effect.position = Vector3::new(0.0, 1.0, 2.0);
-        effect.rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+        effect.position = Vec3::new(0.0, 1.0, 2.0);
+        effect.rotation = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
 
         let baked = FlameBaked::default();
         refresh_flame_coefficients(&mut effect, &baked);
@@ -145,9 +145,9 @@ fn test_light_position_bit_identity() {
         let mut effect = FlameEffect::default();
         apply_flame_preset(&mut effect, "campfire");
         effect.time = 1.5;
-        effect.position = Vector3::new(0.0, 1.0, 2.0);
-        effect.rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0);
-        effect.light_position_world = Vector3::new(1.0, 1.0, 2.0);
+        effect.position = Vec3::new(0.0, 1.0, 2.0);
+        effect.rotation = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
+        effect.light_position_world = Vec3::new(1.0, 1.0, 2.0);
 
         let baked = FlameBaked::default();
         refresh_flame_coefficients(&mut effect, &baked);
@@ -285,7 +285,7 @@ fn test_wind_spread_offset_grows_after_spread_start() {
             .extract()
             .unwrap();
 
-        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let identity_column_major: [f32; 16] = *Mat4::IDENTITY.as_ref();
         let read_spread_offset = |time: f32| -> f32 {
             let bytes = super::pack_wind_ubo(
                 py,
@@ -355,6 +355,45 @@ fn blender_to_engine_matrix_matches_the_math_core_constant() {
 }
 
 #[test]
+fn engine_projection_from_window_matches_the_engine_perspective() {
+    let fovy = 60f32.to_radians();
+    let aspect = 16.0 / 9.0;
+    let focal_y = 1.0 / (fovy / 2.0).tan();
+    let window = [
+        [focal_y / aspect, 0.0, 0.0, 0.0],
+        [0.0, focal_y, 0.0, 0.0],
+        [0.0, 0.0, -1.0002, -0.20002],
+        [0.0, 0.0, -1.0, 0.0],
+    ];
+    let rows = super::effect::engine_projection_from_window(window, 0.1);
+    let expected = thyllore_math_core::perspective_infinite_reverse(fovy, aspect, 0.1);
+    let actual = glam::Mat4::from_cols_array_2d(&rows).transpose();
+    assert!(
+        actual.abs_diff_eq(expected, 1e-5),
+        "{actual:?} vs {expected:?}"
+    );
+}
+
+#[test]
+fn object_local_points_undo_the_object_world_matrix() {
+    let world = [
+        [1.0, 0.0, 0.0, 2.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    let local = super::effect::object_local_points(world, vec![[3.0, 1.0, 0.0]]).unwrap();
+    assert_eq!(local, vec![[1.0, 1.0, 0.0]]);
+    let flat = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    assert!(super::effect::object_local_points(flat, vec![]).is_err());
+}
+
+#[test]
 fn test_lightning_preset_names_and_pack() {
     Python::attach(|py| {
         let names = super::lightning_preset_names();
@@ -363,7 +402,7 @@ fn test_lightning_preset_names_and_pack() {
 
         let preset_dict: Bound<'_, PyDict> = super::lightning_preset_params(py, "bolt").unwrap();
 
-        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let identity_column_major: [f32; 16] = *Mat4::IDENTITY.as_ref();
         let (ubo_bytes, segments_bytes, segment_count) = super::pack_lightning_ubo(
             py,
             &preset_dict,
@@ -397,7 +436,7 @@ fn test_lightning_preset_names_and_pack() {
 fn test_lightning_waypoints_reshape_the_main_channel() {
     Python::attach(|py| {
         let preset_dict: Bound<'_, PyDict> = super::lightning_preset_params(py, "bolt").unwrap();
-        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let identity_column_major: [f32; 16] = *Mat4::IDENTITY.as_ref();
         let pack_with_waypoints = |waypoints: Vec<[f32; 3]>| {
             super::pack_lightning_ubo(
                 py,

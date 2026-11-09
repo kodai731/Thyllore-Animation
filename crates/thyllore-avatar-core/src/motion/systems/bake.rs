@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{InnerSpace, One, Quaternion};
+use glam::Quat;
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
 use crate::motion::components::baked_motion::BakedMotion;
@@ -29,7 +29,7 @@ fn bake_sampled_motion(
     let frame_count = (duration * fps as f32).round() as usize + 1;
 
     let mut frame_times = Vec::with_capacity(frame_count);
-    let mut bone_rotations: BTreeMap<usize, Vec<Quaternion<f32>>> = BTreeMap::new();
+    let mut bone_rotations: BTreeMap<usize, Vec<Quat>> = BTreeMap::new();
     let mut hips_offsets = Vec::with_capacity(frame_count);
     let mut morph_weights: BTreeMap<String, Vec<f32>> = BTreeMap::new();
 
@@ -43,7 +43,7 @@ fn bake_sampled_motion(
         for (&bone_idx, &rotation) in &retargeted.local_rotations {
             let curve = bone_rotations
                 .entry(bone_idx)
-                .or_insert_with(|| vec![Quaternion::one(); frame_count]);
+                .or_insert_with(|| vec![Quat::IDENTITY; frame_count]);
             if k == 0 {
                 curve[k] = rotation;
             } else {
@@ -74,7 +74,7 @@ fn bake_sampled_motion(
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
@@ -106,8 +106,8 @@ mod tests {
     fn bone(parent: Option<usize>, x: f32, y: f32, z: f32) -> RetargetBone {
         RetargetBone {
             parent,
-            world_position: Vector3::new(x, y, z),
-            world_rotation: Quaternion::one(),
+            world_position: Vec3::new(x, y, z),
+            world_rotation: Quat::IDENTITY,
         }
     }
 

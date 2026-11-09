@@ -17,9 +17,11 @@ use crate::ecs::systems::animation_debug_dump::{
     build_animation_debug_dump, resolve_animation_debug_target,
 };
 use crate::ecs::systems::batch_run_systems::batch_anim_dump_json;
+use crate::ecs::systems::phases::TRANSFORM_PROPAGATE_PHASE;
 use crate::ecs::FrameContext;
 use crate::ecs::World;
-use crate::hooks::external_command::ExternalCommandSender;
+use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
+use crate::scratch::loader::LoadScratchJob;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub const LIVE_DUMP_DIRECTORY: &str = "log/live_dump";
@@ -46,6 +48,12 @@ pub enum LiveDumpRequest {
     Timings {
         #[serde(default)]
         seconds: Option<f32>,
+    },
+    Scratch {
+        library: PathBuf,
+        job: String,
+        #[serde(default)]
+        args: serde_json::Value,
     },
 }
 
@@ -216,7 +224,16 @@ fn handle_request_line<S: std::io::Read + Write>(
         serde_json::from_str(line.trim()).context("invalid live dump request")?;
 
     let (reply, reply_rx) = mpsc::channel();
-    sender.send(Box::new(LiveDumpCommand { request, reply }))?;
+    let command: ExternalCommand = match request {
+        LiveDumpRequest::Scratch { library, job, args } => Box::new(LoadScratchJob {
+            library,
+            job,
+            args,
+            reply,
+        }),
+        request => Box::new(LiveDumpCommand { request, reply }),
+    };
+    sender.send(command)?;
     reply_rx
         .recv_timeout(REPLY_TIMEOUT)
         .context("the engine did not answer in time")
@@ -247,6 +264,9 @@ fn serve_request(
             let looping = world.resource::<TimelineState>().looping;
             let dump = build_animation_debug_dump(&target, times, looping);
             Ok(serde_json::to_value(dump)?)
+        }
+        LiveDumpRequest::Scratch { .. } => {
+            anyhow::bail!("scratch requests are applied by LoadScratchJob")
         }
     }
 }
@@ -307,6 +327,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
     let phase_sub = world.get_resource::<PhaseSubTimings>();
     let render_prep = phase_sub_json(phase_sub.as_deref(), "render_prep");
     let animation = phase_sub_json(phase_sub.as_deref(), "animation");
+    let transform_propagate = phase_sub_json(phase_sub.as_deref(), TRANSFORM_PROPAGATE_PHASE);
 
     serde_json::json!({
         "frame": cpu.as_ref().map(|c| c.frame),
@@ -315,6 +336,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
         "update_phases": update_phases.as_ref().map(|u| stages_json(&u.stages)),
         "render_prep": render_prep,
         "animation": animation,
+        "transform_propagate": transform_propagate,
     })
 }
 
@@ -492,5 +514,20 @@ mod tests {
         let response = reply_rx.recv().unwrap();
         assert_eq!(response["ok"], true);
         assert!(response["data"]["curve_editor"]["is_open"].is_boolean());
+    }
+
+    #[test]
+    fn request_parses_scratch_without_args() {
+        let request: LiveDumpRequest =
+            serde_json::from_str(r#"{"kind":"scratch","library":"/tmp/x.so","job":"anim"}"#)
+                .unwrap();
+        assert_eq!(
+            request,
+            LiveDumpRequest::Scratch {
+                library: PathBuf::from("/tmp/x.so"),
+                job: "anim".to_string(),
+                args: serde_json::Value::Null,
+            }
+        );
     }
 }

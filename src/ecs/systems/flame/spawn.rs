@@ -6,6 +6,7 @@ use crate::ecs::resource::{
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
@@ -28,7 +29,7 @@ fn spawn_flame_instance(world: &mut World, assets: &mut AssetStorage, ordinal: u
         return spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
     }
     let effect = FlameEffect {
-        position: cgmath::Vector3::new(1.5 * ordinal as f32, 0.0, 0.0),
+        position: Vec3::new(1.5 * ordinal as f32, 0.0, 0.0),
         ..FlameEffect::default()
     };
     spawn_flame_with_clip(

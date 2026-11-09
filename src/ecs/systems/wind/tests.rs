@@ -3,7 +3,7 @@ use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect};
 use crate::ecs::resource::{HierarchyState, PickRay, WindRenderSettings};
 use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
 use crate::ecs::world::{GlobalTransform, Name, Transform, World};
-use cgmath::Vector3;
+use glam::Vec3;
 
 #[test]
 fn spawned_wind_carries_the_components_the_editor_queries() {
@@ -40,16 +40,16 @@ fn pick_ray_hits_the_wind_envelope_and_misses_beside_it() {
     let entity = spawn_wind(&mut world, "Wind", WindTornadoEffect::default());
 
     let hit = PickRay {
-        origin: Vector3::new(-5.0, 1.0, 0.0),
-        direction: Vector3::new(1.0, 0.0, 0.0),
+        origin: Vec3::new(-5.0, 1.0, 0.0),
+        direction: Vec3::new(1.0, 0.0, 0.0),
     };
     let (picked, distance) = find_wind_by_pick_ray(&world, &hit).expect("ray enters the envelope");
     assert_eq!(picked, entity);
     assert!(distance > 3.0 && distance < 5.0, "distance {distance}");
 
     let miss = PickRay {
-        origin: Vector3::new(-5.0, 1.0, 4.0),
-        direction: Vector3::new(1.0, 0.0, 0.0),
+        origin: Vec3::new(-5.0, 1.0, 4.0),
+        direction: Vec3::new(1.0, 0.0, 0.0),
     };
     assert!(find_wind_by_pick_ray(&world, &miss).is_none());
 }

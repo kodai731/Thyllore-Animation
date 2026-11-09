@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
 use crate::water::ownership::WaterParameterOwner;
 
@@ -7,9 +7,9 @@ use crate::water::ownership::WaterParameterOwner;
 #[scene(key = "water_torus", tag = WaterParameterOwner, owner = Frame, tags = WATER_PARAMETER_OWNERSHIP, snapshot = water_parameter_snapshot, scalars = WATER_SCALAR_PARAMS, ui = WATER_UI_PARAMS, overwrite = overwrite_water_persisted_fields)]
 pub struct WaterTorusEffect {
     #[persist(as = [f32; 3])]
-    pub position: Vector3<f32>,
+    pub position: Vec3,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
-    pub rotation: Quaternion<f32>,
+    pub rotation: Quat,
     #[ubo("radii.x")]
     #[persist(curve, debug_range = (0.5, 5.0), ui(min = 0.01, max = 10.0, group = "shape"))]
     pub major_radius: f32,
@@ -85,8 +85,8 @@ pub struct WaterTorusEffect {
 impl Default for WaterTorusEffect {
     fn default() -> Self {
         Self {
-            position: Vector3::new(0.0, 0.0, 0.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            position: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             time: 0.0,
             time_scale: 1.0,
             time_offset: 0.0,
@@ -114,8 +114,8 @@ impl Default for WaterTorusEffect {
     }
 }
 
-pub fn build_water_model_matrix(effect: &WaterTorusEffect) -> Matrix4<f32> {
-    Matrix4::from_translation(effect.position) * Matrix4::from(effect.rotation)
+pub fn build_water_model_matrix(effect: &WaterTorusEffect) -> Mat4 {
+    Mat4::from_translation(effect.position) * Mat4::from_quat(effect.rotation)
 }
 
 pub fn advance_water_time(effect: &mut WaterTorusEffect, delta_time: f32) {
@@ -133,7 +133,7 @@ impl crate::EffectPresets for WaterTorusEffect {
 impl crate::Placement for WaterTorusEffect {
     fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
         self.time = time;
-        self.position = Vector3::from(position);
+        self.position = Vec3::from(position);
         crate::scene_convert::quaternion_wxyz::set(&mut self.rotation, rotation);
     }
 }

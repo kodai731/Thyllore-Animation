@@ -1,5 +1,5 @@
 #![cfg(test)]
-use cgmath::{InnerSpace, Matrix3, Quaternion, Rad, Rotation3, SquareMatrix, Vector3};
+use glam::{DMat3, DQuat, DVec3};
 
 use super::rig_convention::RigConvention;
 use super::{canonical_bones, CanonicalBone};
@@ -19,9 +19,9 @@ pub fn file_positions(convention: &RigConvention) -> Vec<[f64; 3]> {
         .collect();
 
     let file_rotation = character_to_file_rotation(convention.character_to_file);
-    if !file_rotation.is_identity() {
+    if file_rotation != DMat3::IDENTITY {
         for p in &mut positions {
-            let v: Vector3<f64> = [p[0], p[1], p[2]].into();
+            let v: DVec3 = [p[0], p[1], p[2]].into();
             let rotated = file_rotation * v;
             p[0] = rotated.x;
             p[1] = rotated.y;
@@ -68,14 +68,14 @@ fn character_space_position(
     p
 }
 
-pub fn character_to_file_rotation(spec: &[([f64; 3], f64)]) -> Matrix3<f64> {
-    let mut m = Matrix3::identity();
+pub fn character_to_file_rotation(spec: &[([f64; 3], f64)]) -> DMat3 {
+    let mut m = DMat3::IDENTITY;
     for (axis, angle_deg) in spec {
-        let axis_vec: Vector3<f64> = [axis[0], axis[1], axis[2]].into();
+        let axis_vec = DVec3::from(*axis);
         let norm = axis_vec.normalize();
         let angle = angle_deg.to_radians();
-        let q: Quaternion<f64> = Quaternion::from_axis_angle(norm, Rad(angle));
-        m = Matrix3::from(q) * m;
+        let q: DQuat = DQuat::from_axis_angle(norm, angle);
+        m = DMat3::from_quat(q) * m;
     }
     m
 }

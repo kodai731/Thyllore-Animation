@@ -17,7 +17,6 @@ pub mod render;
 pub mod render_context;
 pub mod scene_model;
 pub mod update;
-pub mod util;
 pub mod viewport;
 
 pub use render_context::{build_frame_render_context, build_pass_context, RenderContext};
@@ -29,7 +28,8 @@ use crate::ecs::{ResMut, ResRef, Resource};
 use crate::vulkanr::device::*;
 
 use std::time::Instant;
-use vulkanalia::prelude::v1_0::*;
+
+use thyllore_vulkan_core::types::{Entry, Instance};
 
 pub struct App {
     pub entry: Entry,

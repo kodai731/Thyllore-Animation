@@ -1,5 +1,5 @@
 use anyhow::Context;
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thyllore_scene_core::SceneComponent;
@@ -37,7 +37,7 @@ pub struct SceneComponentHook {
 /// placement, gets the hierarchy icon and then the component itself.
 pub trait SceneOwner: SceneComponent {
     const ICON: EntityIcon;
-    fn placement(&self) -> (Vector3<f32>, Quaternion<f32>);
+    fn placement(&self) -> (Vec3, Quat);
     /// Runs on a component decoded from a scene before it is attached.
     fn prepare_loaded(&mut self) {}
 }
@@ -154,8 +154,8 @@ macro_rules! scene_owner {
         impl $crate::hooks::scene::SceneOwner for $component {
             const ICON: $crate::ecs::component::EntityIcon = $icon;
 
-            fn placement(&self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) {
-                let placement: fn(&Self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) =
+            fn placement(&self) -> (::glam::Vec3, ::glam::Quat) {
+                let placement: fn(&Self) -> (::glam::Vec3, ::glam::Quat) =
                     $placement;
                 placement(self)
             }

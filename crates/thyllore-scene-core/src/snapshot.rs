@@ -1,3 +1,5 @@
+use glam::Vec3;
+
 pub trait SnapshotValues {
     fn snapshot_values(&self) -> Vec<f32>;
 }
@@ -35,5 +37,11 @@ impl SnapshotValues for String {
 impl<T: SnapshotValues> SnapshotValues for Option<T> {
     fn snapshot_values(&self) -> Vec<f32> {
         self.as_ref().map(T::snapshot_values).unwrap_or_default()
+    }
+}
+
+impl SnapshotValues for Vec3 {
+    fn snapshot_values(&self) -> Vec<f32> {
+        vec![self.x, self.y, self.z]
     }
 }

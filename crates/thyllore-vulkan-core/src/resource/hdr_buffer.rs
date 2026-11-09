@@ -4,23 +4,49 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 
-pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
+pub(crate) const HDR_FORMAT_RAW: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 #[derive(Clone, Debug, Default)]
 pub struct HdrBuffer {
-    pub color_image: vk::Image,
-    pub color_image_memory: vk::DeviceMemory,
-    pub color_image_view: vk::ImageView,
-    pub depth_image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub framebuffer: vk::Framebuffer,
-    pub render_pass: vk::RenderPass,
+    pub(crate) color_image: vk::Image,
+    pub(crate) color_image_memory: vk::DeviceMemory,
+    pub(crate) color_image_view: vk::ImageView,
+    pub(crate) depth_image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) render_pass: vk::RenderPass,
     pub width: u32,
     pub height: u32,
 }
 
 impl HdrBuffer {
+    #[inline]
+    pub fn color_image(&self) -> crate::types::Image {
+        crate::types::Image(self.color_image)
+    }
+
+    #[inline]
+    pub fn color_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.color_image_view)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        crate::types::Framebuffer(self.framebuffer)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -34,7 +60,7 @@ impl HdrBuffer {
             height,
             1,
             vk::SampleCountFlags::_1,
-            HDR_FORMAT,
+            HDR_FORMAT_RAW,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED
@@ -46,20 +72,20 @@ impl HdrBuffer {
         let color_image_view = create_image_view(
             rrdevice,
             color_image,
-            HDR_FORMAT,
+            HDR_FORMAT_RAW,
             vk::ImageAspectFlags::COLOR,
             1,
         )?;
 
         let render_pass = Self::create_render_pass(rrdevice)?;
 
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         log!(
             "Created HDR buffer: {}x{} format {:?}",
             width,
             height,
-            HDR_FORMAT
+            HDR_FORMAT_RAW
         );
 
         Ok(Self {
@@ -78,14 +104,16 @@ impl HdrBuffer {
     pub unsafe fn attach_depth(
         &mut self,
         rrdevice: &RRDevice,
-        depth_image_view: vk::ImageView,
+        depth_image_view: crate::types::ImageView,
     ) -> Result<()> {
         if self.framebuffer != vk::Framebuffer::null() {
-            rrdevice.device.destroy_framebuffer(self.framebuffer, None);
+            rrdevice
+                .device()
+                .destroy_framebuffer(self.framebuffer, None);
             self.framebuffer = vk::Framebuffer::null();
         }
 
-        let attachments = [self.color_image_view, depth_image_view];
+        let attachments = [self.color_image_view, depth_image_view.raw()];
         let framebuffer_info = vk::FramebufferCreateInfo::builder()
             .render_pass(self.render_pass)
             .attachments(&attachments)
@@ -93,11 +121,11 @@ impl HdrBuffer {
             .height(self.height)
             .layers(1);
         let framebuffer = rrdevice
-            .device
+            .device()
             .create_framebuffer(&framebuffer_info, None)?;
 
         self.framebuffer = framebuffer;
-        self.depth_image_view = depth_image_view;
+        self.depth_image_view = depth_image_view.raw();
 
         log!("Attached depth to HDR buffer");
 
@@ -106,7 +134,7 @@ impl HdrBuffer {
 
     unsafe fn create_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
-            .format(HDR_FORMAT)
+            .format(HDR_FORMAT_RAW)
             .samples(vk::SampleCountFlags::_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
@@ -192,7 +220,7 @@ impl HdrBuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -230,14 +258,14 @@ impl HdrBuffer {
         // The depth attachment belongs to the G-buffer, which is resized after
         // this call and re-attaches its new depth view; the old one has the
         // previous extent and would not fit this framebuffer.
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         *self = Self::new(instance, rrdevice, new_width, new_height)?;
 
         log!("Resized HDR buffer to: {}x{}", new_width, new_height);
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.sampler != vk::Sampler::null() {
             device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
@@ -266,8 +294,8 @@ impl HdrBuffer {
         log!("Destroyed HDR buffer");
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D {
             width: self.width,
             height: self.height,
         }
@@ -284,7 +312,7 @@ impl Drop for HdrBuffer {
 
 impl GpuResource for HdrBuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {

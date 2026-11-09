@@ -158,7 +158,7 @@ pub(crate) fn world_with_scene_hooks() -> World {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use cgmath::Quaternion;
+    use glam::Quat;
     use serde::{Deserialize, Serialize};
     use thyllore_scene_core::SceneComponent;
 
@@ -176,7 +176,7 @@ pub(crate) mod test_support {
 
     crate::scene_owner!(ProbeOwner {
         icon: crate::ecs::component::EntityIcon::Empty,
-        placement: |p| (p.position.into(), Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+        placement: |p| (p.position.into(), Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)),
     });
 
     /// Test-only attachment restored by insertion.
@@ -201,6 +201,7 @@ mod tests {
     use crate::hooks::scene::{
         decode_scene_value, encode_scene_value, entities_with, spawn_scene_owner,
     };
+    use glam::Vec3;
     use thyllore_scene_core::SceneComponent;
 
     fn spawn_probe(world: &mut World, name: &str, level: f32) -> Entity {
@@ -285,7 +286,7 @@ mod tests {
             world
                 .get_component::<Transform>(entity)
                 .map(|t| t.translation),
-            Some(cgmath::Vector3::new(1.0, 2.0, 3.0))
+            Some(Vec3::new(1.0, 2.0, 3.0))
         );
         assert_eq!(
             world

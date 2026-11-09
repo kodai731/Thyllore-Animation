@@ -1,8 +1,8 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
 use crate::vulkanr::context::{CommandState, SwapchainState};
-use crate::vulkanr::vulkan::*;
 use anyhow::Result;
+use glam::Vec3;
 
 impl App {
     pub unsafe fn spawn_debug_primitive(&mut self, kind: DebugPrimitiveKind) -> Result<()> {
@@ -13,10 +13,10 @@ impl App {
     pub unsafe fn spawn_debug_primitive_at(
         &mut self,
         kind: DebugPrimitiveKind,
-        position: cgmath::Vector3<f32>,
+        position: Vec3,
     ) -> Result<()> {
         log!("Spawning debug primitive: {:?}", kind);
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let swapchain = self.resource::<SwapchainState>().swapchain.clone();
@@ -95,7 +95,7 @@ impl App {
     }
 
     pub unsafe fn delete_entities(&mut self, entities: &[u64]) -> Result<()> {
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         for &entity in entities {
             let mesh_ref = self
@@ -138,10 +138,10 @@ impl App {
     }
 }
 
-fn default_debug_primitive_position(kind: DebugPrimitiveKind) -> cgmath::Vector3<f32> {
+fn default_debug_primitive_position(kind: DebugPrimitiveKind) -> Vec3 {
     match kind {
-        DebugPrimitiveKind::Cube => cgmath::Vector3::new(3.0, 0.5, 0.0),
-        DebugPrimitiveKind::Sphere => cgmath::Vector3::new(-3.0, 0.6, 0.0),
-        DebugPrimitiveKind::Floor => cgmath::Vector3::new(0.0, -1.6, 0.0),
+        DebugPrimitiveKind::Cube => Vec3::new(3.0, 0.5, 0.0),
+        DebugPrimitiveKind::Sphere => Vec3::new(-3.0, 0.6, 0.0),
+        DebugPrimitiveKind::Floor => Vec3::new(0.0, -1.6, 0.0),
     }
 }

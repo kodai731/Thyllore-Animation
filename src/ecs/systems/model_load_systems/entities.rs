@@ -3,8 +3,9 @@ use crate::animation::classify_imported_animation;
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
+use crate::ecs::systems::attach_morph_channel_catalogs;
 use crate::ecs::world::{Animator, Entity, Transform, World};
-use crate::loader::ModelLoadResult;
+use crate::loader::{LoadedMesh, ModelLoadResult};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub(super) fn spawn_model_entities(
@@ -54,7 +55,7 @@ pub(super) fn spawn_model_entities(
     );
 
     spawn_mesh_entities(
-        &name,
+        &mesh_entity_names(&name, &load_result.meshes, 0),
         graphics,
         world,
         assets,
@@ -91,17 +92,35 @@ pub(super) fn spawn_model_part_entity(part_name: &str, world: &mut World) -> Ent
     parent_entity
 }
 
+pub(super) fn mesh_entity_names(
+    model_name: &str,
+    meshes: &[LoadedMesh],
+    first_mesh_index: usize,
+) -> Vec<String> {
+    meshes
+        .iter()
+        .enumerate()
+        .map(|(offset, mesh)| {
+            mesh.name
+                .clone()
+                .unwrap_or_else(|| format!("{}_{:02}", model_name, first_mesh_index + offset + 1))
+        })
+        .collect()
+}
+
 pub(super) fn spawn_mesh_entities(
-    name: &str,
+    entity_names: &[String],
     graphics: &GraphicsResources,
     world: &mut World,
     assets: &mut AssetStorage,
     parent_entity: Entity,
     mesh_range: std::ops::Range<usize>,
 ) {
+    let first_mesh_index = mesh_range.start;
+    let mut morph_entities = Vec::new();
     for mesh_idx in mesh_range {
         let mesh = &graphics.meshes[mesh_idx];
-        let entity_name = format!("{}_{:02}", name, mesh_idx + 1);
+        let entity_name = entity_names[mesh_idx - first_mesh_index].clone();
 
         let asset_id = assets.add_mesh(MeshAsset {
             id: 0,
@@ -127,6 +146,7 @@ pub(super) fn spawn_mesh_entities(
         let morph = &graphics.meshes[mesh_idx].morph;
         if !morph.channels.is_empty() {
             world.insert_component(entity, MorphWeights::from_defaults(morph));
+            morph_entities.push(entity);
         }
 
         log!(
@@ -138,6 +158,8 @@ pub(super) fn spawn_mesh_entities(
             parent_entity
         );
     }
+
+    attach_morph_channel_catalogs(world, assets, graphics, &morph_entities);
 }
 
 pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {

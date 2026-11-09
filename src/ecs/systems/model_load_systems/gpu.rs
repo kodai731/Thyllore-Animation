@@ -3,7 +3,6 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use thyllore_avatar_core::material::systems::texture_remap_io::resolve_remapped_texture;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::systems::load_model_texture_remap;
 use crate::loader::{resolve_mesh_texture, DecodedTextureFiles, ModelLoadResult};
@@ -12,8 +11,8 @@ use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{MeshSource, TexturePixels};
 use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 
 pub(super) unsafe fn upload_model_meshes(
     load_result: &ModelLoadResult,
@@ -27,7 +26,7 @@ pub(super) unsafe fn upload_model_meshes(
     graphics.ensure_object_capacity(
         instance,
         device,
-        swapchain.swapchain_images.len(),
+        swapchain.swapchain_images().len(),
         load_result.meshes.len(),
     )?;
 
@@ -90,10 +89,10 @@ pub(super) unsafe fn release_model_gpu_resources(
     graphics: &mut GraphicsResources,
     raytracing: &mut RayTracingData,
 ) -> Result<()> {
-    device.device.device_wait_idle()?;
+    device.wait_idle()?;
 
     if let Some(ref mut accel) = raytracing.acceleration_structure {
-        accel.destroy(&device.device);
+        accel.destroy(device);
     }
     raytracing.acceleration_structure = None;
 

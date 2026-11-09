@@ -6,7 +6,8 @@ use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
-    create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
+    create_grid_mesh, create_light_gizmo, gizmo_create_buffers_for_every_slot,
+    gizmo_create_static_buffers,
 };
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
@@ -21,49 +22,25 @@ use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
+    BlendConfig, CullFace, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder,
+    PushConstantConfig, RRPipeline, SampleCount, ShaderStages, Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
-use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
 use crate::ecs::resource::Camera;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use anyhow::{anyhow, Context, Result};
-use std::collections::HashSet;
-use std::ffi::CStr;
-use std::os::raw::c_void;
 use std::rc::Rc;
 use std::time::Instant;
-use thyllore_log_core::message_buffer::{push_message, MessageLevel, VALIDATION_MESSAGE_PREFIX};
-use thyllore_log_core::validation_stats::{record_validation, ValidationSeverity};
-use vulkanalia::Device as VkDevice;
+use thyllore_vulkan_core::types::{DebugMessenger, Fence, Instance, Semaphore, Surface};
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
-use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use winit::window::Window;
 
-// Constants
-pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
-pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-pub const VALIDATION_MODE: crate::vulkanr::core::device::ValidationMode = if cfg!(debug_assertions)
-{
-    crate::vulkanr::core::device::ValidationMode::Enabled
-} else {
-    crate::vulkanr::core::device::ValidationMode::Disabled
-};
-pub use crate::vulkanr::core::device::VALIDATION_LAYER;
-pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
-    vk::KHR_SWAPCHAIN_EXTENSION.name,
-    vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
-    vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
-    vk::KHR_RAY_QUERY_EXTENSION.name,
-    vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
-    vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
-];
+use thyllore_vulkan_core::core::instance::create_sync_objects;
 
 /// Clean up old screenshot files from the log directory
 pub fn cleanup_old_screenshots() -> Result<()> {
@@ -104,16 +81,16 @@ pub fn cleanup_old_screenshots() -> Result<()> {
 }
 
 struct VulkanResources {
-    messenger: vk::DebugUtilsMessengerEXT,
-    surface: vk::SurfaceKHR,
+    messenger: DebugMessenger,
+    surface: Surface,
     rrswapchain: RRSwapchain,
     rrrender: RRRender,
     rrcommand_pool: Rc<RRCommandPool>,
     rrcommand_buffer: RRCommandBuffer,
     model_pipeline: RRPipeline,
-    image_available_semaphores: Vec<vk::Semaphore>,
-    render_finish_semaphores: Vec<vk::Semaphore>,
-    in_flight_fences: Vec<vk::Fence>,
+    image_available_semaphores: Vec<Semaphore>,
+    render_finish_semaphores: Vec<Semaphore>,
+    in_flight_fences: Vec<Fence>,
 }
 
 struct GizmoPipelineIds {
@@ -132,8 +109,6 @@ impl App {
         window: &Window,
         #[cfg(feature = "ml")] curve_copilot_mode: crate::ml::CurveCopilotMode,
     ) -> Result<Self> {
-        let loader = LibloadingLoader::new(LIBRARY)?;
-        let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
         crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
@@ -144,17 +119,12 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
 
-        let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
-        let surface = vk_window::create_surface(&instance, &window, &window)?;
-        let rrdevice = RRDevice::new(
-            &entry,
-            &instance,
-            &surface,
-            VALIDATION_MODE,
-            VALIDATION_LAYER,
-            DEVICE_EXTENSIONS,
-            PORTABILITY_MACOS_VERSION,
-        )?;
+        let vulkan_context = thyllore_vulkan_core::create_vulkan_context(window)?;
+        let messenger = vulkan_context.messenger();
+        let surface = vulkan_context.surface();
+        let entry = vulkan_context.entry;
+        let instance = vulkan_context.instance;
+        let rrdevice = vulkan_context.rrdevice;
         let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
@@ -177,9 +147,9 @@ impl App {
             &rrrender,
             &render_layouts,
             &MODEL,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            vk::CullModeFlags::BACK,
+            Topology::TriangleList,
+            FillMode::Fill,
+            CullFace::Back,
         )
         .context("Failed to create model pipeline")?;
         data.pipeline_storage.register(model_pipeline.clone());
@@ -235,7 +205,7 @@ impl App {
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
         Self::apply_loaded_scene(&mut data, loaded_scene)?;
-        data.raytracing.command_pool = rrcommand_pool.command_pool;
+        data.raytracing.set_command_pool(&rrcommand_pool);
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
             &rrdevice,
@@ -272,7 +242,7 @@ impl App {
         }
 
         let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
-            Self::create_sync_objects(&rrdevice.device)?;
+            create_sync_objects(&rrdevice, MAX_FRAMES_IN_FLIGHT)?;
 
         let vulkan_resources = VulkanResources {
             messenger,
@@ -291,7 +261,7 @@ impl App {
             &mut data,
             &vulkan_resources,
             &model_path,
-            rrdevice.msaa_samples,
+            rrdevice.msaa_samples(),
         );
 
         let grid_scale = create_default_grid_scale();
@@ -299,9 +269,9 @@ impl App {
         data.ecs_world.insert_resource(grid_scale);
 
         let gpu_timestamp_profiler = thyllore_vulkan_core::GpuTimestampProfiler::new(
-            &rrdevice.device,
+            &rrdevice,
             rrdevice.timestamp_period,
-            vulkan_resources.rrswapchain.swapchain_images.len(),
+            vulkan_resources.rrswapchain.swapchain_images().len(),
         );
 
         Ok(Self {
@@ -358,7 +328,7 @@ impl App {
         rrrender: &RRRender,
         data: &mut AppData,
     ) -> Result<()> {
-        let swapchain_image_count = rrswapchain.swapchain_images.len();
+        let swapchain_image_count = rrswapchain.swapchain_images().len();
         data.graphics_resources =
             GraphicsResources::new(instance, rrdevice, swapchain_image_count, 64)
                 .context("Failed to create render resources")?;
@@ -399,16 +369,16 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::AutoRigState::default());
 
-        let viewport_width = rrswapchain.swapchain_extent.width;
-        let viewport_height = rrswapchain.swapchain_extent.height;
+        let viewport_width = rrswapchain.swapchain_extent().width;
+        let viewport_height = rrswapchain.swapchain_extent().height;
         data.viewport = crate::app::viewport::ViewportState::new(
             instance,
             rrdevice,
-            rrcommand_pool.command_pool,
+            rrcommand_pool.command_pool(),
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format,
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format(),
         )
         .context("Failed to create viewport state")?;
 
@@ -416,37 +386,25 @@ impl App {
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format()
         );
 
         let render_layouts = data.graphics_resources.get_layouts();
         if let Some(ref hdr_buffer) = data.viewport.hdr_buffer {
             let hdr_grid = PipelineBuilder::from_pass(&GRID)
                 .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::LINE_LIST)
-                .polygon_mode(vk::PolygonMode::LINE)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: true,
-                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-                })
-                .custom_render_pass(hdr_buffer.render_pass)
-                .msaa_samples(vk::SampleCountFlags::_1)
+                .topology(Topology::LineList)
+                .polygon_mode(FillMode::Line)
+                .depth_test(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual))
+                .custom_render_pass(hdr_buffer.render_pass())
+                .msaa_samples(SampleCount::One)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully
                 // covered", which the tonemap needs to keep the grid color. Effects
                 // composite over it afterwards with premultiplied blending.
-                .blend(BlendConfig {
-                    enable: true,
-                    src_color_factor: vk::BlendFactor::SRC_ALPHA,
-                    dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                    color_op: vk::BlendOp::ADD,
-                    src_alpha_factor: vk::BlendFactor::ONE,
-                    dst_alpha_factor: vk::BlendFactor::ZERO,
-                    alpha_op: vk::BlendOp::ADD,
-                })
-                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .blend(BlendConfig::default())
+                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent()))
                 .context("Failed to create HDR grid pipeline")?;
             let hdr_grid_id = data.pipeline_storage.register(hdr_grid);
             data.viewport.hdr_grid_pipeline_id = Some(hdr_grid_id);
@@ -465,54 +423,39 @@ impl App {
     ) -> Result<GizmoPipelineIds> {
         let grid = PipelineBuilder::from_pass(&GRID)
             .vertex_input(VertexInputConfig::Gizmo)
-            .topology(vk::PrimitiveTopology::LINE_LIST)
-            .polygon_mode(vk::PolygonMode::LINE)
-            .depth_test(DepthTestConfig {
-                test_enable: true,
-                write_enable: false,
-                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-            })
+            .topology(Topology::LineList)
+            .polygon_mode(FillMode::Line)
+            .depth_test(DepthTestConfig::read_only(DepthCompare::GreaterOrEqual))
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create grid pipeline")?;
         let grid = pipeline_storage.register(grid);
         pipeline_allocate_id(pipeline_manager);
 
         let gizmo = PipelineBuilder::from_pass(&GIZMO)
             .vertex_input(VertexInputConfig::Gizmo)
-            .topology(vk::PrimitiveTopology::LINE_LIST)
-            .polygon_mode(vk::PolygonMode::LINE)
+            .topology(Topology::LineList)
+            .polygon_mode(FillMode::Line)
             .no_depth_test()
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create gizmo pipeline")?;
         let gizmo = pipeline_storage.register(gizmo);
         pipeline_allocate_id(pipeline_manager);
 
-        let bone_push_constants = PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        };
-        let depth_front = DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        };
-        let depth_behind = DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::LESS_OR_EQUAL,
-        };
+        let bone_push_constants =
+            PushConstantConfig::new(ShaderStages::Fragment, 0, std::mem::size_of::<f32>() as u32);
+        let depth_front = DepthTestConfig::read_only(DepthCompare::GreaterOrEqual);
+        let depth_behind = DepthTestConfig::read_only(DepthCompare::LessOrEqual);
 
         let bone_solid = Self::build_bone_pipeline(
             rrdevice,
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             None,
             None,
             bone_push_constants,
@@ -526,8 +469,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             None,
             None,
@@ -542,9 +485,9 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             Some(depth_front),
             None,
             bone_push_constants,
@@ -558,8 +501,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             Some(depth_front),
             None,
@@ -574,9 +517,9 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             Some(depth_behind),
             Some(BlendConfig::default()),
             bone_push_constants,
@@ -590,8 +533,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             Some(depth_behind),
             Some(BlendConfig::default()),
@@ -619,9 +562,9 @@ impl App {
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
         render_layouts: &[&ReflectedSetLayout],
-        topology: vk::PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: Option<vk::CullModeFlags>,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: Option<CullFace>,
         depth_test: Option<DepthTestConfig>,
         blend: Option<BlendConfig>,
         push_constants: PushConstantConfig,
@@ -650,7 +593,7 @@ impl App {
         }
 
         let pipeline = builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context(format!("Failed to create {} pipeline", label))?;
         let id = pipeline_storage.register(pipeline);
         pipeline_allocate_id(pipeline_manager);
@@ -682,11 +625,10 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
+            gizmo_create_static_buffers(
                 &mut gizmo_data.mesh,
                 &mut backend,
-                0,
-                crate::render::BufferMemoryType::DeviceLocal,
+                thyllore_render_core::BufferMemoryType::DeviceLocal,
             )
             .expect("Failed to create gizmo buffers");
         }
@@ -704,13 +646,8 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
-                &mut light_gizmo_data.mesh,
-                &mut backend,
-                0,
-                crate::render::BufferMemoryType::HostVisible,
-            )
-            .expect("Failed to create light gizmo buffers");
+            gizmo_create_buffers_for_every_slot(&mut light_gizmo_data.mesh, &mut backend)
+                .expect("Failed to create light gizmo buffers");
         }
 
         Self::setup_bone_gizmo_resources(pipeline_ids, data);
@@ -797,7 +734,7 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+            .insert_resource(crate::ecs::resource::SpringBoneInspectorState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
         data.ecs_world
@@ -993,16 +930,15 @@ impl App {
         let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
-        grid_mesh.vertex_buffer_handles[0] = data.buffer_registry.create_vertex_buffer(
+        grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             instance,
             rrdevice,
             rrcommand_pool,
             &grid_mesh.vertices,
-            crate::render::BufferMemoryType::DeviceLocal,
+            thyllore_render_core::BufferMemoryType::DeviceLocal,
         )?;
-        grid_mesh.last_written_slot = 0;
 
-        grid_mesh.index_buffer_handles[0] = data.buffer_registry.create_index_buffer(
+        grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
             instance,
             rrdevice,
             rrcommand_pool,
@@ -1018,147 +954,11 @@ impl App {
         })
     }
 
-    extern "system" fn debug_callback(
-        severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-        type_: vk::DebugUtilsMessageTypeFlagsEXT,
-        data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-        _: *mut c_void,
-    ) -> vk::Bool32 {
-        let data = unsafe { *data };
-        let message = if data.message.is_null() {
-            std::borrow::Cow::Borrowed("(no message)")
-        } else {
-            unsafe { CStr::from_ptr(data.message) }.to_string_lossy()
-        };
-
-        // コンソール（色付き）とログファイルの両方に出力
-        use log::{debug, error, trace, warn};
-        if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
-            error!("({:?}) {}", type_, message);
-            log_error!("({:?}) {}", type_, message);
-            record_validation(ValidationSeverity::Error, &message);
-            push_message(
-                MessageLevel::Error,
-                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
-            );
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
-            warn!("({:?}) {}", type_, message);
-            log_warn!("({:?}) {}", type_, message);
-            record_validation(ValidationSeverity::Warning, &message);
-            push_message(
-                MessageLevel::Warning,
-                format!("{VALIDATION_MESSAGE_PREFIX} {message}"),
-            );
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
-            debug!("({:?}) {}", type_, message);
-            log!("({:?}) {}", type_, message);
-        } else {
-            trace!("({:?}) {}", type_, message);
-            log!("DEBUG ({:?}) {}", type_, message);
-        }
-
-        vk::FALSE
-    }
-
-    unsafe fn create_instance_with_messenger(
-        window: &Window,
-        entry: &Entry,
-    ) -> Result<(Instance, vk::DebugUtilsMessengerEXT)> {
-        let application_info = vk::ApplicationInfo::builder()
-            .application_name(b"Vulkan Tutorial\0")
-            .application_version(vk::make_version(1, 0, 0))
-            .engine_name(b"No Engine\0")
-            .engine_version(vk::make_version(1, 0, 0))
-            .api_version(vk::make_version(1, 2, 0));
-
-        let mut extensions = vk_window::get_required_instance_extensions(window)
-            .iter()
-            .map(|e| e.as_ptr())
-            .collect::<Vec<_>>();
-
-        if VALIDATION_ENABLED {
-            extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
-        }
-
-        let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            log!("Enabling extensions for macOS portability.");
-            extensions.push(
-                vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
-                    .name
-                    .as_ptr(),
-            );
-            extensions.push(vk::KHR_PORTABILITY_ENUMERATION_EXTENSION.name.as_ptr());
-            vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
-        } else {
-            vk::InstanceCreateFlags::empty()
-        };
-
-        let available_layers = entry
-            .enumerate_instance_layer_properties()?
-            .iter()
-            .map(|l| l.layer_name)
-            .collect::<HashSet<_>>();
-
-        if VALIDATION_ENABLED && !available_layers.contains(&VALIDATION_LAYER) {
-            return Err(anyhow!("Validation layer requested but not supported"));
-        }
-
-        let layers = if VALIDATION_ENABLED {
-            vec![VALIDATION_LAYER.as_ptr()]
-        } else {
-            Vec::new()
-        };
-
-        let mut info = vk::InstanceCreateInfo::builder()
-            .application_info(&application_info)
-            .enabled_layer_names(&layers)
-            .enabled_extension_names(&extensions)
-            .flags(flags);
-
-        let mut debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-            .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
-            .user_callback(Some(Self::debug_callback));
-
-        if VALIDATION_ENABLED {
-            info = info.push_next(&mut debug_info);
-        }
-
-        let instance = entry.create_instance(&info, None)?;
-
-        let messenger = if VALIDATION_ENABLED {
-            instance.create_debug_utils_messenger_ext(&debug_info, None)?
-        } else {
-            vk::DebugUtilsMessengerEXT::null()
-        };
-
-        Ok((instance, messenger))
-    }
-
-    unsafe fn create_sync_objects(
-        device: &VkDevice,
-    ) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>)> {
-        let semaphore_info = vk::SemaphoreCreateInfo::builder();
-        let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
-
-        let mut image_available = Vec::new();
-        let mut render_finished = Vec::new();
-        let mut in_flight = Vec::new();
-
-        for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            image_available.push(device.create_semaphore(&semaphore_info, None)?);
-            render_finished.push(device.create_semaphore(&semaphore_info, None)?);
-            in_flight.push(device.create_fence(&fence_info, None)?);
-        }
-
-        Ok((image_available, render_finished, in_flight))
-    }
-
     fn register_resources(
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
         Self::register_editor_resources(data);
@@ -1172,7 +972,7 @@ impl App {
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         data.ecs_world.insert_resource(FrameSync::new(
             resources.image_available_semaphores.clone(),
@@ -1182,7 +982,7 @@ impl App {
 
         data.ecs_world.insert_resource(SwapchainState::new(
             resources.rrswapchain.clone(),
-            resources.rrswapchain.swapchain_images.len(),
+            resources.rrswapchain.swapchain_images().len(),
         ));
 
         data.ecs_world
@@ -1221,6 +1021,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::SceneLoadQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::AssetEditQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OutputQueue>(data);
+        Self::insert_default_if_missing::<crate::scratch::loader::ScratchHost>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::InjectedInput>(data);
@@ -1323,14 +1124,7 @@ impl App {
         let descriptor_set_layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
         let sampler = crate::vulkanr::image::create_linear_clamp_sampler(rrdevice)?;
 
-        let msaa_samples = {
-            let render_config = data.ecs_world.resource::<RenderConfig>();
-            if !render_config.msaa_samples.is_empty() {
-                render_config.msaa_samples
-            } else {
-                vk::SampleCountFlags::_8
-            }
-        };
+        let msaa_samples = data.ecs_world.resource::<RenderConfig>().msaa_samples;
         let imgui_pipeline = RRPipeline::new_imgui(
             rrdevice,
             rrrender,
@@ -1343,15 +1137,15 @@ impl App {
             .create_synchronous_renderer_consumer()
             .map_err(|error| anyhow!("ImGui renderer consumer: {error}"))?;
 
-        data.imgui.pipeline = Some(imgui_pipeline.pipeline);
-        data.imgui.pipeline_layout = Some(imgui_pipeline.pipeline_layout);
+        data.imgui.pipeline = Some(imgui_pipeline.pipeline());
+        data.imgui.pipeline_layout = Some(imgui_pipeline.pipeline_layout());
         data.imgui.descriptor_set_layout = Some(descriptor_set_layout);
         data.imgui.sampler = Some(sampler);
         data.imgui.renderer_consumer = Some(renderer_consumer);
         data.ecs_world
             .insert_resource(crate::ecs::resource::ImguiTextures::default());
         log!("ImGui rendering resources initialized successfully");
-        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
+        log!("  Pipeline: {:?}", imgui_pipeline.pipeline());
         Ok(())
     }
 

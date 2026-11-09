@@ -1,5 +1,5 @@
+use glam::{Vec2, Vec3, Vec4};
 use thyllore_anim_core::AnimationSystem;
-use thyllore_math_core::{Vec2, Vec3, Vec4};
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
 
@@ -91,6 +91,7 @@ pub fn build_box_model(size_x: f32, size_y: f32, size_z: f32, color: [f32; 4]) -
 
     ModelLoadResult {
         meshes: vec![LoadedMesh {
+            name: None,
             vertex_data,
             skin_data: None,
             skeleton_id: None,
@@ -193,6 +194,7 @@ pub fn build_uv_sphere_model(radius: f32, segments: u32, rings: u32) -> ModelLoa
 
     ModelLoadResult {
         meshes: vec![LoadedMesh {
+            name: None,
             vertex_data,
             skin_data: None,
             skeleton_id: None,

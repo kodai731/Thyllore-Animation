@@ -350,7 +350,10 @@ fn inspect_zip(zip_path: &Path) -> std::io::Result<ZipInspection> {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            .into_owned();
         inspection.entry_paths.push(name.clone());
 
         if name == "blender_manifest.toml" {

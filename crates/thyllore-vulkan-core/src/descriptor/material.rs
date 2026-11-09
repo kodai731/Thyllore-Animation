@@ -8,7 +8,7 @@ use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayou
 use crate::descriptor::shader_bindings::model;
 use crate::resource::image::RRImage;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
-use crate::vulkan::Instance;
+use crate::types::Instance;
 use thyllore_render_core::MaterialUBO;
 
 pub type MaterialId = u32;
@@ -17,10 +17,17 @@ pub type MaterialId = u32;
 pub struct Material {
     pub id: MaterialId,
     pub name: String,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
     pub textures: Vec<RRImage>,
     pub uniform_buffer: UniformBuffer<MaterialUBO>,
     pub properties: MaterialUBO,
+}
+
+impl Material {
+    #[inline]
+    pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_set)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -57,8 +64,8 @@ impl MaterialManager {
             instance,
             rrdevice,
             name,
-            texture.image_view,
-            texture.sampler,
+            texture.image_view(),
+            texture.sampler(),
             properties,
         )
     }
@@ -68,8 +75,8 @@ impl MaterialManager {
         instance: &Instance,
         rrdevice: &RRDevice,
         name: &str,
-        image_view: vk::ImageView,
-        sampler: vk::Sampler,
+        image_view: crate::types::ImageView,
+        sampler: crate::types::Sampler,
         properties: MaterialUBO,
     ) -> anyhow::Result<MaterialId> {
         let descriptor_set = self.layout.allocate_set(rrdevice)?;
@@ -81,8 +88,8 @@ impl MaterialManager {
             .writer(descriptor_set)
             .image(
                 model::TEX_SAMPLER,
-                image_view,
-                sampler,
+                image_view.raw(),
+                sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .uniform(model::MATERIAL, &uniform_buffer, 0)?
@@ -111,7 +118,7 @@ impl MaterialManager {
     /// The caller guarantees the device is idle: the sets go back to the allocator for reuse.
     pub unsafe fn clear_materials(&mut self, rrdevice: &RRDevice) {
         for material in self.materials.values_mut() {
-            material.uniform_buffer.destroy(&rrdevice.device);
+            material.uniform_buffer.destroy(&rrdevice.device());
             self.layout.release_set(rrdevice, material.descriptor_set);
         }
 
@@ -120,7 +127,7 @@ impl MaterialManager {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         for material in self.materials.values_mut() {
             material.uniform_buffer.destroy(device);
         }

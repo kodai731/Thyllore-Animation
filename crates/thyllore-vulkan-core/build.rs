@@ -66,10 +66,12 @@ fn gpu_block_source(reflections: &BTreeMap<String, ShaderReflection>, block_name
         std::process::exit(1);
     }
 
-    generate_spirv_block_rust(&block, first_name, &["cgmath::Matrix4"]).unwrap_or_else(|error| {
-        eprintln!("generate `{block_name}`: {error}");
-        std::process::exit(1)
-    })
+    generate_spirv_block_rust(&block, first_name, &["thyllore_math_core::GpuMat4"]).unwrap_or_else(
+        |error| {
+            eprintln!("generate `{block_name}`: {error}");
+            std::process::exit(1)
+        },
+    )
 }
 
 fn workspace_root() -> PathBuf {

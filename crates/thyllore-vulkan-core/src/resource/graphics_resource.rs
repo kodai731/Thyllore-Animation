@@ -11,8 +11,9 @@ use crate::resource::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
 use crate::resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 use thyllore_render_core::{MaterialUBO, ObjectUBO};
 
@@ -26,8 +27,8 @@ pub struct NodeData {
     pub index: usize,
     pub name: String,
     pub parent_index: Option<usize>,
-    pub local_transform: Matrix4<f32>,
-    pub global_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
+    pub global_transform: Mat4,
 }
 
 impl Default for NodeData {
@@ -36,8 +37,8 @@ impl Default for NodeData {
             index: 0,
             name: String::new(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
-            global_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
+            global_transform: Mat4::IDENTITY,
         }
     }
 }
@@ -94,7 +95,7 @@ impl GraphicsResources {
         &self,
         rrdevice: &RRDevice,
         image_index: usize,
-        model: Matrix4<f32>,
+        model: Mat4,
     ) -> anyhow::Result<()> {
         for mesh in &self.meshes {
             let object_ubo = ObjectUBO { model };
@@ -171,7 +172,7 @@ impl GraphicsResources {
             mesh.vertex_data
                 .vertices
                 .iter()
-                .map(|v| Vector4::new(v.color.x, v.color.y, v.color.z, v.color.w))
+                .map(|v| Vec4::from_array(v.color))
                 .collect(),
         );
 
@@ -212,7 +213,7 @@ impl GraphicsResources {
     ) -> anyhow::Result<MaterialId> {
         let [r, g, b, a] = source.base_color_factor;
         let properties = MaterialUBO {
-            base_color: Vector4::new(r, g, b, a),
+            base_color: Vec4::new(r, g, b, a),
             ..MaterialUBO::default()
         };
 
@@ -220,8 +221,8 @@ impl GraphicsResources {
             instance,
             rrdevice,
             source.material_name,
-            mesh.image_view,
-            mesh.sampler,
+            mesh.image_view(),
+            mesh.sampler(),
             properties,
         )?;
 
@@ -262,13 +263,13 @@ impl GraphicsResources {
         [&self.frame_set.layout, &self.objects.layout]
     }
 
-    pub fn calculate_model_bounds(&self) -> Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)> {
+    pub fn calculate_model_bounds(&self) -> Option<(Vec3, Vec3, Vec3)> {
         if self.meshes.is_empty() {
             return None;
         }
 
-        let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-        let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+        let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
         let mut has_vertices = false;
 
         for mesh in &self.meshes {
@@ -287,7 +288,7 @@ impl GraphicsResources {
             return None;
         }
 
-        let center = Vector3::new(
+        let center = Vec3::new(
             (min.x + max.x) * 0.5,
             (min.y + max.y) * 0.5,
             (min.z + max.z) * 0.5,
@@ -317,32 +318,6 @@ impl GraphicsResources {
         }
         self.meshes.clear();
         self.mesh_material_ids.clear();
-    }
-
-    pub fn create_pipeline_key(
-        &self,
-        vertex_shader: &str,
-        fragment_shader: &str,
-        topology: vk::PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: vk::CullModeFlags,
-        depth_test_enable: bool,
-        blend_enable: bool,
-        render_pass: vk::RenderPass,
-    ) -> crate::pipeline::PipelineKey {
-        crate::pipeline::PipelineKey::new(
-            vertex_shader,
-            fragment_shader,
-            topology,
-            polygon_mode,
-            cull_mode,
-            depth_test_enable,
-            depth_test_enable,
-            blend_enable,
-            vk::SampleCountFlags::_1,
-            1,
-            render_pass,
-        )
     }
 }
 

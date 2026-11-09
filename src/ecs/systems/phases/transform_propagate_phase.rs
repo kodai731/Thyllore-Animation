@@ -1,0 +1,234 @@
+use std::collections::HashMap;
+use std::time::Instant;
+
+use glam::Mat4;
+
+use crate::animation::SkeletonId;
+use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::{AnimationType, PhaseSubTimings};
+use crate::ecs::systems::skeleton_gizmos_clear;
+use crate::ecs::transform_propagation_system;
+use crate::ecs::FrameContext;
+
+pub const TRANSFORM_PROPAGATE_PHASE: &str = "transform_propagate";
+
+pub fn run_transform_propagate_phase(
+    ctx: &mut FrameContext,
+    bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
+) {
+    let mut sub: HashMap<String, f32> = HashMap::new();
+
+    let t = Instant::now();
+    transform_propagation_system(ctx.world);
+    sub.insert(
+        "transform_propagation_system".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    let t = Instant::now();
+    if ctx.world.contains_resource::<BoneGizmoData>() {
+        if let Some((skel_id, transforms, anim_type)) = bone_transforms {
+            let entity_transform = find_skin_entity_transform(ctx.world);
+            let final_transforms = apply_entity_transform(&transforms, &entity_transform);
+
+            let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+            bone_gizmo.cached_skeleton_id = Some(skel_id);
+            bone_gizmo.cached_animation_type = anim_type;
+            bone_gizmo.cached_global_transforms = final_transforms;
+        } else if skeleton_gizmos_are_stale(ctx.world) {
+            skeleton_gizmos_clear(ctx.world);
+        }
+    }
+    sub.insert(
+        "bone_gizmo_cache".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    ctx.world
+        .resource_mut::<PhaseSubTimings>()
+        .phases
+        .insert(TRANSFORM_PROPAGATE_PHASE, sub);
+}
+
+fn skeleton_gizmos_are_stale(world: &crate::ecs::World) -> bool {
+    use crate::ecs::world::Animator;
+
+    let has_cached_skeleton = world
+        .resource::<BoneGizmoData>()
+        .cached_skeleton_id
+        .is_some();
+    let has_animated_entity = world.iter_components::<Animator>().next().is_some();
+    has_cached_skeleton && !has_animated_entity
+}
+
+fn find_skin_entity_transform(world: &crate::ecs::World) -> Mat4 {
+    use crate::ecs::world::{Animator, GlobalTransform};
+
+    world
+        .iter_components::<Animator>()
+        .next()
+        .and_then(|(entity, _)| {
+            world
+                .get_component::<GlobalTransform>(entity)
+                .map(|gt| gt.0)
+        })
+        .unwrap_or(Mat4::IDENTITY)
+}
+
+fn apply_entity_transform(bone_transforms: &[Mat4], entity_transform: &Mat4) -> Vec<Mat4> {
+    bone_transforms
+        .iter()
+        .map(|bt| entity_transform * bt)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::component::{motion_path_position, MotionPath};
+    use crate::ecs::resource::FrameClock;
+    use crate::ecs::sync_motion_paths;
+    use crate::ecs::world::{Animator, GlobalTransform, Transform};
+    use glam::Vec3;
+
+    fn create_world_with_animated_entity(translation: Vec3) -> crate::ecs::World {
+        let mut world = crate::ecs::World::new();
+
+        let mut transform = Transform::default();
+        transform.translation = translation;
+        let global_matrix = Mat4::from_translation(translation);
+
+        let parent = world
+            .entity()
+            .with_name("test_model")
+            .with_transform(transform)
+            .with_visible(true)
+            .with_animator(Animator::new())
+            .build();
+        world.insert_component(parent, GlobalTransform(global_matrix));
+
+        world
+            .entity()
+            .with_name("test_mesh")
+            .with_global_transform()
+            .with_visible(true)
+            .with_parent(parent)
+            .with_mesh(1, 0)
+            .build();
+
+        world
+    }
+
+    fn insert_bone_gizmo_with_cached_skeleton(world: &mut crate::ecs::World) {
+        let mut bone_gizmo = BoneGizmoData::default();
+        bone_gizmo.visible = true;
+        bone_gizmo.cached_skeleton_id = Some(1);
+        bone_gizmo.cached_global_transforms = vec![Mat4::IDENTITY];
+        world.insert_resource(bone_gizmo);
+    }
+
+    #[test]
+    fn skeleton_gizmos_stay_while_animated_entity_exists() {
+        let mut world = create_world_with_animated_entity(Vec3::new(0.0, 0.0, 0.0));
+        insert_bone_gizmo_with_cached_skeleton(&mut world);
+
+        assert!(!skeleton_gizmos_are_stale(&world));
+    }
+
+    #[test]
+    fn skeleton_gizmos_clear_after_animated_entity_is_despawned() {
+        let mut world = create_world_with_animated_entity(Vec3::new(0.0, 0.0, 0.0));
+        insert_bone_gizmo_with_cached_skeleton(&mut world);
+        let animated: Vec<u64> = world
+            .iter_components::<Animator>()
+            .map(|(entity, _)| entity)
+            .collect();
+        for entity in animated {
+            world.despawn(entity);
+        }
+
+        assert!(skeleton_gizmos_are_stale(&world));
+        skeleton_gizmos_clear(&mut world);
+
+        let bone_gizmo = world.resource::<BoneGizmoData>();
+        assert!(!bone_gizmo.visible);
+        assert!(bone_gizmo.cached_skeleton_id.is_none());
+        assert!(bone_gizmo.cached_global_transforms.is_empty());
+    }
+
+    #[test]
+    fn find_skin_entity_transform_returns_entity_transform_for_animated_mesh() {
+        let offset = Vec3::new(5.0, 3.0, -2.0);
+        let world = create_world_with_animated_entity(offset);
+
+        let result = find_skin_entity_transform(&world);
+
+        let expected = Mat4::from_translation(offset);
+        assert_ne!(
+            result,
+            Mat4::IDENTITY,
+            "BUG: find_skin_entity_transform returns identity even though animated mesh entity exists with non-identity GlobalTransform"
+        );
+        assert_eq!(
+            result, expected,
+            "find_skin_entity_transform should return the animated mesh entity's GlobalTransform"
+        );
+    }
+
+    #[test]
+    fn apply_entity_transform_includes_entity_offset() {
+        let offset = Vec3::new(10.0, 0.0, 0.0);
+        let world = create_world_with_animated_entity(offset);
+
+        let bone_transforms = vec![
+            Mat4::IDENTITY,
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0)),
+        ];
+
+        let entity_transform = find_skin_entity_transform(&world);
+        let result = apply_entity_transform(&bone_transforms, &entity_transform);
+
+        let expected_bone0 = Mat4::from_translation(offset);
+        let expected_bone1 = Mat4::from_translation(Vec3::new(10.0, 1.0, 0.0));
+
+        assert_ne!(
+            result[0],
+            Mat4::IDENTITY,
+            "BUG: bone[0] at origin should be offset by entity transform (10,0,0), but got identity"
+        );
+        assert_eq!(
+            result[0], expected_bone0,
+            "bone[0] should be at entity position"
+        );
+        assert_eq!(
+            result[1], expected_bone1,
+            "bone[1] should be offset by entity position"
+        );
+    }
+
+    #[test]
+    fn motion_path_position_reaches_global_transform_in_the_same_frame() {
+        let mut world = crate::ecs::World::new();
+        world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
+        world.resource_mut::<FrameClock>().frame = 15;
+
+        let path = MotionPath {
+            center: Vec3::new(1.0, 2.0, 3.0),
+            radius: 5.0,
+            angular_speed: 1.0,
+            phase_offset: 0.0,
+            enabled: true,
+        };
+        let entity = world.spawn();
+        world.insert_component(entity, path.clone());
+        world.insert_component(entity, GlobalTransform(Mat4::IDENTITY));
+
+        sync_motion_paths(&mut world);
+        transform_propagation_system(&mut world);
+
+        let frame_time = world.resource::<FrameClock>().fixed_time_seconds().unwrap();
+        let expected_position = motion_path_position(&path, frame_time);
+        let global = world.get_component::<GlobalTransform>(entity).unwrap().0;
+        assert_eq!(global.w_axis.truncate(), expected_position);
+    }
+}

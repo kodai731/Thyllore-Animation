@@ -239,7 +239,7 @@ mod tests {
     use crate::ecs::resource::{Camera, PanelLayout, TimelineState};
     use crate::ecs::world::{Name, Transform};
     use crate::hooks::scene::{decode_scene_value, SceneOwner};
-    use cgmath::Vector3;
+    use glam::Vec3;
     use thyllore_scene_core::SceneComponent;
 
     fn write_scene(dir: &Path, model_path: &str) -> PathBuf {
@@ -331,7 +331,7 @@ mod tests {
         {
             let mut camera = world.resource_mut::<Camera>();
             camera.distance = 12.5;
-            camera.pivot = Vector3::new(1.0, 2.0, 3.0);
+            camera.pivot = Vec3::new(1.0, 2.0, 3.0);
         }
         world.resource_mut::<PanelLayout>().debug_height = 123.0;
         world.resource_mut::<TimelineState>().looping = false;
@@ -349,7 +349,7 @@ mod tests {
         let camera = restored.resource::<Camera>();
         assert_eq!(camera.distance, 12.5);
         assert_eq!(camera.initial_distance, 12.5);
-        assert_eq!(camera.pivot, Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(camera.pivot, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(restored.resource::<PanelLayout>().debug_height, 123.0);
         assert!(!restored.resource::<TimelineState>().looping);
     }
@@ -400,7 +400,7 @@ mod tests {
             restored
                 .get_component::<Transform>(restored_entity)
                 .map(|t| t.translation),
-            Some(Vector3::new(4.0, 5.0, 6.0))
+            Some(Vec3::new(4.0, 5.0, 6.0))
         );
         assert_eq!(
             restored
